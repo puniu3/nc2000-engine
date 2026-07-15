@@ -244,7 +244,7 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-status", &ts, "tox"]);
-            let rd = dex.conds_id("residualdmg").unwrap();
+            let rd = crate::cond_id!(dex, "residualdmg").unwrap();
             if !b.poke(t).has_volatile(rd) {
                 b.add_volatile(dex, t, "residualdmg", None, EffectHandle::None);
             }
@@ -255,11 +255,11 @@ fn dispatch_cond(
         }
         ("tox", "onAfterMoveSelf") => {
             let t = tpoke.unwrap();
-            let rd = dex.conds_id("residualdmg").unwrap();
+            let rd = crate::cond_id!(dex, "residualdmg").unwrap();
             let counter = b.poke(t).volatile(rd).map(|v| v.get_int("counter")).unwrap_or(0);
             let maxhp = b.poke(t).maxhp as f64;
             let dmg = super::clamp_int_range((maxhp / 16.0).floor(), Some(1.0), None) * counter as f64;
-            let eff = EffectHandle::Cond(dex.conds_id("tox").unwrap());
+            let eff = EffectHandle::Cond(crate::cond_id!(dex, "tox").unwrap());
             b.damage(dex, dmg, Some(t), Some(t), DamageEffect::Effect(eff), false);
             RV::Undef
         }
@@ -275,7 +275,7 @@ fn dispatch_cond(
             let maxhp = b.poke(t).maxhp as f64;
             let dmg = super::clamp_int_range((maxhp / 16.0).floor(), Some(1.0), None);
             // this.damage(...) with implicit target/effect from the event
-            let eff = EffectHandle::Cond(dex.conds_id("tox").unwrap());
+            let eff = EffectHandle::Cond(crate::cond_id!(dex, "tox").unwrap());
             b.damage(dex, dmg, Some(t), Some(t), DamageEffect::Effect(eff), false);
             RV::Undef
         }
@@ -306,7 +306,7 @@ fn dispatch_cond(
         }
         ("confusion", "onBeforeMove") => {
             let t = tpoke.unwrap();
-            let cid = dex.conds_id("confusion").unwrap();
+            let cid = crate::cond_id!(dex, "confusion").unwrap();
             let time = b.poke(t).volatile(cid).map(|v| v.get_int("time")).unwrap_or(0) - 1;
             if let Some(vs) = b.poke_mut(t).volatile_mut(cid) {
                 vs.set_int("time", time);
@@ -338,7 +338,7 @@ fn dispatch_cond(
             let Some(damage) = damage else {
                 panic!("Confusion damage not dealt");
             };
-            let eff = EffectHandle::Cond(dex.conds_id("confusion").unwrap());
+            let eff = EffectHandle::Cond(crate::cond_id!(dex, "confusion").unwrap());
             b.direct_damage(dex, damage as f64, Some(t), None, eff);
             RV::False
         }
@@ -387,7 +387,7 @@ fn dispatch_cond(
                 None => true,
             };
             if trapper_gone {
-                let cid = dex.conds_id("partiallytrapped").unwrap();
+                let cid = crate::cond_id!(dex, "partiallytrapped").unwrap();
                 b.poke_mut(t).volatiles.retain(|(k, _)| *k != cid);
                 let ts = b.poke_str(t);
                 let name = src_move_name(dex, &src_move);
@@ -395,7 +395,7 @@ fn dispatch_cond(
                 return RV::Undef;
             }
             let dmg = b.poke(t).base_maxhp as f64 / divisor as f64;
-            let eff = EffectHandle::Cond(dex.conds_id("partiallytrapped").unwrap());
+            let eff = EffectHandle::Cond(crate::cond_id!(dex, "partiallytrapped").unwrap());
             b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
             RV::Undef
         }
@@ -422,7 +422,7 @@ fn dispatch_cond(
         // ----------------------------------------------------- residualdmg
         ("residualdmg", "onStart") => {
             let t = tpoke.unwrap();
-            let cid = dex.conds_id("residualdmg").unwrap();
+            let cid = crate::cond_id!(dex, "residualdmg").unwrap();
             if let Some(vs) = b.poke_mut(t).volatile_mut(cid) {
                 vs.set_int("counter", 0);
             }
@@ -431,7 +431,7 @@ fn dispatch_cond(
         ("residualdmg", "onAfterMoveSelf") | ("residualdmg", "onAfterSwitchInSelf") => {
             let t = tpoke.unwrap();
             if matches!(b.poke(t).status, Status::Brn | Status::Psn | Status::Tox) {
-                let cid = dex.conds_id("residualdmg").unwrap();
+                let cid = crate::cond_id!(dex, "residualdmg").unwrap();
                 if let Some(vs) = b.poke_mut(t).volatile_mut(cid) {
                     let c = vs.get_int("counter");
                     vs.set_int("counter", c + 1);
@@ -520,7 +520,7 @@ fn dispatch_cond(
             // gen2: this.damage(target.baseMaxhp / 8)
             let t = tpoke.unwrap();
             let dmg = b.poke(t).base_maxhp as f64 / 8.0;
-            let eff = EffectHandle::Cond(dex.conds_id("sandstorm").unwrap());
+            let eff = EffectHandle::Cond(crate::cond_id!(dex, "sandstorm").unwrap());
             b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
             RV::Undef
         }
@@ -656,7 +656,7 @@ fn dispatch_cond(
             let layers = b.state_at(state).map(|s| s.get_int("layers")).unwrap_or(1);
             const AMOUNTS: [i64; 4] = [0, 3, 4, 6];
             let dmg = AMOUNTS[layers.clamp(0, 3) as usize] as f64 * b.poke(t).maxhp as f64 / 24.0;
-            let eff = EffectHandle::Cond(dex.conds_id("spikes").unwrap());
+            let eff = EffectHandle::Cond(crate::cond_id!(dex, "spikes").unwrap());
             b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
             RV::Undef
         }
@@ -682,7 +682,7 @@ fn dispatch_cond(
             }
             let to_leech =
                 super::clamp_int_range(b.poke(t).maxhp as f64 / 8.0, Some(1.0), None);
-            let eff = EffectHandle::Cond(dex.conds_id("leechseed").unwrap());
+            let eff = EffectHandle::Cond(crate::cond_id!(dex, "leechseed").unwrap());
             let dealt = b.damage(dex, to_leech, Some(t), Some(leecher), DamageEffect::Effect(eff), false);
             if let Some(d) = dealt {
                 if d != 0.0 {
@@ -705,7 +705,7 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             if b.poke(t).status == Status::Slp {
                 let dmg = b.poke(t).base_maxhp as f64 / 4.0;
-                let eff = EffectHandle::Cond(dex.conds_id("nightmare").unwrap());
+                let eff = EffectHandle::Cond(crate::cond_id!(dex, "nightmare").unwrap());
                 b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
             }
             RV::Undef
@@ -721,7 +721,7 @@ fn dispatch_cond(
         ("curse", "onAfterMoveSelf") => {
             let t = tpoke.unwrap();
             let dmg = b.poke(t).base_maxhp as f64 / 4.0;
-            let eff = EffectHandle::Cond(dex.conds_id("curse").unwrap());
+            let eff = EffectHandle::Cond(crate::cond_id!(dex, "curse").unwrap());
             b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
             RV::Undef
         }
@@ -1003,7 +1003,7 @@ fn dispatch_cond(
             if let Some(st) = b.state_at_mut(state) {
                 st.set_int("hp", hp);
             }
-            let pt = dex.conds_id("partiallytrapped").unwrap();
+            let pt = crate::cond_id!(dex, "partiallytrapped").unwrap();
             if b.poke(t).has_volatile(pt) {
                 let src_move = b.poke(t).volatile(pt).and_then(|v| v.source_effect.clone());
                 let name = src_move_name(dex, &src_move);
@@ -1082,7 +1082,7 @@ fn dispatch_cond(
                 super::moveexec::DamageResult::Damage(d) if d > 0.0 => d,
                 _ => return RV::Null,
             };
-            let sub = dex.conds_id("substitute").unwrap();
+            let sub = crate::cond_id!(dex, "substitute").unwrap();
             let sub_hp = b.poke(t).volatile(sub).map(|v| v.get_int("hp")).unwrap_or(0);
             if damage > sub_hp as f64 {
                 damage = sub_hp as f64;
@@ -1231,7 +1231,7 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let category = b.active_move.as_ref().map(|m| m.category);
             if source != Some(t) && category != Some(crate::dex::Category::Status) {
-                let eff = EffectHandle::Cond(dex.conds_id("rage").unwrap());
+                let eff = EffectHandle::Cond(crate::cond_id!(dex, "rage").unwrap());
                 b.boost(dex, &[(0, 1)], Some(t), source, eff);
             }
             RV::Undef
@@ -1257,7 +1257,7 @@ fn dispatch_cond(
                 .map(|lm| dex.moves.key(lm) == "struggle")
                 .unwrap_or(false);
             if is_struggle {
-                let ro = dex.conds_id("rollout").unwrap();
+                let ro = crate::cond_id!(dex, "rollout").unwrap();
                 b.poke_mut(t).volatiles.retain(|(k, _)| *k != ro);
             }
             RV::Undef
@@ -1544,7 +1544,7 @@ fn dispatch_cond(
             }
             // lock-on: source has lockon volatile targeting this pokemon
             if let (Some(t), Some(src)) = (tpoke, source) {
-                let lo = dex.conds_id("lockon").unwrap();
+                let lo = crate::cond_id!(dex, "lockon").unwrap();
                 let locked = b
                     .poke(src)
                     .volatile(lo)
@@ -1595,7 +1595,7 @@ fn dispatch_cond(
                 .unwrap_or(false);
             if is_struggle || b.poke(t).status == Status::Slp {
                 // direct delete (no End event → no confusion)
-                let lm = dex.conds_id("lockedmove").unwrap();
+                let lm = crate::cond_id!(dex, "lockedmove").unwrap();
                 b.poke_mut(t).volatiles.retain(|(k, _)| *k != lm);
             }
             RV::Undef
@@ -1603,11 +1603,11 @@ fn dispatch_cond(
         ("lockedmove", "onEnd") => {
             let t = tpoke.unwrap();
             // silently delete confusion, then re-add unless safeguard
-            let conf = dex.conds_id("confusion").unwrap();
+            let conf = crate::cond_id!(dex, "confusion").unwrap();
             b.poke_mut(t).volatiles.retain(|(k, _)| *k != conf);
-            let sg = dex.conds_id("safeguard").unwrap();
+            let sg = crate::cond_id!(dex, "safeguard").unwrap();
             if !b.sides[t.side as usize].has_side_condition(sg) {
-                let lm_eff = EffectHandle::Cond(dex.conds_id("lockedmove").unwrap());
+                let lm_eff = EffectHandle::Cond(crate::cond_id!(dex, "lockedmove").unwrap());
                 b.add_volatile(dex, t, "confusion", None, lm_eff);
             }
             RV::Undef
@@ -1625,7 +1625,7 @@ fn dispatch_cond(
         }
         ("lockedmove", "onMoveAborted") => {
             let t = tpoke.unwrap();
-            let lm = dex.conds_id("lockedmove").unwrap();
+            let lm = crate::cond_id!(dex, "lockedmove").unwrap();
             b.poke_mut(t).volatiles.retain(|(k, _)| *k != lm);
             RV::Undef
         }
@@ -1644,7 +1644,7 @@ fn dispatch_cond(
             if b.poke(holder).hp <= 0 {
                 return RV::Undef;
             }
-            let en = dex.conds_id("encore").unwrap();
+            let en = crate::cond_id!(dex, "encore").unwrap();
             if let Some(enc) = b.poke(holder).volatile(en) {
                 let enc_move = enc
                     .get("move")
@@ -1701,7 +1701,7 @@ fn dispatch_cond(
                 return RV::Undef;
             }
             if let Some(at_slot) = b.poke_at_slot(&slot) {
-                let fm = dex.conds_id("futuremove").unwrap();
+                let fm = crate::cond_id!(dex, "futuremove").unwrap();
                 b.remove_slot_condition(dex, at_slot, fm);
             }
             RV::Undef
@@ -1748,10 +1748,10 @@ fn src_move_name(dex: &Dex, src_move: &Option<String>) -> String {
 
 /// The shared gen2 residualdmg helper (brn/psn tick).
 fn residualdmg(b: &mut Battle, dex: &Dex, pokemon: PokeId) {
-    let rd = dex.conds_id("residualdmg").unwrap();
+    let rd = crate::cond_id!(dex, "residualdmg").unwrap();
     let status = b.poke(pokemon).status;
     let eff = EffectHandle::Cond(
-        dex.conds_id(status.as_str()).unwrap_or_else(|| dex.conds_id("brn").unwrap()),
+        dex.conds_id(status.as_str()).unwrap_or_else(|| crate::cond_id!(dex, "brn").unwrap()),
     );
     if b.poke(pokemon).has_volatile(rd) {
         let counter = b.poke(pokemon).volatile(rd).map(|v| v.get_int("counter")).unwrap_or(0);
@@ -1782,8 +1782,8 @@ impl DamageEffect {
     pub fn to_handle(self, dex: &Dex) -> EffectHandle {
         match self {
             DamageEffect::Effect(e) => e,
-            DamageEffect::Recoil => EffectHandle::Cond(dex.conds_id("recoil").unwrap()),
-            DamageEffect::Drain => EffectHandle::Cond(dex.conds_id("drain").unwrap()),
+            DamageEffect::Recoil => EffectHandle::Cond(crate::cond_id!(dex, "recoil").unwrap()),
+            DamageEffect::Drain => EffectHandle::Cond(crate::cond_id!(dex, "drain").unwrap()),
         }
     }
 }

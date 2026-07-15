@@ -29,13 +29,13 @@ impl Battle {
                 value = (value * NUMERATORS[(-boost) as usize] / 100.0).floor();
             }
         }
-        let parspeeddrop = dex.conds_id("parspeeddrop").map(|c| p.has_volatile(c)).unwrap_or(false);
+        let parspeeddrop = crate::cond_id!(dex, "parspeeddrop").map(|c| p.has_volatile(c)).unwrap_or(false);
         if p.status == Status::Par && stat == 4 && parspeeddrop {
             value = (value / 4.0).floor();
         }
         if !unmodified {
             let brnattackdrop =
-                dex.conds_id("brnattackdrop").map(|c| p.has_volatile(c)).unwrap_or(false);
+                crate::cond_id!(dex, "brnattackdrop").map(|c| p.has_volatile(c)).unwrap_or(false);
             if p.status == Status::Brn && stat == 0 && brnattackdrop {
                 value = (value / 2.0).floor();
             }
@@ -49,25 +49,29 @@ impl Battle {
         // Screens
         if !unboosted {
             let side = &self.sides[id.side as usize];
-            let reflect = dex.conds_id("reflect").map(|c| side.has_side_condition(c)).unwrap_or(false);
+            let reflect = crate::cond_id!(dex, "reflect").map(|c| side.has_side_condition(c)).unwrap_or(false);
             let lightscreen =
-                dex.conds_id("lightscreen").map(|c| side.has_side_condition(c)).unwrap_or(false);
+                crate::cond_id!(dex, "lightscreen").map(|c| side.has_side_condition(c)).unwrap_or(false);
             if (stat == 1 && reflect) || (stat == 3 && lightscreen) {
                 value *= 2.0;
             }
         }
 
-        // Boosting items (thickclub/lightball/metalpowder)
+        // Boosting items (thickclub/lightball/metalpowder). PS compares
+        // `species.name` (the CURRENT species, transform included) — the
+        // interned id compare is equivalent.
         if let Some(item) = p.item {
-            let item_key = dex.items.key(item);
-            let species_name = &dex.species.get(p.species).name;
-            if (item_key == "thickclub"
-                && (species_name == "Cubone" || species_name == "Marowak")
+            let item = Some(item);
+            let species = Some(p.species);
+            let ki = &dex.known_items;
+            let ks = &dex.known_species;
+            if (item == ki.thickclub
+                && (species == ks.cubone || species == ks.marowak)
                 && stat == 0)
-                || (item_key == "lightball" && species_name == "Pikachu" && stat == 2)
+                || (item == ki.lightball && species == ks.pikachu && stat == 2)
             {
                 value *= 2.0;
-            } else if item_key == "metalpowder" && species_name == "Ditto" && (stat == 1 || stat == 3) {
+            } else if item == ki.metalpowder && species == ks.ditto && (stat == 1 || stat == 3) {
                 value = (value * 1.5).floor();
             }
         }
@@ -78,12 +82,11 @@ impl Battle {
     /// gen3 `pokemon.getActionSpeed()`.
     pub fn get_pokemon_action_speed(&self, dex: &Dex, id: PokeId) -> i32 {
         let speed = self.get_stat(dex, id, 4, false, false, false);
-        if self.quick_claw_roll {
-            if let Some(item) = self.poke(id).item {
-                if dex.items.key(item) == "quickclaw" {
-                    return 65535;
-                }
-            }
+        if self.quick_claw_roll
+            && self.poke(id).item.is_some()
+            && self.poke(id).item == dex.known_items.quickclaw
+        {
+            return 65535;
         }
         speed
     }
@@ -93,8 +96,12 @@ impl Battle {
     }
 
     pub fn update_all_speeds(&mut self, dex: &Dex) {
-        for id in self.get_all_active(false) {
-            self.update_speed(dex, id);
+        for side in 0..2 {
+            if let Some(id) = self.active_id(side) {
+                if !self.poke(id).fainted {
+                    self.update_speed(dex, id);
+                }
+            }
         }
     }
 

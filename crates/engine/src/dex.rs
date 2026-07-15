@@ -72,6 +72,35 @@ pub struct CbNums {
     pub sub_order: Option<i32>,
 }
 
+/// Per-call-site cached `dex.conds_id(<literal>)`. Each expansion owns a
+/// `OnceLock`, so the BTreeMap lookup happens once per site per process (one
+/// format's dex per process — the same assumption the event system makes).
+#[macro_export]
+macro_rules! cond_id {
+    ($dex:expr, $name:literal) => {{
+        static C: std::sync::OnceLock<Option<$crate::dex::CondId>> = std::sync::OnceLock::new();
+        *C.get_or_init(|| $dex.conds_id($name))
+    }};
+}
+
+/// Item ids referenced by the stat/speed hot path (gen2stadium2 getStat).
+#[derive(Clone, Copy, Debug)]
+pub struct KnownItems {
+    pub thickclub: Option<ItemId>,
+    pub lightball: Option<ItemId>,
+    pub metalpowder: Option<ItemId>,
+    pub quickclaw: Option<ItemId>,
+}
+
+/// Species ids referenced by the stat hot path.
+#[derive(Clone, Copy, Debug)]
+pub struct KnownSpecies {
+    pub cubone: Option<SpeciesId>,
+    pub marowak: Option<SpeciesId>,
+    pub pikachu: Option<SpeciesId>,
+    pub ditto: Option<SpeciesId>,
+}
+
 /// Hot callback ids resolved once at load (literal-name checks in the battle
 /// code go through these instead of hashing the string every time).
 #[derive(Clone, Copy, Debug)]
@@ -667,6 +696,8 @@ pub struct Dex {
     /// "RedirectTarget" (resolvePriority special cases).
     pub cb_flags: Vec<u8>,
     pub known: KnownCbs,
+    pub known_items: KnownItems,
+    pub known_species: KnownSpecies,
     /// CondId of each `Status` discriminant ("", brn, par, slp, frz, psn,
     /// tox, fnt) — collection must not hit the string index per event.
     pub status_conds: [Option<CondId>; 8],
@@ -988,9 +1019,22 @@ impl Dex {
         let conds = Table::build(entries);
         let status_conds = ["", "brn", "par", "slp", "frz", "psn", "tox", "fnt"]
             .map(|s| if s.is_empty() { None } else { conds.id(s) });
+        let known_items = KnownItems {
+            thickclub: items.id("thickclub"),
+            lightball: items.id("lightball"),
+            metalpowder: items.id("metalpowder"),
+            quickclaw: items.id("quickclaw"),
+        };
+        let species = Table::build(file.species);
+        let known_species = KnownSpecies {
+            cubone: species.id("cubone"),
+            marowak: species.id("marowak"),
+            pikachu: species.id("pikachu"),
+            ditto: species.id("ditto"),
+        };
 
         Ok(Dex {
-            species: Table::build(file.species),
+            species,
             moves,
             items,
             conditions: Table::build(file.conditions),
@@ -1003,6 +1047,8 @@ impl Dex {
             possible_mask,
             cb_flags,
             known,
+            known_items,
+            known_species,
             status_conds,
         })
     }

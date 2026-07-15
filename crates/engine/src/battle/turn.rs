@@ -238,7 +238,7 @@ impl Battle {
                     super::EffectHandle::MoveEff(move_id),
                 );
                 let loc: i64 = if target.side == pokemon.side { -1 } else { 1 };
-                let pu = dex.conds_id("pursuit").unwrap();
+                let pu = crate::cond_id!(dex, "pursuit").unwrap();
                 if let Some(vs) = self.poke_mut(pokemon).volatile_mut(pu) {
                     vs.set_int("targetLoc", loc);
                 }

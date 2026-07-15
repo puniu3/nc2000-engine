@@ -192,7 +192,7 @@ pub fn dispatch_item(
         // -------------------------------------------------- status berries
         ("bitterberry", "onUpdate") => {
             let t = tpoke.unwrap();
-            if dex.conds_id("confusion").map(|c| b.poke(t).has_volatile(c)).unwrap_or(false) {
+            if crate::cond_id!(dex, "confusion").map(|c| b.poke(t).has_volatile(c)).unwrap_or(false) {
                 b.eat_item(dex, t, false, None, EffectHandle::None);
             }
             RV::Undef
@@ -237,7 +237,7 @@ pub fn dispatch_item(
         ("miracleberry", "onUpdate") => {
             let t = tpoke.unwrap();
             let has_conf =
-                dex.conds_id("confusion").map(|c| b.poke(t).has_volatile(c)).unwrap_or(false);
+                crate::cond_id!(dex, "confusion").map(|c| b.poke(t).has_volatile(c)).unwrap_or(false);
             if b.poke(t).status != Status::None || has_conf {
                 b.eat_item(dex, t, false, None, EffectHandle::None);
             }
@@ -261,7 +261,7 @@ pub fn dispatch_item(
             if let Some(i) = slot_idx {
                 if b.poke(t).move_slots[i].pp == 0 {
                     b.add_volatile(dex, t, "leppaberry", None, EffectHandle::None);
-                    let lb = dex.conds_id("leppaberry").unwrap();
+                    let lb = crate::cond_id!(dex, "leppaberry").unwrap();
                     if let Some(vs) = b.poke_mut(t).volatile_mut(lb) {
                         vs.slot_ref = Some(i);
                     }
@@ -272,7 +272,7 @@ pub fn dispatch_item(
         }
         ("mysteryberry", "onEat") => {
             let t = tpoke.unwrap();
-            let lb = dex.conds_id("leppaberry").unwrap();
+            let lb = crate::cond_id!(dex, "leppaberry").unwrap();
             let slot_idx = if b.poke(t).has_volatile(lb) {
                 let idx = b.poke(t).volatile(lb).and_then(|v| v.slot_ref);
                 b.remove_volatile(dex, t, "leppaberry");

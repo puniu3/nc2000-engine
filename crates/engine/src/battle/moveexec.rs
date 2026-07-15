@@ -245,7 +245,7 @@ fn base_power_callback(
         }
         "hiddenpower" => Some(b.poke(source).hp_power),
         "furycutter" => {
-            let fc = dex.conds_id("furycutter").unwrap();
+            let fc = crate::cond_id!(dex, "furycutter").unwrap();
             let hit = b.active_move.as_ref().map(|am| am.hit).unwrap_or(0);
             if !b.poke(source).has_volatile(fc) || hit == 1 {
                 b.add_volatile(dex, source, "furycutter", None, EffectHandle::None);
@@ -254,8 +254,8 @@ fn base_power_callback(
             Some(clamp_int_range(base_power as f64 * mult as f64, Some(1.0), Some(160.0)) as i32)
         }
         "rollout" => {
-            let ro = dex.conds_id("rollout").unwrap();
-            let dc = dex.conds_id("defensecurl").unwrap();
+            let ro = crate::cond_id!(dex, "rollout").unwrap();
+            let dc = crate::cond_id!(dex, "defensecurl").unwrap();
             let mut bp = base_power as i64;
             let has_rollout = b.poke(source).has_volatile(ro);
             if has_rollout {
@@ -294,7 +294,7 @@ fn before_move_callback(
 ) -> bool {
     match dex.moves.key(m) {
         "bide" => {
-            let bide = dex.conds_id("bide").unwrap();
+            let bide = crate::cond_id!(dex, "bide").unwrap();
             b.poke(pokemon).has_volatile(bide)
         }
         other => panic!("unported beforeMoveCallback: {other}"),
@@ -372,7 +372,7 @@ pub fn dispatch_move_callback(
             } else {
                 let sub_blocked = source
                     .map(|t| {
-                        dex.conds_id("substitute")
+                        crate::cond_id!(dex, "substitute")
                             .map(|c| b.poke(t).has_volatile(c))
                             .unwrap_or(false)
                     })
@@ -438,7 +438,7 @@ pub fn dispatch_move_callback(
         }
         ("rollout", "onModifyMove") => {
             let user = tpoke.unwrap();
-            let ro = dex.conds_id("rollout").unwrap();
+            let ro = crate::cond_id!(dex, "rollout").unwrap();
             if b.poke(user).has_volatile(ro) || b.poke(user).status == Status::Slp || source.is_none()
             {
                 return RV::Undef;
@@ -552,7 +552,7 @@ pub fn dispatch_move_callback(
             fake.damage = None;
             fake.cb_mask = crate::dex::CbMask::EMPTY;
             let damage = get_damage_synthetic(b, dex, user, foe, fake);
-            let fm = dex.conds_id("futuremove").unwrap();
+            let fm = crate::cond_id!(dex, "futuremove").unwrap();
             let loc = StateLoc::SlotCond(foe.side, 0, fm);
             if let Some(st) = b.state_at_mut(loc) {
                 st.duration = Some(3);
@@ -567,7 +567,7 @@ pub fn dispatch_move_callback(
         // -------------------------------------------------------- onTryHit
         ("substitute", "onTryHit") => {
             let user = tpoke.unwrap();
-            let sub = dex.conds_id("substitute").unwrap();
+            let sub = crate::cond_id!(dex, "substitute").unwrap();
             if b.poke(user).has_volatile(sub) {
                 let ps = b.poke_str(user);
                 b.add(&["-fail", &ps, "move: Substitute"]);
@@ -594,7 +594,7 @@ pub fn dispatch_move_callback(
                 }
             } else {
                 let has_vs = b.active_move.as_ref().map(|am| am.volatile_status.is_some()).unwrap_or(false);
-                let curse = dex.conds_id("curse").unwrap();
+                let curse = crate::cond_id!(dex, "curse").unwrap();
                 if has_vs && b.poke(t).has_volatile(curse) {
                     return RV::False;
                 }
@@ -611,7 +611,7 @@ pub fn dispatch_move_callback(
         }
         ("foresight", "onTryHit") => {
             let t = tpoke.unwrap();
-            let fs = dex.conds_id("foresight").unwrap();
+            let fs = crate::cond_id!(dex, "foresight").unwrap();
             if b.poke(t).has_volatile(fs) {
                 return RV::False;
             }
@@ -619,8 +619,8 @@ pub fn dispatch_move_callback(
         }
         ("lockon", "onTryHit") | ("mindreader", "onTryHit") => {
             let t = tpoke.unwrap();
-            let fs = dex.conds_id("foresight").unwrap();
-            let lo = dex.conds_id("lockon").unwrap();
+            let fs = crate::cond_id!(dex, "foresight").unwrap();
+            let lo = crate::cond_id!(dex, "lockon").unwrap();
             if b.poke(t).has_volatile(fs) || b.poke(t).has_volatile(lo) {
                 return RV::False;
             }
@@ -652,8 +652,8 @@ pub fn dispatch_move_callback(
         }
         ("sleeptalk", "onTryHit") => {
             let user = tpoke.unwrap();
-            let cl = dex.conds_id("choicelock");
-            let en = dex.conds_id("encore").unwrap();
+            let cl = crate::cond_id!(dex, "choicelock");
+            let en = crate::cond_id!(dex, "encore").unwrap();
             let locked = cl.map(|c| b.poke(user).has_volatile(c)).unwrap_or(false)
                 || b.poke(user).has_volatile(en);
             RV::from_bool(!locked)
@@ -668,7 +668,7 @@ pub fn dispatch_move_callback(
         }
         ("dreameater", "onTryImmunity") => {
             let t = tpoke.unwrap();
-            let sub = dex.conds_id("substitute").unwrap();
+            let sub = crate::cond_id!(dex, "substitute").unwrap();
             RV::from_bool(b.poke(t).status == Status::Slp && !b.poke(t).has_volatile(sub))
         }
         ("leechseed", "onTryImmunity") => {
@@ -734,7 +734,7 @@ pub fn dispatch_move_callback(
                 } else if b.run_event(dex, &ev::TryHit, EvTarget::Poke(id), Some(user), move_eff, None, false, false) == RV::Null {
                     result = true;
                 } else {
-                    let ps_cond = dex.conds_id("perishsong").unwrap();
+                    let ps_cond = crate::cond_id!(dex, "perishsong").unwrap();
                     if !b.poke(id).has_volatile(ps_cond) {
                         b.add_volatile(dex, id, "perishsong", None, EffectHandle::None);
                         let ts = b.poke_str(id);
@@ -881,7 +881,7 @@ pub fn dispatch_move_callback(
         ("mimic", "onHit") => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
-            let sub = dex.conds_id("substitute").unwrap();
+            let sub = crate::cond_id!(dex, "substitute").unwrap();
             if b.poke(user).transformed || b.poke(t).last_move.is_none() || b.poke(t).has_volatile(sub)
             {
                 return RV::False;
@@ -1203,7 +1203,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
             }
             // evasion (foresight zeroes positive evasion)
             let mut eva = b.poke(target).boosts[6].clamp(-6, 6);
-            let fs_cond = dex.conds_id("foresight").unwrap();
+            let fs_cond = crate::cond_id!(dex, "foresight").unwrap();
             if eva > 0 && b.poke(target).has_volatile(fs_cond) {
                 eva = 0;
             }
@@ -1307,14 +1307,14 @@ fn rapid_spin_cleanup(b: &mut Battle, dex: &Dex, pokemon: PokeId) {
         let of = format!("[of] {ps}");
         b.add(&["-end", &ps, "Leech Seed", "[from] move: Rapid Spin", &of]);
     }
-    if let Some(spikes) = dex.conds_id("spikes") {
+    if let Some(spikes) = crate::cond_id!(dex, "spikes") {
         if b.remove_side_condition(dex, pokemon.side, spikes) {
             let side_str = b.side_str(pokemon.side);
             let of = format!("[of] {}", b.poke_str(pokemon));
             b.add(&["-sideend", &side_str, "Spikes", "[from] move: Rapid Spin", &of]);
         }
     }
-    let pt = dex.conds_id("partiallytrapped").unwrap();
+    let pt = crate::cond_id!(dex, "partiallytrapped").unwrap();
     if b.poke(pokemon).has_volatile(pt) {
         b.remove_volatile(dex, pokemon, "partiallytrapped");
     }

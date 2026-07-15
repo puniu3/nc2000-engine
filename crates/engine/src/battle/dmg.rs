@@ -117,7 +117,7 @@ impl Battle {
         let side_id = format!("p{}", target.side + 1);
         match effect_id.as_str() {
             "partiallytrapped" => {
-                let pt = dex.conds_id("partiallytrapped").unwrap();
+                let pt = crate::cond_id!(dex, "partiallytrapped").unwrap();
                 let src_eff = self
                     .poke(target)
                     .volatile(pt)
@@ -258,7 +258,7 @@ impl Battle {
         let mut target = target;
         let mut source = source;
         let mut effect_handle = match effect {
-            HealEffect::Drain => EffectHandle::Cond(dex.conds_id("drain").unwrap()),
+            HealEffect::Drain => EffectHandle::Cond(crate::cond_id!(dex, "drain").unwrap()),
             HealEffect::Effect(e) => e,
         };
         if let Some(frame) = self.event_stack.last() {
@@ -421,13 +421,13 @@ impl Battle {
                 success = Some(true);
                 // brn/par drop removal on boost
                 if stat == 0 && self.poke(target).status == Status::Brn {
-                    let c = dex.conds_id("brnattackdrop").unwrap();
+                    let c = crate::cond_id!(dex, "brnattackdrop").unwrap();
                     if self.poke(target).has_volatile(c) {
                         self.remove_volatile(dex, target, "brnattackdrop");
                     }
                 }
                 if stat == 4 && self.poke(target).status == Status::Par {
-                    let c = dex.conds_id("parspeeddrop").unwrap();
+                    let c = crate::cond_id!(dex, "parspeeddrop").unwrap();
                     if self.poke(target).has_volatile(c) {
                         self.remove_volatile(dex, target, "parspeeddrop");
                     }

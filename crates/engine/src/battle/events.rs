@@ -294,7 +294,7 @@ impl Battle {
             return;
         }
         let mut sorted = 0;
-        let mut next_indexes: Vec<usize> = Vec::with_capacity(list.len());
+        let mut next_indexes: smallvec::SmallVec<[usize; 16]> = smallvec::SmallVec::new();
         while sorted + 1 < list.len() {
             next_indexes.clear();
             next_indexes.push(sorted);
@@ -996,19 +996,26 @@ impl Battle {
     // --------------------------------------------------------- eachEvent
 
     pub fn each_event(&mut self, dex: &Dex, ev: &'static Ev, effect: Option<EffectHandle>) {
-        let mut actives = self.get_all_active(false);
+        // getAllActive (non-fainted), then speedSort by speed desc — at most
+        // one active per side in singles, collected on the stack.
+        let mut buf = [(PokeId { side: 0, slot: 0 }, 0.0f64); 2];
+        let mut n = 0;
+        for side in 0..2 {
+            if let Some(id) = self.active_id(side) {
+                if !self.poke(id).fainted {
+                    buf[n] = (id, self.poke(id).speed as f64);
+                    n += 1;
+                }
+            }
+        }
         if trace_enabled() {
-            let speeds: Vec<i32> = actives.iter().map(|&p| self.poke(p).speed).collect();
-            eprintln!("[trace] eachEvent {} actives={} speeds={:?} seed={}", ev.name, actives.len(), speeds, self.prng.seed_str());
+            let speeds: Vec<f64> = buf[..n].iter().map(|&(_, s)| s).collect();
+            eprintln!("[trace] eachEvent {} actives={n} speeds={:?} seed={}", ev.name, speeds, self.prng.seed_str());
         }
         let effect = effect.unwrap_or_else(|| self.current_effect());
-        // speedSort by speed desc
-        let speeds: Vec<(PokeId, f64)> =
-            actives.iter().map(|&p| (p, self.poke(p).speed as f64)).collect();
-        let mut list = speeds;
-        self.speed_sort(&mut list, |a, b| b.1 - a.1);
-        actives = list.into_iter().map(|(p, _)| p).collect();
-        for pokemon in actives {
+        self.speed_sort(&mut buf[..n], |a, b| b.1 - a.1);
+        for i in 0..n {
+            let pokemon = buf[i].0;
             self.run_event(dex, ev, EvTarget::Poke(pokemon), None, effect, None, false, false);
         }
     }
