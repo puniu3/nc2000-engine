@@ -386,6 +386,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nc2000-bot"
+version = "0.1.0"
+dependencies = [
+ "conformance",
+ "nc2000-engine",
+]
+
+[[package]]
 name = "nc2000-engine"
 version = "0.1.0"
 dependencies = [

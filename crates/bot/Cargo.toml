@@ -1,0 +1,10 @@
+[package]
+name = "nc2000-bot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nc2000-engine = { path = "../engine" }
+
+[dev-dependencies]
+conformance = { path = "../conformance" }
