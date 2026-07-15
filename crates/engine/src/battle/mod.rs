@@ -253,8 +253,11 @@ impl Battle {
         format!("p{}: {}", id.side + 1, self.poke(id).name)
     }
 
-    /// PS `side.toString()`: "p1: P1".
+    /// PS `side.toString()`: "p1: P1". Log-only; empty when the log is off.
     pub fn side_str(&self, side_n: u8) -> String {
+        if !self.log_enabled {
+            return String::new();
+        }
         format!("p{}: {}", side_n + 1, self.sides[side_n as usize].name)
     }
 
@@ -299,7 +302,12 @@ impl Battle {
     }
 
     /// PS `pokemon.toString()`: active → "p1a: Abra", else fullname.
+    /// Feeds protocol-log lines only — returns empty when the log is off so
+    /// search stepping skips the formatting entirely.
     pub fn poke_str(&self, id: PokeId) -> String {
+        if !self.log_enabled {
+            return String::new();
+        }
         let p = self.poke(id);
         if p.is_active {
             format!("{}: {}", self.slot_str(id), p.name)
@@ -658,8 +666,11 @@ impl Battle {
         Ok(p)
     }
 
-    /// PS `pokemon.details`: "Name, L51, M".
+    /// PS `pokemon.details`: "Name, L51, M". Log-only.
     pub fn details(&self, dex: &Dex, id: PokeId) -> String {
+        if !self.log_enabled {
+            return String::new();
+        }
         let p = self.poke(id);
         let species = dex.species.get(p.species);
         let mut d = species.name.clone();
@@ -672,8 +683,11 @@ impl Battle {
         d
     }
 
-    /// PS `pokemon.getHealth` → (secret, shared) strings.
+    /// PS `pokemon.getHealth` → (secret, shared) strings. Log-only.
     pub fn get_health(&self, id: PokeId) -> (String, String) {
+        if !self.log_enabled {
+            return (String::new(), String::new());
+        }
         let p = self.poke(id);
         if p.hp <= 0 {
             return ("0 fnt".into(), "0 fnt".into());
