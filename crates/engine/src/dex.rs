@@ -1286,11 +1286,6 @@ impl Dex {
         cb.exists() && self.cb_flags[cb.0 as usize] & 2 != 0
     }
 
-    /// Can ANY condition/item in this format handle `callback_name`?
-    pub fn callback_possible(&self, callback_name: &str) -> bool {
-        self.possible_callbacks.contains(callback_name)
-    }
-
     pub fn move_static(&self, id: MoveId) -> &MoveStatic {
         &self.moves_static[id.0 as usize]
     }

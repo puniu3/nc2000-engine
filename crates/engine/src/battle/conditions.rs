@@ -198,6 +198,7 @@ fn dispatch_cond(
         }
         ("frz", "onAfterMoveSecondary") => {
             // (move.secondary?.status === 'brn' || move.statusRoll === 'brn') → cure
+            // statusRoll is tri attack's dynamically rolled status.
             let t = tpoke.unwrap();
             let is_brn = b
                 .active_move
@@ -206,6 +207,7 @@ fn dispatch_cond(
                     m.secondaries
                         .iter()
                         .any(|s| s.status.as_deref() == Some("brn"))
+                        || m.status_roll.as_deref() == Some("brn")
                 })
                 .unwrap_or(false);
             if is_brn {

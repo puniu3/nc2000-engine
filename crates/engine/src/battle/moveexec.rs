@@ -35,7 +35,7 @@ pub fn get_active_move(dex: &Dex, id: MoveId) -> ActiveMove {
         base_power: ms.base_power,
         accuracy: ms.accuracy,
         priority: ms.priority,
-        target: ms.target.clone(),
+        target: ms.target,
         crit_ratio: ms.crit_ratio,
         will_crit: ms.will_crit,
         status: ms.status.clone(),
@@ -1575,7 +1575,7 @@ impl Battle {
         if let Some(am) = &self.active_move {
             mv.priority = am.priority;
         }
-        let base_target = mv.target.clone();
+        let base_target = mv.target;
         let mut target = target;
         if target.is_none() {
             target = self.get_random_target(&mv.target, pokemon);
@@ -1602,9 +1602,9 @@ impl Battle {
             move_eff,
             None,
         );
-        if self.active_move.as_ref().map(|m| m.target.clone()).unwrap_or_default() != base_target {
+        if self.active_move.as_ref().map(|m| m.target).unwrap_or("") != base_target {
             target = self.get_random_target(
-                &self.active_move.as_ref().unwrap().target.clone(),
+                self.active_move.as_ref().unwrap().target,
                 pokemon,
             );
         }
@@ -2108,7 +2108,7 @@ impl Battle {
         let move_eff = move_id.map(EffectHandle::MoveEff).unwrap_or(EffectHandle::None);
         let mut target = target;
 
-        let mv_target_kind = self.active_move.as_ref().unwrap().target.clone();
+        let mv_target_kind = self.active_move.as_ref().unwrap().target;
 
         // TryHit single events
         let mut hit_result = RV::True;

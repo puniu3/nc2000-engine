@@ -154,6 +154,47 @@ fn main() {
         dt
     );
 
+    // 3b. clone-based playouts (the MCTS workload: determinize = clone+reseed)
+    let mut rng = TestRng(0xC10_4E5);
+    let mut turns = 0u64;
+    let mut battles = 0u64;
+    let t = Instant::now();
+    for (fi, fx) in fixtures.iter().enumerate() {
+        let mut base = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+        base.set_log_enabled(false);
+        for line in &fx.choices[..fx.choices.len() / 2] {
+            let side_n = if line.side == "p1" { 0 } else { 1 };
+            base.choose(&dex, side_n, &line.choice).unwrap();
+        }
+        if base.outcome().is_some() {
+            continue;
+        }
+        for p in 0..playouts_per_fixture {
+            let mut b = base.clone();
+            b.reseed(0xACE ^ ((fi as u64) << 20) ^ p);
+            while b.outcome().is_none() {
+                let picks = [0usize, 1].map(|side_n| {
+                    let legal = b.legal_choices(&dex, side_n);
+                    if legal.is_empty() {
+                        None
+                    } else {
+                        Some(legal[(rng.next() % legal.len() as u64) as usize])
+                    }
+                });
+                b.apply_choices(&dex, picks).unwrap();
+            }
+            turns += b.turn as u64;
+            battles += 1;
+        }
+    }
+    let dt = t.elapsed().as_secs_f64();
+    println!(
+        "clone playouts:    {:>9.0} turns/s   {:>7.0} battles/s   ({battles} playouts from mid-battle clones, {turns} turns, {:.2}s)",
+        turns as f64 / dt,
+        battles as f64 / dt,
+        dt
+    );
+
     // 4. clone cost on a mid-battle state (log off → log stays small)
     let fx = &fixtures[0];
     let mut b = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
