@@ -444,6 +444,7 @@ impl Battle {
             pending_boosts: None,
             field_weather_key: String::new(),
             listener_pool: Default::default(),
+            battle_mask: crate::dex::CbMask::EMPTY,
         };
         // formatData/field states get effectOrder slots in PS construction
         // order: formatData (id set, no target → order 0? target absent →
@@ -461,6 +462,7 @@ impl Battle {
 
         battle.set_player(dex, 0, p1)?;
         battle.set_player(dex, 1, p2)?;
+        battle.battle_mask = battle.recompute_battle_mask(dex);
         Ok(battle)
     }
 

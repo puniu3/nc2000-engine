@@ -63,6 +63,7 @@ impl Battle {
         let prev_key = self.field_weather_key.clone();
 
         self.field.weather = Some(cond);
+        self.refresh_battle_mask(dex);
         self.field_weather_key = status.to_string();
         let mut state = EffectState { id: status.to_string(), ..Default::default() };
         if let Some(src) = source {
@@ -94,6 +95,7 @@ impl Battle {
         if !started.truthy() {
             self.field.weather = prev_weather;
             self.field.weather_state = prev_state;
+        self.refresh_battle_mask(dex);
             self.field_weather_key = prev_key;
             return RV::False;
         }
@@ -115,6 +117,7 @@ impl Battle {
             None,
         );
         self.field.weather = None;
+        self.refresh_battle_mask(dex);
         self.field_weather_key.clear();
         // clearEffectState: keep effectOrder 0, drop the rest
         self.field.weather_state = EffectState::default();
@@ -156,6 +159,7 @@ impl Battle {
         }
         let state = self.init_effect_state(state, true);
         self.field.pseudo_weather.push((cond, state));
+        self.refresh_battle_mask(dex);
         if dex.cond(cond).has_callback("durationCallback") {
             let dur =
                 super::conditions::duration_callback(self, dex, status, source, source, source_effect);
@@ -177,6 +181,7 @@ impl Battle {
         );
         if !started.truthy() {
             self.field.pseudo_weather.retain(|(k, _)| *k != cond);
+            self.refresh_battle_mask(dex);
             return RV::False;
         }
         RV::True
@@ -197,6 +202,7 @@ impl Battle {
             None,
         );
         self.field.pseudo_weather.retain(|(k, _)| *k != cond);
+        self.refresh_battle_mask(dex);
         true
     }
 
@@ -319,6 +325,7 @@ impl Battle {
         }
         let state = self.init_effect_state(state, true);
         self.sides[side_n as usize].slot_conditions.push((cond, state));
+        self.refresh_battle_mask(dex);
         let started = self.single_event(
             dex,
             &ev::Start,
@@ -331,6 +338,7 @@ impl Battle {
         );
         if !started.truthy() {
             self.sides[side_n as usize].slot_conditions.retain(|(k, _)| *k != cond);
+        self.refresh_battle_mask(dex);
             return RV::False;
         }
         RV::True
@@ -353,6 +361,7 @@ impl Battle {
             None,
         );
         self.sides[side_n as usize].slot_conditions.retain(|(k, _)| *k != cond);
+        self.refresh_battle_mask(dex);
         true
     }
 

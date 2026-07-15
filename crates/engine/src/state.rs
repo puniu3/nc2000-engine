@@ -655,6 +655,10 @@ pub struct Battle {
     pub field_weather_key: String,
     /// Reusable listener buffers (never state; clones start empty).
     pub listener_pool: crate::battle::events::ScratchPool,
+    /// Union of every handler mask in the battle (all roster pokemon, side +
+    /// slot conditions, weather, pseudo-weathers). runEvent skips handler
+    /// collection when the event's callbacks miss this mask entirely.
+    pub battle_mask: crate::dex::CbMask,
 }
 
 /// Sparse boosts as an ordered list (PS object iteration order).

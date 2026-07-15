@@ -407,6 +407,7 @@ impl Battle {
 
     pub fn refresh_poke_mask(&mut self, dex: &Dex, id: PokeId) {
         self.poke_mut(id).handler_mask = self.recompute_poke_mask(dex, id);
+        self.refresh_battle_mask(dex);
     }
 
     pub fn recompute_side_mask(&self, dex: &Dex, side_n: u8) -> crate::dex::CbMask {
@@ -419,6 +420,34 @@ impl Battle {
 
     pub fn refresh_side_mask(&mut self, dex: &Dex, side_n: u8) {
         self.sides[side_n as usize].handler_mask = self.recompute_side_mask(dex, side_n);
+        self.refresh_battle_mask(dex);
+    }
+
+    /// Union of everything that can currently handle any callback anywhere in
+    /// this battle. Poke/side masks are trusted (they carry their own debug
+    /// asserts); slot conditions, weather and pseudo-weathers are walked.
+    pub fn recompute_battle_mask(&self, dex: &Dex) -> crate::dex::CbMask {
+        let mut m = crate::dex::CbMask::EMPTY;
+        for side in &self.sides {
+            m.or_with(&side.handler_mask);
+            for p in &side.roster {
+                m.or_with(&p.handler_mask);
+            }
+            for (c, _) in &side.slot_conditions {
+                m.or_with(&dex.cond(*c).mask);
+            }
+        }
+        for (c, _) in &self.field.pseudo_weather {
+            m.or_with(&dex.cond(*c).mask);
+        }
+        if let Some(w) = self.field.weather {
+            m.or_with(&dex.cond(w).mask);
+        }
+        m
+    }
+
+    pub fn refresh_battle_mask(&mut self, dex: &Dex) {
+        self.battle_mask = self.recompute_battle_mask(dex);
     }
 
     /// resolvePriority: fill sort metadata for a listener.
@@ -924,8 +953,20 @@ impl Battle {
             panic!("runEvent stack overflow at {}", ev.name);
         }
         let cbs = ev.cbs(dex);
+        debug_assert_eq!(
+            self.battle_mask,
+            self.recompute_battle_mask(dex),
+            "stale battle_mask at {}",
+            ev.name
+        );
         let mut handlers = self.take_scratch();
-        if cbs.possible {
+        if cbs.possible
+            && (self.battle_mask.has(cbs.on)
+                || self.battle_mask.has(cbs.on_ally)
+                || self.battle_mask.has(cbs.on_any)
+                || self.battle_mask.has(cbs.on_foe)
+                || self.battle_mask.has(cbs.on_source))
+        {
             self.find_event_handlers(dex, target, cbs, source, &mut handlers);
         }
         if on_effect {
