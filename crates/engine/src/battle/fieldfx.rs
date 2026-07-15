@@ -51,7 +51,10 @@ impl Battle {
                     if is_weather_move {
                         let ss = self.poke_str(src);
                         let se_name = self.effect_name(dex, source_effect);
-                        let from = format!("[from] {}", self.field_weather_key);
+                        let from = format!(
+                            "[from] {}",
+                            self.field.weather.map(|w| dex.conds_key(w)).unwrap_or("")
+                        );
                         self.add(&["-fail", &ss, &se_name, &from]);
                     }
                 }
@@ -60,11 +63,9 @@ impl Battle {
         }
         let prev_weather = self.field.weather;
         let prev_state = self.field.weather_state.clone();
-        let prev_key = self.field_weather_key.clone();
 
         self.field.weather = Some(cond);
         self.refresh_battle_mask(dex);
-        self.field_weather_key = status.to_string();
         let mut state = EffectState { id: crate::state::EffId::Cond(cond), ..Default::default() };
         if let Some(src) = source {
             state.source = Some(src);
@@ -96,7 +97,6 @@ impl Battle {
             self.field.weather = prev_weather;
             self.field.weather_state = prev_state;
         self.refresh_battle_mask(dex);
-            self.field_weather_key = prev_key;
             return RV::False;
         }
         self.each_event(dex, &ev::WeatherChange, Some(source_effect));
@@ -118,7 +118,6 @@ impl Battle {
         );
         self.field.weather = None;
         self.refresh_battle_mask(dex);
-        self.field_weather_key.clear();
         // clearEffectState: keep effectOrder 0, drop the rest
         self.field.weather_state = EffectState::default();
         self.each_event(dex, &ev::WeatherChange, None);

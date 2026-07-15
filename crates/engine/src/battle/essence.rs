@@ -96,7 +96,7 @@ impl Battle {
             "prngSeed": self.prng.seed_str(),
             "requestState": self.request_state.as_str(),
             "field": {
-                "weather": self.field_weather_key,
+                "weather": self.field.weather.map(|w| dex.conds_key(w)).unwrap_or(""),
                 "weatherState": scal(dex, &self.field.weather_state),
                 "pseudoWeather": map_scal(dex, self.field.pseudo_weather.iter().map(|(c, s)| (c, s))),
             },

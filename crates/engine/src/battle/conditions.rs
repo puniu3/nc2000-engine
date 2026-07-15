@@ -188,7 +188,7 @@ fn dispatch_cond(
         }
         ("frz", "onBeforeMove") => {
             let t = tpoke.unwrap();
-            let defrost = b.active_move.as_ref().map(|m| m.has_flag("defrost")).unwrap_or(false);
+            let defrost = b.active_move.as_ref().map(|m| m.has_flag(dex, "defrost")).unwrap_or(false);
             if defrost {
                 return RV::Undef;
             }
@@ -215,7 +215,7 @@ fn dispatch_cond(
         }
         ("frz", "onAfterMoveSecondarySelf") => {
             let t = tpoke.unwrap();
-            let defrost = b.active_move.as_ref().map(|m| m.has_flag("defrost")).unwrap_or(false);
+            let defrost = b.active_move.as_ref().map(|m| m.has_flag(dex, "defrost")).unwrap_or(false);
             if defrost {
                 b.cure_status(dex, t, false);
             }
@@ -494,7 +494,7 @@ fn dispatch_cond(
         ("sunnyday", "onImmunity") => {
             // onImmunity(type, pokemon): frz → false (can't freeze in sun)
             let t = tpoke.unwrap();
-            if b.effective_weather(t) != "sunnyday" {
+            if b.effective_weather(t) != crate::cond_id!(dex, "sunnyday") {
                 return RV::Undef;
             }
             if relay == RV::Str("frz".to_string()) {
@@ -508,7 +508,7 @@ fn dispatch_cond(
         }
         ("sandstorm", "onFieldResidual") => {
             b.add(&["-weather", "Sandstorm", "[upkeep]"]);
-            if b.field_is_weather("sandstorm") {
+            if b.field.weather.is_some() && b.field.weather == crate::cond_id!(dex, "sandstorm") {
                 b.each_event(dex, &ev::Weather, None);
             }
             RV::Undef
@@ -764,7 +764,7 @@ fn dispatch_cond(
                 return RV::Undef;
             }
             if let EffectHandle::MoveEff(m) = source_effect {
-                if !dex.move_static(m).has_flag("futuremove") {
+                if !dex.move_static(m).has_flag(dex, "futuremove") {
                     let ts = b.poke_str(t);
                     b.add(&["-activate", &ts, "move: Destiny Bond"]);
                     b.pokemon_faint(src, None, EffectHandle::None);
@@ -812,7 +812,7 @@ fn dispatch_cond(
             let locked = b.poke(t).last_move_encore;
             let Some(locked) = locked else { return RV::False };
             let has_slot = b.poke(t).get_move_slot(locked).map(|s| s.pp).unwrap_or(0) > 0;
-            if dex.move_static(locked).has_flag("failencore") || !has_slot {
+            if dex.move_static(locked).has_flag(dex, "failencore") || !has_slot {
                 return RV::False;
             }
             let locked_key = dex.moves.key(locked).to_string();
@@ -931,7 +931,7 @@ fn dispatch_cond(
                 .unwrap_or_default();
             if !locked.is_empty() && cur == locked {
                 let ts = b.poke_str(t);
-                let name = b.active_move.as_ref().map(|m| m.name.clone()).unwrap_or_default();
+                let name = b.active_move_name(dex);
                 b.add(&["cant", &ts, "Disable", &name]);
                 return RV::False;
             }
@@ -1053,7 +1053,7 @@ fn dispatch_cond(
                     || SUB_BLOCKED.contains(&move_key.as_str())
                 {
                     let ts = b.poke_str(t);
-                    let name = b.active_move.as_ref().map(|m| m.name.clone()).unwrap_or_default();
+                    let name = b.active_move_name(dex);
                     let block = format!("[block] {name}");
                     b.add(&["-activate", &ts, "Substitute", &block]);
                     return RV::Null;
@@ -1172,7 +1172,7 @@ fn dispatch_cond(
                 fake.volatile_status = None;
                 fake.secondaries = Vec::new();
                 fake.self_effect = None;
-                fake.flags = vec!["contact".into(), "protect".into()];
+                fake.flags = dex.flag_bit("contact") | dex.flag_bit("protect");
                 fake.cb_mask = crate::dex::CbMask::EMPTY;
                 // the synthetic moveData has no ignoreImmunity: Physical → false
                 fake.ignore_immunity = false;
@@ -1270,7 +1270,7 @@ fn dispatch_cond(
             let has_flag = b
                 .active_move
                 .as_ref()
-                .map(|m| m.has_flag("minimize"))
+                .map(|m| m.has_flag(dex, "minimize"))
                 .unwrap_or(false);
             if has_flag {
                 b.chain_modify(2.0, 1.0);
@@ -1353,7 +1353,7 @@ fn dispatch_cond(
             let has_protect_flag = b
                 .active_move
                 .as_ref()
-                .map(|m| m.has_flag("protect"))
+                .map(|m| m.has_flag(dex, "protect"))
                 .unwrap_or(false);
             if !has_protect_flag {
                 return RV::Undef; // move bypasses protect

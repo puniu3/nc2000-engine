@@ -959,14 +959,20 @@ impl Battle {
             "stale battle_mask at {}",
             ev.name
         );
-        let mut handlers = self.take_scratch();
-        if cbs.possible
+        let any_handler = cbs.possible
             && (self.battle_mask.has(cbs.on)
                 || self.battle_mask.has(cbs.on_ally)
                 || self.battle_mask.has(cbs.on_any)
                 || self.battle_mask.has(cbs.on_foe)
-                || self.battle_mask.has(cbs.on_source))
-        {
+                || self.battle_mask.has(cbs.on_source));
+        if !any_handler && !on_effect {
+            // Zero handlers: PS runs the frame anyway, but with no handlers it
+            // consumes no PRNG, leaves the modifier at 1 (identity on integer
+            // relays) and returns the relay unchanged. Skip the machinery.
+            return relay.unwrap_or(RV::True);
+        }
+        let mut handlers = self.take_scratch();
+        if any_handler {
             self.find_event_handlers(dex, target, cbs, source, &mut handlers);
         }
         if on_effect {

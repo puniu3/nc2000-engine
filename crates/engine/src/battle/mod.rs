@@ -395,6 +395,15 @@ impl Battle {
         }
     }
 
+    /// The active move's display name (synthetic moves have none).
+    pub fn active_move_name(&self, dex: &Dex) -> String {
+        self.active_move
+            .as_ref()
+            .and_then(|m| m.id)
+            .map(|m| dex.move_static(m).name.clone())
+            .unwrap_or_default()
+    }
+
     /// PS `effect.name`.
     pub fn effect_name(&self, dex: &Dex, effect: EffectHandle) -> String {
         match effect {
@@ -438,7 +447,7 @@ impl Battle {
             winner: None,
             field: Field::default(),
             sides: [Side::empty("P1"), Side::empty("P2")],
-            queue: Vec::new(),
+            queue: Default::default(),
             faint_queue: Vec::new(),
             log: Vec::new(),
             log_enabled: true,
@@ -458,7 +467,6 @@ impl Battle {
             active_target: None,
             last_move_id: None,
             pending_boosts: None,
-            field_weather_key: String::new(),
             listener_pool: Default::default(),
             battle_mask: crate::dex::CbMask::EMPTY,
         };
@@ -642,7 +650,7 @@ impl Battle {
                 ..Default::default()
             },
             types: dex.species_types(species_id),
-            volatiles: Vec::new(),
+            volatiles: Default::default(),
             handler_mask: item.map(|i| dex.items.get(i).mask).unwrap_or(crate::dex::CbMask::EMPTY),
             transformed: false,
             fainted: false,
@@ -673,7 +681,7 @@ impl Battle {
             stats_lowered_this_turn: false,
             used_item_this_turn: false,
             last_damage: 0,
-            attacked_by: Vec::new(),
+            attacked_by: Default::default(),
             times_attacked: 0,
             speed: stats[5],
         };
@@ -768,13 +776,13 @@ impl Side {
     pub fn empty(name: &'static str) -> Side {
         Side {
             name,
-            roster: Vec::new(),
-            party: Vec::new(),
+            roster: Default::default(),
+            party: Default::default(),
             active: None,
             pokemon_left: 0,
             total_fainted: 0,
-            side_conditions: Vec::new(),
-            slot_conditions: Vec::new(),
+            side_conditions: Default::default(),
+            slot_conditions: Default::default(),
             handler_mask: crate::dex::CbMask::EMPTY,
             last_move: None,
             fainted_this_turn: None,

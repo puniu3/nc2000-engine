@@ -1229,14 +1229,9 @@ impl Battle {
     }
 
     /// pokemon.effectiveWeather (no utility umbrella in gen2).
-    pub fn effective_weather(&self, id: PokeId) -> String {
+    pub fn effective_weather(&self, id: PokeId) -> Option<CondId> {
         let _ = id;
-        // resolved via field only; dex key lookup needs dex, so store id here
-        self.field_weather_key.clone()
-    }
-
-    pub fn field_is_weather(&self, key: &str) -> bool {
-        self.field_weather_key == key
+        self.field.weather
     }
 }
 

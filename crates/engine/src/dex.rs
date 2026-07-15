@@ -488,16 +488,18 @@ pub enum Multihit {
 pub struct MoveStatic {
     pub name: String,
     pub move_type: TypeId,
+    // (target/flags interned below — see `target` and `flags` fields)
     pub category: Category,
     pub base_power: i32,
     pub accuracy: Accuracy,
     pub pp: i32,
     pub no_pp_boosts: bool,
     pub priority: i8,
-    pub target: String,
+    pub target: &'static str,
     pub crit_ratio: i32,
     pub will_crit: Option<bool>,
-    pub flags: Vec<String>,
+    /// Bitmask over `Dex::flag_bit` (move flags: contact/charge/protect/...).
+    pub flags: u64,
     pub status: Option<String>,
     pub volatile_status: Option<String>,
     pub side_condition: Option<String>,
@@ -528,7 +530,7 @@ pub struct MoveStatic {
     pub always_hit: bool,
     pub thaws_target: bool,
     pub stalling_move: bool,
-    pub non_ghost_target: Option<String>,
+    pub non_ghost_target: Option<&'static str>,
     /// PS callback names on the move (non-empty = milestone 2 move).
     pub callbacks: Vec<String>,
     /// Registered-callback bitset over `callbacks` (dotted sub-block names
@@ -538,8 +540,28 @@ pub struct MoveStatic {
     pub condition: Option<Value>,
 }
 
+/// Intern a short string once, globally (move targets, flag names).
+fn leak_intern(s: &str) -> &'static str {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+    static TABLE: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
+    let mut t = TABLE.get_or_init(|| Mutex::new(HashSet::new())).lock().unwrap();
+    match t.get(s) {
+        Some(&v) => v,
+        None => {
+            let v: &'static str = Box::leak(s.to_owned().into_boxed_str());
+            t.insert(v);
+            v
+        }
+    }
+}
+
 impl MoveStatic {
-    fn parse(d: &MoveData, type_index: &std::collections::HashMap<String, u8>) -> MoveStatic {
+    fn parse(
+        d: &MoveData,
+        type_index: &std::collections::HashMap<String, u8>,
+        flag_bits: &std::collections::HashMap<String, u64>,
+    ) -> MoveStatic {
         let x = |k: &str| d.extra.get(k);
         let xb = |k: &str| x(k).map(|v| v.as_bool() == Some(true) || v.is_string()).unwrap_or(false);
         let category = match d.category.as_str() {
@@ -593,10 +615,10 @@ impl MoveStatic {
             pp: d.pp as i32,
             no_pp_boosts: xb("noPPBoosts"),
             priority: d.priority,
-            target: d.target.clone(),
+            target: leak_intern(&d.target),
             crit_ratio: d.crit_ratio.unwrap_or(1) as i32,
             will_crit: x("willCrit").and_then(|v| v.as_bool()),
-            flags: d.flags.keys().cloned().collect(),
+            flags: d.flags.keys().map(|k| flag_bits.get(k).copied().unwrap_or(0)).fold(0, |a, b| a | b),
             status: d.status.clone(),
             volatile_status: d.volatile_status.clone(),
             side_condition: d.side_condition.clone(),
@@ -639,15 +661,16 @@ impl MoveStatic {
             always_hit: xb("alwaysHit"),
             thaws_target: xb("thawsTarget"),
             stalling_move: xb("stallingMove"),
-            non_ghost_target: x("nonGhostTarget").and_then(|v| v.as_str()).map(String::from),
+            non_ghost_target: x("nonGhostTarget").and_then(|v| v.as_str()).map(leak_intern),
             callbacks: d.callbacks.clone(),
             cb_mask: CbMask::EMPTY,
             condition: d.condition.clone(),
         }
     }
 
-    pub fn has_flag(&self, flag: &str) -> bool {
-        self.flags.iter().any(|f| f == flag)
+    /// Flag test through the dex registry (unknown flags are never set).
+    pub fn has_flag(&self, dex: &Dex, flag: &str) -> bool {
+        self.flags & dex.flag_bit(flag) != 0
     }
 }
 
@@ -756,6 +779,8 @@ pub struct Dex {
     status_imm: std::collections::HashMap<String, Box<[bool]>>,
     /// Precomputed TypeList per species (SpeciesId order).
     species_types: Vec<TypeList>,
+    /// Move-flag name → bitmask bit.
+    flag_bits: std::collections::HashMap<String, u64>,
     /// CondId of each `Status` discriminant ("", brn, par, slp, frz, psn,
     /// tox, fnt) — collection must not hit the string index per event.
     pub status_conds: [Option<CondId>; 8],
@@ -842,8 +867,22 @@ impl Dex {
         };
 
         let moves = Table::build(file.moves);
-        let moves_static: Vec<MoveStatic> =
-            moves.values.iter().map(|d| MoveStatic::parse(d, &type_index)).collect();
+        // move-flag registry (gen2: ~20 distinct flags; bitmask capacity 64)
+        let mut flag_bits: std::collections::HashMap<String, u64> = Default::default();
+        for d in &moves.values {
+            for k in d.flags.keys() {
+                if !flag_bits.contains_key(k) {
+                    let bit = 1u64 << flag_bits.len();
+                    assert!(flag_bits.len() < 64, "flag bitmask overflow");
+                    flag_bits.insert(k.clone(), bit);
+                }
+            }
+        }
+        let moves_static: Vec<MoveStatic> = moves
+            .values
+            .iter()
+            .map(|d| MoveStatic::parse(d, &type_index, &flag_bits))
+            .collect();
 
         // ---- build the interned runtime condition table
         let mut entries: BTreeMap<String, CondEntry> = BTreeMap::new();
@@ -1178,6 +1217,7 @@ impl Dex {
             imm_matrix,
             status_imm,
             species_types,
+            flag_bits,
             status_conds,
         })
     }
@@ -1215,6 +1255,12 @@ impl Dex {
     #[inline]
     pub fn species_types(&self, id: SpeciesId) -> TypeList {
         self.species_types[id.0 as usize]
+    }
+
+    /// Bit for a move-flag name (0 if the flag doesn't occur in this dex).
+    #[inline]
+    pub fn flag_bit(&self, flag: &str) -> u64 {
+        self.flag_bits.get(flag).copied().unwrap_or(0)
     }
 
     /// Dense id of a callback name (`Cb::NONE` if never registered — such a

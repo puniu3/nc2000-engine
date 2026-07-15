@@ -445,6 +445,8 @@ pub struct Pokemon {
     pub item_state: EffectState,
     pub types: TypeList,
     /// Insertion-ordered (PS object key order drives handler collection).
+    /// Heap-backed: an inline pair costs ~400B per Pokemon copy (measured
+    /// slower than the one allocation when volatiles exist).
     pub volatiles: Vec<(CondId, EffectState)>,
     /// Union of status/volatile/item callback masks (slot conditions
     /// excluded) — collection fast path. Maintained by refresh_poke_mask at
@@ -483,7 +485,7 @@ pub struct Pokemon {
     pub stats_lowered_this_turn: bool,
     pub used_item_this_turn: bool,
     pub last_damage: i64,
-    pub attacked_by: Vec<Attacker>,
+    pub attacked_by: smallvec::SmallVec<[Attacker; 2]>,
     pub times_attacked: i32,
 
     pub speed: i32,
@@ -572,17 +574,19 @@ pub enum RequestKind {
 pub struct Side {
     pub name: &'static str,
     /// All constructed pokemon in construction order — never reordered.
+    /// Heap-backed on purpose: keeping 6 inline Pokemon would put ~15KB on
+    /// the stack per clone/move of Battle (measured 2x slower).
     pub roster: Vec<Pokemon>,
     /// PS `side.pokemon`: display order, mutated by team choice + switches.
     /// Values are roster slots.
-    pub party: Vec<u8>,
+    pub party: smallvec::SmallVec<[u8; 6]>,
     /// Roster slot of the active pokemon (singles: one slot).
     pub active: Option<u8>,
     pub pokemon_left: i32,
     pub total_fainted: i32,
     /// Insertion-ordered.
-    pub side_conditions: Vec<(CondId, EffectState)>,
-    pub slot_conditions: Vec<(CondId, EffectState)>,
+    pub side_conditions: smallvec::SmallVec<[(CondId, EffectState); 2]>,
+    pub slot_conditions: smallvec::SmallVec<[(CondId, EffectState); 1]>,
     /// Union of side-condition callback masks (collection fast path).
     pub handler_mask: crate::dex::CbMask,
     /// Stadium 2 self-KO clause bookkeeping (side.lastMove).
@@ -621,7 +625,7 @@ pub struct Field {
     pub weather_state: EffectState,
     /// Insertion-ordered. Keys are interned runtime cond ids (rule
     /// pseudo-weathers are interned too).
-    pub pseudo_weather: Vec<(CondId, EffectState)>,
+    pub pseudo_weather: smallvec::SmallVec<[(CondId, EffectState); 4]>,
 }
 
 impl Field {
@@ -650,7 +654,7 @@ impl RequestState {
 }
 
 /// battle-queue.ts Action, resolved (gen2 singles slice).
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Action {
     pub choice: ActionKind,
     pub order: i64,
@@ -660,7 +664,7 @@ pub struct Action {
     pub pokemon: Option<PokeId>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ActionKind {
     Start,
     BeforeTurn,
@@ -724,14 +728,13 @@ pub struct EffectFrame {
 pub struct ActiveMove {
     /// None for synthetic moves (confusion self-hit).
     pub id: Option<MoveId>,
-    pub name: String,
     pub move_type: TypeId,
     pub base_move_type: TypeId,
     pub category: Category,
     pub base_power: i32,
     pub accuracy: Accuracy,
     pub priority: i8,
-    pub target: String,
+    pub target: &'static str,
     pub crit_ratio: i32,
     pub will_crit: Option<bool>,
     pub status: Option<String>,
@@ -764,8 +767,8 @@ pub struct ActiveMove {
     pub always_hit: bool,
     pub thaws_target: bool,
     pub stalling_move: bool,
-    pub non_ghost_target: Option<String>,
-    pub flags: Vec<String>,
+    pub non_ghost_target: Option<&'static str>,
+    pub flags: u64,
     pub cb_mask: crate::dex::CbMask,
     // ---- per-use mutable
     pub hit: i32,
@@ -789,8 +792,8 @@ pub struct ActiveMove {
 }
 
 impl ActiveMove {
-    pub fn has_flag(&self, flag: &str) -> bool {
-        self.flags.iter().any(|f| f == flag)
+    pub fn has_flag(&self, dex: &crate::dex::Dex, flag: &str) -> bool {
+        self.flags & dex.flag_bit(flag) != 0
     }
 
     pub fn hit_data_mut(&mut self, slot: String) -> &mut (bool, i32) {
@@ -821,7 +824,7 @@ pub struct Battle {
     pub winner: Option<String>,
     pub field: Field,
     pub sides: [Side; 2],
-    pub queue: Vec<Action>,
+    pub queue: smallvec::SmallVec<[Action; 8]>,
     pub faint_queue: Vec<FaintEntry>,
     pub log: Vec<String>,
     /// Protocol-log recording. Disabling it (search mode) skips all log
@@ -851,9 +854,6 @@ pub struct Battle {
     pub last_move_id: Option<MoveId>,
     /// The boost table flowing through a TryBoost event (mist mutates it).
     pub pending_boosts: Option<Vec<(usize, i8)>>,
-    /// Cached dex key of `field.weather` ('' if none) — lets weather checks
-    /// avoid threading `dex` everywhere.
-    pub field_weather_key: String,
     /// Reusable listener buffers (never state; clones start empty).
     pub listener_pool: crate::battle::events::ScratchPool,
     /// Union of every handler mask in the battle (all roster pokemon, side +

@@ -29,7 +29,6 @@ pub fn get_active_move(dex: &Dex, id: MoveId) -> ActiveMove {
     let ms = dex.move_static(id);
     ActiveMove {
         id: Some(id),
-        name: ms.name.clone(),
         move_type: ms.move_type,
         base_move_type: ms.move_type,
         category: ms.category,
@@ -91,7 +90,6 @@ pub fn get_active_move(dex: &Dex, id: MoveId) -> ActiveMove {
 pub fn synthetic_move(dex: &Dex, base_power: i32) -> ActiveMove {
     ActiveMove {
         id: None,
-        name: String::new(),
         move_type: dex.known_types.unknown,
         base_move_type: dex.known_types.unknown,
         category: Category::Physical,
@@ -132,7 +130,7 @@ pub fn synthetic_move(dex: &Dex, base_power: i32) -> ActiveMove {
         thaws_target: false,
         stalling_move: false,
         non_ghost_target: None,
-        flags: Vec::new(),
+        flags: 0,
         cb_mask: crate::dex::CbMask::EMPTY,
         hit: 0,
         last_hit: false,
@@ -324,15 +322,14 @@ pub fn dispatch_move_callback(
         }
         ("thunder", "onModifyMove") => {
             // target?.effectiveWeather() — the foe (= the event's source)
-            let weather = match source {
-                Some(t) => b.effective_weather(t),
-                None => String::new(),
-            };
+            let weather = source.and_then(|t| b.effective_weather(t));
+            let rain = weather.is_some() && weather == crate::cond_id!(dex, "raindance");
+            let sun = weather.is_some() && weather == crate::cond_id!(dex, "sunnyday");
             if let Some(am) = b.active_move.as_mut() {
-                match weather.as_str() {
-                    "raindance" => am.accuracy = Accuracy::AlwaysHits,
-                    "sunnyday" => am.accuracy = Accuracy::Pct(50),
-                    _ => {}
+                if rain {
+                    am.accuracy = Accuracy::AlwaysHits;
+                } else if sun {
+                    am.accuracy = Accuracy::Pct(50);
                 }
             }
             RV::Undef
@@ -356,7 +353,7 @@ pub fn dispatch_move_callback(
                     .active_move
                     .as_ref()
                     .and_then(|am| am.non_ghost_target.clone())
-                    .unwrap_or_else(|| "self".to_string());
+                    .unwrap_or("self");
                 if let Some(am) = b.active_move.as_mut() {
                     am.volatile_status = None;
                     am.cb_mask.clear(dex.known.on_hit);
@@ -474,7 +471,7 @@ pub fn dispatch_move_callback(
             }
             if key == "solarbeam" {
                 let w = b.effective_weather(attacker);
-                if w == "sunnyday" {
+                if w.is_some() && w == crate::cond_id!(dex, "sunnyday") {
                     b.attr_last_move(&["[still]"]);
                     let ps = b.poke_str(attacker);
                     let defender_str = source.map(|d| b.poke_str(d)).unwrap_or_default();
@@ -888,7 +885,7 @@ pub fn dispatch_move_callback(
             }
             let last = b.poke(t).last_move.unwrap();
             let user_moves: Vec<MoveId> = b.poke(user).move_slots.iter().map(|s| s.id).collect();
-            if dex.move_static(last).has_flag("failmimic") || user_moves.contains(&last) {
+            if dex.move_static(last).has_flag(dex, "failmimic") || user_moves.contains(&last) {
                 return RV::False;
             }
             let mimic_id = dex.moves.id("mimic").unwrap();
@@ -931,9 +928,11 @@ pub fn dispatch_move_callback(
         ("moonlight", "onHit") | ("morningsun", "onHit") | ("synthesis", "onHit") => {
             let t = tpoke.unwrap();
             let w = b.effective_weather(t);
-            let amount = if w == "sunnyday" {
+            let amount = if w.is_some() && w == crate::cond_id!(dex, "sunnyday") {
                 b.poke(t).maxhp as f64
-            } else if matches!(w.as_str(), "raindance" | "sandstorm") {
+            } else if w.is_some()
+                && (w == crate::cond_id!(dex, "raindance") || w == crate::cond_id!(dex, "sandstorm"))
+            {
                 b.poke(t).base_maxhp as f64 / 4.0
             } else {
                 b.poke(t).base_maxhp as f64 / 2.0
@@ -1010,7 +1009,7 @@ pub fn dispatch_move_callback(
             let mut moves: Vec<MoveId> = Vec::new();
             for slot in &b.poke(user).move_slots {
                 let ms = dex.move_static(slot.id);
-                if !ms.has_flag("nosleeptalk") && !ms.has_flag("charge") {
+                if !ms.has_flag(dex, "nosleeptalk") && !ms.has_flag(dex, "charge") {
                     moves.push(slot.id);
                 }
             }
@@ -1153,7 +1152,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
     mv.secondaries = Vec::new();
     mv.self_effect = None;
     mv.volatile_status = None;
-    mv.flags = vec!["metronome".into(), "futuremove".into()];
+    mv.flags = dex.flag_bit("metronome") | dex.flag_bit("futuremove");
     mv.cb_mask = crate::dex::CbMask::EMPTY;
     mv.ignore_immunity = false;
     let move_eff = EffectHandle::MoveEff(fs_id);
@@ -1378,11 +1377,11 @@ impl Battle {
     pub fn get_target(&self, dex: &Dex, mv: &ActiveMove, pokemon: PokeId, target_loc: i8) -> Option<PokeId> {
         // Fails if the target is the user and the move can't target its own position
         let self_loc = -1i8;
-        if matches!(mv.target.as_str(), "adjacentAlly" | "any" | "normal")
+        if matches!(mv.target, "adjacentAlly" | "any" | "normal")
             && target_loc == self_loc
             && !self.has_twoturn_volatile(dex, pokemon)
         {
-            if mv.has_flag("futuremove") {
+            if mv.has_flag(dex, "futuremove") {
                 return Some(pokemon);
             }
             return self.get_random_target(&mv.target, pokemon);
@@ -1616,7 +1615,7 @@ impl Battle {
 
         // |move| line
         let ps = self.poke_str(pokemon);
-        let move_name = self.active_move.as_ref().unwrap().name.clone();
+        let move_name = self.active_move_name(dex);
         let target_str = match target {
             Some(t) => self.poke_str(t),
             None => "null".to_string(),
@@ -1635,9 +1634,9 @@ impl Battle {
         }
 
         // getMoveTargets (singles single-target path + field/side path)
-        let mv_target_kind = self.active_move.as_ref().unwrap().target.clone();
+        let mv_target_kind = self.active_move.as_ref().unwrap().target;
         let is_field_move = matches!(
-            mv_target_kind.as_str(),
+            mv_target_kind,
             "all" | "foeSide" | "allySide" | "allyTeam"
         );
 
@@ -1700,7 +1699,7 @@ impl Battle {
                     }
                 }
             }
-            let futuremove = self.active_move.as_ref().unwrap().has_flag("futuremove");
+            let futuremove = self.active_move.as_ref().unwrap().has_flag(dex, "futuremove");
             if self.poke(t).fainted && !futuremove {
                 self.attr_last_move(&["[notarget]"]);
                 let ps = self.poke_str(pokemon);
@@ -1803,8 +1802,8 @@ impl Battle {
             return MoveOutcome::Fail;
         }
 
-        let mv_target = self.active_move.as_ref().unwrap().target.clone();
-        if matches!(mv_target.as_str(), "all" | "foeSide" | "allySide" | "allyTeam") {
+        let mv_target = self.active_move.as_ref().unwrap().target;
+        if matches!(mv_target, "all" | "foeSide" | "allySide" | "allyTeam") {
             let hit_result = if mv_target == "all" {
                 self.run_event(dex, &ev::TryHitField, EvTarget::Poke(target), Some(pokemon), move_eff, None, false, false)
             } else {
