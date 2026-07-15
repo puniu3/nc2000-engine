@@ -52,7 +52,8 @@ pub struct Listener {
     pub state_token: u32,
     /// The (possibly prefixed) callback name this listener was collected
     /// under — onSourceAccuracy, onFoeBeforeSwitchOut, ... Dispatch uses it.
-    pub callback_name: String,
+    /// Interned via `cb_name` (hot path must not allocate).
+    pub callback_name: &'static str,
 }
 
 /// comparePriority as a signed delta (PS returns a number; only the sign and
@@ -101,6 +102,111 @@ pub fn compare_redirect_order(a: &Listener, b: &Listener) -> f64 {
     b.speed - a.speed
 }
 
+/// `NC_TRACE` env flag, read once (the lookup is too slow for hot paths).
+pub(crate) fn trace_enabled() -> bool {
+    static TRACE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *TRACE.get_or_init(|| std::env::var_os("NC_TRACE").is_some())
+}
+
+/// Interned `prefix + event` concatenation. The event system used to build
+/// these names with `format!` on every dispatch — sampling showed the fmt
+/// machinery under `find_event_handlers` eating ~60% of turn time. Both
+/// arguments are always `&'static` literals (or previously-interned results),
+/// so the hot path is a thread-local cache keyed by POINTER identity — no
+/// string hashing, no lock. The slow path composes + interns once globally.
+pub(crate) fn cb_name(prefix: &'static str, event: &'static str) -> &'static str {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::hash::{BuildHasherDefault, Hasher};
+
+    /// Multiply-mix hasher for the (ptr,len,ptr,len) key — SipHash is
+    /// overkill for pointer identity.
+    #[derive(Default)]
+    struct PtrHasher(u64);
+    impl Hasher for PtrHasher {
+        fn write(&mut self, _: &[u8]) {
+            unreachable!("PtrHasher only hashes usize");
+        }
+        fn write_usize(&mut self, v: usize) {
+            self.0 = (self.0 ^ v as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        }
+        fn finish(&self) -> u64 {
+            self.0 ^ (self.0 >> 32)
+        }
+    }
+    type Key = (usize, usize, usize, usize);
+    type Cache = HashMap<Key, &'static str, BuildHasherDefault<PtrHasher>>;
+    thread_local! {
+        static CACHE: RefCell<Cache> = RefCell::new(Cache::default());
+    }
+
+    let key =
+        (prefix.as_ptr() as usize, prefix.len(), event.as_ptr() as usize, event.len());
+    CACHE.with(|c| {
+        if let Some(&s) = c.borrow().get(&key) {
+            return s;
+        }
+        let s = intern_concat(prefix, event);
+        c.borrow_mut().insert(key, s);
+        s
+    })
+}
+
+/// Can this event possibly have handlers, given the format's conditions and
+/// items? Checked once per distinct event id (thread-local cache keyed by
+/// pointer identity — event ids are literals), then a plain bool. Assumes one
+/// format's dex per process, which is this engine's whole design.
+///
+/// Soundness: a runEvent with zero handlers is side-effect-free in PS too —
+/// it consumes no PRNG (speedSort of an empty list) and returns the relay
+/// unchanged (modifier stays 1). The conformance corpus verifies this.
+fn event_possibly_handled(dex: &Dex, event_id: &'static str) -> bool {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    thread_local! {
+        static CACHE: RefCell<HashMap<(usize, usize), bool>> = RefCell::new(HashMap::new());
+    }
+    let key = (event_id.as_ptr() as usize, event_id.len());
+    CACHE.with(|c| {
+        if let Some(&b) = c.borrow().get(&key) {
+            return b;
+        }
+        let b = ["on", "onAlly", "onAny", "onFoe", "onSource"]
+            .iter()
+            .any(|prefix| dex.callback_possible(cb_name(prefix, event_id)));
+        c.borrow_mut().insert(key, b);
+        b
+    })
+}
+
+/// Slow path: compose into a stack buffer and intern in the global table
+/// (content-keyed, shared across threads).
+fn intern_concat(prefix: &str, event: &str) -> &'static str {
+    use std::collections::HashSet;
+    use std::sync::{OnceLock, RwLock};
+    static TABLE: OnceLock<RwLock<HashSet<&'static str>>> = OnceLock::new();
+
+    let mut buf = [0u8; 64];
+    let n = prefix.len() + event.len();
+    assert!(n <= buf.len(), "callback name too long: {prefix}{event}");
+    buf[..prefix.len()].copy_from_slice(prefix.as_bytes());
+    buf[prefix.len()..n].copy_from_slice(event.as_bytes());
+    // concatenating two valid str at char boundaries is valid UTF-8
+    let composed = std::str::from_utf8(&buf[..n]).unwrap();
+
+    let table = TABLE.get_or_init(|| RwLock::new(HashSet::new()));
+    if let Some(&s) = table.read().unwrap().get(composed) {
+        return s;
+    }
+    let mut w = table.write().unwrap();
+    if let Some(&s) = w.get(composed) {
+        return s;
+    }
+    let leaked: &'static str = Box::leak(composed.to_owned().into_boxed_str());
+    w.insert(leaked);
+    leaked
+}
+
 impl Battle {
     /// PS speedSort: selection sort; full ties shuffled with the battle PRNG.
     pub fn speed_sort<T>(&mut self, list: &mut [T], cmp: impl Fn(&T, &T) -> f64) {
@@ -108,15 +214,18 @@ impl Battle {
             return;
         }
         let mut sorted = 0;
+        let mut next_indexes: Vec<usize> = Vec::with_capacity(list.len());
         while sorted + 1 < list.len() {
-            let mut next_indexes = vec![sorted];
+            next_indexes.clear();
+            next_indexes.push(sorted);
             for i in (sorted + 1)..list.len() {
                 let delta = cmp(&list[next_indexes[0]], &list[i]);
                 if delta < 0.0 {
                     continue;
                 }
                 if delta > 0.0 {
-                    next_indexes = vec![i];
+                    next_indexes.clear();
+                    next_indexes.push(i);
                 } else {
                     next_indexes.push(i);
                 }
@@ -127,7 +236,7 @@ impl Battle {
                 }
             }
             if next_indexes.len() > 1 {
-                if std::env::var_os("NC_TRACE").is_some() {
+                if trace_enabled() {
                     eprintln!("[trace] speed_sort shuffle: ties={} seed_before={}", next_indexes.len(), self.prng.seed_str());
                 }
                 self.prng.shuffle(list, sorted, sorted + next_indexes.len());
@@ -198,13 +307,13 @@ impl Battle {
     // ------------------------------------------------- handler collection
 
     /// resolvePriority: fill sort metadata for a listener.
-    fn resolve_priority(&self, dex: &Dex, mut h: Listener, callback_name: &str) -> Listener {
-        h.callback_name = callback_name.to_string();
+    fn resolve_priority(&self, dex: &Dex, mut h: Listener, callback_name: &'static str) -> Listener {
+        h.callback_name = callback_name;
         if let EffectHandle::Cond(c) = h.effect {
             let entry = dex.cond(c);
-            h.order = entry.num(&format!("{callback_name}Order")).map(|v| v as i64);
-            h.priority = entry.num(&format!("{callback_name}Priority")).unwrap_or(0) as f64;
-            h.sub_order = entry.num(&format!("{callback_name}SubOrder")).unwrap_or(0) as f64;
+            h.order = entry.num(cb_name(callback_name, "Order")).map(|v| v as i64);
+            h.priority = entry.num(cb_name(callback_name, "Priority")).unwrap_or(0) as f64;
+            h.sub_order = entry.num(cb_name(callback_name, "SubOrder")).unwrap_or(0) as f64;
             if h.sub_order == 0.0 {
                 // effectTypeOrder: Condition 2 (3/4/5 by state target), Weather
                 // 5, Format/Rule 5, Item 8. 'Status' is NOT in the table → 0.
@@ -223,9 +332,9 @@ impl Battle {
             }
         } else if let EffectHandle::Item(i) = h.effect {
             let entry = dex.items.get(i);
-            h.order = entry.num(&format!("{callback_name}Order")).map(|v| v as i64);
-            h.priority = entry.num(&format!("{callback_name}Priority")).unwrap_or(0) as f64;
-            h.sub_order = entry.num(&format!("{callback_name}SubOrder")).unwrap_or(0) as f64;
+            h.order = entry.num(cb_name(callback_name, "Order")).map(|v| v as i64);
+            h.priority = entry.num(cb_name(callback_name, "Priority")).unwrap_or(0) as f64;
+            h.sub_order = entry.num(cb_name(callback_name, "SubOrder")).unwrap_or(0) as f64;
             if h.sub_order == 0.0 {
                 h.sub_order = 8.0;
             }
@@ -255,7 +364,7 @@ impl Battle {
         &self,
         dex: &Dex,
         pokemon: PokeId,
-        callback_name: &str,
+        callback_name: &'static str,
         get_key_duration: bool,
     ) -> Vec<Listener> {
         let mut handlers = Vec::new();
@@ -281,7 +390,7 @@ impl Battle {
                             speed: 0.0,
                             effect_order: 0.0,
                             state_token: p.status_state.effect_order,
-                            callback_name: String::new(),
+                            callback_name: "",
                         },
                         callback_name,
                     ));
@@ -306,7 +415,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: state.effect_order,
-                        callback_name: String::new(),
+                        callback_name: "",
                     },
                     callback_name,
                 ));
@@ -331,7 +440,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: p.item_state.effect_order,
-                        callback_name: String::new(),
+                        callback_name: "",
                     },
                     callback_name,
                 ));
@@ -358,7 +467,7 @@ impl Battle {
                             speed: 0.0,
                             effect_order: 0.0,
                             state_token: state.effect_order,
-                            callback_name: String::new(),
+                            callback_name: "",
                         },
                         callback_name,
                     ));
@@ -372,7 +481,7 @@ impl Battle {
         &self,
         dex: &Dex,
         side_n: u8,
-        callback_name: &str,
+        callback_name: &'static str,
         get_key_duration: bool,
         custom_holder: Option<PokeId>,
     ) -> Vec<Listener> {
@@ -397,7 +506,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: state.effect_order,
-                        callback_name: String::new(),
+                        callback_name: "",
                     },
                     callback_name,
                 ));
@@ -409,7 +518,7 @@ impl Battle {
     pub fn find_field_event_handlers(
         &self,
         dex: &Dex,
-        callback_name: &str,
+        callback_name: &'static str,
         get_key_duration: bool,
         custom_holder: Option<PokeId>,
     ) -> Vec<Listener> {
@@ -434,7 +543,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: state.effect_order,
-                        callback_name: String::new(),
+                        callback_name: "",
                     },
                     callback_name,
                 ));
@@ -460,7 +569,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: self.field.weather_state.effect_order,
-                        callback_name: String::new(),
+                        callback_name: "",
                     },
                     callback_name,
                 ));
@@ -472,7 +581,7 @@ impl Battle {
 
     /// findBattleEventHandlers: the format itself has no runtime handlers in
     /// NC2000 (rules act via pseudo-weathers), so this is empty.
-    pub fn find_battle_event_handlers(&self, _callback_name: &str) -> Vec<Listener> {
+    pub fn find_battle_event_handlers(&self, _callback_name: &'static str) -> Vec<Listener> {
         Vec::new()
     }
 
@@ -481,7 +590,7 @@ impl Battle {
         &self,
         dex: &Dex,
         target: EvTarget,
-        event_name: &str,
+        event_name: &'static str,
         source: Option<PokeId>,
     ) -> Vec<Listener> {
         let mut handlers: Vec<Listener> = Vec::new();
@@ -499,20 +608,20 @@ impl Battle {
             let target_active = self.poke(p).is_active;
             let source_active = source.map(|s| self.poke(s).is_active).unwrap_or(false);
             if target_active || source_active {
-                handlers = self.find_pokemon_event_handlers(dex, p, &format!("on{event_name}"), false);
+                handlers = self.find_pokemon_event_handlers(dex, p, cb_name("on", event_name), false);
                 if prefixed {
                     // allies incl. self (singles: self only, if hp)
                     for ally in self.allies_and_self(p) {
                         handlers.extend(self.find_pokemon_event_handlers(
                             dex,
                             ally,
-                            &format!("onAlly{event_name}"),
+                            cb_name("onAlly", event_name),
                             false,
                         ));
                         handlers.extend(self.find_pokemon_event_handlers(
                             dex,
                             ally,
-                            &format!("onAny{event_name}"),
+                            cb_name("onAny", event_name),
                             false,
                         ));
                     }
@@ -520,13 +629,13 @@ impl Battle {
                         handlers.extend(self.find_pokemon_event_handlers(
                             dex,
                             foe,
-                            &format!("onFoe{event_name}"),
+                            cb_name("onFoe", event_name),
                             false,
                         ));
                         handlers.extend(self.find_pokemon_event_handlers(
                             dex,
                             foe,
-                            &format!("onAny{event_name}"),
+                            cb_name("onAny", event_name),
                             false,
                         ));
                     }
@@ -539,7 +648,7 @@ impl Battle {
                 handlers.extend(self.find_pokemon_event_handlers(
                     dex,
                     src,
-                    &format!("onSource{event_name}"),
+                    cb_name("onSource", event_name),
                     false,
                 ));
             }
@@ -552,14 +661,14 @@ impl Battle {
                             handlers.extend(self.find_pokemon_event_handlers(
                                 dex,
                                 active,
-                                &format!("on{event_name}"),
+                                cb_name("on", event_name),
                                 false,
                             ));
                         } else if prefixed {
                             handlers.extend(self.find_pokemon_event_handlers(
                                 dex,
                                 active,
-                                &format!("onFoe{event_name}"),
+                                cb_name("onFoe", event_name),
                                 false,
                             ));
                         }
@@ -567,7 +676,7 @@ impl Battle {
                             handlers.extend(self.find_pokemon_event_handlers(
                                 dex,
                                 active,
-                                &format!("onAny{event_name}"),
+                                cb_name("onAny", event_name),
                                 false,
                             ));
                         }
@@ -577,7 +686,7 @@ impl Battle {
                     handlers.extend(self.find_side_event_handlers(
                         dex,
                         side_n,
-                        &format!("on{event_name}"),
+                        cb_name("on", event_name),
                         false,
                         None,
                     ));
@@ -585,7 +694,7 @@ impl Battle {
                     handlers.extend(self.find_side_event_handlers(
                         dex,
                         side_n,
-                        &format!("onFoe{event_name}"),
+                        cb_name("onFoe", event_name),
                         false,
                         None,
                     ));
@@ -594,15 +703,15 @@ impl Battle {
                     handlers.extend(self.find_side_event_handlers(
                         dex,
                         side_n,
-                        &format!("onAny{event_name}"),
+                        cb_name("onAny", event_name),
                         false,
                         None,
                     ));
                 }
             }
         }
-        handlers.extend(self.find_field_event_handlers(dex, &format!("on{event_name}"), false, None));
-        handlers.extend(self.find_battle_event_handlers(&format!("on{event_name}")));
+        handlers.extend(self.find_field_event_handlers(dex, cb_name("on", event_name), false, None));
+        handlers.extend(self.find_battle_event_handlers(cb_name("on", event_name)));
         handlers
     }
 
@@ -630,7 +739,7 @@ impl Battle {
     pub fn single_event(
         &mut self,
         dex: &Dex,
-        event_id: &str,
+        event_id: &'static str,
         effect: EffectHandle,
         state: StateLoc,
         target: EvTarget,
@@ -653,14 +762,13 @@ impl Battle {
             }
         }
 
+        let on_name = cb_name("on", event_id);
         let has_cb = match effect {
-            EffectHandle::Cond(c) => self.cond_has_callback(dex, c, &format!("on{event_id}")),
+            EffectHandle::Cond(c) => self.cond_has_callback(dex, c, on_name),
             EffectHandle::MoveEff(m) => {
-                super::moveexec::active_move_has_callback(self, dex, m, &format!("on{event_id}"))
+                super::moveexec::active_move_has_callback(self, dex, m, on_name)
             }
-            EffectHandle::Item(i) => {
-                dex.items.get(i).callbacks.iter().any(|c| c == &format!("on{event_id}"))
-            }
+            EffectHandle::Item(i) => dex.items.get(i).callbacks.iter().any(|c| c == on_name),
             _ => false,
         };
         if !has_cb {
@@ -669,7 +777,7 @@ impl Battle {
 
         self.effect_stack.push(EffectFrame { effect, state });
         self.event_stack.push(EventFrame {
-            id: event_id.to_string(),
+            id: event_id,
             target: target.poke(),
             source,
             effect: source_effect,
@@ -681,7 +789,7 @@ impl Battle {
             self,
             dex,
             effect,
-            &format!("on{event_id}"),
+            on_name,
             state,
             target,
             source,
@@ -706,7 +814,7 @@ impl Battle {
     pub fn run_event(
         &mut self,
         dex: &Dex,
-        event_id: &str,
+        event_id: &'static str,
         target: EvTarget,
         source: Option<PokeId>,
         source_effect: EffectHandle,
@@ -717,13 +825,18 @@ impl Battle {
         if self.event_depth >= 8 {
             panic!("runEvent stack overflow at {event_id}");
         }
-        let mut handlers = self.find_event_handlers(dex, target, event_id, source);
+        let mut handlers = if event_possibly_handled(dex, event_id) {
+            self.find_event_handlers(dex, target, event_id, source)
+        } else {
+            Vec::new()
+        };
         if on_effect {
             // sourceEffect's own callback runs first (used by Damage event)
+            let on_name = cb_name("on", event_id);
             let has_cb = match source_effect {
-                EffectHandle::Cond(c) => self.cond_has_callback(dex, c, &format!("on{event_id}")),
+                EffectHandle::Cond(c) => self.cond_has_callback(dex, c, on_name),
                 EffectHandle::MoveEff(m) => {
-                    super::moveexec::active_move_has_callback(self, dex, m, &format!("on{event_id}"))
+                    super::moveexec::active_move_has_callback(self, dex, m, on_name)
                 }
                 _ => false,
             };
@@ -746,9 +859,9 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: 0,
-                        callback_name: String::new(),
+                        callback_name: "",
                     },
-                    &format!("on{event_id}"),
+                    cb_name("on", event_id),
                 );
                 handlers.insert(0, l);
             }
@@ -769,7 +882,7 @@ impl Battle {
         let mut relay = relay.unwrap_or(RV::True);
 
         self.event_stack.push(EventFrame {
-            id: event_id.to_string(),
+            id: event_id,
             target: target.poke(),
             source,
             effect: source_effect,
@@ -835,7 +948,7 @@ impl Battle {
     pub fn priority_event(
         &mut self,
         dex: &Dex,
-        event_id: &str,
+        event_id: &'static str,
         target: EvTarget,
         source: Option<PokeId>,
         source_effect: EffectHandle,
@@ -846,9 +959,9 @@ impl Battle {
 
     // --------------------------------------------------------- eachEvent
 
-    pub fn each_event(&mut self, dex: &Dex, event_id: &str, effect: Option<EffectHandle>) {
+    pub fn each_event(&mut self, dex: &Dex, event_id: &'static str, effect: Option<EffectHandle>) {
         let mut actives = self.get_all_active(false);
-        if std::env::var_os("NC_TRACE").is_some() {
+        if trace_enabled() {
             let speeds: Vec<i32> = actives.iter().map(|&p| self.poke(p).speed).collect();
             eprintln!("[trace] eachEvent {event_id} actives={} speeds={:?} seed={}", actives.len(), speeds, self.prng.seed_str());
         }
@@ -867,16 +980,16 @@ impl Battle {
     // -------------------------------------------------------- fieldEvent
 
     /// fieldEvent('Residual') / fieldEvent('SwitchIn', targets).
-    pub fn field_event(&mut self, dex: &Dex, event_id: &str, targets: Option<&[PokeId]>) {
-        let callback_name = format!("on{event_id}");
+    pub fn field_event(&mut self, dex: &Dex, event_id: &'static str, targets: Option<&[PokeId]>) {
+        let callback_name = cb_name("on", event_id);
         let get_key = event_id == "Residual";
         let mut handlers =
-            self.find_field_event_handlers(dex, &format!("onField{event_id}"), get_key, None);
+            self.find_field_event_handlers(dex, cb_name("onField", event_id), get_key, None);
         for side_n in 0..2u8 {
             handlers.extend(self.find_side_event_handlers(
                 dex,
                 side_n,
-                &format!("onSide{event_id}"),
+                cb_name("onSide", event_id),
                 get_key,
                 None,
             ));
@@ -885,7 +998,7 @@ impl Battle {
                     handlers.extend(self.find_pokemon_event_handlers(
                         dex,
                         active,
-                        &format!("onAny{event_id}"),
+                        cb_name("onAny", event_id),
                         false,
                     ));
                 }
@@ -894,15 +1007,15 @@ impl Battle {
                         continue;
                     }
                 }
-                handlers.extend(self.find_pokemon_event_handlers(dex, active, &callback_name, get_key));
+                handlers.extend(self.find_pokemon_event_handlers(dex, active, callback_name, get_key));
                 handlers.extend(self.find_side_event_handlers(
                     dex,
                     side_n,
-                    &callback_name,
+                    callback_name,
                     false,
                     Some(active),
                 ));
-                handlers.extend(self.find_field_event_handlers(dex, &callback_name, false, Some(active)));
+                handlers.extend(self.find_field_event_handlers(dex, callback_name, false, Some(active)));
                 // battle handlers: none.
             }
         }
@@ -949,9 +1062,9 @@ impl Battle {
             }
 
             let handler_event = match handler.holder {
-                Holder::Side(_) => format!("Side{event_id}"),
-                Holder::Field => format!("Field{event_id}"),
-                _ => event_id.to_string(),
+                Holder::Side(_) => cb_name("Side", event_id),
+                Holder::Field => cb_name("Field", event_id),
+                _ => event_id,
             };
             if handler.has_callback {
                 let target = match handler.holder {
@@ -961,7 +1074,7 @@ impl Battle {
                 };
                 self.single_event(
                     dex,
-                    &handler_event,
+                    handler_event,
                     handler.effect,
                     handler.state,
                     target,

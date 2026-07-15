@@ -179,3 +179,27 @@ Read once from PS; keep updated as the port progresses. All line refs are PS rep
   (JS `&&` order), so it consumes PRNG on every move-damage event.
 - **`stall.counter` goes fractional** (127 → 63.5 → …) — essence needs a
   float-capable scalar; `onStallMove` floors it.
+
+## Perf facts measured during M3 (2026-07)
+
+- **The `format!` machinery, not malloc, dominated turn time.** gdb-sampling
+  the release bench showed fmt frames under `find_event_handlers` in ~60% of
+  samples; swapping mimalloc in barely moved turns/s while allocs/turn was
+  1585. Interning the composed callback names (`on{E}`/`onAlly{E}`/…/`{cb}Order`)
+  behind a pointer-keyed thread-local cache took 5k → 10k turns/s. Lesson:
+  never build event/callback identity with `format!` in a dispatcher.
+- **run_event with zero handlers is side-effect-free** (no PRNG: speedSort of
+  an empty list; relay returned unchanged since modifier stays 1) — so
+  handler collection can be skipped for events no cond/item in the format can
+  handle (`Dex::possible_callbacks`). eachEvent's active-list tie shuffle
+  happens BEFORE run_event and is preserved. Worth only ~8% here because most
+  fired events are format-possible; a per-battle live-condition index would be
+  the next step.
+- **Remaining structural costs** (why we're at ~10k turns/s, not 1e5+):
+  string-keyed handler lookup iterating `Vec<String>` callbacks per volatile
+  per prefix per event, and 153 allocs per `Battle::clone` (Strings/Vecs in
+  `Pokemon`/`EffectState`). Both are M4: integer event/callback ids +
+  flattened state.
+- **gdb SIGINT sampling works where perf doesn't** (WSL2, yama ptrace_scope
+  blocks attach): run the binary UNDER gdb batch with a script of
+  `bt/continue` pairs and a background `pkill -INT` pulse.

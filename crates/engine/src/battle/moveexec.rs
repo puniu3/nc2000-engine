@@ -2290,7 +2290,7 @@ impl Battle {
                         let name = if is_self { "self.onHit" } else { "secondary.onHit" };
                         self.effect_stack.push(EffectFrame { effect: move_eff, state: StateLoc::None });
                         self.event_stack.push(EventFrame {
-                            id: "Hit".to_string(),
+                            id: "Hit",
                             target: Some(t),
                             source: Some(pokemon),
                             effect: move_eff,

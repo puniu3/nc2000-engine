@@ -15,7 +15,7 @@ tools/            Node scripts run against the reference PS build (needs PS_ROOT
 data/gen2stadium2.json     reference data (functions replaced by callback-name lists; meta.psCommit records origin)
 fixtures/prng-vectors.json PRNG vectors
 fixtures/corpus-v1/        60 battles (30 puredata + 30 full; 2,268 turns / 2,585 snapshots)
-crates/engine/             the engine (prng / dex / state / choice / battle: M1 turn engine complete)
+crates/engine/             the engine (prng / dex / state / choice / battle; battle/search.rs = M3 search API)
 crates/conformance/        conformance harness (fixture schema, divergence reporter, replay tests)
 PORTING.md                 porting checklist (377 callbacks, generated)
 ```
@@ -37,6 +37,8 @@ node tools/gen-fixtures.js --n 100 --pool full --out /tmp/soak --seed 12345
 cargo run -p conformance --example sweep -- /tmp/soak
 # drill into one diverging fixture (per-choice log diff + seed check)
 cargo run -p conformance --example debug -- /tmp/soak/battle-042.json [from_snapshot]
+# throughput benchmark (turns/s, playouts/s, ns/clone, allocs)
+cargo run --release -p conformance --example bench
 # regenerate artifacts (e.g. after a PS update)
 node tools/export-dex.js && node tools/gen-porting-checklist.js && node tools/dump-callbacks.js
 node tools/gen-fixtures.js --n 30 --pool puredata --out fixtures/corpus-v1/puredata --seed 100
@@ -45,17 +47,46 @@ node tools/gen-fixtures.js --n 30 --pool full     --out fixtures/corpus-v1/full 
 
 Porting loop: port one callback → tick it off in `PORTING.md` → keep the replay test green as the legal pool grows. On divergence, `compare::Divergence` auto-localizes to the first differing snapshot + JSON path + that turn's log lines.
 
+### Search API (M3)
+
+`Battle` is a plain deep-clonable value; DUCT/MCTS drives it like this:
+
+```rust
+let mut b = Battle::from_fixture(&dex, seed, &p1, &p2)?;
+b.set_log_enabled(false);              // search mode: skip the protocol log
+while b.outcome().is_none() {          // Some(P1Win|P2Win|Tie) when over
+    let picks = [0, 1].map(|s| {
+        let cs = b.legal_choices(&dex, s);   // empty ⇔ side owes nothing
+        cs.first().copied()                  // SearchChoice is Copy
+    });
+    b.apply_choices(&dex, picks)?;     // advances to the next request point
+}
+```
+
+Determinized playouts: clone the battle, `clone.reseed(sample)` — the PRNG is
+part of the state. `SearchChoice::to_input` renders the PS-canonical choice
+string (`move surf` / `switch 3` / `team 5, 6, 1`) for interop with fixtures
+and the debug tools.
+
 ### Milestones
 
 1. **M1 — puredata corpus green: DONE (2026-07)**. Team init, team preview, switching, the full turn engine (queue/speed ties/PRNG parity), gen2stadium2 damage pipeline, residuals, and the core conditions (statuses, confusion, flinch, partiallytrapped, mustrecharge, weathers, sleep/freeze clauses) replay all 30 puredata battles bit-exact (state + PRNG seed + protocol log at every snapshot).
 2. **M2 — full corpus green: DONE (2026-07)**. All 88 callback moves, all 38 callback items, every condition reachable in this format, and the runtime rules. Verified beyond the golden 30: 350 additional fresh-seed battles replay bit-exact (see the soak workflow above); the last 100 diverged nowhere. Every reachable `PORTING.md` entry is ticked; unreachable entries are documented there.
-3. **M3 — search API**: `Battle` is already flat/Copy-friendly; add clone- or apply/undo-based enumeration for DUCT/MCTS.
-4. Beyond: exhaustive-runner-style coverage-forcing corpora, expert scenario fixtures, automatic predicted-vs-actual diffing during live bot play.
+3. **M3 — search API: DONE (2026-07)**. `crates/engine/src/battle/search.rs`: `SearchChoice` (compact/`Copy`), `Battle::legal_choices` / `apply_choice(s)` / `needs_choice` / `outcome` / `reseed`, plus `set_log_enabled(false)` for protocol-log-free stepping. Enumeration mirrors the `choices.rs` validation rules and application funnels through `Battle::choose` with PS-canonical strings — one code path shared with fixture replay. Verified by `tests/search_api.rs`: at every decision point of all 60 golden fixtures the PS choice is inside the enumerated set and (sampled) every enumerated choice is accepted; log-off replay is state+seed-identical; random playouts terminate. A 100-battle fresh-seed soak stayed bit-exact after the M3 perf work.
+4. **M4 — throughput**: close the gap to the 1e5–1e6 turns/s target. M3 profiling (see `examples/bench.rs`) says the two structural costs are (a) the string-keyed event system — replace event/callback identity with integer ids end-to-end (dex-precomputed handler tables, integer dispatch in `conditions.rs`), and (b) the alloc-y state — flatten `Pokemon`/`EffectState` Strings and Vecs into ids + fixed arrays for ~0-alloc clones (153 allocs/clone today).
+5. Beyond: exhaustive-runner-style coverage-forcing corpora, expert scenario fixtures, automatic predicted-vs-actual diffing during live bot play.
 
 ## Baseline measurements (this machine, WSL)
 
 - PS (TS): 6.5 battles/s, 570 turns/s, 5.5 ms per clone → tree search is infeasible on the TS engine
 - Target: 1e5–1e6 turns/s, sub-microsecond clones (prior art pkmn/engine claims >1000x over PS)
+- Rust engine after M3 (`cargo run --release -p conformance --example bench`):
+  ~10k turns/s / ~260 battles/s (replay and random playouts alike, log on or off),
+  ~22 µs per mid-battle clone (12 µs under mimalloc — build the bench with `--features conformance/mi`).
+  That is ~17x PS on turns and ~250x on clones; the remaining ~10x to target is M4
+  (measured: 254 allocs/turn, 153 allocs/clone; sampling shows handler collection in the
+  string-keyed event system dominating — `format!` was 60% of turn time before M3's
+  interning pass took 5k → 10k turns/s).
 
 ## Porting landmines (facts measured in this repo)
 

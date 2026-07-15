@@ -498,7 +498,7 @@ pub enum Holder {
 /// PS `this.event` frame (drives default args of damage/boost/heal).
 #[derive(Clone, Debug)]
 pub struct EventFrame {
-    pub id: String,
+    pub id: &'static str,
     pub target: Option<PokeId>,
     pub source: Option<PokeId>,
     pub effect: crate::battle::EffectHandle,
@@ -617,6 +617,11 @@ pub struct Battle {
     pub queue: Vec<Action>,
     pub faint_queue: Vec<FaintEntry>,
     pub log: Vec<String>,
+    /// Protocol-log recording. Disabling it (search mode) skips all log
+    /// pushes; battle STATE and PRNG consumption are unaffected — the log is
+    /// write-only except for `hint(once)`'s dedup scan and
+    /// `attr_last_move`/`retarget_last_move`, which only rewrite log lines.
+    pub log_enabled: bool,
     pub effect_order: u32,
     pub event_depth: u32,
     pub last_move_line: i64,

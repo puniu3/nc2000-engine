@@ -63,7 +63,7 @@ impl Battle {
         !side.choice.actions.is_empty()
     }
 
-    fn picked_team_size(&self, side_n: usize) -> usize {
+    pub(crate) fn picked_team_size(&self, side_n: usize) -> usize {
         self.sides[side_n].party.len().min(3)
     }
 
@@ -228,7 +228,7 @@ impl Battle {
     }
 
     /// pokemon.getMoves() reduced to (id, disabled) pairs; empty if no valid.
-    fn pokemon_choosable_moves(&self, pokemon: PokeId) -> Vec<(MoveId, bool)> {
+    pub(crate) fn pokemon_choosable_moves(&self, pokemon: PokeId) -> Vec<(MoveId, bool)> {
         let p = self.poke(pokemon);
         let mut out = Vec::new();
         let mut has_valid = false;

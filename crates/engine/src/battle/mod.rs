@@ -20,7 +20,10 @@ pub mod fieldfx;
 pub mod items;
 pub mod moveexec;
 pub mod pokemon;
+pub mod search;
 pub mod turn;
+
+pub use search::{Outcome, SearchChoice};
 
 use crate::dex::{toid, CondId, Dex, EffectType, ItemId, MoveId};
 use crate::prng::Prng;
@@ -142,18 +145,36 @@ impl Battle {
     // ------------------------------------------------------------ logging
 
     pub fn add(&mut self, parts: &[&str]) {
+        if !self.log_enabled {
+            return;
+        }
         self.log.push(format!("|{}", parts.join("|")));
     }
 
     pub fn add_split(&mut self, side_id: &str, secret: &[&str], shared: &[&str]) {
+        if !self.log_enabled {
+            return;
+        }
         self.log.push(format!("|split|{side_id}"));
         self.add(secret);
         self.add(shared);
     }
 
     pub fn add_move(&mut self, parts: &[&str]) {
+        if !self.log_enabled {
+            return;
+        }
         self.last_move_line = self.log.len() as i64;
         self.log.push(format!("|{}", parts.join("|")));
+    }
+
+    /// Toggle protocol-log recording (search mode: off). Disabling clears the
+    /// move-line cursor so `attr_last_move` can never touch stale lines.
+    pub fn set_log_enabled(&mut self, on: bool) {
+        self.log_enabled = on;
+        if !on {
+            self.last_move_line = -1;
+        }
     }
 
     pub fn attr_last_move(&mut self, args: &[&str]) {
@@ -189,6 +210,9 @@ impl Battle {
     /// (not part of state parity but part of LOG parity — implement via log
     /// scan: PS `hints` is a Set persisting for the battle).
     pub fn hint(&mut self, text: &str, once: bool) {
+        if !self.log_enabled {
+            return;
+        }
         let line = format!("|-hint|{text}");
         if once && self.log.iter().any(|l| l == &line) {
             return;
@@ -393,6 +417,7 @@ impl Battle {
             queue: Vec::new(),
             faint_queue: Vec::new(),
             log: Vec::new(),
+            log_enabled: true,
             effect_order: 0,
             event_depth: 0,
             last_move_line: -1,

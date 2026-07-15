@@ -554,6 +554,12 @@ pub struct Dex {
     pub moves_static: Vec<MoveStatic>,
     /// Interned runtime conditions (superset of `conditions`).
     pub conds: Table<CondId, CondEntry>,
+    /// Every callback name any condition or item in this format can handle
+    /// (plus the code-only builtins). Battle event dispatch uses this to skip
+    /// handler collection for events that can never have handlers. Move
+    /// callbacks are NOT included — they never enter `findEventHandlers`
+    /// (single_event / the runEvent onEffect branch check the move directly).
+    pub possible_callbacks: std::collections::HashSet<String>,
 }
 
 impl Dex {
@@ -689,15 +695,31 @@ impl Dex {
             });
         }
 
+        let items = Table::build(file.items);
+        let mut possible_callbacks: std::collections::HashSet<String> =
+            entries.values().flat_map(|e| e.callbacks.iter().cloned()).collect();
+        for item in &items.values {
+            possible_callbacks.extend(item.callbacks.iter().cloned());
+        }
+        // crate::battle::conditions::has_builtin constants
+        possible_callbacks.insert("onLockMove".to_string());
+        possible_callbacks.insert("onSemiLockMove".to_string());
+
         Ok(Dex {
             species: Table::build(file.species),
             moves,
-            items: Table::build(file.items),
+            items,
             conditions: Table::build(file.conditions),
             typechart: file.typechart,
             moves_static,
             conds: Table::build(entries),
+            possible_callbacks,
         })
+    }
+
+    /// Can ANY condition/item in this format handle `callback_name`?
+    pub fn callback_possible(&self, callback_name: &str) -> bool {
+        self.possible_callbacks.contains(callback_name)
     }
 
     pub fn move_static(&self, id: MoveId) -> &MoveStatic {
