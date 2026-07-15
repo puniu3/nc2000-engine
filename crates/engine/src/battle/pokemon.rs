@@ -220,6 +220,7 @@ impl Battle {
         }
 
         self.poke_mut(id).status = Status::from_str(status);
+        self.refresh_poke_mask(dex, id);
         let mut state = EffectState { id: status.to_string(), ..Default::default() };
         state.source = source;
         let cond = if status.is_empty() { None } else { dex.conds_id(status) };
@@ -248,6 +249,7 @@ impl Battle {
             if !started.truthy() {
                 self.poke_mut(id).status = prev_status;
                 self.poke_mut(id).status_state = prev_state;
+                self.refresh_poke_mask(dex, id);
                 return RV::False;
             }
             let after = self.run_event(
@@ -387,6 +389,7 @@ impl Battle {
         let target_active = self.poke(id).is_active;
         let state = self.init_effect_state(state, target_active);
         self.poke_mut(id).volatiles.push((cond, state));
+        self.refresh_poke_mask(dex, id);
         if dex.cond(cond).has_callback("durationCallback") {
             let dur = super::conditions::duration_callback(self, dex, status, Some(id), source, source_effect);
             if let Some(d) = dur {
@@ -407,6 +410,7 @@ impl Battle {
         );
         if !started.truthy() {
             self.poke_mut(id).volatiles.retain(|(k, _)| *k != cond);
+            self.refresh_poke_mask(dex, id);
             return started;
         }
         RV::True
@@ -484,6 +488,7 @@ impl Battle {
             None,
         );
         self.poke_mut(id).volatiles.retain(|(k, _)| *k != cond);
+        self.refresh_poke_mask(dex, id);
         if !linked_pokemon.is_empty() {
             if let Some(ls) = linked_status {
                 self.remove_linked_volatiles(dex, id, &ls, &linked_pokemon);
@@ -713,6 +718,7 @@ impl Battle {
             }
             self.poke_mut(id).volatiles.push((c, state));
         }
+        self.refresh_poke_mask(dex, id);
         self.clear_volatile(dex, from, true);
         // singleEvent('Copy') per volatile: no gen2 condition has onCopy.
     }
@@ -762,6 +768,7 @@ impl Battle {
         p.stored_stats = p.base_stored_stats;
         p.types = dex.species.get(p.base_species).types.clone();
         p.speed = p.stored_stats[4];
+        self.refresh_poke_mask(dex, id);
     }
 
     // ---------------------------------------------------------- immunity
@@ -971,6 +978,7 @@ impl Battle {
         p.item = None;
         p.item_state = EffectState::default();
         p.used_item_this_turn = true;
+        self.refresh_poke_mask(dex, id);
         self.run_event(
             dex,
             &ev::AfterUseItem,
@@ -1058,6 +1066,7 @@ impl Battle {
         p.item = None;
         p.item_state = EffectState::default();
         p.used_item_this_turn = true;
+        self.refresh_poke_mask(dex, id);
         self.run_event(
             dex,
             &ev::AfterUseItem,
@@ -1091,6 +1100,7 @@ impl Battle {
         let p = self.poke_mut(id);
         p.item = None;
         p.item_state = EffectState::default();
+        self.refresh_poke_mask(dex, id);
         // singleEvent('End', item): no gen2 item has onEnd.
         self.run_event(
             dex,
@@ -1116,6 +1126,7 @@ impl Battle {
         let p = self.poke_mut(id);
         p.item = Some(item);
         p.item_state = state;
+        self.refresh_poke_mask(dex, id);
         // singleEvent('End', oldItem) / ('Start', item): no gen2 handlers.
         true
     }

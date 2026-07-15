@@ -245,6 +245,10 @@ pub struct Pokemon {
     pub types: Vec<String>,
     /// Insertion-ordered (PS object key order drives handler collection).
     pub volatiles: Vec<(CondId, EffectState)>,
+    /// Union of status/volatile/item callback masks (slot conditions
+    /// excluded) — collection fast path. Maintained by refresh_poke_mask at
+    /// every status/volatile/item mutation; debug builds assert freshness.
+    pub handler_mask: crate::dex::CbMask,
     pub transformed: bool,
     pub fainted: bool,
     pub faint_queued: bool,
@@ -378,6 +382,8 @@ pub struct Side {
     /// Insertion-ordered.
     pub side_conditions: Vec<(CondId, EffectState)>,
     pub slot_conditions: Vec<(CondId, EffectState)>,
+    /// Union of side-condition callback masks (collection fast path).
+    pub handler_mask: crate::dex::CbMask,
     /// Stadium 2 self-KO clause bookkeeping (side.lastMove).
     pub last_move: Option<MoveId>,
     pub fainted_this_turn: Option<u8>,

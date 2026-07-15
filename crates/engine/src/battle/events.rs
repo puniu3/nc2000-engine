@@ -386,6 +386,41 @@ impl Battle {
 
     // ------------------------------------------------- handler collection
 
+    /// Union of status/volatile/item masks for one pokemon (slot conditions
+    /// excluded — they are walked separately).
+    pub fn recompute_poke_mask(&self, dex: &Dex, id: PokeId) -> crate::dex::CbMask {
+        let p = self.poke(id);
+        let mut m = crate::dex::CbMask::EMPTY;
+        if p.status != Status::None && p.status != Status::Fnt {
+            if let Some(c) = dex.status_conds[p.status as usize] {
+                m.or_with(&dex.cond(c).mask);
+            }
+        }
+        for (c, _) in &p.volatiles {
+            m.or_with(&dex.cond(*c).mask);
+        }
+        if let Some(item) = p.item {
+            m.or_with(&dex.items.get(item).mask);
+        }
+        m
+    }
+
+    pub fn refresh_poke_mask(&mut self, dex: &Dex, id: PokeId) {
+        self.poke_mut(id).handler_mask = self.recompute_poke_mask(dex, id);
+    }
+
+    pub fn recompute_side_mask(&self, dex: &Dex, side_n: u8) -> crate::dex::CbMask {
+        let mut m = crate::dex::CbMask::EMPTY;
+        for (c, _) in &self.sides[side_n as usize].side_conditions {
+            m.or_with(&dex.cond(*c).mask);
+        }
+        m
+    }
+
+    pub fn refresh_side_mask(&mut self, dex: &Dex, side_n: u8) {
+        self.sides[side_n as usize].handler_mask = self.recompute_side_mask(dex, side_n);
+    }
+
     /// resolvePriority: fill sort metadata for a listener.
     fn resolve_priority(&self, dex: &Dex, mut h: Listener, cb: Cb) -> Listener {
         h.cb = cb;
@@ -445,6 +480,17 @@ impl Battle {
         handlers: &mut Vec<Listener>,
     ) {
         let p = self.poke(pokemon);
+        debug_assert_eq!(
+            p.handler_mask,
+            self.recompute_poke_mask(dex, pokemon),
+            "stale handler_mask on {pokemon:?}"
+        );
+        if !get_key_duration
+            && !p.handler_mask.has(cb)
+            && (p.position != 0 || self.sides[pokemon.side as usize].slot_conditions.is_empty())
+        {
+            return;
+        }
 
         // status
         if p.status != Status::None && p.status != Status::Fnt {
@@ -561,6 +607,14 @@ impl Battle {
         custom_holder: Option<PokeId>,
         handlers: &mut Vec<Listener>,
     ) {
+        debug_assert_eq!(
+            self.sides[side_n as usize].handler_mask,
+            self.recompute_side_mask(dex, side_n),
+            "stale handler_mask on side {side_n}"
+        );
+        if !get_key_duration && !self.sides[side_n as usize].handler_mask.has(cb) {
+            return;
+        }
         for (c, state) in &self.sides[side_n as usize].side_conditions {
             let has_cb = dex.cond(*c).mask.has(cb);
             if has_cb || (get_key_duration && state.duration.is_some()) {

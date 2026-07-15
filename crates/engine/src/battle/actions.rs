@@ -89,6 +89,7 @@ impl Battle {
             self.poke_mut(old).position = new_pos;
             if self.poke(old).fainted {
                 self.poke_mut(old).status = Status::None;
+                self.refresh_poke_mask(dex, old);
             }
             // gen <= 4: incoming takes outgoing's lastItem
             let old_last_item = self.poke(old).last_item;

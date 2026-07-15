@@ -239,6 +239,7 @@ impl Battle {
         }
         let state = self.init_effect_state(state, true);
         self.sides[side_n as usize].side_conditions.push((cond, state));
+        self.refresh_side_mask(dex, side_n);
         if dex.cond(cond).has_callback("durationCallback") {
             let dur = super::conditions::duration_callback(
                 self,
@@ -266,6 +267,7 @@ impl Battle {
         );
         if !started.truthy() {
             self.sides[side_n as usize].side_conditions.retain(|(k, _)| *k != cond);
+        self.refresh_side_mask(dex, side_n);
             return RV::False;
         }
         self.run_event(
@@ -369,6 +371,7 @@ impl Battle {
             None,
         );
         self.sides[side_n as usize].side_conditions.retain(|(k, _)| *k != cond);
+        self.refresh_side_mask(dex, side_n);
         true
     }
 }

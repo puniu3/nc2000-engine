@@ -1079,6 +1079,7 @@ pub fn dispatch_move_callback(
             let Some(item) = b.take_item(dex, t, Some(user)) else { return RV::Undef };
             if !b.set_item(dex, user, item) {
                 b.poke_mut(t).item = Some(item);
+                b.refresh_poke_mask(dex, t);
                 return RV::Undef;
             }
             let us = b.poke_str(user);

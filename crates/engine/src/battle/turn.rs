@@ -163,7 +163,7 @@ impl Battle {
         if queue_empty
             || matches!(next_choice, Some(ActionKind::Move { .. }) | Some(ActionKind::Residual))
         {
-            self.check_fainted();
+            self.check_fainted(dex);
         } else if matches!(next_choice, Some(ActionKind::Switch { insta: true, .. })) {
             return;
         }
@@ -248,12 +248,13 @@ impl Battle {
     }
 
     /// battle.checkFainted.
-    pub fn check_fainted(&mut self) {
+    pub fn check_fainted(&mut self, dex: &Dex) {
         for side_n in 0..2usize {
             if let Some(active) = self.active_id(side_n) {
                 if self.poke(active).fainted {
                     self.poke_mut(active).status = Status::Fnt;
                     self.poke_mut(active).switch_flag = SwitchFlag::Yes;
+                    self.refresh_poke_mask(dex, active);
                 }
             }
         }

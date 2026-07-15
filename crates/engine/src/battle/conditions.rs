@@ -266,6 +266,7 @@ fn dispatch_cond(
         ("tox", "onSwitchIn") => {
             let t = tpoke.unwrap();
             b.poke_mut(t).status = Status::Psn;
+            b.refresh_poke_mask(dex, t);
             let ts = b.poke_str(t);
             b.add(&["-status", &ts, "psn", "[silent]"]);
             RV::Undef
@@ -389,6 +390,7 @@ fn dispatch_cond(
             if trapper_gone {
                 let cid = crate::cond_id!(dex, "partiallytrapped").unwrap();
                 b.poke_mut(t).volatiles.retain(|(k, _)| *k != cid);
+                b.refresh_poke_mask(dex, t);
                 let ts = b.poke_str(t);
                 let name = src_move_name(dex, &src_move);
                 b.add(&["-end", &ts, &name, "[partiallytrapped]", "[silent]"]);
@@ -1010,6 +1012,7 @@ fn dispatch_cond(
                 let ts = b.poke_str(t);
                 b.add(&["-end", &ts, &name, "[partiallytrapped]", "[silent]"]);
                 b.poke_mut(t).volatiles.retain(|(k, _)| *k != pt);
+                b.refresh_poke_mask(dex, t);
             }
             RV::Undef
         }
@@ -1259,6 +1262,7 @@ fn dispatch_cond(
             if is_struggle {
                 let ro = crate::cond_id!(dex, "rollout").unwrap();
                 b.poke_mut(t).volatiles.retain(|(k, _)| *k != ro);
+                b.refresh_poke_mask(dex, t);
             }
             RV::Undef
         }
@@ -1597,6 +1601,7 @@ fn dispatch_cond(
                 // direct delete (no End event → no confusion)
                 let lm = crate::cond_id!(dex, "lockedmove").unwrap();
                 b.poke_mut(t).volatiles.retain(|(k, _)| *k != lm);
+                b.refresh_poke_mask(dex, t);
             }
             RV::Undef
         }
@@ -1605,6 +1610,7 @@ fn dispatch_cond(
             // silently delete confusion, then re-add unless safeguard
             let conf = crate::cond_id!(dex, "confusion").unwrap();
             b.poke_mut(t).volatiles.retain(|(k, _)| *k != conf);
+            b.refresh_poke_mask(dex, t);
             let sg = crate::cond_id!(dex, "safeguard").unwrap();
             if !b.sides[t.side as usize].has_side_condition(sg) {
                 let lm_eff = EffectHandle::Cond(crate::cond_id!(dex, "lockedmove").unwrap());
@@ -1627,6 +1633,7 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let lm = crate::cond_id!(dex, "lockedmove").unwrap();
             b.poke_mut(t).volatiles.retain(|(k, _)| *k != lm);
+            b.refresh_poke_mask(dex, t);
             RV::Undef
         }
         // --------------------------------------------------------- pursuit
