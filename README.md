@@ -1,68 +1,68 @@
 # nc2000-engine
 
-Pokemon Showdown の **`[Gen 2] NC 2000`**（mod: `gen2stadium2`）を Rust に移植し、bot 研究の探索速度を桁上げするプロジェクト。
+Rust port of Pokemon Showdown's **`[Gen 2] NC 2000`** format (mod: `gen2stadium2`), built to raise bot-research search throughput by orders of magnitude.
 
-**準拠先は「PS に現に実装されているもの」**。カートリッジ実機や Stadium 2 実機との乖離は追わない。正しさの定義 = `tools/gen-fixtures.js` が PS から生成したゴールデンフィクスチャとの**ビット一致**（状態 + PRNG シード、全スナップショット点で）。
+**The source of truth is PS as actually implemented.** Divergence from cartridge GSC or real Stadium 2 hardware is out of scope. Correctness is defined as **bit-exact parity** (state + PRNG seed, at every snapshot point) against golden fixtures generated from PS by `tools/gen-fixtures.js`.
 
-## 構成
+## Layout
 
 ```
-tools/            PS(参照実装)から生成する Node スクリプト群（要: PS_ROOT=PSリポジトリ, node build 済み）
-  export-dex.js            平坦化した gen2stadium2 Dex を data/ へ書き出す
-  gen-prng-vectors.js      PRNG パリティ用ベクタ
-  gen-fixtures.js          ゴールデンフィクスチャ生成（live対戦→inputLogリプレイ→スナップショット抽出）
-  gen-porting-checklist.js PORTING.md 再生成
-data/gen2stadium2.json     参照データ（関数はコールバック名リストに置換済み、psCommit をmetaに記録）
-fixtures/prng-vectors.json PRNG ベクタ
-fixtures/corpus-v1/        60バトル（puredata 30 + full 30、計2,268ターン/2,585スナップショット）
-crates/engine/             エンジン本体（prng 完動 / dex ローダ / state / choice / battle=未実装スタブ）
-crates/conformance/        適合性ハーネス（フィクスチャschema・差分レポータ・replayテスト）
-PORTING.md                 移植チェックリスト（377コールバック、生成物）
+tools/            Node scripts run against the reference PS build (needs PS_ROOT=PS repo, `node build` done)
+  export-dex.js            dump the flattened gen2stadium2 dex into data/
+  gen-prng-vectors.js      PRNG parity vectors
+  gen-fixtures.js          golden fixture generator (live battle -> inputLog replay -> snapshot extraction)
+  gen-porting-checklist.js regenerate PORTING.md
+data/gen2stadium2.json     reference data (functions replaced by callback-name lists; meta.psCommit records origin)
+fixtures/prng-vectors.json PRNG vectors
+fixtures/corpus-v1/        60 battles (30 puredata + 30 full; 2,268 turns / 2,585 snapshots)
+crates/engine/             the engine (prng working / dex loader / state / choice; battle = unimplemented stubs)
+crates/conformance/        conformance harness (fixture schema, divergence reporter, replay tests)
+PORTING.md                 porting checklist (377 callbacks, generated)
 ```
 
-## 検証の仕組み（スナップショット契約）
+## Verification model (the snapshot contract)
 
-- フィクスチャの `choices` は PS inputLog の正規化済み選択列（例: `team 5, 6, 1` / `move surf` / `switch 2`）。
-- スナップショット点 = **ログが伸びた入力行の直後**。各点で `turn / requestState / prngSeed / field / sides(全ポケモンのHP・状態・ランク・PP・volatiles)` + そのターンのログ行を記録。
-- `prngSeed` は PS `Gen5RNG.getSeed()` 形式（10進16bitリム4つのカンマ結合）。**シード一致 = 乱数消費順の一致**。結果だけ合っていても消費順がズレれば即検出される。
-- `|t:|`（壁時計）は生成時に除去済み。
+- Fixture `choices` are PS's canonicalized inputLog choice lines (e.g. `team 5, 6, 1` / `move surf` / `switch 2`).
+- Snapshot points = **immediately after every input line that grew the battle log**. Each snapshot records `turn / requestState / prngSeed / field / sides` (every mon's HP, status, boosts, PP, volatiles) plus the log lines produced since the previous snapshot.
+- `prngSeed` uses PS `Gen5RNG.getSeed()` format (four decimal 16-bit limbs, comma-joined). **Seed equality = RNG-consumption-order equality** — a drift in consumption order is caught immediately even when outcomes happen to match.
+- Nondeterministic `|t:|` wall-clock lines are stripped at generation time.
 
-## ワークフロー
+## Workflow
 
 ```bash
-# 全テスト（現在: PRNGパリティ・dexロード・フィクスチャschema = green）
+# all tests (currently green: PRNG parity, dex load, fixture schema)
 cargo test
-# 本丸のリプレイ適合（エンジンがマイルストーン1に達したら ignored を外す）
+# the real conformance gate (un-ignore as the engine reaches milestone 1)
 cargo test -p conformance --test replay -- --include-ignored
-# フィクスチャ再生成（PS更新後など）
+# regenerate artifacts (e.g. after a PS update)
 node tools/export-dex.js && node tools/gen-porting-checklist.js
 node tools/gen-fixtures.js --n 30 --pool puredata --out fixtures/corpus-v1/puredata --seed 100
 node tools/gen-fixtures.js --n 30 --pool full     --out fixtures/corpus-v1/full     --seed 200
 ```
 
-移植の進め方: コールバックを1個移植するたびに `PORTING.md` をチェック → replay テストが緑のまま成長させる。乖離時は `compare::Divergence` が「最初に割れたスナップショット + JSONパス + そのターンのログ」まで自動局所化する。
+Porting loop: port one callback → tick it off in `PORTING.md` → keep the replay test green as the legal pool grows. On divergence, `compare::Divergence` auto-localizes to the first differing snapshot + JSON path + that turn's log lines.
 
-### マイルストーン
+### Milestones
 
-1. **M1 — puredata corpus 緑**: チーム初期化（Gen2 DV/努力値→実数値、`data/mods/gen2/scripts.ts` の式）→ チームプレビュー → 交代 → 純データ技のダメージパイプライン（Gen2 getDamage）→ 残留処理 + 状態異常37種。
-2. **M2 — full corpus 緑**: コールバック技88種 + アイテム38種 + Stadium Sleep/Freeze Clause 等のランタイムルール。
-3. **M3 — 探索API**: `Battle` は既に flat/Copy 設計。apply/undo か clone ベースの列挙APIを載せ、DUCT/MCTS へ。
-4. 以後: exhaustive-runner 型のカバレッジ強制コーパス、友人シナリオfixture、実対戦の予測/実測自動差分。
+1. **M1 — puredata corpus green**: team init (Gen 2 DV/stat-exp → stats, formulas from `data/mods/gen2/scripts.ts`) → team preview → switching → damage pipeline for pure-data moves (Gen 2 `getDamage` lineage) → residuals + the 37 conditions.
+2. **M2 — full corpus green**: the 88 callback moves + 38 callback items + runtime format rules (Stadium Sleep Clause, Freeze Clause, ...).
+3. **M3 — search API**: `Battle` is already flat/Copy-friendly; add clone- or apply/undo-based enumeration for DUCT/MCTS.
+4. Beyond: exhaustive-runner-style coverage-forcing corpora, expert scenario fixtures, automatic predicted-vs-actual diffing during live bot play.
 
-## 実測ベースライン（この機・WSL）
+## Baseline measurements (this machine, WSL)
 
-- PS(TS): 6.5バトル/s・570ターン/s・クローン5.5ms → 木探索は不成立
-- 目標: 10⁵–10⁶ターン/s、クローン=サブμs（同種先行例 pkmn/engine は公称 PS比1000x超）
+- PS (TS): 6.5 battles/s, 570 turns/s, 5.5 ms per clone → tree search is infeasible on the TS engine
+- Target: 1e5–1e6 turns/s, sub-microsecond clones (prior art pkmn/engine claims >1000x over PS)
 
-## 移植時の地雷（このリポジトリで実測済みの事実）
+## Porting landmines (facts measured in this repo)
 
-1. **sim は渡された特性を Gen 2 でも発動させる**。バリデータ正規形は `ability: 'No Ability'`。空文字のままpack往復すると種族デフォルト特性が充填され、Shed Skin等が発動して対戦結果が変わる（battle-005で実証）。フィクスチャは全て validator 通過済み。
-2. **Gen 2 の DV 整合性**: SpA DV = SpD DV、HP DV = Atk/Def/Spe/Spc の最下位ビットから導出。満たさないチームはバリデータが弾く。
-3. **チームプレビュー後、PS は `side.pokemon` を選出3匹に切り詰める**。スナップショットのパーティサイズは 6(プレビュー時) → 3(開始後)。
-4. リプレイは inputLog の `>player` 行（packedチーム）から構成しないと live と一致しない（生成器は対策済み）。
-5. PRNG は Gen5 64bit LCG。`random(n)` は `(next * n) >> 32`（JS float 演算と n < 2^21 で完全一致、debug_assert 済み）。
+1. **The sim runs whatever ability it is handed, even in Gen 2.** The validator's canonical form is `ability: 'No Ability'`. A blank ability round-tripped through pack/unpack gets default-filled with the species ability, and e.g. Shed Skin then fires and changes battle outcomes (proven on battle-005). All fixtures are TeamValidator-clean.
+2. **Gen 2 DV consistency**: SpA DV must equal SpD DV; the HP DV is derived from the low bits of Atk/Def/Spe/Spc. The validator rejects teams that violate this.
+3. **After team preview, PS truncates `side.pokemon` to the 3 picked mons** — snapshot party size goes 6 (preview) → 3 (battle).
+4. Replay must reconstruct players from the inputLog's `>player` lines (packed teams) or it will not match the live battle (the generator does this).
+5. The PRNG is the Gen 5 64-bit LCG. `random(n)` is `(next * n) >> 32`, exactly matching JS float math for n < 2^21 (debug_assert enforced).
 
-## 参照
+## References
 
-- 参照実装: `PS_ROOT`（デフォルト `~/pokemon-showdown`、`node build` 必須）。データの由来コミットは `data/gen2stadium2.json` の `meta.psCommit`。
-- スコープ実測: 技267(コールバック持ち88) / アイテム62(38) / 状態37 / 特性0 / 種族251(Uber5除外で246)、コールバック計377、使用イベントフック76種。
+- Reference implementation: `PS_ROOT` (default `~/pokemon-showdown`, `node build` required). Data provenance commit: `meta.psCommit` in `data/gen2stadium2.json`.
+- Measured scope: 267 moves (88 with callbacks) / 62 items (38) / 37 conditions / 0 abilities / 251 species (246 after the 5 Ubers), 377 callbacks total, 76 distinct event hooks in use.
