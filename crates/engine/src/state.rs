@@ -172,7 +172,93 @@ impl DK {
 /// What PS stores in `EffectState`: scalar keys (serialized into the fixture
 /// essence) plus non-scalar references (dropped from the essence but needed
 /// at runtime: source Pokemon, sourceEffect).
-#[derive(Clone, Debug, Default, PartialEq)]
+/// Fixed-capacity scalar bag (Copy — the whole EffectState memcpy-clones).
+/// Capacity 4 covers every condition in this format (rollout: hitCount +
+/// contactHitCount + multiplier is the widest); overflow asserts loudly.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct DataBag {
+    entries: [Option<(DK, Scalar)>; 4],
+    n: u8,
+}
+
+impl DataBag {
+    pub fn iter(&self) -> impl Iterator<Item = &(DK, Scalar)> {
+        self.entries[..self.n as usize].iter().map(|e| e.as_ref().unwrap())
+    }
+
+    fn iter_mut(&mut self) -> impl Iterator<Item = &mut (DK, Scalar)> {
+        self.entries[..self.n as usize].iter_mut().map(|e| e.as_mut().unwrap())
+    }
+
+    pub fn push(&mut self, key: DK, value: Scalar) {
+        assert!((self.n as usize) < self.entries.len(), "DataBag overflow at {key:?}");
+        self.entries[self.n as usize] = Some((key, value));
+        self.n += 1;
+    }
+
+    pub fn retain(&mut self, mut keep: impl FnMut(DK) -> bool) {
+        let mut out: [Option<(DK, Scalar)>; 4] = Default::default();
+        let mut m = 0u8;
+        for e in self.entries[..self.n as usize].iter().flatten() {
+            if keep(e.0) {
+                out[m as usize] = Some(*e);
+                m += 1;
+            }
+        }
+        self.entries = out;
+        self.n = m;
+    }
+}
+
+/// Fixed-capacity linked-pokemon list (singles: one link; capacity 2).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LinkedPokes {
+    p: [Option<PokeId>; 2],
+    n: u8,
+}
+
+impl LinkedPokes {
+    pub fn one(id: PokeId) -> LinkedPokes {
+        LinkedPokes { p: [Some(id), None], n: 1 }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.n == 0
+    }
+
+    pub fn push(&mut self, id: PokeId) {
+        assert!((self.n as usize) < self.p.len(), "LinkedPokes overflow");
+        self.p[self.n as usize] = Some(id);
+        self.n += 1;
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = PokeId> + '_ {
+        self.p[..self.n as usize].iter().map(|e| e.unwrap())
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut PokeId> {
+        self.p[..self.n as usize].iter_mut().map(|e| e.as_mut().unwrap())
+    }
+
+    pub fn retain(&mut self, mut keep: impl FnMut(PokeId) -> bool) {
+        let mut out: [Option<PokeId>; 2] = [None, None];
+        let mut m = 0u8;
+        for e in self.p[..self.n as usize].iter().flatten() {
+            if keep(*e) {
+                out[m as usize] = Some(*e);
+                m += 1;
+            }
+        }
+        self.p = out;
+        self.n = m;
+    }
+
+    pub fn clear(&mut self) {
+        *self = LinkedPokes::default();
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct EffectState {
     pub id: EffId,
     /// Volatiles carry `name` (addVolatile sets the condition's display name)
@@ -186,7 +272,7 @@ pub struct EffectState {
     /// `sourceEffect` — an Effect reference, not in essence.
     pub source_effect: Option<crate::battle::EffectHandle>,
     /// `linkedPokemon` — Pokemon references, not in essence (trapped/trapper).
-    pub linked_pokemon: smallvec::SmallVec<[PokeId; 2]>,
+    pub linked_pokemon: LinkedPokes,
     /// The paired condition id for linked volatiles. On the *target* side PS
     /// stores the string form (also mirrored into `data` for essence); on the
     /// *source* side it stores the Condition object (essence-invisible).
@@ -200,7 +286,7 @@ pub struct EffectState {
     /// Everything else scalar: time, startTime, counter, boundDivisor, move...
     /// Insertion-ordered like a JS object (affects nothing in essence compare,
     /// which is key-based, but keep order for faithful iteration anyway).
-    pub data: smallvec::SmallVec<[(DK, Scalar); 3]>,
+    pub data: DataBag,
     /// PS initEffectState effectOrder (handler ordering for SwitchIn events).
     pub effect_order: u32,
 }
@@ -215,11 +301,16 @@ impl EffectState {
     }
 
     pub fn set(&mut self, key: DK, value: Scalar) {
-        if let Some(entry) = self.data.iter_mut().find(|(k, _)| *k == key) {
-            entry.1 = value;
-        } else {
-            self.data.push((key, value));
+        let existing = self.data.iter_mut().find(|(k, _)| *k == key).is_some();
+        if existing {
+            for e in self.data.iter_mut() {
+                if e.0 == key {
+                    e.1 = value;
+                    return;
+                }
+            }
         }
+        self.data.push(key, value);
     }
 
     pub fn set_int(&mut self, key: DK, value: i64) {
@@ -232,7 +323,7 @@ impl EffectState {
     }
 
     pub fn remove(&mut self, key: DK) {
-        self.data.retain(|(k, _)| *k != key);
+        self.data.retain(|k| k != key);
     }
 }
 

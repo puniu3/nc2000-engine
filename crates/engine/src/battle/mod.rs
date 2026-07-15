@@ -168,12 +168,15 @@ impl Battle {
         self.log.push(format!("|{}", parts.join("|")));
     }
 
-    /// Toggle protocol-log recording (search mode: off). Disabling clears the
-    /// move-line cursor so `attr_last_move` can never touch stale lines.
+    /// Toggle protocol-log recording (search mode: off). Disabling drops the
+    /// accumulated log (construction lines included — nothing reads them in
+    /// search mode) and clears the move-line cursor so `attr_last_move` can
+    /// never touch stale lines.
     pub fn set_log_enabled(&mut self, on: bool) {
         self.log_enabled = on;
         if !on {
             self.last_move_line = -1;
+            self.log = Vec::new();
         }
     }
 

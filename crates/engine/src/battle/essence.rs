@@ -48,7 +48,7 @@ fn scal(dex: &Dex, state: &EffectState) -> Value {
     if let Some(d) = state.duration {
         out.insert("duration".into(), json!(d));
     }
-    for (k, v) in &state.data {
+    for (k, v) in state.data.iter() {
         out.insert(k.as_str().to_string(), scalar_json(dex, v));
     }
     Value::Object(out)
