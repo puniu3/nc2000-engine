@@ -22,7 +22,6 @@ fn run_corpus(name: &str) {
 }
 
 #[test]
-#[ignore = "milestone 1: core + conditions + pure-data moves"]
 fn puredata_corpus_replays_bit_exact() {
     run_corpus("puredata");
 }

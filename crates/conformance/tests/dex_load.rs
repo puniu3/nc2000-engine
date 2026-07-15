@@ -8,7 +8,7 @@ use nc2000_engine::events::Handler;
 fn dex_has_expected_counts() {
     let dex = load_dex();
     assert_eq!(dex.species.len(), 251, "gen2 species");
-    assert_eq!(dex.moves.len(), 267, "gen2 moves (incl. 16 typed Hidden Powers)");
+    assert_eq!(dex.moves.len(), 268, "gen2 moves (incl. 16 typed Hidden Powers + synthetic recharge)");
     assert_eq!(dex.items.len(), 62, "gen2 items");
     assert_eq!(dex.conditions.len(), 37, "conditions table");
     assert_eq!(dex.typechart.len(), 17, "gen2 type chart (17 types)");

@@ -4,6 +4,11 @@
 //! Design: typed fields for the hot data; everything else stays reachable via
 //! `extra` so no information is lost while porting. String keys are interned
 //! to dense u16 ids at load; battle state stores only ids.
+//!
+//! `MoveStatic` is the fully-parsed per-move record (PS `Move` after its
+//! constructor normalization: secondaries array, self block, critRatio, ...).
+//! `ActiveMove` (see `battle::active_move`) is a cheap clone of it plus the
+//! mutable per-use fields.
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -17,6 +22,18 @@ pub struct SpeciesId(pub u16);
 pub struct ItemId(pub u16);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CondId(pub u16);
+/// Id into the RAW `conditions` data table (export shape); distinct from
+/// `CondId`, which indexes the interned runtime `conds` table.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct RawCondId(pub u16);
+
+/// PS `toID`: lowercase, strip non-alphanumerics.
+pub fn toid(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
+}
 
 #[derive(Debug, Deserialize)]
 pub struct StatsTable {
@@ -108,6 +125,8 @@ pub struct ItemData {
 #[serde(rename_all = "camelCase")]
 pub struct ConditionData {
     #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
     pub effect_type: Option<String>, // Status | Weather | Condition | ...
     #[serde(default)]
     pub duration: Option<u8>,
@@ -117,6 +136,13 @@ pub struct ConditionData {
     pub callbacks: Vec<String>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
+}
+
+impl ConditionData {
+    /// `on{Event}Order` / `Priority` / `SubOrder` data fields (resolvePriority).
+    pub fn handler_num(&self, key: &str) -> Option<i32> {
+        self.extra.get(key).and_then(|v| v.as_i64()).map(|v| v as i32)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -197,24 +223,469 @@ impl_id!(MoveId);
 impl_id!(SpeciesId);
 impl_id!(ItemId);
 impl_id!(CondId);
+impl_id!(RawCondId);
+
+// ------------------------------------------------------------- MoveStatic
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Category {
+    Physical,
+    Special,
+    Status,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Accuracy {
+    AlwaysHits,
+    Pct(i32),
+}
+
+/// Sparse boost table in PS's key iteration order (data object insertion
+/// order: PS objects iterate in insertion order; move data writes boosts in
+/// atk/def/spa/spd/spe/accuracy/evasion order in practice — we normalize to
+/// that fixed order, which matches `for (boostName in boost)` in PS because
+/// the JSON preserves the original insertion order and PS data files list
+/// stats in canonical order).
+pub type SparseBoosts = Vec<(usize, i8)>; // (boost index, delta)
+
+pub const BOOST_KEYS: [&str; 7] = ["atk", "def", "spa", "spd", "spe", "accuracy", "evasion"];
+
+pub fn boost_index(key: &str) -> Option<usize> {
+    BOOST_KEYS.iter().position(|&k| k == key)
+}
+
+fn parse_sparse_boosts(v: &Value) -> SparseBoosts {
+    // serde_json is built with preserve_order, so iteration order here is the
+    // JSON object's own key order == PS's `for (boostName in boost)` order.
+    let mut out = Vec::new();
+    if let Value::Object(map) = v {
+        for (key, val) in map {
+            if let (Some(idx), Some(n)) = (boost_index(key), val.as_i64()) {
+                out.push((idx, n as i8));
+            }
+        }
+    }
+    out
+}
+
+/// A `secondary` or `self` block on a move (PS SecondaryEffect / HitEffect).
+#[derive(Clone, Debug, Default)]
+pub struct HitEffect {
+    pub chance: Option<i32>,
+    pub boosts: SparseBoosts,
+    pub status: Option<String>,
+    pub volatile_status: Option<String>,
+    pub self_effect: Option<Box<HitEffect>>,
+    pub kingsrock: bool,
+    /// Callback names inside this block (e.g. thief secondary.onHit).
+    pub has_on_hit: bool,
+}
+
+fn parse_hit_effect(v: &Value) -> HitEffect {
+    let mut h = HitEffect::default();
+    if let Value::Object(map) = v {
+        h.chance = map.get("chance").and_then(|x| x.as_i64()).map(|x| x as i32);
+        if let Some(b) = map.get("boosts") {
+            h.boosts = parse_sparse_boosts(b);
+        }
+        h.status = map.get("status").and_then(|x| x.as_str()).map(String::from);
+        h.volatile_status = map.get("volatileStatus").and_then(|x| x.as_str()).map(String::from);
+        if let Some(s) = map.get("self") {
+            h.self_effect = Some(Box::new(parse_hit_effect(s)));
+        }
+        h.kingsrock = map.get("kingsrock").map(|x| !x.is_null()).unwrap_or(false);
+        h.has_on_hit = false; // callbacks were stripped in export; flags carry names
+    }
+    h
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FixedDamage {
+    Level,
+    Amount(i32),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Multihit {
+    Fixed(i32),
+    Range(i32, i32),
+}
+
+/// Fully-parsed static move record.
+#[derive(Clone, Debug)]
+pub struct MoveStatic {
+    pub name: String,
+    pub move_type: String,
+    pub category: Category,
+    pub base_power: i32,
+    pub accuracy: Accuracy,
+    pub pp: i32,
+    pub no_pp_boosts: bool,
+    pub priority: i8,
+    pub target: String,
+    pub crit_ratio: i32,
+    pub will_crit: Option<bool>,
+    pub flags: Vec<String>,
+    pub status: Option<String>,
+    pub volatile_status: Option<String>,
+    pub side_condition: Option<String>,
+    pub weather: Option<String>,
+    pub pseudo_weather: Option<String>,
+    pub boosts: SparseBoosts,
+    pub has_boosts: bool,
+    pub heal: Option<(i32, i32)>,
+    pub drain: Option<(i32, i32)>,
+    pub recoil: Option<(i32, i32)>,
+    pub struggle_recoil: bool,
+    pub multihit: Option<Multihit>,
+    pub secondaries: Vec<HitEffect>,
+    pub self_effect: Option<HitEffect>,
+    pub damage: Option<FixedDamage>,
+    pub ohko: bool,
+    pub selfdestruct: bool,
+    pub self_switch: Option<String>,
+    pub force_switch: bool,
+    pub ignore_immunity: bool,
+    pub ignore_accuracy: bool,
+    pub ignore_evasion: bool,
+    pub ignore_positive_evasion: bool,
+    pub ignore_offensive: bool,
+    pub ignore_defensive: bool,
+    pub sleep_usable: bool,
+    pub no_damage_variance: bool,
+    pub always_hit: bool,
+    pub thaws_target: bool,
+    /// PS callback names on the move (non-empty = milestone 2 move).
+    pub callbacks: Vec<String>,
+    /// Condition block data (for moves that define one), kept raw.
+    pub condition: Option<Value>,
+}
+
+impl MoveStatic {
+    fn parse(d: &MoveData) -> MoveStatic {
+        let x = |k: &str| d.extra.get(k);
+        let xb = |k: &str| x(k).map(|v| v.as_bool() == Some(true) || v.is_string()).unwrap_or(false);
+        let category = match d.category.as_str() {
+            "Physical" => Category::Physical,
+            "Special" => Category::Special,
+            _ => Category::Status,
+        };
+        let accuracy = match &d.accuracy {
+            Value::Bool(true) => Accuracy::AlwaysHits,
+            Value::Number(n) => Accuracy::Pct(n.as_i64().unwrap_or(100) as i32),
+            _ => Accuracy::Pct(100),
+        };
+        let multihit = d.multihit.as_ref().and_then(|v| match v {
+            Value::Number(n) => Some(Multihit::Fixed(n.as_i64().unwrap() as i32)),
+            Value::Array(a) if a.len() == 2 => Some(Multihit::Range(
+                a[0].as_i64().unwrap() as i32,
+                a[1].as_i64().unwrap() as i32,
+            )),
+            _ => None,
+        });
+        let damage = x("damage").and_then(|v| match v {
+            Value::String(s) if s == "level" => Some(FixedDamage::Level),
+            Value::Number(n) => Some(FixedDamage::Amount(n.as_i64().unwrap() as i32)),
+            _ => None,
+        });
+        let secondaries = d
+            .secondaries
+            .as_ref()
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().map(parse_hit_effect).collect())
+            .unwrap_or_default();
+        MoveStatic {
+            name: d.name.clone(),
+            move_type: d.move_type.clone(),
+            category,
+            base_power: d.base_power as i32,
+            accuracy,
+            pp: d.pp as i32,
+            no_pp_boosts: xb("noPPBoosts"),
+            priority: d.priority,
+            target: d.target.clone(),
+            crit_ratio: d.crit_ratio.unwrap_or(1) as i32,
+            will_crit: x("willCrit").and_then(|v| v.as_bool()),
+            flags: d.flags.keys().cloned().collect(),
+            status: d.status.clone(),
+            volatile_status: d.volatile_status.clone(),
+            side_condition: d.side_condition.clone(),
+            weather: d.weather.clone(),
+            pseudo_weather: x("pseudoWeather").and_then(|v| v.as_str()).map(String::from),
+            boosts: x("boosts").map(parse_sparse_boosts).unwrap_or_default(),
+            has_boosts: x("boosts").is_some(),
+            heal: x("heal").and_then(|v| v.as_array()).map(|a| {
+                (a[0].as_i64().unwrap() as i32, a[1].as_i64().unwrap() as i32)
+            }),
+            drain: d.drain.map(|(a, b)| (a as i32, b as i32)),
+            recoil: d.recoil.map(|(a, b)| (a as i32, b as i32)),
+            struggle_recoil: xb("struggleRecoil"),
+            multihit,
+            secondaries,
+            self_effect: x("self").map(parse_hit_effect),
+            damage,
+            ohko: xb("ohko"),
+            selfdestruct: xb("selfdestruct"),
+            self_switch: x("selfSwitch").and_then(|v| {
+                if v.as_bool() == Some(true) {
+                    Some("true".to_string())
+                } else {
+                    v.as_str().map(String::from)
+                }
+            }),
+            force_switch: xb("forceSwitch"),
+            ignore_immunity: match x("ignoreImmunity") {
+                Some(Value::Bool(b)) => *b,
+                Some(Value::Object(_)) => true, // e.g. {Ground: true} — treat per-type later if needed
+                _ => category == Category::Status,
+            },
+            ignore_accuracy: xb("ignoreAccuracy"),
+            ignore_evasion: xb("ignoreEvasion"),
+            ignore_positive_evasion: xb("ignorePositiveEvasion"),
+            ignore_offensive: xb("ignoreOffensive"),
+            ignore_defensive: xb("ignoreDefensive"),
+            sleep_usable: xb("sleepUsable"),
+            no_damage_variance: xb("noDamageVariance"),
+            always_hit: xb("alwaysHit"),
+            thaws_target: xb("thawsTarget"),
+            callbacks: d.callbacks.clone(),
+            condition: d.condition.clone(),
+        }
+    }
+
+    pub fn has_flag(&self, flag: &str) -> bool {
+        self.flags.iter().any(|f| f == flag)
+    }
+}
+
+/// PS effect types reachable in this format.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EffectType {
+    Condition,
+    Status,
+    Weather,
+    Move,
+    Item,
+    Rule,
+    Format,
+}
+
+/// Interned runtime condition entry. Mirrors what PS
+/// `dex.conditions.getByID(id)` resolves for every id the battle can touch:
+/// dex conditions, move `condition` blocks, format rules acting as
+/// pseudo-weathers, and marker volatiles that exist only as ids.
+#[derive(Clone, Debug)]
+pub struct CondEntry {
+    pub name: String,
+    pub effect_type: EffectType,
+    pub duration: Option<i32>,
+    pub counter_max: Option<i32>,
+    pub callbacks: Vec<String>,
+    /// `on{Event}Order` / `Priority` / `SubOrder` numbers from the data.
+    pub nums: BTreeMap<String, i32>,
+}
+
+impl CondEntry {
+    pub fn has_callback(&self, name: &str) -> bool {
+        self.callbacks.iter().any(|c| c == name)
+    }
+
+    pub fn num(&self, key: &str) -> Option<i32> {
+        self.nums.get(key).copied()
+    }
+}
+
+fn handler_nums(obj: &BTreeMap<String, Value>) -> BTreeMap<String, i32> {
+    let mut nums = BTreeMap::new();
+    for (k, v) in obj {
+        if k.starts_with("on")
+            && (k.ends_with("Order") || k.ends_with("Priority") || k.ends_with("SubOrder"))
+        {
+            if let Some(n) = v.as_i64() {
+                nums.insert(k.clone(), n as i32);
+            }
+        }
+    }
+    nums
+}
 
 pub struct Dex {
     pub species: Table<SpeciesId, SpeciesData>,
     pub moves: Table<MoveId, MoveData>,
     pub items: Table<ItemId, ItemData>,
-    pub conditions: Table<CondId, ConditionData>,
+    pub conditions: Table<RawCondId, ConditionData>,
     pub typechart: BTreeMap<String, TypeData>,
+    /// Parsed static move records, indexed by MoveId.
+    pub moves_static: Vec<MoveStatic>,
+    /// Interned runtime conditions (superset of `conditions`).
+    pub conds: Table<CondId, CondEntry>,
 }
 
 impl Dex {
     pub fn from_json(json: &str) -> Result<Dex, serde_json::Error> {
-        let file: DexFile = serde_json::from_str(json)?;
+        let mut file: DexFile = serde_json::from_str(json)?;
+        // Synthetic 'recharge' pseudo-move (PS resolves it as a nonexistent
+        // move; it only ever reaches BeforeMove, where mustrecharge aborts it).
+        if !file.moves.contains_key("recharge") {
+            let recharge: MoveData = serde_json::from_value(serde_json::json!({
+                "num": 0,
+                "name": "Recharge",
+                "basePower": 0,
+                "accuracy": true,
+                "pp": 1,
+                "priority": 0,
+                "category": "Physical",
+                "type": "???",
+                "target": "normal",
+                "flags": {},
+                "callbacks": [],
+            }))?;
+            file.moves.insert("recharge".to_string(), recharge);
+        }
+        let moves = Table::build(file.moves);
+        let moves_static: Vec<MoveStatic> = moves.values.iter().map(MoveStatic::parse).collect();
+
+        // ---- build the interned runtime condition table
+        let mut entries: BTreeMap<String, CondEntry> = BTreeMap::new();
+        for (id, c) in &file.conditions {
+            let effect_type = match c.effect_type.as_deref() {
+                Some("Status") => EffectType::Status,
+                Some("Weather") => EffectType::Weather,
+                _ => EffectType::Condition,
+            };
+            entries.insert(
+                id.clone(),
+                CondEntry {
+                    name: c.name.clone().unwrap_or_else(|| id.clone()),
+                    effect_type,
+                    duration: c.duration.map(|d| d as i32),
+                    counter_max: c.counter_max.map(|d| d as i32),
+                    callbacks: c.callbacks.clone(),
+                    nums: handler_nums(&c.extra),
+                },
+            );
+        }
+        // move condition blocks (volatiles keyed by move id, e.g. lightscreen)
+        for (i, ms) in moves_static.iter().enumerate() {
+            let id = moves.keys[i].clone();
+            if entries.contains_key(&id) {
+                continue;
+            }
+            let Some(Value::Object(cond)) = &ms.condition else { continue };
+            let cond_map: BTreeMap<String, Value> =
+                cond.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            let callbacks = ms
+                .callbacks
+                .iter()
+                .filter_map(|c| c.strip_prefix("condition."))
+                .map(String::from)
+                .collect();
+            entries.insert(
+                id,
+                CondEntry {
+                    name: ms.name.clone(),
+                    effect_type: EffectType::Condition,
+                    duration: cond_map.get("duration").and_then(|v| v.as_i64()).map(|v| v as i32),
+                    counter_max: cond_map
+                        .get("counterMax")
+                        .and_then(|v| v.as_i64())
+                        .map(|v| v as i32),
+                    callbacks,
+                    nums: handler_nums(&cond_map),
+                },
+            );
+        }
+        // rules that act as runtime effects (pseudo-weathers / onSetStatus)
+        for (id, name, callbacks) in [
+            ("maxtotallevel", "Max Total Level", vec![]),
+            ("stadiumsleepclause", "Stadium Sleep Clause", vec!["onSetStatus".to_string()]),
+            ("freezeclausemod", "Freeze Clause Mod", vec!["onSetStatus".to_string()]),
+        ] {
+            entries.insert(
+                id.to_string(),
+                CondEntry {
+                    name: name.to_string(),
+                    effect_type: EffectType::Rule,
+                    duration: None,
+                    counter_max: None,
+                    callbacks,
+                    nums: BTreeMap::new(),
+                },
+            );
+        }
+        // marker/synthetic conditions PS resolves as nonexistent-or-special
+        for (id, name) in [
+            ("brnattackdrop", "brnattackdrop"),
+            ("parspeeddrop", "parspeeddrop"),
+            ("recoil", "Recoil"),
+            ("drain", "Drain"),
+            ("confused", "confused"),
+        ] {
+            entries.entry(id.to_string()).or_insert_with(|| CondEntry {
+                name: name.to_string(),
+                effect_type: EffectType::Condition,
+                duration: None,
+                counter_max: None,
+                callbacks: Vec::new(),
+                nums: BTreeMap::new(),
+            });
+        }
+
         Ok(Dex {
             species: Table::build(file.species),
-            moves: Table::build(file.moves),
+            moves,
             items: Table::build(file.items),
             conditions: Table::build(file.conditions),
             typechart: file.typechart,
+            moves_static,
+            conds: Table::build(entries),
         })
+    }
+
+    pub fn move_static(&self, id: MoveId) -> &MoveStatic {
+        &self.moves_static[id.0 as usize]
+    }
+
+    pub fn conds_id(&self, key: &str) -> Option<CondId> {
+        self.conds.id(key)
+    }
+
+    pub fn conds_key(&self, id: CondId) -> &str {
+        self.conds.key(id)
+    }
+
+    pub fn cond(&self, id: CondId) -> &CondEntry {
+        self.conds.get(id)
+    }
+
+    pub fn cond_display_name(&self, id: CondId) -> &str {
+        &self.conds.get(id).name
+    }
+
+    pub fn cond_effect_type(&self, id: CondId) -> EffectType {
+        self.conds.get(id).effect_type
+    }
+
+    /// PS `dex.getEffectiveness`: +1 super effective, -1 resisted, 0 neutral/immune.
+    pub fn get_effectiveness(&self, attack_type: &str, defend_type: &str) -> i32 {
+        let Some(t) = self.typechart.get(&toid(defend_type)) else { return 0 };
+        match t.damage_taken.get(attack_type).copied().unwrap_or(0) {
+            1 => 1,
+            2 => -1,
+            _ => 0,
+        }
+    }
+
+    /// PS `dex.getImmunity`: false = immune. `source_type` may be a move type
+    /// or a status id ('psn', 'trapped', 'sandstorm', ...).
+    pub fn get_immunity(&self, source_type: &str, defend_types: &[String]) -> bool {
+        for ty in defend_types {
+            if let Some(t) = self.typechart.get(&toid(ty)) {
+                if t.damage_taken.get(source_type).copied().unwrap_or(0) == 3 {
+                    return false;
+                }
+            }
+        }
+        true
     }
 }

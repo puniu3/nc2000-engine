@@ -1,0 +1,768 @@
+//! Pokemon-level methods (sim/pokemon.ts + gen2/gen2stadium2 overrides),
+//! implemented on `Battle` because everything needs battle context.
+
+use crate::dex::{Dex, MoveId};
+use crate::state::*;
+
+use super::events::EvTarget;
+use super::{clamp_int_range, EffectHandle, RV};
+
+pub const STAT_KEYS: [&str; 5] = ["atk", "def", "spa", "spd", "spe"];
+
+impl Battle {
+    // ------------------------------------------------------------- stats
+
+    /// gen2stadium2 `pokemon.getStat(statName, unboosted, unmodified, fastReturn)`.
+    /// `stat` is an index into stored_stats (0=atk..4=spe).
+    pub fn get_stat(&self, dex: &Dex, id: PokeId, stat: usize, unboosted: bool, unmodified: bool, fast_return: bool) -> i32 {
+        let p = self.poke(id);
+        let mut value = p.stored_stats[stat] as f64;
+
+        if !unboosted {
+            let mut boost = p.boosts[stat] as i32;
+            boost = boost.clamp(-6, 6);
+            if boost >= 0 {
+                const BOOST_TABLE: [f64; 7] = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+                value = (value * BOOST_TABLE[boost as usize]).floor();
+            } else {
+                const NUMERATORS: [f64; 7] = [100.0, 66.0, 50.0, 40.0, 33.0, 28.0, 25.0];
+                value = (value * NUMERATORS[(-boost) as usize] / 100.0).floor();
+            }
+        }
+        let parspeeddrop = dex.conds_id("parspeeddrop").map(|c| p.has_volatile(c)).unwrap_or(false);
+        if p.status == Status::Par && stat == 4 && parspeeddrop {
+            value = (value / 4.0).floor();
+        }
+        if !unmodified {
+            let brnattackdrop =
+                dex.conds_id("brnattackdrop").map(|c| p.has_volatile(c)).unwrap_or(false);
+            if p.status == Status::Brn && stat == 0 && brnattackdrop {
+                value = (value / 2.0).floor();
+            }
+        }
+
+        let mut value = clamp_int_range(value, Some(1.0), Some(999.0));
+        if fast_return {
+            return value as i32;
+        }
+
+        // Screens
+        if !unboosted {
+            let side = &self.sides[id.side as usize];
+            let reflect = dex.conds_id("reflect").map(|c| side.has_side_condition(c)).unwrap_or(false);
+            let lightscreen =
+                dex.conds_id("lightscreen").map(|c| side.has_side_condition(c)).unwrap_or(false);
+            if (stat == 1 && reflect) || (stat == 3 && lightscreen) {
+                value *= 2.0;
+            }
+        }
+
+        // Boosting items (thickclub/lightball/metalpowder)
+        if let Some(item) = p.item {
+            let item_key = dex.items.key(item);
+            let species_name = &dex.species.get(p.species).name;
+            if (item_key == "thickclub"
+                && (species_name == "Cubone" || species_name == "Marowak")
+                && stat == 0)
+                || (item_key == "lightball" && species_name == "Pikachu" && stat == 2)
+            {
+                value *= 2.0;
+            } else if item_key == "metalpowder" && species_name == "Ditto" && (stat == 1 || stat == 3) {
+                value = (value * 1.5).floor();
+            }
+        }
+
+        value as i32
+    }
+
+    /// gen3 `pokemon.getActionSpeed()`.
+    pub fn get_pokemon_action_speed(&self, dex: &Dex, id: PokeId) -> i32 {
+        let speed = self.get_stat(dex, id, 4, false, false, false);
+        if self.quick_claw_roll {
+            if let Some(item) = self.poke(id).item {
+                if dex.items.key(item) == "quickclaw" {
+                    return 65535;
+                }
+            }
+        }
+        speed
+    }
+
+    pub fn update_speed(&mut self, dex: &Dex, id: PokeId) {
+        self.poke_mut(id).speed = self.get_pokemon_action_speed(dex, id);
+    }
+
+    pub fn update_all_speeds(&mut self, dex: &Dex) {
+        for id in self.get_all_active(false) {
+            self.update_speed(dex, id);
+        }
+    }
+
+    /// gen2 `pokemon.boostBy(boost)` — returns the last delta applied.
+    pub fn pokemon_boost_by(&mut self, dex: &Dex, id: PokeId, boosts: &[(usize, i8)]) -> i8 {
+        let mut delta: i8 = 0;
+        for &(stat, amount) in boosts {
+            delta = amount;
+            if amount > 0 && stat < 5 && self.get_stat(dex, id, stat, false, true, false) == 999 {
+                delta = 0;
+                continue;
+            }
+            let p = self.poke_mut(id);
+            p.boosts[stat] = p.boosts[stat].saturating_add(delta);
+            if p.boosts[stat] > 6 {
+                delta -= p.boosts[stat] - 6;
+                p.boosts[stat] = 6;
+            }
+            if p.boosts[stat] < -6 {
+                delta -= p.boosts[stat] + 6;
+                p.boosts[stat] = -6;
+            }
+        }
+        delta
+    }
+
+    // ------------------------------------------------------------ status
+
+    /// pokemon.trySetStatus.
+    pub fn try_set_status(
+        &mut self,
+        dex: &Dex,
+        id: PokeId,
+        status: &str,
+        source: Option<PokeId>,
+        source_effect: EffectHandle,
+    ) -> RV {
+        let current = self.poke(id).status;
+        let status_to_set = if current != Status::None { current.as_str().to_string() } else { status.to_string() };
+        self.set_status(dex, id, &status_to_set, source, source_effect, false)
+    }
+
+    /// pokemon.setStatus.
+    pub fn set_status(
+        &mut self,
+        dex: &Dex,
+        id: PokeId,
+        status: &str,
+        source: Option<PokeId>,
+        source_effect: EffectHandle,
+        ignore_immunities: bool,
+    ) -> RV {
+        if self.poke(id).hp <= 0 {
+            return RV::False;
+        }
+        let mut source = source;
+        let mut source_effect = source_effect;
+        if let Some(frame) = self.event_stack.last() {
+            if source.is_none() {
+                source = frame.source;
+            }
+        }
+        if source_effect.is_none() {
+            source_effect = self.current_effect();
+        }
+        if source.is_none() {
+            source = Some(id);
+        }
+
+        // sourceEffect move `status` field checks (fail messages)
+        let se_status: Option<String> = match source_effect {
+            EffectHandle::MoveEff(m) => dex.move_static(m).status.clone(),
+            _ => None,
+        };
+
+        if self.poke(id).status.as_str() == status {
+            if se_status.as_deref() == Some(status) {
+                let ts = self.poke_str(id);
+                b_add_fail_status(self, &ts, status);
+            } else if se_status.is_some() {
+                let ss = self.poke_str(source.unwrap());
+                self.add(&["-fail", &ss]);
+                self.attr_last_move(&["[still]"]);
+            }
+            return RV::False;
+        }
+
+        if !ignore_immunities && !status.is_empty() {
+            let check = if status == "tox" { "psn" } else { status };
+            if !self.run_status_immunity(dex, id, check, false) {
+                if se_status.is_some() {
+                    let ts = self.poke_str(id);
+                    self.add(&["-immune", &ts]);
+                }
+                return RV::False;
+            }
+        }
+
+        let prev_status = self.poke(id).status;
+        let prev_state = self.poke(id).status_state.clone();
+
+        if !status.is_empty() {
+            let result = self.run_event(
+                dex,
+                "SetStatus",
+                EvTarget::Poke(id),
+                source,
+                source_effect,
+                Some(RV::Str(status.to_string())),
+                false,
+                false,
+            );
+            if !result.truthy() {
+                return result;
+            }
+        }
+
+        self.poke_mut(id).status = Status::from_str(status);
+        let mut state = EffectState { id: status.to_string(), ..Default::default() };
+        state.source = source;
+        let cond = if status.is_empty() { None } else { dex.conds_id(status) };
+        if let Some(c) = cond {
+            if let Some(d) = dex.cond(c).duration {
+                state.duration = Some(d);
+            }
+        }
+        let target_active = self.poke(id).is_active;
+        let state = self.init_effect_state(state, target_active && !status.is_empty());
+        self.poke_mut(id).status_state = state;
+        // (statuses in gen2 have no durationCallback)
+
+        if !status.is_empty() {
+            let c = cond.expect("status condition must exist");
+            let started = self.single_event(
+                dex,
+                "Start",
+                EffectHandle::Cond(c),
+                StateLoc::Status(id),
+                EvTarget::Poke(id),
+                source,
+                source_effect,
+                None,
+            );
+            if !started.truthy() {
+                self.poke_mut(id).status = prev_status;
+                self.poke_mut(id).status_state = prev_state;
+                return RV::False;
+            }
+            let after = self.run_event(
+                dex,
+                "AfterSetStatus",
+                EvTarget::Poke(id),
+                source,
+                source_effect,
+                Some(RV::Str(status.to_string())),
+                false,
+                false,
+            );
+            if !after.truthy() {
+                return RV::False;
+            }
+        }
+        RV::True
+    }
+
+    /// pokemon.cureStatus (with message).
+    pub fn cure_status(&mut self, dex: &Dex, id: PokeId, silent: bool) -> bool {
+        let p = self.poke(id);
+        if p.hp <= 0 || p.status == Status::None {
+            return false;
+        }
+        let ts = self.poke_str(id);
+        let status = self.poke(id).status.as_str().to_string();
+        self.add(&["-curestatus", &ts, &status, if silent { "[silent]" } else { "[msg]" }]);
+        if self.poke(id).status == Status::Slp && self.remove_volatile(dex, id, "nightmare") {
+            let ts = self.poke_str(id);
+            self.add(&["-end", &ts, "Nightmare", "[silent]"]);
+        }
+        self.set_status(dex, id, "", None, EffectHandle::None, false);
+        true
+    }
+
+    /// pokemon.clearStatus (no message).
+    pub fn pokemon_clear_status(&mut self, dex: &Dex, id: PokeId) -> bool {
+        let p = self.poke(id);
+        if p.hp <= 0 || p.status == Status::None {
+            return false;
+        }
+        if self.poke(id).status == Status::Slp && self.remove_volatile(dex, id, "nightmare") {
+            let ts = self.poke_str(id);
+            self.add(&["-end", &ts, "Nightmare", "[silent]"]);
+        }
+        self.set_status(dex, id, "", None, EffectHandle::None, false);
+        true
+    }
+
+    // --------------------------------------------------------- volatiles
+
+    /// pokemon.addVolatile.
+    pub fn add_volatile(
+        &mut self,
+        dex: &Dex,
+        id: PokeId,
+        status: &str,
+        source: Option<PokeId>,
+        source_effect: EffectHandle,
+    ) -> RV {
+        let cond = dex
+            .conds_id(status)
+            .unwrap_or_else(|| panic!("addVolatile of unknown condition {status}"));
+        if self.poke(id).hp <= 0 {
+            return RV::False;
+        }
+        let mut source = source;
+        let mut source_effect = source_effect;
+        if !self.event_stack.is_empty() {
+            if source.is_none() {
+                source = self.event_stack.last().unwrap().source;
+            }
+            if source_effect.is_none() {
+                source_effect = self.current_effect();
+            }
+        }
+        if source.is_none() {
+            source = Some(id);
+        }
+
+        if self.poke(id).has_volatile(cond) {
+            if !dex.cond(cond).has_callback("onRestart") {
+                return RV::False;
+            }
+            return self.single_event(
+                dex,
+                "Restart",
+                EffectHandle::Cond(cond),
+                StateLoc::Volatile(id, cond),
+                EvTarget::Poke(id),
+                source,
+                source_effect,
+                None,
+            );
+        }
+        if !self.run_status_immunity(dex, id, status, false) {
+            let se_status = match source_effect {
+                EffectHandle::MoveEff(m) => dex.move_static(m).status.is_some(),
+                _ => false,
+            };
+            if se_status {
+                let ts = self.poke_str(id);
+                self.add(&["-immune", &ts]);
+            }
+            return RV::False;
+        }
+        let result = self.run_event(
+            dex,
+            "TryAddVolatile",
+            EvTarget::Poke(id),
+            source,
+            source_effect,
+            Some(RV::Str(status.to_string())),
+            false,
+            false,
+        );
+        if !result.truthy() {
+            return result;
+        }
+
+        let mut state = EffectState {
+            id: status.to_string(),
+            name: Some(dex.cond_display_name(cond).to_string()),
+            ..Default::default()
+        };
+        if let Some(src) = source {
+            state.source = Some(src);
+            state.source_slot = Some(self.slot_str(src));
+        }
+        if !source_effect.is_none() {
+            state.source_effect = Some(self.effect_id(dex, source_effect).to_string());
+        }
+        if let Some(d) = dex.cond(cond).duration {
+            state.duration = Some(d);
+        }
+        let target_active = self.poke(id).is_active;
+        let state = self.init_effect_state(state, target_active);
+        self.poke_mut(id).volatiles.push((cond, state));
+        if dex.cond(cond).has_callback("durationCallback") {
+            let dur = super::conditions::duration_callback(self, dex, status, Some(id), source, source_effect);
+            if let Some(d) = dur {
+                if let Some(vs) = self.poke_mut(id).volatile_mut(cond) {
+                    vs.duration = Some(d);
+                }
+            }
+        }
+        let started = self.single_event(
+            dex,
+            "Start",
+            EffectHandle::Cond(cond),
+            StateLoc::Volatile(id, cond),
+            EvTarget::Poke(id),
+            source,
+            source_effect,
+            None,
+        );
+        if !started.truthy() {
+            self.poke_mut(id).volatiles.retain(|(k, _)| *k != cond);
+            return started;
+        }
+        RV::True
+    }
+
+    /// pokemon.removeVolatile.
+    pub fn remove_volatile(&mut self, dex: &Dex, id: PokeId, status: &str) -> bool {
+        let Some(cond) = dex.conds_id(status) else { return false };
+        self.remove_volatile_id(dex, id, cond)
+    }
+
+    pub fn remove_volatile_id(&mut self, dex: &Dex, id: PokeId, cond: crate::dex::CondId) -> bool {
+        if self.poke(id).hp <= 0 {
+            return false;
+        }
+        if !self.poke(id).has_volatile(cond) {
+            return false;
+        }
+        self.single_event(
+            dex,
+            "End",
+            EffectHandle::Cond(cond),
+            StateLoc::Volatile(id, cond),
+            EvTarget::Poke(id),
+            None,
+            EffectHandle::None,
+            None,
+        );
+        self.poke_mut(id).volatiles.retain(|(k, _)| *k != cond);
+        true
+    }
+
+    pub fn try_trap(&mut self, id: PokeId) -> bool {
+        // runStatusImmunity('trapped') without message
+        // (dex lookup needs dex; trapped immunity: Ghost)
+        // NOTE: callers pass through run_status_immunity when needed; PS
+        // tryTrap checks it — we do too via types directly.
+        let p = self.poke(id);
+        let ghost = p.types.iter().any(|t| t == "Ghost");
+        if ghost {
+            return false;
+        }
+        if p.fainted {
+            return false;
+        }
+        self.poke_mut(id).trapped = true;
+        true
+    }
+
+    // --------------------------------------------------------- hp change
+
+    /// pokemon.damage (the low-level one).
+    pub fn pokemon_damage(
+        &mut self,
+        id: PokeId,
+        d: f64,
+        source: Option<PokeId>,
+        effect: EffectHandle,
+    ) -> f64 {
+        let p = self.poke(id);
+        if p.hp <= 0 || d.is_nan() || d <= 0.0 {
+            return 0.0;
+        }
+        let mut d = d;
+        if d < 1.0 && d > 0.0 {
+            d = 1.0;
+        }
+        let mut d = super::tr(d);
+        self.poke_mut(id).hp -= d as i32;
+        if self.poke(id).hp <= 0 {
+            d += self.poke(id).hp as f64;
+            self.pokemon_faint(id, source, effect);
+        }
+        d
+    }
+
+    /// pokemon.heal (low-level). Returns healed amount or None (false).
+    pub fn pokemon_heal(&mut self, id: PokeId, d: f64) -> Option<f64> {
+        let p = self.poke(id);
+        if p.hp <= 0 {
+            return None;
+        }
+        let d = super::tr(d);
+        if d <= 0.0 {
+            return None;
+        }
+        if p.hp >= p.maxhp {
+            return None;
+        }
+        let mut d = d;
+        let p = self.poke_mut(id);
+        p.hp += d as i32;
+        if p.hp > p.maxhp {
+            d -= (p.hp - p.maxhp) as f64;
+            p.hp = p.maxhp;
+        }
+        Some(d)
+    }
+
+    /// pokemon.faint: queue only.
+    pub fn pokemon_faint(&mut self, id: PokeId, source: Option<PokeId>, effect: EffectHandle) -> f64 {
+        let p = self.poke(id);
+        if p.fainted || p.faint_queued {
+            return 0.0;
+        }
+        let d = p.hp as f64;
+        let p = self.poke_mut(id);
+        p.hp = 0;
+        p.switch_flag = SwitchFlag::No;
+        p.faint_queued = true;
+        self.faint_queue.push(FaintEntry {
+            target: id,
+            source,
+            effect: if effect.is_none() { None } else { Some(effect) },
+        });
+        d
+    }
+
+    // --------------------------------------------------------- pp / moves
+
+    /// pokemon.deductPP. Writes mirror into base_move_slots for shared slots
+    /// (PS shares the slot objects).
+    pub fn deduct_pp(&mut self, id: PokeId, move_id: MoveId, amount: i32) -> i32 {
+        let Some(slot) = self.poke_mut(id).get_move_slot_mut(move_id) else { return 0 };
+        slot.used = true;
+        let mut deducted = 0;
+        if slot.pp > 0 {
+            deducted = amount;
+            slot.pp -= amount;
+            if slot.pp < 0 {
+                deducted += slot.pp;
+                slot.pp = 0;
+            }
+        }
+        let (pp, used, shared) = (slot.pp, slot.used, slot.shared);
+        if shared {
+            if let Some(base) = self.poke_mut(id).base_move_slots.iter_mut().find(|m| m.id == move_id) {
+                base.pp = pp;
+                base.used = used;
+            }
+        }
+        deducted
+    }
+
+    /// pokemon.moveUsed (gen2 rules).
+    pub fn move_used(&mut self, dex: &Dex, id: PokeId, move_id: MoveId, target_loc: Option<i8>) {
+        let key = dex.moves.key(move_id);
+        let p = self.poke_mut(id);
+        if matches!(key, "metronome" | "mimic" | "mirrormove" | "sketch" | "sleeptalk" | "transform") {
+            p.last_move = None;
+            p.last_move_encore = None;
+        } else {
+            p.last_move = Some(move_id);
+            p.last_move_encore = Some(move_id);
+        }
+        p.last_move_target_loc = target_loc;
+        p.move_this_turn = Some(move_id);
+    }
+
+    /// pokemon.gotAttacked.
+    pub fn got_attacked(&mut self, id: PokeId, move_id: Option<MoveId>, damage: Option<f64>, source: PokeId) {
+        let slot = self.slot_str(source);
+        let damage_number = damage.unwrap_or(0.0) as i64;
+        self.poke_mut(id).attacked_by.push(Attacker {
+            source,
+            damage: damage_number,
+            move_id: move_id.unwrap_or(MoveId(u16::MAX)),
+            this_turn: true,
+            slot,
+            damage_value: damage.map(|d| d as i64),
+        });
+        self.poke_mut(id).times_attacked += 1;
+    }
+
+    /// pokemon.getLockedMove: priorityEvent('LockMove').
+    pub fn get_locked_move(&mut self, dex: &Dex, id: PokeId) -> Option<String> {
+        let rv = self.priority_event(dex, "LockMove", EvTarget::Poke(id), None, EffectHandle::None, None);
+        match rv {
+            RV::Str(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// pokemon.disableMove.
+    pub fn pokemon_disable_move(&mut self, id: PokeId, move_id: MoveId) {
+        let mut shared = false;
+        if let Some(slot) = self.poke_mut(id).get_move_slot_mut(move_id) {
+            if !slot.disabled {
+                slot.disabled = true;
+                shared = slot.shared;
+            }
+        }
+        if shared {
+            if let Some(base) = self.poke_mut(id).base_move_slots.iter_mut().find(|m| m.id == move_id) {
+                base.disabled = true;
+            }
+        }
+    }
+
+    // ------------------------------------------------------- clearVolatile
+
+    /// pokemon.clearVolatile(includeSwitchFlags).
+    pub fn clear_volatile(&mut self, id: PokeId, include_switch_flags: bool) {
+        let p = self.poke_mut(id);
+        p.boosts = [0; 7];
+        p.move_slots = p.base_move_slots.clone();
+        p.transformed = false;
+        p.volatiles.clear();
+        if include_switch_flags {
+            p.switch_flag = SwitchFlag::No;
+            p.force_switch_flag = false;
+        }
+        p.last_move = None;
+        p.last_move_encore = None;
+        p.last_move_used = None;
+        p.move_this_turn = None;
+        p.move_last_turn_result = MoveResult::Undef;
+        p.move_this_turn_result = MoveResult::Undef;
+        p.last_damage = 0;
+        p.attacked_by.clear();
+        p.hurt_this_turn = None;
+        p.newly_switched = true;
+        p.being_called_back = false;
+        // setSpecies: stats unchanged in gen2 (no forme changes); speed reset.
+        p.speed = p.stored_stats[4];
+        // types reset to base species types happens in setSpecies via setType.
+    }
+
+    // ---------------------------------------------------------- immunity
+
+    /// pokemon.runStatusImmunity(type, message?).
+    pub fn run_status_immunity(&mut self, dex: &Dex, id: PokeId, ty: &str, message: bool) -> bool {
+        if self.poke(id).fainted {
+            return false;
+        }
+        if ty.is_empty() {
+            return true;
+        }
+        let types = self.poke(id).types.clone();
+        if !dex.get_immunity(ty, &types) {
+            if message {
+                let ts = self.poke_str(id);
+                self.add(&["-immune", &ts]);
+            }
+            return false;
+        }
+        let immunity = self.run_event(
+            dex,
+            "Immunity",
+            EvTarget::Poke(id),
+            None,
+            EffectHandle::None,
+            Some(RV::Str(ty.to_string())),
+            false,
+            false,
+        );
+        if !immunity.truthy() {
+            if message && immunity != RV::Null {
+                let ts = self.poke_str(id);
+                self.add(&["-immune", &ts]);
+            }
+            return false;
+        }
+        true
+    }
+
+    /// pokemon.runImmunity(move, message) — false = immune.
+    pub fn run_move_immunity(&mut self, dex: &Dex, id: PokeId, message: bool) -> bool {
+        let (ty, ignore) = {
+            let m = self.active_move.as_ref().expect("runImmunity without active move");
+            (m.move_type.clone(), m.ignore_immunity)
+        };
+        if ignore {
+            return true;
+        }
+        if ty.is_empty() || ty == "???" {
+            return true;
+        }
+        let negate = !self
+            .run_event(
+                dex,
+                "NegateImmunity",
+                EvTarget::Poke(id),
+                None,
+                EffectHandle::None,
+                Some(RV::Str(ty.clone())),
+                false,
+                false,
+            )
+            .truthy();
+        let not_immune = if ty == "Ground" {
+            // gen2 isGrounded: Flying-types are airborne, nothing else.
+            let flying = self.poke(id).has_type("Flying");
+            if negate {
+                true
+            } else {
+                !flying
+            }
+        } else {
+            let types = self.poke(id).types.clone();
+            negate || dex.get_immunity(&ty, &types)
+        };
+        if not_immune {
+            return true;
+        }
+        if message {
+            let ts = self.poke_str(id);
+            self.add(&["-immune", &ts]);
+        }
+        false
+    }
+
+    /// pokemon.runEffectiveness(move) — total type mod.
+    pub fn run_effectiveness(&mut self, dex: &Dex, id: PokeId) -> i32 {
+        let move_type = self.active_move.as_ref().unwrap().move_type.clone();
+        let move_eff = self
+            .active_move
+            .as_ref()
+            .and_then(|m| m.id)
+            .map(EffectHandle::MoveEff)
+            .unwrap_or(EffectHandle::None);
+        let types = self.poke(id).types.clone();
+        let mut total = 0i32;
+        for ty in &types {
+            let type_mod = dex.get_effectiveness(&move_type, ty);
+            // singleEvent('Effectiveness', move, ...) — only M2 moves have it.
+            let rv = self.run_event(
+                dex,
+                "Effectiveness",
+                EvTarget::Poke(id),
+                None,
+                move_eff,
+                Some(RV::Num(type_mod as f64)),
+                false,
+                false,
+            );
+            total += rv.as_num() as i32;
+        }
+        total
+    }
+
+    // ------------------------------------------------------------ weather
+
+    /// field.effectiveWeather (no suppression in gen2).
+    pub fn field_effective_weather<'d>(&self, dex: &'d Dex) -> &'d str {
+        match self.field.weather {
+            Some(w) => dex.conds_key(w),
+            None => "",
+        }
+    }
+
+    /// pokemon.effectiveWeather (no utility umbrella in gen2).
+    pub fn effective_weather(&self, id: PokeId) -> String {
+        let _ = id;
+        // resolved via field only; dex key lookup needs dex, so store id here
+        self.field_weather_key.clone()
+    }
+
+    pub fn field_is_weather(&self, key: &str) -> bool {
+        self.field_weather_key == key
+    }
+}
+
+fn b_add_fail_status(b: &mut Battle, target_str: &str, status: &str) {
+    b.add(&["-fail", target_str, status]);
+}

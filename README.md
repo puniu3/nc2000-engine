@@ -15,7 +15,7 @@ tools/            Node scripts run against the reference PS build (needs PS_ROOT
 data/gen2stadium2.json     reference data (functions replaced by callback-name lists; meta.psCommit records origin)
 fixtures/prng-vectors.json PRNG vectors
 fixtures/corpus-v1/        60 battles (30 puredata + 30 full; 2,268 turns / 2,585 snapshots)
-crates/engine/             the engine (prng working / dex loader / state / choice; battle = unimplemented stubs)
+crates/engine/             the engine (prng / dex / state / choice / battle: M1 turn engine complete)
 crates/conformance/        conformance harness (fixture schema, divergence reporter, replay tests)
 PORTING.md                 porting checklist (377 callbacks, generated)
 ```
@@ -30,9 +30,9 @@ PORTING.md                 porting checklist (377 callbacks, generated)
 ## Workflow
 
 ```bash
-# all tests (currently green: PRNG parity, dex load, fixture schema)
+# all tests (green: PRNG parity, dex load, fixture schema, puredata replay)
 cargo test
-# the real conformance gate (un-ignore as the engine reaches milestone 1)
+# the M2 conformance gate (full corpus; un-ignore as callback moves/items land)
 cargo test -p conformance --test replay -- --include-ignored
 # regenerate artifacts (e.g. after a PS update)
 node tools/export-dex.js && node tools/gen-porting-checklist.js
@@ -44,7 +44,7 @@ Porting loop: port one callback → tick it off in `PORTING.md` → keep the rep
 
 ### Milestones
 
-1. **M1 — puredata corpus green**: team init (Gen 2 DV/stat-exp → stats, formulas from `data/mods/gen2/scripts.ts`) → team preview → switching → damage pipeline for pure-data moves (Gen 2 `getDamage` lineage) → residuals + the 37 conditions.
+1. **M1 — puredata corpus green: DONE (2026-07)**. Team init, team preview, switching, the full turn engine (queue/speed ties/PRNG parity), gen2stadium2 damage pipeline, residuals, and the core conditions (statuses, confusion, flinch, partiallytrapped, mustrecharge, weathers, sleep/freeze clauses) replay all 30 puredata battles bit-exact (state + PRNG seed + protocol log at every snapshot).
 2. **M2 — full corpus green**: the 88 callback moves + 38 callback items + runtime format rules (Stadium Sleep Clause, Freeze Clause, ...).
 3. **M3 — search API**: `Battle` is already flat/Copy-friendly; add clone- or apply/undo-based enumeration for DUCT/MCTS.
 4. Beyond: exhaustive-runner-style coverage-forcing corpora, expert scenario fixtures, automatic predicted-vs-actual diffing during live bot play.
