@@ -1190,6 +1190,8 @@ fn dispatch_cond(
                 fake.self_effect = None;
                 fake.flags = vec!["contact".into(), "protect".into()];
                 fake.has_callbacks = Vec::new();
+                // the synthetic moveData has no ignoreImmunity: Physical → false
+                fake.ignore_immunity = false;
                 let saved_move = b.active_move.take();
                 let saved_pokemon = b.active_pokemon;
                 let saved_target = b.active_target;

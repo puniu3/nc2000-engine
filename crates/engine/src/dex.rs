@@ -513,6 +513,8 @@ pub struct CondEntry {
     pub effect_type: EffectType,
     pub duration: Option<i32>,
     pub counter_max: Option<i32>,
+    /// Not transferred by Baton Pass.
+    pub no_copy: bool,
     pub callbacks: Vec<String>,
     /// `on{Event}Order` / `Priority` / `SubOrder` numbers from the data.
     pub nums: BTreeMap<String, i32>,
@@ -600,6 +602,7 @@ impl Dex {
                     effect_type,
                     duration: c.duration.map(|d| d as i32),
                     counter_max: c.counter_max.map(|d| d as i32),
+                    no_copy: c.extra.get("noCopy").and_then(|v| v.as_bool()).unwrap_or(false),
                     callbacks: c.callbacks.clone(),
                     nums: handler_nums(&c.extra),
                 },
@@ -639,6 +642,7 @@ impl Dex {
                         .get("counterMax")
                         .and_then(|v| v.as_i64())
                         .map(|v| v as i32),
+                    no_copy: cond_map.get("noCopy").and_then(|v| v.as_bool()).unwrap_or(false),
                     callbacks,
                     nums: handler_nums(&cond_map),
                 },
@@ -657,6 +661,7 @@ impl Dex {
                     effect_type: EffectType::Rule,
                     duration: None,
                     counter_max: None,
+                    no_copy: false,
                     callbacks,
                     nums: BTreeMap::new(),
                 },
@@ -678,6 +683,7 @@ impl Dex {
                 effect_type: EffectType::Condition,
                 duration: None,
                 counter_max: None,
+                no_copy: false,
                 callbacks: Vec::new(),
                 nums: BTreeMap::new(),
             });

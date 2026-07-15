@@ -1445,6 +1445,8 @@ impl Battle {
                 }
             }
         }
+        // everything below acts on the (possibly overridden) move
+        let move_id = mv.id.unwrap();
         if target.is_none() {
             target = self.get_random_target(&mv.target, pokemon);
         }

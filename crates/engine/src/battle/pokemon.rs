@@ -670,6 +670,46 @@ impl Battle {
         }
     }
 
+    /// pokemon.copyVolatileFrom (Baton Pass): boosts + non-noCopy volatiles.
+    pub fn copy_volatile_from(&mut self, dex: &Dex, id: PokeId, from: PokeId) {
+        // this.clearVolatile() — incoming bench mon is already clean.
+        self.poke_mut(id).boosts = self.poke(from).boosts;
+        let copied: Vec<(crate::dex::CondId, EffectState)> = self
+            .poke(from)
+            .volatiles
+            .iter()
+            .filter(|(c, _)| !dex.cond(*c).no_copy)
+            .map(|(c, s)| (*c, s.clone()))
+            .collect();
+        for (c, state) in copied {
+            // linked volatiles: re-point the partners' links at the new mon,
+            // and strip the links from the passer so its clearVolatile()
+            // doesn't tear them down.
+            if !state.linked_pokemon.is_empty() {
+                if let Some(vs) = self.poke_mut(from).volatile_mut(c) {
+                    vs.linked_pokemon.clear();
+                    vs.linked_status = None;
+                }
+                if let Some(ls) = &state.linked_status {
+                    if let Some(lc) = dex.conds_id(ls) {
+                        for &linked in &state.linked_pokemon {
+                            if let Some(lv) = self.poke_mut(linked).volatile_mut(lc) {
+                                for p in lv.linked_pokemon.iter_mut() {
+                                    if *p == from {
+                                        *p = id;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            self.poke_mut(id).volatiles.push((c, state));
+        }
+        self.clear_volatile(dex, from, true);
+        // singleEvent('Copy') per volatile: no gen2 condition has onCopy.
+    }
+
     // ------------------------------------------------------- clearVolatile
 
     /// pokemon.clearVolatile(includeSwitchFlags).
@@ -1124,12 +1164,24 @@ impl Battle {
         };
         let t_move_ids: Vec<crate::dex::MoveId> =
             self.poke(target).move_slots.iter().map(|m| m.id).collect();
+        // setSpecies caches speed from spreadModify(newSpecies.baseStats,
+        // this.set) — the USER's level/DVs/stat exp on the TARGET's base spe.
+        // (transformInto then overwrites storedStats with the target's copies
+        // WITHOUT refreshing the cached speed.)
+        let own_spe_on_target_base = {
+            let p = self.poke(id);
+            let base = dex.species.get(t_species).base_stats.spe as f64;
+            let iv = p.set_ivs[5] as f64;
+            let ev_term = super::tr(p.set_evs[5] as f64 / 4.0);
+            super::tr(super::tr(2.0 * base + iv + ev_term) * p.level as f64 / 100.0 + 5.0) as i32
+        };
         {
             let p = self.poke_mut(id);
             p.species = t_species;
             p.transformed = true;
             p.types = t_types;
             p.stored_stats = t_stats;
+            p.speed = own_spe_on_target_base;
             p.hp_type = t_hp_type;
             p.hp_power = t_hp_power;
             p.times_attacked = t_times_attacked;

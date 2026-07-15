@@ -52,7 +52,11 @@ impl Battle {
 
         if let Some(old) = unfainted_old {
             self.poke_mut(old).being_called_back = true;
-            // selfSwitch copyvolatile: batonpass — M2.
+            let switch_copy = matches!(
+                source_effect,
+                Some(EffectHandle::MoveEff(m))
+                    if dex.move_static(m).self_switch.as_deref() == Some("copyvolatile")
+            );
             if !self.poke(old).skip_before_switch_out && !is_drag {
                 self.run_event(dex, "BeforeSwitchOut", EvTarget::Poke(old), None, EffectHandle::None, None, false, false);
             }
@@ -66,8 +70,11 @@ impl Battle {
             if self.poke(old).hp <= 0 {
                 return Err(()); // pursuitfaint
             }
-            // End events for ability/item: none in M1 (items End — M2).
+            // End events for ability/item: no gen2 handlers.
             self.queue_cancel_action(old);
+            if switch_copy {
+                self.copy_volatile_from(dex, pokemon, old);
+            }
             self.clear_volatile(dex, old, true);
         }
         if let Some(old) = old_active {
@@ -132,7 +139,8 @@ impl Battle {
         let tag = if is_drag { "drag" } else { "switch" };
         match source_effect {
             Some(se) if !se.is_none() => {
-                let from = format!("[from] {}", self.effect_fullname(dex, se));
+                // PS: '[from] ' + sourceEffect (toString = plain name)
+                let from = format!("[from] {}", self.effect_name(dex, se));
                 self.add_split(
                     &side_id,
                     &[tag, &ps, &details, &secret, &from],
