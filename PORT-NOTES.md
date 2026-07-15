@@ -146,6 +146,10 @@ Read once from PS; keep updated as the port progresses. All line refs are PS rep
   batch (frozen Forretress x Tri Attack rolling brn) — after ~470 prior soak
   battles never composed the two. The M2 lesson stands: keep soaking with new seeds
   after every structural change.
+- **`substitute.onHit` (the maxhp/4 cost via directDamage) had never fired** until
+  M4 soak batch 2 (#62) — the M3 engine panics identically on that fixture. A
+  per-move `[x]` in PORTING.md can hide an unimplemented callback on the move;
+  only the unported-callback panic + fresh seeds prove reachability.
 - **Perf-refactor invariants that keep parity safe:** a runEvent with zero handlers
   is side-effect-free in PS too (no PRNG from speedSort of an empty list, modifier
   stays 1 → identity on integer relays), so it can short-circuit entirely; aggregate
