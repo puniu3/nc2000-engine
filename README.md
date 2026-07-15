@@ -30,12 +30,15 @@ PORTING.md                 porting checklist (377 callbacks, generated)
 ## Workflow
 
 ```bash
-# all tests (green: PRNG parity, dex load, fixture schema, puredata replay)
+# all tests (green: PRNG parity, dex load, fixture schema, both corpus replays)
 cargo test
-# the M2 conformance gate (full corpus; un-ignore as callback moves/items land)
-cargo test -p conformance --test replay -- --include-ignored
+# adversarial soak: generate fresh fixtures with any seed and sweep them
+node tools/gen-fixtures.js --n 100 --pool full --out /tmp/soak --seed 12345
+cargo run -p conformance --example sweep -- /tmp/soak
+# drill into one diverging fixture (per-choice log diff + seed check)
+cargo run -p conformance --example debug -- /tmp/soak/battle-042.json [from_snapshot]
 # regenerate artifacts (e.g. after a PS update)
-node tools/export-dex.js && node tools/gen-porting-checklist.js
+node tools/export-dex.js && node tools/gen-porting-checklist.js && node tools/dump-callbacks.js
 node tools/gen-fixtures.js --n 30 --pool puredata --out fixtures/corpus-v1/puredata --seed 100
 node tools/gen-fixtures.js --n 30 --pool full     --out fixtures/corpus-v1/full     --seed 200
 ```
@@ -45,7 +48,7 @@ Porting loop: port one callback → tick it off in `PORTING.md` → keep the rep
 ### Milestones
 
 1. **M1 — puredata corpus green: DONE (2026-07)**. Team init, team preview, switching, the full turn engine (queue/speed ties/PRNG parity), gen2stadium2 damage pipeline, residuals, and the core conditions (statuses, confusion, flinch, partiallytrapped, mustrecharge, weathers, sleep/freeze clauses) replay all 30 puredata battles bit-exact (state + PRNG seed + protocol log at every snapshot).
-2. **M2 — full corpus green**: the 88 callback moves + 38 callback items + runtime format rules (Stadium Sleep Clause, Freeze Clause, ...).
+2. **M2 — full corpus green: DONE (2026-07)**. All 88 callback moves, all 38 callback items, every condition reachable in this format, and the runtime rules. Verified beyond the golden 30: 350 additional fresh-seed battles replay bit-exact (see the soak workflow above); the last 100 diverged nowhere. Every reachable `PORTING.md` entry is ticked; unreachable entries are documented there.
 3. **M3 — search API**: `Battle` is already flat/Copy-friendly; add clone- or apply/undo-based enumeration for DUCT/MCTS.
 4. Beyond: exhaustive-runner-style coverage-forcing corpora, expert scenario fixtures, automatic predicted-vs-actual diffing during live bot play.
 

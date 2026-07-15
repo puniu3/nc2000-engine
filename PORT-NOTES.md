@@ -137,3 +137,45 @@ Read once from PS; keep updated as the port progresses. All line refs are PS rep
 - **effectTypeOrder quirk**: 'Status' is NOT in PS's subOrder table → statuses
   get subOrder 0 and run BEFORE volatiles (subOrder 2) on priority ties
   (matters for BeforeMove: slp/frz P10 → flinch P8 → confusion P3 → par P2).
+
+## Lessons burned in during M2 (divergences found by fresh-seed soak corpora)
+
+- **The golden 30 exercise ~60% of callbacks; fresh-seed soaks are the real
+  gate.** Each 50–100 battle batch (`gen-fixtures.js --seed <new>` + the sweep
+  example) found 2–7 real bugs the fixed corpus could not: encore override,
+  transform speed cache, baton-pass copyvolatile, bide-vs-Ghost, future-sight
+  timing, metronome-called charge moves, teleport. Green plateaued after ~300
+  battles.
+- **Prefixed handlers dispatch under their collection name.** A listener found
+  as `onSourceAccuracy`/`onFoeBeforeSwitchOut` must be dispatched as that
+  name, not `on{Event}` — `Listener.callback_name` carries it.
+- **`dex.conditions.get(<any move id>)` always resolves.** Moves without a
+  `condition` block yield a nonexistent Condition whose NAME IS THE RAW ID
+  (essence shows `volatiles.solarbeam.name == "solarbeam"`, but
+  `furycutter.name == "Fury Cutter"` since it has a block). Every move id is
+  interned as a runtime condition.
+- **`getOverflowedTurnCount()` is `turn - 1` for gen < 8** — Future Sight
+  resolves at the end of use-turn + 2, not + 1.
+- **`setSpecies` inside `transformInto` caches `speed` from
+  `spreadModify(newSpecies.baseStats, this.set)`** — the user's own
+  level/DVs/stat-exp on the target's base Spe — and the later storedStats copy
+  does NOT refresh it. Speed ties from this cache drive eachEvent shuffles.
+- **After `OverrideAction` (encore) everything downstream uses the overridden
+  move** — PP deduction, moveUsed, useMove. Keeping the original move id
+  silently executes the wrong move.
+- **Baton Pass:** `copyVolatileFrom` copies boosts + non-`noCopy` volatiles
+  (linked volatiles re-point their partners), and the `|switch|` line prints
+  `[from] ${sourceEffect}` = plain NAME ("Baton Pass"), not fullname.
+- **Synthetic moveData objects have no `ignoreImmunity`** — bide's unleash is
+  blocked by Ghost immunity even though the bide move itself has
+  `ignoreImmunity: true`.
+- **`teleport` carries a constant `onTry: false`** (silent fail, no message) —
+  a second instance of the invisible-constant-callback trap after
+  `mustrecharge.onLockMove`; `rollout.onLockMove` and `bide.onSemiLockMove`
+  are the other two.
+- **Items participate with effectTypeOrder subOrder 8** and their own
+  order/priority nums (focusband `onDamagePriority: -40`, leftovers
+  `onResidualOrder: 5`); focusband rolls its 30/256 BEFORE checking lethality
+  (JS `&&` order), so it consumes PRNG on every move-damage event.
+- **`stall.counter` goes fractional** (127 → 63.5 → …) — essence needs a
+  float-capable scalar; `onStallMove` floors it.
