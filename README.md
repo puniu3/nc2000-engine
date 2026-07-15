@@ -42,6 +42,8 @@ cargo run -p conformance --example debug -- /tmp/soak/battle-042.json [from_snap
 cargo run --release -p conformance --example bench
 # bot arena (agents: random | maxdamage | mcts[:iters[:c]]); deterministic per --seed
 cargo run --release -p nc2000-bot --example arena -- mcts:1000 maxdamage --games 100
+# play the bot yourself in the terminal (or spectate: bot vs bot)
+cargo run --release -p nc2000-bot --example play -- human mcts:1000
 # regenerate artifacts (e.g. after a PS update)
 node tools/export-dex.js && node tools/gen-porting-checklist.js && node tools/dump-callbacks.js
 node tools/gen-fixtures.js --n 30 --pool puredata --out fixtures/corpus-v1/puredata --seed 100
