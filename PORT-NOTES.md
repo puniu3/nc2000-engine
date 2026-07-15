@@ -138,15 +138,33 @@ Read once from PS; keep updated as the port progresses. All line refs are PS rep
   get subOrder 0 and run BEFORE volatiles (subOrder 2) on priority ties
   (matters for BeforeMove: slp/frz P10 → flinch P8 → confusion P3 → par P2).
 
+## Lessons burned in during M4 (throughput port)
+
+- **frz thaws on `move.statusRoll === 'brn'`, not just static `secondary.status`.**
+  Tri attack stores its rolled status in `move.statusRoll`; a rolled burn cures a
+  frozen target (gen2 burn-thaw). Found by fresh-seed soak battle #99 of the M4
+  batch (frozen Forretress x Tri Attack rolling brn) — after ~470 prior soak
+  battles never composed the two. The M2 lesson stands: keep soaking with new seeds
+  after every structural change.
+- **Perf-refactor invariants that keep parity safe:** a runEvent with zero handlers
+  is side-effect-free in PS too (no PRNG from speedSort of an empty list, modifier
+  stays 1 → identity on integer relays), so it can short-circuit entirely; aggregate
+  handler masks (per-Pokemon/Side/battle) must be refreshed at every
+  status/volatile/item/side-cond/weather/slot-cond mutation — debug builds
+  recompute-and-assert at every runEvent/collection, so `cargo test` (debug) and
+  debug-mode sweeps prove the maintenance complete.
+- **Inline capacity is not free:** SmallVec-inlining the roster (6 Pokemon) or
+  per-Pokemon volatiles made clones SLOWER (Battle became a ~16KB by-value object;
+  9.6 µs vs 8.4 µs) — heap-backed Vec + one allocation beats fat memcpy for
+  large elements. Inline only small Copy payloads (move slots, effect-state bags).
+
 ## Lessons burned in during M2 (divergences found by fresh-seed soak corpora)
 
 - **The golden 30 exercise ~60% of callbacks; fresh-seed soaks are the real
   gate.** Each 50–100 battle batch (`gen-fixtures.js --seed <new>` + the sweep
   example) found 2–7 real bugs the fixed corpus could not: encore override,
   transform speed cache, baton-pass copyvolatile, bide-vs-Ghost, future-sight
-  timing, metronome-called charge moves, teleport. Green plateaued after ~300
-  battles.
-- **Prefixed handlers dispatch under their collection name.** A listener found
+  timing, - **Prefixed handlers dispatch under their collection name.** A listener found
   as `onSourceAccuracy`/`onFoeBeforeSwitchOut` must be dispatched as that
   name, not `on{Event}` — `Listener.callback_name` carries it.
 - **`dex.conditions.get(<any move id>)` always resolves.** Moves without a

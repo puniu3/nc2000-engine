@@ -750,6 +750,13 @@ pub fn dispatch_move_callback(
             RV::Undef
         }
         // ------------------------------------------------------------ onHit
+        ("substitute", "onHit") => {
+            // base onHit: directDamage(target.maxhp / 4) — the sub's HP cost.
+            let t = tpoke.unwrap();
+            let maxhp = b.poke(t).maxhp as f64;
+            b.direct_damage(dex, maxhp / 4.0, Some(t), None, EffectHandle::None);
+            RV::Undef
+        }
         ("bellydrum", "onHit") => {
             let t = tpoke.unwrap();
             if b.poke(t).boosts[0] >= 6 || b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0 {

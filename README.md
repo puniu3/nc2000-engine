@@ -73,20 +73,23 @@ and the debug tools.
 1. **M1 — puredata corpus green: DONE (2026-07)**. Team init, team preview, switching, the full turn engine (queue/speed ties/PRNG parity), gen2stadium2 damage pipeline, residuals, and the core conditions (statuses, confusion, flinch, partiallytrapped, mustrecharge, weathers, sleep/freeze clauses) replay all 30 puredata battles bit-exact (state + PRNG seed + protocol log at every snapshot).
 2. **M2 — full corpus green: DONE (2026-07)**. All 88 callback moves, all 38 callback items, every condition reachable in this format, and the runtime rules. Verified beyond the golden 30: 350 additional fresh-seed battles replay bit-exact (see the soak workflow above); the last 100 diverged nowhere. Every reachable `PORTING.md` entry is ticked; unreachable entries are documented there.
 3. **M3 — search API: DONE (2026-07)**. `crates/engine/src/battle/search.rs`: `SearchChoice` (compact/`Copy`), `Battle::legal_choices` / `apply_choice(s)` / `needs_choice` / `outcome` / `reseed`, plus `set_log_enabled(false)` for protocol-log-free stepping. Enumeration mirrors the `choices.rs` validation rules and application funnels through `Battle::choose` with PS-canonical strings — one code path shared with fixture replay. Verified by `tests/search_api.rs`: at every decision point of all 60 golden fixtures the PS choice is inside the enumerated set and (sampled) every enumerated choice is accepted; log-off replay is state+seed-identical; random playouts terminate. A 100-battle fresh-seed soak stayed bit-exact after the M3 perf work.
-4. **M4 — throughput**: close the gap to the 1e5–1e6 turns/s target. M3 profiling (see `examples/bench.rs`) says the two structural costs are (a) the string-keyed event system — replace event/callback identity with integer ids end-to-end (dex-precomputed handler tables, integer dispatch in `conditions.rs`), and (b) the alloc-y state — flatten `Pokemon`/`EffectState` Strings and Vecs into ids + fixed arrays for ~0-alloc clones (153 allocs/clone today).
+4. **M4 — throughput: DONE (2026-07)**. Both prescribed structural fixes landed end-to-end: (a) integer event/callback identity — `Cb` ids + `CbMask` bitsets, per-event `Ev` statics with precomputed prefix callbacks, precomputed handler Order/Priority/SubOrder, aggregate handler masks per Pokemon/Side plus one battle-level union mask that lets zero-handler runEvents return without any machinery; (b) flat state — `TypeId`/`TypeList` with effectiveness matrices, Copy `EffectState` (`EffId`/`DK`/compact `Scalar`), inline move slots/name/gender, interned move targets + flag bitmasks, log-only formatters gated off in search mode. Measured (same machine): **54k turns/s replay, 103k turns/s clone-based playouts (the MCTS workload), 4.7 µs / 4-alloc clones** — 5.3x / 4.7x / 38x-fewer-allocs vs M3. Verified: full corpus bit-exact + 270 fresh-seed battles (2 soak batches), which also caught and fixed a real M2 gap (frz thaw on Tri Attack's rolled burn). Remaining ideas toward 1e6 (fn-pointer dispatch tables keyed by (CondId, Cb), direct SearchChoice application without the string round-trip, construction diet) are deferred until bot-side search actually wants them.
 5. Beyond: exhaustive-runner-style coverage-forcing corpora, expert scenario fixtures, automatic predicted-vs-actual diffing during live bot play.
 
 ## Baseline measurements (this machine, WSL)
 
 - PS (TS): 6.5 battles/s, 570 turns/s, 5.5 ms per clone → tree search is infeasible on the TS engine
 - Target: 1e5–1e6 turns/s, sub-microsecond clones (prior art pkmn/engine claims >1000x over PS)
-- Rust engine after M3 (`cargo run --release -p conformance --example bench`):
-  ~10k turns/s / ~260 battles/s (replay and random playouts alike, log on or off),
-  ~22 µs per mid-battle clone (12 µs under mimalloc — build the bench with `--features conformance/mi`).
-  That is ~17x PS on turns and ~250x on clones; the remaining ~10x to target is M4
-  (measured: 254 allocs/turn, 153 allocs/clone; sampling shows handler collection in the
-  string-keyed event system dominating — `format!` was 60% of turn time before M3's
-  interning pass took 5k → 10k turns/s).
+- Rust engine after M4 (`cargo run --release -p conformance --example bench`):
+  54k turns/s log-off replay (35k log-on), 52k turns/s full-game random playouts,
+  **103k turns/s clone-based playouts** (clone + reseed + play to the end — the MCTS
+  determinization workload), 4.7 µs / 4 allocs per mid-battle clone (the 4 are the two
+  roster Vecs + occasional volatile spill). That is ~95x PS on turns and ~1100x on clones.
+  M4 history: 10k → 20k (integer event identity) → 24k (lookup hoisting + aggregate
+  masks) → 31k (TypeId + log gating) → 41k (battle-level mask gate) → 52k (zero-handler
+  fast path + ActiveMove diet); clones 22 µs/153 allocs → 4.7 µs/4 allocs (compact
+  Copy state). Profile is flat now (top item ~9%); see `examples/profile.rs`
+  (flamegraph) and `examples/clone_anatomy.rs` (per-field clone costs).
 
 ## Porting landmines (facts measured in this repo)
 
