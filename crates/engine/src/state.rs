@@ -153,7 +153,7 @@ impl EffectState {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct MoveSlot {
     pub id: MoveId,
     pub pp: i32,
@@ -165,6 +165,126 @@ pub struct MoveSlot {
     /// persist through clearVolatile. `shared` marks slots that mirror writes
     /// into `base_move_slots` (false only for transform/mimic slots — M2).
     pub shared: bool,
+}
+
+/// Inline move-slot list (gen 2: at most 4 moves) — Copy, so cloning a
+/// pokemon never touches the heap for moves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct MoveSlots {
+    slots: [MoveSlot; 4],
+    n: u8,
+}
+
+impl MoveSlots {
+    pub fn len(&self) -> usize {
+        self.n as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.n == 0
+    }
+
+    pub fn push(&mut self, slot: MoveSlot) {
+        assert!(self.n < 4, "more than 4 move slots");
+        self.slots[self.n as usize] = slot;
+        self.n += 1;
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, MoveSlot> {
+        self.slots[..self.n as usize].iter()
+    }
+
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, MoveSlot> {
+        self.slots[..self.n as usize].iter_mut()
+    }
+}
+
+impl std::ops::Index<usize> for MoveSlots {
+    type Output = MoveSlot;
+    fn index(&self, i: usize) -> &MoveSlot {
+        &self.slots[..self.n as usize][i]
+    }
+}
+
+impl std::ops::IndexMut<usize> for MoveSlots {
+    fn index_mut(&mut self, i: usize) -> &mut MoveSlot {
+        &mut self.slots[..self.n as usize][i]
+    }
+}
+
+impl IntoIterator for MoveSlots {
+    type Item = MoveSlot;
+    type IntoIter = std::iter::Take<std::array::IntoIter<MoveSlot, 4>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.slots.into_iter().take(self.n as usize)
+    }
+}
+
+impl<'a> IntoIterator for &'a MoveSlots {
+    type Item = &'a MoveSlot;
+    type IntoIter = std::slice::Iter<'a, MoveSlot>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut MoveSlots {
+    type Item = &'a mut MoveSlot;
+    type IntoIter = std::slice::IterMut<'a, MoveSlot>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
+/// Inline pokemon nickname (PS truncates to 20 chars at construction).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct PokeName {
+    buf: [u8; 24],
+    len: u8,
+}
+
+impl PokeName {
+    pub fn new(name: &str) -> PokeName {
+        let bytes = name.as_bytes();
+        assert!(bytes.len() <= 24, "pokemon name too long: {name}");
+        let mut buf = [0u8; 24];
+        buf[..bytes.len()].copy_from_slice(bytes);
+        PokeName { buf, len: bytes.len() as u8 }
+    }
+
+    pub fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.buf[..self.len as usize]).unwrap()
+    }
+}
+
+impl std::fmt::Display for PokeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::fmt::Debug for PokeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.as_str())
+    }
+}
+
+/// PS gender: "M" / "F" / "" (genderless).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gender {
+    M,
+    F,
+    N,
+}
+
+impl Gender {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Gender::M => "M",
+            Gender::F => "F",
+            Gender::N => "",
+        }
+    }
 }
 
 /// Boost table indices: atk, def, spa, spd, spe, accuracy, evasion.
@@ -195,13 +315,12 @@ pub enum MoveResult {
 }
 
 /// Entry in `pokemon.attackedBy` (Counter/Mirror Coat bookkeeping).
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Attacker {
     pub source: PokeId,
     pub damage: i64,
     pub move_id: MoveId,
     pub this_turn: bool,
-    pub slot: String,
     /// PS damageValue: number | false | undefined.
     pub damage_value: Option<i64>,
 }
@@ -211,14 +330,13 @@ pub struct Pokemon {
     // ----- set-derived, fixed for the battle
     pub species: SpeciesId,
     pub base_species: SpeciesId,
-    pub name: String,
+    pub name: PokeName,
     pub level: u8,
-    /// "", "M", "F"
-    pub gender: String,
+    pub gender: Gender,
     pub happiness: u8,
     pub set_ivs: [i32; 6],
     pub set_evs: [i32; 6],
-    pub base_move_slots: Vec<MoveSlot>,
+    pub base_move_slots: MoveSlots,
     /// Gen 2 hidden power (from DVs).
     pub hp_type: TypeId,
     pub hp_power: i32,
@@ -238,7 +356,7 @@ pub struct Pokemon {
     pub status: Status,
     pub status_state: EffectState,
     pub boosts: Boosts,
-    pub move_slots: Vec<MoveSlot>,
+    pub move_slots: MoveSlots,
     pub item: Option<ItemId>,
     pub last_item: Option<ItemId>,
     pub item_state: EffectState,
@@ -369,7 +487,7 @@ pub enum RequestKind {
 
 #[derive(Clone, Debug)]
 pub struct Side {
-    pub name: String,
+    pub name: &'static str,
     /// All constructed pokemon in construction order — never reordered.
     pub roster: Vec<Pokemon>,
     /// PS `side.pokemon`: display order, mutated by team choice + switches.
@@ -635,7 +753,7 @@ pub struct Battle {
     pub last_damage: i64,
     pub quick_claw_roll: bool,
     /// Field-position values sorted by speed at last runSwitch (resolvePriority).
-    pub speed_order: Vec<usize>,
+    pub speed_order: [usize; 2],
     /// Format data effect state (unused scalars, kept for parity).
     pub format_data: EffectState,
     /// Log length threshold bookkeeping (PS sentLogPos, used only by the

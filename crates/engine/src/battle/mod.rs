@@ -432,7 +432,7 @@ impl Battle {
             last_successful_move_this_turn: None,
             last_damage: 0,
             quick_claw_roll: false,
-            speed_order: vec![0, 1],
+            speed_order: [0, 1],
             format_data: EffectState { id: "gen2nc2000".into(), ..Default::default() },
             sent_log_pos: 0,
             event_stack: Vec::new(),
@@ -508,27 +508,27 @@ impl Battle {
         } else {
             set.name.clone()
         };
-        let name = name.chars().take(20).collect::<String>();
+        let name = PokeName::new(&name.chars().take(20).collect::<String>());
 
         // gender: set.gender || species.gender || battle.sample(['M','F'])
         let gender = match set.gender.as_deref() {
-            Some("M") => "M".to_string(),
-            Some("F") => "F".to_string(),
-            Some("N") => "".to_string(),
+            Some("M") => Gender::M,
+            Some("F") => Gender::F,
+            Some("N") => Gender::N,
             _ => match species.gender.as_deref() {
-                Some("M") => "M".to_string(),
-                Some("F") => "F".to_string(),
-                Some("N") => "".to_string(),
+                Some("M") => Gender::M,
+                Some("F") => Gender::F,
+                Some("N") => Gender::N,
                 _ => {
                     let pick = self.prng.sample_index(2);
-                    if pick == 0 { "M".to_string() } else { "F".to_string() }
+                    if pick == 0 { Gender::M } else { Gender::F }
                 }
             },
         };
 
         let happiness = set.happiness.unwrap_or(255);
 
-        let mut base_move_slots = Vec::new();
+        let mut base_move_slots = MoveSlots::default();
         for mv in &set.moves {
             let move_id = dex
                 .moves
@@ -679,8 +679,8 @@ impl Battle {
         if p.level != 100 {
             d.push_str(&format!(", L{}", p.level));
         }
-        if !p.gender.is_empty() {
-            d.push_str(&format!(", {}", p.gender));
+        if p.gender != Gender::N {
+            d.push_str(&format!(", {}", p.gender.as_str()));
         }
         d
     }
@@ -749,9 +749,9 @@ impl Battle {
 }
 
 impl Side {
-    pub fn empty(name: &str) -> Side {
+    pub fn empty(name: &'static str) -> Side {
         Side {
-            name: name.to_string(),
+            name,
             roster: Vec::new(),
             party: Vec::new(),
             active: None,

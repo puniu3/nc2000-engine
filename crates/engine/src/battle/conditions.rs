@@ -1302,9 +1302,9 @@ fn dispatch_cond(
         ("attract", "onStart") => {
             let t = tpoke.unwrap();
             let src = source.unwrap();
-            let tg = b.poke(t).gender.clone();
-            let sg = b.poke(src).gender.clone();
-            if !((tg == "M" && sg == "F") || (tg == "F" && sg == "M")) {
+            let tg = b.poke(t).gender;
+            let sg = b.poke(src).gender;
+            if !((tg == Gender::M && sg == Gender::F) || (tg == Gender::F && sg == Gender::M)) {
                 return RV::False;
             }
             if !b

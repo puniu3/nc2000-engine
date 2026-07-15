@@ -644,14 +644,12 @@ impl Battle {
 
     /// pokemon.gotAttacked.
     pub fn got_attacked(&mut self, id: PokeId, move_id: Option<MoveId>, damage: Option<f64>, source: PokeId) {
-        let slot = self.slot_str(source);
         let damage_number = damage.unwrap_or(0.0) as i64;
         self.poke_mut(id).attacked_by.push(Attacker {
             source,
             damage: damage_number,
             move_id: move_id.unwrap_or(MoveId(u16::MAX)),
             this_turn: true,
-            slot,
             damage_value: damage.map(|d| d as i64),
         });
         self.poke_mut(id).times_attacked += 1;
@@ -1208,7 +1206,7 @@ impl Battle {
             p.hp_power = t_hp_power;
             p.times_attacked = t_times_attacked;
             p.boosts = t_boosts;
-            p.move_slots = Vec::new();
+            p.move_slots = MoveSlots::default();
         }
         for mid in t_move_ids {
             let ms = dex.move_static(mid);

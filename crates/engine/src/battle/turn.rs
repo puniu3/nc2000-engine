@@ -369,13 +369,13 @@ impl Battle {
             return false;
         }
         self.winner = Some(match side {
-            Some(n) => self.sides[n].name.clone(),
+            Some(n) => self.sides[n].name.to_string(),
             None => String::new(),
         });
         self.add(&[""]);
         match side {
             Some(n) => {
-                let name = self.sides[n].name.clone();
+                let name = self.sides[n].name;
                 self.add(&["win", &name]);
             }
             None => self.add(&["tie"]),

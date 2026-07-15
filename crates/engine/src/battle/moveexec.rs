@@ -659,9 +659,9 @@ pub fn dispatch_move_callback(
         ("attract", "onTryImmunity") => {
             let t = tpoke.unwrap();
             let s = source.unwrap();
-            let tg = b.poke(t).gender.clone();
-            let sg = b.poke(s).gender.clone();
-            RV::from_bool((tg == "M" && sg == "F") || (tg == "F" && sg == "M"))
+            let tg = b.poke(t).gender;
+            let sg = b.poke(s).gender;
+            RV::from_bool((tg == Gender::M && sg == Gender::F) || (tg == Gender::F && sg == Gender::M))
         }
         ("dreameater", "onTryImmunity") => {
             let t = tpoke.unwrap();
@@ -783,7 +783,7 @@ pub fn dispatch_move_callback(
         ("conversion", "onHit") => {
             let t = tpoke.unwrap();
             let mut possible: Vec<crate::dex::TypeId> = Vec::new();
-            for slot in b.poke(t).move_slots.clone() {
+            for slot in b.poke(t).move_slots {
                 let ms = dex.move_static(slot.id);
                 if dex.moves.key(slot.id) != "curse" && !b.poke(t).has_type(ms.move_type) {
                     possible.push(ms.move_type);
