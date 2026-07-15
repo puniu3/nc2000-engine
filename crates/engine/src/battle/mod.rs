@@ -578,7 +578,9 @@ impl Battle {
         let def_dv = ivs[2] / 2;
         let spe_dv = ivs[5] / 2;
         let spc_dv = ivs[3] / 2;
-        let hp_type = HP_TYPES[(4 * (atk_dv % 4) + (def_dv % 4)) as usize].to_string();
+        let hp_type = dex
+            .type_id(HP_TYPES[(4 * (atk_dv % 4) + (def_dv % 4)) as usize])
+            .expect("hidden power type interned");
         let hp_power = (5 * ((spc_dv >> 3) + 2 * (spe_dv >> 3) + 4 * (def_dv >> 3) + 8 * (atk_dv >> 3))
             + (spc_dv % 4))
             / 2
@@ -594,7 +596,7 @@ impl Battle {
             set_ivs: ivs,
             set_evs: evs,
             base_move_slots: base_move_slots.clone(),
-            hp_type: hp_type.clone(),
+            hp_type,
             hp_power,
             base_hp_type: hp_type,
             base_hp_power: hp_power,
@@ -613,7 +615,7 @@ impl Battle {
                 id: item.map(|i| dex.items.key(i).to_string()).unwrap_or_default(),
                 ..Default::default()
             },
-            types: species.types.clone(),
+            types: dex.species_types(species_id),
             volatiles: Vec::new(),
             handler_mask: item.map(|i| dex.items.get(i).mask).unwrap_or(crate::dex::CbMask::EMPTY),
             transformed: false,

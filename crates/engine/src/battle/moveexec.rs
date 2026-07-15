@@ -30,8 +30,8 @@ pub fn get_active_move(dex: &Dex, id: MoveId) -> ActiveMove {
     ActiveMove {
         id: Some(id),
         name: ms.name.clone(),
-        move_type: ms.move_type.clone(),
-        base_move_type: ms.move_type.clone(),
+        move_type: ms.move_type,
+        base_move_type: ms.move_type,
         category: ms.category,
         base_power: ms.base_power,
         accuracy: ms.accuracy,
@@ -88,12 +88,12 @@ pub fn get_active_move(dex: &Dex, id: MoveId) -> ActiveMove {
 }
 
 /// The confusion self-hit fake move.
-pub fn synthetic_move(base_power: i32) -> ActiveMove {
+pub fn synthetic_move(dex: &Dex, base_power: i32) -> ActiveMove {
     ActiveMove {
         id: None,
         name: String::new(),
-        move_type: "???".into(),
-        base_move_type: "???".into(),
+        move_type: dex.known_types.unknown,
+        base_move_type: dex.known_types.unknown,
         category: Category::Physical,
         base_power,
         accuracy: Accuracy::AlwaysHits,
@@ -318,7 +318,7 @@ pub fn dispatch_move_callback(
         // ---------------------------------------------------- onModifyMove
         ("struggle", "onModifyMove") => {
             if let Some(am) = b.active_move.as_mut() {
-                am.move_type = "???".into();
+                am.move_type = dex.known_types.unknown;
             }
             RV::Undef
         }
@@ -339,22 +339,19 @@ pub fn dispatch_move_callback(
         }
         ("hiddenpower", "onModifyMove") => {
             let user = tpoke.unwrap();
-            let hp_type = b.poke(user).hp_type.clone();
+            let hp_type = b.poke(user).hp_type;
             const SPECIAL: [&str; 8] =
                 ["Fire", "Water", "Grass", "Ice", "Electric", "Dark", "Psychic", "Dragon"];
+            let special = SPECIAL.contains(&dex.type_name(hp_type));
             if let Some(am) = b.active_move.as_mut() {
-                am.move_type = hp_type.clone();
-                am.category = if SPECIAL.contains(&hp_type.as_str()) {
-                    Category::Special
-                } else {
-                    Category::Physical
-                };
+                am.move_type = hp_type;
+                am.category = if special { Category::Special } else { Category::Physical };
             }
             RV::Undef
         }
         ("curse", "onModifyMove") => {
             let user = tpoke.unwrap();
-            if !b.poke(user).has_type("Ghost") {
+            if !b.poke(user).has_type(dex.known_types.ghost) {
                 let non_ghost = b
                     .active_move
                     .as_ref()
@@ -429,7 +426,7 @@ pub fn dispatch_move_callback(
                 .filter(|&id| !b.poke(id).fainted && b.poke(id).status == Status::None)
                 .collect();
             if let Some(am) = b.active_move.as_mut() {
-                am.move_type = "???".into();
+                am.move_type = dex.known_types.unknown;
                 am.category = Category::Special;
                 am.multihit = Some(Multihit::Fixed(allies.len() as i32));
                 am.allies = Some(allies);
@@ -547,7 +544,7 @@ pub fn dispatch_move_callback(
             let mut fake = get_active_move(dex, m);
             fake.base_power = 80;
             fake.category = Category::Special;
-            fake.move_type = "???".into();
+            fake.move_type = dex.known_types.unknown;
             fake.will_crit = Some(false);
             fake.damage = None;
             fake.cb_mask = crate::dex::CbMask::EMPTY;
@@ -583,7 +580,7 @@ pub fn dispatch_move_callback(
         ("curse", "onTryHit") => {
             let user = source.unwrap();
             let t = tpoke.unwrap();
-            if !b.poke(user).has_type("Ghost") {
+            if !b.poke(user).has_type(dex.known_types.ghost) {
                 if let Some(am) = b.active_move.as_mut() {
                     am.volatile_status = None;
                     am.cb_mask.clear(dex.known.on_hit);
@@ -673,13 +670,13 @@ pub fn dispatch_move_callback(
         }
         ("leechseed", "onTryImmunity") => {
             let t = tpoke.unwrap();
-            RV::from_bool(!b.poke(t).has_type("Grass"))
+            RV::from_bool(!b.poke(t).has_type(dex.known_types.grass))
         }
         // ------------------------------------------------------ onMoveFail
         ("highjumpkick", "onMoveFail") | ("jumpkick", "onMoveFail") => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
-            if b.run_type_immunity(dex, t, "Fighting") {
+            if b.run_type_immunity(dex, t, dex.known_types.fighting) {
                 let damage = {
                     let saved = b.active_move.clone();
                     let d = b.get_damage(dex, user, t, true);
@@ -785,20 +782,20 @@ pub fn dispatch_move_callback(
         }
         ("conversion", "onHit") => {
             let t = tpoke.unwrap();
-            let mut possible: Vec<String> = Vec::new();
+            let mut possible: Vec<crate::dex::TypeId> = Vec::new();
             for slot in b.poke(t).move_slots.clone() {
                 let ms = dex.move_static(slot.id);
-                if dex.moves.key(slot.id) != "curse" && !b.poke(t).has_type(&ms.move_type) {
-                    possible.push(ms.move_type.clone());
+                if dex.moves.key(slot.id) != "curse" && !b.poke(t).has_type(ms.move_type) {
+                    possible.push(ms.move_type);
                 }
             }
             if possible.is_empty() {
                 return RV::False;
             }
-            let ty = possible[b.prng.sample_index(possible.len())].clone();
-            b.set_type(t, vec![ty.clone()]);
+            let ty = possible[b.prng.sample_index(possible.len())];
+            b.set_type(t, crate::dex::TypeList::one(ty));
             let ts = b.poke_str(t);
-            b.add(&["-start", &ts, "typechange", &ty]);
+            b.add(&["-start", &ts, "typechange", dex.type_name(ty)]);
             RV::Undef
         }
         ("conversion2", "onHit") => {
@@ -806,25 +803,25 @@ pub fn dispatch_move_callback(
             let user = source.unwrap();
             let Some(last) = b.poke(t).last_move else { return RV::False };
             let attack_type = if dex.moves.key(last) == "struggle" {
-                "Normal".to_string()
+                dex.known_types.normal
             } else {
-                dex.move_static(last).move_type.clone()
+                dex.move_static(last).move_type
             };
-            let mut possible: Vec<&str> = Vec::new();
+            let mut possible: Vec<crate::dex::TypeId> = Vec::new();
             for ty in TYPE_NAMES {
-                let Some(tc) = dex.typechart.get(&crate::dex::toid(ty)) else { continue };
-                let taken = tc.damage_taken.get(&attack_type).copied().unwrap_or(0);
-                if taken == 2 || taken == 3 {
-                    possible.push(ty);
+                let Some(def) = dex.type_id(ty) else { continue };
+                // damageTaken 2 (resist) or 3 (immune)
+                if dex.eff(attack_type, def) == -1 || dex.type_immune(attack_type, def) {
+                    possible.push(def);
                 }
             }
             if possible.is_empty() {
                 return RV::False;
             }
-            let ty = possible[b.prng.sample_index(possible.len())].to_string();
-            b.set_type(user, vec![ty.clone()]);
+            let ty = possible[b.prng.sample_index(possible.len())];
+            b.set_type(user, crate::dex::TypeList::one(ty));
             let us = b.poke_str(user);
-            b.add(&["-start", &us, "typechange", &ty]);
+            b.add(&["-start", &us, "typechange", dex.type_name(ty)]);
             RV::Undef
         }
         ("detect", "onHit") | ("protect", "onHit") | ("endure", "onHit") => {
@@ -1147,7 +1144,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
     mv.base_power = 0;
     mv.damage = Some(crate::dex::FixedDamage::Amount(damage.unwrap_or(0.0) as i32));
     mv.category = Category::Special;
-    mv.move_type = "???".into();
+    mv.move_type = dex.known_types.unknown;
     mv.will_crit = None;
     mv.crit_ratio = 0;
     mv.secondaries = Vec::new();
@@ -2368,9 +2365,9 @@ impl Battle {
                 if try_sec.truthy() {
                     for secondary in md.secondaries.clone() {
                         // brn/frz immunity if target shares the move's type
-                        let move_type = self.active_move.as_ref().unwrap().move_type.clone();
+                        let move_type = self.active_move.as_ref().unwrap().move_type;
                         if let Some(st) = &secondary.status {
-                            if (st == "brn" || st == "frz") && self.poke(t).has_type(&move_type) {
+                            if (st == "brn" || st == "frz") && self.poke(t).has_type(move_type) {
                                 continue;
                             }
                         }
@@ -2569,7 +2566,7 @@ impl Battle {
                 true,
                 false,
             );
-            self.active_move.as_mut().unwrap().move_type = "???".into();
+            self.active_move.as_mut().unwrap().move_type = dex.known_types.unknown;
             rv
         } else {
             self.run_event(
@@ -2681,18 +2678,18 @@ impl Battle {
         damage += 2.0;
 
         // weather modifiers
-        let weather = self.field_weather_key.clone();
-        let move_key = self.active_move.as_ref().unwrap().id.map(|m| dex.moves.key(m).to_string()).unwrap_or_default();
-        if (mv_type == "Water" && weather == "raindance") || (mv_type == "Fire" && weather == "sunnyday") {
+        let rain = self.field.weather.is_some() && self.field.weather == crate::cond_id!(dex, "raindance");
+        let sun = self.field.weather.is_some() && self.field.weather == crate::cond_id!(dex, "sunnyday");
+        let kt = &dex.known_types;
+        let is_solarbeam = self.active_move.as_ref().unwrap().id.map(|m| dex.moves.key(m) == "solarbeam").unwrap_or(false);
+        if (mv_type == kt.water && rain) || (mv_type == kt.fire && sun) {
             damage = (damage * 1.5).floor();
-        } else if ((mv_type == "Fire" || move_key == "solarbeam") && weather == "raindance")
-            || (mv_type == "Water" && weather == "sunnyday")
-        {
+        } else if ((mv_type == kt.fire || is_solarbeam) && rain) || (mv_type == kt.water && sun) {
             damage = (damage / 2.0).floor();
         }
 
         // STAB
-        if mv_type != "???" && self.poke(source).has_type(&mv_type) {
+        if mv_type != kt.unknown && self.poke(source).has_type(mv_type) {
             damage += (damage / 2.0).floor();
         }
 

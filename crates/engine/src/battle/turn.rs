@@ -452,8 +452,8 @@ impl Battle {
                 self.run_event(dex, &ev::TrapPokemon, EvTarget::Poke(active), None, EffectHandle::None, None, false, false);
                 // knownType always true in gen2 → MaybeTrapPokemon if immune
                 // to 'trapped'... PS: if (!knownType || getImmunity('trapped'))
-                let types = self.poke(active).types.clone();
-                if dex.get_immunity("trapped", &types) {
+                let types = self.poke(active).types;
+                if !types.iter().any(|d| dex.status_key_immune("trapped", d)) {
                     self.run_event(dex, &ev::MaybeTrapPokemon, EvTarget::Poke(active), None, EffectHandle::None, None, false, false);
                 }
 

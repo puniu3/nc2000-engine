@@ -83,6 +83,50 @@ macro_rules! cond_id {
     }};
 }
 
+/// Dense type id ("Water", "Flying", ..., plus the "???" pseudo-type).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TypeId(pub u8);
+
+/// A pokemon's type list (1–2 entries in gen 2; conversion can set 1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TypeList {
+    pub t: [TypeId; 2],
+    pub n: u8,
+}
+
+impl TypeList {
+    pub fn one(a: TypeId) -> TypeList {
+        TypeList { t: [a, a], n: 1 }
+    }
+
+    pub fn two(a: TypeId, b: TypeId) -> TypeList {
+        TypeList { t: [a, b], n: 2 }
+    }
+
+    #[inline]
+    pub fn has(&self, ty: TypeId) -> bool {
+        self.t[0] == ty || (self.n == 2 && self.t[1] == ty)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = TypeId> + '_ {
+        self.t[..self.n as usize].iter().copied()
+    }
+}
+
+/// Type ids referenced by literal in the battle code.
+#[derive(Clone, Copy, Debug)]
+pub struct KnownTypes {
+    pub unknown: TypeId, // "???"
+    pub normal: TypeId,
+    pub water: TypeId,
+    pub fire: TypeId,
+    pub flying: TypeId,
+    pub ghost: TypeId,
+    pub grass: TypeId,
+    pub fighting: TypeId,
+    pub ground: TypeId,
+}
+
 /// Item ids referenced by the stat/speed hot path (gen2stadium2 getStat).
 #[derive(Clone, Copy, Debug)]
 pub struct KnownItems {
@@ -443,7 +487,7 @@ pub enum Multihit {
 #[derive(Clone, Debug)]
 pub struct MoveStatic {
     pub name: String,
-    pub move_type: String,
+    pub move_type: TypeId,
     pub category: Category,
     pub base_power: i32,
     pub accuracy: Accuracy,
@@ -495,7 +539,7 @@ pub struct MoveStatic {
 }
 
 impl MoveStatic {
-    fn parse(d: &MoveData) -> MoveStatic {
+    fn parse(d: &MoveData, type_index: &std::collections::HashMap<String, u8>) -> MoveStatic {
         let x = |k: &str| d.extra.get(k);
         let xb = |k: &str| x(k).map(|v| v.as_bool() == Some(true) || v.is_string()).unwrap_or(false);
         let category = match d.category.as_str() {
@@ -542,7 +586,7 @@ impl MoveStatic {
         }
         MoveStatic {
             name: d.name.clone(),
-            move_type: d.move_type.clone(),
+            move_type: TypeId(*type_index.get(&d.move_type).expect("move type interned")),
             category,
             base_power: d.base_power as i32,
             accuracy,
@@ -698,6 +742,20 @@ pub struct Dex {
     pub known: KnownCbs,
     pub known_items: KnownItems,
     pub known_species: KnownSpecies,
+    pub known_types: KnownTypes,
+    /// Display names of interned types ("Fire", ..., "???"), TypeId order.
+    pub type_names: Vec<String>,
+    /// Keys: both display ("Fire") and toid ("fire") forms.
+    type_index: std::collections::HashMap<String, u8>,
+    /// attacker-major NxN: +1 super effective, -1 resisted, 0 neutral/immune.
+    eff_matrix: Vec<i8>,
+    /// attacker-major NxN: damage_taken == 3 (immune).
+    imm_matrix: Vec<bool>,
+    /// Non-type damage_taken keys (psn/brn/trapped/sandstorm/...) → per-type
+    /// immunity row.
+    status_imm: std::collections::HashMap<String, Box<[bool]>>,
+    /// Precomputed TypeList per species (SpeciesId order).
+    species_types: Vec<TypeList>,
     /// CondId of each `Status` discriminant ("", brn, par, slp, frz, psn,
     /// tox, fnt) — collection must not hit the string index per event.
     pub status_conds: [Option<CondId>; 8],
@@ -731,8 +789,61 @@ impl Dex {
                 teleport.callbacks.push("onTry".to_string());
             }
         }
+        // ---- type interning (typechart order is BTreeMap-sorted, then "???")
+        let mut type_names: Vec<String> = Vec::new();
+        let mut type_index: std::collections::HashMap<String, u8> = Default::default();
+        for (key, td) in &file.typechart {
+            let i = type_names.len() as u8;
+            type_names.push(td.name.clone());
+            type_index.insert(td.name.clone(), i);
+            type_index.insert(key.clone(), i);
+        }
+        {
+            let i = type_names.len() as u8;
+            type_names.push("???".to_string());
+            type_index.insert("???".to_string(), i);
+        }
+        let nt = type_names.len();
+        let tid = |name: &str| -> TypeId {
+            TypeId(*type_index.get(name).unwrap_or_else(|| panic!("unknown type {name}")))
+        };
+        // attacker-major matrices; the "???" row/col stays neutral/non-immune.
+        let mut eff_matrix = vec![0i8; nt * nt];
+        let mut imm_matrix = vec![false; nt * nt];
+        let mut status_imm: std::collections::HashMap<String, Vec<bool>> = Default::default();
+        for (key, td) in &file.typechart {
+            let def = tid(key).0 as usize;
+            for (att_key, &code) in &td.damage_taken {
+                if let Some(&att) = type_index.get(att_key) {
+                    eff_matrix[att as usize * nt + def] = match code {
+                        1 => 1,
+                        2 => -1,
+                        _ => 0,
+                    };
+                    imm_matrix[att as usize * nt + def] = code == 3;
+                } else {
+                    let row = status_imm.entry(att_key.clone()).or_insert_with(|| vec![false; nt]);
+                    row[def] = code == 3;
+                }
+            }
+        }
+        let status_imm: std::collections::HashMap<String, Box<[bool]>> =
+            status_imm.into_iter().map(|(k, v)| (k, v.into_boxed_slice())).collect();
+        let known_types = KnownTypes {
+            unknown: tid("???"),
+            normal: tid("Normal"),
+            water: tid("Water"),
+            fire: tid("Fire"),
+            flying: tid("Flying"),
+            ghost: tid("Ghost"),
+            grass: tid("Grass"),
+            fighting: tid("Fighting"),
+            ground: tid("Ground"),
+        };
+
         let moves = Table::build(file.moves);
-        let moves_static: Vec<MoveStatic> = moves.values.iter().map(MoveStatic::parse).collect();
+        let moves_static: Vec<MoveStatic> =
+            moves.values.iter().map(|d| MoveStatic::parse(d, &type_index)).collect();
 
         // ---- build the interned runtime condition table
         let mut entries: BTreeMap<String, CondEntry> = BTreeMap::new();
@@ -1026,6 +1137,17 @@ impl Dex {
             quickclaw: items.id("quickclaw"),
         };
         let species = Table::build(file.species);
+        let species_types: Vec<TypeList> = species
+            .values
+            .iter()
+            .map(|sp| {
+                let a = TypeId(*type_index.get(&sp.types[0]).expect("species type interned"));
+                match sp.types.get(1) {
+                    Some(b) => TypeList::two(a, TypeId(*type_index.get(b).unwrap())),
+                    None => TypeList::one(a),
+                }
+            })
+            .collect();
         let known_species = KnownSpecies {
             cubone: species.id("cubone"),
             marowak: species.id("marowak"),
@@ -1049,8 +1171,50 @@ impl Dex {
             known,
             known_items,
             known_species,
+            known_types,
+            type_names,
+            type_index,
+            eff_matrix,
+            imm_matrix,
+            status_imm,
+            species_types,
             status_conds,
         })
+    }
+
+    /// Type id by display ("Fire") or toid ("fire") name.
+    #[inline]
+    pub fn type_id(&self, name: &str) -> Option<TypeId> {
+        self.type_index.get(name).map(|&i| TypeId(i))
+    }
+
+    #[inline]
+    pub fn type_name(&self, t: TypeId) -> &str {
+        &self.type_names[t.0 as usize]
+    }
+
+    /// +1 super effective, -1 resisted, 0 neutral/immune (PS getEffectiveness).
+    #[inline]
+    pub fn eff(&self, att: TypeId, def: TypeId) -> i32 {
+        self.eff_matrix[att.0 as usize * self.type_names.len() + def.0 as usize] as i32
+    }
+
+    /// damage_taken == 3 for this matchup (PS getImmunity == false).
+    #[inline]
+    pub fn type_immune(&self, att: TypeId, def: TypeId) -> bool {
+        self.imm_matrix[att.0 as usize * self.type_names.len() + def.0 as usize]
+    }
+
+    /// PS getImmunity for a non-type key ('psn', 'trapped', 'sandstorm', ...):
+    /// false = immune. Unknown keys are never immune (PS: no damageTaken row).
+    #[inline]
+    pub fn status_key_immune(&self, key: &str, def: TypeId) -> bool {
+        self.status_imm.get(key).map(|row| row[def.0 as usize]).unwrap_or(false)
+    }
+
+    #[inline]
+    pub fn species_types(&self, id: SpeciesId) -> TypeList {
+        self.species_types[id.0 as usize]
     }
 
     /// Dense id of a callback name (`Cb::NONE` if never registered — such a

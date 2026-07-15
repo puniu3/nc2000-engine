@@ -325,11 +325,11 @@ fn dispatch_cond(
             let base_move_type = b
                 .active_move
                 .as_ref()
-                .map(|m| m.move_type.clone())
-                .unwrap_or_else(|| "Normal".to_string());
+                .map(|m| m.move_type)
+                .unwrap_or(dex.known_types.normal);
             let selfdestruct =
                 b.active_move.as_ref().map(|m| m.selfdestruct).unwrap_or(false);
-            let mut fake = super::moveexec::synthetic_move(40);
+            let mut fake = super::moveexec::synthetic_move(dex, 40);
             fake.base_move_type = base_move_type;
             fake.is_confusion_self_hit = true;
             fake.no_damage_variance = true;
@@ -417,7 +417,7 @@ fn dispatch_cond(
                 .map(|s| b.poke(s).is_active)
                 .unwrap_or(false);
             if source_active {
-                b.try_trap(t);
+                b.try_trap(dex, t);
             }
             RV::Undef
         }
@@ -460,7 +460,7 @@ fn dispatch_cond(
         // --------------------------------------------------------- trapped
         ("trapped", "onTrapPokemon") => {
             let t = tpoke.unwrap();
-            b.try_trap(t);
+            b.try_trap(dex, t);
             RV::Undef
         }
         ("trapped", "onStart") => {
@@ -652,7 +652,7 @@ fn dispatch_cond(
         }
         ("spikes", "onEntryHazard") => {
             let t = tpoke.unwrap();
-            if b.poke(t).has_type("Flying") {
+            if b.poke(t).has_type(dex.known_types.flying) {
                 return RV::Undef;
             }
             let layers = b.state_at(state).map(|s| s.get_int("layers")).unwrap_or(1);
@@ -736,9 +736,10 @@ fn dispatch_cond(
         }
         ("foresight", "onNegateImmunity") => {
             let t = tpoke.unwrap();
-            if b.poke(t).has_type("Ghost") {
-                if let RV::Str(ty) = &relay {
-                    if ty == "Normal" || ty == "Fighting" {
+            if b.poke(t).has_type(dex.known_types.ghost) {
+                if let RV::Num(tyv) = relay {
+                    let ty = crate::dex::TypeId(tyv as u8);
+                    if ty == dex.known_types.normal || ty == dex.known_types.fighting {
                         return RV::False;
                     }
                 }
@@ -1184,7 +1185,7 @@ fn dispatch_cond(
                 fake.base_power = 0;
                 fake.damage = Some(crate::dex::FixedDamage::Amount((total * 2) as i32));
                 fake.category = crate::dex::Category::Physical;
-                fake.move_type = "Normal".into();
+                fake.move_type = dex.known_types.normal;
                 fake.crit_ratio = 0;
                 fake.will_crit = None;
                 fake.priority = 0;

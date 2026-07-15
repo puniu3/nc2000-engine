@@ -117,7 +117,7 @@ impl Battle {
             "itemState": scal(&p.item_state),
             "moves": moves,
             "volatiles": map_scal(dex, p.volatiles.iter().map(|(c, s)| (c, s))),
-            "types": p.types,
+            "types": p.types.iter().map(|t| dex.type_name(t)).collect::<Vec<_>>(),
             "transformed": p.transformed,
             "active": p.is_active,
             "position": p.position,

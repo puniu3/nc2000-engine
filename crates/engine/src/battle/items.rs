@@ -66,8 +66,8 @@ pub fn dispatch_item(
 
     // 1.1x type-boost items
     if let (Some(ty), "onModifyDamage") = (type_boost(&key), cb) {
-        let move_type = b.active_move.as_ref().map(|m| m.move_type.clone()).unwrap_or_default();
-        if move_type == ty {
+        let move_type = b.active_move.as_ref().map(|m| m.move_type);
+        if move_type.is_some() && move_type == dex.type_id(ty) {
             return RV::Num(relay.as_num() * 1.1);
         }
         return RV::Undef;

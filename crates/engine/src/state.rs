@@ -10,7 +10,7 @@
 //! `side.pokemon` array is mirrored by `Side::party` (display order); PS's
 //! `pokemon.position` is kept in sync exactly like PS does.
 
-use crate::dex::{Accuracy, Category, CondId, FixedDamage, HitEffect, ItemId, MoveId, Multihit, SparseBoosts, SpeciesId};
+use crate::dex::{Accuracy, Category, CondId, FixedDamage, HitEffect, ItemId, MoveId, Multihit, SparseBoosts, SpeciesId, TypeId, TypeList};
 use crate::prng::Prng;
 use std::collections::BTreeMap;
 
@@ -220,9 +220,9 @@ pub struct Pokemon {
     pub set_evs: [i32; 6],
     pub base_move_slots: Vec<MoveSlot>,
     /// Gen 2 hidden power (from DVs).
-    pub hp_type: String,
+    pub hp_type: TypeId,
     pub hp_power: i32,
-    pub base_hp_type: String,
+    pub base_hp_type: TypeId,
     pub base_hp_power: i32,
     /// Stats before transform (transform copies stored stats).
     pub base_stored_stats: [i32; 5],
@@ -242,7 +242,7 @@ pub struct Pokemon {
     pub item: Option<ItemId>,
     pub last_item: Option<ItemId>,
     pub item_state: EffectState,
-    pub types: Vec<String>,
+    pub types: TypeList,
     /// Insertion-ordered (PS object key order drives handler collection).
     pub volatiles: Vec<(CondId, EffectState)>,
     /// Union of status/volatile/item callback masks (slot conditions
@@ -301,8 +301,8 @@ impl Pokemon {
         self.volatiles.iter().any(|(k, _)| *k == id)
     }
 
-    pub fn has_type(&self, ty: &str) -> bool {
-        self.types.iter().any(|t| t == ty)
+    pub fn has_type(&self, ty: TypeId) -> bool {
+        self.types.has(ty)
     }
 
     pub fn get_move_slot(&self, id: MoveId) -> Option<&MoveSlot> {
@@ -524,8 +524,8 @@ pub struct ActiveMove {
     /// None for synthetic moves (confusion self-hit).
     pub id: Option<MoveId>,
     pub name: String,
-    pub move_type: String,
-    pub base_move_type: String,
+    pub move_type: TypeId,
+    pub base_move_type: TypeId,
     pub category: Category,
     pub base_power: i32,
     pub accuracy: Accuracy,

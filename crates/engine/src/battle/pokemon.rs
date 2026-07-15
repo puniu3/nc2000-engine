@@ -515,13 +515,13 @@ impl Battle {
         }
     }
 
-    pub fn try_trap(&mut self, id: PokeId) -> bool {
+    pub fn try_trap(&mut self, dex: &Dex, id: PokeId) -> bool {
         // runStatusImmunity('trapped') without message
         // (dex lookup needs dex; trapped immunity: Ghost)
         // NOTE: callers pass through run_status_immunity when needed; PS
         // tryTrap checks it — we do too via types directly.
         let p = self.poke(id);
-        let ghost = p.types.iter().any(|t| t == "Ghost");
+        let ghost = p.types.has(dex.known_types.ghost);
         if ghost {
             return false;
         }
@@ -766,7 +766,7 @@ impl Battle {
         // setSpecies(baseSpecies): restores species/types/stats (transform).
         p.species = p.base_species;
         p.stored_stats = p.base_stored_stats;
-        p.types = dex.species.get(p.base_species).types.clone();
+        p.types = dex.species_types(p.base_species);
         p.speed = p.stored_stats[4];
         self.refresh_poke_mask(dex, id);
     }
@@ -781,8 +781,12 @@ impl Battle {
         if ty.is_empty() {
             return true;
         }
-        let types = self.poke(id).types.clone();
-        if !dex.get_immunity(ty, &types) {
+        let types = self.poke(id).types;
+        let immune = match dex.type_id(ty) {
+            Some(att) => types.iter().any(|d| dex.type_immune(att, d)),
+            None => types.iter().any(|d| dex.status_key_immune(ty, d)),
+        };
+        if immune {
             if message {
                 let ts = self.poke_str(id);
                 self.add(&["-immune", &ts]);
@@ -813,12 +817,12 @@ impl Battle {
     pub fn run_move_immunity(&mut self, dex: &Dex, id: PokeId, message: bool) -> bool {
         let (ty, ignore) = {
             let m = self.active_move.as_ref().expect("runImmunity without active move");
-            (m.move_type.clone(), m.ignore_immunity)
+            (m.move_type, m.ignore_immunity)
         };
         if ignore {
             return true;
         }
-        if ty.is_empty() || ty == "???" {
+        if ty == dex.known_types.unknown {
             return true;
         }
         let negate = !self
@@ -828,22 +832,22 @@ impl Battle {
                 EvTarget::Poke(id),
                 None,
                 EffectHandle::None,
-                Some(RV::Str(ty.clone())),
+                Some(RV::Num(ty.0 as f64)),
                 false,
                 false,
             )
             .truthy();
-        let not_immune = if ty == "Ground" {
+        let not_immune = if ty == dex.known_types.ground {
             // gen2 isGrounded: Flying-types are airborne, nothing else.
-            let flying = self.poke(id).has_type("Flying");
+            let flying = self.poke(id).has_type(dex.known_types.flying);
             if negate {
                 true
             } else {
                 !flying
             }
         } else {
-            let types = self.poke(id).types.clone();
-            negate || dex.get_immunity(&ty, &types)
+            let types = self.poke(id).types;
+            negate || !types.iter().any(|d| dex.type_immune(ty, d))
         };
         if not_immune {
             return true;
@@ -856,7 +860,7 @@ impl Battle {
     }
 
     /// pokemon.runImmunity(type-string) — false = immune (jumpkick crash).
-    pub fn run_type_immunity(&mut self, dex: &Dex, id: PokeId, ty: &str) -> bool {
+    pub fn run_type_immunity(&mut self, dex: &Dex, id: PokeId, ty: crate::dex::TypeId) -> bool {
         let negate = !self
             .run_event(
                 dex,
@@ -864,32 +868,32 @@ impl Battle {
                 EvTarget::Poke(id),
                 None,
                 EffectHandle::None,
-                Some(RV::Str(ty.to_string())),
+                Some(RV::Num(ty.0 as f64)),
                 false,
                 false,
             )
             .truthy();
-        if ty == "Ground" {
-            let flying = self.poke(id).has_type("Flying");
+        if ty == dex.known_types.ground {
+            let flying = self.poke(id).has_type(dex.known_types.flying);
             return negate || !flying;
         }
-        let types = self.poke(id).types.clone();
-        negate || dex.get_immunity(ty, &types)
+        let types = self.poke(id).types;
+        negate || !types.iter().any(|d| dex.type_immune(ty, d))
     }
 
     /// pokemon.runEffectiveness(move) — total type mod.
     pub fn run_effectiveness(&mut self, dex: &Dex, id: PokeId) -> i32 {
-        let move_type = self.active_move.as_ref().unwrap().move_type.clone();
+        let move_type = self.active_move.as_ref().unwrap().move_type;
         let move_eff = self
             .active_move
             .as_ref()
             .and_then(|m| m.id)
             .map(EffectHandle::MoveEff)
             .unwrap_or(EffectHandle::None);
-        let types = self.poke(id).types.clone();
+        let types = self.poke(id).types;
         let mut total = 0i32;
-        for ty in &types {
-            let type_mod = dex.get_effectiveness(&move_type, ty);
+        for ty in types.iter() {
+            let type_mod = dex.eff(move_type, ty);
             // singleEvent('Effectiveness', move, ...) — only M2 moves have it.
             let rv = self.run_event(
                 dex,
@@ -1158,7 +1162,7 @@ impl Battle {
     }
 
     /// pokemon.setType(newType).
-    pub fn set_type(&mut self, id: PokeId, new_types: Vec<String>) -> bool {
+    pub fn set_type(&mut self, id: PokeId, new_types: crate::dex::TypeList) -> bool {
         self.poke_mut(id).types = new_types;
         true
     }
