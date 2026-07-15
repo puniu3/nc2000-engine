@@ -6,7 +6,7 @@ use crate::dex::{toid, Dex, MoveId};
 use crate::state::*;
 
 use super::actions::compare_action_priority;
-use super::events::EvTarget;
+use super::events::{ev, EvTarget};
 use super::{EffectHandle, EngineError, RV};
 
 impl Battle {
@@ -417,7 +417,7 @@ impl Battle {
                 let frac = self
                     .run_event(
                         dex,
-                        "FractionalPriority",
+                        &ev::FractionalPriority,
                         EvTarget::Poke(pokemon),
                         None,
                         EffectHandle::MoveEff(move_id),
@@ -444,7 +444,7 @@ impl Battle {
                 // singleEvent('ModifyPriority', move...): no gen2 move has it.
                 let rv = self.run_event(
                     dex,
-                    "ModifyPriority",
+                    &ev::ModifyPriority,
                     EvTarget::Poke(pokemon),
                     original_target,
                     EffectHandle::MoveEff(move_id),

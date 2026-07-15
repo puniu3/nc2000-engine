@@ -4,7 +4,7 @@
 use crate::dex::Dex;
 use crate::state::*;
 
-use super::events::EvTarget;
+use super::events::{ev, EvTarget};
 use super::EffectHandle;
 
 impl Battle {
@@ -118,13 +118,13 @@ impl Battle {
                 self.run_switch(dex, pokemon);
             }
             ActionKind::BeforeTurn => {
-                self.each_event(dex, "BeforeTurn", None);
+                self.each_event(dex, &ev::BeforeTurn, None);
             }
             ActionKind::Residual => {
                 self.add(&[""]);
                 self.clear_active_move(true);
                 self.update_all_speeds(dex);
-                self.field_event(dex, "Residual", None);
+                self.field_event(dex, &ev::Residual, None);
                 if !self.ended {
                     self.add(&["upkeep"]);
                 }
@@ -198,7 +198,7 @@ impl Battle {
                         && self.poke(active).switch_flag.is_set()
                         && !self.poke(active).skip_before_switch_out
                     {
-                        self.run_event(dex, "BeforeSwitchOut", EvTarget::Poke(active), None, EffectHandle::None, None, false, false);
+                        self.run_event(dex, &ev::BeforeSwitchOut, EvTarget::Poke(active), None, EffectHandle::None, None, false, false);
                         self.poke_mut(active).skip_before_switch_out = true;
                         self.faint_messages(dex, false);
                         if self.ended {
@@ -223,7 +223,7 @@ impl Battle {
         }
 
         // gen < 5
-        self.each_event(dex, "Update", None);
+        self.each_event(dex, &ev::Update, None);
     }
 
     /// beforeTurnCallback dispatch (pursuit).
@@ -281,7 +281,7 @@ impl Battle {
                 && self
                     .run_event(
                         dex,
-                        "BeforeFaint",
+                        &ev::BeforeFaint,
                         EvTarget::Poke(pokemon),
                         entry.source,
                         entry.effect.unwrap_or(EffectHandle::None),
@@ -299,7 +299,7 @@ impl Battle {
                 }
                 self.run_event(
                     dex,
-                    "Faint",
+                    &ev::Faint,
                     EvTarget::Poke(pokemon),
                     entry.source,
                     entry.effect.unwrap_or(EffectHandle::None),
@@ -350,7 +350,7 @@ impl Battle {
         if let Some(fd) = faint_data {
             self.run_event(
                 dex,
-                "AfterFaint",
+                &ev::AfterFaint,
                 EvTarget::Poke(fd.target),
                 fd.source,
                 fd.effect.unwrap_or(EffectHandle::None),
@@ -417,7 +417,7 @@ impl Battle {
                         slot.disabled = false;
                     }
                 }
-                self.run_event(dex, "DisableMove", EvTarget::Poke(active), None, EffectHandle::None, None, false, false);
+                self.run_event(dex, &ev::DisableMove, EvTarget::Poke(active), None, EffectHandle::None, None, false, false);
                 // per-slot singleEvent('DisableMove', activeMove): no gen2 M1
                 // move carries onDisableMove.
 
@@ -448,12 +448,12 @@ impl Battle {
 
                 self.poke_mut(active).trapped = false;
                 self.poke_mut(active).maybe_trapped = false;
-                self.run_event(dex, "TrapPokemon", EvTarget::Poke(active), None, EffectHandle::None, None, false, false);
+                self.run_event(dex, &ev::TrapPokemon, EvTarget::Poke(active), None, EffectHandle::None, None, false, false);
                 // knownType always true in gen2 → MaybeTrapPokemon if immune
                 // to 'trapped'... PS: if (!knownType || getImmunity('trapped'))
                 let types = self.poke(active).types.clone();
                 if dex.get_immunity("trapped", &types) {
-                    self.run_event(dex, "MaybeTrapPokemon", EvTarget::Poke(active), None, EffectHandle::None, None, false, false);
+                    self.run_event(dex, &ev::MaybeTrapPokemon, EvTarget::Poke(active), None, EffectHandle::None, None, false, false);
                 }
 
                 if !self.poke(active).fainted {

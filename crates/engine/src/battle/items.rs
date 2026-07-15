@@ -5,7 +5,7 @@ use crate::dex::{Dex, HitEffect, ItemId};
 use crate::state::*;
 
 use super::dmg::HealEffect;
-use super::events::EvTarget;
+use super::events::{ev, EvTarget};
 use super::{EffectHandle, RV};
 
 /// The 1.1x type-boost items.
@@ -141,7 +141,7 @@ pub fn dispatch_item(
                 let ok = b
                     .run_event(
                         dex,
-                        "TryHeal",
+                        &ev::TryHeal,
                         EvTarget::Poke(t),
                         None,
                         EffectHandle::Item(item),
@@ -170,7 +170,7 @@ pub fn dispatch_item(
             let ok = b
                 .run_event(
                     dex,
-                    "TryHeal",
+                    &ev::TryHeal,
                     EvTarget::Poke(t),
                     None,
                     EffectHandle::Item(item),

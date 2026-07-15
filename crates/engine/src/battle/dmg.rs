@@ -5,7 +5,7 @@ use crate::dex::{Dex, EffectType};
 use crate::state::*;
 
 use super::conditions::DamageEffect;
-use super::events::EvTarget;
+use super::events::{ev, EvTarget};
 use super::{clamp_int_range, EffectHandle, RV};
 
 impl Battle {
@@ -71,7 +71,7 @@ impl Battle {
             }
             let rv = self.run_event(
                 dex,
-                "Damage",
+                &ev::Damage,
                 EvTarget::Poke(target),
                 source,
                 effect_handle,
@@ -280,7 +280,7 @@ impl Battle {
         // TryHeal event
         let rv = self.run_event(
             dex,
-            "TryHeal",
+            &ev::TryHeal,
             target.map(EvTarget::Poke).unwrap_or(EvTarget::Battle),
             source,
             effect_handle,
@@ -351,7 +351,7 @@ impl Battle {
         }
         self.run_event(
             dex,
-            "Heal",
+            &ev::Heal,
             EvTarget::Poke(target),
             source,
             effect_handle,
@@ -396,7 +396,7 @@ impl Battle {
         self.pending_boosts = Some(boosts.to_vec());
         let rv = self.run_event(
             dex,
-            "TryBoost",
+            &ev::TryBoost,
             EvTarget::Poke(target),
             source,
             effect,
@@ -445,7 +445,7 @@ impl Battle {
                 }
                 self.run_event(
                     dex,
-                    "AfterEachBoost",
+                    &ev::AfterEachBoost,
                     EvTarget::Poke(target),
                     source,
                     effect,
@@ -457,7 +457,7 @@ impl Battle {
         }
         self.run_event(
             dex,
-            "AfterBoost",
+            &ev::AfterBoost,
             EvTarget::Poke(target),
             source,
             effect,

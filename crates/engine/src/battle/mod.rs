@@ -435,6 +435,7 @@ impl Battle {
             last_move_id: None,
             pending_boosts: None,
             field_weather_key: String::new(),
+            listener_pool: Default::default(),
         };
         // formatData/field states get effectOrder slots in PS construction
         // order: formatData (id set, no target → order 0? target absent →

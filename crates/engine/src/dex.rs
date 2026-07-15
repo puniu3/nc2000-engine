@@ -14,6 +14,78 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
+/// Dense id of a registered callback name ("onTryHit", "basePowerCallback",
+/// ...). Assigned at dex load in deterministic (BTreeMap) order; a name that
+/// was never registered maps to `Cb::NONE`, which no `CbMask` contains.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Cb(pub u16);
+
+impl Cb {
+    pub const NONE: Cb = Cb(u16::MAX);
+
+    #[inline]
+    pub fn exists(self) -> bool {
+        self.0 != u16::MAX
+    }
+}
+
+/// 256-bit set over registered callback ids (the gen2stadium2 dex registers
+/// ~90 distinct names; load asserts the bound).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CbMask([u64; 4]);
+
+impl CbMask {
+    pub const EMPTY: CbMask = CbMask([0; 4]);
+
+    #[inline]
+    pub fn has(&self, cb: Cb) -> bool {
+        let i = cb.0 as usize;
+        i < 256 && self.0[i >> 6] & (1 << (i & 63)) != 0
+    }
+
+    pub fn set(&mut self, cb: Cb) {
+        let i = cb.0 as usize;
+        assert!(i < 256, "CbMask overflow");
+        self.0[i >> 6] |= 1 << (i & 63);
+    }
+
+    pub fn clear(&mut self, cb: Cb) {
+        let i = cb.0 as usize;
+        if i < 256 {
+            self.0[i >> 6] &= !(1 << (i & 63));
+        }
+    }
+
+    pub fn or_with(&mut self, other: &CbMask) {
+        for k in 0..4 {
+            self.0[k] |= other.0[k];
+        }
+    }
+}
+
+/// `on{Event}Order` / `Priority` / `SubOrder` numbers a condition or item
+/// declares for one callback (PS resolvePriority data lookups, precomputed).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CbNums {
+    pub order: Option<i32>,
+    pub priority: Option<i32>,
+    pub sub_order: Option<i32>,
+}
+
+/// Hot callback ids resolved once at load (literal-name checks in the battle
+/// code go through these instead of hashing the string every time).
+#[derive(Clone, Copy, Debug)]
+pub struct KnownCbs {
+    pub on_hit: Cb,
+    pub on_after_hit: Cb,
+    pub on_start: Cb,
+    pub damage_callback: Cb,
+    pub base_power_callback: Cb,
+    pub before_move_callback: Cb,
+    pub on_hit_field: Cb,
+    pub on_hit_side: Cb,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MoveId(pub u16);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -119,6 +191,12 @@ pub struct ItemData {
     pub callbacks: Vec<String>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
+    /// Registered-callback bitset (filled at load, after registry build).
+    #[serde(skip)]
+    pub mask: CbMask,
+    /// Per-callback Order/Priority/SubOrder numbers (filled at load).
+    #[serde(skip)]
+    pub cb_nums: Vec<(Cb, CbNums)>,
 }
 
 impl ItemData {
@@ -129,6 +207,11 @@ impl ItemData {
     /// `on{Event}Order`/`Priority`/`SubOrder` numbers (resolvePriority).
     pub fn num(&self, key: &str) -> Option<i32> {
         self.extra.get(key).and_then(|v| v.as_i64()).map(|v| v as i32)
+    }
+
+    #[inline]
+    pub fn cb_num(&self, cb: Cb) -> CbNums {
+        self.cb_nums.iter().find(|(c, _)| *c == cb).map(|(_, n)| *n).unwrap_or_default()
     }
 
     /// Item `boosts` table (berserkgene).
@@ -375,6 +458,9 @@ pub struct MoveStatic {
     pub non_ghost_target: Option<String>,
     /// PS callback names on the move (non-empty = milestone 2 move).
     pub callbacks: Vec<String>,
+    /// Registered-callback bitset over `callbacks` (dotted sub-block names
+    /// like "secondary.onHit" excluded — they never reach mask checks).
+    pub cb_mask: CbMask,
     /// Condition block data (for moves that define one), kept raw.
     pub condition: Option<Value>,
 }
@@ -482,6 +568,7 @@ impl MoveStatic {
             stalling_move: xb("stallingMove"),
             non_ghost_target: x("nonGhostTarget").and_then(|v| v.as_str()).map(String::from),
             callbacks: d.callbacks.clone(),
+            cb_mask: CbMask::EMPTY,
             condition: d.condition.clone(),
         }
     }
@@ -518,6 +605,11 @@ pub struct CondEntry {
     pub callbacks: Vec<String>,
     /// `on{Event}Order` / `Priority` / `SubOrder` numbers from the data.
     pub nums: BTreeMap<String, i32>,
+    /// Registered-callback bitset over `callbacks` + code-only builtins
+    /// (`conditions::has_builtin`). Filled at load.
+    pub mask: CbMask,
+    /// Precomputed per-callback Order/Priority/SubOrder (from `nums`).
+    pub cb_nums: Vec<(Cb, CbNums)>,
 }
 
 impl CondEntry {
@@ -527,6 +619,11 @@ impl CondEntry {
 
     pub fn num(&self, key: &str) -> Option<i32> {
         self.nums.get(key).copied()
+    }
+
+    #[inline]
+    pub fn cb_num(&self, cb: Cb) -> CbNums {
+        self.cb_nums.iter().find(|(c, _)| *c == cb).map(|(_, n)| *n).unwrap_or_default()
     }
 }
 
@@ -560,6 +657,19 @@ pub struct Dex {
     /// callbacks are NOT included — they never enter `findEventHandlers`
     /// (single_event / the runEvent onEffect branch check the move directly).
     pub possible_callbacks: std::collections::HashSet<String>,
+    /// Registered callback names, dense-id order (`Cb` indexes this).
+    pub cb_names: Vec<String>,
+    cb_index: std::collections::HashMap<String, u16>,
+    /// Union of all condition + item masks (same universe as
+    /// `possible_callbacks`; move callbacks excluded).
+    pub possible_mask: CbMask,
+    /// Per-Cb flag bits: 1 = name ends with "SwitchIn", 2 = ends with
+    /// "RedirectTarget" (resolvePriority special cases).
+    pub cb_flags: Vec<u8>,
+    pub known: KnownCbs,
+    /// CondId of each `Status` discriminant ("", brn, par, slp, frz, psn,
+    /// tox, fnt) — collection must not hit the string index per event.
+    pub status_conds: [Option<CondId>; 8],
 }
 
 impl Dex {
@@ -611,6 +721,8 @@ impl Dex {
                     no_copy: c.extra.get("noCopy").and_then(|v| v.as_bool()).unwrap_or(false),
                     callbacks: c.callbacks.clone(),
                     nums: handler_nums(&c.extra),
+                    mask: CbMask::EMPTY,
+                    cb_nums: Vec::new(),
                 },
             );
         }
@@ -651,6 +763,8 @@ impl Dex {
                     no_copy: cond_map.get("noCopy").and_then(|v| v.as_bool()).unwrap_or(false),
                     callbacks,
                     nums: handler_nums(&cond_map),
+                    mask: CbMask::EMPTY,
+                    cb_nums: Vec::new(),
                 },
             );
         }
@@ -670,6 +784,8 @@ impl Dex {
                     no_copy: false,
                     callbacks,
                     nums: BTreeMap::new(),
+                    mask: CbMask::EMPTY,
+                    cb_nums: Vec::new(),
                 },
             );
         }
@@ -692,10 +808,12 @@ impl Dex {
                 no_copy: false,
                 callbacks: Vec::new(),
                 nums: BTreeMap::new(),
+                mask: CbMask::EMPTY,
+                cb_nums: Vec::new(),
             });
         }
 
-        let items = Table::build(file.items);
+        let mut items = Table::build(file.items);
         let mut possible_callbacks: std::collections::HashSet<String> =
             entries.values().flat_map(|e| e.callbacks.iter().cloned()).collect();
         for item in &items.values {
@@ -705,6 +823,172 @@ impl Dex {
         possible_callbacks.insert("onLockMove".to_string());
         possible_callbacks.insert("onSemiLockMove".to_string());
 
+        // ---- callback registry: dense ids for every name any entity carries.
+        // Registration order is deterministic (BTreeMap iteration + fixed
+        // extras), so ids are stable across loads of the same data.
+        let mut cb_names: Vec<String> = Vec::new();
+        let mut cb_index: std::collections::HashMap<String, u16> = Default::default();
+        let register = |name: &str, cb_names: &mut Vec<String>, cb_index: &mut std::collections::HashMap<String, u16>| -> Cb {
+            if let Some(&i) = cb_index.get(name) {
+                return Cb(i);
+            }
+            let i = cb_names.len() as u16;
+            cb_names.push(name.to_string());
+            cb_index.insert(name.to_string(), i);
+            Cb(i)
+        };
+        // strip the Order/Priority/SubOrder suffix off a nums key
+        fn nums_base(key: &str) -> (&str, u8) {
+            if let Some(b) = key.strip_suffix("SubOrder") {
+                (b, 2)
+            } else if let Some(b) = key.strip_suffix("Priority") {
+                (b, 1)
+            } else if let Some(b) = key.strip_suffix("Order") {
+                (b, 0)
+            } else {
+                (key, 3)
+            }
+        }
+        for e in entries.values() {
+            for c in &e.callbacks {
+                register(c, &mut cb_names, &mut cb_index);
+            }
+            for k in e.nums.keys() {
+                register(nums_base(k).0, &mut cb_names, &mut cb_index);
+            }
+        }
+        for item in &items.values {
+            for c in &item.callbacks {
+                register(c, &mut cb_names, &mut cb_index);
+            }
+            for k in item.extra.keys() {
+                if k.starts_with("on")
+                    && (k.ends_with("Order") || k.ends_with("Priority") || k.ends_with("SubOrder"))
+                {
+                    register(nums_base(k).0, &mut cb_names, &mut cb_index);
+                }
+            }
+        }
+        for ms in &moves_static {
+            for c in &ms.callbacks {
+                if !c.contains('.') {
+                    register(c, &mut cb_names, &mut cb_index);
+                }
+            }
+        }
+        for builtin in [
+            "onLockMove",
+            "onSemiLockMove",
+            "onHit",
+            "onAfterHit",
+            "onStart",
+            "damageCallback",
+            "basePowerCallback",
+            "beforeMoveCallback",
+            "onHitField",
+            "onHitSide",
+        ] {
+            register(builtin, &mut cb_names, &mut cb_index);
+        }
+        assert!(cb_names.len() <= 256, "CbMask capacity exceeded: {} callbacks", cb_names.len());
+
+        let lookup = |name: &str| cb_index.get(name).map(|&i| Cb(i)).unwrap_or(Cb::NONE);
+
+        // fill per-entry masks + precomputed nums
+        let mut moves_static = moves_static;
+        for (key, e) in entries.iter_mut() {
+            for c in &e.callbacks {
+                e.mask.set(lookup(c));
+            }
+            for extra in ["onLockMove", "onSemiLockMove"] {
+                if crate::battle::conditions::has_builtin(key, extra) {
+                    e.mask.set(lookup(extra));
+                }
+            }
+            for (k, &n) in &e.nums {
+                let (base, kind) = nums_base(k);
+                let cb = lookup(base);
+                let slot = match e.cb_nums.iter_mut().find(|(c, _)| *c == cb) {
+                    Some((_, s)) => s,
+                    None => {
+                        e.cb_nums.push((cb, CbNums::default()));
+                        &mut e.cb_nums.last_mut().unwrap().1
+                    }
+                };
+                match kind {
+                    0 => slot.order = Some(n),
+                    1 => slot.priority = Some(n),
+                    _ => slot.sub_order = Some(n),
+                }
+            }
+        }
+        for item in items.values.iter_mut() {
+            for c in &item.callbacks {
+                item.mask.set(lookup(c));
+            }
+            let mut cb_nums: Vec<(Cb, CbNums)> = Vec::new();
+            for (k, v) in &item.extra {
+                if !(k.starts_with("on")
+                    && (k.ends_with("Order") || k.ends_with("Priority") || k.ends_with("SubOrder")))
+                {
+                    continue;
+                }
+                let Some(n) = v.as_i64() else { continue };
+                let (base, kind) = nums_base(k);
+                let cb = lookup(base);
+                let slot = match cb_nums.iter_mut().find(|(c, _)| *c == cb) {
+                    Some((_, s)) => s,
+                    None => {
+                        cb_nums.push((cb, CbNums::default()));
+                        &mut cb_nums.last_mut().unwrap().1
+                    }
+                };
+                match kind {
+                    0 => slot.order = Some(n as i32),
+                    1 => slot.priority = Some(n as i32),
+                    _ => slot.sub_order = Some(n as i32),
+                }
+            }
+            item.cb_nums = cb_nums;
+        }
+        for ms in moves_static.iter_mut() {
+            for c in &ms.callbacks {
+                if !c.contains('.') {
+                    ms.cb_mask.set(lookup(c));
+                }
+            }
+        }
+
+        let mut possible_mask = CbMask::EMPTY;
+        for e in entries.values() {
+            possible_mask.or_with(&e.mask);
+        }
+        for item in &items.values {
+            possible_mask.or_with(&item.mask);
+        }
+
+        let cb_flags: Vec<u8> = cb_names
+            .iter()
+            .map(|n| {
+                (n.ends_with("SwitchIn") as u8) | ((n.ends_with("RedirectTarget") as u8) << 1)
+            })
+            .collect();
+
+        let known = KnownCbs {
+            on_hit: lookup("onHit"),
+            on_after_hit: lookup("onAfterHit"),
+            on_start: lookup("onStart"),
+            damage_callback: lookup("damageCallback"),
+            base_power_callback: lookup("basePowerCallback"),
+            before_move_callback: lookup("beforeMoveCallback"),
+            on_hit_field: lookup("onHitField"),
+            on_hit_side: lookup("onHitSide"),
+        };
+
+        let conds = Table::build(entries);
+        let status_conds = ["", "brn", "par", "slp", "frz", "psn", "tox", "fnt"]
+            .map(|s| if s.is_empty() { None } else { conds.id(s) });
+
         Ok(Dex {
             species: Table::build(file.species),
             moves,
@@ -712,9 +996,38 @@ impl Dex {
             conditions: Table::build(file.conditions),
             typechart: file.typechart,
             moves_static,
-            conds: Table::build(entries),
+            conds,
             possible_callbacks,
+            cb_names,
+            cb_index,
+            possible_mask,
+            cb_flags,
+            known,
+            status_conds,
         })
+    }
+
+    /// Dense id of a callback name (`Cb::NONE` if never registered — such a
+    /// name can have no handlers in this format).
+    #[inline]
+    pub fn cb(&self, name: &str) -> Cb {
+        self.cb_index.get(name).map(|&i| Cb(i)).unwrap_or(Cb::NONE)
+    }
+
+    #[inline]
+    pub fn cb_key(&self, cb: Cb) -> &str {
+        &self.cb_names[cb.0 as usize]
+    }
+
+    /// resolvePriority's `callbackName.endsWith("SwitchIn")`.
+    #[inline]
+    pub fn cb_ends_switch_in(&self, cb: Cb) -> bool {
+        cb.exists() && self.cb_flags[cb.0 as usize] & 1 != 0
+    }
+
+    #[inline]
+    pub fn cb_ends_redirect_target(&self, cb: Cb) -> bool {
+        cb.exists() && self.cb_flags[cb.0 as usize] & 2 != 0
     }
 
     /// Can ANY condition/item in this format handle `callback_name`?

@@ -1,27 +1,27 @@
 //! The move pipeline: gen2 `runMove` → base `useMove` → gen3 `useMoveInner`
 //! → gen2stadium2 `tryMoveHit` → gen2 `moveHit` → gen2stadium2 `getDamage`.
 
-use crate::dex::{Accuracy, Category, Dex, HitEffect, Multihit, MoveId};
+use crate::dex::{Cb, Accuracy, Category, Dex, HitEffect, Multihit, MoveId};
 use crate::state::*;
 
 use super::conditions::DamageEffect;
-use super::events::EvTarget;
+use super::events::{ev, EvTarget};
 use super::{clamp_int_range, EffectHandle, RV};
 
-pub fn move_has_callback(dex: &Dex, m: MoveId, callback_name: &str) -> bool {
-    dex.move_static(m).callbacks.iter().any(|c| c == callback_name)
+pub fn move_has_callback(dex: &Dex, m: MoveId, cb: Cb) -> bool {
+    dex.move_static(m).cb_mask.has(cb)
 }
 
 /// Active-move-aware callback check: synthetic/modified ActiveMoves carry
 /// their own callback list (curse deletes onHit; bide/futuresight synthetics
 /// have none), which overrides the dex static list.
-pub fn active_move_has_callback(b: &Battle, dex: &Dex, m: MoveId, callback_name: &str) -> bool {
+pub fn active_move_has_callback(b: &Battle, dex: &Dex, m: MoveId, cb: Cb) -> bool {
     if let Some(am) = &b.active_move {
         if am.id == Some(m) {
-            return am.has_callbacks.iter().any(|c| c == callback_name);
+            return am.cb_mask.has(cb);
         }
     }
-    move_has_callback(dex, m, callback_name)
+    move_has_callback(dex, m, cb)
 }
 
 /// Build an ActiveMove from the dex (PS getActiveMove).
@@ -71,7 +71,7 @@ pub fn get_active_move(dex: &Dex, id: MoveId) -> ActiveMove {
         stalling_move: ms.stalling_move,
         non_ghost_target: ms.non_ghost_target.clone(),
         flags: ms.flags.clone(),
-        has_callbacks: ms.callbacks.clone(),
+        cb_mask: ms.cb_mask,
         hit: 0,
         last_hit: false,
         total_damage: None,
@@ -133,7 +133,7 @@ pub fn synthetic_move(base_power: i32) -> ActiveMove {
         stalling_move: false,
         non_ghost_target: None,
         flags: Vec::new(),
-        has_callbacks: Vec::new(),
+        cb_mask: crate::dex::CbMask::EMPTY,
         hit: 0,
         last_hit: false,
         total_damage: None,
@@ -362,7 +362,7 @@ pub fn dispatch_move_callback(
                     .unwrap_or_else(|| "self".to_string());
                 if let Some(am) = b.active_move.as_mut() {
                     am.volatile_status = None;
-                    am.has_callbacks.retain(|c| c != "onHit");
+                    am.cb_mask.clear(dex.known.on_hit);
                     am.self_effect = Some(HitEffect {
                         boosts: vec![(0, 1), (1, 1), (4, -1)],
                         ..Default::default()
@@ -380,7 +380,7 @@ pub fn dispatch_move_callback(
                 if sub_blocked {
                     if let Some(am) = b.active_move.as_mut() {
                         am.volatile_status = None;
-                        am.has_callbacks.retain(|c| c != "onHit");
+                        am.cb_mask.clear(dex.known.on_hit);
                     }
                 }
             }
@@ -486,7 +486,7 @@ pub fn dispatch_move_callback(
                 }
             }
             if !b
-                .run_event(dex, "ChargeMove", EvTarget::Poke(attacker), source, move_eff, None, false, false)
+                .run_event(dex, &ev::ChargeMove, EvTarget::Poke(attacker), source, move_eff, None, false, false)
                 .truthy()
             {
                 return RV::Undef;
@@ -507,7 +507,7 @@ pub fn dispatch_move_callback(
             if !b.queue_will_act() {
                 return RV::False;
             }
-            b.run_event(dex, "StallMove", EvTarget::Poke(user), None, EffectHandle::None, None, false, false)
+            b.run_event(dex, &ev::StallMove, EvTarget::Poke(user), None, EffectHandle::None, None, false, false)
         }
         ("destinybond", "onPrepareHit") | ("perishsong", "onPrepareHit") => {
             let user = tpoke.unwrap();
@@ -550,7 +550,7 @@ pub fn dispatch_move_callback(
             fake.move_type = "???".into();
             fake.will_crit = Some(false);
             fake.damage = None;
-            fake.has_callbacks = Vec::new();
+            fake.cb_mask = crate::dex::CbMask::EMPTY;
             let damage = get_damage_synthetic(b, dex, user, foe, fake);
             let fm = dex.conds_id("futuremove").unwrap();
             let loc = StateLoc::SlotCond(foe.side, 0, fm);
@@ -586,7 +586,7 @@ pub fn dispatch_move_callback(
             if !b.poke(user).has_type("Ghost") {
                 if let Some(am) = b.active_move.as_mut() {
                     am.volatile_status = None;
-                    am.has_callbacks.retain(|c| c != "onHit");
+                    am.cb_mask.clear(dex.known.on_hit);
                     am.self_effect = Some(HitEffect {
                         boosts: vec![(4, -1), (0, 1), (1, 1)],
                         ..Default::default()
@@ -725,13 +725,13 @@ pub fn dispatch_move_callback(
             let mut result = false;
             let mut message = false;
             for id in b.get_all_active(false) {
-                let invuln = b.run_event(dex, "Invulnerability", EvTarget::Poke(id), Some(user), move_eff, None, false, false);
+                let invuln = b.run_event(dex, &ev::Invulnerability, EvTarget::Poke(id), Some(user), move_eff, None, false, false);
                 if invuln == RV::False {
                     let ss = b.poke_str(user);
                     let ts = b.poke_str(id);
                     b.add(&["-miss", &ss, &ts]);
                     result = true;
-                } else if b.run_event(dex, "TryHit", EvTarget::Poke(id), Some(user), move_eff, None, false, false) == RV::Null {
+                } else if b.run_event(dex, &ev::TryHit, EvTarget::Poke(id), Some(user), move_eff, None, false, false) == RV::Null {
                     result = true;
                 } else {
                     let ps_cond = dex.conds_id("perishsong").unwrap();
@@ -1153,13 +1153,13 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
     mv.self_effect = None;
     mv.volatile_status = None;
     mv.flags = vec!["metronome".into(), "futuremove".into()];
-    mv.has_callbacks = Vec::new();
+    mv.cb_mask = crate::dex::CbMask::EMPTY;
     mv.ignore_immunity = false;
     let move_eff = EffectHandle::MoveEff(fs_id);
 
     b.set_active_move(mv, Some(source), Some(target));
     // singleEvent Try / PrepareHit: no callbacks on the hit move.
-    let prep = b.run_event(dex, "PrepareHit", EvTarget::Poke(source), Some(target), move_eff, None, false, false);
+    let prep = b.run_event(dex, &ev::PrepareHit, EvTarget::Poke(source), Some(target), move_eff, None, false, false);
     if !prep.truthy() {
         if prep == RV::False {
             let ss = b.poke_str(source);
@@ -1171,7 +1171,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
     }
     'steps: {
         // 0. Invulnerability (gen4 override)
-        let invuln = b.run_event(dex, "Invulnerability", EvTarget::Poke(target), Some(source), move_eff, None, false, false);
+        let invuln = b.run_event(dex, &ev::Invulnerability, EvTarget::Poke(target), Some(source), move_eff, None, false, false);
         if invuln == RV::False {
             b.attr_last_move(&["[miss]"]);
             let ss = b.poke_str(source);
@@ -1181,7 +1181,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
         }
         // 1. type immunity: '???' — always passes.
         // 2. TryHit event
-        let tryhit = b.run_event(dex, "TryHit", EvTarget::Poke(target), Some(source), move_eff, None, false, false);
+        let tryhit = b.run_event(dex, &ev::TryHit, EvTarget::Poke(target), Some(source), move_eff, None, false, false);
         if !tryhit.truthy() {
             if tryhit == RV::False {
                 let ss = b.poke_str(source);
@@ -1215,7 +1215,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
         }
         let rv = b.run_event(
             dex,
-            "ModifyAccuracy",
+            &ev::ModifyAccuracy,
             EvTarget::Poke(target),
             Some(source),
             move_eff,
@@ -1226,7 +1226,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
         accuracy = rv.as_num();
         let acc_rv = b.run_event(
             dex,
-            "Accuracy",
+            &ev::Accuracy,
             EvTarget::Poke(target),
             Some(source),
             move_eff,
@@ -1254,7 +1254,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
         // spreadMoveHit: TryPrimaryHit (substitute), getDamage, spreadDamage,
         // Hit event; no self/secondaries/forceSwitch.
         let mut cur_target = Some(target);
-        let rv = b.run_event(dex, "TryPrimaryHit", EvTarget::Poke(target), Some(source), move_eff, None, false, false);
+        let rv = b.run_event(dex, &ev::TryPrimaryHit, EvTarget::Poke(target), Some(source), move_eff, None, false, false);
         if rv == RV::Num(0.0) {
             cur_target = None;
         } else if !rv.truthy() {
@@ -1266,14 +1266,14 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
             if let DamageResult::Damage(d) = calc {
                 dealt = b.damage(dex, d, Some(t), Some(source), DamageEffect::Effect(move_eff), false);
             }
-            b.run_event(dex, "Hit", EvTarget::Poke(t), Some(source), move_eff, None, false, false);
+            b.run_event(dex, &ev::Hit, EvTarget::Poke(t), Some(source), move_eff, None, false, false);
             if let Some(d) = dealt {
                 let am = b.active_move.as_mut().unwrap();
                 am.total_damage = Some(am.total_damage.unwrap_or(0) + d as i64);
                 // gen < 5 DamagingHit: no handlers in this format.
             }
         }
-        b.each_event(dex, "Update", None);
+        b.each_event(dex, &ev::Update, None);
         b.faint_messages(dex, false);
         if b.ended {
             b.clear_active_move(true);
@@ -1283,9 +1283,9 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
             b.got_attacked(target, Some(fs_id), dealt, source);
         }
         if dealt.is_some() {
-            b.each_event(dex, "Update", None);
-            b.single_event(dex, "AfterMoveSecondary", move_eff, StateLoc::None, EvTarget::Poke(target), Some(source), move_eff, None);
-            b.run_event(dex, "AfterMoveSecondary", EvTarget::Poke(target), Some(source), move_eff, None, false, false);
+            b.each_event(dex, &ev::Update, None);
+            b.single_event(dex, &ev::AfterMoveSecondary, move_eff, StateLoc::None, EvTarget::Poke(target), Some(source), move_eff, None);
+            b.run_event(dex, &ev::AfterMoveSecondary, EvTarget::Poke(target), Some(source), move_eff, None, false, false);
         }
     }
     b.clear_active_move(true);
@@ -1430,7 +1430,7 @@ impl Battle {
         if source_effect.is_none() && dex.moves.key(move_id) != "struggle" {
             let changed = self.run_event(
                 dex,
-                "OverrideAction",
+                &ev::OverrideAction,
                 EvTarget::Poke(pokemon),
                 target,
                 EffectHandle::MoveEff(move_id),
@@ -1461,7 +1461,7 @@ impl Battle {
         }
         let before = self.run_event(
             dex,
-            "BeforeMove",
+            &ev::BeforeMove,
             EvTarget::Poke(pokemon),
             target,
             move_eff,
@@ -1470,14 +1470,14 @@ impl Battle {
             false,
         );
         if !before.truthy() {
-            self.run_event(dex, "MoveAborted", EvTarget::Poke(pokemon), target, move_eff, None, false, false);
+            self.run_event(dex, &ev::MoveAborted, EvTarget::Poke(pokemon), target, move_eff, None, false, false);
             self.clear_active_move(true);
             // This is only run for sleep and fully paralysed.
-            self.run_event(dex, "AfterMoveSelf", EvTarget::Poke(pokemon), target, move_eff, None, false, false);
+            self.run_event(dex, &ev::AfterMoveSelf, EvTarget::Poke(pokemon), target, move_eff, None, false, false);
             return;
         }
         // beforeMoveCallback (bide)
-        if active_move_has_callback(self, dex, move_id, "beforeMoveCallback")
+        if active_move_has_callback(self, dex, move_id, dex.known.before_move_callback)
             && before_move_callback(self, dex, move_id, pokemon, target)
         {
             self.clear_active_move(true);
@@ -1499,7 +1499,7 @@ impl Battle {
         self.use_move(dex, move_id, pokemon, target, source_effect);
         self.single_event(
             dex,
-            "AfterMove",
+            &ev::AfterMove,
             move_eff,
             StateLoc::None,
             EvTarget::Poke(pokemon),
@@ -1516,13 +1516,13 @@ impl Battle {
             .map(|f| self.poke(f).hp > 0)
             .unwrap_or(false);
         if !move_self_switch && foe_hp {
-            self.run_event(dex, "AfterMoveSelf", EvTarget::Poke(pokemon), target, move_eff, None, false, false);
+            self.run_event(dex, &ev::AfterMoveSelf, EvTarget::Poke(pokemon), target, move_eff, None, false, false);
         }
     }
 
     /// pokemon.getSemiLockedMove.
     pub fn get_semi_locked_move(&mut self, dex: &Dex, id: PokeId) -> Option<String> {
-        let rv = self.priority_event(dex, "SemiLockMove", EvTarget::Poke(id), None, EffectHandle::None, None);
+        let rv = self.priority_event(dex, &ev::SemiLockMove, EvTarget::Poke(id), None, EffectHandle::None, None);
         match rv {
             RV::Str(s) => Some(s),
             _ => None,
@@ -1591,7 +1591,7 @@ impl Battle {
         // ModifyMove single + run events
         self.single_event(
             dex,
-            "ModifyMove",
+            &ev::ModifyMove,
             move_eff,
             StateLoc::None,
             EvTarget::Poke(pokemon),
@@ -1605,7 +1605,7 @@ impl Battle {
                 pokemon,
             );
         }
-        self.run_event(dex, "ModifyMove", EvTarget::Poke(pokemon), target, move_eff, None, false, false);
+        self.run_event(dex, &ev::ModifyMove, EvTarget::Poke(pokemon), target, move_eff, None, false, false);
         if self.poke(pokemon).fainted {
             return false;
         }
@@ -1639,10 +1639,10 @@ impl Battle {
 
         // TryMove events
         if !self
-            .single_event(dex, "TryMove", move_eff, StateLoc::None, EvTarget::Poke(pokemon), target, move_eff, None)
+            .single_event(dex, &ev::TryMove, move_eff, StateLoc::None, EvTarget::Poke(pokemon), target, move_eff, None)
             .truthy()
             || !self
-                .run_event(dex, "TryMove", EvTarget::Poke(pokemon), target, move_eff, None, false, false)
+                .run_event(dex, &ev::TryMove, EvTarget::Poke(pokemon), target, move_eff, None, false, false)
                 .truthy()
         {
             return false;
@@ -1650,7 +1650,7 @@ impl Battle {
 
         self.single_event(
             dex,
-            "UseMoveMessage",
+            &ev::UseMoveMessage,
             move_eff,
             StateLoc::None,
             EvTarget::Poke(pokemon),
@@ -1721,7 +1721,7 @@ impl Battle {
         if !move_result {
             self.single_event(
                 dex,
-                "MoveFail",
+                &ev::MoveFail,
                 move_eff,
                 StateLoc::None,
                 target.map(EvTarget::Poke).unwrap_or(EvTarget::Battle),
@@ -1734,7 +1734,7 @@ impl Battle {
 
         self.single_event(
             dex,
-            "AfterMoveSecondarySelf",
+            &ev::AfterMoveSecondarySelf,
             move_eff,
             StateLoc::None,
             EvTarget::Poke(pokemon),
@@ -1744,7 +1744,7 @@ impl Battle {
         );
         self.run_event(
             dex,
-            "AfterMoveSecondarySelf",
+            &ev::AfterMoveSecondarySelf,
             EvTarget::Poke(pokemon),
             target,
             move_eff,
@@ -1775,7 +1775,7 @@ impl Battle {
 
         let hit = self.single_event(
             dex,
-            "PrepareHit",
+            &ev::PrepareHit,
             move_eff,
             StateLoc::None,
             EvTarget::Poke(target),
@@ -1790,10 +1790,10 @@ impl Battle {
             }
             return MoveOutcome::Fail;
         }
-        self.run_event(dex, "PrepareHit", EvTarget::Poke(pokemon), Some(target), move_eff, None, false, false);
+        self.run_event(dex, &ev::PrepareHit, EvTarget::Poke(pokemon), Some(target), move_eff, None, false, false);
 
         if !self
-            .single_event(dex, "Try", move_eff, StateLoc::None, EvTarget::Poke(pokemon), Some(target), move_eff, None)
+            .single_event(dex, &ev::Try, move_eff, StateLoc::None, EvTarget::Poke(pokemon), Some(target), move_eff, None)
             .truthy()
         {
             return MoveOutcome::Fail;
@@ -1802,9 +1802,9 @@ impl Battle {
         let mv_target = self.active_move.as_ref().unwrap().target.clone();
         if matches!(mv_target.as_str(), "all" | "foeSide" | "allySide" | "allyTeam") {
             let hit_result = if mv_target == "all" {
-                self.run_event(dex, "TryHitField", EvTarget::Poke(target), Some(pokemon), move_eff, None, false, false)
+                self.run_event(dex, &ev::TryHitField, EvTarget::Poke(target), Some(pokemon), move_eff, None, false, false)
             } else {
-                self.run_event(dex, "TryHitSide", EvTarget::Side(target.side), Some(pokemon), move_eff, None, false, false)
+                self.run_event(dex, &ev::TryHitSide, EvTarget::Side(target.side), Some(pokemon), move_eff, None, false, false)
             };
             if !hit_result.truthy() {
                 if hit_result == RV::False {
@@ -1817,7 +1817,7 @@ impl Battle {
             return self.move_hit(dex, Some(target), pokemon, MoveHitData::Primary, false, false);
         }
 
-        let invuln = self.run_event(dex, "Invulnerability", EvTarget::Poke(target), Some(pokemon), move_eff, None, false, false);
+        let invuln = self.run_event(dex, &ev::Invulnerability, EvTarget::Poke(target), Some(pokemon), move_eff, None, false, false);
         if invuln == RV::False {
             self.attr_last_move(&["[miss]"]);
             let ps = self.poke_str(pokemon);
@@ -1831,7 +1831,7 @@ impl Battle {
 
         let try_immunity = self.single_event(
             dex,
-            "TryImmunity",
+            &ev::TryImmunity,
             move_eff,
             StateLoc::None,
             EvTarget::Poke(target),
@@ -1845,7 +1845,7 @@ impl Battle {
             return MoveOutcome::Fail;
         }
 
-        let try_hit = self.run_event(dex, "TryHit", EvTarget::Poke(target), Some(pokemon), move_eff, None, false, false);
+        let try_hit = self.run_event(dex, &ev::TryHit, EvTarget::Poke(target), Some(pokemon), move_eff, None, false, false);
         if !try_hit.truthy() {
             if try_hit == RV::False {
                 let ts = self.poke_str(target);
@@ -1916,7 +1916,7 @@ impl Battle {
         if let Some(a) = acc_num {
             let rv = self.run_event(
                 dex,
-                "ModifyAccuracy",
+                &ev::ModifyAccuracy,
                 EvTarget::Poke(target),
                 Some(pokemon),
                 move_eff,
@@ -1988,7 +1988,7 @@ impl Battle {
                 mh_damage = MoveOutcome::Damage(dmg_num);
                 let am = self.active_move.as_mut().unwrap();
                 am.total_damage = Some(am.total_damage.unwrap_or(0) + dmg_num as i64);
-                self.each_event(dex, "Update", None);
+                self.each_event(dex, &ev::Update, None);
                 i += 1;
             }
             if i == 0 {
@@ -2015,7 +2015,7 @@ impl Battle {
 
         self.single_event(
             dex,
-            "AfterMoveSecondary",
+            &ev::AfterMoveSecondary,
             move_eff,
             StateLoc::None,
             EvTarget::Poke(target),
@@ -2023,7 +2023,7 @@ impl Battle {
             move_eff,
             None,
         );
-        self.run_event(dex, "AfterMoveSecondary", EvTarget::Poke(target), Some(pokemon), move_eff, None, false, false);
+        self.run_event(dex, &ev::AfterMoveSecondary, EvTarget::Poke(target), Some(pokemon), move_eff, None, false, false);
 
         let (recoil, total_damage) = {
             let am = self.active_move.as_ref().unwrap();
@@ -2066,7 +2066,7 @@ impl Battle {
         };
         let rv = self.run_event(
             dex,
-            "Accuracy",
+            &ev::Accuracy,
             EvTarget::Poke(target),
             Some(pokemon),
             move_eff,
@@ -2110,11 +2110,11 @@ impl Battle {
         // TryHit single events
         let mut hit_result = RV::True;
         if mv_target_kind == "all" && !is_self {
-            hit_result = self.single_event(dex, "TryHitField", move_eff, StateLoc::None, EvTarget::Battle, Some(pokemon), move_eff, None);
+            hit_result = self.single_event(dex, &ev::TryHitField, move_eff, StateLoc::None, EvTarget::Battle, Some(pokemon), move_eff, None);
         } else if (mv_target_kind == "foeSide" || mv_target_kind == "allySide") && !is_self {
             hit_result = self.single_event(
                 dex,
-                "TryHitSide",
+                &ev::TryHitSide,
                 move_eff,
                 StateLoc::None,
                 target.map(|t| EvTarget::Side(t.side)).unwrap_or(EvTarget::Battle),
@@ -2126,7 +2126,7 @@ impl Battle {
             // only the PRIMARY moveData TryHit runs as a singleEvent on the
             // move; secondary/self blocks have no onTryHit in M1.
             if matches!(hit_data, MoveHitData::Primary) {
-                hit_result = self.single_event(dex, "TryHit", move_eff, StateLoc::None, EvTarget::Poke(t), Some(pokemon), move_eff, None);
+                hit_result = self.single_event(dex, &ev::TryHit, move_eff, StateLoc::None, EvTarget::Poke(t), Some(pokemon), move_eff, None);
             }
         }
         if !hit_result.truthy() {
@@ -2138,7 +2138,7 @@ impl Battle {
         }
 
         if target.is_some() && !is_secondary && !is_self {
-            let rv = self.run_event(dex, "TryPrimaryHit", EvTarget::Poke(target.unwrap()), Some(pokemon), move_eff, None, false, false);
+            let rv = self.run_event(dex, &ev::TryPrimaryHit, EvTarget::Poke(target.unwrap()), Some(pokemon), move_eff, None, false, false);
             if rv == RV::Num(0.0) {
                 // special Substitute flag
                 target = None;
@@ -2264,23 +2264,23 @@ impl Battle {
             // Hit events (hitResult = null before them)
             let mut hit_event = Tri::Null;
             if mv_target_kind == "all" && !is_self {
-                if move_id.map(|m| move_has_callback(dex, m, "onHitField")).unwrap_or(false) {
-                    let r = self.single_event(dex, "HitField", move_eff, StateLoc::None, EvTarget::Poke(t), Some(pokemon), move_eff, None);
+                if move_id.map(|m| move_has_callback(dex, m, dex.known.on_hit_field)).unwrap_or(false) {
+                    let r = self.single_event(dex, &ev::HitField, move_eff, StateLoc::None, EvTarget::Poke(t), Some(pokemon), move_eff, None);
                     hit_event = Tri::from_rv(&r);
                 }
             } else if (mv_target_kind == "foeSide" || mv_target_kind == "allySide") && !is_self {
-                if move_id.map(|m| move_has_callback(dex, m, "onHitSide")).unwrap_or(false) {
-                    let r = self.single_event(dex, "HitSide", move_eff, StateLoc::None, EvTarget::Side(t.side), Some(pokemon), move_eff, None);
+                if move_id.map(|m| move_has_callback(dex, m, dex.known.on_hit_side)).unwrap_or(false) {
+                    let r = self.single_event(dex, &ev::HitSide, move_eff, StateLoc::None, EvTarget::Side(t.side), Some(pokemon), move_eff, None);
                     hit_event = Tri::from_rv(&r);
                 }
             } else {
                 match &hit_data {
                     MoveHitData::Primary => {
                         if move_id
-                            .map(|m| active_move_has_callback(self, dex, m, "onHit"))
+                            .map(|m| active_move_has_callback(self, dex, m, dex.known.on_hit))
                             .unwrap_or(false)
                         {
-                            let r = self.single_event(dex, "Hit", move_eff, StateLoc::None, EvTarget::Poke(t), Some(pokemon), move_eff, None);
+                            let r = self.single_event(dex, &ev::Hit, move_eff, StateLoc::None, EvTarget::Poke(t), Some(pokemon), move_eff, None);
                             hit_event = Tri::from_rv(&r);
                         }
                     }
@@ -2318,14 +2318,14 @@ impl Battle {
                     _ => {}
                 }
                 if !is_self && !is_secondary {
-                    self.run_event(dex, "Hit", EvTarget::Poke(t), Some(pokemon), move_eff, None, false, false);
+                    self.run_event(dex, &ev::Hit, EvTarget::Poke(t), Some(pokemon), move_eff, None, false, false);
                 }
                 if matches!(hit_data, MoveHitData::Primary)
                     && move_id
-                        .map(|m| active_move_has_callback(self, dex, m, "onAfterHit"))
+                        .map(|m| active_move_has_callback(self, dex, m, dex.known.on_after_hit))
                         .unwrap_or(false)
                 {
-                    let r = self.single_event(dex, "AfterHit", move_eff, StateLoc::None, EvTarget::Poke(t), Some(pokemon), move_eff, None);
+                    let r = self.single_event(dex, &ev::AfterHit, move_eff, StateLoc::None, EvTarget::Poke(t), Some(pokemon), move_eff, None);
                     hit_event = Tri::from_rv(&r);
                 }
             }
@@ -2363,7 +2363,7 @@ impl Battle {
         // secondaries
         if let Some(t) = target {
             if self.poke(t).hp > 0 && !md.secondaries.is_empty() {
-                let try_sec = self.run_event(dex, "TrySecondaryHit", EvTarget::Poke(t), Some(pokemon), move_eff, None, false, false);
+                let try_sec = self.run_event(dex, &ev::TrySecondaryHit, EvTarget::Poke(t), Some(pokemon), move_eff, None, false, false);
                 if try_sec.truthy() {
                     for secondary in md.secondaries.clone() {
                         // brn/frz immunity if target shares the move's type
@@ -2405,7 +2405,7 @@ impl Battle {
         // forceSwitch drag
         if let Some(t) = target {
             if self.poke(t).hp > 0 && self.poke(pokemon).hp > 0 && md.force_switch && self.can_switch(t.side) {
-                let rv = self.run_event(dex, "DragOut", EvTarget::Poke(t), Some(pokemon), move_eff, None, false, false);
+                let rv = self.run_event(dex, &ev::DragOut, EvTarget::Poke(t), Some(pokemon), move_eff, None, false, false);
                 if rv.truthy() {
                     let pos = self.poke(t).position;
                     self.drag_in(dex, t.side, pos);
@@ -2500,7 +2500,7 @@ impl Battle {
         }
         // damageCallback (counter/mirrorcoat/psywave/superfang)
         if let Some(m) = self.active_move.as_ref().and_then(|m| m.id) {
-            if active_move_has_callback(self, dex, m, "damageCallback") {
+            if active_move_has_callback(self, dex, m, dex.known.damage_callback) {
                 return damage_callback(self, dex, m, source, target);
             }
         }
@@ -2512,7 +2512,7 @@ impl Battle {
         }
         // basePowerCallback
         if let Some(m) = self.active_move.as_ref().and_then(|m| m.id) {
-            if active_move_has_callback(self, dex, m, "basePowerCallback") {
+            if active_move_has_callback(self, dex, m, dex.known.base_power_callback) {
                 match base_power_callback(self, dex, m, source, target, base_power) {
                     Some(bp) => base_power = bp,
                     // JS `null`/false base power propagates like 0-but-not-0
@@ -2529,7 +2529,7 @@ impl Battle {
         let crit_ratio = self
             .run_event(
                 dex,
-                "ModifyCritRatio",
+                &ev::ModifyCritRatio,
                 EvTarget::Poke(source),
                 Some(target),
                 move_eff,
@@ -2546,7 +2546,7 @@ impl Battle {
         }
         if is_crit
             && self
-                .run_event(dex, "CriticalHit", EvTarget::Poke(target), None, move_eff, None, false, false)
+                .run_event(dex, &ev::CriticalHit, EvTarget::Poke(target), None, move_eff, None, false, false)
                 .truthy()
         {
             let slot = self.slot_str(target);
@@ -2560,7 +2560,7 @@ impl Battle {
             self.active_move.as_mut().unwrap().move_type = base_type;
             let rv = self.run_event(
                 dex,
-                "BasePower",
+                &ev::BasePower,
                 EvTarget::Poke(source),
                 Some(target),
                 move_eff,
@@ -2573,7 +2573,7 @@ impl Battle {
         } else {
             self.run_event(
                 dex,
-                "BasePower",
+                &ev::BasePower,
                 EvTarget::Poke(source),
                 Some(target),
                 move_eff,
@@ -2667,7 +2667,7 @@ impl Battle {
         }
         let rv = self.run_event(
             dex,
-            "ModifyDamage",
+            &ev::ModifyDamage,
             EvTarget::Poke(source),
             Some(target),
             move_eff,

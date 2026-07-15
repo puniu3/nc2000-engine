@@ -3,7 +3,7 @@
 use crate::dex::{CondId, Dex};
 use crate::state::*;
 
-use super::events::EvTarget;
+use super::events::{ev, EvTarget};
 use super::{EffectHandle, RV};
 
 impl Battle {
@@ -34,7 +34,7 @@ impl Battle {
         if let Some(src) = source {
             let result = self.run_event(
                 dex,
-                "SetWeather",
+                &ev::SetWeather,
                 EvTarget::Poke(src),
                 Some(src),
                 EffectHandle::Cond(cond),
@@ -83,7 +83,7 @@ impl Battle {
         }
         let started = self.single_event(
             dex,
-            "FieldStart",
+            &ev::FieldStart,
             EffectHandle::Cond(cond),
             StateLoc::Weather,
             EvTarget::Battle,
@@ -97,7 +97,7 @@ impl Battle {
             self.field_weather_key = prev_key;
             return RV::False;
         }
-        self.each_event(dex, "WeatherChange", Some(source_effect));
+        self.each_event(dex, &ev::WeatherChange, Some(source_effect));
         RV::True
     }
 
@@ -106,7 +106,7 @@ impl Battle {
         let Some(cond) = self.field.weather else { return false };
         self.single_event(
             dex,
-            "FieldEnd",
+            &ev::FieldEnd,
             EffectHandle::Cond(cond),
             StateLoc::Weather,
             EvTarget::Battle,
@@ -118,7 +118,7 @@ impl Battle {
         self.field_weather_key.clear();
         // clearEffectState: keep effectOrder 0, drop the rest
         self.field.weather_state = EffectState::default();
-        self.each_event(dex, "WeatherChange", None);
+        self.each_event(dex, &ev::WeatherChange, None);
         true
     }
 
@@ -137,7 +137,7 @@ impl Battle {
             }
             return self.single_event(
                 dex,
-                "FieldRestart",
+                &ev::FieldRestart,
                 EffectHandle::Cond(cond),
                 StateLoc::PseudoWeather(cond),
                 EvTarget::Battle,
@@ -167,7 +167,7 @@ impl Battle {
         }
         let started = self.single_event(
             dex,
-            "FieldStart",
+            &ev::FieldStart,
             EffectHandle::Cond(cond),
             StateLoc::PseudoWeather(cond),
             EvTarget::Battle,
@@ -188,7 +188,7 @@ impl Battle {
         }
         self.single_event(
             dex,
-            "FieldEnd",
+            &ev::FieldEnd,
             EffectHandle::Cond(cond),
             StateLoc::PseudoWeather(cond),
             EvTarget::Battle,
@@ -222,7 +222,7 @@ impl Battle {
             }
             return self.single_event(
                 dex,
-                "SideRestart",
+                &ev::SideRestart,
                 EffectHandle::Cond(cond),
                 StateLoc::SideCond(side_n, cond),
                 EvTarget::Side(side_n),
@@ -256,7 +256,7 @@ impl Battle {
         }
         let started = self.single_event(
             dex,
-            "SideStart",
+            &ev::SideStart,
             EffectHandle::Cond(cond),
             StateLoc::SideCond(side_n, cond),
             EvTarget::Side(side_n),
@@ -270,7 +270,7 @@ impl Battle {
         }
         self.run_event(
             dex,
-            "SideConditionStart",
+            &ev::SideConditionStart,
             EvTarget::Side(side_n),
             Some(source),
             EffectHandle::Cond(cond),
@@ -298,7 +298,7 @@ impl Battle {
             }
             return self.single_event(
                 dex,
-                "Restart",
+                &ev::Restart,
                 EffectHandle::Cond(cond),
                 StateLoc::SlotCond(side_n, 0, cond),
                 EvTarget::Poke(target),
@@ -319,7 +319,7 @@ impl Battle {
         self.sides[side_n as usize].slot_conditions.push((cond, state));
         let started = self.single_event(
             dex,
-            "Start",
+            &ev::Start,
             EffectHandle::Cond(cond),
             StateLoc::SlotCond(side_n, 0, cond),
             EvTarget::Poke(target),
@@ -342,7 +342,7 @@ impl Battle {
         }
         self.single_event(
             dex,
-            "End",
+            &ev::End,
             EffectHandle::Cond(cond),
             StateLoc::SlotCond(side_n, 0, cond),
             EvTarget::Poke(target),
@@ -360,7 +360,7 @@ impl Battle {
         }
         self.single_event(
             dex,
-            "SideEnd",
+            &ev::SideEnd,
             EffectHandle::Cond(cond),
             StateLoc::SideCond(side_n, cond),
             EvTarget::Side(side_n),

@@ -559,7 +559,7 @@ pub struct ActiveMove {
     pub stalling_move: bool,
     pub non_ghost_target: Option<String>,
     pub flags: Vec<String>,
-    pub has_callbacks: Vec<String>,
+    pub cb_mask: crate::dex::CbMask,
     // ---- per-use mutable
     pub hit: i32,
     pub last_hit: bool,
@@ -647,6 +647,8 @@ pub struct Battle {
     /// Cached dex key of `field.weather` ('' if none) — lets weather checks
     /// avoid threading `dex` everywhere.
     pub field_weather_key: String,
+    /// Reusable listener buffers (never state; clones start empty).
+    pub listener_pool: crate::battle::events::ScratchPool,
 }
 
 /// Sparse boosts as an ordered list (PS object iteration order).

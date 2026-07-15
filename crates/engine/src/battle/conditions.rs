@@ -4,10 +4,10 @@
 //! Dispatch is by (condition id, callback name). Anything not ported panics
 //! loudly so the conformance harness reports exactly what is missing.
 
-use crate::dex::{Dex, MoveId};
+use crate::dex::{Cb, Dex, MoveId};
 use crate::state::*;
 
-use super::events::EvTarget;
+use super::events::{ev, EvTarget};
 use super::{EffectHandle, RV};
 
 /// Markers for callbacks implemented in code but absent from the data's
@@ -51,7 +51,7 @@ pub fn dispatch(
     b: &mut Battle,
     dex: &Dex,
     effect: EffectHandle,
-    callback_name: &str,
+    cb: Cb,
     state: StateLoc,
     target: EvTarget,
     source: Option<PokeId>,
@@ -59,10 +59,11 @@ pub fn dispatch(
     relay: RV,
     _has_relay: bool,
 ) -> RV {
+    let callback_name = dex.cb_key(cb);
     match effect {
         EffectHandle::Cond(c) => {
-            let key = dex.conds_key(c).to_string();
-            dispatch_cond(b, dex, &key, callback_name, state, target, source, source_effect, relay)
+            let key = dex.conds_key(c);
+            dispatch_cond(b, dex, key, callback_name, state, target, source, source_effect, relay)
         }
         EffectHandle::MoveEff(m) => {
             super::moveexec::dispatch_move_callback(b, dex, m, callback_name, target, source, relay)
@@ -346,7 +347,7 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["cant", &ts, "flinch"]);
-            b.run_event(dex, "Flinch", EvTarget::Poke(t), None, EffectHandle::None, None, false, false);
+            b.run_event(dex, &ev::Flinch, EvTarget::Poke(t), None, EffectHandle::None, None, false, false);
             RV::False
         }
         // ------------------------------------------------ partiallytrapped
@@ -473,7 +474,7 @@ fn dispatch_cond(
         }
         ("raindance", "onFieldResidual") => {
             b.add(&["-weather", "RainDance", "[upkeep]"]);
-            b.each_event(dex, "Weather", None);
+            b.each_event(dex, &ev::Weather, None);
             RV::Undef
         }
         ("raindance", "onFieldEnd") => {
@@ -486,7 +487,7 @@ fn dispatch_cond(
         }
         ("sunnyday", "onFieldResidual") => {
             b.add(&["-weather", "SunnyDay", "[upkeep]"]);
-            b.each_event(dex, "Weather", None);
+            b.each_event(dex, &ev::Weather, None);
             RV::Undef
         }
         ("sunnyday", "onFieldEnd") => {
@@ -511,7 +512,7 @@ fn dispatch_cond(
         ("sandstorm", "onFieldResidual") => {
             b.add(&["-weather", "Sandstorm", "[upkeep]"]);
             if b.field_is_weather("sandstorm") {
-                b.each_event(dex, "Weather", None);
+                b.each_event(dex, &ev::Weather, None);
             }
             RV::Undef
         }
@@ -1109,7 +1110,7 @@ fn dispatch_cond(
                 .unwrap_or(EffectHandle::None);
             b.run_event(
                 dex,
-                "AfterSubDamage",
+                &ev::AfterSubDamage,
                 EvTarget::Poke(t),
                 Some(src),
                 move_eff,
@@ -1189,7 +1190,7 @@ fn dispatch_cond(
                 fake.secondaries = Vec::new();
                 fake.self_effect = None;
                 fake.flags = vec!["contact".into(), "protect".into()];
-                fake.has_callbacks = Vec::new();
+                fake.cb_mask = crate::dex::CbMask::EMPTY;
                 // the synthetic moveData has no ignoreImmunity: Physical → false
                 fake.ignore_immunity = false;
                 let saved_move = b.active_move.take();
@@ -1302,7 +1303,7 @@ fn dispatch_cond(
                 return RV::False;
             }
             if !b
-                .run_event(dex, "Attract", EvTarget::Poke(t), Some(src), EffectHandle::None, None, false, false)
+                .run_event(dex, &ev::Attract, EvTarget::Poke(t), Some(src), EffectHandle::None, None, false, false)
                 .truthy()
             {
                 return RV::False;
@@ -1375,7 +1376,7 @@ fn dispatch_cond(
             }
             let src = source.unwrap();
             if !b
-                .run_event(dex, "HitProtect", EvTarget::Poke(src), tpoke, EffectHandle::None, None, false, false)
+                .run_event(dex, &ev::HitProtect, EvTarget::Poke(src), tpoke, EffectHandle::None, None, false, false)
                 .truthy()
             {
                 return RV::Undef;
@@ -1474,7 +1475,7 @@ fn dispatch_cond(
                 }
             }
             b.attr_last_move(&["[still]"]);
-            b.run_event(dex, "PrepareHit", EvTarget::Poke(t), source, source_effect, None, false, false);
+            b.run_event(dex, &ev::PrepareHit, EvTarget::Poke(t), source, source_effect, None, false, false);
             RV::Undef
         }
         ("twoturnmove", "onEnd") => {

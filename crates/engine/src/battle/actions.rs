@@ -3,7 +3,7 @@
 use crate::dex::Dex;
 use crate::state::*;
 
-use super::events::EvTarget;
+use super::events::{ev, EvTarget};
 use super::EffectHandle;
 
 impl Battle {
@@ -58,11 +58,11 @@ impl Battle {
                     if dex.move_static(m).self_switch.as_deref() == Some("copyvolatile")
             );
             if !self.poke(old).skip_before_switch_out && !is_drag {
-                self.run_event(dex, "BeforeSwitchOut", EvTarget::Poke(old), None, EffectHandle::None, None, false, false);
+                self.run_event(dex, &ev::BeforeSwitchOut, EvTarget::Poke(old), None, EffectHandle::None, None, false, false);
             }
             self.poke_mut(old).skip_before_switch_out = false;
             if !self
-                .run_event(dex, "SwitchOut", EvTarget::Poke(old), None, EffectHandle::None, None, false, false)
+                .run_event(dex, &ev::SwitchOut, EvTarget::Poke(old), None, EffectHandle::None, None, false, false)
                 .truthy()
             {
                 return Ok(false);
@@ -130,7 +130,7 @@ impl Battle {
         let state = self.init_effect_state(state, has_item);
         self.poke_mut(pokemon).item_state = state;
 
-        self.run_event(dex, "BeforeSwitchIn", EvTarget::Poke(pokemon), None, EffectHandle::None, None, false, false);
+        self.run_event(dex, &ev::BeforeSwitchIn, EvTarget::Poke(pokemon), None, EffectHandle::None, None, false, false);
         // |switch| / |drag|
         let ps = self.poke_str(pokemon);
         let details = self.details(dex, pokemon);
@@ -238,8 +238,8 @@ impl Battle {
     /// **gen4** actions.runSwitch (the override that applies to gen2) — NOT
     /// the modern base version: no allActive speedSort, no fieldEvent.
     pub fn run_switch(&mut self, dex: &Dex, pokemon: PokeId) -> bool {
-        self.run_event(dex, "EntryHazard", EvTarget::Poke(pokemon), None, EffectHandle::None, None, false, false);
-        self.run_event(dex, "SwitchIn", EvTarget::Poke(pokemon), None, EffectHandle::None, None, false, false);
+        self.run_event(dex, &ev::EntryHazard, EvTarget::Poke(pokemon), None, EffectHandle::None, None, false, false);
+        self.run_event(dex, &ev::SwitchIn, EvTarget::Poke(pokemon), None, EffectHandle::None, None, false, false);
         // gen <= 2: pokemon.lastMove is reset for ALL actives (Mirror Move)
         for active in self.get_all_active(false) {
             self.poke_mut(active).last_move = None;
@@ -247,7 +247,7 @@ impl Battle {
         let side_fainted = self.sides[pokemon.side as usize].fainted_this_turn.is_some();
         let dragged_this_turn = self.poke(pokemon).dragged_in == Some(self.turn);
         if !side_fainted && !dragged_this_turn {
-            self.run_event(dex, "AfterSwitchInSelf", EvTarget::Poke(pokemon), None, EffectHandle::None, None, false, false);
+            self.run_event(dex, &ev::AfterSwitchInSelf, EvTarget::Poke(pokemon), None, EffectHandle::None, None, false, false);
         }
         if self.poke(pokemon).hp <= 0 {
             return false;
@@ -256,10 +256,10 @@ impl Battle {
         if !self.poke(pokemon).fainted {
             // singleEvent Start for ability (none) and item (M2: berserkgene…)
             if let Some(item) = self.poke(pokemon).item {
-                if dex.items.get(item).callbacks.iter().any(|c| c == "onStart") {
+                if dex.items.get(item).mask.has(dex.known.on_start) {
                     self.single_event(
                         dex,
-                        "Start",
+                        &ev::Start,
                         EffectHandle::Item(item),
                         StateLoc::None,
                         EvTarget::Poke(pokemon),
@@ -285,7 +285,7 @@ impl Battle {
             return false;
         }
         if !self
-            .run_event(dex, "DragOut", EvTarget::Poke(old_active), None, EffectHandle::None, None, false, false)
+            .run_event(dex, &ev::DragOut, EvTarget::Poke(old_active), None, EffectHandle::None, None, false, false)
             .truthy()
         {
             return false;

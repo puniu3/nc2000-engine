@@ -4,7 +4,7 @@
 use crate::dex::{Dex, MoveId};
 use crate::state::*;
 
-use super::events::EvTarget;
+use super::events::{ev, EvTarget};
 use super::{clamp_int_range, EffectHandle, RV};
 
 pub const STAT_KEYS: [&str; 5] = ["atk", "def", "spa", "spd", "spe"];
@@ -199,7 +199,7 @@ impl Battle {
         if !status.is_empty() {
             let result = self.run_event(
                 dex,
-                "SetStatus",
+                &ev::SetStatus,
                 EvTarget::Poke(id),
                 source,
                 source_effect,
@@ -230,7 +230,7 @@ impl Battle {
             let c = cond.expect("status condition must exist");
             let started = self.single_event(
                 dex,
-                "Start",
+                &ev::Start,
                 EffectHandle::Cond(c),
                 StateLoc::Status(id),
                 EvTarget::Poke(id),
@@ -245,7 +245,7 @@ impl Battle {
             }
             let after = self.run_event(
                 dex,
-                "AfterSetStatus",
+                &ev::AfterSetStatus,
                 EvTarget::Poke(id),
                 source,
                 source_effect,
@@ -328,7 +328,7 @@ impl Battle {
             }
             return self.single_event(
                 dex,
-                "Restart",
+                &ev::Restart,
                 EffectHandle::Cond(cond),
                 StateLoc::Volatile(id, cond),
                 EvTarget::Poke(id),
@@ -350,7 +350,7 @@ impl Battle {
         }
         let result = self.run_event(
             dex,
-            "TryAddVolatile",
+            &ev::TryAddVolatile,
             EvTarget::Poke(id),
             source,
             source_effect,
@@ -390,7 +390,7 @@ impl Battle {
         }
         let started = self.single_event(
             dex,
-            "Start",
+            &ev::Start,
             EffectHandle::Cond(cond),
             StateLoc::Volatile(id, cond),
             EvTarget::Poke(id),
@@ -468,7 +468,7 @@ impl Battle {
         };
         self.single_event(
             dex,
-            "End",
+            &ev::End,
             EffectHandle::Cond(cond),
             StateLoc::Volatile(id, cond),
             EvTarget::Poke(id),
@@ -647,7 +647,7 @@ impl Battle {
 
     /// pokemon.getLockedMove: priorityEvent('LockMove').
     pub fn get_locked_move(&mut self, dex: &Dex, id: PokeId) -> Option<String> {
-        let rv = self.priority_event(dex, "LockMove", EvTarget::Poke(id), None, EffectHandle::None, None);
+        let rv = self.priority_event(dex, &ev::LockMove, EvTarget::Poke(id), None, EffectHandle::None, None);
         match rv {
             RV::Str(s) => Some(s),
             _ => None,
@@ -777,7 +777,7 @@ impl Battle {
         }
         let immunity = self.run_event(
             dex,
-            "Immunity",
+            &ev::Immunity,
             EvTarget::Poke(id),
             None,
             EffectHandle::None,
@@ -810,7 +810,7 @@ impl Battle {
         let negate = !self
             .run_event(
                 dex,
-                "NegateImmunity",
+                &ev::NegateImmunity,
                 EvTarget::Poke(id),
                 None,
                 EffectHandle::None,
@@ -846,7 +846,7 @@ impl Battle {
         let negate = !self
             .run_event(
                 dex,
-                "NegateImmunity",
+                &ev::NegateImmunity,
                 EvTarget::Poke(id),
                 None,
                 EffectHandle::None,
@@ -879,7 +879,7 @@ impl Battle {
             // singleEvent('Effectiveness', move, ...) — only M2 moves have it.
             let rv = self.run_event(
                 dex,
-                "Effectiveness",
+                &ev::Effectiveness,
                 EvTarget::Poke(id),
                 None,
                 move_eff,
@@ -931,7 +931,7 @@ impl Battle {
         }
         let rv = self.run_event(
             dex,
-            "UseItem",
+            &ev::UseItem,
             EvTarget::Poke(id),
             None,
             EffectHandle::None,
@@ -951,7 +951,7 @@ impl Battle {
         }
         self.single_event(
             dex,
-            "Use",
+            &ev::Use,
             EffectHandle::Item(item),
             StateLoc::None,
             EvTarget::Poke(id),
@@ -966,7 +966,7 @@ impl Battle {
         p.used_item_this_turn = true;
         self.run_event(
             dex,
-            "AfterUseItem",
+            &ev::AfterUseItem,
             EvTarget::Poke(id),
             None,
             EffectHandle::None,
@@ -1004,14 +1004,14 @@ impl Battle {
             }
         }
         let use_ok = self
-            .run_event(dex, "UseItem", EvTarget::Poke(id), None, EffectHandle::None, Some(RV::True), false, false)
+            .run_event(dex, &ev::UseItem, EvTarget::Poke(id), None, EffectHandle::None, Some(RV::True), false, false)
             .truthy();
         let eat_ok = use_ok
             && (force
                 || self
                     .run_event(
                         dex,
-                        "TryEatItem",
+                        &ev::TryEatItem,
                         EvTarget::Poke(id),
                         None,
                         EffectHandle::None,
@@ -1028,7 +1028,7 @@ impl Battle {
         self.add(&["-enditem", &ps, &item_name, "[eat]"]);
         self.single_event(
             dex,
-            "Eat",
+            &ev::Eat,
             EffectHandle::Item(item),
             StateLoc::None,
             EvTarget::Poke(id),
@@ -1038,7 +1038,7 @@ impl Battle {
         );
         self.run_event(
             dex,
-            "EatItem",
+            &ev::EatItem,
             EvTarget::Poke(id),
             source,
             source_effect,
@@ -1053,7 +1053,7 @@ impl Battle {
         p.used_item_this_turn = true;
         self.run_event(
             dex,
-            "AfterUseItem",
+            &ev::AfterUseItem,
             EvTarget::Poke(id),
             None,
             EffectHandle::None,
@@ -1070,7 +1070,7 @@ impl Battle {
         let item = self.poke(id).item?;
         let rv = self.run_event(
             dex,
-            "TakeItem",
+            &ev::TakeItem,
             EvTarget::Poke(id),
             Some(source),
             EffectHandle::None,
@@ -1087,7 +1087,7 @@ impl Battle {
         // singleEvent('End', item): no gen2 item has onEnd.
         self.run_event(
             dex,
-            "AfterTakeItem",
+            &ev::AfterTakeItem,
             EvTarget::Poke(id),
             None,
             EffectHandle::None,
