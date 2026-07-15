@@ -62,13 +62,17 @@ impl Status {
 }
 
 /// Scalar value inside an effect-state bag (PS `EffectState` holds arbitrary
-/// scalars; these are exactly what the fixture essence serializes).
-#[derive(Clone, Debug, PartialEq)]
+/// scalars; these are exactly what the fixture essence serializes). String
+/// values are stored as interned ids and rendered back at essence time
+/// (`MoveK` → move key, `CondK` → condition key, `Slot` → "p1a").
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Scalar {
     Int(i64),
     Float(f64),
     Bool(bool),
-    Str(String),
+    MoveK(MoveId),
+    CondK(CondId),
+    Slot(u8, u8),
 }
 
 impl Scalar {
@@ -77,7 +81,7 @@ impl Scalar {
             Scalar::Int(v) => *v,
             Scalar::Float(v) => *v as i64,
             Scalar::Bool(b) => *b as i64,
-            Scalar::Str(_) => 0,
+            _ => 0,
         }
     }
 
@@ -86,7 +90,81 @@ impl Scalar {
             Scalar::Int(v) => *v as f64,
             Scalar::Float(v) => *v,
             Scalar::Bool(b) => *b as i64 as f64,
-            Scalar::Str(_) => 0.0,
+            _ => 0.0,
+        }
+    }
+
+    pub fn as_move(&self) -> Option<MoveId> {
+        match self {
+            Scalar::MoveK(m) => Some(*m),
+            _ => None,
+        }
+    }
+}
+
+/// The identity an `EffectState` belongs to (PS stores the effect's string
+/// id; we store the interned handle and render the string at essence time).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EffId {
+    #[default]
+    None,
+    Cond(CondId),
+    Item(ItemId),
+    Format,
+}
+
+impl EffId {
+    pub fn is_empty(self) -> bool {
+        self == EffId::None
+    }
+
+    pub fn cond(self) -> Option<CondId> {
+        match self {
+            EffId::Cond(c) => Some(c),
+            _ => None,
+        }
+    }
+}
+
+/// Keys of scalar data PS effects store on their state (fixed universe for
+/// this format; `as_str` must render the exact PS key for the essence).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DK {
+    BoundDivisor,
+    ContactHitCount,
+    Counter,
+    EndingTurn,
+    HitCount,
+    Hp,
+    Layers,
+    LinkedStatus,
+    Move,
+    Multiplier,
+    StartTime,
+    TargetLoc,
+    TargetSlot,
+    Time,
+    TotalDamage,
+}
+
+impl DK {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DK::BoundDivisor => "boundDivisor",
+            DK::ContactHitCount => "contactHitCount",
+            DK::Counter => "counter",
+            DK::EndingTurn => "endingTurn",
+            DK::HitCount => "hitCount",
+            DK::Hp => "hp",
+            DK::Layers => "layers",
+            DK::LinkedStatus => "linkedStatus",
+            DK::Move => "move",
+            DK::Multiplier => "multiplier",
+            DK::StartTime => "startTime",
+            DK::TargetLoc => "targetLoc",
+            DK::TargetSlot => "targetSlot",
+            DK::Time => "time",
+            DK::TotalDamage => "totalDamage",
         }
     }
 }
@@ -96,23 +174,23 @@ impl Scalar {
 /// at runtime: source Pokemon, sourceEffect).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EffectState {
-    pub id: String,
-    /// Volatiles carry `name` (addVolatile sets it) — a scalar, in essence.
-    pub name: Option<String>,
+    pub id: EffId,
+    /// Volatiles carry `name` (addVolatile sets the condition's display name)
+    /// — rendered from `id` at essence time when set.
+    pub has_name: bool,
     pub duration: Option<i32>,
-    /// `sourceSlot` — a scalar string ("p1a"), in essence.
-    pub source_slot: Option<String>,
+    /// `sourceSlot` — (side, position), rendered "p1a" in essence.
+    pub source_slot: Option<(u8, u8)>,
     /// `source` — a Pokemon reference, not in essence.
     pub source: Option<PokeId>,
-    /// `sourceEffect` — an Effect reference, not in essence. Holds the
-    /// effect's id (move id for partiallytrapped, etc.).
-    pub source_effect: Option<String>,
+    /// `sourceEffect` — an Effect reference, not in essence.
+    pub source_effect: Option<crate::battle::EffectHandle>,
     /// `linkedPokemon` — Pokemon references, not in essence (trapped/trapper).
-    pub linked_pokemon: Vec<PokeId>,
+    pub linked_pokemon: smallvec::SmallVec<[PokeId; 2]>,
     /// The paired condition id for linked volatiles. On the *target* side PS
     /// stores the string form (also mirrored into `data` for essence); on the
     /// *source* side it stores the Condition object (essence-invisible).
-    pub linked_status: Option<String>,
+    pub linked_status: Option<CondId>,
     /// bide `lastDamageSource` (object in PS — essence-invisible).
     pub last_damage_source: Option<PokeId>,
     /// leppaberry `moveSlot` (object reference in PS): move slot index.
@@ -121,35 +199,40 @@ pub struct EffectState {
     pub future_damage: Option<f64>,
     /// Everything else scalar: time, startTime, counter, boundDivisor, move...
     /// Insertion-ordered like a JS object (affects nothing in essence compare,
-    /// which is key-based, but keep Vec for faithful iteration anyway).
-    pub data: Vec<(String, Scalar)>,
+    /// which is key-based, but keep order for faithful iteration anyway).
+    pub data: smallvec::SmallVec<[(DK, Scalar); 3]>,
     /// PS initEffectState effectOrder (handler ordering for SwitchIn events).
     pub effect_order: u32,
 }
 
 impl EffectState {
-    pub fn get(&self, key: &str) -> Option<&Scalar> {
-        self.data.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+    pub fn get(&self, key: DK) -> Option<&Scalar> {
+        self.data.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
     }
 
-    pub fn get_int(&self, key: &str) -> i64 {
+    pub fn get_int(&self, key: DK) -> i64 {
         self.get(key).map(|v| v.as_int()).unwrap_or(0)
     }
 
-    pub fn set(&mut self, key: &str, value: Scalar) {
-        if let Some(entry) = self.data.iter_mut().find(|(k, _)| k == key) {
+    pub fn set(&mut self, key: DK, value: Scalar) {
+        if let Some(entry) = self.data.iter_mut().find(|(k, _)| *k == key) {
             entry.1 = value;
         } else {
-            self.data.push((key.to_string(), value));
+            self.data.push((key, value));
         }
     }
 
-    pub fn set_int(&mut self, key: &str, value: i64) {
+    pub fn set_int(&mut self, key: DK, value: i64) {
         self.set(key, Scalar::Int(value));
     }
 
-    pub fn remove(&mut self, key: &str) {
-        self.data.retain(|(k, _)| k != key);
+    /// The stored move id under `DK::Move` (lockedmove/encore/futuremove).
+    pub fn get_move(&self) -> Option<MoveId> {
+        self.get(DK::Move).and_then(|v| v.as_move())
+    }
+
+    pub fn remove(&mut self, key: DK) {
+        self.data.retain(|(k, _)| *k != key);
     }
 }
 

@@ -285,6 +285,22 @@ impl Battle {
         format!("p{}{}", id.side + 1, letter)
     }
 
+    /// `pokemon.getSlot()` as (side, position) — the compact form stored in
+    /// effect states (rendered "p1a" at essence time).
+    pub fn slot_of(&self, id: PokeId) -> (u8, u8) {
+        (id.side, self.poke(id).position)
+    }
+
+    /// getAtSlot on the compact (side, position) form.
+    pub fn poke_at_slot_pos(&self, slot: (u8, u8)) -> Option<PokeId> {
+        let id = self.active_id(slot.0 as usize)?;
+        if self.poke(id).position == slot.1 {
+            Some(id)
+        } else {
+            None
+        }
+    }
+
     /// PS `battle.getAtSlot("p2a")` — the active pokemon at that slot.
     pub fn poke_at_slot(&self, slot: &str) -> Option<PokeId> {
         let bytes = slot.as_bytes();
@@ -433,7 +449,7 @@ impl Battle {
             last_damage: 0,
             quick_claw_roll: false,
             speed_order: [0, 1],
-            format_data: EffectState { id: "gen2nc2000".into(), ..Default::default() },
+            format_data: EffectState { id: EffId::Format, ..Default::default() },
             sent_log_pos: 0,
             event_stack: Vec::new(),
             effect_stack: Vec::new(),
@@ -455,7 +471,7 @@ impl Battle {
         // Rules with runtime handlers become pseudo-weathers at construction.
         for rule in ["maxtotallevel", "stadiumsleepclause", "freezeclausemod"] {
             let cid = dex.conds_id(rule).expect("rule condition interned");
-            let state = EffectState { id: rule.to_string(), ..Default::default() };
+            let state = EffectState { id: EffId::Cond(cid), ..Default::default() };
             let state = battle.init_effect_state(state, true);
             battle.field.pseudo_weather.push((cid, state));
         }
@@ -622,7 +638,7 @@ impl Battle {
             item,
             last_item: None,
             item_state: EffectState {
-                id: item.map(|i| dex.items.key(i).to_string()).unwrap_or_default(),
+                id: item.map(EffId::Item).unwrap_or_default(),
                 ..Default::default()
             },
             types: dex.species_types(species_id),

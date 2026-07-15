@@ -122,12 +122,10 @@ impl Battle {
         // abilityState/itemState re-init: itemState gets a fresh effectOrder
         // when the holder is now active and has an item.
         let has_item = self.poke(pokemon).item.is_some();
-        let item_id = self
-            .poke(pokemon)
-            .item
-            .map(|i| dex.items.key(i).to_string())
-            .unwrap_or_default();
-        let state = EffectState { id: item_id, ..Default::default() };
+        let state = EffectState {
+            id: self.poke(pokemon).item.map(crate::state::EffId::Item).unwrap_or_default(),
+            ..Default::default()
+        };
         let state = self.init_effect_state(state, has_item);
         self.poke_mut(pokemon).item_state = state;
 

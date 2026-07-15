@@ -6,28 +6,50 @@ use crate::dex::Dex;
 use crate::state::*;
 use serde_json::{json, Map, Value};
 
-fn scal(state: &EffectState) -> Value {
+fn eff_id_str<'d>(dex: &'d Dex, id: EffId) -> &'d str {
+    match id {
+        EffId::None => "",
+        EffId::Cond(c) => dex.conds_key(c),
+        EffId::Item(i) => dex.items.key(i),
+        EffId::Format => "gen2nc2000",
+    }
+}
+
+fn scalar_json(dex: &Dex, v: &Scalar) -> Value {
+    match v {
+        Scalar::Int(i) => json!(i),
+        Scalar::Float(f) => json!(f),
+        Scalar::Bool(b) => json!(b),
+        Scalar::MoveK(m) => json!(dex.moves.key(*m)),
+        Scalar::CondK(c) => json!(dex.conds_key(*c)),
+        Scalar::Slot(side, pos) => json!(format!("p{}{}", side + 1, (b'a' + pos) as char)),
+    }
+}
+
+fn scal(dex: &Dex, state: &EffectState) -> Value {
     let mut out = Map::new();
-    out.insert("id".into(), Value::String(state.id.clone()));
-    if let Some(name) = &state.name {
-        out.insert("name".into(), Value::String(name.clone()));
+    out.insert("id".into(), Value::String(eff_id_str(dex, state.id).to_string()));
+    if state.has_name {
+        // addVolatile stores the condition's display name.
+        let name = match state.id {
+            EffId::Cond(c) => dex.cond_display_name(c).to_string(),
+            other => eff_id_str(dex, other).to_string(),
+        };
+        out.insert("name".into(), Value::String(name));
     }
     // PS key order: id, name (addVolatile), source*, duration, then data.
     // Key order doesn't matter for comparison (structural), but keep sane.
-    if let Some(slot) = &state.source_slot {
-        out.insert("sourceSlot".into(), Value::String(slot.clone()));
+    if let Some((side, pos)) = state.source_slot {
+        out.insert(
+            "sourceSlot".into(),
+            Value::String(format!("p{}{}", side + 1, (b'a' + pos) as char)),
+        );
     }
     if let Some(d) = state.duration {
         out.insert("duration".into(), json!(d));
     }
     for (k, v) in &state.data {
-        let val = match v {
-            Scalar::Int(i) => json!(i),
-            Scalar::Float(f) => json!(f),
-            Scalar::Bool(b) => json!(b),
-            Scalar::Str(s) => json!(s),
-        };
-        out.insert(k.clone(), val);
+        out.insert(k.as_str().to_string(), scalar_json(dex, v));
     }
     Value::Object(out)
 }
@@ -38,7 +60,7 @@ fn map_scal<'a>(
 ) -> Value {
     let mut out = Map::new();
     for (cond, state) in entries {
-        out.insert(dex.conds_key(*cond).to_string(), scal(state));
+        out.insert(dex.conds_key(*cond).to_string(), scal(dex, state));
     }
     Value::Object(out)
 }
@@ -75,7 +97,7 @@ impl Battle {
             "requestState": self.request_state.as_str(),
             "field": {
                 "weather": self.field_weather_key,
-                "weatherState": scal(&self.field.weather_state),
+                "weatherState": scal(dex, &self.field.weather_state),
                 "pseudoWeather": map_scal(dex, self.field.pseudo_weather.iter().map(|(c, s)| (c, s))),
             },
             "sides": sides,
@@ -102,7 +124,7 @@ impl Battle {
             "maxhp": p.maxhp,
             "fainted": p.fainted,
             "status": p.status.as_str(),
-            "statusState": scal(&p.status_state),
+            "statusState": scal(dex, &p.status_state),
             "boosts": {
                 "atk": p.boosts[0],
                 "def": p.boosts[1],
@@ -114,7 +136,7 @@ impl Battle {
             },
             "item": p.item.map(|i| dex.items.key(i).to_string()).unwrap_or_default(),
             "lastItem": p.last_item.map(|i| dex.items.key(i).to_string()).unwrap_or_default(),
-            "itemState": scal(&p.item_state),
+            "itemState": scal(dex, &p.item_state),
             "moves": moves,
             "volatiles": map_scal(dex, p.volatiles.iter().map(|(c, s)| (c, s))),
             "types": p.types.iter().map(|t| dex.type_name(t)).collect::<Vec<_>>(),

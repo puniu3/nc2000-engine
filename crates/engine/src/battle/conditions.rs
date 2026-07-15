@@ -148,7 +148,7 @@ fn dispatch_cond(
             // 1-4 turns, guaranteed 1 turn of sleep (stadium2)
             let time = b.prng.random_range(2, 5) as i64;
             if let Some(st) = b.state_at_mut(state) {
-                st.set_int("time", time);
+                st.set_int(crate::state::DK::Time, time);
             }
             if b.remove_volatile(dex, t, "nightmare") {
                 let ts = b.poke_str(t);
@@ -159,9 +159,9 @@ fn dispatch_cond(
         ("slp", "onBeforeMove") => {
             let t = tpoke.unwrap();
             let loc = StateLoc::Status(t);
-            let time = b.state_at(loc).map(|s| s.get_int("time")).unwrap_or(0) - 1;
+            let time = b.state_at(loc).map(|s| s.get_int(crate::state::DK::Time)).unwrap_or(0) - 1;
             if let Some(st) = b.state_at_mut(loc) {
-                st.set_int("time", time);
+                st.set_int(crate::state::DK::Time, time);
             }
             if time <= 0 {
                 b.cure_status(dex, t, false);
@@ -249,14 +249,14 @@ fn dispatch_cond(
                 b.add_volatile(dex, t, "residualdmg", None, EffectHandle::None);
             }
             if let Some(vs) = b.poke_mut(t).volatile_mut(rd) {
-                vs.set_int("counter", 0);
+                vs.set_int(crate::state::DK::Counter, 0);
             }
             RV::Undef
         }
         ("tox", "onAfterMoveSelf") => {
             let t = tpoke.unwrap();
             let rd = crate::cond_id!(dex, "residualdmg").unwrap();
-            let counter = b.poke(t).volatile(rd).map(|v| v.get_int("counter")).unwrap_or(0);
+            let counter = b.poke(t).volatile(rd).map(|v| v.get_int(crate::state::DK::Counter)).unwrap_or(0);
             let maxhp = b.poke(t).maxhp as f64;
             let dmg = super::clamp_int_range((maxhp / 16.0).floor(), Some(1.0), None) * counter as f64;
             let eff = EffectHandle::Cond(crate::cond_id!(dex, "tox").unwrap());
@@ -295,7 +295,7 @@ fn dispatch_cond(
             }
             let time = b.prng.random_range(2, 6) as i64;
             if let Some(st) = b.state_at_mut(state) {
-                st.set_int("time", time);
+                st.set_int(crate::state::DK::Time, time);
             }
             RV::Undef
         }
@@ -308,9 +308,9 @@ fn dispatch_cond(
         ("confusion", "onBeforeMove") => {
             let t = tpoke.unwrap();
             let cid = crate::cond_id!(dex, "confusion").unwrap();
-            let time = b.poke(t).volatile(cid).map(|v| v.get_int("time")).unwrap_or(0) - 1;
+            let time = b.poke(t).volatile(cid).map(|v| v.get_int(crate::state::DK::Time)).unwrap_or(0) - 1;
             if let Some(vs) = b.poke_mut(t).volatile_mut(cid) {
-                vs.set_int("time", time);
+                vs.set_int(crate::state::DK::Time, time);
             }
             if time == 0 {
                 b.remove_volatile(dex, t, "confusion");
@@ -357,20 +357,15 @@ fn dispatch_cond(
             let ts = b.poke_str(t);
             let src_move_name = b
                 .state_at(state)
-                .and_then(|s| s.source_effect.clone())
-                .map(|id| {
-                    dex.moves
-                        .id(&id)
-                        .map(|m| dex.move_static(m).name.clone())
-                        .unwrap_or(id)
-                })
+                .and_then(|s| s.source_effect)
+                .map(|e| src_move_name(dex, &Some(e)))
                 .unwrap_or_default();
             let of = format!("[of] {}", b.poke_str(source.unwrap()));
             let activate = format!("move: {src_move_name}");
             b.add(&["-activate", &ts, &activate, &of]);
             // gen5+ merged data: boundDivisor = bindingband ? 8 : 16 (no items in M1)
             if let Some(st) = b.state_at_mut(state) {
-                st.set_int("boundDivisor", 16);
+                st.set_int(crate::state::DK::BoundDivisor, 16);
             }
             RV::Undef
         }
@@ -378,7 +373,7 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let (trapper, divisor, src_move) = {
                 let st = b.state_at(state).unwrap();
-                (st.source, st.get_int("boundDivisor").max(1), st.source_effect.clone())
+                (st.source, st.get_int(crate::state::DK::BoundDivisor).max(1), st.source_effect)
             };
             let trapper_gone = match trapper {
                 Some(tr_id) => {
@@ -403,7 +398,7 @@ fn dispatch_cond(
         }
         ("partiallytrapped", "onEnd") => {
             let t = tpoke.unwrap();
-            let src_move = b.state_at(state).and_then(|s| s.source_effect.clone());
+            let src_move = b.state_at(state).and_then(|s| s.source_effect);
             let ts = b.poke_str(t);
             let name = src_move_name(dex, &src_move);
             b.add(&["-end", &ts, &name, "[partiallytrapped]"]);
@@ -426,7 +421,7 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let cid = crate::cond_id!(dex, "residualdmg").unwrap();
             if let Some(vs) = b.poke_mut(t).volatile_mut(cid) {
-                vs.set_int("counter", 0);
+                vs.set_int(crate::state::DK::Counter, 0);
             }
             RV::Undef
         }
@@ -435,8 +430,8 @@ fn dispatch_cond(
             if matches!(b.poke(t).status, Status::Brn | Status::Psn | Status::Tox) {
                 let cid = crate::cond_id!(dex, "residualdmg").unwrap();
                 if let Some(vs) = b.poke_mut(t).volatile_mut(cid) {
-                    let c = vs.get_int("counter");
-                    vs.set_int("counter", c + 1);
+                    let c = vs.get_int(crate::state::DK::Counter);
+                    vs.set_int(crate::state::DK::Counter, c + 1);
                 }
             }
             RV::Undef
@@ -646,7 +641,7 @@ fn dispatch_cond(
             let ss = b.side_str(n);
             b.add(&["-sidestart", &ss, "Spikes"]);
             if let Some(st) = b.state_at_mut(state) {
-                st.set_int("layers", 1);
+                st.set_int(crate::state::DK::Layers, 1);
             }
             RV::Undef
         }
@@ -655,7 +650,7 @@ fn dispatch_cond(
             if b.poke(t).has_type(dex.known_types.flying) {
                 return RV::Undef;
             }
-            let layers = b.state_at(state).map(|s| s.get_int("layers")).unwrap_or(1);
+            let layers = b.state_at(state).map(|s| s.get_int(crate::state::DK::Layers)).unwrap_or(1);
             const AMOUNTS: [i64; 4] = [0, 3, 4, 6];
             let dmg = AMOUNTS[layers.clamp(0, 3) as usize] as f64 * b.poke(t).maxhp as f64 / 24.0;
             let eff = EffectHandle::Cond(crate::cond_id!(dex, "spikes").unwrap());
@@ -676,8 +671,8 @@ fn dispatch_cond(
             }
             let leecher = b
                 .state_at(state)
-                .and_then(|s| s.source_slot.clone())
-                .and_then(|slot| b.poke_at_slot(&slot));
+                .and_then(|s| s.source_slot)
+                .and_then(|slot| b.poke_at_slot_pos(slot));
             let Some(leecher) = leecher else { return RV::Undef };
             if b.poke(leecher).fainted || b.poke(leecher).hp <= 0 {
                 return RV::Undef;
@@ -822,7 +817,7 @@ fn dispatch_cond(
             }
             let locked_key = dex.moves.key(locked).to_string();
             if let Some(st) = b.state_at_mut(state) {
-                st.set("move", Scalar::Str(locked_key.clone()));
+                st.set(crate::state::DK::Move, Scalar::MoveK(locked));
             }
             let ts = b.poke_str(t);
             b.add(&["-start", &ts, "Encore"]);
@@ -838,11 +833,8 @@ fn dispatch_cond(
             };
             let locked = b
                 .state_at(state)
-                .and_then(|s| s.get("move").cloned())
-                .map(|v| match v {
-                    Scalar::Str(s) => s,
-                    _ => String::new(),
-                })
+                .and_then(|s| s.get_move())
+                .map(|m| dex.moves.key(m).to_string())
                 .unwrap_or_default();
             if !locked.is_empty() && move_key != locked {
                 return RV::Str(locked);
@@ -853,11 +845,8 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let locked = b
                 .state_at(state)
-                .and_then(|s| s.get("move").cloned())
-                .map(|v| match v {
-                    Scalar::Str(s) => s,
-                    _ => String::new(),
-                })
+                .and_then(|s| s.get_move())
+                .map(|m| dex.moves.key(m).to_string())
                 .unwrap_or_default();
             let pp_left = dex
                 .moves
@@ -879,11 +868,8 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let locked = b
                 .state_at(state)
-                .and_then(|s| s.get("move").cloned())
-                .map(|v| match v {
-                    Scalar::Str(s) => s,
-                    _ => String::new(),
-                })
+                .and_then(|s| s.get_move())
+                .map(|m| dex.moves.key(m).to_string())
                 .unwrap_or_default();
             let Some(mid) = dex.moves.id(&locked) else { return RV::Undef };
             if b.poke(t).get_move_slot(mid).is_none() {
@@ -919,9 +905,8 @@ fn dispatch_cond(
             let ts = b.poke_str(t);
             let name = dex.move_static(last).name.clone();
             b.add(&["-start", &ts, "Disable", &name]);
-            let key = dex.moves.key(last).to_string();
             if let Some(st) = b.state_at_mut(state) {
-                st.set("move", Scalar::Str(key));
+                st.set(crate::state::DK::Move, Scalar::MoveK(last));
             }
             RV::Undef
         }
@@ -935,11 +920,8 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let locked = b
                 .state_at(state)
-                .and_then(|s| s.get("move").cloned())
-                .map(|v| match v {
-                    Scalar::Str(s) => s,
-                    _ => String::new(),
-                })
+                .and_then(|s| s.get_move())
+                .map(|m| dex.moves.key(m).to_string())
                 .unwrap_or_default();
             let cur = b
                 .active_move
@@ -959,11 +941,8 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let locked = b
                 .state_at(state)
-                .and_then(|s| s.get("move").cloned())
-                .map(|v| match v {
-                    Scalar::Str(s) => s,
-                    _ => String::new(),
-                })
+                .and_then(|s| s.get_move())
+                .map(|m| dex.moves.key(m).to_string())
                 .unwrap_or_default();
             if let Some(mid) = dex.moves.id(&locked) {
                 if b.poke(t).get_move_slot(mid).is_some() {
@@ -1004,11 +983,11 @@ fn dispatch_cond(
             b.add(&["-start", &ts, "Substitute"]);
             let hp = (b.poke(t).maxhp as f64 / 4.0).floor() as i64;
             if let Some(st) = b.state_at_mut(state) {
-                st.set_int("hp", hp);
+                st.set_int(crate::state::DK::Hp, hp);
             }
             let pt = crate::cond_id!(dex, "partiallytrapped").unwrap();
             if b.poke(t).has_volatile(pt) {
-                let src_move = b.poke(t).volatile(pt).and_then(|v| v.source_effect.clone());
+                let src_move = b.poke(t).volatile(pt).and_then(|v| v.source_effect);
                 let name = src_move_name(dex, &src_move);
                 let ts = b.poke_str(t);
                 b.add(&["-end", &ts, &name, "[partiallytrapped]", "[silent]"]);
@@ -1087,16 +1066,16 @@ fn dispatch_cond(
                 _ => return RV::Null,
             };
             let sub = crate::cond_id!(dex, "substitute").unwrap();
-            let sub_hp = b.poke(t).volatile(sub).map(|v| v.get_int("hp")).unwrap_or(0);
+            let sub_hp = b.poke(t).volatile(sub).map(|v| v.get_int(crate::state::DK::Hp)).unwrap_or(0);
             if damage > sub_hp as f64 {
                 damage = sub_hp as f64;
             }
             if let Some(vsq) = b.poke_mut(t).volatile_mut(sub) {
-                let hp = vsq.get_int("hp");
-                vsq.set_int("hp", hp - damage as i64);
+                let hp = vsq.get_int(crate::state::DK::Hp);
+                vsq.set_int(crate::state::DK::Hp, hp - damage as i64);
             }
             b.poke_mut(src).last_damage = damage as i64;
-            let left = b.poke(t).volatile(sub).map(|v| v.get_int("hp")).unwrap_or(0);
+            let left = b.poke(t).volatile(sub).map(|v| v.get_int(crate::state::DK::Hp)).unwrap_or(0);
             if left <= 0 {
                 b.remove_volatile(dex, t, "substitute");
             } else {
@@ -1128,7 +1107,7 @@ fn dispatch_cond(
         ("bide", "onStart") => {
             let t = tpoke.unwrap();
             if let Some(st) = b.state_at_mut(state) {
-                st.set_int("totalDamage", 0);
+                st.set_int(crate::state::DK::TotalDamage, 0);
             }
             let ts = b.poke_str(t);
             b.add(&["-start", &ts, "move: Bide"]);
@@ -1140,8 +1119,8 @@ fn dispatch_cond(
             }
             let dmg = relay.as_num() as i64;
             if let Some(st) = b.state_at_mut(state) {
-                let cur = st.get_int("totalDamage");
-                st.set_int("totalDamage", cur + dmg);
+                let cur = st.get_int(crate::state::DK::TotalDamage);
+                st.set_int(crate::state::DK::TotalDamage, cur + dmg);
                 st.last_damage_source = source;
             }
             RV::Undef
@@ -1150,7 +1129,7 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let (duration, total, last_src) = {
                 let st = b.state_at(state).unwrap();
-                (st.duration.unwrap_or(0), st.get_int("totalDamage"), st.last_damage_source)
+                (st.duration.unwrap_or(0), st.get_int(crate::state::DK::TotalDamage), st.last_damage_source)
             };
             if duration == 1 {
                 let ts = b.poke_str(t);
@@ -1248,8 +1227,8 @@ fn dispatch_cond(
         // --------------------------------------------------------- rollout
         ("rollout", "onStart") => {
             if let Some(st) = b.state_at_mut(state) {
-                st.set_int("hitCount", 0);
-                st.set_int("contactHitCount", 0);
+                st.set_int(crate::state::DK::HitCount, 0);
+                st.set_int(crate::state::DK::ContactHitCount, 0);
             }
             RV::Undef
         }
@@ -1271,15 +1250,15 @@ fn dispatch_cond(
         // ------------------------------------------------------ furycutter
         ("furycutter", "onStart") => {
             if let Some(st) = b.state_at_mut(state) {
-                st.set_int("multiplier", 1);
+                st.set_int(crate::state::DK::Multiplier, 1);
             }
             RV::Undef
         }
         ("furycutter", "onRestart") => {
             if let Some(st) = b.state_at_mut(state) {
-                let m = st.get_int("multiplier");
+                let m = st.get_int(crate::state::DK::Multiplier);
                 if m < 16 {
-                    st.set_int("multiplier", m << 1);
+                    st.set_int(crate::state::DK::Multiplier, m << 1);
                 }
                 st.duration = Some(2);
             }
@@ -1412,14 +1391,14 @@ fn dispatch_cond(
         // ----------------------------------------------------------- stall
         ("stall", "onStart") => {
             if let Some(st) = b.state_at_mut(state) {
-                st.set_int("counter", 127);
+                st.set_int(crate::state::DK::Counter, 127);
             }
             RV::Undef
         }
         ("stall", "onStallMove") => {
             let counter = b
                 .state_at(state)
-                .and_then(|s| s.get("counter").cloned())
+                .and_then(|s| s.get(crate::state::DK::Counter).cloned())
                 .map(|v| v.as_f64())
                 .unwrap_or(0.0);
             let mut c = counter.floor() as u32;
@@ -1430,12 +1409,12 @@ fn dispatch_cond(
         }
         ("stall", "onRestart") => {
             if let Some(st) = b.state_at_mut(state) {
-                let c = st.get("counter").map(|v| v.as_f64()).unwrap_or(127.0);
+                let c = st.get(crate::state::DK::Counter).map(|v| v.as_f64()).unwrap_or(127.0);
                 let half = c / 2.0;
                 if half.fract() == 0.0 {
-                    st.set("counter", Scalar::Int(half as i64));
+                    st.set(crate::state::DK::Counter, Scalar::Int(half as i64));
                 } else {
-                    st.set("counter", Scalar::Float(half));
+                    st.set(crate::state::DK::Counter, Scalar::Float(half));
                 }
                 st.duration = Some(2);
             }
@@ -1447,7 +1426,7 @@ fn dispatch_cond(
             let EffectHandle::MoveEff(mv) = source_effect else { return RV::Undef };
             let move_key = dex.moves.key(mv).to_string();
             if let Some(st) = b.state_at_mut(state) {
-                st.set("move", Scalar::Str(move_key.clone()));
+                st.set(crate::state::DK::Move, Scalar::MoveK(mv));
             }
             b.add_volatile(dex, t, &move_key, None, EffectHandle::None);
             // gen2 runMove's moveUsed() never passes targetLoc, so this is
@@ -1476,7 +1455,7 @@ fn dispatch_cond(
             let mvc = dex.conds_id(&move_key).unwrap();
             if let Some(loc) = move_target_loc {
                 if let Some(vs) = b.poke_mut(t).volatile_mut(mvc) {
-                    vs.set_int("targetLoc", loc as i64);
+                    vs.set_int(crate::state::DK::TargetLoc, loc as i64);
                 }
             }
             b.attr_last_move(&["[still]"]);
@@ -1487,11 +1466,8 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let locked = b
                 .state_at(state)
-                .and_then(|s| s.get("move").cloned())
-                .map(|v| match v {
-                    Scalar::Str(s) => s,
-                    _ => String::new(),
-                })
+                .and_then(|s| s.get_move())
+                .map(|m| dex.moves.key(m).to_string())
                 .unwrap_or_default();
             if !locked.is_empty() {
                 b.remove_volatile(dex, t, &locked);
@@ -1501,11 +1477,8 @@ fn dispatch_cond(
         ("twoturnmove", "onLockMove") => {
             let locked = b
                 .state_at(state)
-                .and_then(|s| s.get("move").cloned())
-                .map(|v| match v {
-                    Scalar::Str(s) => s,
-                    _ => String::new(),
-                })
+                .and_then(|s| s.get_move())
+                .map(|m| dex.moves.key(m).to_string())
                 .unwrap_or_default();
             RV::Str(locked)
         }
@@ -1581,13 +1554,13 @@ fn dispatch_cond(
         }
         // ------------------------------------------------------ lockedmove
         ("lockedmove", "onStart") => {
-            let move_key = match source_effect {
-                EffectHandle::MoveEff(m) => dex.moves.key(m).to_string(),
-                EffectHandle::Cond(c) => dex.conds_key(c).to_string(),
-                _ => String::new(),
+            let val = match source_effect {
+                EffectHandle::MoveEff(m) => Some(Scalar::MoveK(m)),
+                EffectHandle::Cond(c) => Some(Scalar::CondK(c)),
+                _ => None,
             };
-            if let Some(st) = b.state_at_mut(state) {
-                st.set("move", Scalar::Str(move_key));
+            if let (Some(v), Some(st)) = (val, b.state_at_mut(state)) {
+                st.set(crate::state::DK::Move, v);
             }
             RV::Undef
         }
@@ -1622,11 +1595,8 @@ fn dispatch_cond(
         ("lockedmove", "onLockMove") => {
             let locked = b
                 .state_at(state)
-                .and_then(|s| s.get("move").cloned())
-                .map(|v| match v {
-                    Scalar::Str(s) => s,
-                    _ => String::new(),
-                })
+                .and_then(|s| s.get_move())
+                .map(|m| dex.moves.key(m).to_string())
                 .unwrap_or_default();
             RV::Str(locked)
         }
@@ -1643,7 +1613,7 @@ fn dispatch_cond(
             let StateLoc::Volatile(holder, _) = state else { return RV::Undef };
             let (target_loc, src_effect) = {
                 let st = b.state_at(state).unwrap();
-                (st.get_int("targetLoc"), st.source_effect.clone())
+                (st.get_int(crate::state::DK::TargetLoc), st.source_effect)
             };
             let expected_loc: i64 = if switching.side == holder.side { -1 } else { 1 };
             if target_loc != expected_loc {
@@ -1654,14 +1624,7 @@ fn dispatch_cond(
             }
             let en = crate::cond_id!(dex, "encore").unwrap();
             if let Some(enc) = b.poke(holder).volatile(en) {
-                let enc_move = enc
-                    .get("move")
-                    .map(|v| match v {
-                        Scalar::Str(s) => s.clone(),
-                        _ => String::new(),
-                    })
-                    .unwrap_or_default();
-                if enc_move != "pursuit" {
+                if enc.get_move() != dex.moves.id("pursuit") {
                     return RV::Undef;
                 }
             }
@@ -1676,18 +1639,21 @@ fn dispatch_cond(
                 b.remove_volatile(dex, switching, "destinybond");
             }
             let pursuit_id = dex.moves.id("pursuit").unwrap();
-            let se = src_effect.and_then(|id| dex.moves.id(&id));
+            let se = src_effect.and_then(|e| match e {
+                EffectHandle::MoveEff(m) => Some(m),
+                _ => None,
+            });
             b.run_move(dex, pursuit_id, holder, expected_loc as i8, se);
             RV::Undef
         }
         // ------------------------------------------------------ futuremove
         ("futuremove", "onStart") => {
             let t = tpoke.unwrap();
-            let slot = b.slot_str(t);
+            let slot = b.slot_of(t);
             let ending = b.turn as i64 + 1;
             if let Some(st) = b.state_at_mut(state) {
-                st.set("targetSlot", Scalar::Str(slot));
-                st.set_int("endingTurn", ending);
+                st.set(crate::state::DK::TargetSlot, Scalar::Slot(slot.0, slot.1));
+                st.set_int(crate::state::DK::EndingTurn, ending);
             }
             RV::Undef
         }
@@ -1695,20 +1661,18 @@ fn dispatch_cond(
             let (ending, slot) = {
                 let st = b.state_at(state).unwrap();
                 (
-                    st.get_int("endingTurn"),
-                    st.get("targetSlot")
-                        .map(|v| match v {
-                            Scalar::Str(s) => s.clone(),
-                            _ => String::new(),
-                        })
-                        .unwrap_or_default(),
+                    st.get_int(crate::state::DK::EndingTurn),
+                    st.get(crate::state::DK::TargetSlot).and_then(|v| match v {
+                        Scalar::Slot(a, b) => Some((*a, *b)),
+                        _ => None,
+                    }),
                 )
             };
             // getOverflowedTurnCount() = turn - 1 for gen < 8
             if (b.turn as i64 - 1) < ending {
                 return RV::Undef;
             }
-            if let Some(at_slot) = b.poke_at_slot(&slot) {
+            if let Some(at_slot) = slot.and_then(|sl| b.poke_at_slot_pos(sl)) {
                 let fm = crate::cond_id!(dex, "futuremove").unwrap();
                 b.remove_slot_condition(dex, at_slot, fm);
             }
@@ -1743,14 +1707,11 @@ fn move_eff_has_secondaries(b: &Battle, dex: &Dex, effect: EffectHandle) -> bool
 }
 
 /// `${effect}` (Effect.toString()) — the plain name ("Wrap").
-fn src_move_name(dex: &Dex, src_move: &Option<String>) -> String {
+fn src_move_name(dex: &Dex, src_move: &Option<EffectHandle>) -> String {
     match src_move {
-        Some(id) => dex
-            .moves
-            .id(id)
-            .map(|m| dex.move_static(m).name.clone())
-            .unwrap_or_else(|| id.clone()),
-        None => String::new(),
+        Some(EffectHandle::MoveEff(m)) => dex.move_static(*m).name.clone(),
+        Some(EffectHandle::Cond(c)) => dex.conds_key(*c).to_string(),
+        _ => String::new(),
     }
 }
 
@@ -1762,7 +1723,7 @@ fn residualdmg(b: &mut Battle, dex: &Dex, pokemon: PokeId) {
         dex.conds_id(status.as_str()).unwrap_or_else(|| crate::cond_id!(dex, "brn").unwrap()),
     );
     if b.poke(pokemon).has_volatile(rd) {
-        let counter = b.poke(pokemon).volatile(rd).map(|v| v.get_int("counter")).unwrap_or(0);
+        let counter = b.poke(pokemon).volatile(rd).map(|v| v.get_int(crate::state::DK::Counter)).unwrap_or(0);
         let maxhp = b.poke(pokemon).maxhp as f64;
         let dmg = super::clamp_int_range((maxhp / 16.0).floor() * counter as f64, Some(1.0), None);
         b.damage(dex, dmg, Some(pokemon), None, DamageEffect::Effect(eff), false);

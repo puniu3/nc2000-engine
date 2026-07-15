@@ -1,7 +1,7 @@
 //! Pokemon-level methods (sim/pokemon.ts + gen2/gen2stadium2 overrides),
 //! implemented on `Battle` because everything needs battle context.
 
-use crate::dex::{Dex, MoveId};
+use crate::dex::{CondId, Dex, MoveId};
 use crate::state::*;
 
 use super::events::{ev, EvTarget};
@@ -221,9 +221,12 @@ impl Battle {
 
         self.poke_mut(id).status = Status::from_str(status);
         self.refresh_poke_mask(dex, id);
-        let mut state = EffectState { id: status.to_string(), ..Default::default() };
-        state.source = source;
         let cond = if status.is_empty() { None } else { dex.conds_id(status) };
+        let mut state = EffectState {
+            id: cond.map(crate::state::EffId::Cond).unwrap_or_default(),
+            ..Default::default()
+        };
+        state.source = source;
         if let Some(c) = cond {
             if let Some(d) = dex.cond(c).duration {
                 state.duration = Some(d);
@@ -372,16 +375,16 @@ impl Battle {
         }
 
         let mut state = EffectState {
-            id: status.to_string(),
-            name: Some(dex.cond_display_name(cond).to_string()),
+            id: crate::state::EffId::Cond(cond),
+            has_name: true,
             ..Default::default()
         };
         if let Some(src) = source {
             state.source = Some(src);
-            state.source_slot = Some(self.slot_str(src));
+            state.source_slot = Some(self.slot_of(src));
         }
         if !source_effect.is_none() {
-            state.source_effect = Some(self.effect_id(dex, source_effect).to_string());
+            state.source_effect = Some(source_effect);
         }
         if let Some(d) = dex.cond(cond).duration {
             state.duration = Some(d);
@@ -441,21 +444,18 @@ impl Battle {
         if !self.poke(src).has_volatile(linked_cond) {
             self.add_volatile(dex, src, linked_status, Some(id), source_effect);
             if let Some(vs) = self.poke_mut(src).volatile_mut(linked_cond) {
-                vs.linked_pokemon = vec![id];
+                vs.linked_pokemon = smallvec::smallvec![id];
                 // PS stores the Condition OBJECT here — essence-invisible.
-                vs.linked_status = Some(status.to_string());
+                vs.linked_status = dex.conds_id(status);
             }
         } else if let Some(vs) = self.poke_mut(src).volatile_mut(linked_cond) {
             vs.linked_pokemon.push(id);
         }
         if let Some(vs) = self.poke_mut(id).volatile_mut(cond) {
-            vs.linked_pokemon = vec![src];
-            vs.linked_status = Some(linked_status.to_string());
+            vs.linked_pokemon = smallvec::smallvec![src];
+            vs.linked_status = Some(linked_cond);
             // PS stores the STRING here — it lands in the essence.
-            vs.set(
-                "linkedStatus",
-                crate::state::Scalar::Str(linked_status.to_string()),
-            );
+            vs.set(crate::state::DK::LinkedStatus, crate::state::Scalar::CondK(linked_cond));
         }
         result
     }
@@ -491,7 +491,7 @@ impl Battle {
         self.refresh_poke_mask(dex, id);
         if !linked_pokemon.is_empty() {
             if let Some(ls) = linked_status {
-                self.remove_linked_volatiles(dex, id, &ls, &linked_pokemon);
+                self.remove_linked_volatiles(dex, id, ls, &linked_pokemon);
             }
         }
         true
@@ -502,13 +502,12 @@ impl Battle {
         &mut self,
         dex: &Dex,
         id: PokeId,
-        linked_status: &str,
+        cond: CondId,
         linked_pokemon: &[PokeId],
     ) {
-        let Some(cond) = dex.conds_id(linked_status) else { return };
         for &linked in linked_pokemon {
             let Some(vs) = self.poke_mut(linked).volatile_mut(cond) else { continue };
-            vs.linked_pokemon.retain(|&p| p != id);
+            vs.linked_pokemon.retain(|p| *p != id);
             if vs.linked_pokemon.is_empty() {
                 self.remove_volatile_id(dex, linked, cond);
             }
@@ -700,8 +699,8 @@ impl Battle {
                     vs.linked_pokemon.clear();
                     vs.linked_status = None;
                 }
-                if let Some(ls) = &state.linked_status {
-                    if let Some(lc) = dex.conds_id(ls) {
+                if let Some(lc) = state.linked_status {
+                    {
                         for &linked in &state.linked_pokemon {
                             if let Some(lv) = self.poke_mut(linked).volatile_mut(lc) {
                                 for p in lv.linked_pokemon.iter_mut() {
@@ -726,18 +725,17 @@ impl Battle {
     /// pokemon.clearVolatile(includeSwitchFlags).
     pub fn clear_volatile(&mut self, dex: &Dex, id: PokeId, include_switch_flags: bool) {
         // linked volatiles first (PS iterates this.volatiles)
-        let linked: Vec<(String, Vec<PokeId>)> = self
+        let linked: Vec<(CondId, smallvec::SmallVec<[PokeId; 2]>)> = self
             .poke(id)
             .volatiles
             .iter()
             .filter_map(|(_, vs)| {
                 vs.linked_status
-                    .as_ref()
-                    .map(|ls| (ls.clone(), vs.linked_pokemon.clone()))
+                    .map(|ls| (ls, vs.linked_pokemon.clone()))
             })
             .collect();
         for (ls, lp) in linked {
-            self.remove_linked_volatiles(dex, id, &ls, &lp);
+            self.remove_linked_volatiles(dex, id, ls, &lp);
         }
         let p = self.poke_mut(id);
         p.boosts = [0; 7];
@@ -1122,8 +1120,7 @@ impl Battle {
         if self.poke(id).hp <= 0 || !self.poke(id).is_active {
             return false;
         }
-        let item_key = dex.items.key(item).to_string();
-        let state = EffectState { id: item_key, ..Default::default() };
+        let state = EffectState { id: crate::state::EffId::Item(item), ..Default::default() };
         let state = self.init_effect_state(state, true);
         let p = self.poke_mut(id);
         p.item = Some(item);

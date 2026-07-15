@@ -65,10 +65,10 @@ impl Battle {
         self.field.weather = Some(cond);
         self.refresh_battle_mask(dex);
         self.field_weather_key = status.to_string();
-        let mut state = EffectState { id: status.to_string(), ..Default::default() };
+        let mut state = EffectState { id: crate::state::EffId::Cond(cond), ..Default::default() };
         if let Some(src) = source {
             state.source = Some(src);
-            state.source_slot = Some(self.slot_str(src));
+            state.source_slot = Some(self.slot_of(src));
         }
         if let Some(d) = dex.cond(cond).duration {
             state.duration = Some(d);
@@ -149,10 +149,10 @@ impl Battle {
                 None,
             );
         }
-        let mut state = EffectState { id: status.to_string(), ..Default::default() };
+        let mut state = EffectState { id: crate::state::EffId::Cond(cond), ..Default::default() };
         if let Some(src) = source {
             state.source = Some(src);
-            state.source_slot = Some(self.slot_str(src));
+            state.source_slot = Some(self.slot_of(src));
         }
         if let Some(d) = dex.cond(cond).duration {
             state.duration = Some(d);
@@ -237,9 +237,9 @@ impl Battle {
                 None,
             );
         }
-        let mut state = EffectState { id: status.to_string(), ..Default::default() };
+        let mut state = EffectState { id: crate::state::EffId::Cond(cond), ..Default::default() };
         state.source = Some(source);
-        state.source_slot = Some(self.slot_str(source));
+        state.source_slot = Some(self.slot_of(source));
         if let Some(d) = dex.cond(cond).duration {
             state.duration = Some(d);
         }
@@ -315,10 +315,10 @@ impl Battle {
                 None,
             );
         }
-        let mut state = EffectState { id: status.to_string(), ..Default::default() };
+        let mut state = EffectState { id: crate::state::EffId::Cond(cond), ..Default::default() };
         if let Some(src) = source {
             state.source = Some(src);
-            state.source_slot = Some(self.slot_str(src));
+            state.source_slot = Some(self.slot_of(src));
         }
         if let Some(d) = dex.cond(cond).duration {
             state.duration = Some(d);

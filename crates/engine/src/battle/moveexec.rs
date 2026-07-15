@@ -250,7 +250,7 @@ fn base_power_callback(
             if !b.poke(source).has_volatile(fc) || hit == 1 {
                 b.add_volatile(dex, source, "furycutter", None, EffectHandle::None);
             }
-            let mult = b.poke(source).volatile(fc).map(|v| v.get_int("multiplier")).unwrap_or(1);
+            let mult = b.poke(source).volatile(fc).map(|v| v.get_int(crate::state::DK::Multiplier)).unwrap_or(1);
             Some(clamp_int_range(base_power as f64 * mult as f64, Some(1.0), Some(160.0)) as i32)
         }
         "rollout" => {
@@ -261,15 +261,15 @@ fn base_power_callback(
             if has_rollout {
                 let (hit_count, contact) = {
                     let v = b.poke(source).volatile(ro).unwrap();
-                    (v.get_int("hitCount"), v.get_int("contactHitCount"))
+                    (v.get_int(crate::state::DK::HitCount), v.get_int(crate::state::DK::ContactHitCount))
                 };
                 if hit_count != 0 {
                     bp *= 1i64 << contact;
                 }
                 if b.poke(source).status != Status::Slp {
                     let v = b.poke_mut(source).volatile_mut(ro).unwrap();
-                    v.set_int("hitCount", hit_count + 1);
-                    v.set_int("contactHitCount", contact + 1);
+                    v.set_int(crate::state::DK::HitCount, hit_count + 1);
+                    v.set_int(crate::state::DK::ContactHitCount, contact + 1);
                     if hit_count + 1 < 5 {
                         v.duration = Some(2);
                     }
@@ -553,7 +553,10 @@ pub fn dispatch_move_callback(
             let loc = StateLoc::SlotCond(foe.side, 0, fm);
             if let Some(st) = b.state_at_mut(loc) {
                 st.duration = Some(3);
-                st.set("move", crate::state::Scalar::Str("futuresight".into()));
+                st.set(
+                    crate::state::DK::Move,
+                    crate::state::Scalar::MoveK(dex.moves.id("futuresight").unwrap()),
+                );
                 st.source = Some(user);
                 st.future_damage = damage;
             }
@@ -990,8 +993,8 @@ pub fn dispatch_move_callback(
             }
             {
                 let p = b.poke_mut(t);
-                p.status_state.set_int("time", 3);
-                p.status_state.set_int("startTime", 3);
+                p.status_state.set_int(crate::state::DK::Time, 3);
+                p.status_state.set_int(crate::state::DK::StartTime, 3);
                 p.status_state.source = Some(t);
             }
             let maxhp = b.poke(t).maxhp as f64;
@@ -1372,12 +1375,12 @@ impl Battle {
     }
 
     /// battle.getTarget.
-    pub fn get_target(&self, mv: &ActiveMove, pokemon: PokeId, target_loc: i8) -> Option<PokeId> {
+    pub fn get_target(&self, dex: &Dex, mv: &ActiveMove, pokemon: PokeId, target_loc: i8) -> Option<PokeId> {
         // Fails if the target is the user and the move can't target its own position
         let self_loc = -1i8;
         if matches!(mv.target.as_str(), "adjacentAlly" | "any" | "normal")
             && target_loc == self_loc
-            && !self.has_twoturn_volatile(pokemon)
+            && !self.has_twoturn_volatile(dex, pokemon)
         {
             if mv.has_flag("futuremove") {
                 return Some(pokemon);
@@ -1404,12 +1407,15 @@ impl Battle {
         self.get_random_target(&mv.target, pokemon)
     }
 
-    fn has_twoturn_volatile(&self, pokemon: PokeId) -> bool {
+    fn has_twoturn_volatile(&self, dex: &Dex, pokemon: PokeId) -> bool {
         // twoturnmove / iceball / rollout volatiles — ids live in the state bag.
-        self.poke(pokemon)
-            .volatiles
-            .iter()
-            .any(|(_, st)| st.id == "twoturnmove" || st.id == "iceball" || st.id == "rollout")
+        let tt = crate::cond_id!(dex, "twoturnmove");
+        let ib = crate::cond_id!(dex, "iceball");
+        let ro = crate::cond_id!(dex, "rollout");
+        self.poke(pokemon).volatiles.iter().any(|(_, st)| {
+            let c = st.id.cond();
+            c.is_some() && (c == tt || c == ib || c == ro)
+        })
     }
 
     // ------------------------------------------------------------ runMove
@@ -1424,7 +1430,7 @@ impl Battle {
         source_effect: Option<MoveId>,
     ) {
         let mut mv = get_active_move(dex, move_id);
-        let mut target = self.get_target(&mv, pokemon, target_loc);
+        let mut target = self.get_target(dex, &mv, pokemon, target_loc);
         if source_effect.is_none() && dex.moves.key(move_id) != "struggle" {
             let changed = self.run_event(
                 dex,

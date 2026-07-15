@@ -98,7 +98,7 @@ impl Battle {
                     return;
                 }
                 let mv = super::moveexec::get_active_move(dex, *move_id);
-                let Some(target) = self.get_target(&mv, pokemon, *target_loc) else { return };
+                let Some(target) = self.get_target(dex, &mv, pokemon, *target_loc) else { return };
                 self.before_turn_callback(dex, *move_id, pokemon, target);
             }
             ActionKind::Switch { insta: _, target, source_effect } => {
@@ -240,7 +240,7 @@ impl Battle {
                 let loc: i64 = if target.side == pokemon.side { -1 } else { 1 };
                 let pu = crate::cond_id!(dex, "pursuit").unwrap();
                 if let Some(vs) = self.poke_mut(pokemon).volatile_mut(pu) {
-                    vs.set_int("targetLoc", loc);
+                    vs.set_int(crate::state::DK::TargetLoc, loc);
                 }
             }
             other => panic!("unported beforeTurnCallback: {other}"),

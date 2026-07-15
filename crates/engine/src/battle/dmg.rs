@@ -121,9 +121,11 @@ impl Battle {
                 let src_eff = self
                     .poke(target)
                     .volatile(pt)
-                    .and_then(|v| v.source_effect.clone())
-                    .and_then(|id| dex.moves.id(&id))
-                    .map(|m| format!("move: {}", dex.move_static(m).name))
+                    .and_then(|v| v.source_effect)
+                    .and_then(|e| match e {
+                        EffectHandle::MoveEff(m) => Some(format!("move: {}", dex.move_static(m).name)),
+                        _ => None,
+                    })
                     .unwrap_or_default();
                 let from = format!("[from] {src_eff}");
                 self.add_split(
