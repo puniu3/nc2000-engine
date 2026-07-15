@@ -405,6 +405,50 @@ impl Battle {
         RV::True
     }
 
+    /// pokemon.addVolatile with a linkedStatus (meanlook/spiderweb 'trapper').
+    pub fn add_volatile_linked(
+        &mut self,
+        dex: &Dex,
+        id: PokeId,
+        status: &str,
+        source: Option<PokeId>,
+        source_effect: EffectHandle,
+        linked_status: &str,
+    ) -> RV {
+        if let Some(src) = source {
+            if self.poke(src).hp <= 0 {
+                return RV::False;
+            }
+        }
+        let result = self.add_volatile(dex, id, status, source, source_effect);
+        if result != RV::True {
+            return result;
+        }
+        let Some(src) = source else { return result };
+        let cond = dex.conds_id(status).unwrap();
+        let linked_cond = dex.conds_id(linked_status).unwrap();
+        if !self.poke(src).has_volatile(linked_cond) {
+            self.add_volatile(dex, src, linked_status, Some(id), source_effect);
+            if let Some(vs) = self.poke_mut(src).volatile_mut(linked_cond) {
+                vs.linked_pokemon = vec![id];
+                // PS stores the Condition OBJECT here — essence-invisible.
+                vs.linked_status = Some(status.to_string());
+            }
+        } else if let Some(vs) = self.poke_mut(src).volatile_mut(linked_cond) {
+            vs.linked_pokemon.push(id);
+        }
+        if let Some(vs) = self.poke_mut(id).volatile_mut(cond) {
+            vs.linked_pokemon = vec![src];
+            vs.linked_status = Some(linked_status.to_string());
+            // PS stores the STRING here — it lands in the essence.
+            vs.set(
+                "linkedStatus",
+                crate::state::Scalar::Str(linked_status.to_string()),
+            );
+        }
+        result
+    }
+
     /// pokemon.removeVolatile.
     pub fn remove_volatile(&mut self, dex: &Dex, id: PokeId, status: &str) -> bool {
         let Some(cond) = dex.conds_id(status) else { return false };
@@ -418,6 +462,10 @@ impl Battle {
         if !self.poke(id).has_volatile(cond) {
             return false;
         }
+        let (linked_pokemon, linked_status) = {
+            let vs = self.poke(id).volatile(cond).unwrap();
+            (vs.linked_pokemon.clone(), vs.linked_status.clone())
+        };
         self.single_event(
             dex,
             "End",
@@ -429,7 +477,30 @@ impl Battle {
             None,
         );
         self.poke_mut(id).volatiles.retain(|(k, _)| *k != cond);
+        if !linked_pokemon.is_empty() {
+            if let Some(ls) = linked_status {
+                self.remove_linked_volatiles(dex, id, &ls, &linked_pokemon);
+            }
+        }
         true
+    }
+
+    /// pokemon.removeLinkedVolatiles(linkedStatus, linkedPokemon), self = `id`.
+    fn remove_linked_volatiles(
+        &mut self,
+        dex: &Dex,
+        id: PokeId,
+        linked_status: &str,
+        linked_pokemon: &[PokeId],
+    ) {
+        let Some(cond) = dex.conds_id(linked_status) else { return };
+        for &linked in linked_pokemon {
+            let Some(vs) = self.poke_mut(linked).volatile_mut(cond) else { continue };
+            vs.linked_pokemon.retain(|&p| p != id);
+            if vs.linked_pokemon.is_empty() {
+                self.remove_volatile_id(dex, linked, cond);
+            }
+        }
     }
 
     pub fn try_trap(&mut self, id: PokeId) -> bool {
@@ -602,11 +673,27 @@ impl Battle {
     // ------------------------------------------------------- clearVolatile
 
     /// pokemon.clearVolatile(includeSwitchFlags).
-    pub fn clear_volatile(&mut self, id: PokeId, include_switch_flags: bool) {
+    pub fn clear_volatile(&mut self, dex: &Dex, id: PokeId, include_switch_flags: bool) {
+        // linked volatiles first (PS iterates this.volatiles)
+        let linked: Vec<(String, Vec<PokeId>)> = self
+            .poke(id)
+            .volatiles
+            .iter()
+            .filter_map(|(_, vs)| {
+                vs.linked_status
+                    .as_ref()
+                    .map(|ls| (ls.clone(), vs.linked_pokemon.clone()))
+            })
+            .collect();
+        for (ls, lp) in linked {
+            self.remove_linked_volatiles(dex, id, &ls, &lp);
+        }
         let p = self.poke_mut(id);
         p.boosts = [0; 7];
         p.move_slots = p.base_move_slots.clone();
         p.transformed = false;
+        p.hp_type = p.base_hp_type.clone();
+        p.hp_power = p.base_hp_power;
         p.volatiles.clear();
         if include_switch_flags {
             p.switch_flag = SwitchFlag::No;
@@ -623,9 +710,11 @@ impl Battle {
         p.hurt_this_turn = None;
         p.newly_switched = true;
         p.being_called_back = false;
-        // setSpecies: stats unchanged in gen2 (no forme changes); speed reset.
+        // setSpecies(baseSpecies): restores species/types/stats (transform).
+        p.species = p.base_species;
+        p.stored_stats = p.base_stored_stats;
+        p.types = dex.species.get(p.base_species).types.clone();
         p.speed = p.stored_stats[4];
-        // types reset to base species types happens in setSpecies via setType.
     }
 
     // ---------------------------------------------------------- immunity
@@ -712,6 +801,28 @@ impl Battle {
         false
     }
 
+    /// pokemon.runImmunity(type-string) — false = immune (jumpkick crash).
+    pub fn run_type_immunity(&mut self, dex: &Dex, id: PokeId, ty: &str) -> bool {
+        let negate = !self
+            .run_event(
+                dex,
+                "NegateImmunity",
+                EvTarget::Poke(id),
+                None,
+                EffectHandle::None,
+                Some(RV::Str(ty.to_string())),
+                false,
+                false,
+            )
+            .truthy();
+        if ty == "Ground" {
+            let flying = self.poke(id).has_type("Flying");
+            return negate || !flying;
+        }
+        let types = self.poke(id).types.clone();
+        negate || dex.get_immunity(ty, &types)
+    }
+
     /// pokemon.runEffectiveness(move) — total type mod.
     pub fn run_effectiveness(&mut self, dex: &Dex, id: PokeId) -> i32 {
         let move_type = self.active_move.as_ref().unwrap().move_type.clone();
@@ -749,6 +860,303 @@ impl Battle {
             Some(w) => dex.conds_key(w),
             None => "",
         }
+    }
+
+    // ------------------------------------------------------------- items
+
+    /// pokemon.useItem(source?, sourceEffect?).
+    pub fn use_item(
+        &mut self,
+        dex: &Dex,
+        id: PokeId,
+        source: Option<PokeId>,
+        source_effect: EffectHandle,
+    ) -> bool {
+        if self.poke(id).hp <= 0 || !self.poke(id).is_active {
+            return false;
+        }
+        let Some(item) = self.poke(id).item else { return false };
+        let mut source_effect = source_effect;
+        if source_effect.is_none() {
+            source_effect = self.current_effect();
+        }
+        let mut source = source;
+        if source.is_none() {
+            source = self.event_stack.last().and_then(|f| f.target);
+        }
+        if let EffectHandle::Item(se_item) = source_effect {
+            if se_item != item && source == Some(id) {
+                return false;
+            }
+        }
+        let rv = self.run_event(
+            dex,
+            "UseItem",
+            EvTarget::Poke(id),
+            None,
+            EffectHandle::None,
+            Some(RV::True),
+            false,
+            false,
+        );
+        if !rv.truthy() {
+            return false;
+        }
+        let ps = self.poke_str(id);
+        let item_name = dex.items.get(item).name.clone();
+        self.add(&["-enditem", &ps, &item_name]);
+        let boosts = dex.items.get(item).boosts();
+        if !boosts.is_empty() {
+            self.boost(dex, &boosts, Some(id), source, EffectHandle::Item(item));
+        }
+        self.single_event(
+            dex,
+            "Use",
+            EffectHandle::Item(item),
+            StateLoc::None,
+            EvTarget::Poke(id),
+            source,
+            source_effect,
+            None,
+        );
+        let p = self.poke_mut(id);
+        p.last_item = Some(item);
+        p.item = None;
+        p.item_state = EffectState::default();
+        p.used_item_this_turn = true;
+        self.run_event(
+            dex,
+            "AfterUseItem",
+            EvTarget::Poke(id),
+            None,
+            EffectHandle::None,
+            Some(RV::True),
+            false,
+            false,
+        );
+        true
+    }
+
+    /// pokemon.eatItem(force?, source?, sourceEffect?).
+    pub fn eat_item(
+        &mut self,
+        dex: &Dex,
+        id: PokeId,
+        force: bool,
+        source: Option<PokeId>,
+        source_effect: EffectHandle,
+    ) -> bool {
+        let Some(item) = self.poke(id).item else { return false };
+        if self.poke(id).hp <= 0 || !self.poke(id).is_active {
+            return false;
+        }
+        let mut source_effect = source_effect;
+        if source_effect.is_none() {
+            source_effect = self.current_effect();
+        }
+        let mut source = source;
+        if source.is_none() {
+            source = self.event_stack.last().and_then(|f| f.target);
+        }
+        if let EffectHandle::Item(se_item) = source_effect {
+            if se_item != item && source == Some(id) {
+                return false;
+            }
+        }
+        let use_ok = self
+            .run_event(dex, "UseItem", EvTarget::Poke(id), None, EffectHandle::None, Some(RV::True), false, false)
+            .truthy();
+        let eat_ok = use_ok
+            && (force
+                || self
+                    .run_event(
+                        dex,
+                        "TryEatItem",
+                        EvTarget::Poke(id),
+                        None,
+                        EffectHandle::None,
+                        Some(RV::True),
+                        false,
+                        false,
+                    )
+                    .truthy());
+        if !eat_ok {
+            return false;
+        }
+        let ps = self.poke_str(id);
+        let item_name = dex.items.get(item).name.clone();
+        self.add(&["-enditem", &ps, &item_name, "[eat]"]);
+        self.single_event(
+            dex,
+            "Eat",
+            EffectHandle::Item(item),
+            StateLoc::None,
+            EvTarget::Poke(id),
+            source,
+            source_effect,
+            None,
+        );
+        self.run_event(
+            dex,
+            "EatItem",
+            EvTarget::Poke(id),
+            source,
+            source_effect,
+            Some(RV::True),
+            false,
+            false,
+        );
+        let p = self.poke_mut(id);
+        p.last_item = Some(item);
+        p.item = None;
+        p.item_state = EffectState::default();
+        p.used_item_this_turn = true;
+        self.run_event(
+            dex,
+            "AfterUseItem",
+            EvTarget::Poke(id),
+            None,
+            EffectHandle::None,
+            Some(RV::True),
+            false,
+            false,
+        );
+        true
+    }
+
+    /// pokemon.takeItem(source?). Returns the taken item.
+    pub fn take_item(&mut self, dex: &Dex, id: PokeId, source: Option<PokeId>) -> Option<crate::dex::ItemId> {
+        let source = source.unwrap_or(id);
+        let item = self.poke(id).item?;
+        let rv = self.run_event(
+            dex,
+            "TakeItem",
+            EvTarget::Poke(id),
+            Some(source),
+            EffectHandle::None,
+            Some(RV::True),
+            false,
+            false,
+        );
+        if !rv.truthy() {
+            return None;
+        }
+        let p = self.poke_mut(id);
+        p.item = None;
+        p.item_state = EffectState::default();
+        // singleEvent('End', item): no gen2 item has onEnd.
+        self.run_event(
+            dex,
+            "AfterTakeItem",
+            EvTarget::Poke(id),
+            None,
+            EffectHandle::None,
+            Some(RV::True),
+            false,
+            false,
+        );
+        Some(item)
+    }
+
+    /// pokemon.setItem(item, source?, effect?).
+    pub fn set_item(&mut self, dex: &Dex, id: PokeId, item: crate::dex::ItemId) -> bool {
+        if self.poke(id).hp <= 0 || !self.poke(id).is_active {
+            return false;
+        }
+        let item_key = dex.items.key(item).to_string();
+        let state = EffectState { id: item_key, ..Default::default() };
+        let state = self.init_effect_state(state, true);
+        let p = self.poke_mut(id);
+        p.item = Some(item);
+        p.item_state = state;
+        // singleEvent('End', oldItem) / ('Start', item): no gen2 handlers.
+        true
+    }
+
+    // ------------------------------------------------------------ various
+
+    /// pokemon.getLastAttackedBy().
+    pub fn get_last_attacked_by(&self, id: PokeId) -> Option<&Attacker> {
+        self.poke(id).attacked_by.last()
+    }
+
+    /// pokemon.sethp(d) (Pain Split).
+    pub fn set_hp(&mut self, id: PokeId, d: f64) -> f64 {
+        if self.poke(id).hp <= 0 {
+            return 0.0;
+        }
+        let mut d = super::tr(d);
+        if d < 1.0 {
+            d = 1.0;
+        }
+        let p = self.poke_mut(id);
+        let mut delta = d - p.hp as f64;
+        p.hp += delta as i32;
+        if p.hp > p.maxhp {
+            delta -= (p.hp - p.maxhp) as f64;
+            p.hp = p.maxhp;
+        }
+        delta
+    }
+
+    /// pokemon.setType(newType).
+    pub fn set_type(&mut self, id: PokeId, new_types: Vec<String>) -> bool {
+        self.poke_mut(id).types = new_types;
+        true
+    }
+
+    /// pokemon.transformInto(target) — gen2 slice.
+    pub fn transform_into(&mut self, dex: &Dex, id: PokeId, target: PokeId) -> bool {
+        if self.poke(target).fainted || self.poke(target).transformed {
+            return false;
+        }
+        let (t_species, t_types, t_stats, t_boosts, t_hp_type, t_hp_power, t_times_attacked) = {
+            let t = self.poke(target);
+            (
+                t.species,
+                t.types.clone(),
+                t.stored_stats,
+                t.boosts,
+                t.hp_type.clone(),
+                t.hp_power,
+                t.times_attacked,
+            )
+        };
+        let t_move_ids: Vec<crate::dex::MoveId> =
+            self.poke(target).move_slots.iter().map(|m| m.id).collect();
+        {
+            let p = self.poke_mut(id);
+            p.species = t_species;
+            p.transformed = true;
+            p.types = t_types;
+            p.stored_stats = t_stats;
+            p.hp_type = t_hp_type;
+            p.hp_power = t_hp_power;
+            p.times_attacked = t_times_attacked;
+            p.boosts = t_boosts;
+            p.move_slots = Vec::new();
+        }
+        for mid in t_move_ids {
+            let ms = dex.move_static(mid);
+            let pp = ms.pp.min(5);
+            let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
+            let mut maxpp = ms.pp * (5 + pp_ups) / 5;
+            if ms.pp == 40 {
+                maxpp -= pp_ups;
+            }
+            self.poke_mut(id).move_slots.push(MoveSlot {
+                id: mid,
+                pp,
+                maxpp,
+                disabled: false,
+                used: false,
+                shared: false,
+            });
+        }
+        let ps = self.poke_str(id);
+        let ts = self.poke_str(target);
+        self.add(&["-transform", &ps, &ts]);
+        true
     }
 
     /// pokemon.effectiveWeather (no utility umbrella in gen2).

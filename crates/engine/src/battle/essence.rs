@@ -23,6 +23,7 @@ fn scal(state: &EffectState) -> Value {
     for (k, v) in &state.data {
         let val = match v {
             Scalar::Int(i) => json!(i),
+            Scalar::Float(f) => json!(f),
             Scalar::Bool(b) => json!(b),
             Scalar::Str(s) => json!(s),
         };

@@ -92,6 +92,15 @@ impl Battle {
                 }
                 self.run_move(dex, *move_id, pokemon, *target_loc, *source_effect);
             }
+            ActionKind::BeforeTurnMove { move_id, target_loc } => {
+                let pokemon = action.pokemon.unwrap();
+                if !self.poke(pokemon).is_active || self.poke(pokemon).fainted {
+                    return;
+                }
+                let mv = super::moveexec::get_active_move(dex, *move_id);
+                let Some(target) = self.get_target(&mv, pokemon, *target_loc) else { return };
+                self.before_turn_callback(dex, *move_id, pokemon, target);
+            }
             ActionKind::Switch { insta: _, target, source_effect } => {
                 let pokemon = action.pokemon.unwrap();
                 let se = source_effect.map(EffectHandle::MoveEff);
@@ -217,6 +226,27 @@ impl Battle {
         self.each_event(dex, "Update", None);
     }
 
+    /// beforeTurnCallback dispatch (pursuit).
+    pub fn before_turn_callback(&mut self, dex: &Dex, move_id: crate::dex::MoveId, pokemon: PokeId, target: PokeId) {
+        match dex.moves.key(move_id) {
+            "pursuit" => {
+                self.add_volatile(
+                    dex,
+                    pokemon,
+                    "pursuit",
+                    Some(pokemon),
+                    super::EffectHandle::MoveEff(move_id),
+                );
+                let loc: i64 = if target.side == pokemon.side { -1 } else { 1 };
+                let pu = dex.conds_id("pursuit").unwrap();
+                if let Some(vs) = self.poke_mut(pokemon).volatile_mut(pu) {
+                    vs.set_int("targetLoc", loc);
+                }
+            }
+            other => panic!("unported beforeTurnCallback: {other}"),
+        }
+    }
+
     /// battle.checkFainted.
     pub fn check_fainted(&mut self) {
         for side_n in 0..2usize {
@@ -278,7 +308,7 @@ impl Battle {
                     false,
                 );
                 // singleEvent End ability: none.
-                self.clear_volatile(pokemon, false);
+                self.clear_volatile(dex, pokemon, false);
                 let p = self.poke_mut(pokemon);
                 p.fainted = true;
                 p.is_active = false;

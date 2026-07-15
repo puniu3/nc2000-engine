@@ -121,6 +121,22 @@ pub struct ItemData {
     pub extra: BTreeMap<String, Value>,
 }
 
+impl ItemData {
+    pub fn has_callback(&self, name: &str) -> bool {
+        self.callbacks.iter().any(|c| c == name)
+    }
+
+    /// `on{Event}Order`/`Priority`/`SubOrder` numbers (resolvePriority).
+    pub fn num(&self, key: &str) -> Option<i32> {
+        self.extra.get(key).and_then(|v| v.as_i64()).map(|v| v as i32)
+    }
+
+    /// Item `boosts` table (berserkgene).
+    pub fn boosts(&self) -> SparseBoosts {
+        self.extra.get("boosts").map(parse_sparse_boosts).unwrap_or_default()
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConditionData {
@@ -294,7 +310,7 @@ fn parse_hit_effect(v: &Value) -> HitEffect {
             h.self_effect = Some(Box::new(parse_hit_effect(s)));
         }
         h.kingsrock = map.get("kingsrock").map(|x| !x.is_null()).unwrap_or(false);
-        h.has_on_hit = false; // callbacks were stripped in export; flags carry names
+        h.has_on_hit = false; // set from the move's callback-name list at parse
     }
     h
 }
@@ -355,6 +371,8 @@ pub struct MoveStatic {
     pub no_damage_variance: bool,
     pub always_hit: bool,
     pub thaws_target: bool,
+    pub stalling_move: bool,
+    pub non_ghost_target: Option<String>,
     /// PS callback names on the move (non-empty = milestone 2 move).
     pub callbacks: Vec<String>,
     /// Condition block data (for moves that define one), kept raw.
@@ -388,12 +406,25 @@ impl MoveStatic {
             Value::Number(n) => Some(FixedDamage::Amount(n.as_i64().unwrap() as i32)),
             _ => None,
         });
-        let secondaries = d
+        let mut secondaries: Vec<HitEffect> = d
             .secondaries
             .as_ref()
             .and_then(|v| v.as_array())
             .map(|a| a.iter().map(parse_hit_effect).collect())
             .unwrap_or_default();
+        // The export records sub-block callbacks as "secondary.onHit" /
+        // "self.onHit" on the move's callback list.
+        if d.callbacks.iter().any(|c| c == "secondary.onHit") {
+            for s in &mut secondaries {
+                s.has_on_hit = true;
+            }
+        }
+        let mut self_effect = d.extra.get("self").map(parse_hit_effect);
+        if d.callbacks.iter().any(|c| c == "self.onHit") {
+            if let Some(se) = &mut self_effect {
+                se.has_on_hit = true;
+            }
+        }
         MoveStatic {
             name: d.name.clone(),
             move_type: d.move_type.clone(),
@@ -422,7 +453,7 @@ impl MoveStatic {
             struggle_recoil: xb("struggleRecoil"),
             multihit,
             secondaries,
-            self_effect: x("self").map(parse_hit_effect),
+            self_effect,
             damage,
             ohko: xb("ohko"),
             selfdestruct: xb("selfdestruct"),
@@ -448,6 +479,8 @@ impl MoveStatic {
             no_damage_variance: xb("noDamageVariance"),
             always_hit: xb("alwaysHit"),
             thaws_target: xb("thawsTarget"),
+            stalling_move: xb("stallingMove"),
+            non_ghost_target: x("nonGhostTarget").and_then(|v| v.as_str()).map(String::from),
             callbacks: d.callbacks.clone(),
             condition: d.condition.clone(),
         }
@@ -542,6 +575,13 @@ impl Dex {
             }))?;
             file.moves.insert("recharge".to_string(), recharge);
         }
+        // Non-function constant callbacks are invisible to the exporter:
+        // gen2 teleport carries `onTry: false` (fails silently, no message).
+        if let Some(teleport) = file.moves.get_mut("teleport") {
+            if !teleport.callbacks.iter().any(|c| c == "onTry") {
+                teleport.callbacks.push("onTry".to_string());
+            }
+        }
         let moves = Table::build(file.moves);
         let moves_static: Vec<MoveStatic> = moves.values.iter().map(MoveStatic::parse).collect();
 
@@ -565,15 +605,22 @@ impl Dex {
                 },
             );
         }
-        // move condition blocks (volatiles keyed by move id, e.g. lightscreen)
+        // move condition blocks (volatiles keyed by move id, e.g. lightscreen).
+        // Moves WITHOUT a condition block still intern as empty conditions:
+        // PS conditions.get(moveid) resolves a wrapper (twoturnmove adds e.g.
+        // a 'solarbeam' volatile).
         for (i, ms) in moves_static.iter().enumerate() {
             let id = moves.keys[i].clone();
             if entries.contains_key(&id) {
                 continue;
             }
-            let Some(Value::Object(cond)) = &ms.condition else { continue };
-            let cond_map: BTreeMap<String, Value> =
-                cond.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            let has_block = matches!(&ms.condition, Some(Value::Object(_)));
+            let cond_map: BTreeMap<String, Value> = match &ms.condition {
+                Some(Value::Object(cond)) => {
+                    cond.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+                }
+                _ => BTreeMap::new(),
+            };
             let callbacks = ms
                 .callbacks
                 .iter()
@@ -581,9 +628,11 @@ impl Dex {
                 .map(String::from)
                 .collect();
             entries.insert(
-                id,
+                id.clone(),
                 CondEntry {
-                    name: ms.name.clone(),
+                    // PS: a move without a condition block resolves to a
+                    // nonexistent Condition whose name is the raw id.
+                    name: if has_block { ms.name.clone() } else { id },
                     effect_type: EffectType::Condition,
                     duration: cond_map.get("duration").and_then(|v| v.as_i64()).map(|v| v as i32),
                     counter_max: cond_map
@@ -620,6 +669,9 @@ impl Dex {
             ("recoil", "Recoil"),
             ("drain", "Drain"),
             ("confused", "confused"),
+            // mysteryberry adds this ephemeral marker (PS resolves the id via
+            // the out-of-dex leppaberry item entry; no callbacks fire).
+            ("leppaberry", "Leppa Berry"),
         ] {
             entries.entry(id.to_string()).or_insert_with(|| CondEntry {
                 name: name.to_string(),

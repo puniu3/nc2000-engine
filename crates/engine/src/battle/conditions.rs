@@ -14,7 +14,10 @@ use super::{EffectHandle, RV};
 /// callback lists. PS allows non-function callbacks (constants); the export
 /// tool only records function-valued ones, so constants are listed here.
 pub fn has_builtin(cond: &str, callback: &str) -> bool {
-    matches!((cond, callback), ("mustrecharge", "onLockMove"))
+    matches!(
+        (cond, callback),
+        ("mustrecharge", "onLockMove") | ("rollout", "onLockMove") | ("bide", "onSemiLockMove")
+    )
 }
 
 /// durationCallback for conditions that define one. Returns None if the
@@ -33,7 +36,11 @@ pub fn duration_callback(
         "partiallytrapped" => Some(b.prng.random_range(3, 6) as i32),
         // gen2 lockedmove: random(2,4)
         "lockedmove" => Some(b.prng.random_range(2, 4) as i32),
-        // weathers: 5 unless rock items (M2)
+        "bide" => Some(b.prng.random_range(3, 5) as i32),
+        "disable" => Some(b.prng.random_range(2, 6) as i32),
+        "encore" => Some(b.prng.random_range(3, 7) as i32),
+        "safeguard" => Some(5),
+        // weathers: 5 unless rock items (not in NC2000's item pool)
         "raindance" | "sunnyday" | "sandstorm" => Some(5),
         _ => None,
     }
@@ -60,9 +67,16 @@ pub fn dispatch(
         EffectHandle::MoveEff(m) => {
             super::moveexec::dispatch_move_callback(b, dex, m, callback_name, target, source, relay)
         }
-        EffectHandle::Item(i) => {
-            panic!("unported item callback: {} {}", dex.items.key(i), callback_name)
-        }
+        EffectHandle::Item(i) => super::items::dispatch_item(
+            b,
+            dex,
+            i,
+            callback_name,
+            target,
+            source,
+            source_effect,
+            relay,
+        ),
         _ => RV::Undef,
     }
 }
@@ -557,9 +571,1163 @@ fn dispatch_cond(
             }
             RV::Undef
         }
+        // --------------------------------------------- lightscreen/reflect
+        ("lightscreen", "onSideStart") | ("reflect", "onSideStart") => {
+            let EvTarget::Side(n) = target else { return RV::Undef };
+            let ss = b.side_str(n);
+            let label = if cond == "lightscreen" { "move: Light Screen" } else { "Reflect" };
+            b.add(&["-sidestart", &ss, label]);
+            RV::Undef
+        }
+        ("lightscreen", "onSideEnd") | ("reflect", "onSideEnd") => {
+            let EvTarget::Side(n) = target else { return RV::Undef };
+            let ss = b.side_str(n);
+            let label = if cond == "lightscreen" { "move: Light Screen" } else { "Reflect" };
+            b.add(&["-sideend", &ss, label]);
+            RV::Undef
+        }
+        // ------------------------------------------------------- safeguard
+        ("safeguard", "onSideStart") => {
+            let EvTarget::Side(n) = target else { return RV::Undef };
+            let ss = b.side_str(n);
+            b.add(&["-sidestart", &ss, "Safeguard"]);
+            RV::Undef
+        }
+        ("safeguard", "onSideEnd") => {
+            let EvTarget::Side(n) = target else { return RV::Undef };
+            let ss = b.side_str(n);
+            b.add(&["-sideend", &ss, "Safeguard"]);
+            RV::Undef
+        }
+        ("safeguard", "onSetStatus") | ("safeguard", "onTryAddVolatile") => {
+            let t = tpoke.unwrap();
+            let Some(src) = source else { return RV::Undef };
+            if source_effect.is_none() {
+                return RV::Undef;
+            }
+            let is_move = matches!(source_effect, EffectHandle::MoveEff(_));
+            let infiltrates = b
+                .active_move
+                .as_ref()
+                .map(|am| {
+                    matches!(source_effect, EffectHandle::MoveEff(m) if am.id == Some(m))
+                        && am.infiltrates
+                })
+                .unwrap_or(false);
+            if is_move && infiltrates && t.side != src.side {
+                return RV::Undef;
+            }
+            if cb == "onSetStatus" {
+                if t != src {
+                    if is_move && !move_eff_has_secondaries(b, dex, source_effect) {
+                        let ts = b.poke_str(t);
+                        b.add(&["-activate", &ts, "move: Safeguard"]);
+                    }
+                    return RV::Null;
+                }
+            } else {
+                let is_confusion = relay == RV::Str("confusion".to_string());
+                if is_confusion && t != src {
+                    if is_move && !move_eff_has_secondaries(b, dex, source_effect) {
+                        let ts = b.poke_str(t);
+                        b.add(&["-activate", &ts, "move: Safeguard"]);
+                    }
+                    return RV::Null;
+                }
+            }
+            RV::Undef
+        }
+        // ---------------------------------------------------------- spikes
+        ("spikes", "onSideStart") => {
+            let EvTarget::Side(n) = target else { return RV::Undef };
+            let ss = b.side_str(n);
+            b.add(&["-sidestart", &ss, "Spikes"]);
+            if let Some(st) = b.state_at_mut(state) {
+                st.set_int("layers", 1);
+            }
+            RV::Undef
+        }
+        ("spikes", "onEntryHazard") => {
+            let t = tpoke.unwrap();
+            if b.poke(t).has_type("Flying") {
+                return RV::Undef;
+            }
+            let layers = b.state_at(state).map(|s| s.get_int("layers")).unwrap_or(1);
+            const AMOUNTS: [i64; 4] = [0, 3, 4, 6];
+            let dmg = AMOUNTS[layers.clamp(0, 3) as usize] as f64 * b.poke(t).maxhp as f64 / 24.0;
+            let eff = EffectHandle::Cond(dex.conds_id("spikes").unwrap());
+            b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
+            RV::Undef
+        }
+        // ------------------------------------------------------- leechseed
+        ("leechseed", "onStart") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-start", &ts, "move: Leech Seed"]);
+            RV::Undef
+        }
+        ("leechseed", "onAfterMoveSelf") => {
+            let t = tpoke.unwrap();
+            if b.poke(t).hp <= 0 {
+                return RV::Undef;
+            }
+            let leecher = b
+                .state_at(state)
+                .and_then(|s| s.source_slot.clone())
+                .and_then(|slot| b.poke_at_slot(&slot));
+            let Some(leecher) = leecher else { return RV::Undef };
+            if b.poke(leecher).fainted || b.poke(leecher).hp <= 0 {
+                return RV::Undef;
+            }
+            let to_leech =
+                super::clamp_int_range(b.poke(t).maxhp as f64 / 8.0, Some(1.0), None);
+            let eff = EffectHandle::Cond(dex.conds_id("leechseed").unwrap());
+            let dealt = b.damage(dex, to_leech, Some(t), Some(leecher), DamageEffect::Effect(eff), false);
+            if let Some(d) = dealt {
+                if d != 0.0 {
+                    b.heal(dex, d, Some(leecher), Some(t), super::dmg::HealEffect::Effect(eff));
+                }
+            }
+            RV::Undef
+        }
+        // ------------------------------------------------------- nightmare
+        ("nightmare", "onStart") => {
+            let t = tpoke.unwrap();
+            if b.poke(t).status != Status::Slp {
+                return RV::False;
+            }
+            let ts = b.poke_str(t);
+            b.add(&["-start", &ts, "Nightmare"]);
+            RV::Undef
+        }
+        ("nightmare", "onAfterMoveSelf") => {
+            let t = tpoke.unwrap();
+            if b.poke(t).status == Status::Slp {
+                let dmg = b.poke(t).base_maxhp as f64 / 4.0;
+                let eff = EffectHandle::Cond(dex.conds_id("nightmare").unwrap());
+                b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
+            }
+            RV::Undef
+        }
+        // ----------------------------------------------------------- curse
+        ("curse", "onStart") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            let of = format!("[of] {}", b.poke_str(source.unwrap()));
+            b.add(&["-start", &ts, "Curse", &of]);
+            RV::Undef
+        }
+        ("curse", "onAfterMoveSelf") => {
+            let t = tpoke.unwrap();
+            let dmg = b.poke(t).base_maxhp as f64 / 4.0;
+            let eff = EffectHandle::Cond(dex.conds_id("curse").unwrap());
+            b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
+            RV::Undef
+        }
+        // ------------------------------------------------------- foresight
+        ("foresight", "onStart") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-start", &ts, "Foresight"]);
+            RV::Undef
+        }
+        ("foresight", "onNegateImmunity") => {
+            let t = tpoke.unwrap();
+            if b.poke(t).has_type("Ghost") {
+                if let RV::Str(ty) = &relay {
+                    if ty == "Normal" || ty == "Fighting" {
+                        return RV::False;
+                    }
+                }
+            }
+            RV::Undef
+        }
+        // ---------------------------------------------------------- lockon
+        ("lockon", "onSourceAccuracy") => {
+            let StateLoc::Volatile(holder, _) = state else { return RV::Undef };
+            let locked_onto = b.state_at(state).and_then(|s| s.source);
+            if source == Some(holder) && tpoke.is_some() && tpoke == locked_onto {
+                return RV::True;
+            }
+            RV::Undef
+        }
+        // ----------------------------------------------------- destinybond
+        ("destinybond", "onStart") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-singlemove", &ts, "Destiny Bond"]);
+            RV::Undef
+        }
+        ("destinybond", "onFaint") => {
+            let t = tpoke.unwrap();
+            let Some(src) = source else { return RV::Undef };
+            if source_effect.is_none() || src.side == t.side {
+                return RV::Undef;
+            }
+            if let EffectHandle::MoveEff(m) = source_effect {
+                if !dex.move_static(m).has_flag("futuremove") {
+                    let ts = b.poke_str(t);
+                    b.add(&["-activate", &ts, "move: Destiny Bond"]);
+                    b.pokemon_faint(src, None, EffectHandle::None);
+                }
+            }
+            RV::Undef
+        }
+        ("destinybond", "onBeforeMove") => {
+            let t = tpoke.unwrap();
+            let is_db = b
+                .active_move
+                .as_ref()
+                .and_then(|m| m.id)
+                .map(|m| dex.moves.key(m) == "destinybond")
+                .unwrap_or(false);
+            if !is_db {
+                b.remove_volatile(dex, t, "destinybond");
+            }
+            RV::Undef
+        }
+        ("destinybond", "onMoveAborted") => {
+            let t = tpoke.unwrap();
+            b.remove_volatile(dex, t, "destinybond");
+            RV::Undef
+        }
+        // ------------------------------------------------------ perishsong
+        ("perishsong", "onResidual") => {
+            let t = tpoke.unwrap();
+            let dur = b.state_at(state).and_then(|s| s.duration).unwrap_or(0);
+            let ts = b.poke_str(t);
+            let tag = format!("perish{dur}");
+            b.add(&["-start", &ts, &tag]);
+            RV::Undef
+        }
+        ("perishsong", "onEnd") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-start", &ts, "perish0"]);
+            b.pokemon_faint(t, None, EffectHandle::None);
+            RV::Undef
+        }
+        // ---------------------------------------------------------- encore
+        ("encore", "onStart") => {
+            let t = tpoke.unwrap();
+            let locked = b.poke(t).last_move_encore;
+            let Some(locked) = locked else { return RV::False };
+            let has_slot = b.poke(t).get_move_slot(locked).map(|s| s.pp).unwrap_or(0) > 0;
+            if dex.move_static(locked).has_flag("failencore") || !has_slot {
+                return RV::False;
+            }
+            let locked_key = dex.moves.key(locked).to_string();
+            if let Some(st) = b.state_at_mut(state) {
+                st.set("move", Scalar::Str(locked_key.clone()));
+            }
+            let ts = b.poke_str(t);
+            b.add(&["-start", &ts, "Encore"]);
+            if locked_key == "pursuit" {
+                b.add_volatile(dex, t, "pursuit", Some(t), EffectHandle::MoveEff(locked));
+            }
+            RV::Undef
+        }
+        ("encore", "onOverrideAction") => {
+            let move_key = match source_effect {
+                EffectHandle::MoveEff(m) => dex.moves.key(m).to_string(),
+                _ => String::new(),
+            };
+            let locked = b
+                .state_at(state)
+                .and_then(|s| s.get("move").cloned())
+                .map(|v| match v {
+                    Scalar::Str(s) => s,
+                    _ => String::new(),
+                })
+                .unwrap_or_default();
+            if !locked.is_empty() && move_key != locked {
+                return RV::Str(locked);
+            }
+            RV::Undef
+        }
+        ("encore", "onResidual") => {
+            let t = tpoke.unwrap();
+            let locked = b
+                .state_at(state)
+                .and_then(|s| s.get("move").cloned())
+                .map(|v| match v {
+                    Scalar::Str(s) => s,
+                    _ => String::new(),
+                })
+                .unwrap_or_default();
+            let pp_left = dex
+                .moves
+                .id(&locked)
+                .and_then(|mid| b.poke(t).get_move_slot(mid).map(|s| s.pp))
+                .unwrap_or(0);
+            if pp_left <= 0 {
+                b.remove_volatile(dex, t, "encore");
+            }
+            RV::Undef
+        }
+        ("encore", "onEnd") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-end", &ts, "Encore"]);
+            RV::Undef
+        }
+        ("encore", "onDisableMove") => {
+            let t = tpoke.unwrap();
+            let locked = b
+                .state_at(state)
+                .and_then(|s| s.get("move").cloned())
+                .map(|v| match v {
+                    Scalar::Str(s) => s,
+                    _ => String::new(),
+                })
+                .unwrap_or_default();
+            let Some(mid) = dex.moves.id(&locked) else { return RV::Undef };
+            if b.poke(t).get_move_slot(mid).is_none() {
+                return RV::Undef;
+            }
+            let others: Vec<crate::dex::MoveId> = b
+                .poke(t)
+                .move_slots
+                .iter()
+                .map(|s| s.id)
+                .filter(|&id| id != mid)
+                .collect();
+            for other in others {
+                b.pokemon_disable_move(t, other);
+            }
+            RV::Undef
+        }
+        // --------------------------------------------------------- disable
+        ("disable", "onStart") => {
+            let t = tpoke.unwrap();
+            if !b.queue_will_move(t) {
+                if let Some(st) = b.state_at_mut(state) {
+                    if let Some(d) = st.duration {
+                        st.duration = Some(d + 1);
+                    }
+                }
+            }
+            let Some(last) = b.poke(t).last_move else { return RV::False };
+            let Some(slot) = b.poke(t).get_move_slot(last) else { return RV::False };
+            if slot.pp == 0 {
+                return RV::False;
+            }
+            let ts = b.poke_str(t);
+            let name = dex.move_static(last).name.clone();
+            b.add(&["-start", &ts, "Disable", &name]);
+            let key = dex.moves.key(last).to_string();
+            if let Some(st) = b.state_at_mut(state) {
+                st.set("move", Scalar::Str(key));
+            }
+            RV::Undef
+        }
+        ("disable", "onEnd") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-end", &ts, "Disable"]);
+            RV::Undef
+        }
+        ("disable", "onBeforeMove") => {
+            let t = tpoke.unwrap();
+            let locked = b
+                .state_at(state)
+                .and_then(|s| s.get("move").cloned())
+                .map(|v| match v {
+                    Scalar::Str(s) => s,
+                    _ => String::new(),
+                })
+                .unwrap_or_default();
+            let cur = b
+                .active_move
+                .as_ref()
+                .and_then(|m| m.id)
+                .map(|m| dex.moves.key(m).to_string())
+                .unwrap_or_default();
+            if !locked.is_empty() && cur == locked {
+                let ts = b.poke_str(t);
+                let name = b.active_move.as_ref().map(|m| m.name.clone()).unwrap_or_default();
+                b.add(&["cant", &ts, "Disable", &name]);
+                return RV::False;
+            }
+            RV::Undef
+        }
+        ("disable", "onDisableMove") => {
+            let t = tpoke.unwrap();
+            let locked = b
+                .state_at(state)
+                .and_then(|s| s.get("move").cloned())
+                .map(|v| match v {
+                    Scalar::Str(s) => s,
+                    _ => String::new(),
+                })
+                .unwrap_or_default();
+            if let Some(mid) = dex.moves.id(&locked) {
+                if b.poke(t).get_move_slot(mid).is_some() {
+                    b.pokemon_disable_move(t, mid);
+                }
+            }
+            RV::Undef
+        }
+        // ------------------------------------------------------------ mist
+        ("mist", "onStart") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-start", &ts, "Mist"]);
+            RV::Undef
+        }
+        ("mist", "onTryBoost") => {
+            let t = tpoke.unwrap();
+            let Some(src) = source else { return RV::Undef };
+            if t == src {
+                return RV::Undef;
+            }
+            let mut show_msg = false;
+            if let Some(table) = b.pending_boosts.as_mut() {
+                let before = table.len();
+                table.retain(|&(_, amt)| amt >= 0);
+                show_msg = table.len() != before;
+            }
+            if show_msg && !move_eff_has_secondaries(b, dex, source_effect) {
+                let ts = b.poke_str(t);
+                b.add(&["-activate", &ts, "move: Mist"]);
+            }
+            RV::Undef
+        }
+        // ------------------------------------------------------ substitute
+        ("substitute", "onStart") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-start", &ts, "Substitute"]);
+            let hp = (b.poke(t).maxhp as f64 / 4.0).floor() as i64;
+            if let Some(st) = b.state_at_mut(state) {
+                st.set_int("hp", hp);
+            }
+            let pt = dex.conds_id("partiallytrapped").unwrap();
+            if b.poke(t).has_volatile(pt) {
+                let src_move = b.poke(t).volatile(pt).and_then(|v| v.source_effect.clone());
+                let name = src_move_name(dex, &src_move);
+                let ts = b.poke_str(t);
+                b.add(&["-end", &ts, &name, "[partiallytrapped]", "[silent]"]);
+                b.poke_mut(t).volatiles.retain(|(k, _)| *k != pt);
+            }
+            RV::Undef
+        }
+        ("substitute", "onEnd") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-end", &ts, "Substitute"]);
+            RV::Undef
+        }
+        ("substitute", "onTryPrimaryHit") => {
+            let t = tpoke.unwrap();
+            let src = source.unwrap();
+            let (stalling, is_drain, category, move_key, has_status, has_boosts, vs, has_recoil) = {
+                let am = b.active_move.as_ref().unwrap();
+                (
+                    am.stalling_move,
+                    am.drain.is_some(),
+                    am.category,
+                    am.id.map(|m| dex.moves.key(m).to_string()).unwrap_or_default(),
+                    am.status.is_some(),
+                    am.has_boosts,
+                    am.volatile_status.clone(),
+                    am.recoil.is_some(),
+                )
+            };
+            if stalling {
+                let ss = b.poke_str(src);
+                b.add(&["-fail", &ss]);
+                return RV::Null;
+            }
+            if t == src {
+                return RV::Undef;
+            }
+            if move_key == "twineedle" {
+                if let Some(am) = b.active_move.as_mut() {
+                    am.secondaries.retain(|s| !s.kingsrock);
+                }
+            }
+            if is_drain {
+                let ss = b.poke_str(src);
+                b.add(&["-miss", &ss]);
+                b.hint("In Gen 2, draining moves always miss against Substitute.", false);
+                return RV::Null;
+            }
+            if category == crate::dex::Category::Status {
+                const SUB_BLOCKED: [&str; 6] =
+                    ["leechseed", "lockon", "mindreader", "nightmare", "painsplit", "sketch"];
+                let mut vs = vs;
+                if move_key == "swagger" {
+                    if let Some(am) = b.active_move.as_mut() {
+                        am.volatile_status = None;
+                    }
+                    vs = None;
+                }
+                if has_status
+                    || (has_boosts && move_key != "swagger")
+                    || vs.as_deref() == Some("confusion")
+                    || SUB_BLOCKED.contains(&move_key.as_str())
+                {
+                    let ts = b.poke_str(t);
+                    let name = b.active_move.as_ref().map(|m| m.name.clone()).unwrap_or_default();
+                    let block = format!("[block] {name}");
+                    b.add(&["-activate", &ts, "Substitute", &block]);
+                    return RV::Null;
+                }
+                return RV::Undef;
+            }
+            let calc = b.get_damage(dex, src, t, false);
+            let mut damage = match calc {
+                super::moveexec::DamageResult::Damage(d) if d > 0.0 => d,
+                _ => return RV::Null,
+            };
+            let sub = dex.conds_id("substitute").unwrap();
+            let sub_hp = b.poke(t).volatile(sub).map(|v| v.get_int("hp")).unwrap_or(0);
+            if damage > sub_hp as f64 {
+                damage = sub_hp as f64;
+            }
+            if let Some(vsq) = b.poke_mut(t).volatile_mut(sub) {
+                let hp = vsq.get_int("hp");
+                vsq.set_int("hp", hp - damage as i64);
+            }
+            b.poke_mut(src).last_damage = damage as i64;
+            let left = b.poke(t).volatile(sub).map(|v| v.get_int("hp")).unwrap_or(0);
+            if left <= 0 {
+                b.remove_volatile(dex, t, "substitute");
+            } else {
+                let ts = b.poke_str(t);
+                b.add(&["-activate", &ts, "Substitute", "[damage]"]);
+            }
+            if has_recoil {
+                b.damage(dex, 1.0, Some(src), Some(t), DamageEffect::Recoil, false);
+            }
+            let move_eff = b
+                .active_move
+                .as_ref()
+                .and_then(|m| m.id)
+                .map(EffectHandle::MoveEff)
+                .unwrap_or(EffectHandle::None);
+            b.run_event(
+                dex,
+                "AfterSubDamage",
+                EvTarget::Poke(t),
+                Some(src),
+                move_eff,
+                Some(RV::Num(damage)),
+                false,
+                false,
+            );
+            RV::Num(0.0) // HIT_SUBSTITUTE
+        }
+        // ------------------------------------------------------------ bide
+        ("bide", "onStart") => {
+            let t = tpoke.unwrap();
+            if let Some(st) = b.state_at_mut(state) {
+                st.set_int("totalDamage", 0);
+            }
+            let ts = b.poke_str(t);
+            b.add(&["-start", &ts, "move: Bide"]);
+            RV::Undef
+        }
+        ("bide", "onDamage") => {
+            if !matches!(source_effect, EffectHandle::MoveEff(_)) || source.is_none() {
+                return RV::Undef;
+            }
+            let dmg = relay.as_num() as i64;
+            if let Some(st) = b.state_at_mut(state) {
+                let cur = st.get_int("totalDamage");
+                st.set_int("totalDamage", cur + dmg);
+                st.last_damage_source = source;
+            }
+            RV::Undef
+        }
+        ("bide", "onBeforeMove") => {
+            let t = tpoke.unwrap();
+            let (duration, total, last_src) = {
+                let st = b.state_at(state).unwrap();
+                (st.duration.unwrap_or(0), st.get_int("totalDamage"), st.last_damage_source)
+            };
+            if duration == 1 {
+                let ts = b.poke_str(t);
+                b.add(&["-end", &ts, "move: Bide"]);
+                if total == 0 {
+                    let ts = b.poke_str(t);
+                    b.add(&["-fail", &ts]);
+                    return RV::False;
+                }
+                let mut bide_target = match last_src {
+                    Some(s) => s,
+                    None => {
+                        let ts = b.poke_str(t);
+                        b.add(&["-fail", &ts]);
+                        return RV::False;
+                    }
+                };
+                if !b.poke(bide_target).is_active {
+                    match b.get_random_target("normal", t) {
+                        Some(nt) => bide_target = nt,
+                        None => {
+                            let ts = b.poke_str(t);
+                            b.add(&["-miss", &ts]);
+                            return RV::False;
+                        }
+                    }
+                }
+                // synthetic 'bide' unleash move
+                let bide_id = dex.moves.id("bide").unwrap();
+                let mut fake = super::moveexec::get_active_move(dex, bide_id);
+                fake.accuracy = crate::dex::Accuracy::Pct(100);
+                fake.base_power = 0;
+                fake.damage = Some(crate::dex::FixedDamage::Amount((total * 2) as i32));
+                fake.category = crate::dex::Category::Physical;
+                fake.move_type = "Normal".into();
+                fake.crit_ratio = 0;
+                fake.will_crit = None;
+                fake.priority = 0;
+                fake.target = "normal".into();
+                fake.volatile_status = None;
+                fake.secondaries = Vec::new();
+                fake.self_effect = None;
+                fake.flags = vec!["contact".into(), "protect".into()];
+                fake.has_callbacks = Vec::new();
+                let saved_move = b.active_move.take();
+                let saved_pokemon = b.active_pokemon;
+                let saved_target = b.active_target;
+                b.set_active_move(fake, Some(t), Some(bide_target));
+                b.try_move_hit(dex, bide_target, t);
+                b.active_move = saved_move;
+                b.active_pokemon = saved_pokemon;
+                b.active_target = saved_target;
+                b.remove_volatile(dex, t, "bide");
+                return RV::False;
+            }
+            let ts = b.poke_str(t);
+            b.add(&["-activate", &ts, "move: Bide"]);
+            RV::Undef
+        }
+        ("bide", "onMoveAborted") => {
+            let t = tpoke.unwrap();
+            b.remove_volatile(dex, t, "bide");
+            RV::Undef
+        }
+        ("bide", "onEnd") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-end", &ts, "move: Bide", "[silent]"]);
+            RV::Undef
+        }
+        ("bide", "onSemiLockMove") => RV::Str("bide".to_string()),
+        // ------------------------------------------------------------ rage
+        ("rage", "onStart") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-singlemove", &ts, "Rage"]);
+            RV::Undef
+        }
+        ("rage", "onHit") => {
+            let t = tpoke.unwrap();
+            let category = b.active_move.as_ref().map(|m| m.category);
+            if source != Some(t) && category != Some(crate::dex::Category::Status) {
+                let eff = EffectHandle::Cond(dex.conds_id("rage").unwrap());
+                b.boost(dex, &[(0, 1)], Some(t), source, eff);
+            }
+            RV::Undef
+        }
+        ("rage", "onBeforeMove") => {
+            let t = tpoke.unwrap();
+            b.remove_volatile(dex, t, "rage");
+            RV::Undef
+        }
+        // --------------------------------------------------------- rollout
+        ("rollout", "onStart") => {
+            if let Some(st) = b.state_at_mut(state) {
+                st.set_int("hitCount", 0);
+                st.set_int("contactHitCount", 0);
+            }
+            RV::Undef
+        }
+        ("rollout", "onResidual") => {
+            let t = tpoke.unwrap();
+            let is_struggle = b
+                .poke(t)
+                .last_move
+                .map(|lm| dex.moves.key(lm) == "struggle")
+                .unwrap_or(false);
+            if is_struggle {
+                let ro = dex.conds_id("rollout").unwrap();
+                b.poke_mut(t).volatiles.retain(|(k, _)| *k != ro);
+            }
+            RV::Undef
+        }
+        ("rollout", "onLockMove") => RV::Str("rollout".to_string()),
+        // ------------------------------------------------------ furycutter
+        ("furycutter", "onStart") => {
+            if let Some(st) = b.state_at_mut(state) {
+                st.set_int("multiplier", 1);
+            }
+            RV::Undef
+        }
+        ("furycutter", "onRestart") => {
+            if let Some(st) = b.state_at_mut(state) {
+                let m = st.get_int("multiplier");
+                if m < 16 {
+                    st.set_int("multiplier", m << 1);
+                }
+                st.duration = Some(2);
+            }
+            RV::Undef
+        }
+        // ------------------------------------------- defensecurl/minimize
+        ("defensecurl", "onRestart") | ("minimize", "onRestart") => RV::Null,
+        ("minimize", "onSourceModifyDamage") => {
+            let has_flag = b
+                .active_move
+                .as_ref()
+                .map(|m| m.has_flag("minimize"))
+                .unwrap_or(false);
+            if has_flag {
+                b.chain_modify(2.0, 1.0);
+            }
+            RV::Undef
+        }
+        // --------------------------------------------------------- attract
+        ("attract", "onStart") => {
+            let t = tpoke.unwrap();
+            let src = source.unwrap();
+            let tg = b.poke(t).gender.clone();
+            let sg = b.poke(src).gender.clone();
+            if !((tg == "M" && sg == "F") || (tg == "F" && sg == "M")) {
+                return RV::False;
+            }
+            if !b
+                .run_event(dex, "Attract", EvTarget::Poke(t), Some(src), EffectHandle::None, None, false, false)
+                .truthy()
+            {
+                return RV::False;
+            }
+            let ts = b.poke_str(t);
+            b.add(&["-start", &ts, "Attract"]);
+            RV::Undef
+        }
+        ("attract", "onUpdate") => {
+            let t = tpoke.unwrap();
+            let src = b.state_at(state).and_then(|s| s.source);
+            if let Some(src) = src {
+                if !b.poke(src).is_active {
+                    b.remove_volatile(dex, t, "attract");
+                }
+            }
+            RV::Undef
+        }
+        ("attract", "onBeforeMove") => {
+            let t = tpoke.unwrap();
+            let src = b.state_at(state).and_then(|s| s.source);
+            let ts = b.poke_str(t);
+            let of = format!("[of] {}", src.map(|s| b.poke_str(s)).unwrap_or_default());
+            b.add(&["-activate", &ts, "move: Attract", &of]);
+            if b.prng.random_chance(1, 2) {
+                let ts = b.poke_str(t);
+                b.add(&["cant", &ts, "Attract"]);
+                return RV::False;
+            }
+            RV::Undef
+        }
+        ("attract", "onEnd") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-end", &ts, "Attract", "[silent]"]);
+            RV::Undef
+        }
+        // ----------------------------------------------------- focusenergy
+        ("focusenergy", "onStart") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            let silent = matches!(
+                source_effect,
+                EffectHandle::MoveEff(m) if matches!(dex.moves.key(m), "psychup" | "transform")
+            );
+            if silent {
+                b.add(&["-start", &ts, "move: Focus Energy", "[silent]"]);
+            } else {
+                b.add(&["-start", &ts, "move: Focus Energy"]);
+            }
+            RV::Undef
+        }
+        ("focusenergy", "onModifyCritRatio") => RV::Num(relay.as_num() + 1.0),
+        // --------------------------------------------------------- protect
+        ("protect", "onStart") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-singleturn", &ts, "Protect"]);
+            RV::Undef
+        }
+        ("protect", "onTryHit") => {
+            let t = tpoke.unwrap();
+            let has_protect_flag = b
+                .active_move
+                .as_ref()
+                .map(|m| m.has_flag("protect"))
+                .unwrap_or(false);
+            if !has_protect_flag {
+                return RV::Undef; // move bypasses protect
+            }
+            let src = source.unwrap();
+            if !b
+                .run_event(dex, "HitProtect", EvTarget::Poke(src), tpoke, EffectHandle::None, None, false, false)
+                .truthy()
+            {
+                return RV::Undef;
+            }
+            let ts = b.poke_str(t);
+            b.add(&["-activate", &ts, "Protect"]);
+            RV::Null
+        }
+        // ---------------------------------------------------------- endure
+        ("endure", "onStart") => {
+            let t = tpoke.unwrap();
+            let ts = b.poke_str(t);
+            b.add(&["-singleturn", &ts, "move: Endure"]);
+            RV::Undef
+        }
+        ("endure", "onDamage") => {
+            let t = tpoke.unwrap();
+            if matches!(source_effect, EffectHandle::MoveEff(_)) {
+                let damage = relay.as_num();
+                if damage >= b.poke(t).hp as f64 {
+                    let ts = b.poke_str(t);
+                    b.add(&["-activate", &ts, "move: Endure"]);
+                    return RV::Num(b.poke(t).hp as f64 - 1.0);
+                }
+            }
+            RV::Undef
+        }
+        // ----------------------------------------------------------- stall
+        ("stall", "onStart") => {
+            if let Some(st) = b.state_at_mut(state) {
+                st.set_int("counter", 127);
+            }
+            RV::Undef
+        }
+        ("stall", "onStallMove") => {
+            let counter = b
+                .state_at(state)
+                .and_then(|s| s.get("counter").cloned())
+                .map(|v| v.as_f64())
+                .unwrap_or(0.0);
+            let mut c = counter.floor() as u32;
+            if c == 0 {
+                c = 127;
+            }
+            RV::from_bool(b.prng.random_chance(c, 255))
+        }
+        ("stall", "onRestart") => {
+            if let Some(st) = b.state_at_mut(state) {
+                let c = st.get("counter").map(|v| v.as_f64()).unwrap_or(127.0);
+                let half = c / 2.0;
+                if half.fract() == 0.0 {
+                    st.set("counter", Scalar::Int(half as i64));
+                } else {
+                    st.set("counter", Scalar::Float(half));
+                }
+                st.duration = Some(2);
+            }
+            RV::Undef
+        }
+        // ----------------------------------------------------- twoturnmove
+        ("twoturnmove", "onStart") => {
+            let t = tpoke.unwrap();
+            let EffectHandle::MoveEff(mv) = source_effect else { return RV::Undef };
+            let move_key = dex.moves.key(mv).to_string();
+            if let Some(st) = b.state_at_mut(state) {
+                st.set("move", Scalar::Str(move_key.clone()));
+            }
+            b.add_volatile(dex, t, &move_key, None, EffectHandle::None);
+            // gen2 runMove's moveUsed() never passes targetLoc, so this is
+            // None for directly-used charge moves...
+            let mut move_target_loc = b.poke(t).last_move_target_loc;
+            // ...but metronome/mirror-move-called charge moves (sourceEffect
+            // set) retarget explicitly.
+            let has_source_effect = b
+                .active_move
+                .as_ref()
+                .map(|am| am.source_effect.is_some())
+                .unwrap_or(false);
+            if has_source_effect && dex.move_static(mv).target != "self" {
+                let mut defender = source;
+                if defender.map(|d| b.poke(d).fainted).unwrap_or(false) {
+                    // this.sample(attacker.foes(true)) — consumes PRNG
+                    let foes = b.foes_of(t, true);
+                    if !foes.is_empty() {
+                        defender = Some(foes[b.prng.sample_index(foes.len())]);
+                    }
+                }
+                if let Some(d) = defender {
+                    move_target_loc = Some(if d.side == t.side { -1 } else { 1 });
+                }
+            }
+            let mvc = dex.conds_id(&move_key).unwrap();
+            if let Some(loc) = move_target_loc {
+                if let Some(vs) = b.poke_mut(t).volatile_mut(mvc) {
+                    vs.set_int("targetLoc", loc as i64);
+                }
+            }
+            b.attr_last_move(&["[still]"]);
+            b.run_event(dex, "PrepareHit", EvTarget::Poke(t), source, source_effect, None, false, false);
+            RV::Undef
+        }
+        ("twoturnmove", "onEnd") => {
+            let t = tpoke.unwrap();
+            let locked = b
+                .state_at(state)
+                .and_then(|s| s.get("move").cloned())
+                .map(|v| match v {
+                    Scalar::Str(s) => s,
+                    _ => String::new(),
+                })
+                .unwrap_or_default();
+            if !locked.is_empty() {
+                b.remove_volatile(dex, t, &locked);
+            }
+            RV::Undef
+        }
+        ("twoturnmove", "onLockMove") => {
+            let locked = b
+                .state_at(state)
+                .and_then(|s| s.get("move").cloned())
+                .map(|v| match v {
+                    Scalar::Str(s) => s,
+                    _ => String::new(),
+                })
+                .unwrap_or_default();
+            RV::Str(locked)
+        }
+        ("twoturnmove", "onMoveAborted") => {
+            let t = tpoke.unwrap();
+            b.remove_volatile(dex, t, "twoturnmove");
+            RV::Undef
+        }
+        // ---------------------------------------------- dig / fly volatiles
+        ("dig", "onImmunity") => {
+            if relay == RV::Str("sandstorm".to_string()) || relay == RV::Str("hail".to_string()) {
+                return RV::False;
+            }
+            RV::Undef
+        }
+        ("dig", "onInvulnerability") | ("fly", "onInvulnerability") => {
+            let move_key = b
+                .active_move
+                .as_ref()
+                .and_then(|m| m.id)
+                .map(|m| dex.moves.key(m).to_string())
+                .unwrap_or_default();
+            if cond == "dig" {
+                if matches!(move_key.as_str(), "earthquake" | "magnitude" | "fissure") {
+                    return RV::Undef;
+                }
+            } else {
+                if matches!(move_key.as_str(), "gust" | "twister" | "thunder" | "whirlwind") {
+                    return RV::Undef;
+                }
+                if matches!(move_key.as_str(), "earthquake" | "magnitude" | "fissure") {
+                    return RV::False;
+                }
+            }
+            if matches!(
+                move_key.as_str(),
+                "attract" | "curse" | "foresight" | "meanlook" | "mimic" | "nightmare"
+                    | "spiderweb" | "transform"
+            ) {
+                return RV::False;
+            }
+            // lock-on: source has lockon volatile targeting this pokemon
+            if let (Some(t), Some(src)) = (tpoke, source) {
+                let lo = dex.conds_id("lockon").unwrap();
+                let locked = b
+                    .poke(src)
+                    .volatile(lo)
+                    .and_then(|v| v.source)
+                    .map(|locked| locked == t)
+                    .unwrap_or(false);
+                if b.poke(src).has_volatile(lo) && locked {
+                    return RV::Undef;
+                }
+            }
+            RV::False
+        }
+        ("dig", "onSourceBasePower") | ("fly", "onSourceBasePower") => {
+            let move_key = b
+                .active_move
+                .as_ref()
+                .and_then(|m| m.id)
+                .map(|m| dex.moves.key(m).to_string())
+                .unwrap_or_default();
+            let doubled = if cond == "dig" {
+                matches!(move_key.as_str(), "earthquake" | "magnitude")
+            } else {
+                matches!(move_key.as_str(), "gust" | "twister")
+            };
+            if doubled {
+                b.chain_modify(2.0, 1.0);
+            }
+            RV::Undef
+        }
+        // ------------------------------------------------------ lockedmove
+        ("lockedmove", "onStart") => {
+            let move_key = match source_effect {
+                EffectHandle::MoveEff(m) => dex.moves.key(m).to_string(),
+                EffectHandle::Cond(c) => dex.conds_key(c).to_string(),
+                _ => String::new(),
+            };
+            if let Some(st) = b.state_at_mut(state) {
+                st.set("move", Scalar::Str(move_key));
+            }
+            RV::Undef
+        }
+        ("lockedmove", "onResidual") => {
+            let t = tpoke.unwrap();
+            let is_struggle = b
+                .poke(t)
+                .last_move
+                .map(|lm| dex.moves.key(lm) == "struggle")
+                .unwrap_or(false);
+            if is_struggle || b.poke(t).status == Status::Slp {
+                // direct delete (no End event → no confusion)
+                let lm = dex.conds_id("lockedmove").unwrap();
+                b.poke_mut(t).volatiles.retain(|(k, _)| *k != lm);
+            }
+            RV::Undef
+        }
+        ("lockedmove", "onEnd") => {
+            let t = tpoke.unwrap();
+            // silently delete confusion, then re-add unless safeguard
+            let conf = dex.conds_id("confusion").unwrap();
+            b.poke_mut(t).volatiles.retain(|(k, _)| *k != conf);
+            let sg = dex.conds_id("safeguard").unwrap();
+            if !b.sides[t.side as usize].has_side_condition(sg) {
+                let lm_eff = EffectHandle::Cond(dex.conds_id("lockedmove").unwrap());
+                b.add_volatile(dex, t, "confusion", None, lm_eff);
+            }
+            RV::Undef
+        }
+        ("lockedmove", "onLockMove") => {
+            let locked = b
+                .state_at(state)
+                .and_then(|s| s.get("move").cloned())
+                .map(|v| match v {
+                    Scalar::Str(s) => s,
+                    _ => String::new(),
+                })
+                .unwrap_or_default();
+            RV::Str(locked)
+        }
+        ("lockedmove", "onMoveAborted") => {
+            let t = tpoke.unwrap();
+            let lm = dex.conds_id("lockedmove").unwrap();
+            b.poke_mut(t).volatiles.retain(|(k, _)| *k != lm);
+            RV::Undef
+        }
+        // --------------------------------------------------------- pursuit
+        ("pursuit", "onFoeBeforeSwitchOut") => {
+            let switching = tpoke.unwrap();
+            let StateLoc::Volatile(holder, _) = state else { return RV::Undef };
+            let (target_loc, src_effect) = {
+                let st = b.state_at(state).unwrap();
+                (st.get_int("targetLoc"), st.source_effect.clone())
+            };
+            let expected_loc: i64 = if switching.side == holder.side { -1 } else { 1 };
+            if target_loc != expected_loc {
+                return RV::Undef;
+            }
+            if b.poke(holder).hp <= 0 {
+                return RV::Undef;
+            }
+            let en = dex.conds_id("encore").unwrap();
+            if let Some(enc) = b.poke(holder).volatile(en) {
+                let enc_move = enc
+                    .get("move")
+                    .map(|v| match v {
+                        Scalar::Str(s) => s.clone(),
+                        _ => String::new(),
+                    })
+                    .unwrap_or_default();
+                if enc_move != "pursuit" {
+                    return RV::Undef;
+                }
+            }
+            if !b.queue_cancel_move(holder) {
+                return RV::Undef;
+            }
+            let holder_speed = b.poke(holder).speed;
+            let switching_speed = b.poke(switching).speed;
+            if holder_speed < switching_speed
+                || (holder_speed == switching_speed && b.prng.random_chance(1, 2))
+            {
+                b.remove_volatile(dex, switching, "destinybond");
+            }
+            let pursuit_id = dex.moves.id("pursuit").unwrap();
+            let se = src_effect.and_then(|id| dex.moves.id(&id));
+            b.run_move(dex, pursuit_id, holder, expected_loc as i8, se);
+            RV::Undef
+        }
+        // ------------------------------------------------------ futuremove
+        ("futuremove", "onStart") => {
+            let t = tpoke.unwrap();
+            let slot = b.slot_str(t);
+            let ending = b.turn as i64 + 1;
+            if let Some(st) = b.state_at_mut(state) {
+                st.set("targetSlot", Scalar::Str(slot));
+                st.set_int("endingTurn", ending);
+            }
+            RV::Undef
+        }
+        ("futuremove", "onResidual") => {
+            let (ending, slot) = {
+                let st = b.state_at(state).unwrap();
+                (
+                    st.get_int("endingTurn"),
+                    st.get("targetSlot")
+                        .map(|v| match v {
+                            Scalar::Str(s) => s.clone(),
+                            _ => String::new(),
+                        })
+                        .unwrap_or_default(),
+                )
+            };
+            // getOverflowedTurnCount() = turn - 1 for gen < 8
+            if (b.turn as i64 - 1) < ending {
+                return RV::Undef;
+            }
+            if let Some(at_slot) = b.poke_at_slot(&slot) {
+                let fm = dex.conds_id("futuremove").unwrap();
+                b.remove_slot_condition(dex, at_slot, fm);
+            }
+            RV::Undef
+        }
+        ("futuremove", "onEnd") => {
+            let t = tpoke.unwrap();
+            super::moveexec::resolve_future_move(b, dex, state, t);
+            RV::Undef
+        }
+        // ---------------------------------------------------------- trapper
+        ("trapper", _) => RV::Undef,
         // ------------------------------------------------- marker volatiles
-        ("brnattackdrop", _) | ("parspeeddrop", _) => RV::Undef,
+        ("brnattackdrop", _) | ("parspeeddrop", _) | ("leppaberry", _) => RV::Undef,
         _ => panic!("unported condition callback: {cond} {cb}"),
+    }
+}
+
+/// Whether the effect (a move) has secondaries — mist/safeguard message gate.
+fn move_eff_has_secondaries(b: &Battle, dex: &Dex, effect: EffectHandle) -> bool {
+    match effect {
+        EffectHandle::MoveEff(m) => {
+            if let Some(am) = &b.active_move {
+                if am.id == Some(m) {
+                    return !am.secondaries.is_empty();
+                }
+            }
+            !dex.move_static(m).secondaries.is_empty()
+        }
+        _ => false,
     }
 }
 

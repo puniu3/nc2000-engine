@@ -1,0 +1,560 @@
+======================================================================
+## dragonfang  (name: Dragon Fang)
+meta: {"fling":{"basePower":70},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifySpAPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Dragon") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## berryjuice  (name: Berry Juice)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onResidualOrder = 10
+--- onResidualSubOrder = 4
+--- onResidual:
+onResidual(pokemon) {
+      if (pokemon.hp <= pokemon.maxhp / 2) {
+        if (this.runEvent("TryHeal", pokemon, null, this.effect, 20) && pokemon.useItem()) {
+          this.heal(20);
+        }
+      }
+    }
+======================================================================
+## blackbelt  (name: Black Belt)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifyAtkPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Fighting") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## blackglasses  (name: Black Glasses)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifySpAPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Dark") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## brightpowder  (name: Bright Powder)
+meta: {"fling":{"basePower":10},"isBerry":false,"ignoreKlutz":false}
+--- onModifyAccuracyPriority = 5
+--- onModifyAccuracy:
+onModifyAccuracy(accuracy) {
+      if (typeof accuracy !== "number") return;
+      this.debug("brightpowder - decreasing accuracy");
+      return accuracy - 20;
+    }
+======================================================================
+## charcoal  (name: Charcoal)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifySpAPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Fire") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## focusband  (name: Focus Band)
+meta: {"fling":{"basePower":10},"isBerry":false,"ignoreKlutz":false}
+--- onDamagePriority = -40
+--- onDamage:
+onDamage(damage, target, source, effect) {
+      if (this.randomChance(30, 256) && damage >= target.hp && effect && effect.effectType === "Move") {
+        this.add("-activate", target, "item: Focus Band");
+        return target.hp - 1;
+      }
+    }
+======================================================================
+## hardstone  (name: Hard Stone)
+meta: {"fling":{"basePower":100},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifyAtkPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Rock") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## kingsrock  (name: King's Rock)
+meta: {"fling":{"basePower":30,"volatileStatus":"flinch"},"isBerry":false,"ignoreKlutz":false}
+--- onModifyMovePriority = -1
+--- onModifyMove:
+onModifyMove(move) {
+      const affectedByKingsRock = [
+        "absorb",
+        "aeroblast",
+        "barrage",
+        "beatup",
+        "bide",
+        "bonerush",
+        "bonemerang",
+        "cometpunch",
+        "counter",
+        "crabhammer",
+        "crosschop",
+        "cut",
+        "dig",
+        "doublekick",
+        "doubleslap",
+        "doubleedge",
+        "dragonrage",
+        "drillpeck",
+        "eggbomb",
+        "explosion",
+        "extremespeed",
+        "falseswipe",
+        "feintattack",
+        "flail",
+        "fly",
+        "frustration",
+        "furyattack",
+        "furycutter",
+        "furyswipes",
+        "gigadrain",
+        "hiddenpower",
+        "highjumpkick",
+        "hornattack",
+        "hydropump",
+        "jumpkick",
+        "karatechop",
+        "leechlife",
+        "machpunch",
+        "magnitude",
+        "megadrain",
+        "megakick",
+        "megapunch",
+        "megahorn",
+        "mirrorcoat",
+        "nightshade",
+        "outrage",
+        "payday",
+        "peck",
+        "petaldance",
+        "pinmissile",
+        "pound",
+        "present",
+        "pursuit",
+        "psywave",
+        "quickattack",
+        "rage",
+        "rapidspin",
+        "razorleaf",
+        "razorwind",
+        "return",
+        "reversal",
+        "rockthrow",
+        "rollout",
+        "scratch",
+        "seismictoss",
+        "selfdestruct",
+        "skullbash",
+        "skyattack",
+        "slam",
+        "slash",
+        "snore",
+        "solarbeam",
+        "sonicboom",
+        "spikecannon",
+        "strength",
+        "struggle",
+        "submission",
+        "superfang",
+        "surf",
+        "swift",
+        "tackle",
+        "takedown",
+        "thief",
+        "thrash",
+        "triplekick",
+        "twineedle",
+        "visegrip",
+        "vinewhip",
+        "vitalthrow",
+        "watergun",
+        "waterfall",
+        "wingattack"
+      ];
+      if (affectedByKingsRock.includes(move.id)) {
+        if (!move.secondaries) move.secondaries = [];
+        move.secondaries.push({
+          chance: 12,
+          volatileStatus: "flinch",
+          kingsrock: true
+        });
+      }
+    }
+======================================================================
+## leftovers  (name: Leftovers)
+meta: {"fling":{"basePower":10},"isBerry":false,"ignoreKlutz":false}
+--- onResidualOrder = 5
+--- onResidualSubOrder = 1
+--- onResidual:
+onResidual(pokemon) {
+      this.heal(pokemon.baseMaxhp / 16);
+    }
+======================================================================
+## luckypunch  (name: Lucky Punch)
+meta: {"fling":{"basePower":40},"isBerry":false,"ignoreKlutz":false}
+--- onModifyCritRatio:
+onModifyCritRatio(critRatio, user) {
+      if (user.species.name === "Chansey") {
+        return 3;
+      }
+    }
+--- onModifyCritRatioPriority = -1
+======================================================================
+## magnet  (name: Magnet)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifySpAPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Electric") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## metalcoat  (name: Metal Coat)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifyAtkPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Steel") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## miracleseed  (name: Miracle Seed)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifySpAPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Grass") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## mysticwater  (name: Mystic Water)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifySpAPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Water") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## nevermeltice  (name: Never-Melt Ice)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifySpAPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Ice") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## poisonbarb  (name: Poison Barb)
+meta: {"fling":{"basePower":70,"status":"psn"},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifyAtkPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Poison") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## sharpbeak  (name: Sharp Beak)
+meta: {"fling":{"basePower":50},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifyAtkPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Flying") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## silverpowder  (name: Silver Powder)
+meta: {"fling":{"basePower":10},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifyAtkPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Bug") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## softsand  (name: Soft Sand)
+meta: {"fling":{"basePower":10},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifyAtkPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Ground") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## spelltag  (name: Spell Tag)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifyAtkPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Ghost") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## stick  (name: Stick)
+meta: {"fling":{"basePower":60},"isBerry":false,"ignoreKlutz":false}
+--- onModifyCritRatio:
+onModifyCritRatio(critRatio, user) {
+      if (user.species.id === "farfetchd") {
+        return 3;
+      }
+    }
+--- onModifyCritRatioPriority = -1
+======================================================================
+## twistedspoon  (name: Twisted Spoon)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onBasePowerPriority = 15
+--- onModifySpAPriority = 1
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Psychic") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## berry  (name: Berry)
+meta: {"fling":{"basePower":10},"naturalGift":{"basePower":80,"type":"Poison"},"isBerry":true,"ignoreKlutz":false}
+--- onResidualOrder = 10
+--- onResidual:
+onResidual(pokemon) {
+      if (pokemon.hp <= pokemon.maxhp / 2) {
+        pokemon.eatItem();
+      }
+    }
+--- onTryEatItem:
+onTryEatItem(item, pokemon) {
+      if (!this.runEvent("TryHeal", pokemon, null, this.effect, 10)) return false;
+    }
+--- onEat:
+onEat(pokemon) {
+      this.heal(10);
+    }
+======================================================================
+## berserkgene  (name: Berserk Gene)
+meta: {"boosts":{"atk":2},"isBerry":false,"ignoreKlutz":false}
+--- onUpdate:
+onUpdate(pokemon) {
+      if (pokemon.useItem()) {
+        pokemon.addVolatile("confusion");
+      }
+    }
+======================================================================
+## bitterberry  (name: Bitter Berry)
+meta: {"fling":{"basePower":10},"naturalGift":{"basePower":80,"type":"Ground"},"isBerry":true,"ignoreKlutz":false}
+--- onUpdate:
+onUpdate(pokemon) {
+      if (pokemon.volatiles["confusion"]) {
+        pokemon.eatItem();
+      }
+    }
+--- onEat:
+onEat(pokemon) {
+      pokemon.removeVolatile("confusion");
+    }
+======================================================================
+## burntberry  (name: Burnt Berry)
+meta: {"fling":{"basePower":10},"naturalGift":{"basePower":80,"type":"Ice"},"isBerry":true,"ignoreKlutz":false}
+--- onUpdate:
+onUpdate(pokemon) {
+      if (pokemon.status === "frz") {
+        pokemon.eatItem();
+      }
+    }
+--- onEat:
+onEat(pokemon) {
+      if (pokemon.status === "frz") {
+        pokemon.cureStatus();
+      }
+    }
+======================================================================
+## goldberry  (name: Gold Berry)
+meta: {"fling":{"basePower":10},"naturalGift":{"basePower":80,"type":"Psychic"},"isBerry":true,"ignoreKlutz":false}
+--- onResidualOrder = 10
+--- onResidual:
+onResidual(pokemon) {
+      if (pokemon.hp <= pokemon.maxhp / 2) {
+        pokemon.eatItem();
+      }
+    }
+--- onTryEatItem:
+onTryEatItem(item, pokemon) {
+      if (!this.runEvent("TryHeal", pokemon, null, this.effect, 30)) return false;
+    }
+--- onEat:
+onEat(pokemon) {
+      this.heal(30);
+    }
+======================================================================
+## iceberry  (name: Ice Berry)
+meta: {"fling":{"basePower":10},"naturalGift":{"basePower":80,"type":"Grass"},"isBerry":true,"ignoreKlutz":false}
+--- onUpdate:
+onUpdate(pokemon) {
+      if (pokemon.status === "brn") {
+        pokemon.eatItem();
+      }
+    }
+--- onEat:
+onEat(pokemon) {
+      if (pokemon.status === "brn") {
+        pokemon.cureStatus();
+      }
+    }
+======================================================================
+## mintberry  (name: Mint Berry)
+meta: {"fling":{"basePower":10},"naturalGift":{"basePower":80,"type":"Water"},"isBerry":true,"ignoreKlutz":false}
+--- onUpdate:
+onUpdate(pokemon) {
+      if (pokemon.status === "slp") {
+        pokemon.eatItem();
+      }
+    }
+--- onEat:
+onEat(pokemon) {
+      if (pokemon.status === "slp") {
+        pokemon.cureStatus();
+      }
+    }
+======================================================================
+## miracleberry  (name: Miracle Berry)
+meta: {"fling":{"basePower":10},"naturalGift":{"basePower":80,"type":"Flying"},"isBerry":true,"ignoreKlutz":false}
+--- onUpdate:
+onUpdate(pokemon) {
+      if (pokemon.status || pokemon.volatiles["confusion"]) {
+        pokemon.eatItem();
+      }
+    }
+--- onEat:
+onEat(pokemon) {
+      pokemon.cureStatus();
+      pokemon.removeVolatile("confusion");
+    }
+======================================================================
+## mysteryberry  (name: Mystery Berry)
+meta: {"fling":{"basePower":10},"naturalGift":{"basePower":80,"type":"Fighting"},"isBerry":true,"ignoreKlutz":false}
+--- onUpdate:
+onUpdate(pokemon) {
+      if (!pokemon.hp) return;
+      const moveSlot = pokemon.lastMove && pokemon.getMoveData(pokemon.lastMove.id);
+      if (moveSlot && moveSlot.pp === 0) {
+        pokemon.addVolatile("leppaberry");
+        pokemon.volatiles["leppaberry"].moveSlot = moveSlot;
+        pokemon.eatItem();
+      }
+    }
+--- onEat:
+onEat(pokemon) {
+      let moveSlot;
+      if (pokemon.volatiles["leppaberry"]) {
+        moveSlot = pokemon.volatiles["leppaberry"].moveSlot;
+        pokemon.removeVolatile("leppaberry");
+      } else {
+        let pp = 99;
+        for (const possibleMoveSlot of pokemon.moveSlots) {
+          if (possibleMoveSlot.pp < pp) {
+            moveSlot = possibleMoveSlot;
+            pp = moveSlot.pp;
+          }
+        }
+      }
+      moveSlot.pp += 5;
+      if (moveSlot.pp > moveSlot.maxpp) moveSlot.pp = moveSlot.maxpp;
+      this.add("-activate", pokemon, "item: Mystery Berry", moveSlot.move);
+    }
+======================================================================
+## pinkbow  (name: Pink Bow)
+meta: {"isBerry":false,"ignoreKlutz":false}
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Normal") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## polkadotbow  (name: Polkadot Bow)
+meta: {"isBerry":false,"ignoreKlutz":false}
+--- onModifyDamage:
+onModifyDamage(damage, source, target, move) {
+      if (move?.type === "Normal") {
+        return damage * 1.1;
+      }
+    }
+======================================================================
+## przcureberry  (name: PRZ Cure Berry)
+meta: {"fling":{"basePower":10},"naturalGift":{"basePower":80,"type":"Fire"},"isBerry":true,"ignoreKlutz":false}
+--- onUpdate:
+onUpdate(pokemon) {
+      if (pokemon.status === "par") {
+        pokemon.eatItem();
+      }
+    }
+--- onEat:
+onEat(pokemon) {
+      if (pokemon.status === "par") {
+        pokemon.cureStatus();
+      }
+    }
+======================================================================
+## psncureberry  (name: PSN Cure Berry)
+meta: {"fling":{"basePower":10},"naturalGift":{"basePower":80,"type":"Electric"},"isBerry":true,"ignoreKlutz":false}
+--- onUpdate:
+onUpdate(pokemon) {
+      if (pokemon.status === "psn" || pokemon.status === "tox") {
+        pokemon.eatItem();
+      }
+    }
+--- onEat:
+onEat(pokemon) {
+      if (pokemon.status === "psn" || pokemon.status === "tox") {
+        pokemon.cureStatus();
+      }
+    }
+======================================================================
+## mail  (name: Mail)
+meta: {"isBerry":false,"ignoreKlutz":false}
+--- onTakeItem:
+onTakeItem(item, source) {
+      if (!this.activeMove) return false;
+      if (this.activeMove.id !== "knockoff" && this.activeMove.id !== "thief" && this.activeMove.id !== "covet") return false;
+    }
+======================================================================
+## scopelens  (name: Scope Lens)
+meta: {"fling":{"basePower":30},"isBerry":false,"ignoreKlutz":false}
+--- onModifyCritRatio:
+onModifyCritRatio(critRatio) {
+      return critRatio + 1;
+    }

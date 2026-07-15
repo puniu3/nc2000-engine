@@ -66,6 +66,7 @@ impl Status {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Scalar {
     Int(i64),
+    Float(f64),
     Bool(bool),
     Str(String),
 }
@@ -74,8 +75,18 @@ impl Scalar {
     pub fn as_int(&self) -> i64 {
         match self {
             Scalar::Int(v) => *v,
+            Scalar::Float(v) => *v as i64,
             Scalar::Bool(b) => *b as i64,
             Scalar::Str(_) => 0,
+        }
+    }
+
+    pub fn as_f64(&self) -> f64 {
+        match self {
+            Scalar::Int(v) => *v as f64,
+            Scalar::Float(v) => *v,
+            Scalar::Bool(b) => *b as i64 as f64,
+            Scalar::Str(_) => 0.0,
         }
     }
 }
@@ -96,6 +107,18 @@ pub struct EffectState {
     /// `sourceEffect` — an Effect reference, not in essence. Holds the
     /// effect's id (move id for partiallytrapped, etc.).
     pub source_effect: Option<String>,
+    /// `linkedPokemon` — Pokemon references, not in essence (trapped/trapper).
+    pub linked_pokemon: Vec<PokeId>,
+    /// The paired condition id for linked volatiles. On the *target* side PS
+    /// stores the string form (also mirrored into `data` for essence); on the
+    /// *source* side it stores the Condition object (essence-invisible).
+    pub linked_status: Option<String>,
+    /// bide `lastDamageSource` (object in PS — essence-invisible).
+    pub last_damage_source: Option<PokeId>,
+    /// leppaberry `moveSlot` (object reference in PS): move slot index.
+    pub slot_ref: Option<usize>,
+    /// futuremove `moveData.damage` (nested object — essence-invisible).
+    pub future_damage: Option<f64>,
     /// Everything else scalar: time, startTime, counter, boundDivisor, move...
     /// Insertion-ordered like a JS object (affects nothing in essence compare,
     /// which is key-based, but keep Vec for faithful iteration anyway).
@@ -187,6 +210,7 @@ pub struct Attacker {
 pub struct Pokemon {
     // ----- set-derived, fixed for the battle
     pub species: SpeciesId,
+    pub base_species: SpeciesId,
     pub name: String,
     pub level: u8,
     /// "", "M", "F"
@@ -195,6 +219,13 @@ pub struct Pokemon {
     pub set_ivs: [i32; 6],
     pub set_evs: [i32; 6],
     pub base_move_slots: Vec<MoveSlot>,
+    /// Gen 2 hidden power (from DVs).
+    pub hp_type: String,
+    pub hp_power: i32,
+    pub base_hp_type: String,
+    pub base_hp_power: i32,
+    /// Stats before transform (transform copies stored stats).
+    pub base_stored_stats: [i32; 5],
 
     // ----- computed stats
     /// Stored stats (atk, def, spa, spd, spe) after level/DV/stat-exp math.
@@ -429,6 +460,8 @@ pub enum ActionKind {
     Residual,
     Team { index: u8 },
     Move { move_id: MoveId, target_loc: i8, original_target: Option<PokeId>, source_effect: Option<MoveId> },
+    /// beforeTurnCallback carrier (pursuit).
+    BeforeTurnMove { move_id: MoveId, target_loc: i8 },
     Switch { insta: bool, target: PokeId, source_effect: Option<MoveId> },
     RunSwitch,
 }
@@ -523,6 +556,8 @@ pub struct ActiveMove {
     pub no_damage_variance: bool,
     pub always_hit: bool,
     pub thaws_target: bool,
+    pub stalling_move: bool,
+    pub non_ghost_target: Option<String>,
     pub flags: Vec<String>,
     pub has_callbacks: Vec<String>,
     // ---- per-use mutable
@@ -532,6 +567,16 @@ pub struct ActiveMove {
     pub source_effect: Option<MoveId>,
     pub is_confusion_self_hit: bool,
     pub spread_hit: bool,
+    /// magnitude's rolled value (onUseMoveMessage).
+    pub magnitude: Option<i64>,
+    /// beatup ally roster (mutated by getDamage).
+    pub allies: Option<Vec<PokeId>>,
+    /// triattack move.statusRoll.
+    pub status_roll: Option<String>,
+    /// curse's `delete move.onHit`.
+    pub on_hit_suppressed: bool,
+    /// present's `move.infiltrates = true`.
+    pub infiltrates: bool,
     /// Per-target-slot hit data ("p1a" → (crit, typeMod)).
     pub move_hit_data: Vec<(String, (bool, i32))>,
 }
@@ -592,6 +637,8 @@ pub struct Battle {
     pub active_pokemon: Option<PokeId>,
     pub active_target: Option<PokeId>,
     pub last_move_id: Option<MoveId>,
+    /// The boost table flowing through a TryBoost event (mist mutates it).
+    pub pending_boosts: Option<Vec<(usize, i8)>>,
     /// Cached dex key of `field.weather` ('' if none) — lets weather checks
     /// avoid threading `dex` everywhere.
     pub field_weather_key: String,

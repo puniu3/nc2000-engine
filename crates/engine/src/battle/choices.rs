@@ -330,6 +330,33 @@ impl Battle {
         for side_n in 0..2usize {
             let actions = std::mem::take(&mut self.sides[side_n].choice.actions);
             for action in actions {
+                // resolveAction unshifts a beforeTurnMove for moves with a
+                // beforeTurnCallback (pursuit) when !midTurn.
+                if let ChosenAction::Move { pokemon, target_loc, move_id, .. } = &action {
+                    if dex
+                        .move_static(*move_id)
+                        .callbacks
+                        .iter()
+                        .any(|c| c == "beforeTurnCallback")
+                    {
+                        let speed = self.get_pokemon_action_speed(dex, *pokemon) as f64;
+                        let mut btm_loc = *target_loc;
+                        if btm_loc == 0 {
+                            let ms = dex.move_static(*move_id);
+                            if let Some(t) = self.get_random_target(&ms.target, *pokemon) {
+                                btm_loc = if t.side == pokemon.side { -1 } else { 1 };
+                            }
+                        }
+                        self.queue.push(Action {
+                            choice: ActionKind::BeforeTurnMove { move_id: *move_id, target_loc: btm_loc },
+                            order: 5,
+                            priority: 0.0,
+                            fractional_priority: 0.0,
+                            speed,
+                            pokemon: Some(*pokemon),
+                        });
+                    }
+                }
                 let resolved = self.resolve_action(dex, action, false);
                 if let Some(a) = resolved {
                     self.queue.push(a);

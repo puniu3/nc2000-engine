@@ -390,8 +390,10 @@ impl Battle {
         if self.poke(target).hp <= 0 {
             return Some(false); // PS returns 0
         }
-        // TryBoost event — relayVar is the boost table (we skip passing it;
-        // no gen2 M1 handler modifies it except Mist (M2)).
+        // TryBoost event — relayVar is the boost table (mist deletes
+        // negative entries in place).
+        let saved_pending = self.pending_boosts.take();
+        self.pending_boosts = Some(boosts.to_vec());
         let rv = self.run_event(
             dex,
             "TryBoost",
@@ -402,11 +404,13 @@ impl Battle {
             false,
             false,
         );
-        if !rv.truthy() {
+        let boosts = self.pending_boosts.take().unwrap_or_default();
+        self.pending_boosts = saved_pending;
+        if rv == RV::False || rv == RV::Null {
             return None;
         }
         let mut success = None;
-        for &(stat, amount) in boosts {
+        for &(stat, amount) in &boosts {
             let mut boost_by = self.pokemon_boost_by(dex, target, &[(stat, amount)]);
             let mut msg = "-boost";
             if amount < 0 {

@@ -281,6 +281,79 @@ impl Battle {
         RV::True
     }
 
+    /// side.addSlotCondition(target, status) — singles slot 0.
+    pub fn add_slot_condition(
+        &mut self,
+        dex: &Dex,
+        target: PokeId,
+        status: &str,
+        source: Option<PokeId>,
+        source_effect: EffectHandle,
+    ) -> RV {
+        let cond = dex.conds_id(status).unwrap_or_else(|| panic!("unknown slot condition {status}"));
+        let side_n = target.side;
+        if self.sides[side_n as usize].slot_conditions.iter().any(|(k, _)| *k == cond) {
+            if !dex.cond(cond).has_callback("onRestart") {
+                return RV::False;
+            }
+            return self.single_event(
+                dex,
+                "Restart",
+                EffectHandle::Cond(cond),
+                StateLoc::SlotCond(side_n, 0, cond),
+                EvTarget::Poke(target),
+                source,
+                source_effect,
+                None,
+            );
+        }
+        let mut state = EffectState { id: status.to_string(), ..Default::default() };
+        if let Some(src) = source {
+            state.source = Some(src);
+            state.source_slot = Some(self.slot_str(src));
+        }
+        if let Some(d) = dex.cond(cond).duration {
+            state.duration = Some(d);
+        }
+        let state = self.init_effect_state(state, true);
+        self.sides[side_n as usize].slot_conditions.push((cond, state));
+        let started = self.single_event(
+            dex,
+            "Start",
+            EffectHandle::Cond(cond),
+            StateLoc::SlotCond(side_n, 0, cond),
+            EvTarget::Poke(target),
+            source,
+            source_effect,
+            None,
+        );
+        if !started.truthy() {
+            self.sides[side_n as usize].slot_conditions.retain(|(k, _)| *k != cond);
+            return RV::False;
+        }
+        RV::True
+    }
+
+    /// side.removeSlotCondition (singles slot 0).
+    pub fn remove_slot_condition(&mut self, dex: &Dex, target: PokeId, cond: CondId) -> bool {
+        let side_n = target.side;
+        if !self.sides[side_n as usize].slot_conditions.iter().any(|(k, _)| *k == cond) {
+            return false;
+        }
+        self.single_event(
+            dex,
+            "End",
+            EffectHandle::Cond(cond),
+            StateLoc::SlotCond(side_n, 0, cond),
+            EvTarget::Poke(target),
+            None,
+            EffectHandle::None,
+            None,
+        );
+        self.sides[side_n as usize].slot_conditions.retain(|(k, _)| *k != cond);
+        true
+    }
+
     pub fn remove_side_condition(&mut self, dex: &Dex, side_n: u8, cond: CondId) -> bool {
         if !self.sides[side_n as usize].has_side_condition(cond) {
             return false;

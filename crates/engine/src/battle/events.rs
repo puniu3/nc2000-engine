@@ -50,6 +50,9 @@ pub struct Listener {
     pub effect_order: f64,
     /// Captured `state.effect_order` for the fieldEvent staleness check.
     pub state_token: u32,
+    /// The (possibly prefixed) callback name this listener was collected
+    /// under — onSourceAccuracy, onFoeBeforeSwitchOut, ... Dispatch uses it.
+    pub callback_name: String,
 }
 
 /// comparePriority as a signed delta (PS returns a number; only the sign and
@@ -196,6 +199,7 @@ impl Battle {
 
     /// resolvePriority: fill sort metadata for a listener.
     fn resolve_priority(&self, dex: &Dex, mut h: Listener, callback_name: &str) -> Listener {
+        h.callback_name = callback_name.to_string();
         if let EffectHandle::Cond(c) = h.effect {
             let entry = dex.cond(c);
             h.order = entry.num(&format!("{callback_name}Order")).map(|v| v as i64);
@@ -217,7 +221,11 @@ impl Battle {
                     _ => 0.0,
                 };
             }
-        } else if let EffectHandle::Item(_) = h.effect {
+        } else if let EffectHandle::Item(i) = h.effect {
+            let entry = dex.items.get(i);
+            h.order = entry.num(&format!("{callback_name}Order")).map(|v| v as i64);
+            h.priority = entry.num(&format!("{callback_name}Priority")).unwrap_or(0) as f64;
+            h.sub_order = entry.num(&format!("{callback_name}SubOrder")).unwrap_or(0) as f64;
             if h.sub_order == 0.0 {
                 h.sub_order = 8.0;
             }
@@ -273,6 +281,7 @@ impl Battle {
                             speed: 0.0,
                             effect_order: 0.0,
                             state_token: p.status_state.effect_order,
+                            callback_name: String::new(),
                         },
                         callback_name,
                     ));
@@ -297,6 +306,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: state.effect_order,
+                        callback_name: String::new(),
                     },
                     callback_name,
                 ));
@@ -321,6 +331,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: p.item_state.effect_order,
+                        callback_name: String::new(),
                     },
                     callback_name,
                 ));
@@ -347,6 +358,7 @@ impl Battle {
                             speed: 0.0,
                             effect_order: 0.0,
                             state_token: state.effect_order,
+                            callback_name: String::new(),
                         },
                         callback_name,
                     ));
@@ -385,6 +397,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: state.effect_order,
+                        callback_name: String::new(),
                     },
                     callback_name,
                 ));
@@ -421,6 +434,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: state.effect_order,
+                        callback_name: String::new(),
                     },
                     callback_name,
                 ));
@@ -446,6 +460,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: self.field.weather_state.effect_order,
+                        callback_name: String::new(),
                     },
                     callback_name,
                 ));
@@ -641,7 +656,7 @@ impl Battle {
         let has_cb = match effect {
             EffectHandle::Cond(c) => self.cond_has_callback(dex, c, &format!("on{event_id}")),
             EffectHandle::MoveEff(m) => {
-                super::moveexec::move_has_callback(dex, m, &format!("on{event_id}"))
+                super::moveexec::active_move_has_callback(self, dex, m, &format!("on{event_id}"))
             }
             EffectHandle::Item(i) => {
                 dex.items.get(i).callbacks.iter().any(|c| c == &format!("on{event_id}"))
@@ -708,7 +723,7 @@ impl Battle {
             let has_cb = match source_effect {
                 EffectHandle::Cond(c) => self.cond_has_callback(dex, c, &format!("on{event_id}")),
                 EffectHandle::MoveEff(m) => {
-                    super::moveexec::move_has_callback(dex, m, &format!("on{event_id}"))
+                    super::moveexec::active_move_has_callback(self, dex, m, &format!("on{event_id}"))
                 }
                 _ => false,
             };
@@ -731,6 +746,7 @@ impl Battle {
                         speed: 0.0,
                         effect_order: 0.0,
                         state_token: 0,
+                        callback_name: String::new(),
                     },
                     &format!("on{event_id}"),
                 );
@@ -786,7 +802,7 @@ impl Battle {
                 self,
                 dex,
                 handler.effect,
-                &format!("on{event_id}"),
+                &handler.callback_name,
                 handler.state,
                 target,
                 source,

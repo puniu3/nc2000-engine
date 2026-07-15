@@ -68,7 +68,7 @@ impl Battle {
             }
             // End events for ability/item: none in M1 (items End — M2).
             self.queue_cancel_action(old);
-            self.clear_volatile(old, true);
+            self.clear_volatile(dex, old, true);
         }
         if let Some(old) = old_active {
             let p = self.poke_mut(old);

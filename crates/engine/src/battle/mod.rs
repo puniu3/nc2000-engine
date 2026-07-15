@@ -17,6 +17,7 @@ pub mod dmg;
 pub mod essence;
 pub mod events;
 pub mod fieldfx;
+pub mod items;
 pub mod moveexec;
 pub mod pokemon;
 pub mod turn;
@@ -228,11 +229,49 @@ impl Battle {
         format!("p{}: {}", id.side + 1, self.poke(id).name)
     }
 
+    /// PS `side.toString()`: "p1: P1".
+    pub fn side_str(&self, side_n: u8) -> String {
+        format!("p{}: {}", side_n + 1, self.sides[side_n as usize].name)
+    }
+
+    /// queue.willAct(): any move/switch/instaswitch queued.
+    pub fn queue_will_act(&self) -> bool {
+        self.queue
+            .iter()
+            .any(|a| matches!(a.choice, ActionKind::Move { .. } | ActionKind::Switch { .. }))
+    }
+
+    /// queue.willMove(pokemon).
+    pub fn queue_will_move(&self, pokemon: PokeId) -> bool {
+        if self.poke(pokemon).fainted {
+            return false;
+        }
+        self.queue
+            .iter()
+            .any(|a| matches!(a.choice, ActionKind::Move { .. }) && a.pokemon == Some(pokemon))
+    }
+
     /// PS `pokemon.getSlot()`: "p1a".
     pub fn slot_str(&self, id: PokeId) -> String {
         let p = self.poke(id);
         let letter = (b'a' + p.position) as char;
         format!("p{}{}", id.side + 1, letter)
+    }
+
+    /// PS `battle.getAtSlot("p2a")` — the active pokemon at that slot.
+    pub fn poke_at_slot(&self, slot: &str) -> Option<PokeId> {
+        let bytes = slot.as_bytes();
+        if bytes.len() < 3 || bytes[0] != b'p' {
+            return None;
+        }
+        let side = (bytes[1] - b'1') as usize;
+        let position = bytes[2] - b'a';
+        let id = self.active_id(side)?;
+        if self.poke(id).position == position {
+            Some(id)
+        } else {
+            None
+        }
     }
 
     /// PS `pokemon.toString()`: active → "p1a: Abra", else fullname.
@@ -369,6 +408,7 @@ impl Battle {
             active_pokemon: None,
             active_target: None,
             last_move_id: None,
+            pending_boosts: None,
             field_weather_key: String::new(),
         };
         // formatData/field states get effectOrder slots in PS construction
@@ -503,8 +543,24 @@ impl Battle {
 
         let item = if set.item.is_empty() { None } else { dex.items.id(&toid(&set.item)) };
 
+        // gen 2 hidden power from DVs (ivs already clamped & 30)
+        const HP_TYPES: [&str; 16] = [
+            "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost", "Steel",
+            "Fire", "Water", "Grass", "Electric", "Psychic", "Ice", "Dragon", "Dark",
+        ];
+        let atk_dv = ivs[1] / 2;
+        let def_dv = ivs[2] / 2;
+        let spe_dv = ivs[5] / 2;
+        let spc_dv = ivs[3] / 2;
+        let hp_type = HP_TYPES[(4 * (atk_dv % 4) + (def_dv % 4)) as usize].to_string();
+        let hp_power = (5 * ((spc_dv >> 3) + 2 * (spe_dv >> 3) + 4 * (def_dv >> 3) + 8 * (atk_dv >> 3))
+            + (spc_dv % 4))
+            / 2
+            + 31;
+
         let mut p = Pokemon {
             species: species_id,
+            base_species: species_id,
             name,
             level: set.level,
             gender,
@@ -512,6 +568,11 @@ impl Battle {
             set_ivs: ivs,
             set_evs: evs,
             base_move_slots: base_move_slots.clone(),
+            hp_type: hp_type.clone(),
+            hp_power,
+            base_hp_type: hp_type,
+            base_hp_power: hp_power,
+            base_stored_stats: [stats[1], stats[2], stats[3], stats[4], stats[5]],
             stored_stats: [stats[1], stats[2], stats[3], stats[4], stats[5]],
             base_maxhp: stats[0],
             maxhp: stats[0],
@@ -624,7 +685,8 @@ impl Battle {
         for id in self.get_all_pokemon() {
             let details = self.details(dex, id);
             let side_id = format!("p{}", id.side + 1);
-            self.add(&["poke", &side_id, &details, ""]);
+            let item = if self.poke(id).item.is_some() { "item" } else { "" };
+            self.add(&["poke", &side_id, &details, item]);
         }
         self.make_request(dex, RequestState::TeamPreview);
         // queue.addChoice({choice:'start'})

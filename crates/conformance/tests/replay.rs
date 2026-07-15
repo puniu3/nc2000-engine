@@ -1,8 +1,5 @@
 //! THE conformance test: replay every golden fixture on the Rust engine and
 //! require bit-exact snapshot parity (state + prng seed at every snapshot).
-//!
-//! Ignored until the engine reaches milestone 1 (puredata corpus). Run with:
-//!   cargo test -p conformance --test replay -- --include-ignored
 
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::{load_dex, replay};
@@ -27,7 +24,6 @@ fn puredata_corpus_replays_bit_exact() {
 }
 
 #[test]
-#[ignore = "milestone 2: full NC2000 pool (callback moves + items)"]
 fn full_corpus_replays_bit_exact() {
     run_corpus("full");
 }
