@@ -458,8 +458,9 @@ fn top_actions(root: &Node, side: usize, m: usize) -> Vec<usize> {
 
 /// Full-width RM+ with linear averaging on the zero-sum stage game
 /// `matrix` (side-0 payoff, side-1 payoff = 1 − u). Returns both sides'
-/// average strategies.
-fn solve_rm_plus(matrix: &[f64], k: [usize; 2], sweeps: u32) -> (Vec<f64>, Vec<f64>) {
+/// average strategies. Public since M8: the preview baker solves the
+/// offline meta matchup matrices with the same solver.
+pub fn solve_rm_plus(matrix: &[f64], k: [usize; 2], sweeps: u32) -> (Vec<f64>, Vec<f64>) {
     let (k0, k1) = (k[0], k[1]);
     let mut r0 = vec![0.0f64; k0];
     let mut r1 = vec![0.0f64; k1];

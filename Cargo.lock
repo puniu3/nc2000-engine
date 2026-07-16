@@ -392,6 +392,8 @@ dependencies = [
  "conformance",
  "nc2000-engine",
  "pprof",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
