@@ -76,20 +76,20 @@ impl MctsConfig {
 }
 
 #[derive(Default)]
-struct ActStats {
-    n: u32,
-    w: f64,
+pub(crate) struct ActStats {
+    pub(crate) n: u32,
+    pub(crate) w: f64,
 }
 
-type Joint = (Option<SearchChoice>, Option<SearchChoice>);
+pub(crate) type Joint = (Option<SearchChoice>, Option<SearchChoice>);
 
-struct Node {
-    stats: [HashMap<SearchChoice, ActStats>; 2],
-    children: HashMap<Joint, usize>,
+pub(crate) struct Node {
+    pub(crate) stats: [HashMap<SearchChoice, ActStats>; 2],
+    pub(crate) children: HashMap<Joint, usize>,
 }
 
 impl Node {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Node { stats: [HashMap::new(), HashMap::new()], children: HashMap::new() }
     }
 }
@@ -217,6 +217,64 @@ impl MctsAgent {
     }
 }
 
+/// One playout from `sim` to termination/cutoff under `playout`, returning
+/// the side-0 reward. Free-function twin of `MctsAgent::rollout` (same
+/// policy, same PRNG draw order) shared by the M7 agents; `MctsAgent` keeps
+/// its own methods so the M5/M6 gate references stay bit-identical.
+pub(crate) fn playout_value(
+    sim: &mut Battle,
+    dex: &Dex,
+    playout: &Playout,
+    turn_cap: u16,
+    rng: &mut SplitMix64,
+) -> f64 {
+    let cutoff = match playout {
+        Playout::Uniform => turn_cap,
+        Playout::Heavy { turns, .. } => turn_cap.min(sim.turn.saturating_add(*turns)),
+    };
+    loop {
+        if let Some(o) = sim.outcome() {
+            return outcome_reward(o);
+        }
+        if sim.turn > cutoff {
+            return match playout {
+                Playout::Uniform => hp_eval(sim),
+                Playout::Heavy { weights, .. } => eval::eval_leaf(sim, dex, weights),
+            };
+        }
+        let mut picks = [None, None];
+        for s in 0..2 {
+            let cs = sim.legal_choices(dex, s);
+            if !cs.is_empty() {
+                picks[s] = Some(playout_pick(sim, dex, playout, s, &cs, rng));
+            }
+        }
+        sim.apply_choices(dex, picks)
+            .expect("legal_choices produced an illegal choice");
+    }
+}
+
+fn playout_pick(
+    sim: &Battle,
+    dex: &Dex,
+    playout: &Playout,
+    side: usize,
+    cs: &[SearchChoice],
+    rng: &mut SplitMix64,
+) -> SearchChoice {
+    let eps = match playout {
+        Playout::Uniform => return cs[rng.below(cs.len())],
+        Playout::Heavy { eps, .. } => *eps,
+    };
+    if cs.len() == 1 {
+        return cs[0];
+    }
+    if rng.next_f64() < eps {
+        return cs[rng.below(cs.len())];
+    }
+    greedy_pick(sim, dex, side, cs, rng)
+}
+
 /// Greedy rollout move: strongest expected hit (never a voluntary switch);
 /// forced switch → healthiest bench; team preview / all-zero scores →
 /// uniform random.
@@ -309,7 +367,7 @@ impl Agent for MctsAgent {
     }
 }
 
-fn outcome_reward(o: Outcome) -> f64 {
+pub(crate) fn outcome_reward(o: Outcome) -> f64 {
     match o {
         Outcome::P1Win => 1.0,
         Outcome::P2Win => 0.0,
@@ -319,7 +377,7 @@ fn outcome_reward(o: Outcome) -> f64 {
 
 /// Horizon cutoff evaluation: mean party HP fraction differential, squashed
 /// into [0.25, 0.75] so it never outranks a real win/loss.
-fn hp_eval(b: &Battle) -> f64 {
+pub(crate) fn hp_eval(b: &Battle) -> f64 {
     let f = |s: usize| {
         let side = &b.sides[s];
         let mut sum = 0.0;
@@ -340,7 +398,7 @@ fn hp_eval(b: &Battle) -> f64 {
 
 /// UCB1 over the actions legal *now*; unvisited legal actions first
 /// (uniformly at random among them).
-fn select_ucb(
+pub(crate) fn select_ucb(
     node: &Node,
     side: usize,
     legal: &[SearchChoice],

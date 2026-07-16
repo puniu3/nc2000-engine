@@ -14,13 +14,13 @@ use crate::dex::{Accuracy, Category, CondId, FixedDamage, HitEffect, ItemId, Mov
 use crate::prng::Prng;
 use std::collections::BTreeMap;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PokeId {
     pub side: u8,
     pub slot: u8,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Status {
     None,
     Brn,
@@ -75,6 +75,20 @@ pub enum Scalar {
     Slot(u8, u8),
 }
 
+// Manual Hash (f64 payload hashed as bits); used by `Battle::state_key`.
+impl std::hash::Hash for Scalar {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        match self {
+            Scalar::Int(v) => (0u8, v).hash(h),
+            Scalar::Float(v) => (1u8, v.to_bits()).hash(h),
+            Scalar::Bool(b) => (2u8, b).hash(h),
+            Scalar::MoveK(m) => (3u8, m).hash(h),
+            Scalar::CondK(c) => (4u8, c).hash(h),
+            Scalar::Slot(a, b) => (5u8, a, b).hash(h),
+        }
+    }
+}
+
 impl Scalar {
     pub fn as_int(&self) -> i64 {
         match self {
@@ -104,7 +118,7 @@ impl Scalar {
 
 /// The identity an `EffectState` belongs to (PS stores the effect's string
 /// id; we store the interned handle and render the string at essence time).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum EffId {
     #[default]
     None,
@@ -128,7 +142,7 @@ impl EffId {
 
 /// Keys of scalar data PS effects store on their state (fixed universe for
 /// this format; `as_str` must render the exact PS key for the essence).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DK {
     BoundDivisor,
     ContactHitCount,
@@ -175,7 +189,7 @@ impl DK {
 /// Fixed-capacity scalar bag (Copy — the whole EffectState memcpy-clones).
 /// Capacity 4 covers every condition in this format (rollout: hitCount +
 /// contactHitCount + multiplier is the widest); overflow asserts loudly.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Hash)]
 pub struct DataBag {
     entries: [Option<(DK, Scalar)>; 4],
     n: u8,
@@ -211,7 +225,7 @@ impl DataBag {
 }
 
 /// Fixed-capacity linked-pokemon list (singles: one link; capacity 2).
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Hash)]
 pub struct LinkedPokes {
     p: [Option<PokeId>; 2],
     n: u8,
@@ -291,6 +305,25 @@ pub struct EffectState {
     pub effect_order: u32,
 }
 
+// Manual Hash (future_damage is f64); used by `Battle::state_key`.
+impl std::hash::Hash for EffectState {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.id.hash(h);
+        self.has_name.hash(h);
+        self.duration.hash(h);
+        self.source_slot.hash(h);
+        self.source.hash(h);
+        self.source_effect.hash(h);
+        self.linked_pokemon.hash(h);
+        self.linked_status.hash(h);
+        self.last_damage_source.hash(h);
+        self.slot_ref.hash(h);
+        self.future_damage.map(f64::to_bits).hash(h);
+        self.data.hash(h);
+        self.effect_order.hash(h);
+    }
+}
+
 impl EffectState {
     pub fn get(&self, key: DK) -> Option<&Scalar> {
         self.data.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
@@ -327,7 +360,7 @@ impl EffectState {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
 pub struct MoveSlot {
     pub id: MoveId,
     pub pp: i32,
@@ -343,7 +376,7 @@ pub struct MoveSlot {
 
 /// Inline move-slot list (gen 2: at most 4 moves) — Copy, so cloning a
 /// pokemon never touches the heap for moves.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
 pub struct MoveSlots {
     slots: [MoveSlot; 4],
     n: u8,
@@ -411,7 +444,7 @@ impl<'a> IntoIterator for &'a mut MoveSlots {
 }
 
 /// Inline pokemon nickname (PS truncates to 20 chars at construction).
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PokeName {
     buf: [u8; 24],
     len: u8,
@@ -444,7 +477,7 @@ impl std::fmt::Debug for PokeName {
 }
 
 /// PS gender: "M" / "F" / "" (genderless).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Gender {
     M,
     F,
@@ -465,7 +498,7 @@ impl Gender {
 pub type Boosts = [i8; 7];
 
 /// PS `pokemon.switchFlag`: false | true | move id (selfSwitch).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SwitchFlag {
     No,
     Yes,
@@ -479,7 +512,7 @@ impl SwitchFlag {
 }
 
 /// PS `moveThisTurnResult`: undefined | null | false | true.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum MoveResult {
     #[default]
     Undef,
@@ -489,7 +522,7 @@ pub enum MoveResult {
 }
 
 /// Entry in `pokemon.attackedBy` (Counter/Mirror Coat bookkeeping).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash)]
 pub struct Attacker {
     pub source: PokeId,
     pub damage: i64,
@@ -582,7 +615,120 @@ pub struct Pokemon {
     pub speed: i32,
 }
 
+impl std::hash::Hash for Pokemon {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.hash_with(h, None);
+    }
+}
+
 impl Pokemon {
+    /// State-key hashing walk. With `hp_buckets: Some(b)`, HP and pure
+    /// roll-magnitude bookkeeping are quantized so that chance outcomes
+    /// differing only in damage-roll detail share a search node (search-tree
+    /// abstraction); `None` hashes them exactly. Destructuring is total on
+    /// purpose: adding a `Pokemon` field breaks this fn until it is placed.
+    pub fn hash_with<H: std::hash::Hasher>(&self, h: &mut H, hp_buckets: Option<i64>) {
+        use std::hash::Hash;
+        let Pokemon {
+            species,
+            base_species,
+            name,
+            level,
+            gender,
+            happiness,
+            set_ivs,
+            set_evs,
+            base_move_slots,
+            hp_type,
+            hp_power,
+            base_hp_type,
+            base_hp_power,
+            base_stored_stats,
+            stored_stats,
+            base_maxhp,
+            maxhp,
+            hp,
+            status,
+            status_state,
+            boosts,
+            move_slots,
+            item,
+            last_item,
+            item_state,
+            types,
+            volatiles,
+            handler_mask,
+            transformed,
+            fainted,
+            faint_queued,
+            is_active,
+            is_started,
+            position,
+            active_turns,
+            active_move_actions,
+            newly_switched,
+            being_called_back,
+            dragged_in,
+            previously_switched_in,
+            switch_flag,
+            force_switch_flag,
+            skip_before_switch_out,
+            trapped,
+            maybe_trapped,
+            last_move,
+            last_move_encore,
+            last_move_used,
+            last_move_target_loc,
+            move_this_turn,
+            move_this_turn_result,
+            move_last_turn_result,
+            hurt_this_turn,
+            stats_raised_this_turn,
+            stats_lowered_this_turn,
+            used_item_this_turn,
+            last_damage,
+            attacked_by,
+            times_attacked,
+            speed,
+        } = self;
+        (species, base_species, name, level, gender, happiness).hash(h);
+        (set_ivs, set_evs, base_move_slots).hash(h);
+        (hp_type, hp_power, base_hp_type, base_hp_power).hash(h);
+        (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(h);
+        match hp_buckets {
+            None => {
+                hp.hash(h);
+                hurt_this_turn.hash(h);
+                last_damage.hash(h);
+                attacked_by.as_slice().hash(h);
+            }
+            Some(b) => {
+                // quantized: hp as a maxhp-relative bucket, roll-magnitude
+                // bookkeeping in coarse absolute steps
+                ((*hp as i64) * b / (*maxhp).max(1) as i64).hash(h);
+                hurt_this_turn.map(|v| v as i64 / 16).hash(h);
+                (last_damage / 16).hash(h);
+                for a in attacked_by.iter() {
+                    (a.source, a.move_id, a.this_turn).hash(h);
+                    (a.damage / 16).hash(h);
+                    a.damage_value.map(|v| v / 16).hash(h);
+                }
+            }
+        }
+        (status, status_state, boosts, move_slots).hash(h);
+        (item, last_item, item_state, types).hash(h);
+        (volatiles, handler_mask).hash(h);
+        (transformed, fainted, faint_queued).hash(h);
+        (is_active, is_started, position, active_turns, active_move_actions).hash(h);
+        (newly_switched, being_called_back, dragged_in, previously_switched_in).hash(h);
+        (switch_flag, force_switch_flag, skip_before_switch_out).hash(h);
+        (trapped, maybe_trapped).hash(h);
+        (last_move, last_move_encore, last_move_used, last_move_target_loc).hash(h);
+        (move_this_turn, move_this_turn_result, move_last_turn_result).hash(h);
+        (stats_raised_this_turn, stats_lowered_this_turn, used_item_this_turn).hash(h);
+        (times_attacked, speed).hash(h);
+    }
+
     pub fn volatile(&self, id: CondId) -> Option<&EffectState> {
         self.volatiles.iter().find(|(k, _)| *k == id).map(|(_, v)| v)
     }
@@ -608,7 +754,7 @@ impl Pokemon {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct Choice {
     pub cant_undo: bool,
     pub error: bool,
@@ -632,7 +778,7 @@ impl Default for Choice {
 }
 
 /// side.ts ChosenAction (gen2 singles slice).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub enum ChosenAction {
     Move {
         pokemon: PokeId,
@@ -653,7 +799,7 @@ pub enum ChosenAction {
     Pass,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RequestKind {
     TeamPreview,
     Move,
@@ -688,7 +834,43 @@ pub struct Side {
     pub choice: Choice,
 }
 
+impl std::hash::Hash for Side {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.hash_with(h, None);
+    }
+}
+
 impl Side {
+    /// See `Pokemon::hash_with`. Total destructuring on purpose.
+    pub fn hash_with<H: std::hash::Hasher>(&self, h: &mut H, hp_buckets: Option<i64>) {
+        use std::hash::Hash;
+        let Side {
+            name,
+            roster,
+            party,
+            active,
+            pokemon_left,
+            total_fainted,
+            side_conditions,
+            slot_conditions,
+            handler_mask,
+            last_move,
+            fainted_this_turn,
+            fainted_last_turn,
+            request,
+            choice,
+        } = self;
+        name.hash(h);
+        roster.len().hash(h);
+        for p in roster.iter() {
+            p.hash_with(h, hp_buckets);
+        }
+        (party, active, pokemon_left, total_fainted).hash(h);
+        (side_conditions, slot_conditions, handler_mask).hash(h);
+        (last_move, fainted_this_turn, fainted_last_turn).hash(h);
+        (request, choice).hash(h);
+    }
+
     pub fn pokemon_at(&self, position: usize) -> Option<u8> {
         self.party.get(position).copied()
     }
@@ -710,7 +892,7 @@ impl Side {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Hash)]
 pub struct Field {
     pub weather: Option<CondId>,
     pub weather_state: EffectState,
@@ -725,7 +907,7 @@ impl Field {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RequestState {
     None,
     TeamPreview,
@@ -755,7 +937,19 @@ pub struct Action {
     pub pokemon: Option<PokeId>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+// Manual Hash (f64 ordering keys hashed as bits); used by `Battle::state_key`.
+impl std::hash::Hash for Action {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.choice.hash(h);
+        self.order.hash(h);
+        self.priority.to_bits().hash(h);
+        self.fractional_priority.to_bits().hash(h);
+        self.speed.to_bits().hash(h);
+        self.pokemon.hash(h);
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 pub enum ActionKind {
     Start,
     BeforeTurn,
@@ -768,7 +962,7 @@ pub enum ActionKind {
     RunSwitch,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct FaintEntry {
     pub target: PokeId,
     pub source: Option<PokeId>,

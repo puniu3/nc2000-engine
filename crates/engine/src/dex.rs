@@ -31,7 +31,7 @@ impl Cb {
 
 /// 256-bit set over registered callback ids (the gen2stadium2 dex registers
 /// ~90 distinct names; load asserts the bound).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CbMask([u64; 4]);
 
 impl CbMask {
@@ -88,7 +88,7 @@ macro_rules! cond_id {
 pub struct TypeId(pub u8);
 
 /// A pokemon's type list (1–2 entries in gen 2; conversion can set 1).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TypeList {
     pub t: [TypeId; 2],
     pub n: u8,

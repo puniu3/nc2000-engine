@@ -6,7 +6,7 @@
 //! Options: --seed S (default 1) --team N --foe-team N (pool indices,
 //! default random from seed) --max-turns M (default 500)
 //!
-//! Agent specs: human | random | maxdamage | mcts[:iters[:c]]
+//! Agent specs: human | random | maxdamage | mcts[:iters[:c]] | rm[:iters]
 //!
 //! NOTE: search agents read the full battle state — your moves, PP, and DVs
 //! included — so the bot plays with perfect information. Treat strength
@@ -16,7 +16,9 @@ use std::io::Write as _;
 
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
-use nc2000_bot::{Agent, MaxDamageAgent, MctsAgent, MctsConfig, RandomAgent, SplitMix64};
+use nc2000_bot::{
+    Agent, MaxDamageAgent, MctsAgent, MctsConfig, RandomAgent, RmAgent, RmConfig, SplitMix64,
+};
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Category, Dex};
 use nc2000_engine::state::{Battle, Pokemon, Status};
@@ -430,6 +432,7 @@ enum Spec {
     Random,
     MaxDamage,
     Mcts { iterations: u32, c: f64, uniform: bool },
+    Rm { iterations: u32 },
 }
 
 impl Spec {
@@ -444,6 +447,10 @@ impl Spec {
                 iterations: p.get(1).and_then(|v| v.parse().ok()).unwrap_or(1000),
                 c: p.get(2).and_then(|v| v.parse().ok()).unwrap_or(1.0),
                 uniform: p[0] == "mcts5",
+            },
+            // M7 state-keyed tree + RM-solved mixed root play
+            "rm" => Spec::Rm {
+                iterations: p.get(1).and_then(|v| v.parse().ok()).unwrap_or(1000),
             },
             other => {
                 eprintln!("unknown agent: {other}");
@@ -465,6 +472,10 @@ impl Spec {
                 };
                 Box::new(MctsAgent::new(cfg, seed))
             }
+            Spec::Rm { iterations } => Box::new(RmAgent::new(
+                RmConfig { iterations: *iterations, ..Default::default() },
+                seed,
+            )),
         }
     }
 
@@ -480,7 +491,7 @@ fn flag(args: &[String], name: &str) -> Option<String> {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.len() < 2 {
-        eprintln!("usage: play <p1: human|random|maxdamage|mcts[:it[:c]]> <p2: ...> [--seed S] [--team N] [--foe-team N] [--max-turns M]");
+        eprintln!("usage: play <p1: human|random|maxdamage|mcts[:it[:c]]|rm[:it]> <p2: ...> [--seed S] [--team N] [--foe-team N] [--max-turns M]");
         std::process::exit(2);
     }
     let specs = [Spec::parse(&args[0]), Spec::parse(&args[1])];

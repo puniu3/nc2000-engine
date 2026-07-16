@@ -58,7 +58,7 @@ pub struct PokemonSet {
 }
 
 /// Which effect a piece of behavior belongs to (PS `Effect`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EffectHandle {
     None,
     Cond(CondId),

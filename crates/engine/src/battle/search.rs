@@ -27,6 +27,74 @@ use crate::state::*;
 
 use super::EngineError;
 
+/// FxHash-style word-folding hasher (rustc-hash algorithm): deterministic,
+/// no dependencies, ~5x faster than SipHash on the state-key walk, quality
+/// plenty for 64-bit search-tree keys. Not DoS-resistant — never use for
+/// attacker-controlled map keys.
+#[derive(Default)]
+struct FxHasher(u64);
+
+impl FxHasher {
+    const K: u64 = 0x51_7c_c1_b7_27_22_0a_95;
+
+    #[inline]
+    fn add(&mut self, word: u64) {
+        self.0 = (self.0.rotate_left(5) ^ word).wrapping_mul(Self::K);
+    }
+}
+
+impl std::hash::Hasher for FxHasher {
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        let mut chunks = bytes.chunks_exact(8);
+        for c in &mut chunks {
+            self.add(u64::from_le_bytes(c.try_into().unwrap()));
+        }
+        let rem = chunks.remainder();
+        if !rem.is_empty() {
+            let mut buf = [0u8; 8];
+            buf[..rem.len()].copy_from_slice(rem);
+            self.add(u64::from_le_bytes(buf) ^ rem.len() as u64);
+        }
+    }
+
+    #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.add(i as u64);
+    }
+
+    #[inline]
+    fn write_u16(&mut self, i: u16) {
+        self.add(i as u64);
+    }
+
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.add(i as u64);
+    }
+
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.add(i);
+    }
+
+    #[inline]
+    fn write_u128(&mut self, i: u128) {
+        self.add(i as u64);
+        self.add((i >> 64) as u64);
+    }
+
+    #[inline]
+    fn write_usize(&mut self, i: usize) {
+        self.add(i as u64);
+    }
+}
+
 /// A single side's choice, compact and `Copy` (fits in search tree nodes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SearchChoice {
@@ -98,6 +166,91 @@ impl Battle {
     /// clone). The seed is the raw 64-bit LCG state.
     pub fn reseed(&mut self, seed: u64) {
         self.prng = Prng::new(seed);
+    }
+
+    /// Hash of the decision-relevant battle state — everything the game's
+    /// future depends on EXCEPT the PRNG (search resamples chance, so two
+    /// sims that differ only in seed are the same decision point). Used by
+    /// state-keyed search trees (M7): equal keys ⇒ same state ⇒ per-node
+    /// statistics and cached legal-action sets stay valid; a 64-bit collision
+    /// only mis-aggregates one node's statistics, never produces an illegal
+    /// choice submission path (choices are still validated by `choose`).
+    ///
+    /// Skipped on purpose: `prng`, the protocol log and its bookkeeping
+    /// (`log`, `log_enabled`, `sent_log_pos`, `last_move_line`), scratch
+    /// buffers (`listener_pool`), and the derived `battle_mask` (a function
+    /// of hashed state). Mid-event machinery is quiescent at request points;
+    /// its occupancy is hashed as a cheap guard.
+    pub fn state_key(&self) -> u64 {
+        self.state_key_with(None)
+    }
+
+    /// `state_key` with search-tree abstraction: HP is hashed as one of
+    /// `buckets` maxhp-relative buckets and pure roll-magnitude bookkeeping
+    /// (`last_damage`, `attacked_by` damages, `hurt_this_turn`) in coarse
+    /// steps, so chance outcomes that differ only in damage-roll detail map
+    /// to the same node. Discrete chance (KOs, status procs, request kinds,
+    /// volatile durations) still splits exactly — that is the open-loop
+    /// aliasing M7 exists to fix. The bucketing trades a bounded value
+    /// blur inside a node for sample density below it.
+    pub fn state_key_bucketed(&self, buckets: i64) -> u64 {
+        self.state_key_with(Some(buckets))
+    }
+
+    fn state_key_with(&self, hp_buckets: Option<i64>) -> u64 {
+        use std::hash::{Hash, Hasher};
+        // Total destructuring on purpose: adding a `Battle` field breaks
+        // this fn until the field is placed (hashed or explicitly skipped).
+        let Battle {
+            prng: _,           // chance is resampled by search
+            turn,
+            request_state,
+            mid_turn,
+            started,
+            ended,
+            winner,
+            field,
+            sides,
+            queue,
+            faint_queue,
+            log: _,            // protocol log + bookkeeping: not state
+            log_enabled: _,
+            effect_order,
+            event_depth,
+            last_move_line: _, // log bookkeeping
+            last_successful_move_this_turn,
+            last_damage,
+            quick_claw_roll,
+            speed_order,
+            format_data,
+            sent_log_pos: _,   // log bookkeeping
+            event_stack,
+            effect_stack,
+            active_move,
+            active_pokemon,
+            active_target,
+            last_move_id,
+            pending_boosts,
+            listener_pool: _,  // scratch buffers
+            battle_mask: _,    // derived from hashed state
+        } = self;
+        let mut h = FxHasher::default();
+        (turn, request_state, mid_turn, started, ended, winner).hash(&mut h);
+        field.hash(&mut h);
+        for side in sides.iter() {
+            side.hash_with(&mut h, hp_buckets);
+        }
+        (queue, faint_queue, effect_order, event_depth).hash(&mut h);
+        last_successful_move_this_turn.hash(&mut h);
+        match hp_buckets {
+            None => last_damage.hash(&mut h),
+            Some(_) => (last_damage / 16).hash(&mut h),
+        }
+        (quick_claw_roll, speed_order, format_data).hash(&mut h);
+        // mid-event machinery: quiescent at request points, hashed as a guard
+        (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(&mut h);
+        (active_pokemon, active_target, last_move_id, pending_boosts).hash(&mut h);
+        h.finish()
     }
 
     /// All legal choices for one side at the current request point. Empty ⇔

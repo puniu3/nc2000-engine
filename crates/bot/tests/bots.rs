@@ -7,8 +7,8 @@ use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
 use nc2000_bot::mcts::Playout;
 use nc2000_bot::{
-    eval, play_game, Agent, EvalWeights, GameResult, MaxDamageAgent, MctsAgent, MctsConfig,
-    RandomAgent, SplitMix64,
+    eval, play_game, Agent, BrAgent, EvalWeights, GameResult, MaxDamageAgent, MctsAgent,
+    MctsConfig, RandomAgent, RmAgent, RmConfig, SplitMix64,
 };
 use nc2000_engine::battle::{Outcome, PokemonSet};
 use nc2000_engine::state::Battle;
@@ -111,6 +111,96 @@ fn mcts_heavy_smoke() {
     );
     assert!((0.0..=1.0).contains(&s));
     assert!(matches!(MctsConfig::default().playout, Playout::Heavy { .. }));
+}
+
+#[test]
+fn rm_smoke_and_determinism() {
+    let build = |seed: u64| -> Box<dyn Agent> {
+        Box::new(RmAgent::new(RmConfig { iterations: 32, ..Default::default() }, seed))
+    };
+    let s1 = duel(&build, &|seed| Box::new(RandomAgent::new(seed)), 2, 3);
+    let s2 = duel(&build, &|seed| Box::new(RandomAgent::new(seed)), 2, 3);
+    assert!((0.0..=1.0).contains(&s1));
+    assert_eq!(s1, s2, "rm agent must be deterministic per seed");
+}
+
+#[test]
+fn exploit_smoke() {
+    let s = duel(
+        &|seed| {
+            let model: Box<dyn Agent> = Box::new(MaxDamageAgent::new());
+            Box::new(BrAgent::new(
+                model,
+                2,
+                MctsConfig { iterations: 32, ..Default::default() },
+                seed,
+            ))
+        },
+        &|_| Box::new(MaxDamageAgent::new()),
+        2,
+        5,
+    );
+    assert!((0.0..=1.0).contains(&s));
+}
+
+#[test]
+fn rm_root_policy_is_a_distribution() {
+    let dex = load_dex();
+    let teams = team_pool();
+    let mut b = Battle::from_fixture(&dex, "11,22,33,44", &teams[0], &teams[1]).unwrap();
+    b.set_log_enabled(false);
+    let choices = b.legal_choices(&dex, 0);
+    assert!(choices.len() >= 2);
+
+    let mut rm = RmAgent::new(RmConfig { iterations: 64, ..Default::default() }, 9);
+    let probs = rm.root_policy(&b, &dex, 0, &choices);
+    assert_eq!(probs.len(), choices.len());
+    let total: f64 = probs.iter().sum();
+    assert!((total - 1.0).abs() < 1e-9, "policy sums to {total}");
+    assert!(probs.iter().all(|p| (0.0..=1.0).contains(p)));
+
+    // default root_policy (argmax agents): a point mass on choose()
+    let mut md = MaxDamageAgent::new();
+    let probs = md.root_policy(&b, &dex, 0, &choices);
+    assert_eq!(probs.iter().filter(|&&p| p == 1.0).count(), 1);
+    assert_eq!(probs.iter().sum::<f64>(), 1.0);
+}
+
+#[test]
+fn state_key_contract() {
+    let dex = load_dex();
+    let teams = team_pool();
+    let mut b = Battle::from_fixture(&dex, "1,2,3,4", &teams[0], &teams[1]).unwrap();
+    b.set_log_enabled(false);
+
+    // clone: same key; reseed: PRNG is excluded from the key
+    let mut c = b.clone();
+    assert_eq!(b.state_key(), c.state_key());
+    c.reseed(0xDEAD_BEEF);
+    assert_eq!(b.state_key(), c.state_key());
+
+    // log recording must not affect the key
+    let mut logged = b.clone();
+    logged.set_log_enabled(true);
+    assert_eq!(b.state_key(), logged.state_key());
+
+    // advancing the battle changes the key
+    let picks = [0, 1].map(|s| {
+        let cs = c.legal_choices(&dex, s);
+        cs.first().copied()
+    });
+    c.apply_choices(&dex, picks).unwrap();
+    assert_ne!(b.state_key(), c.state_key());
+
+    // same choices from the same state + same seed: identical key
+    let mut d = b.clone();
+    d.reseed(0xDEAD_BEEF); // match c's seed so chance rolls identically
+    let picks = [0, 1].map(|s| {
+        let cs = d.legal_choices(&dex, s);
+        cs.first().copied()
+    });
+    d.apply_choices(&dex, picks).unwrap();
+    assert_eq!(c.state_key(), d.state_key());
 }
 
 #[test]

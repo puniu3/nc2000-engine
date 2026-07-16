@@ -21,6 +21,22 @@ pub trait Agent {
         side: usize,
         choices: &[SearchChoice],
     ) -> SearchChoice;
+
+    /// The agent's mixed policy at this decision point: probabilities aligned
+    /// with `choices`, summing to 1. This is the distribution the agent
+    /// actually plays — a best-response exploiter (M7 gate) queries it as its
+    /// opponent model. Default: a point mass on whatever `choose` picks,
+    /// which is exactly right for every argmax/deterministic agent.
+    fn root_policy(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> Vec<f64> {
+        let pick = self.choose(battle, dex, side, choices);
+        choices.iter().map(|&c| if c == pick { 1.0 } else { 0.0 }).collect()
+    }
 }
 
 // ---------------------------------------------------------------- random
