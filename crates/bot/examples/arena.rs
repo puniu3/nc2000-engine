@@ -14,6 +14,11 @@
 //!   mcts5[:ITERS[:C]]                M5 baseline (uniform full rollouts, HP eval)
 //!   rm[:ITERS[:PROBE[:THRESHOLD[:BUCKETS]]]]  M7 state-keyed MCTS + RM-solved mixed root
 //!   skuct[:ITERS[:C[:BUCKETS]]]      M7 state-keyed argmax ablation (in-battle flagship)
+//!   blind[:ITERS[:C[:BUCKETS]]]      M10b imperfect-info skuct: sees only public info +
+//!                                    the meta-pool prior; per-iteration belief
+//!                                    determinization; baked-table preview when the
+//!                                    opponent's pool identity resolves publicly
+//!                                    (battles run log-ON for its observer)
 //!   exploit:<inner>                  best-response probe vs a frozen <inner> policy
 //!                                    (3-sample seed-marginal oracle, own budget = 3x inner's)
 //!   baked:<inner> | bakedarg:<inner>       M8 baked preview (mixed sample / argmax),
@@ -26,12 +31,12 @@ use std::sync::Arc;
 
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
-use nc2000_bot::preview::load_meta_pool;
+use nc2000_bot::preview::{load_meta_pool, MetaPool};
 use nc2000_bot::smmcts::SelRule;
 use nc2000_bot::{
-    run_duel, Agent, BakedPreviewAgent, BrAgent, CounterPickAgent, DuelSpec, EvalWeights,
-    MaxDamageAgent, MctsAgent, MctsConfig, Playout, PreviewMode, RandomAgent, RmAgent, RmConfig,
-    TableSet,
+    run_duel, Agent, BakedPreviewAgent, BlindAgent, BrAgent, CounterPickAgent, DuelSpec,
+    EvalWeights, MaxDamageAgent, MctsAgent, MctsConfig, Playout, PreviewMode, RandomAgent,
+    RmAgent, RmConfig, TableSet,
 };
 use nc2000_engine::battle::PokemonSet;
 
@@ -43,6 +48,7 @@ enum AgentSpec {
     Mcts5 { iterations: u32, c: f64 },
     Rm { iterations: u32, probe: f64, threshold: f64, buckets: i64 },
     SkUct { iterations: u32, c: f64, buckets: i64 },
+    Blind { iterations: u32, c: f64, buckets: i64 },
     Exploit(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
     Counter { inner: Box<AgentSpec>, target: PreviewMode },
@@ -82,6 +88,11 @@ impl AgentSpec {
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
             }),
+            "blind" => Ok(AgentSpec::Blind {
+                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
+                c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
+                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
+            }),
             "exploit" => {
                 let inner = s.strip_prefix("exploit:").ok_or("exploit needs an inner spec")?;
                 Ok(AgentSpec::Exploit(Box::new(AgentSpec::parse(inner)?)))
@@ -109,7 +120,8 @@ impl AgentSpec {
             AgentSpec::Mcts { iterations, .. }
             | AgentSpec::Mcts5 { iterations, .. }
             | AgentSpec::Rm { iterations, .. }
-            | AgentSpec::SkUct { iterations, .. } => *iterations,
+            | AgentSpec::SkUct { iterations, .. }
+            | AgentSpec::Blind { iterations, .. } => *iterations,
             AgentSpec::Exploit(inner) => inner.iterations(),
             AgentSpec::Baked { inner, .. } | AgentSpec::Counter { inner, .. } => {
                 inner.iterations()
@@ -120,13 +132,30 @@ impl AgentSpec {
 
     fn needs_tables(&self) -> bool {
         match self {
-            AgentSpec::Baked { .. } | AgentSpec::Counter { .. } => true,
+            AgentSpec::Baked { .. } | AgentSpec::Counter { .. } | AgentSpec::Blind { .. } => true,
             AgentSpec::Exploit(inner) => inner.needs_tables(),
             _ => false,
         }
     }
 
-    fn build(&self, seed: u64, tables: Option<&Arc<TableSet>>) -> Box<dyn Agent> {
+    /// Blind agents need the meta pool as their belief prior (and log-on
+    /// outer battles for their observer).
+    fn is_blind(&self) -> bool {
+        match self {
+            AgentSpec::Blind { .. } => true,
+            AgentSpec::Exploit(inner)
+            | AgentSpec::Baked { inner, .. }
+            | AgentSpec::Counter { inner, .. } => inner.is_blind(),
+            _ => false,
+        }
+    }
+
+    fn build(
+        &self,
+        seed: u64,
+        tables: Option<&Arc<TableSet>>,
+        pool: Option<&Arc<MetaPool>>,
+    ) -> Box<dyn Agent> {
         match self {
             AgentSpec::Random => Box::new(RandomAgent::new(seed)),
             AgentSpec::MaxDamage => Box::new(MaxDamageAgent::new()),
@@ -166,21 +195,33 @@ impl AgentSpec {
                 },
                 seed,
             )),
+            AgentSpec::Blind { iterations, c, buckets } => Box::new(BlindAgent::new(
+                RmConfig {
+                    iterations: *iterations,
+                    rule: SelRule::Ucb,
+                    c: *c,
+                    hp_buckets: *buckets,
+                    ..Default::default()
+                },
+                pool.expect("blind agents need the meta pool").clone(),
+                tables.cloned(),
+                seed,
+            )),
             AgentSpec::Exploit(inner) => {
-                let model = inner.build(seed ^ 0x517C_C1B7_2722_0A95, tables);
+                let model = inner.build(seed ^ 0x517C_C1B7_2722_0A95, tables, pool);
                 let cfg =
                     MctsConfig { iterations: inner.iterations() * 3, ..Default::default() };
                 Box::new(BrAgent::new(model, 3, cfg, seed))
             }
             AgentSpec::Baked { inner, mode } => Box::new(BakedPreviewAgent::new(
                 tables.expect("baked agents need --tables").clone(),
-                inner.build(seed ^ 0x243F_6A88_85A3_08D3, tables),
+                inner.build(seed ^ 0x243F_6A88_85A3_08D3, tables, pool),
                 *mode,
                 seed,
             )),
             AgentSpec::Counter { inner, target } => Box::new(CounterPickAgent::new(
                 tables.expect("counter agents need --tables").clone(),
-                inner.build(seed ^ 0x243F_6A88_85A3_08D3, tables),
+                inner.build(seed ^ 0x243F_6A88_85A3_08D3, tables, pool),
                 *target,
             )),
         }
@@ -199,6 +240,9 @@ impl AgentSpec {
             }
             AgentSpec::SkUct { iterations, c, buckets } => {
                 format!("skuct:{iterations}:{c}:{buckets}")
+            }
+            AgentSpec::Blind { iterations, c, buckets } => {
+                format!("blind:{iterations}:{c}:{buckets}")
             }
             AgentSpec::Exploit(inner) => format!("exploit:{}", inner.label()),
             AgentSpec::Baked { inner, mode } => match mode {
@@ -234,8 +278,14 @@ fn main() {
 
     let dex = load_dex();
     let pool_spec = flag(&args, "--pool").unwrap_or_else(|| "fixtures".into());
+    let is_blind = spec_a.is_blind() || spec_b.is_blind();
+    let needs_meta =
+        pool_spec.starts_with("meta") || spec_a.needs_tables() || spec_b.needs_tables();
+    let meta = needs_meta.then(|| {
+        Arc::new(load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json")))
+    });
     let teams = if let Some(range) = pool_spec.strip_prefix("meta") {
-        let pool = load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json"));
+        let pool = meta.as_ref().unwrap();
         let (lo, hi) = match range.strip_prefix(':') {
             None => (0, pool.teams.len() - 1),
             Some(r) => {
@@ -253,8 +303,7 @@ fn main() {
         let dir = flag(&args, "--tables")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| repo_root().join("data/preview-tables-v0"));
-        let pool = load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json"));
-        let ts = TableSet::load(&dex, &pool, &dir);
+        let ts = TableSet::load(&dex, meta.as_ref().unwrap(), &dir);
         eprintln!("{} baked pair tables loaded from {}", ts.len(), dir.display());
         ts
     });
@@ -262,9 +311,9 @@ fn main() {
     let stats = run_duel(
         &dex,
         &teams,
-        &|seed| spec_a.build(seed, tables.as_ref()),
-        &|seed| spec_b.build(seed, tables.as_ref()),
-        DuelSpec { games, base_seed, threads, max_turns, progress: true },
+        &|seed| spec_a.build(seed, tables.as_ref(), meta.as_ref()),
+        &|seed| spec_b.build(seed, tables.as_ref(), meta.as_ref()),
+        DuelSpec { games, base_seed, threads, max_turns, progress: true, log_on: is_blind },
     );
 
     println!(

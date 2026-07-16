@@ -7,17 +7,23 @@
 //! default random from seed) --max-turns M (default 500)
 //!
 //! Agent specs: human | random | maxdamage | mcts[:iters[:c]] | rm[:iters]
+//!               | blind[:iters]  (M10b imperfect-info skuct)
 //!
-//! NOTE: search agents read the full battle state — your moves, PP, and DVs
-//! included — so the bot plays with perfect information. Treat strength
-//! readings as an upper bound until hidden-information play lands.
+//! NOTE: search agents except `blind` read the full battle state — your
+//! moves, PP, and DVs included — so those bots play with perfect
+//! information. `blind` restricts itself to public observations + the meta
+//! pool prior (a fixture-pool opponent falls back to a synthesized belief).
 
 use std::io::Write as _;
 
+use std::sync::Arc;
+
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
+use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::{
-    Agent, MaxDamageAgent, MctsAgent, MctsConfig, RandomAgent, RmAgent, RmConfig, SplitMix64,
+    Agent, BlindAgent, MaxDamageAgent, MctsAgent, MctsConfig, RandomAgent, RmAgent, RmConfig,
+    SplitMix64, TableSet,
 };
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Category, Dex};
@@ -433,6 +439,7 @@ enum Spec {
     MaxDamage,
     Mcts { iterations: u32, c: f64, uniform: bool },
     Rm { iterations: u32 },
+    Blind { iterations: u32 },
 }
 
 impl Spec {
@@ -452,6 +459,10 @@ impl Spec {
             "rm" => Spec::Rm {
                 iterations: p.get(1).and_then(|v| v.parse().ok()).unwrap_or(1000),
             },
+            // M10b imperfect-info skuct (public info + meta-pool prior only)
+            "blind" => Spec::Blind {
+                iterations: p.get(1).and_then(|v| v.parse().ok()).unwrap_or(1000),
+            },
             other => {
                 eprintln!("unknown agent: {other}");
                 std::process::exit(2);
@@ -459,7 +470,7 @@ impl Spec {
         }
     }
 
-    fn build(&self, seed: u64) -> Box<dyn Agent> {
+    fn build(&self, seed: u64, dex: &Dex) -> Box<dyn Agent> {
         match self {
             Spec::Human => Box::new(HumanAgent),
             Spec::Random => Box::new(RandomAgent::new(seed)),
@@ -476,6 +487,19 @@ impl Spec {
                 RmConfig { iterations: *iterations, ..Default::default() },
                 seed,
             )),
+            Spec::Blind { iterations } => {
+                let pool = Arc::new(load_meta_pool(
+                    &repo_root().join("data/meta-pool-v0/meta-pool.json"),
+                ));
+                let tables =
+                    TableSet::load(dex, &pool, &repo_root().join("data/preview-tables-v0"));
+                Box::new(BlindAgent::new(
+                    RmConfig { iterations: *iterations, ..Default::default() },
+                    pool,
+                    Some(tables),
+                    seed,
+                ))
+            }
         }
     }
 
@@ -511,8 +535,11 @@ fn main() {
     println!("teams: p1=#{t1} p2=#{t2}   battle seed {battle_seed}   (--seed {seed})");
 
     let mut battle = Battle::from_fixture(&dex, &battle_seed, &teams[t1], &teams[t2]).unwrap();
-    let mut agents: Vec<Box<dyn Agent>> =
-        specs.iter().enumerate().map(|(i, s)| s.build(seed ^ (i as u64 + 0xB07))).collect();
+    let mut agents: Vec<Box<dyn Agent>> = specs
+        .iter()
+        .enumerate()
+        .map(|(i, s)| s.build(seed ^ (i as u64 + 0xB07), &dex))
+        .collect();
 
     // viewer: the human side if exactly one human plays, else spectator view
     let humans: Vec<usize> = (0..2).filter(|&i| specs[i].is_human()).collect();

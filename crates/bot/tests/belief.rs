@@ -81,8 +81,20 @@ fn drive(
     }
 }
 
-/// Play a determinized battle to completion with random agents.
+/// Play a determinized battle to completion with random agents. First
+/// asserts party/position coherence (a party member with an off-party
+/// `position` makes switch_in index party[] out of bounds — the pick
+/// resampling regression M10b hit under search load).
 fn playable(dex: &Dex, mut det: Battle) {
+    for side in 0..2 {
+        for (pos, &slot) in det.sides[side].party.iter().enumerate() {
+            assert_eq!(
+                det.sides[side].roster[slot as usize].position as usize, pos,
+                "side {side}: party[{pos}] holds slot {slot} with position {}",
+                det.sides[side].roster[slot as usize].position
+            );
+        }
+    }
     let mut r0 = RandomAgent::new(11);
     let mut r1 = RandomAgent::new(13);
     play_game(dex, &mut det, &mut [&mut r0, &mut r1], 400)

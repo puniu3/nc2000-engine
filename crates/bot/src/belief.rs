@@ -184,26 +184,41 @@ impl Belief {
         let roster_len = out.sides[opp].roster.len();
 
         // ---- hidden pick identities: never-appeared party slots hold one
-        // of the not-yet-appeared roster mons — resample uniformly
+        // of the not-yet-appeared roster mons — resample uniformly.
+        // Position bookkeeping is rebuilt from scratch afterwards: pairwise
+        // position swaps corrupt `party`/`position` coherence when the
+        // sampled mon already sits in the party at another hidden slot
+        // (party[i] duplicated, a party member left with an off-party
+        // `position` — switch_in then indexes party[] out of bounds).
         if out.sides[opp].party.len() < roster_len {
             let appeared: Vec<bool> = out.sides[opp]
                 .roster
                 .iter()
                 .map(|p| p.previously_switched_in > 0 || p.is_active)
                 .collect();
-            let hidden_positions: Vec<usize> = (0..out.sides[opp].party.len())
+            let party_len = out.sides[opp].party.len();
+            let hidden_positions: Vec<usize> = (0..party_len)
                 .filter(|&pos| !appeared[out.sides[opp].party[pos] as usize])
                 .collect();
             let mut pool: Vec<u8> =
                 (0..roster_len as u8).filter(|&s| !appeared[s as usize]).collect();
-            for pos in hidden_positions {
+            for &pos in &hidden_positions {
                 let new_slot = pool.swap_remove(rng.below(pool.len()));
-                let old_slot = out.sides[opp].party[pos];
-                if new_slot != old_slot {
-                    out.sides[opp].party[pos] = new_slot;
-                    let old_pos = out.sides[opp].roster[new_slot as usize].position;
-                    out.sides[opp].roster[new_slot as usize].position = pos as u8;
-                    out.sides[opp].roster[old_slot as usize].position = old_pos;
+                out.sides[opp].party[pos] = new_slot;
+            }
+            if !hidden_positions.is_empty() {
+                // party members carry their display index; the rest are
+                // parked canonically (same assignment ⇒ same state key)
+                for pos in 0..party_len {
+                    let slot = out.sides[opp].party[pos] as usize;
+                    out.sides[opp].roster[slot].position = pos as u8;
+                }
+                let mut bench_pos = party_len as u8;
+                for slot in 0..roster_len {
+                    if !out.sides[opp].party.contains(&(slot as u8)) {
+                        out.sides[opp].roster[slot].position = bench_pos;
+                        bench_pos += 1;
+                    }
                 }
             }
         }

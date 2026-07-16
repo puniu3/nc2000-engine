@@ -27,12 +27,17 @@ pub struct DuelSpec {
     pub max_turns: u16,
     /// Progress lines on stderr every 10 games.
     pub progress: bool,
+    /// Run the outer battles with the protocol log ON (M10b blind agents:
+    /// the observer's trace-free reveal channel reads `battle.log`). Search
+    /// clones always disable the log themselves; log content never affects
+    /// battle state, so results stay comparable across this flag.
+    pub log_on: bool,
 }
 
 impl DuelSpec {
     pub fn new(games: usize, base_seed: u64) -> Self {
         let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
-        DuelSpec { games, base_seed, threads, max_turns: 500, progress: false }
+        DuelSpec { games, base_seed, threads, max_turns: 500, progress: false, log_on: false }
     }
 }
 
@@ -138,7 +143,7 @@ pub fn run_duel(
                         &teams[g.team_p2],
                     )
                     .unwrap();
-                    battle.set_log_enabled(false);
+                    battle.set_log_enabled(spec.log_on);
                     let (p1, p2): (&mut dyn Agent, &mut dyn Agent) = if g.a_is_p1 {
                         (&mut agent_a, &mut agent_b)
                     } else {

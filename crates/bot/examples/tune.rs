@@ -137,6 +137,7 @@ fn main() {
                 threads,
                 max_turns,
                 progress: false,
+                log_on: false,
             },
         );
 
@@ -180,6 +181,7 @@ fn main() {
                 threads,
                 max_turns,
                 progress: true,
+                log_on: false,
             },
         );
         println!(

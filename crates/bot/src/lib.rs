@@ -7,15 +7,17 @@
 //! tables (`preview`) — offline-solved mixed equilibria over the meta pool,
 //! consumed by `BakedPreviewAgent` and probed by `CounterPickAgent`. M10a:
 //! imperfect-information machinery (`observe` + `belief`) — observation
-//! tracker, belief over the meta pool, and the hidden-field determinizer
-//! that M10b plugs under `SkuctSearch`.
+//! tracker, belief over the meta pool, and the hidden-field determinizer.
+//! M10b: `BlindAgent` (`blind`) — the skuct search restricted to the
+//! observe/belief surface via per-iteration determinization.
 //!
 //! Agents see the full battle state (both teams) — self-play evaluation
-//! mode. A blind agent (M10b) restricts itself to the `observe`/`belief`
-//! surface plus determinized clones.
+//! mode — except `BlindAgent`, which restricts itself to the
+//! `observe`/`belief` surface plus determinized clones.
 
 pub mod agent;
 pub mod belief;
+pub mod blind;
 pub mod duel;
 pub mod eval;
 pub mod exploit;
@@ -28,6 +30,7 @@ pub mod smmcts;
 
 pub use agent::{Agent, MaxDamageAgent, RandomAgent};
 pub use belief::Belief;
+pub use blind::BlindAgent;
 pub use observe::{ItemObs, MonObs, Observer};
 pub use duel::{run_duel, DuelSpec, DuelStats};
 pub use eval::EvalWeights;

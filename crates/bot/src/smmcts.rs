@@ -130,19 +130,19 @@ impl Default for RmConfig {
     }
 }
 
-struct Node {
+pub(crate) struct Node {
     /// Legal actions per side at this state (empty = side owes nothing).
-    acts: [Vec<SearchChoice>; 2],
+    pub(crate) acts: [Vec<SearchChoice>; 2],
     /// Per-action sample counts (UCB1).
-    n: [Vec<u32>; 2],
+    pub(crate) n: [Vec<u32>; 2],
     /// Per-action reward sums (UCB1).
-    w: [Vec<f64>; 2],
+    pub(crate) w: [Vec<f64>; 2],
     /// Team-preview node (always UCB1 + argmax).
-    preview: bool,
+    pub(crate) preview: bool,
 }
 
 impl Node {
-    fn at(sim: &mut Battle, dex: &Dex) -> Node {
+    pub(crate) fn at(sim: &mut Battle, dex: &Dex) -> Node {
         let acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];
         let preview = acts
             .iter()
@@ -191,7 +191,7 @@ impl ProbeStats {
 // `RmAgent` methods; bodies unchanged so agent behavior stays bit-identical
 // (verified by the arena sanity run in M9a).
 
-fn key_of(cfg: &RmConfig, b: &Battle) -> u64 {
+pub(crate) fn key_of(cfg: &RmConfig, b: &Battle) -> u64 {
     if cfg.hp_buckets > 0 {
         b.state_key_bucketed(cfg.hp_buckets)
     } else {
@@ -200,7 +200,12 @@ fn key_of(cfg: &RmConfig, b: &Battle) -> u64 {
 }
 
 /// UCB1 (untried-first, then mean + c·sqrt(ln N / n)).
-fn select_ucb(cfg: &RmConfig, rng: &mut SplitMix64, node: &mut Node, side: usize) -> usize {
+pub(crate) fn select_ucb(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    node: &mut Node,
+    side: usize,
+) -> usize {
     let k = node.acts[side].len();
     let untried: Vec<usize> = (0..k).filter(|&a| node.n[side][a] == 0).collect();
     let pick = if !untried.is_empty() {
@@ -224,14 +229,17 @@ fn select_ucb(cfg: &RmConfig, rng: &mut SplitMix64, node: &mut Node, side: usize
     pick
 }
 
-/// One iteration. `force_root` (probe phase) fixes the root joint to
-/// the given action indices instead of UCB selection; the forced picks
-/// still feed the root's per-action means (an unconditional sample of
-/// an action is an unbiased sample of it), and everything below the
-/// root selects normally. Returns the iteration's side-0 reward and
-/// writes the root joint's action indices into `root_joint`.
+/// One iteration starting at node `start` (0 for the classic per-decision
+/// tree; a per-determinization root for the M10b blind search). Per-side
+/// `force_root` fixes that side's root action index instead of UCB
+/// selection (the probe phase forces both sides; the blind search forces
+/// only its own, globally-selected action); forced picks still feed the
+/// root's per-action means (an unconditional sample of an action is an
+/// unbiased sample of it), and everything below the root selects normally.
+/// Returns the iteration's side-0 reward and writes the root joint's action
+/// indices into `root_joint`.
 #[allow(clippy::too_many_arguments)]
-fn run_iteration(
+pub(crate) fn run_iteration(
     cfg: &RmConfig,
     rng: &mut SplitMix64,
     nodes: &mut Vec<Node>,
@@ -239,15 +247,16 @@ fn run_iteration(
     sim: &mut Battle,
     dex: &Dex,
     turn_cap: u16,
-    force_root: Option<[usize; 2]>,
+    start: usize,
+    force_root: [Option<usize>; 2],
     root_joint: &mut [usize; 2],
 ) -> f64 {
     let mut path: Vec<(usize, usize, usize)> = Vec::new(); // (node, side, act)
-    let mut node_idx = 0usize;
+    let mut node_idx = start;
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
     let reward0 = loop {
-        let at_root = node_idx == 0;
+        let at_root = node_idx == start;
         let mut joint = [None, None];
         for s in 0..2 {
             let k = nodes[node_idx].acts[s].len();
@@ -258,10 +267,10 @@ fn run_iteration(
                 // forced: skip the stats machinery
                 0
             } else {
-                let ai = match force_root {
-                    Some(cell) if at_root => {
-                        nodes[node_idx].n[s][cell[s]] += 1;
-                        cell[s]
+                let ai = match force_root[s] {
+                    Some(f) if at_root => {
+                        nodes[node_idx].n[s][f] += 1;
+                        f
                     }
                     _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
                 };
@@ -365,7 +374,8 @@ impl SkuctSearch {
             &mut sim,
             dex,
             self.turn_cap,
-            None,
+            0,
+            [None, None],
             &mut joint,
         );
         self.done += 1;
@@ -386,7 +396,8 @@ impl SkuctSearch {
             &mut sim,
             dex,
             self.turn_cap,
-            Some(force),
+            0,
+            [Some(force[0]), Some(force[1])],
             &mut joint,
         );
         self.done += 1;

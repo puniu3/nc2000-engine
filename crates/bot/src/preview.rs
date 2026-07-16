@@ -362,9 +362,25 @@ impl TableSet {
     /// Resolve both sides of a live preview to pool indices, orientation
     /// included: `(table, my_side_is_a)`. Public since M9: the wasm bridge
     /// resolves matchups directly (no agent wrapper on the JS side).
+    ///
+    /// NOTE: reads BOTH rosters' full-set signatures — perfect-info only.
+    /// A blind agent must resolve its own side with `side_index` and the
+    /// opponent through its belief, then call `pair_by_idx` (M10b).
     pub fn lookup(&self, battle: &Battle, side: usize) -> Option<(&PairTable, bool)> {
-        let me = *self.sig_to_idx.get(&roster_sig(battle, side))?;
-        let opp = *self.sig_to_idx.get(&roster_sig(battle, 1 - side))?;
+        let me = self.side_index(battle, side)?;
+        let opp = self.side_index(battle, 1 - side)?;
+        self.pair_by_idx(me, opp)
+    }
+
+    /// Pool index of one side's roster by full-set signature. Legitimate
+    /// public knowledge only for the caller's OWN side.
+    pub fn side_index(&self, battle: &Battle, side: usize) -> Option<usize> {
+        self.sig_to_idx.get(&roster_sig(battle, side)).copied()
+    }
+
+    /// Pair table by pool indices (same order as the `MetaPool` the set was
+    /// built from), orientation included: `(table, me_is_a)`.
+    pub fn pair_by_idx(&self, me: usize, opp: usize) -> Option<(&PairTable, bool)> {
         if let Some(t) = self.tables.get(&(me, opp)) {
             return Some((t, true));
         }
