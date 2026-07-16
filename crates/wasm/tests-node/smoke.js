@@ -1,6 +1,8 @@
 // Smoke: a full bot-vs-bot game driven end-to-end through the wasm API
-// (stepped Searcher on both sides), plus the baked-preview-table path
-// (pool + pair JSON fed as strings, resolve/sample at a real preview).
+// (stepped Searcher on both sides), the baked-preview-table path
+// (pool + pair JSON fed as strings, resolve/sample at a real preview), and
+// a full blind game (M10c BlindSearcher: observe/step/best + belief surface,
+// baked preview via the belief, fallback belief vs an off-pool team).
 "use strict";
 
 const fs = require("fs");
@@ -140,6 +142,121 @@ const dex = new wasm.Dex();
     `  tables: resolved ${pair.team_a} vs ${pair.team_b}, ` +
       `mixed support ${res.mixed.length}, value ${res.value.toFixed(3)}`
   );
+}
+
+// ---------------------------------------------------------- blind game
+{
+  const poolJson = readData("meta-pool-v0/meta-pool.json");
+  const pool = JSON.parse(poolJson);
+  // Human stand-in (side 0, plain Searcher) plays pool team 0; the blind
+  // bot (side 1) plays pool team 1 — the pair-00-01 matchup is committed,
+  // so the bot's preview must come from the baked table via the belief.
+  const battle = new wasm.Battle(
+    dex,
+    JSON.stringify(pool.teams[0].sets),
+    JSON.stringify(pool.teams[1].sets),
+    wasm.deriveBattleSeed(42)
+  );
+  // the blind observer's log channel wants the observed battle log-ON
+  // (it is by default)
+  const blind = new wasm.BlindSearcher(battle, 1, poolJson, 4242);
+  blind.addPair(
+    fs.readFileSync(
+      path.join(REPO, "data", "preview-tables-v0", "pair-00-01.json"),
+      "utf8"
+    )
+  );
+
+  // preview: belief collapses to the true team, baked table plays
+  blind.observe(battle);
+  const info0 = JSON.parse(blind.beliefInfo());
+  checkEq(info0.count, 1, "belief is a singleton at preview");
+  checkEq(info0.fallback, false, "pool opponent is not fallback");
+  checkEq(info0.candidates[0], pool.teams[0].id, "belief holds the true team");
+  const baked = blind.bakedPreview();
+  check(typeof baked === "string", "baked preview pick exists");
+  checkEq(blind.best(), baked, "best() returns the baked pick");
+  checkEq(blind.step(50), 0, "step is a no-op at a baked preview");
+  const bpol = JSON.parse(blind.rootPolicy());
+  checkEq(bpol.baked, true, "rootPolicy reports baked");
+  checkEq(bpol.actions.length, 1, "baked policy is a point mass");
+
+  let decisions = 0;
+  const MAX_DECISIONS = 2000;
+  while (battle.outcome() === undefined && decisions < MAX_DECISIONS) {
+    const needs = JSON.parse(battle.needsChoice());
+    const picks = [];
+    if (needs[0]) {
+      const legal = JSON.parse(battle.legalChoices(0));
+      const s = new wasm.Searcher(battle, 0, 9000 + decisions);
+      s.step(120);
+      const best = s.best();
+      check(
+        legal.some((c) => c.input === best),
+        `searcher best "${best}" is legal (blind game, side 0)`
+      );
+      picks.push([0, best]);
+      s.free();
+    }
+    if (needs[1]) {
+      const legal = JSON.parse(battle.legalChoices(1));
+      blind.observe(battle);
+      let best = blind.bakedPreview();
+      if (best === undefined) {
+        const total = blind.step(120);
+        check(total >= 120, "blind step() returns total iterations");
+        best = blind.best();
+      }
+      check(
+        legal.some((c) => c.input === best),
+        `blind best "${best}" is legal`
+      );
+      const info = JSON.parse(blind.beliefInfo());
+      check(!info.fallback, "pool opponent never goes fallback");
+      check(
+        info.candidates.includes(pool.teams[0].id),
+        "true team stays in the belief"
+      );
+      picks.push([1, best]);
+    }
+    for (const [side, input] of picks) battle.applyChoice(side, input);
+    decisions += 1;
+  }
+  check(battle.outcome() !== undefined, "blind game reached an outcome");
+  console.log(
+    `  blind game: outcome ${battle.outcome()} in ${battle.turn()} turns, ` +
+      `${decisions} decisions, preview via baked table`
+  );
+  blind.free();
+  battle.free();
+
+  // fallback: an off-pool opponent (fixture team) flips the belief to
+  // fallback and the blind search still returns legal picks
+  const fx = loadFixture("full/battle-001.json");
+  const fb = new wasm.Battle(
+    dex,
+    JSON.stringify(fx.p1team),
+    JSON.stringify(pool.teams[1].sets),
+    wasm.deriveBattleSeed(43)
+  );
+  const bfs = new wasm.BlindSearcher(fb, 1, poolJson, 4343);
+  bfs.observe(fb);
+  const finfo = JSON.parse(bfs.beliefInfo());
+  checkEq(finfo.fallback, true, "off-pool opponent goes fallback");
+  checkEq(finfo.count, 0, "fallback has zero candidates");
+  checkEq(bfs.bakedPreview(), undefined, "no baked preview in fallback");
+  bfs.step(60);
+  const fbest = bfs.best();
+  const flegal = JSON.parse(fb.legalChoices(1));
+  check(
+    flegal.some((c) => c.input === fbest),
+    `fallback blind best "${fbest}" is legal`
+  );
+  console.log(
+    `  blind fallback: belief fallback vs off-pool team, best "${fbest}"`
+  );
+  bfs.free();
+  fb.free();
 }
 
 finish("smoke");

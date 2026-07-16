@@ -28,6 +28,11 @@
 //!
 //! Play = argmax visits over the global root stats — the `skuct` play rule.
 //!
+//! M10c: the loop body lives in `BlindSearch` — the persistent, steppable
+//! form (mirroring `SkuctSearch`) that the wasm bridge's ponder loop pumps —
+//! and `BlindAgent` drives that same struct internally, so the stepped form
+//! can never drift from the gate-measured agent.
+//!
 //! # Team preview
 //!
 //! The opponent's pool team is publicly identifiable at preview by
@@ -107,86 +112,215 @@ impl BlindAgent {
 
     // ------------------------------------------------------ baked preview
 
-    /// Belief-mediated M8 table lookup: own side by signature (public to
-    /// us), opponent by the single consistent pool candidate. `None` ⇔ fall
-    /// through to the determinized preview search.
+    /// Belief-mediated M8 table lookup (see `baked_preview_pick`). `None` ⇔
+    /// fall through to the determinized preview search.
     fn baked_pick(&mut self, battle: &Battle, side: usize) -> Option<SearchChoice> {
         let tables = self.tables.as_ref()?;
         let g = self.game.as_ref().expect("baked_pick after lifecycle setup");
-        if g.belief.candidate_count() != 1 {
-            return None; // collision pair (or fallback): identity unresolved
-        }
-        let opp = g.belief.alive()[0];
-        debug_assert_eq!(
-            tables.ids[opp],
-            g.belief.candidate_id(opp),
-            "TableSet/MetaPool pool-order drift"
-        );
-        let me = tables.side_index(battle, side)?;
-        let (tab, i_am_a) = tables.pair_by_idx(me, opp)?;
-        // sample the mixed equilibrium (same rule as BakedPreviewAgent)
-        let p = if i_am_a { &tab.sol.p_a } else { &tab.sol.p_b };
-        let u = self.rng.next_f64();
-        let mut acc = 0.0;
-        let mut pick = (0..p.len()).max_by(|&a, &b| p[a].total_cmp(&p[b])).unwrap();
-        for (i, &pr) in p.iter().enumerate() {
-            acc += pr;
-            if u < acc {
-                pick = i;
-                break;
-            }
-        }
-        Some(SearchChoice::Team(tables.actions()[pick]))
+        baked_preview_pick(tables, &g.belief, battle, side, &mut self.rng)
     }
 
     // -------------------------------------------------------------- search
 
     fn search(&mut self, battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoice]) -> SearchChoice {
-        // Log-off base once per decision: the outer battle runs log-ON for
-        // the observer, and determinize clones its input — don't pay for
-        // cloning the whole protocol log every iteration.
+        let mut bs = BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
+        debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
+        let g = self.game.as_ref().expect("search after lifecycle setup");
+        for _ in 0..self.cfg.iterations {
+            bs.step_one(dex, &g.belief, &g.observer);
+        }
+        self.rng = bs.rng.clone();
+        bs.best().expect("search called with a non-empty choice list")
+    }
+}
+
+/// Belief-mediated M8 table lookup at team preview: own side by signature
+/// (public to us), opponent by the single consistent pool candidate —
+/// never by reading the opponent's hidden set signature. Samples the mixed
+/// equilibrium (same rule as `BakedPreviewAgent`). `None` ⇔ collision pair
+/// / fallback / unbaked matchup: play the determinized preview search.
+pub fn baked_preview_pick(
+    tables: &TableSet,
+    belief: &Belief,
+    battle: &Battle,
+    side: usize,
+    rng: &mut SplitMix64,
+) -> Option<SearchChoice> {
+    if belief.candidate_count() != 1 {
+        return None; // collision pair (or fallback): identity unresolved
+    }
+    let opp = belief.alive()[0];
+    debug_assert_eq!(
+        tables.ids[opp],
+        belief.candidate_id(opp),
+        "TableSet/MetaPool pool-order drift"
+    );
+    let me = tables.side_index(battle, side)?;
+    let (tab, i_am_a) = tables.pair_by_idx(me, opp)?;
+    // sample the mixed equilibrium (same rule as BakedPreviewAgent)
+    let p = if i_am_a { &tab.sol.p_a } else { &tab.sol.p_b };
+    let u = rng.next_f64();
+    let mut acc = 0.0;
+    let mut pick = (0..p.len()).max_by(|&a, &b| p[a].total_cmp(&p[b])).unwrap();
+    for (i, &pr) in p.iter().enumerate() {
+        acc += pr;
+        if u < acc {
+            pick = i;
+            break;
+        }
+    }
+    Some(SearchChoice::Team(tables.actions()[pick]))
+}
+
+// --------------------------------------------------- stepped search (M10c)
+
+/// Persistent, incrementally steppable blind search over ONE decision point
+/// — `BlindAgent`'s search loop in the form the wasm bridge's ponder loop
+/// needs, mirroring `SkuctSearch`: create it at the current (true) battle
+/// state, pump `step(n)` in slices, read `best()` / visit stats when the
+/// move is wanted. The belief/observer pair is passed per call (it lives
+/// with the per-game agent state, not the per-decision search).
+/// `cfg.iterations` is ignored — the caller owns the budget.
+///
+/// `BlindAgent` drives this same struct internally, so the stepped form can
+/// never drift from the gate-measured agent (Gate B + arena identity are
+/// the net).
+pub struct BlindSearch {
+    cfg: RmConfig,
+    rng: SplitMix64,
+    /// Log-off base clone: the outer battle may run log-ON for the
+    /// observer, and determinize clones its input — don't pay for cloning
+    /// the whole protocol log every iteration.
+    base: Battle,
+    turn_cap: u16,
+    side: usize,
+    /// The public own-side choice list — the information-set root.
+    my_acts: Vec<SearchChoice>,
+    my_n: Vec<u32>,
+    my_w: Vec<f64>,
+    /// Per-determinization roots + everything below (state-keyed).
+    nodes: Vec<Node>,
+    table: HashMap<u64, usize>,
+    done: u32,
+}
+
+impl BlindSearch {
+    pub fn new(battle: &Battle, dex: &Dex, cfg: RmConfig, side: usize, seed: u64) -> BlindSearch {
+        Self::with_rng(battle, dex, cfg, side, SplitMix64::new(seed))
+    }
+
+    fn with_rng(
+        battle: &Battle,
+        dex: &Dex,
+        cfg: RmConfig,
+        side: usize,
+        rng: SplitMix64,
+    ) -> BlindSearch {
         let mut base = battle.clone();
         base.set_log_enabled(false);
-        let turn_cap = base.turn.saturating_add(self.cfg.horizon);
-
-        let BlindAgent { cfg, rng, game, .. } = self;
-        let g = game.as_ref().expect("search after lifecycle setup");
-
-        let my_acts: Vec<SearchChoice> = choices.to_vec();
-        let mut my_n = vec![0u32; my_acts.len()];
-        let mut my_w = vec![0.0f64; my_acts.len()];
-        let mut nodes: Vec<Node> = Vec::new();
-        let mut table: HashMap<u64, usize> = HashMap::new();
-
-        for _ in 0..cfg.iterations {
-            let mut sim = g.belief.determinize(dex, &base, &g.observer, rng);
-            let key = key_of(cfg, &sim);
-            let root = match table.get(&key) {
-                Some(&i) => i,
-                None => {
-                    let node = Node::at(&mut sim, dex);
-                    debug_assert_eq!(
-                        node.acts[side], my_acts,
-                        "determinization changed the observer's own root actions"
-                    );
-                    nodes.push(node);
-                    table.insert(key, nodes.len() - 1);
-                    nodes.len() - 1
-                }
-            };
-            let my_pick = select_global(cfg, rng, &mut my_n, &my_w);
-            let mut force = [None, None];
-            force[side] = Some(my_pick);
-            let mut joint = [0usize; 2];
-            let r = run_iteration(
-                cfg, rng, &mut nodes, &mut table, &mut sim, dex, turn_cap, root, force,
-                &mut joint,
-            );
-            my_w[my_pick] += if side == 0 { r } else { 1.0 - r };
+        let turn_cap = base.turn.saturating_add(cfg.horizon);
+        let my_acts = base.legal_choices(dex, side);
+        BlindSearch {
+            cfg,
+            rng,
+            base,
+            turn_cap,
+            side,
+            my_n: vec![0; my_acts.len()],
+            my_w: vec![0.0; my_acts.len()],
+            my_acts,
+            nodes: Vec::new(),
+            table: HashMap::new(),
+            done: 0,
         }
+    }
 
-        let best = (0..my_acts.len()).max_by_key(|&a| my_n[a]).unwrap();
-        my_acts[best]
+    /// One iteration: fresh determinization, global-UCB own root pick
+    /// forced into the shared `run_iteration`. Returns the side-0 reward.
+    pub fn step_one(&mut self, dex: &Dex, belief: &Belief, obs: &Observer) -> f64 {
+        let mut sim = belief.determinize(dex, &self.base, obs, &mut self.rng);
+        let key = key_of(&self.cfg, &sim);
+        let root = match self.table.get(&key) {
+            Some(&i) => i,
+            None => {
+                let node = Node::at(&mut sim, dex);
+                debug_assert_eq!(
+                    node.acts[self.side], self.my_acts,
+                    "determinization changed the observer's own root actions"
+                );
+                self.nodes.push(node);
+                self.table.insert(key, self.nodes.len() - 1);
+                self.nodes.len() - 1
+            }
+        };
+        let my_pick = select_global(&self.cfg, &mut self.rng, &mut self.my_n, &self.my_w);
+        let mut force = [None, None];
+        force[self.side] = Some(my_pick);
+        let mut joint = [0usize; 2];
+        let r = run_iteration(
+            &self.cfg,
+            &mut self.rng,
+            &mut self.nodes,
+            &mut self.table,
+            &mut sim,
+            dex,
+            self.turn_cap,
+            root,
+            force,
+            &mut joint,
+        );
+        self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
+        self.done += 1;
+        r
+    }
+
+    /// Pump `n` iterations, return the total run so far.
+    pub fn step(&mut self, dex: &Dex, belief: &Belief, obs: &Observer, n: u32) -> u32 {
+        for _ in 0..n {
+            self.step_one(dex, belief, obs);
+        }
+        self.done
+    }
+
+    pub fn iterations(&self) -> u32 {
+        self.done
+    }
+
+    /// The global root's actions — the side's public legal choice list.
+    pub fn actions(&self) -> &[SearchChoice] {
+        &self.my_acts
+    }
+
+    /// Per-action visit counts on the global (information-set) root stats.
+    pub fn visits(&self) -> &[u32] {
+        &self.my_n
+    }
+
+    /// Per-action mean rewards (own perspective — `my_w` is accumulated
+    /// from this side's view), 0.5 when unvisited.
+    pub fn means(&self) -> Vec<f64> {
+        (0..self.my_acts.len())
+            .map(|a| {
+                if self.my_n[a] == 0 {
+                    0.5
+                } else {
+                    self.my_w[a] / self.my_n[a] as f64
+                }
+            })
+            .collect()
+    }
+
+    /// Current best choice: argmax visits over the global root stats (the
+    /// blind play rule). `None` when the side owes nothing.
+    pub fn best(&self) -> Option<SearchChoice> {
+        (0..self.my_acts.len())
+            .max_by_key(|&a| self.my_n[a])
+            .map(|a| self.my_acts[a])
+    }
+
+    /// Whether the root decision is a team preview.
+    pub fn is_preview(&self) -> bool {
+        matches!(self.my_acts.first(), Some(SearchChoice::Team(_)))
     }
 }
 

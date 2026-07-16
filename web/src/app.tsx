@@ -1,11 +1,11 @@
-// App shell: engine + meta pool loading, strength setting, and the
-// select -> game screen switch. A Game instance is keyed by game number so
-// rematch / new-teams remount it cleanly.
+// App shell: engine + meta pool loading, strength + bot-information
+// settings, and the select -> game screen switch. A Game instance is keyed
+// by game number so rematch / new-teams remount it cleanly.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { loadEngine, PreviewTables, randomSeed32 } from "./engine";
 import { fetchPool } from "./data";
-import type { MetaPool } from "./types";
+import type { BotInfo, MetaPool } from "./types";
 import { TeamSelect } from "./select";
 import { Game } from "./game";
 
@@ -28,12 +28,16 @@ export function App() {
   );
   const [error, setError] = useState("");
   const [pool, setPool] = useState<MetaPool | null>(null);
+  const poolJsonRef = useRef("");
   const tablesRef = useRef<PreviewTables | null>(null);
   const addedPairsRef = useRef(new Set<string>());
   const [strength, setStrength] = useState(() => {
     const v = Number(localStorage.getItem("nc2000-strength"));
     return STRENGTHS.some((s) => s.iters === v) ? v : 3000;
   });
+  const [botInfo, setBotInfo] = useState<BotInfo>(() =>
+    localStorage.getItem("nc2000-botinfo") === "xray" ? "xray" : "fair",
+  );
   const [game, setGame] = useState<GameSpec | null>(null);
 
   useEffect(() => {
@@ -41,6 +45,7 @@ export function App() {
       try {
         const [dex, pd] = await Promise.all([loadEngine(), fetchPool()]);
         tablesRef.current = new PreviewTables(dex, pd.poolJson);
+        poolJsonRef.current = pd.poolJson;
         setPool(pd.pool);
         setStatus("ready");
       } catch (e) {
@@ -53,6 +58,11 @@ export function App() {
   const pickStrength = (iters: number) => {
     setStrength(iters);
     localStorage.setItem("nc2000-strength", String(iters));
+  };
+
+  const pickBotInfo = (v: BotInfo) => {
+    setBotInfo(v);
+    localStorage.setItem("nc2000-botinfo", v);
   };
 
   if (status === "loading") {
@@ -79,6 +89,8 @@ export function App() {
         pool={pool}
         strength={strength}
         onStrength={pickStrength}
+        botInfo={botInfo}
+        onBotInfo={pickBotInfo}
         onStart={(humanIdx, botIdx) => {
           const bot =
             botIdx === "random"
@@ -94,12 +106,14 @@ export function App() {
     <Game
       key={game.n}
       pool={pool}
+      poolJson={poolJsonRef.current}
       tables={tablesRef.current!}
       addedPairs={addedPairsRef.current}
       humanIdx={game.humanIdx}
       botIdx={game.botIdx}
       strength={strength}
       onStrength={pickStrength}
+      botInfo={botInfo}
       onRematch={() => setGame({ ...game, n: game.n + 1 })}
       onNewTeams={() => setGame(null)}
     />

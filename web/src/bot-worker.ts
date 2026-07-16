@@ -12,15 +12,33 @@
 // return `best()` at the next slice boundary; if the flush arrives before
 // the budget is met, the required think still completes first. Bot-only
 // points (`ponder: false`) stop exactly at budget, as before.
+//
+// Blind mode (M10c): a `battle` message carrying `blind` creates a per-game
+// BlindSearcher — the imperfect-info agent that sees only what a human
+// opponent legitimately would (public state + protocol log + the meta-pool
+// prior). The mirror battle then runs log-ON (the observer's trace-free
+// reveal channel reads it). Per search: observe() feeds the mirror, the
+// belief is posted for the UI, then either the baked preview answers
+// instantly (src "table") or the stepped blind search ponders exactly like
+// the perfect-info path (src "search").
 
 import init, {
   Dex,
   Battle,
   Searcher,
+  BlindSearcher,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 
 export type WorkerRequest =
-  | { t: "battle"; p1: string; p2: string; seed: string }
+  | {
+      t: "battle";
+      p1: string;
+      p2: string;
+      seed: string;
+      /** Present = play blind (fair): per-game imperfect-info searcher. */
+      blind?: { poolJson: string; side: number; seed: number };
+    }
+  | { t: "pair"; json: string }
   | { t: "apply"; picks: [number, string][] }
   | {
       t: "search";
@@ -45,7 +63,16 @@ export type WorkerRequest =
 export type WorkerResponse =
   | { t: "ready" }
   | { t: "progress"; id: number; done: number; budget: number }
-  | { t: "result"; id: number; best: string | null; policy: string; ms: number }
+  | {
+      t: "result";
+      id: number;
+      best: string | null;
+      policy: string;
+      ms: number;
+      /** Blind mode only: where the pick came from (preview: table/search). */
+      src?: "table" | "search";
+    }
+  | { t: "belief"; info: string }
   | { t: "benchProgress"; id: number; done: number; total: number; ms: number }
   | { t: "benchResult"; id: number; iters: number; ms: number }
   | { t: "error"; message: string };
@@ -59,6 +86,7 @@ const ready = init().then(() => {
 });
 
 let battle: Battle | null = null;
+let blind: BlindSearcher | null = null;
 let gen = 0; // bumped whenever the battle state moves on -> running searches abort
 let flushed = false; // human committed: stop pondering at the next slice
 
@@ -73,9 +101,28 @@ async function handle(m: WorkerRequest): Promise<void> {
   switch (m.t) {
     case "battle":
       gen += 1;
+      blind?.free();
+      blind = null;
       battle?.free();
       battle = new Battle(dex, m.p1, m.p2, m.seed);
-      battle.setLogEnabled(false);
+      // Blind: keep the protocol log ON — the observer's trace-free reveal
+      // channel (Leftovers / Focus Band / Sleep Talk) reads it.
+      battle.setLogEnabled(!!m.blind);
+      if (m.blind) {
+        blind = new BlindSearcher(
+          battle,
+          m.blind.side,
+          m.blind.poolJson,
+          m.blind.seed >>> 0,
+        );
+      }
+      break;
+    case "pair":
+      try {
+        blind?.addPair(m.json);
+      } catch (e) {
+        console.warn("blind pair table rejected:", e);
+      }
       break;
     case "apply":
       gen += 1;
@@ -88,7 +135,8 @@ async function handle(m: WorkerRequest): Promise<void> {
       flushed = true;
       break;
     case "search":
-      await runSearch(m);
+      if (blind) await runBlindSearch(m);
+      else await runSearch(m);
       break;
     case "bench":
       await runBench(m);
@@ -104,7 +152,7 @@ const PONDER_CAP = 10; // max total think = cap x budget
 const SLICE_TARGET_MS = 125;
 let slice = 250;
 
-function stepAdaptive(s: Searcher, n: number): number {
+function stepAdaptive(s: { step(n: number): number }, n: number): number {
   const t0 = performance.now();
   const done = s.step(n);
   const dt = performance.now() - t0;
@@ -116,13 +164,15 @@ function stepAdaptive(s: Searcher, n: number): number {
   return done;
 }
 
-async function runSearch(m: {
+interface SearchMsg {
   id: number;
   side: number;
   budget: number;
   seed: number;
   ponder: boolean;
-}): Promise<void> {
+}
+
+async function runSearch(m: SearchMsg): Promise<void> {
   const myGen = gen;
   flushed = false;
   const cap = m.budget * PONDER_CAP;
@@ -151,6 +201,51 @@ async function runSearch(m: {
   } finally {
     s.free();
   }
+}
+
+// Blind twin of runSearch on the persistent per-game BlindSearcher:
+// observe() snapshots the mirror's decision point (and updates the belief,
+// posted for the UI), then either the baked preview answers instantly or
+// the stepped search runs the identical ponder loop. The searcher is NOT
+// freed per decision — it carries the game's accumulated observations.
+async function runBlindSearch(m: SearchMsg): Promise<void> {
+  const myGen = gen;
+  flushed = false;
+  const cap = m.budget * PONDER_CAP;
+  const b = blind!;
+  b.observe(battle!);
+  post({ t: "belief", info: b.beliefInfo() });
+  const t0 = performance.now();
+  const baked = b.bakedPreview();
+  if (baked !== undefined) {
+    post({
+      t: "result",
+      id: m.id,
+      best: baked,
+      policy: b.rootPolicy(),
+      ms: performance.now() - t0,
+      src: "table",
+    });
+    return;
+  }
+  let done = 0;
+  for (;;) {
+    if (gen !== myGen) return; // superseded: next observe() resets the search
+    const target = !m.ponder || flushed ? m.budget : cap;
+    if (done >= target) break;
+    done = stepAdaptive(b, Math.min(slice, target - done));
+    post({ t: "progress", id: m.id, done, budget: m.budget });
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  if (gen !== myGen) return;
+  post({
+    t: "result",
+    id: m.id,
+    best: b.best() ?? null,
+    policy: b.rootPolicy(),
+    ms: performance.now() - t0,
+    src: "search",
+  });
 }
 
 // Device benchmark: a fixed, deterministic workload (fixed teams + battle

@@ -1,9 +1,15 @@
 // One game: team preview -> battle -> end. The human is always side 0
 // (p1); the bot is side 1 and thinks in a Web Worker holding a lockstep
 // mirror of the battle. Per request point: collect the picks each owing
-// side must make (forced single choices auto-apply; bot preview comes from
-// the baked tables when the matchup is baked, else from live search), then
-// commit both picks in side order to the main battle AND the mirror.
+// side must make (forced single choices auto-apply), then commit both picks
+// in side order to the main battle AND the mirror.
+//
+// Bot information (M10c): fair (default) = the worker plays the blind
+// imperfect-info searcher — public observations + the meta-pool prior only,
+// no psychic tells — and its belief about the human's team is surfaced as
+// the "bot's read" chip; preview comes from the baked table when the belief
+// resolves the matchup, else determinized search (the worker reports which).
+// X-ray = the old perfect-info searcher; preview via the main-thread tables.
 
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
@@ -21,6 +27,8 @@ import { fetchPairJson } from "./data";
 import { BotWorker } from "./bot";
 import { Narrator } from "./narrate";
 import type {
+  BeliefInfo,
+  BotInfo,
   Choice,
   LogEntry,
   MetaPool,
@@ -81,14 +89,39 @@ function ThinkChip(props: { thinking: Thinking | null }) {
   );
 }
 
+/** Fair-mode flavor: the blind bot's current belief about the human's team
+ * (singleton → the identified pool team; several → candidate count;
+ * fallback → an off-pool custom team). Absent in x-ray mode. */
+function BeliefChip(props: { read: BeliefInfo | null }) {
+  const r = props.read;
+  if (!r) return null;
+  const text = r.fallback
+    ? "custom team"
+    : r.count === 1
+      ? r.candidates[0]
+      : `${r.count} candidates`;
+  return (
+    <span
+      class="belief-chip"
+      data-count={r.count}
+      data-fallback={r.fallback ? "1" : "0"}
+      title="What the bot believes your team is (fair mode: it only sees public information)"
+    >
+      bot's read: {text}
+    </span>
+  );
+}
+
 export function Game(props: {
   pool: MetaPool;
+  poolJson: string;
   tables: PreviewTables;
   addedPairs: Set<string>;
   humanIdx: number;
   botIdx: number;
   strength: number;
   onStrength: (n: number) => void;
+  botInfo: BotInfo;
   onRematch: () => void;
   onNewTeams: () => void;
 }) {
@@ -104,6 +137,7 @@ export function Game(props: {
   const [botPreviewSrc, setBotPreviewSrc] = useState<
     "table" | "search" | null
   >(null);
+  const [botRead, setBotRead] = useState<BeliefInfo | null>(null);
 
   const battleRef = useRef<Battle | null>(null);
   const botRef = useRef<BotWorker | null>(null);
@@ -123,6 +157,9 @@ export function Game(props: {
     aliveRef.current = true;
     const bot = new BotWorker();
     botRef.current = bot;
+    bot.onBelief = (info) => {
+      if (aliveRef.current) setBotRead(info);
+    };
     const battle = new Battle(
       getDex(),
       JSON.stringify(humanTeam.sets),
@@ -136,6 +173,11 @@ export function Game(props: {
         JSON.stringify(humanTeam.sets),
         JSON.stringify(botTeam.sets),
         battle.seed(),
+        // Fair (default): the worker plays blind — public info + the
+        // meta-pool prior only. X-ray: the perfect-info searcher.
+        props.botInfo === "fair"
+          ? { poolJson: props.poolJson, side: BOT, seed: randomSeed32() }
+          : undefined,
       )
       .then(() => {
         if (!aliveRef.current) return;
@@ -215,9 +257,20 @@ export function Game(props: {
 
   async function decideBotPreview(req: Request, legal: Choice[]) {
     const battle = battleRef.current!;
-    let picked: string | null = null;
     const pairJson = await pairPromiseRef.current;
     if (!aliveRef.current || req !== reqRef.current) return;
+
+    if (props.botInfo === "fair") {
+      // Fair: the worker's BlindSearcher decides — the baked table when the
+      // belief resolves the matchup (and the pair is baked), else the
+      // determinized preview search. The main-thread tables (a perfect-info
+      // lookup over BOTH rosters) are never consulted.
+      if (pairJson) botRef.current!.addPair(pairJson);
+      await searchBot(req, legal);
+      return;
+    }
+
+    let picked: string | null = null;
     if (pairJson) {
       const lo = Math.min(props.humanIdx, props.botIdx);
       const hi = Math.max(props.humanIdx, props.botIdx);
@@ -262,6 +315,8 @@ export function Game(props: {
     });
     if (!aliveRef.current || req !== reqRef.current) return;
     setThinking(null);
+    // Blind previews report their source (baked table vs live search).
+    if (r.src && legal[0].kind === "team") setBotPreviewSrc(r.src);
     req.picks[BOT] = r.best ?? legal[0].input;
     maybeCommit(req);
   }
@@ -407,11 +462,16 @@ export function Game(props: {
             ) : botPreviewSrc === "table" ? (
               "Opponent picks from the baked equilibrium table"
             ) : botPreviewSrc === "search" ? (
-              "Opponent picks by live search (matchup not baked yet)"
+              props.botInfo === "fair" ? (
+                "Opponent picks by live search" // unbaked matchup OR ambiguous read
+              ) : (
+                "Opponent picks by live search (matchup not baked yet)"
+              )
             ) : (
               ""
             )}
           </span>
+          <BeliefChip read={botRead} />
           <button class="ghost quit-btn" onClick={props.onNewTeams}>
             Quit
           </button>
@@ -428,6 +488,7 @@ export function Game(props: {
     <div class="screen battle-screen">
       <header class="battle-header">
         <span class="turn-label">Turn {view.turn}</span>
+        <BeliefChip read={botRead} />
         {humanChoices && <ThinkChip thinking={thinking} />}
         <label class="strength-label compact">
           <select

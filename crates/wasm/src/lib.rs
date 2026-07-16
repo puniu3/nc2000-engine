@@ -11,9 +11,15 @@
 //!   from `takeNewLog`). Choices go in as PS-canonical strings (the same
 //!   strings `legalChoices` returns), exactly the fixture/inputLog format.
 //! - `Searcher` — persistent stepped skuct search over ONE decision point
-//!   (state-keyed UCB argmax — the in-battle flagship). The M9c ponder
+//!   (state-keyed UCB argmax — the perfect-info flagship). The M9c ponder
 //!   worker pumps `step(n)` in slices and reads `best()` when the move is
 //!   wanted; create a fresh `Searcher` whenever the battle advances.
+//! - `BlindSearcher` (M10c) — the imperfect-info agent: one instance per
+//!   GAME (it accumulates the M10a observer/belief), `observe()` fed the
+//!   current battle at each decision point (which also snapshots a fresh
+//!   stepped `BlindSearch` — same `step`/`best` ponder shape as `Searcher`),
+//!   baked-table preview via the belief when the opponent's pool identity
+//!   has publicly resolved, `beliefInfo()` for the UI.
 //! - `PreviewTables` — the M8 baked team-preview equilibria. JS fetches
 //!   `meta-pool.json` + `pair-*.json` and feeds them in as strings;
 //!   `resolve` returns the matchup's mixed/argmax policies, `sample` draws
@@ -27,7 +33,9 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 use nc2000_bot::preview::{MetaPool, TableSet};
-use nc2000_bot::{RmConfig, SkuctSearch, SplitMix64};
+use nc2000_bot::{
+    baked_preview_pick, Belief, BlindSearch, Observer, RmConfig, SkuctSearch, SplitMix64,
+};
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Category, Dex};
 use nc2000_engine::state::{Battle, Pokemon, RequestKind, Status, BOOST_NAMES};
@@ -238,31 +246,219 @@ impl WasmSearcher {
     /// descending.
     #[wasm_bindgen(js_name = rootPolicy)]
     pub fn root_policy(&self) -> String {
-        let acts = self.search.actions(self.side);
-        let visits = self.search.visits(self.side);
-        let means = self.search.means(self.side);
-        // Forced spots (one legal action) bypass the visit statistics inside
-        // the search; report the trivial point mass instead of zeros. Same
-        // for a searcher that has not stepped yet: uniform.
-        let total: u32 = visits.iter().sum();
-        let fallback = if acts.is_empty() { 0.0 } else { 1.0 / acts.len() as f64 };
-        let mut rows: Vec<serde_json::Value> = acts
-            .iter()
-            .zip(visits.iter().zip(&means))
-            .map(|(&a, (&n, &m))| {
-                serde_json::json!({
-                    "input": a.to_input(&self.dex),
-                    "visits": n,
-                    "mean": m,
-                    "frac": if total > 0 { n as f64 / total as f64 } else { fallback },
-                })
-            })
-            .collect();
-        rows.sort_by(|a, b| b["visits"].as_u64().cmp(&a["visits"].as_u64()));
         serde_json::json!({
             "iterations": self.search.iterations(),
             "preview": self.search.is_preview(),
+            "actions": policy_rows(
+                &self.dex,
+                self.search.actions(self.side),
+                self.search.visits(self.side),
+                &self.search.means(self.side),
+            ),
+        })
+        .to_string()
+    }
+}
+
+/// Root visit rows for `rootPolicy` (shared by `Searcher`/`BlindSearcher`).
+/// Forced spots (one legal action) bypass the visit statistics inside the
+/// search; report the trivial point mass instead of zeros. Same for a
+/// searcher that has not stepped yet: uniform.
+fn policy_rows(
+    dex: &Dex,
+    acts: &[SearchChoice],
+    visits: &[u32],
+    means: &[f64],
+) -> Vec<serde_json::Value> {
+    let total: u32 = visits.iter().sum();
+    let fallback = if acts.is_empty() { 0.0 } else { 1.0 / acts.len() as f64 };
+    let mut rows: Vec<serde_json::Value> = acts
+        .iter()
+        .zip(visits.iter().zip(means))
+        .map(|(&a, (&n, &m))| {
+            serde_json::json!({
+                "input": a.to_input(dex),
+                "visits": n,
+                "mean": m,
+                "frac": if total > 0 { n as f64 / total as f64 } else { fallback },
+            })
+        })
+        .collect();
+    rows.sort_by(|a, b| b["visits"].as_u64().cmp(&a["visits"].as_u64()));
+    rows
+}
+
+// ---------------------------------------------------------- BlindSearcher
+
+#[wasm_bindgen(js_name = BlindSearcher)]
+pub struct WasmBlindSearcher {
+    dex: Rc<Dex>,
+    cfg: RmConfig,
+    side: usize,
+    tables: TableSet,
+    observer: Observer,
+    belief: Belief,
+    rng: SplitMix64,
+    search: Option<BlindSearch>,
+    baked: Option<SearchChoice>,
+}
+
+#[wasm_bindgen(js_class = BlindSearcher)]
+impl WasmBlindSearcher {
+    /// The M10 imperfect-info agent for `side`, one instance per GAME:
+    /// it accumulates what that side legitimately observes (public state
+    /// diffs + protocol log — run the observed battle log-ON) and keeps a
+    /// belief over the meta pool (`pool_json` = `meta-pool.json` contents).
+    /// Construct right after the battle (at team preview); feed baked pair
+    /// tables with `addPair` for belief-mediated table previews; then per
+    /// decision point call `observe(battle)` and pump `step(n)` / read
+    /// `best()` exactly like `Searcher`. `seed` drives the agent's own RNG
+    /// (determinization sampling, equilibrium sampling, tie-breaking).
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        battle: &WasmBattle,
+        side: usize,
+        pool_json: &str,
+        seed: u32,
+        c: Option<f64>,
+        hp_buckets: Option<i32>,
+    ) -> Result<WasmBlindSearcher, JsError> {
+        let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
+        let tables = TableSet::from_pool(&battle.dex, &pool);
+        let observer = Observer::new(&battle.battle, side);
+        let belief = Belief::new(&battle.dex, &pool, &observer);
+        Ok(WasmBlindSearcher {
+            dex: battle.dex.clone(),
+            cfg: skuct_config(c, hp_buckets),
+            side,
+            tables,
+            observer,
+            belief,
+            rng: SplitMix64::new(seed as u64),
+            search: None,
+            baked: None,
+        })
+    }
+
+    /// Feed one baked pair table (`data/preview-tables-v0/pair-*.json`
+    /// contents) for the belief-mediated preview lookup.
+    #[wasm_bindgen(js_name = addPair)]
+    pub fn add_pair(&mut self, pair_json: &str) -> Result<(), JsError> {
+        self.tables.add_pair_json(pair_json).map_err(|e| JsError::new(&e))
+    }
+
+    /// Feed the current battle at a decision point: ingest everything that
+    /// became visible, re-filter the belief, and snapshot a fresh stepped
+    /// search (any previous decision's search is dropped). At a team
+    /// preview where the belief is a singleton and the pair is baked, the
+    /// M8 mixed table plays instead: `bakedPreview()`/`best()` return the
+    /// table pick immediately and `step` is a no-op.
+    pub fn observe(&mut self, battle: &WasmBattle) {
+        self.observer.observe(&battle.battle, &self.dex);
+        self.belief.sync(&self.dex, &self.observer);
+        self.baked = None;
+        let seed = self.rng.next();
+        let search =
+            BlindSearch::new(&battle.battle, &self.dex, self.cfg.clone(), self.side, seed);
+        if search.is_preview() {
+            if let Some(c) = baked_preview_pick(
+                &self.tables,
+                &self.belief,
+                &battle.battle,
+                self.side,
+                &mut self.rng,
+            ) {
+                if search.actions().contains(&c) {
+                    self.baked = Some(c);
+                }
+            }
+        }
+        self.search = Some(search);
+    }
+
+    /// The baked-table preview pick when it applies at the current decision
+    /// point (ready-to-apply input string), else `null` — the caller then
+    /// pumps the search.
+    #[wasm_bindgen(js_name = bakedPreview)]
+    pub fn baked_preview(&self) -> Option<String> {
+        self.baked.map(|c| c.to_input(&self.dex))
+    }
+
+    /// Pump `n` blind iterations (each on a fresh belief determinization).
+    /// Returns total iterations run at this decision point. No-op when the
+    /// baked preview already decided.
+    pub fn step(&mut self, n: u32) -> Result<u32, JsError> {
+        let search = self.search.as_mut().ok_or_else(|| {
+            JsError::new("BlindSearcher.step before observe")
+        })?;
+        if self.baked.is_some() {
+            return Ok(search.iterations());
+        }
+        Ok(search.step(&self.dex, &self.belief, &self.observer, n))
+    }
+
+    pub fn iterations(&self) -> u32 {
+        self.search.as_ref().map_or(0, |s| s.iterations())
+    }
+
+    /// Current best choice (baked table pick, or argmax visits over the
+    /// global information-set root) as a ready-to-apply input string.
+    /// `null` if the side owes nothing (or before `observe`).
+    pub fn best(&self) -> Option<String> {
+        if let Some(c) = self.baked {
+            return Some(c.to_input(&self.dex));
+        }
+        self.search.as_ref()?.best().map(|c| c.to_input(&self.dex))
+    }
+
+    /// JSON: `{iterations, preview, baked, actions: [...]}` — same row
+    /// shape as `Searcher.rootPolicy`, over the global root stats. A baked
+    /// preview reports its point mass.
+    #[wasm_bindgen(js_name = rootPolicy)]
+    pub fn root_policy(&self) -> String {
+        let (iterations, preview) = match &self.search {
+            Some(s) => (s.iterations(), s.is_preview()),
+            None => (0, false),
+        };
+        if let Some(c) = self.baked {
+            return serde_json::json!({
+                "iterations": iterations,
+                "preview": preview,
+                "baked": true,
+                "actions": [{
+                    "input": c.to_input(&self.dex),
+                    "visits": 0,
+                    "mean": 0.5,
+                    "frac": 1.0,
+                }],
+            })
+            .to_string();
+        }
+        let rows = match &self.search {
+            Some(s) => policy_rows(&self.dex, s.actions(), s.visits(), &s.means()),
+            None => Vec::new(),
+        };
+        serde_json::json!({
+            "iterations": iterations,
+            "preview": preview,
+            "baked": false,
             "actions": rows,
+        })
+        .to_string()
+    }
+
+    /// JSON: `{count, fallback, candidates: [pool team ids still alive]}` —
+    /// the bot's current read of the opponent's team. `count` 1 = publicly
+    /// identified; `fallback` true = no pool team is consistent (a custom
+    /// team; imputation runs on a synthesized roster).
+    #[wasm_bindgen(js_name = beliefInfo)]
+    pub fn belief_info(&self) -> String {
+        let candidates: Vec<&str> =
+            self.belief.alive().iter().map(|&i| self.belief.candidate_id(i)).collect();
+        serde_json::json!({
+            "count": self.belief.candidate_count(),
+            "fallback": self.belief.is_fallback(),
+            "candidates": candidates,
         })
         .to_string()
     }
@@ -615,5 +811,74 @@ mod tests {
         // state view parses and has both sides
         let view: serde_json::Value = serde_json::from_str(&b.state_view()).unwrap();
         assert_eq!(view["sides"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn blind_searcher_flow() {
+        let root = conformance::fixture::repo_root();
+        let pool_json =
+            std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+        let pool: serde_json::Value = serde_json::from_str(&pool_json).unwrap();
+        let team = |i: usize| pool["teams"][i]["sets"].to_string();
+
+        let dex = WasmDex::new().map_err(|_| "dex").unwrap();
+        let mut b = WasmBattle::new(&dex, &team(0), &team(1), "1,2,3,4")
+            .map_err(|_| "battle")
+            .unwrap();
+        let mut bs = WasmBlindSearcher::new(&b, 1, &pool_json, 7, None, None)
+            .map_err(|_| "blind searcher")
+            .unwrap();
+        let pair_json = std::fs::read_to_string(
+            root.join("data/preview-tables-v0/pair-00-01.json"),
+        )
+        .unwrap();
+        bs.add_pair(&pair_json).map_err(|_| "pair").unwrap();
+
+        // preview: the opponent (side 0 = pool team 0) identifies publicly
+        // and the pair is baked -> table pick, no stepping needed
+        bs.observe(&b);
+        let info: serde_json::Value = serde_json::from_str(&bs.belief_info()).unwrap();
+        assert_eq!(info["count"], 1);
+        assert_eq!(info["fallback"], false);
+        assert_eq!(info["candidates"][0], pool["teams"][0]["id"]);
+        let baked = bs.baked_preview().expect("baked preview pick");
+        assert_eq!(bs.best().as_deref(), Some(baked.as_str()));
+        let legal: Vec<serde_json::Value> =
+            serde_json::from_str(&b.legal_choices(1)).unwrap();
+        assert!(legal.iter().any(|c| c["input"] == baked.as_str()));
+        let pol: serde_json::Value = serde_json::from_str(&bs.root_policy()).unwrap();
+        assert_eq!(pol["baked"], true);
+
+        // into battle: stepped blind search returns a legal pick
+        b.apply_choice(0, "team 1, 2, 3").map_err(|_| "apply").unwrap();
+        b.apply_choice(1, &baked).map_err(|_| "apply").unwrap();
+        bs.observe(&b);
+        assert!(bs.baked_preview().is_none());
+        let done = bs.step(40).map_err(|_| "step").unwrap();
+        assert_eq!(done, 40);
+        let best = bs.best().expect("in-battle best");
+        let legal: Vec<serde_json::Value> =
+            serde_json::from_str(&b.legal_choices(1)).unwrap();
+        assert!(legal.iter().any(|c| c["input"] == best.as_str()));
+
+        // fallback belief: an off-pool opponent flips is_fallback and the
+        // search still plays
+        let (p1, _) = fixture_teams();
+        let mut fb = WasmBattle::new(&dex, &p1, &team(1), "1,2,3,4")
+            .map_err(|_| "battle")
+            .unwrap();
+        let mut bfs = WasmBlindSearcher::new(&fb, 1, &pool_json, 9, None, None)
+            .map_err(|_| "blind searcher")
+            .unwrap();
+        bfs.observe(&fb);
+        let info: serde_json::Value = serde_json::from_str(&bfs.belief_info()).unwrap();
+        assert_eq!(info["fallback"], true);
+        assert_eq!(info["count"], 0);
+        assert!(bfs.baked_preview().is_none());
+        bfs.step(30).map_err(|_| "step").unwrap();
+        let best = bfs.best().expect("fallback best");
+        let legal: Vec<serde_json::Value> =
+            serde_json::from_str(&fb.legal_choices(1)).unwrap();
+        assert!(legal.iter().any(|c| c["input"] == best.as_str()));
     }
 }

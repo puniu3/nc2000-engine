@@ -1,12 +1,14 @@
 // Main-thread client for the bot search worker.
 
 import type { WorkerRequest, WorkerResponse } from "./bot-worker";
-import type { RootPolicy } from "./types";
+import type { BeliefInfo, RootPolicy } from "./types";
 
 export interface SearchOutcome {
   best: string | null;
   policy: RootPolicy;
   ms: number;
+  /** Blind mode: where the pick came from (preview: "table" | "search"). */
+  src?: "table" | "search";
 }
 
 export interface BenchOutcome {
@@ -18,6 +20,8 @@ export class BotWorker {
   private worker: Worker;
   private ready: Promise<void>;
   private nextId = 1;
+  /** Blind mode: called whenever the bot's belief updates (search start). */
+  onBelief?: (info: BeliefInfo) => void;
   private pending = new Map<
     number,
     {
@@ -56,10 +60,14 @@ export class BotWorker {
               best: m.best,
               policy: JSON.parse(m.policy) as RootPolicy,
               ms: m.ms,
+              src: m.src,
             });
           }
           break;
         }
+        case "belief":
+          this.onBelief?.(JSON.parse(m.info) as BeliefInfo);
+          break;
         case "benchProgress":
           this.benchPending.get(m.id)?.onProgress?.(m.done, m.total, m.ms);
           break;
@@ -82,9 +90,23 @@ export class BotWorker {
     this.worker.postMessage(m);
   }
 
-  async newBattle(p1: string, p2: string, seed: string): Promise<void> {
+  /** `blind` present = fair play: the worker's per-game imperfect-info
+   * searcher decides (public info + meta-pool prior only); absent = the
+   * perfect-info Searcher (x-ray). */
+  async newBattle(
+    p1: string,
+    p2: string,
+    seed: string,
+    blind?: { poolJson: string; side: number; seed: number },
+  ): Promise<void> {
     await this.ready;
-    this.send({ t: "battle", p1, p2, seed });
+    this.send({ t: "battle", p1, p2, seed, blind });
+  }
+
+  /** Blind mode: feed one baked pair table for the belief-mediated preview
+   * (call before the preview search; messages are ordered). */
+  addPair(json: string): void {
+    this.send({ t: "pair", json });
   }
 
   /** Keep the mirror battle in lockstep (same picks, same order). */

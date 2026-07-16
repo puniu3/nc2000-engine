@@ -142,6 +142,14 @@ small {
 .strength-label.compact {
   margin-left: auto;
 }
+.botinfo-label {
+  margin-left: 0;
+}
+.botinfo-note {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  padding: 2px 0 4px;
+}
 
 /* ------------------------------------------------------- team select */
 
@@ -695,6 +703,23 @@ small {
 .think-chip.pondering .think-chip-dot {
   background: var(--good);
   animation-duration: 2.4s;
+}
+
+/* -------------------------------------------- belief chip (fair mode) */
+
+.belief-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* --------------------------------------------------- device benchmark */

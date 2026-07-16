@@ -4,7 +4,7 @@
 // tapping it.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { MetaPool, PoolTeam } from "./types";
+import type { BotInfo, MetaPool, PoolTeam } from "./types";
 import { STRENGTHS } from "./app";
 import { BotWorker } from "./bot";
 
@@ -142,6 +142,8 @@ export function TeamSelect(props: {
   pool: MetaPool;
   strength: number;
   onStrength: (n: number) => void;
+  botInfo: BotInfo;
+  onBotInfo: (v: BotInfo) => void;
   onStart: (humanIdx: number, botIdx: number | "random") => void;
 }) {
   const [humanIdx, setHumanIdx] = useState<number | null>(null);
@@ -169,7 +171,26 @@ export function TeamSelect(props: {
             ))}
           </select>
         </label>
+        <label class="strength-label botinfo-label">
+          Bot information{" "}
+          <select
+            value={props.botInfo}
+            onChange={(e) =>
+              props.onBotInfo(
+                (e.target as HTMLSelectElement).value as BotInfo,
+              )
+            }
+          >
+            <option value="fair">Fair (blind)</option>
+            <option value="xray">X-ray (perfect info)</option>
+          </select>
+        </label>
       </header>
+      <div class="botinfo-note">
+        {props.botInfo === "fair"
+          ? "Fair: the bot sees only what a human opponent would — your movesets and items stay hidden until revealed in play."
+          : "X-ray: the bot reads your exact sets, moves and items — perfect information."}
+      </div>
 
       <div class="select-bar">
         <div class={`select-slot ${step === 0 ? "current" : ""}`}>

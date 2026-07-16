@@ -83,8 +83,21 @@ export interface StateView {
 export interface RootPolicy {
   iterations: number;
   preview: boolean;
+  /** Blind searcher only: the pick came from the baked preview table. */
+  baked?: boolean;
   actions: { input: string; visits: number; mean: number; frac: number }[];
 }
+
+/** The blind bot's current read of the opponent (BlindSearcher.beliefInfo). */
+export interface BeliefInfo {
+  count: number;
+  fallback: boolean;
+  candidates: string[];
+}
+
+/** Bot information setting: fair = blind (public info only), xray = the
+ * perfect-info searcher. */
+export type BotInfo = "fair" | "xray";
 
 // ------------------------------------------------------------- meta pool
 

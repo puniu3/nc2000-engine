@@ -9,7 +9,9 @@
 //! imperfect-information machinery (`observe` + `belief`) — observation
 //! tracker, belief over the meta pool, and the hidden-field determinizer.
 //! M10b: `BlindAgent` (`blind`) — the skuct search restricted to the
-//! observe/belief surface via per-iteration determinization.
+//! observe/belief surface via per-iteration determinization. M10c:
+//! `BlindSearch` — its stepped form (the wasm/ponder substrate), driven
+//! internally by `BlindAgent`.
 //!
 //! Agents see the full battle state (both teams) — self-play evaluation
 //! mode — except `BlindAgent`, which restricts itself to the
@@ -30,7 +32,7 @@ pub mod smmcts;
 
 pub use agent::{Agent, MaxDamageAgent, RandomAgent};
 pub use belief::Belief;
-pub use blind::BlindAgent;
+pub use blind::{baked_preview_pick, BlindAgent, BlindSearch};
 pub use observe::{ItemObs, MonObs, Observer};
 pub use duel::{run_duel, DuelSpec, DuelStats};
 pub use eval::EvalWeights;
