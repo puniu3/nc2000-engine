@@ -14,6 +14,12 @@
 //! UCB1 selection over its own action stats; the joint action indexes the
 //! child edge. Rewards are from side 0's perspective (win 1 / tie 0.5 /
 //! loss 0); side 1 backs up `1 - r`.
+//!
+//! M6 (`Playout::Heavy`): rollouts are ε-greedy max-damage instead of
+//! uniform, truncated a few turns past the rollout start, and scored by the
+//! weighted static eval (`eval.rs`) instead of raw HP fractions. The M5
+//! configuration survives untouched as `Playout::Uniform` (same PRNG draw
+//! order) so gate measurements compare against the real baseline.
 
 use std::collections::HashMap;
 
@@ -22,7 +28,26 @@ use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
 
 use crate::agent::Agent;
+use crate::eval::{self, EvalWeights};
 use crate::rng::SplitMix64;
+
+/// Rollout policy + leaf evaluation (M6).
+#[derive(Clone, Debug)]
+pub enum Playout {
+    /// M5 baseline: uniform-random playout to the horizon, HP-fraction leaf
+    /// eval. Kept bit-identical (same PRNG draw order) as the reference the
+    /// M6 gate measures against.
+    Uniform,
+    /// M6 heavy playout: ε-greedy max-damage policy, truncated `turns` past
+    /// the rollout start, weighted static eval at the cutoff.
+    Heavy { eps: f64, turns: u16, weights: EvalWeights },
+}
+
+impl Playout {
+    pub fn heavy() -> Playout {
+        Playout::Heavy { eps: 0.2, turns: 8, weights: EvalWeights::default() }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct MctsConfig {
@@ -30,14 +55,23 @@ pub struct MctsConfig {
     pub iterations: u32,
     /// UCB1 exploration constant.
     pub c: f64,
-    /// Rollout horizon: turns beyond the current one before cutting off and
-    /// scoring by HP fraction.
+    /// Tree horizon: turns beyond the current one before a simulation is cut
+    /// off and scored statically even inside the selection phase.
     pub horizon: u16,
+    /// Rollout policy + leaf eval.
+    pub playout: Playout,
 }
 
 impl Default for MctsConfig {
     fn default() -> Self {
-        MctsConfig { iterations: 1000, c: 1.0, horizon: 100 }
+        MctsConfig { iterations: 1000, c: 1.0, horizon: 100, playout: Playout::heavy() }
+    }
+}
+
+impl MctsConfig {
+    /// The M5 agent (uniform full rollouts, HP-fraction eval).
+    pub fn uniform(iterations: u32, c: f64) -> Self {
+        MctsConfig { iterations, c, horizon: 100, playout: Playout::Uniform }
     }
 }
 
@@ -86,7 +120,7 @@ impl MctsAgent {
                 break outcome_reward(o);
             }
             if sim.turn > turn_cap {
-                break hp_eval(sim);
+                break self.leaf_eval(sim, dex);
             }
             let mut joint: Joint = (None, None);
             for s in 0..2 {
@@ -132,29 +166,117 @@ impl MctsAgent {
     }
 
     fn rollout(&mut self, sim: &mut Battle, dex: &Dex, turn_cap: u16) -> f64 {
+        let cutoff = match &self.cfg.playout {
+            Playout::Uniform => turn_cap,
+            Playout::Heavy { turns, .. } => turn_cap.min(sim.turn.saturating_add(*turns)),
+        };
         loop {
             if let Some(o) = sim.outcome() {
                 return outcome_reward(o);
             }
-            if sim.turn > turn_cap {
-                return hp_eval(sim);
+            if sim.turn > cutoff {
+                return self.leaf_eval(sim, dex);
             }
             let mut picks = [None, None];
             for s in 0..2 {
                 let cs = sim.legal_choices(dex, s);
                 if !cs.is_empty() {
-                    picks[s] = Some(cs[self.rng.below(cs.len())]);
+                    picks[s] = Some(self.rollout_pick(sim, dex, s, &cs));
                 }
             }
             sim.apply_choices(dex, picks)
                 .expect("legal_choices produced an illegal choice");
         }
     }
+
+    fn rollout_pick(
+        &mut self,
+        sim: &Battle,
+        dex: &Dex,
+        side: usize,
+        cs: &[SearchChoice],
+    ) -> SearchChoice {
+        let eps = match &self.cfg.playout {
+            Playout::Uniform => return cs[self.rng.below(cs.len())],
+            Playout::Heavy { eps, .. } => *eps,
+        };
+        if cs.len() == 1 {
+            return cs[0];
+        }
+        if self.rng.next_f64() < eps {
+            return cs[self.rng.below(cs.len())];
+        }
+        greedy_pick(sim, dex, side, cs, &mut self.rng)
+    }
+
+    fn leaf_eval(&self, sim: &Battle, dex: &Dex) -> f64 {
+        match &self.cfg.playout {
+            Playout::Uniform => hp_eval(sim),
+            Playout::Heavy { weights, .. } => eval::eval_leaf(sim, dex, weights),
+        }
+    }
+}
+
+/// Greedy rollout move: strongest expected hit (never a voluntary switch);
+/// forced switch → healthiest bench; team preview / all-zero scores →
+/// uniform random.
+fn greedy_pick(
+    sim: &Battle,
+    dex: &Dex,
+    side: usize,
+    cs: &[SearchChoice],
+    rng: &mut SplitMix64,
+) -> SearchChoice {
+    let att = sim.active_id(side);
+    let def = sim.active_id(1 - side);
+    if let (Some(att), Some(def)) = (att, def) {
+        let mut best: Option<(SearchChoice, f64)> = None;
+        for &c in cs {
+            if let SearchChoice::Move(id) = c {
+                let score = eval::expected_hit_fraction(sim, dex, att, def, id);
+                if best.map_or(true, |(_, b)| score > b) {
+                    best = Some((c, score));
+                }
+            }
+        }
+        if let Some((c, score)) = best {
+            if score > 0.0 {
+                return c;
+            }
+            // only status/unknowable moves: fall through to random
+            return cs[rng.below(cs.len())];
+        }
+    }
+    // forced switch: healthiest bench target
+    let hp_frac = |pos: u8| {
+        let s = &sim.sides[side];
+        let p = &s.roster[s.party[(pos - 1) as usize] as usize];
+        p.hp as f64 / p.maxhp as f64
+    };
+    if cs.iter().any(|c| matches!(c, SearchChoice::Switch(_))) {
+        return cs
+            .iter()
+            .copied()
+            .max_by(|a, b| {
+                let f = |c: &SearchChoice| match c {
+                    SearchChoice::Switch(pos) => hp_frac(*pos),
+                    _ => -1.0,
+                };
+                f(a).total_cmp(&f(b))
+            })
+            .unwrap();
+    }
+    cs[rng.below(cs.len())]
 }
 
 impl Agent for MctsAgent {
     fn name(&self) -> String {
-        format!("mcts:{}:{}", self.cfg.iterations, self.cfg.c)
+        match &self.cfg.playout {
+            Playout::Uniform => format!("mcts5:{}:{}", self.cfg.iterations, self.cfg.c),
+            Playout::Heavy { eps, turns, .. } => {
+                format!("mcts:{}:{}:{}:{}", self.cfg.iterations, self.cfg.c, eps, turns)
+            }
+        }
     }
 
     fn choose(

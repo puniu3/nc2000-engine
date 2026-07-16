@@ -391,6 +391,7 @@ version = "0.1.0"
 dependencies = [
  "conformance",
  "nc2000-engine",
+ "pprof",
 ]
 
 [[package]]

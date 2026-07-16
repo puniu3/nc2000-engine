@@ -23,6 +23,11 @@ impl SplitMix64 {
         (self.next() % n as u64) as usize
     }
 
+    /// Uniform in `[0, 1)`.
+    pub fn next_f64(&mut self) -> f64 {
+        (self.next() >> 11) as f64 / (1u64 << 53) as f64
+    }
+
     /// A battle seed string in PS `Gen5RNG.getSeed()` format
     /// (four decimal 16-bit limbs).
     pub fn battle_seed(&mut self) -> String {

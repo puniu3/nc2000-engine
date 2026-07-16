@@ -429,7 +429,7 @@ enum Spec {
     Human,
     Random,
     MaxDamage,
-    Mcts { iterations: u32, c: f64 },
+    Mcts { iterations: u32, c: f64, uniform: bool },
 }
 
 impl Spec {
@@ -439,9 +439,11 @@ impl Spec {
             "human" => Spec::Human,
             "random" => Spec::Random,
             "maxdamage" => Spec::MaxDamage,
-            "mcts" => Spec::Mcts {
+            // mcts = M6 heavy playout; mcts5 = M5 uniform-rollout baseline
+            "mcts" | "mcts5" => Spec::Mcts {
                 iterations: p.get(1).and_then(|v| v.parse().ok()).unwrap_or(1000),
                 c: p.get(2).and_then(|v| v.parse().ok()).unwrap_or(1.0),
+                uniform: p[0] == "mcts5",
             },
             other => {
                 eprintln!("unknown agent: {other}");
@@ -455,10 +457,14 @@ impl Spec {
             Spec::Human => Box::new(HumanAgent),
             Spec::Random => Box::new(RandomAgent::new(seed)),
             Spec::MaxDamage => Box::new(MaxDamageAgent::new()),
-            Spec::Mcts { iterations, c } => Box::new(MctsAgent::new(
-                MctsConfig { iterations: *iterations, c: *c, ..Default::default() },
-                seed,
-            )),
+            Spec::Mcts { iterations, c, uniform } => {
+                let cfg = if *uniform {
+                    MctsConfig::uniform(*iterations, *c)
+                } else {
+                    MctsConfig { iterations: *iterations, c: *c, ..Default::default() }
+                };
+                Box::new(MctsAgent::new(cfg, seed))
+            }
         }
     }
 

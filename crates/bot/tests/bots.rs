@@ -5,7 +5,11 @@
 
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
-use nc2000_bot::{play_game, Agent, GameResult, MaxDamageAgent, MctsAgent, MctsConfig, RandomAgent, SplitMix64};
+use nc2000_bot::mcts::Playout;
+use nc2000_bot::{
+    eval, play_game, Agent, EvalWeights, GameResult, MaxDamageAgent, MctsAgent, MctsConfig,
+    RandomAgent, SplitMix64,
+};
 use nc2000_engine::battle::{Outcome, PokemonSet};
 use nc2000_engine::state::Battle;
 
@@ -81,7 +85,19 @@ fn maxdamage_beats_random() {
 }
 
 #[test]
-fn mcts_smoke() {
+fn mcts_uniform_smoke() {
+    let s = duel(
+        &|seed| Box::new(MctsAgent::new(MctsConfig::uniform(32, 1.0), seed)),
+        &|seed| Box::new(RandomAgent::new(seed)),
+        2,
+        3,
+    );
+    assert!((0.0..=1.0).contains(&s));
+}
+
+#[test]
+fn mcts_heavy_smoke() {
+    // default config = M6 heavy playout
     let s = duel(
         &|seed| {
             Box::new(MctsAgent::new(
@@ -94,4 +110,34 @@ fn mcts_smoke() {
         3,
     );
     assert!((0.0..=1.0).contains(&s));
+    assert!(matches!(MctsConfig::default().playout, Playout::Heavy { .. }));
+}
+
+#[test]
+fn eval_symmetry_and_direction() {
+    let dex = load_dex();
+    let teams = team_pool();
+    let w = EvalWeights::default();
+
+    // mirror match: exactly symmetric state -> 0.5
+    let b = Battle::from_fixture(&dex, "1,2,3,4", &teams[0], &teams[0]).unwrap();
+    let e = eval::eval01(&b, &dex, &w);
+    assert!((e - 0.5).abs() < 1e-12, "mirror eval {e}");
+
+    // damage side 1's whole team -> side 0 favored, leaf stays in (0.25, 0.75)
+    let mut b2 = b.clone();
+    for p in b2.sides[1].roster.iter_mut() {
+        p.hp = (p.maxhp / 10).max(1);
+    }
+    let e2 = eval::eval01(&b2, &dex, &w);
+    assert!(e2 > 0.6, "damaged-foe eval {e2}");
+    let leaf = eval::eval_leaf(&b2, &dex, &w);
+    assert!((0.25..0.75).contains(&leaf), "leaf {leaf}");
+}
+
+#[test]
+fn eval_weights_roundtrip() {
+    let w = EvalWeights::default();
+    let rt = EvalWeights::from_vec(&w.to_vec(), w.scale);
+    assert_eq!(w, rt);
 }
