@@ -1,0 +1,412 @@
+=== HC7.5 1st show ===
+
+Alakazam @ PRZ Cure Berry
+Ability: none
+Level: 52
+- Psychic
+- Fire Punch
+- Encore
+- Recover
+
+Umbreon @ Miracle Berry
+Ability: none
+Level: 52
+- Charm
+- Mean Look
+- Baton Pass
+- Moonlight
+
+Snorlax @ Mint Berry
+Ability: none
+Level: 52
+- Double-Edge
+- Earthquake
+- Curse
+- Rest
+
+Steelix @ Leftovers
+Ability: none
+Level: 51
+- Earthquake
+- Toxic
+- Roar
+- Explosion
+
+Suicune @ Bright Powder
+Ability: none
+Level: 51
+- Surf
+- Ice Beam
+- Sleep Talk
+- Rest
+
+Misdreavus @ Gold Berry
+Ability: none
+Level: 51
+- Mean Look
+- Perish Song
+- Protect
+- Destiny Bond
+
+=== HC7.5 2nd toriyama ===
+
+Zapdos @ Magnet
+Ability: none
+Level: 55
+- Thunder
+- Thunderbolt
+- Sleep Talk
+- Rest
+
+Starmie @ Leftovers
+Ability: none
+Level: 55
+- Surf
+- Thunder Wave
+- Confuse Ray
+- Substitute
+
+Snorlax @ Bright Powder
+Ability: none
+Level: 50
+- Body Slam
+- Dynamic Punch
+- Sleep Talk
+- Rest
+
+Exeggutor @ Quick Claw
+Ability: none
+Level: 50
+IVs: 26 Atk / 26 Def
+- Psychic
+- Hidden Power [Bug]
+- Sleep Powder
+- Explosion
+
+Steelix @ Polkadot Bow
+Ability: none
+Level: 50
+- Earthquake
+- Toxic
+- Roar
+- Explosion
+
+Misdreavus @ Gold Berry
+Ability: none
+Level: 50
+- Zap Cannon
+- Mean Look
+- Perish Song
+- Destiny Bond
+
+=== HC7.5 3rd bean ===
+
+Zapdos @ Leftovers
+Ability: none
+Level: 55
+IVs: 26 Def
+- Thunder
+- Hidden Power [Ice]
+- Swagger
+- Substitute
+
+Miltank @ Bright Powder
+Ability: none
+Level: 55
+- Return
+- Curse
+- Double Team
+- Milk Drink
+
+Snorlax @ Mint Berry
+Ability: none
+Level: 50
+- Body Slam
+- Earthquake
+- Self-Destruct
+- Rest
+
+Exeggutor @ Quick Claw
+Ability: none
+Level: 50
+IVs: 26 Atk / 26 Def
+- Psychic
+- Hidden Power [Bug]
+- Leech Seed
+- Sleep Powder
+
+Cloyster @ Miracle Berry
+Ability: none
+Level: 50
+- Surf
+- Ice Beam
+- Spikes
+- Explosion
+
+Machamp @ Gold Berry
+Ability: none
+Level: 50
+IVs: 26 Atk / 26 Def
+- Cross Chop
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+
+=== HC7.5 4th KG ===
+
+Steelix @ Leftovers
+Ability: none
+Level: 55
+- Earthquake
+- Fissure
+- Sleep Talk
+- Rest
+
+Heracross @ Black Belt
+Ability: none
+Level: 55
+IVs: 6 HP / 24 Atk / 24 Def
+- Megahorn
+- Hidden Power [Fighting]
+- Endure
+- Reversal
+
+Snorlax @ Quick Claw
+Ability: none
+Level: 50
+- Body Slam
+- Earthquake
+- Fire Blast
+- Self-Destruct
+
+Golem @ Gold Berry
+Ability: none
+Level: 50
+- Earthquake
+- Rock Slide
+- Roar
+- Explosion
+
+Starmie @ Miracle Berry
+Ability: none
+Level: 50
+- Surf
+- Psychic
+- Thunderbolt
+- Thunder Wave
+
+Jolteon @ PRZ Cure Berry
+Ability: none
+Level: 50
+IVs: 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Thunder Wave
+- Charm
+
+=== HC7.5 top8 tako ===
+
+Typhlosion @ Miracle Berry
+Ability: none
+Level: 55
+- Fire Blast
+- Thunder Punch
+- Dynamic Punch
+- Sunny Day
+
+Miltank @ Bright Powder
+Ability: none
+Level: 55
+- Frustration
+- Double Team
+- Curse
+- Milk Drink
+
+Exeggutor @ Quick Claw
+Ability: none
+Level: 50
+IVs: 6 HP / 28 Atk / 28 Def
+- Hidden Power [Grass]
+- Sunny Day
+- Sleep Powder
+- Explosion
+
+Snorlax @ Leftovers
+Ability: none
+Level: 50
+- Body Slam
+- Fire Blast
+- Fissure
+- Self-Destruct
+
+Misdreavus @ Focus Band
+Ability: none
+Level: 50
+- Confuse Ray
+- Toxic
+- Pain Split
+- Perish Song
+
+Marowak @ Thick Club
+Ability: none
+Level: 50
+- Bonemerang
+- Rock Slide
+- Fire Blast
+- Swords Dance
+
+=== HC7.5 top8 shinobu ===
+
+Nidoking @ Leftovers
+Ability: none
+Level: 55
+- Earthquake
+- Ice Beam
+- Horn Drill
+- Counter
+
+Tauros @ Bright Powder
+Ability: none
+Level: 55
+- Double-Edge
+- Earthquake
+- Horn Drill
+- Substitute
+
+Misdreavus @ Miracle Berry
+Ability: none
+Level: 50
+- Toxic
+- Mean Look
+- Perish Song
+- Destiny Bond
+
+Cloyster @ Gold Berry
+Ability: none
+Level: 50
+- Surf
+- Ice Beam
+- Spikes
+- Explosion
+
+Marowak @ Thick Club
+Ability: none
+Level: 50
+IVs: 26 Atk / 26 Def
+- Earthquake
+- Hidden Power [Bug]
+- Fire Blast
+- Swords Dance
+
+Blissey @ Quick Claw
+Ability: none
+Level: 50
+- Present
+- Ice Beam
+- Sing
+- Soft-Boiled
+
+=== HC7.5 top8 tsuru ===
+
+Entei @ Miracle Berry
+Ability: none
+Level: 55
+IVs: 6 HP / 24 Atk / 24 Def
+- Fire Blast
+- Solar Beam
+- Hidden Power [Fighting]
+- Sunny Day
+
+Machamp @ Gold Berry
+Ability: none
+Level: 55
+IVs: 26 Atk / 26 Def
+- Cross Chop
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+
+Golem @ PRZ Cure Berry
+Ability: none
+Level: 50
+- Rock Slide
+- Fire Blast
+- Curse
+- Explosion
+
+Snorlax @ Leftovers
+Ability: none
+Level: 50
+- Body Slam
+- Earthquake
+- Curse
+- Self-Destruct
+
+Marowak @ Thick Club
+Ability: none
+Level: 50
+IVs: 14 HP / 24 Atk / 26 Def
+- Bonemerang
+- Rock Slide
+- Hidden Power [Flying]
+- Swords Dance
+
+Exeggutor @ Quick Claw
+Ability: none
+Level: 50
+IVs: 6 HP / 28 Atk / 28 Def
+- Hidden Power [Grass]
+- Sleep Powder
+- Sunny Day
+- Explosion
+
+=== HC7.5 top8 tezan ===
+
+Starmie @ Leftovers
+Ability: none
+Level: 55
+- Surf
+- Psychic
+- Confuse Ray
+- Substitute
+
+Miltank @ Bright Powder
+Ability: none
+Level: 55
+- Return
+- Curse
+- Double Team
+- Milk Drink
+
+Snorlax @ Mint Berry
+Ability: none
+Level: 50
+- Body Slam
+- Earthquake
+- Self-Destruct
+- Rest
+
+Zapdos @ Miracle Berry
+Ability: none
+Level: 50
+IVs: 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Thunder Wave
+- Whirlwind
+
+Exeggutor @ Gold Berry
+Ability: none
+Level: 50
+- Psychic
+- Leech Seed
+- Sleep Powder
+- Explosion
+
+Misdreavus @ PRZ Cure Berry
+Ability: none
+Level: 50
+- Shadow Ball
+- Mean Look
+- Perish Song
+- Destiny Bond

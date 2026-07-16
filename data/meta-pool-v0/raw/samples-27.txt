@@ -1,0 +1,1400 @@
+=== Sample 01 ===
+
+Coconut (Exeggutor) (M) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+- Giga Drain
+- Psychic
+- Explosion
+- Leech Seed
+
+Starmie @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Surf
+- Psychic
+- Thunder Wave
+- Recover
+
+BUFFY (Rhydon) (M) @ Quick Claw
+Ability: No Ability
+Level: 50
+- Earthquake
+- Rock Slide
+- Rest
+- Sleep Talk
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 55
+- Return
+- Flamethrower
+- Curse
+- Rest
+
+Zapdos @ Scope Lens
+Ability: No Ability
+Level: 50
+IVs: 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Rest
+- Sleep Talk
+
+Suicune @ Mint Berry
+Ability: No Ability
+Level: 50
+- Surf
+- Ice Beam
+- Roar
+- Rest
+
+=== Sample 02 ===
+
+LOLA (Jynx)
+Ability: No Ability
+Level: 50
+- Ice Beam
+- Psychic
+- Thief
+- Lovely Kiss
+
+Starmie @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Surf
+- Psychic
+- Thunder Wave
+- Recover
+
+Marowak (M) @ Thick Club
+Ability: No Ability
+Level: 50
+- Earthquake
+- Rock Slide
+- Rest
+- Sleep Talk
+
+Enigami (Porygon2) @ Leftovers
+Ability: No Ability
+Level: 55
+- Return
+- Ice Beam
+- Curse
+- Recover
+
+Snorlax (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+- Body Slam
+- Earthquake
+- Flamethrower
+- Rest
+
+Zapdos @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+IVs: 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Rest
+- Sleep Talk
+
+=== Sample 03 ===
+
+Faust (Gengar) (M) @ Polkadot Bow
+Ability: No Ability
+Level: 50
+- Thunderbolt
+- Fire Punch
+- Ice Punch
+- Explosion
+
+Heracross (M) @ Scope Lens
+Ability: No Ability
+Level: 50
+IVs: 6 HP / 24 Atk / 24 Def
+- Megahorn
+- Hidden Power [Fighting]
+- Rest
+- Sleep Talk
+
+Skarmory (M) @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Drill Peck
+- Curse
+- Whirlwind
+- Rest
+
+Snorlax (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+- Body Slam
+- Earthquake
+- Curse
+- Rest
+
+Raikou @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+IVs: 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Rest
+- Sleep Talk
+
+Tyranitar (M) @ Leftovers
+Ability: No Ability
+Level: 55
+- Rock Slide
+- Crunch
+- Earthquake
+- Flamethrower
+
+=== Sample 04 ===
+
+Machamp (M) @ Scope Lens
+Ability: No Ability
+Level: 55
+- Cross Chop
+- Earthquake
+- Flamethrower
+- Rock Slide
+
+Skarmory @ Mint Berry
+Ability: No Ability
+Level: 50
+- Drill Peck
+- Curse
+- Whirlwind
+- Rest
+
+Misdreavus (M) @ Leftovers
+Ability: No Ability
+Level: 50
+- Thunderbolt
+- Mean Look
+- Perish Song
+- Protect
+
+Snorlax (M) @ Polkadot Bow
+Ability: No Ability
+Level: 50
+- Body Slam
+- Earthquake
+- Flamethrower
+- Self-Destruct
+
+Venusaur (M) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+- Razor Leaf
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Raikou @ Miracle Berry
+Ability: No Ability
+Level: 50
+IVs: 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Rest
+- Sleep Talk
+
+=== Sample 05 ===
+
+Faust (Gengar) (M) @ Scope Lens
+Ability: No Ability
+Level: 50
+- Thunderbolt
+- Fire Punch
+- Ice Punch
+- Destiny Bond
+
+Steelix (M) @ Leftovers
+Ability: No Ability
+Level: 50
+- Earthquake
+- Rock Slide
+- Curse
+- Roar
+
+Alakazam (M) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+- Psychic
+- Seismic Toss
+- Thunder Wave
+- Recover
+
+Cloyster (M) @ Pink Bow
+Ability: No Ability
+Level: 50
+- Surf
+- Ice Beam
+- Explosion
+- Spikes
+
+Blissey @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Flamethrower
+- Ice Beam
+- Heal Bell
+- Soft-Boiled
+
+Snorlax (M) @ Mint Berry
+Ability: No Ability
+Level: 55
+- Double-Edge
+- Curse
+- Rest
+- Sleep Talk
+
+=== Sample 06 ===
+
+Umbreon (M) @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Pursuit
+- Charm
+- Toxic
+- Rest
+
+Skarmory (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+- Drill Peck
+- Curse
+- Toxic
+- Rest
+
+Marowak (M) @ Thick Club
+Ability: No Ability
+Level: 50
+- Earthquake
+- Fire Blast
+- Rock Slide
+- Swords Dance
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 55
+- Double-Edge
+- Curse
+- Rest
+- Sleep Talk
+
+Raikou @ Magnet
+Ability: No Ability
+Level: 55
+IVs: 26 Def
+- Thunder
+- Hidden Power [Ice]
+- Rest
+- Sleep Talk
+
+Suicune @ Scope Lens
+Ability: No Ability
+Level: 50
+- Surf
+- Ice Beam
+- Rest
+- Sleep Talk
+
+=== Sample 07 ===
+
+Electrode @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Thunderbolt
+- Explosion
+- Reflect
+- Thunder Wave
+
+Tauros @ Berserk Gene
+Ability: No Ability
+Level: 55
+- Double-Edge
+- Fire Blast
+- Earthquake
+- Hyper Beam
+
+Cloyster (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+- Ice Beam
+- Explosion
+- Curse
+- Spikes
+
+Marowak (M) @ Thick Club
+Ability: No Ability
+Level: 55
+IVs: 26 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 50
+- Body Slam
+- Earthquake
+- Self-Destruct
+- Curse
+
+Zapdos @ Mint Berry
+Ability: No Ability
+Level: 55
+IVs: 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Whirlwind
+- Rest
+
+=== Sample 08 ===
+
+Exeggutor (M) @ Quick Claw
+Ability: No Ability
+Level: 50
+IVs: 26 Atk / 26 Def
+- Psychic
+- Hidden Power [Bug]
+- Explosion
+- Leech Seed
+
+Machamp (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+IVs: 26 Atk / 26 Def
+- Cross Chop
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+
+Miltank @ Polkadot Bow
+Ability: No Ability
+Level: 55
+- Return
+- Zap Cannon
+- Curse
+- Milk Drink
+
+Cloyster (M) @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Surf
+- Ice Beam
+- Explosion
+- Spikes
+
+Snorlax (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+- Body Slam
+- Earthquake
+- Self-Destruct
+- Rest
+
+Zapdos @ Leftovers
+Ability: No Ability
+Level: 55
+IVs: 26 Def
+- Thunder
+- Hidden Power [Ice]
+- Swagger
+- Whirlwind
+
+=== Sample 09 ===
+
+Nidoking @ Mint Berry
+Ability: No Ability
+Level: 55
+- Earthquake
+- Fire Blast
+- Ice Beam
+- Thunderbolt
+
+Exeggutor (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+IVs: 6 HP / 28 Atk / 28 Def
+- Hidden Power [Grass]
+- Explosion
+- Reflect
+- Stun Spore
+
+Electrode @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Thunderbolt
+- Explosion
+- Light Screen
+- Thunder Wave
+
+Smeargle (M) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+- Agility
+- Baton Pass
+- Encore
+- Spore
+
+Marowak (M) @ Thick Club
+Ability: No Ability
+Level: 55
+IVs: 26 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 50
+- Body Slam
+- Earthquake
+- Self-Destruct
+- Belly Drum
+
+=== Sample 10 ===
+
+Golem (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+- Rock Slide
+- Earthquake
+- Explosion
+- Curse
+
+Exeggutor (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+- Psychic
+- Explosion
+- Leech Seed
+- Sleep Powder
+
+Miltank @ Polkadot Bow
+Ability: No Ability
+Level: 55
+- Return
+- Dynamic Punch
+- Curse
+- Milk Drink
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 50
+- Double-Edge
+- Fire Blast
+- Self-Destruct
+- Curse
+
+Venusaur (M) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+- Razor Leaf
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Tyranitar (M) @ Miracle Berry
+Ability: No Ability
+Level: 55
+- Rock Slide
+- Crunch
+- Fire Blast
+- Dynamic Punch
+
+=== Sample 11 ===
+
+Alakazam (F) @ Miracle Berry
+Ability: No Ability
+Level: 55
+IVs: 2 Atk
+- Psychic
+- Ice Punch
+- Encore
+- Recover
+
+Skarmory (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+- Drill Peck
+- Curse
+- Whirlwind
+- Rest
+
+Blissey @ Quick Claw
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Thunder
+- Ice Beam
+- Counter
+- Soft-Boiled
+
+Venusaur (F) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Razor Leaf
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Suicune @ Scope Lens
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Surf
+- Ice Beam
+- Rest
+- Sleep Talk
+
+Tyranitar (M) @ Leftovers
+Ability: No Ability
+Level: 55
+- Rock Slide
+- Crunch
+- Dynamic Punch
+- Ice Beam
+
+=== Sample 12 ===
+
+Gengar (F) @ Berry Juice
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Zap Cannon
+- Destiny Bond
+- Mean Look
+- Perish Song
+
+Starmie @ Miracle Berry
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Hydro Pump
+- Psychic
+- Thunder Wave
+- Recover
+
+Cloyster (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+- Ice Beam
+- Explosion
+- Reflect
+- Spikes
+
+Umbreon (F) @ Mint Berry
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Pursuit
+- Charm
+- Toxic
+- Rest
+
+Marowak (M) @ Thick Club
+Ability: No Ability
+Level: 50
+- Earthquake
+- Flamethrower
+- Rock Slide
+- Swords Dance
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 55
+- Double-Edge
+- Curse
+- Rest
+- Sleep Talk
+
+=== Sample 13 ===
+
+Gengar (F) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Fire Punch
+- Mean Look
+- Destiny Bond
+- Perish Song
+
+Steelix (M) @ Polkadot Bow
+Ability: No Ability
+Level: 50
+- Earthquake
+- Explosion
+- Roar
+- Toxic
+
+Starmie @ Miracle Berry
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Surf
+- Psychic
+- Thunder Wave
+- Recover
+
+Cloyster (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+- Ice Beam
+- Explosion
+- Curse
+- Spikes
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 55
+- Double-Edge
+- Earthquake
+- Curse
+- Rest
+
+Zapdos @ Mint Berry
+Ability: No Ability
+Level: 50
+IVs: 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Thunder Wave
+- Rest
+
+=== Sample 14 ===
+
+Starmie @ Scope Lens
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Hydro Pump
+- Psychic
+- Thunder Wave
+- Recover
+
+Houndoom (F) @ Miracle Berry
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Crunch
+- Fire Blast
+- Pursuit
+- Roar
+
+Misdreavus (F) @ Gold Berry
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Thunder
+- Mean Look
+- Destiny Bond
+- Perish Song
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 55
+- Double-Edge
+- Dynamic Punch
+- Curse
+- Rest
+
+Venusaur (F) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+IVs: 2 Atk
+- Razor Leaf
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Zapdos @ Mint Berry
+Ability: No Ability
+Level: 50
+IVs: 22 Atk / 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Whirlwind
+- Rest
+
+=== Sample 15 ===
+
+Machamp (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+IVs: 14 HP / 24 Atk / 26 Def
+- Cross Chop
+- Earthquake
+- Hidden Power [Flying]
+- Rest
+
+Starmie @ Mystery Berry
+Ability: No Ability
+Level: 50
+- Hydro Pump
+- Rapid Spin
+- Reflect
+- Recover
+
+Cloyster (M) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+- Ice Beam
+- Explosion
+- Curse
+- Spikes
+
+Skarmory (M) @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Drill Peck
+- Curse
+- Whirlwind
+- Rest
+
+Misdreavus (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+IVs: 26 Def
+- Hidden Power [Ice]
+- Mean Look
+- Destiny Bond
+- Perish Song
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 55
+- Double-Edge
+- Dynamic Punch
+- Thunderbolt
+- Rest
+
+=== Sample 16 ===
+
+Golem (M) @ Soft Sand
+Ability: No Ability
+Level: 50
+- Earthquake
+- Fire Blast
+- Explosion
+- Roar
+
+Gengar (M) @ Miracle Berry
+Ability: No Ability
+Level: 55
+- Shadow Ball
+- Thunderbolt
+- Fire Punch
+- Ice Punch
+
+Poliwrath (M) @ Black Belt
+Ability: No Ability
+Level: 50
+- Hydro Pump
+- Submission
+- Return
+- Belly Drum
+
+Exeggutor (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+IVs: 26 Atk / 26 Def
+- Psychic
+- Hidden Power [Bug]
+- Explosion
+- Leech Seed
+
+Porygon2 @ PRZ Cure Berry
+Ability: No Ability
+Level: 55
+- Return
+- Ice Beam
+- Curse
+- Recover
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 50
+- Double-Edge
+- Earthquake
+- Self-Destruct
+- Curse
+
+=== Sample 17 ===
+
+Steelix (M) @ Polkadot Bow
+Ability: No Ability
+Level: 50
+- Earthquake
+- Explosion
+- Roar
+- Toxic
+
+Exeggutor (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+IVs: 26 Atk / 26 Def
+- Psychic
+- Hidden Power [Bug]
+- Explosion
+- Leech Seed
+
+Porygon2 @ Miracle Berry
+Ability: No Ability
+Level: 55
+- Return
+- Ice Beam
+- Curse
+- Recover
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 50
+- Double-Edge
+- Earthquake
+- Self-Destruct
+- Curse
+
+Zapdos @ Mint Berry
+Ability: No Ability
+Level: 50
+IVs: 22 Atk / 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Reflect
+- Rest
+
+Suicune @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+- Surf
+- Ice Beam
+- Rest
+- Sleep Talk
+
+=== Sample 18 ===
+
+Victreebel (M) @ Gold Berry
+Ability: No Ability
+Level: 51
+IVs: 6 HP / 28 Atk / 28 Def
+- Hidden Power [Grass]
+- Sludge Bomb
+- Encore
+- Synthesis
+
+Starmie @ PRZ Cure Berry
+Ability: No Ability
+Level: 51
+IVs: 2 Atk
+- Surf
+- Reflect
+- Thunder Wave
+- Recover
+
+Umbreon (F) @ Miracle Berry
+Ability: No Ability
+Level: 52
+IVs: 2 Atk
+- Pursuit
+- Charm
+- Toxic
+- Moonlight
+
+Misdreavus (F) @ Leftovers
+Ability: No Ability
+Level: 51
+IVs: 2 Atk
+- Confuse Ray
+- Mean Look
+- Protect
+- Perish Song
+
+Snorlax (M) @ Mint Berry
+Ability: No Ability
+Level: 52
+- Body Slam
+- Earthquake
+- Curse
+- Rest
+
+Zapdos @ Scope Lens
+Ability: No Ability
+Level: 52
+IVs: 22 Atk / 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Rest
+- Sleep Talk
+
+=== Sample 19 ===
+
+Gengar (F) @ PRZ Cure Berry
+Ability: No Ability
+Level: 52
+IVs: 2 Atk
+- Ice Punch
+- Mean Look
+- Destiny Bond
+- Perish Song
+
+Exeggutor (M) @ Miracle Berry
+Ability: No Ability
+Level: 51
+IVs: 26 Atk / 26 Def
+- Psychic
+- Hidden Power [Bug]
+- Leech Seed
+- Sleep Powder
+
+Miltank @ Scope Lens
+Ability: No Ability
+Level: 52
+- Return
+- Dynamic Punch
+- Curse
+- Milk Drink
+
+Starmie @ Leftovers
+Ability: No Ability
+Level: 52
+IVs: 2 Atk
+- Surf
+- Confuse Ray
+- Substitute
+- Thunder Wave
+
+Umbreon (F) @ Black Glasses
+Ability: No Ability
+Level: 52
+IVs: 2 Atk
+- Pursuit
+- Charm
+- Toxic
+- Moonlight
+
+Snorlax (M) @ Mint Berry
+Ability: No Ability
+Level: 52
+- Body Slam
+- Fire Blast
+- Self-Destruct
+- Rest
+
+=== Sample 20 ===
+
+Gengar (M) @ PRZ Cure Berry
+Ability: No Ability
+Level: 51
+- Thunder
+- Mean Look
+- Destiny Bond
+- Perish Song
+
+Exeggutor (M) @ Miracle Berry
+Ability: No Ability
+Level: 51
+- Psychic
+- Leech Seed
+- Sleep Powder
+- Moonlight
+
+Starmie @ Leftovers
+Ability: No Ability
+Level: 51
+- Surf
+- Confuse Ray
+- Substitute
+- Thunder Wave
+
+Skarmory (M) @ Gold Berry
+Ability: No Ability
+Level: 51
+- Drill Peck
+- Thief
+- Toxic
+- Whirlwind
+
+Marowak (M) @ Thick Club
+Ability: No Ability
+Level: 53
+IVs: 14 HP / 24 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Flying]
+- Belly Drum
+
+Snorlax (M) @ Mint Berry
+Ability: No Ability
+Level: 51
+- Return
+- Thunder
+- Curse
+- Rest
+
+=== Sample 21 ===
+
+Gengar (M) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+- Fire Punch
+- Mean Look
+- Destiny Bond
+- Perish Song
+
+Forretress (M) @ Polkadot Bow
+Ability: No Ability
+Level: 50
+- Explosion
+- Curse
+- Spikes
+- Rest
+
+Starmie @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Surf
+- Psychic
+- Thunder Wave
+- Recover
+
+Cloyster (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+- Surf
+- Explosion
+- Curse
+- Spikes
+
+Marowak (M) @ Thick Club
+Ability: No Ability
+Level: 50
+IVs: 26 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Raikou @ Leftovers
+Ability: No Ability
+Level: 55
+IVs: 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Reflect
+- Roar
+
+=== Sample 22 ===
+
+Forretress (M) @ Scope Lens
+Ability: No Ability
+Level: 50
+IVs: 26 Atk / 26 Def
+- Hidden Power [Bug]
+- Curse
+- Spikes
+- Rest
+
+Exeggutor (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+- Psychic
+- Leech Seed
+- Reflect
+- Sleep Powder
+
+Kingdra (M) @ Leftovers
+Ability: No Ability
+Level: 55
+- Hydro Pump
+- Double-Edge
+- Curse
+- Rest
+
+Houndoom (M) @ Berry Juice
+Ability: No Ability
+Level: 50
+- Crunch
+- Fire Blast
+- Pursuit
+- Roar
+
+Snorlax (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+- Body Slam
+- Curse
+- Rest
+- Sleep Talk
+
+Dragonite (M) @ Miracle Berry
+Ability: No Ability
+Level: 55
+- Double-Edge
+- Thunder
+- Dynamic Punch
+- Ice Beam
+
+=== Sample 23 ===
+
+Ampharos (M) @ Miracle Berry
+Ability: No Ability
+Level: 55
+- Thunderbolt
+- Dynamic Punch
+- Fire Punch
+- Thunder Wave
+
+Starmie @ Leftovers
+Ability: No Ability
+Level: 55
+- Surf
+- Psychic
+- Thunder Wave
+- Recover
+
+Cloyster (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+- Ice Beam
+- Explosion
+- Reflect
+- Spikes
+
+Marowak (M) @ Thick Club
+Ability: No Ability
+Level: 50
+IVs: 26 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Misdreavus (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+- Mean Look
+- Protect
+- Perish Song
+- Rest
+
+Snorlax (M) @ Quick Claw
+Ability: No Ability
+Level: 50
+- Body Slam
+- Earthquake
+- Self-Destruct
+- Curse
+
+=== Sample 24 ===
+
+Gengar (M) @ Polkadot Bow
+Ability: No Ability
+Level: 50
+- Fire Punch
+- Explosion
+- Sunny Day
+- Destiny Bond
+
+Exeggutor (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+IVs: 6 HP / 28 Atk / 28 Def
+- Hidden Power [Grass]
+- Explosion
+- Sleep Powder
+- Sunny Day
+
+Electrode @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Thunderbolt
+- Explosion
+- Light Screen
+- Thunder Wave
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 50
+- Body Slam
+- Earthquake
+- Self-Destruct
+- Curse
+
+Charizard (M) @ Quick Claw
+Ability: No Ability
+Level: 55
+- Fire Blast
+- Hyper Beam
+- Earthquake
+- Belly Drum
+
+Moltres @ Mint Berry
+Ability: No Ability
+Level: 55
+IVs: 6 HP / 28 Atk / 28 Def
+- Fire Blast
+- Hidden Power [Grass]
+- Sunny Day
+- Rest
+
+=== Sample 25 ===
+
+Gengar (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+- Fire Punch
+- Mean Look
+- Destiny Bond
+- Perish Song
+
+Heracross (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+IVs: 14 HP / 24 Atk / 26 Def
+- Megahorn
+- Hidden Power [Flying]
+- Curse
+- Rest
+
+Tauros @ Miracle Berry
+Ability: No Ability
+Level: 55
+- Body Slam
+- Earthquake
+- Curse
+- Rest
+
+Starmie @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+- Surf
+- Psychic
+- Reflect
+- Recover
+
+Jolteon (M) @ Scope Lens
+Ability: No Ability
+Level: 50
+- Thunder
+- Charm
+- Rest
+- Sleep Talk
+
+Snorlax (M) @ Leftovers
+Ability: No Ability
+Level: 50
+- Body Slam
+- Earthquake
+- Self-Destruct
+- Curse
+
+=== Sample 26 ===
+
+Steelix (M) @ Quick Claw
+Ability: No Ability
+Level: 50
+- Earthquake
+- Explosion
+- Roar
+- Toxic
+
+Starmie @ Miracle Berry
+Ability: No Ability
+Level: 50
+- Hydro Pump
+- Psychic
+- Light Screen
+- Recover
+
+Cloyster (M) @ Gold Berry
+Ability: No Ability
+Level: 50
+- Ice Beam
+- Explosion
+- Reflect
+- Spikes
+
+Kangaskhan @ Leftovers
+Ability: No Ability
+Level: 55
+- Body Slam
+- Earthquake
+- Curse
+- Roar
+
+Venusaur (M) @ PRZ Cure Berry
+Ability: No Ability
+Level: 50
+- Razor Leaf
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Moltres @ Mint Berry
+Ability: No Ability
+Level: 50
+- Fire Blast
+- Reflect
+- Sunny Day
+- Rest
+
+=== Sample 27 ===
+
+Clefable (M) @ Leftovers
+Ability: No Ability
+Level: 55
+- Return
+- Belly Drum
+- Encore
+- Moonlight
+
+Gengar (M) @ Polkadot Bow
+Ability: No Ability
+Level: 50
+- Fire Punch
+- Explosion
+- Sunny Day
+- Destiny Bond
+
+Machamp (M) @ Scope Lens
+Ability: No Ability
+Level: 50
+- Cross Chop
+- Body Slam
+- Rest
+- Sleep Talk
+
+Umbreon (M) @ Mint Berry
+Ability: No Ability
+Level: 50
+- Pursuit
+- Charm
+- Toxic
+- Rest
+
+Gligar (M) @ Miracle Berry
+Ability: No Ability
+Level: 50
+IVs: 22 HP / 26 Atk / 24 Def
+- Earthquake
+- Hidden Power [Rock]
+- Thief
+- Rest
+
+Blissey @ Quick Claw
+Ability: No Ability
+Level: 50
+- Thunder
+- Ice Beam
+- Heal Bell
+- Soft-Boiled
