@@ -291,7 +291,10 @@ pub struct TableSet {
 }
 
 impl TableSet {
-    pub fn load(dex: &Dex, pool: &MetaPool, dir: &Path) -> Arc<TableSet> {
+    /// Signature index over the pool with no tables yet — the
+    /// filesystem-free construction path (M9 wasm: JS fetches pair JSONs and
+    /// feeds them through `add_pair_json`).
+    pub fn from_pool(dex: &Dex, pool: &MetaPool) -> TableSet {
         let mut sig_to_idx = HashMap::new();
         let mut ids = Vec::new();
         for (i, t) in pool.teams.iter().enumerate() {
@@ -300,9 +303,29 @@ impl TableSet {
                 eprintln!("warning: duplicate team signature in pool at {}", t.id);
             }
         }
-        let id_idx: HashMap<&str, usize> =
-            ids.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect();
-        let mut tables = HashMap::new();
+        TableSet { ids, sig_to_idx, tables: HashMap::new(), actions: preview_actions() }
+    }
+
+    /// Register one baked pair table. Errors when the table references team
+    /// ids outside the pool.
+    pub fn add_pair(&mut self, tab: PairTable) -> Result<(), String> {
+        let idx = |id: &str| self.ids.iter().position(|x| x == id);
+        let (Some(i), Some(j)) = (idx(&tab.team_a), idx(&tab.team_b)) else {
+            return Err(format!("pair {} vs {} references unknown teams", tab.team_a, tab.team_b));
+        };
+        self.tables.insert((i, j), tab);
+        Ok(())
+    }
+
+    /// `add_pair` from the pair-JSON text (the `data/preview-tables-v0/*.json`
+    /// format).
+    pub fn add_pair_json(&mut self, text: &str) -> Result<(), String> {
+        let tab: PairTable = serde_json::from_str(text).map_err(|e| format!("pair JSON: {e}"))?;
+        self.add_pair(tab)
+    }
+
+    pub fn load(dex: &Dex, pool: &MetaPool, dir: &Path) -> Arc<TableSet> {
+        let mut set = TableSet::from_pool(dex, pool);
         if let Ok(entries) = std::fs::read_dir(dir) {
             for e in entries.flatten() {
                 let p = e.path();
@@ -311,16 +334,17 @@ impl TableSet {
                 }
                 let Ok(text) = std::fs::read_to_string(&p) else { continue };
                 let Ok(tab) = serde_json::from_str::<PairTable>(&text) else { continue };
-                let (Some(&i), Some(&j)) =
-                    (id_idx.get(tab.team_a.as_str()), id_idx.get(tab.team_b.as_str()))
-                else {
-                    eprintln!("warning: {} references unknown teams", p.display());
-                    continue;
-                };
-                tables.insert((i, j), tab);
+                if let Err(e) = set.add_pair(tab) {
+                    eprintln!("warning: {}: {e}", p.display());
+                }
             }
         }
-        Arc::new(TableSet { ids, sig_to_idx, tables, actions: preview_actions() })
+        Arc::new(set)
+    }
+
+    /// The canonical 60-action table (shared by every pair).
+    pub fn actions(&self) -> &[[u8; 3]] {
+        &self.actions
     }
 
     pub fn len(&self) -> usize {
@@ -336,8 +360,9 @@ impl TableSet {
     }
 
     /// Resolve both sides of a live preview to pool indices, orientation
-    /// included: `(table, my_side_is_a)`.
-    fn lookup(&self, battle: &Battle, side: usize) -> Option<(&PairTable, bool)> {
+    /// included: `(table, my_side_is_a)`. Public since M9: the wasm bridge
+    /// resolves matchups directly (no agent wrapper on the JS side).
+    pub fn lookup(&self, battle: &Battle, side: usize) -> Option<(&PairTable, bool)> {
         let me = *self.sig_to_idx.get(&roster_sig(battle, side))?;
         let opp = *self.sig_to_idx.get(&roster_sig(battle, 1 - side))?;
         if let Some(t) = self.tables.get(&(me, opp)) {

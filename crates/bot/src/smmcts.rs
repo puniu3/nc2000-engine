@@ -183,6 +183,269 @@ impl ProbeStats {
     }
 }
 
+// ------------------------------------------------- search core (free fns)
+//
+// The iteration machinery lives in free functions so `RmAgent` (one-shot
+// search per decision) and `SkuctSearch` (persistent, steppable — the M9
+// wasm/ponder form) share it verbatim. Extracted mechanically from the M7
+// `RmAgent` methods; bodies unchanged so agent behavior stays bit-identical
+// (verified by the arena sanity run in M9a).
+
+fn key_of(cfg: &RmConfig, b: &Battle) -> u64 {
+    if cfg.hp_buckets > 0 {
+        b.state_key_bucketed(cfg.hp_buckets)
+    } else {
+        b.state_key()
+    }
+}
+
+/// UCB1 (untried-first, then mean + c·sqrt(ln N / n)).
+fn select_ucb(cfg: &RmConfig, rng: &mut SplitMix64, node: &mut Node, side: usize) -> usize {
+    let k = node.acts[side].len();
+    let untried: Vec<usize> = (0..k).filter(|&a| node.n[side][a] == 0).collect();
+    let pick = if !untried.is_empty() {
+        untried[rng.below(untried.len())]
+    } else {
+        let total: u32 = node.n[side].iter().sum();
+        let ln_total = (total as f64).ln();
+        let mut best = 0;
+        let mut best_v = f64::NEG_INFINITY;
+        for a in 0..k {
+            let (n, w) = (node.n[side][a] as f64, node.w[side][a]);
+            let v = w / n + cfg.c * (ln_total / n).sqrt();
+            if v > best_v {
+                best_v = v;
+                best = a;
+            }
+        }
+        best
+    };
+    node.n[side][pick] += 1;
+    pick
+}
+
+/// One iteration. `force_root` (probe phase) fixes the root joint to
+/// the given action indices instead of UCB selection; the forced picks
+/// still feed the root's per-action means (an unconditional sample of
+/// an action is an unbiased sample of it), and everything below the
+/// root selects normally. Returns the iteration's side-0 reward and
+/// writes the root joint's action indices into `root_joint`.
+#[allow(clippy::too_many_arguments)]
+fn run_iteration(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut HashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    force_root: Option<[usize; 2]>,
+    root_joint: &mut [usize; 2],
+) -> f64 {
+    let mut path: Vec<(usize, usize, usize)> = Vec::new(); // (node, side, act)
+    let mut node_idx = 0usize;
+
+    // ---- selection until a leaf: terminal, horizon, or unexpanded state
+    let reward0 = loop {
+        let at_root = node_idx == 0;
+        let mut joint = [None, None];
+        for s in 0..2 {
+            let k = nodes[node_idx].acts[s].len();
+            if k == 0 {
+                continue;
+            }
+            let ai = if k == 1 {
+                // forced: skip the stats machinery
+                0
+            } else {
+                let ai = match force_root {
+                    Some(cell) if at_root => {
+                        nodes[node_idx].n[s][cell[s]] += 1;
+                        cell[s]
+                    }
+                    _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
+                };
+                path.push((node_idx, s, ai));
+                ai
+            };
+            joint[s] = Some(nodes[node_idx].acts[s][ai]);
+            if at_root {
+                root_joint[s] = ai;
+            }
+        }
+        if joint == [None, None] {
+            // defensive: a rest point where neither side owes a choice
+            // (never reached in practice — battles end instead)
+            break leaf_eval(cfg, sim, dex);
+        }
+        sim.apply_choices(dex, joint)
+            .expect("cached legal choice rejected (state_key collision?)");
+        if let Some(o) = sim.outcome() {
+            break outcome_reward(o);
+        }
+        if sim.turn > turn_cap {
+            break leaf_eval(cfg, sim, dex);
+        }
+        let key = key_of(cfg, sim);
+        match table.get(&key) {
+            Some(&child) => node_idx = child,
+            None => {
+                // expand exactly one node per iteration, then roll out
+                let child = nodes.len();
+                nodes.push(Node::at(sim, dex));
+                table.insert(key, child);
+                break playout_value(sim, dex, &cfg.playout, turn_cap, rng);
+            }
+        }
+    };
+
+    // ---- backprop: UCB stats along the path
+    for (ni, s, ai) in path {
+        nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
+    }
+    reward0
+}
+
+fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
+    match &cfg.playout {
+        Playout::Uniform => crate::mcts::hp_eval(sim),
+        Playout::Heavy { weights, .. } => crate::eval::eval_leaf(sim, dex, weights),
+    }
+}
+
+// ---------------------------------------------------- stepped search (M9)
+
+/// Persistent, incrementally steppable state-keyed UCB search over ONE
+/// decision point — the `skuct` flagship in the form the wasm bridge's
+/// ponder loop needs: create it at the current battle state, pump
+/// `step(n)` in small slices (returning to the JS event loop between
+/// slices), read `best()` / visit stats whenever the move is actually
+/// wanted. `cfg.iterations` is ignored — the caller owns the budget.
+///
+/// `RmAgent` drives this same struct internally (tree phase = `step_one`,
+/// probe phase = `step_forced`), so the stepped form can never drift from
+/// the gate-measured agents.
+pub struct SkuctSearch {
+    cfg: RmConfig,
+    rng: SplitMix64,
+    root: Battle,
+    turn_cap: u16,
+    nodes: Vec<Node>,
+    table: HashMap<u64, usize>,
+    done: u32,
+}
+
+impl SkuctSearch {
+    pub fn new(battle: &Battle, dex: &Dex, cfg: RmConfig, seed: u64) -> SkuctSearch {
+        Self::with_rng(battle, dex, cfg, SplitMix64::new(seed))
+    }
+
+    fn with_rng(battle: &Battle, dex: &Dex, cfg: RmConfig, rng: SplitMix64) -> SkuctSearch {
+        let mut root = battle.clone();
+        root.set_log_enabled(false);
+        let turn_cap = root.turn.saturating_add(cfg.horizon);
+        let nodes = vec![Node::at(&mut root, dex)];
+        let mut table = HashMap::new();
+        table.insert(key_of(&cfg, &root), 0usize);
+        SkuctSearch { cfg, rng, root, turn_cap, nodes, table, done: 0 }
+    }
+
+    /// One UCB iteration (clone root, fresh chance seed, select/expand/
+    /// rollout/backprop). Returns the side-0 reward and the root joint's
+    /// action indices — `RmAgent`'s late-tree stage-game seeding needs both.
+    pub fn step_one(&mut self, dex: &Dex) -> (f64, [usize; 2]) {
+        let mut sim = self.root.clone();
+        sim.reseed(self.rng.next());
+        let mut joint = [0usize; 2];
+        let r = run_iteration(
+            &self.cfg,
+            &mut self.rng,
+            &mut self.nodes,
+            &mut self.table,
+            &mut sim,
+            dex,
+            self.turn_cap,
+            None,
+            &mut joint,
+        );
+        self.done += 1;
+        (r, joint)
+    }
+
+    /// One probe iteration with the root joint forced (`RmAgent`'s matrix
+    /// estimation phase).
+    fn step_forced(&mut self, dex: &Dex, force: [usize; 2]) -> f64 {
+        let mut sim = self.root.clone();
+        sim.reseed(self.rng.next());
+        let mut joint = [0usize; 2];
+        let r = run_iteration(
+            &self.cfg,
+            &mut self.rng,
+            &mut self.nodes,
+            &mut self.table,
+            &mut sim,
+            dex,
+            self.turn_cap,
+            Some(force),
+            &mut joint,
+        );
+        self.done += 1;
+        r
+    }
+
+    /// Pump `n` iterations, return the total run so far.
+    pub fn step(&mut self, dex: &Dex, n: u32) -> u32 {
+        for _ in 0..n {
+            self.step_one(dex);
+        }
+        self.done
+    }
+
+    pub fn iterations(&self) -> u32 {
+        self.done
+    }
+
+    /// The root's legal actions for `side` (empty = side owes nothing).
+    pub fn actions(&self, side: usize) -> &[SearchChoice] {
+        &self.nodes[0].acts[side]
+    }
+
+    /// Per-action visit counts at the root, aligned with `actions`.
+    pub fn visits(&self, side: usize) -> &[u32] {
+        &self.nodes[0].n[side]
+    }
+
+    /// Per-action mean rewards (side's own perspective), 0.5 when unvisited.
+    pub fn means(&self, side: usize) -> Vec<f64> {
+        let node = &self.nodes[0];
+        (0..node.acts[side].len())
+            .map(|a| {
+                if node.n[side][a] == 0 {
+                    0.5
+                } else {
+                    node.w[side][a] / node.n[side][a] as f64
+                }
+            })
+            .collect()
+    }
+
+    /// Current best choice: argmax visits (the `skuct` play rule). `None`
+    /// when the side owes nothing at this decision point.
+    pub fn best(&self, side: usize) -> Option<SearchChoice> {
+        let node = &self.nodes[0];
+        (0..node.acts[side].len())
+            .max_by_key(|&a| node.n[side][a])
+            .map(|a| node.acts[side][a])
+    }
+
+    /// Whether the root decision is a team preview.
+    pub fn is_preview(&self) -> bool {
+        self.nodes[0].preview
+    }
+}
+
+// -------------------------------------------------------------- the agent
+
 pub struct RmAgent {
     pub cfg: RmConfig,
     rng: SplitMix64,
@@ -193,139 +456,13 @@ impl RmAgent {
         RmAgent { cfg, rng: SplitMix64::new(seed) }
     }
 
-    fn key_of(&self, b: &Battle) -> u64 {
-        if self.cfg.hp_buckets > 0 {
-            b.state_key_bucketed(self.cfg.hp_buckets)
-        } else {
-            b.state_key()
-        }
-    }
-
-    /// UCB1 (untried-first, then mean + c·sqrt(ln N / n)).
-    fn select_ucb(&mut self, node: &mut Node, side: usize) -> usize {
-        let k = node.acts[side].len();
-        let untried: Vec<usize> = (0..k).filter(|&a| node.n[side][a] == 0).collect();
-        let pick = if !untried.is_empty() {
-            untried[self.rng.below(untried.len())]
-        } else {
-            let total: u32 = node.n[side].iter().sum();
-            let ln_total = (total as f64).ln();
-            let mut best = 0;
-            let mut best_v = f64::NEG_INFINITY;
-            for a in 0..k {
-                let (n, w) = (node.n[side][a] as f64, node.w[side][a]);
-                let v = w / n + self.cfg.c * (ln_total / n).sqrt();
-                if v > best_v {
-                    best_v = v;
-                    best = a;
-                }
-            }
-            best
-        };
-        node.n[side][pick] += 1;
-        pick
-    }
-
-    /// One iteration. `force_root` (probe phase) fixes the root joint to
-    /// the given action indices instead of UCB selection; the forced picks
-    /// still feed the root's per-action means (an unconditional sample of
-    /// an action is an unbiased sample of it), and everything below the
-    /// root selects normally. Returns the iteration's side-0 reward and
-    /// writes the root joint's action indices into `root_joint`.
-    fn run_iteration(
-        &mut self,
-        nodes: &mut Vec<Node>,
-        table: &mut HashMap<u64, usize>,
-        sim: &mut Battle,
-        dex: &Dex,
-        turn_cap: u16,
-        force_root: Option<[usize; 2]>,
-        root_joint: &mut [usize; 2],
-    ) -> f64 {
-        let mut path: Vec<(usize, usize, usize)> = Vec::new(); // (node, side, act)
-        let mut node_idx = 0usize;
-
-        // ---- selection until a leaf: terminal, horizon, or unexpanded state
-        let reward0 = loop {
-            let at_root = node_idx == 0;
-            let mut joint = [None, None];
-            for s in 0..2 {
-                let k = nodes[node_idx].acts[s].len();
-                if k == 0 {
-                    continue;
-                }
-                let ai = if k == 1 {
-                    // forced: skip the stats machinery
-                    0
-                } else {
-                    let ai = match force_root {
-                        Some(cell) if at_root => {
-                            nodes[node_idx].n[s][cell[s]] += 1;
-                            cell[s]
-                        }
-                        _ => self.select_ucb(&mut nodes[node_idx], s),
-                    };
-                    path.push((node_idx, s, ai));
-                    ai
-                };
-                joint[s] = Some(nodes[node_idx].acts[s][ai]);
-                if at_root {
-                    root_joint[s] = ai;
-                }
-            }
-            if joint == [None, None] {
-                // defensive: a rest point where neither side owes a choice
-                // (never reached in practice — battles end instead)
-                break self.leaf_eval(sim, dex);
-            }
-            sim.apply_choices(dex, joint)
-                .expect("cached legal choice rejected (state_key collision?)");
-            if let Some(o) = sim.outcome() {
-                break outcome_reward(o);
-            }
-            if sim.turn > turn_cap {
-                break self.leaf_eval(sim, dex);
-            }
-            let key = self.key_of(sim);
-            match table.get(&key) {
-                Some(&child) => node_idx = child,
-                None => {
-                    // expand exactly one node per iteration, then roll out
-                    let child = nodes.len();
-                    nodes.push(Node::at(sim, dex));
-                    table.insert(key, child);
-                    break playout_value(sim, dex, &self.cfg.playout, turn_cap, &mut self.rng);
-                }
-            }
-        };
-
-        // ---- backprop: UCB stats along the path
-        for (ni, s, ai) in path {
-            nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
-        }
-        reward0
-    }
-
-    fn leaf_eval(&self, sim: &Battle, dex: &Dex) -> f64 {
-        match &self.cfg.playout {
-            Playout::Uniform => crate::mcts::hp_eval(sim),
-            Playout::Heavy { weights, .. } => crate::eval::eval_leaf(sim, dex, weights),
-        }
-    }
-
     /// Run the search and return the root play distribution for `side`
     /// (probabilities aligned with the root's legal actions, which equal the
     /// caller's `choices`).
     fn search(&mut self, battle: &Battle, dex: &Dex, side: usize) -> (Vec<SearchChoice>, Vec<f64>) {
-        let mut root = battle.clone();
-        root.set_log_enabled(false);
-        let turn_cap = root.turn.saturating_add(self.cfg.horizon);
+        let mut ts = SkuctSearch::with_rng(battle, dex, self.cfg.clone(), self.rng.clone());
 
-        let mut nodes = vec![Node::at(&mut root, dex)];
-        let mut table = HashMap::new();
-        table.insert(self.key_of(&root), 0usize);
-
-        let mixed_root = !nodes[0].preview && self.cfg.rule == SelRule::Rm;
+        let mixed_root = !ts.nodes[0].preview && self.cfg.rule == SelRule::Rm;
         let probes = if mixed_root {
             (self.cfg.iterations as f64 * self.cfg.probe).round() as u32
         } else {
@@ -337,16 +474,12 @@ impl RmAgent {
         // they concentrate exactly on the cells the equilibrium cares about
         // most (each side's best replies).
         let tree_iters = self.cfg.iterations - probes;
-        let k1_full = nodes[0].acts[1].len().max(1);
-        let cells_full = nodes[0].acts[0].len().max(1) * k1_full;
+        let k1_full = ts.nodes[0].acts[1].len().max(1);
+        let cells_full = ts.nodes[0].acts[0].len().max(1) * k1_full;
         let mut late_n = vec![0u32; cells_full];
         let mut late_w = vec![0.0f64; cells_full];
         for i in 0..tree_iters {
-            let mut sim = root.clone();
-            sim.reseed(self.rng.next());
-            let mut joint = [0usize; 2];
-            let r =
-                self.run_iteration(&mut nodes, &mut table, &mut sim, dex, turn_cap, None, &mut joint);
+            let (r, joint) = ts.step_one(dex);
             if mixed_root && i >= tree_iters / 2 {
                 let cell = joint[0] * k1_full + joint[1];
                 late_n[cell] += 1;
@@ -354,19 +487,20 @@ impl RmAgent {
             }
         }
 
-        let acts = nodes[0].acts[side].clone();
+        let acts = ts.nodes[0].acts[side].clone();
 
         // preview root (or argmax ablation): most-visited action, point mass
         if !mixed_root {
-            let best = (0..acts.len()).max_by_key(|&a| nodes[0].n[side][a]).unwrap();
+            let best = (0..acts.len()).max_by_key(|&a| ts.nodes[0].n[side][a]).unwrap();
             let mut probs = vec![0.0; acts.len()];
             probs[best] = 1.0;
+            self.rng = ts.rng;
             return (acts, probs);
         }
 
         // ---- probe phase: round-robin the top-m×top-m root joint cells,
         // seeded with the late-tree on-policy samples
-        let support = [0, 1].map(|s| top_actions(&nodes[0], s, self.cfg.mix_actions));
+        let support = [0, 1].map(|s| top_actions(&ts.nodes[0], s, self.cfg.mix_actions));
         let mut stats = ProbeStats::new(support);
         let [m0, m1] = stats.dims();
         for cell in 0..m0 * m1 {
@@ -384,20 +518,10 @@ impl RmAgent {
                 stats.support[0].get(cell / m1).copied().unwrap_or(0),
                 stats.support[1].get(cell % m1).copied().unwrap_or(0),
             ];
-            let mut sim = root.clone();
-            sim.reseed(self.rng.next());
-            let mut joint = [0usize; 2];
-            let r = self.run_iteration(
-                &mut nodes,
-                &mut table,
-                &mut sim,
-                dex,
-                turn_cap,
-                Some(force),
-                &mut joint,
-            );
+            let r = ts.step_forced(dex, force);
             stats.record(cell, r);
         }
+        self.rng = ts.rng.clone();
 
         // ---- solve the probed stage game, embed into the full action list
         let (s0, s1) = solve_rm_plus(&stats.v, stats.dims(), self.cfg.solve_sweeps);
@@ -426,7 +550,7 @@ impl RmAgent {
         // visit statistics (hundreds of samples vs ~tens per matrix cell),
         // so a purified point mass defers to argmax-visits.
         if probs.iter().filter(|&&p| p > 0.0).count() == 1 {
-            let best = (0..acts.len()).max_by_key(|&a| nodes[0].n[side][a]).unwrap();
+            let best = (0..acts.len()).max_by_key(|&a| ts.nodes[0].n[side][a]).unwrap();
             probs.iter_mut().for_each(|p| *p = 0.0);
             probs[best] = 1.0;
         }
