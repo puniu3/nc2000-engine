@@ -9,6 +9,11 @@ export interface SearchOutcome {
   ms: number;
 }
 
+export interface BenchOutcome {
+  iters: number;
+  ms: number;
+}
+
 export class BotWorker {
   private worker: Worker;
   private ready: Promise<void>;
@@ -18,6 +23,13 @@ export class BotWorker {
     {
       resolve: (r: SearchOutcome) => void;
       onProgress?: (done: number, budget: number) => void;
+    }
+  >();
+  private benchPending = new Map<
+    number,
+    {
+      resolve: (r: BenchOutcome) => void;
+      onProgress?: (done: number, total: number, ms: number) => void;
     }
   >();
 
@@ -48,6 +60,17 @@ export class BotWorker {
           }
           break;
         }
+        case "benchProgress":
+          this.benchPending.get(m.id)?.onProgress?.(m.done, m.total, m.ms);
+          break;
+        case "benchResult": {
+          const p = this.benchPending.get(m.id);
+          if (p) {
+            this.benchPending.delete(m.id);
+            p.resolve({ iters: m.iters, ms: m.ms });
+          }
+          break;
+        }
         case "error":
           console.error("bot worker:", m.message);
           break;
@@ -70,6 +93,9 @@ export class BotWorker {
   }
 
   /** Search the mirror battle's current decision point for `side`.
+   * `ponder: true` (simultaneous point) keeps thinking past the budget —
+   * bonus iterations while the human deliberates — until `flush()` or the
+   * ponder cap; `false` (bot-only point) stops exactly at budget.
    * A later apply/newBattle/cancelAll supersedes the search: its promise
    * then never settles (callers holding a stale promise are per-game and
    * torn down with the game). */
@@ -77,12 +103,36 @@ export class BotWorker {
     side: number,
     budget: number,
     seed: number,
+    ponder: boolean,
     onProgress?: (done: number, budget: number) => void,
   ): Promise<SearchOutcome> {
     const id = this.nextId++;
     return new Promise<SearchOutcome>((resolve) => {
       this.pending.set(id, { resolve, onProgress });
-      this.send({ t: "search", id, side, budget, seed });
+      this.send({ t: "search", id, side, budget, seed, ponder });
+    });
+  }
+
+  /** The human committed: a pondering search returns its best at the next
+   * slice boundary (a search still inside its budget finishes it first). */
+  flush(): void {
+    this.send({ t: "flush" });
+  }
+
+  /** Fixed deterministic device benchmark (see the worker). Resolves with
+   * pure search time (yield overhead excluded). */
+  bench(
+    p1: string,
+    p2: string,
+    seed: string,
+    searchSeed: number,
+    iters: number,
+    onProgress?: (done: number, total: number, ms: number) => void,
+  ): Promise<BenchOutcome> {
+    const id = this.nextId++;
+    return new Promise<BenchOutcome>((resolve) => {
+      this.benchPending.set(id, { resolve, onProgress });
+      this.send({ t: "bench", id, p1, p2, seed, searchSeed, iters });
     });
   }
 
@@ -93,6 +143,7 @@ export class BotWorker {
 
   terminate(): void {
     this.pending.clear();
+    this.benchPending.clear();
     this.worker.terminate();
   }
 }

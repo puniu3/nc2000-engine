@@ -52,6 +52,35 @@ interface Thinking {
   budget: number;
 }
 
+const fmtK = (n: number) =>
+  n >= 10000
+    ? `${Math.round(n / 1000)}k`
+    : n >= 1000
+      ? `${(n / 1000).toFixed(1)}k`
+      : String(n);
+
+/** Subtle bot-think status while the human deliberates: "thinking" =
+ * required budget still running, "pondering" = budget done, bonus
+ * iterations accumulating until the human commits. */
+function ThinkChip(props: { thinking: Thinking | null }) {
+  const t = props.thinking;
+  if (!t) return null;
+  const pondering = t.done >= t.budget;
+  return (
+    <span
+      class={`think-chip ${pondering ? "pondering" : ""}`}
+      data-done={t.done}
+      data-budget={t.budget}
+      data-pondering={pondering ? "1" : "0"}
+    >
+      <span class="think-chip-dot" />
+      {pondering
+        ? `pondering +${fmtK(t.done - t.budget)}`
+        : `thinking ${fmtK(t.done)}/${fmtK(t.budget)}`}
+    </span>
+  );
+}
+
 export function Game(props: {
   pool: MetaPool;
   tables: PreviewTables;
@@ -147,7 +176,8 @@ export function Game(props: {
     reqRef.current = req;
     setHumanWaiting(false);
 
-    if (needs[BOT]) decideBot(req);
+    // Human side first: forced picks land before the bot search launches,
+    // so decideBot sees whether the human still owes (=> ponder or not).
     if (needs[HUMAN]) {
       const legal = legalChoices(battle, HUMAN);
       if (legal.length === 1) {
@@ -165,6 +195,7 @@ export function Game(props: {
       setHumanChoices(null);
       if (phase === "init") setPhase("battle");
     }
+    if (needs[BOT]) decideBot(req);
     maybeCommit(req);
   }
 
@@ -220,8 +251,12 @@ export function Game(props: {
   async function searchBot(req: Request, legal: Choice[]) {
     const bot = botRef.current!;
     const budget = strengthRef.current;
+    // Ponder iff the human still owes a pick at launch: the search then
+    // keeps running past its budget (bonus strength) until the human
+    // commits (humanPick -> flush) or the ponder cap.
+    const ponder = req.needs[HUMAN] && req.picks[HUMAN] === null;
     setThinking({ done: 0, budget });
-    const r = await bot.search(BOT, budget, randomSeed32(), (done, b) => {
+    const r = await bot.search(BOT, budget, randomSeed32(), ponder, (done, b) => {
       if (aliveRef.current && req === reqRef.current)
         setThinking({ done, budget: b });
     });
@@ -237,6 +272,8 @@ export function Game(props: {
     req.picks[HUMAN] = input;
     setHumanChoices(null);
     setHumanWaiting(true);
+    // A pondering bot search returns its best immediately.
+    if (req.needs[BOT] && req.picks[BOT] === null) botRef.current!.flush();
     maybeCommit(req);
   }
 
@@ -365,13 +402,15 @@ export function Game(props: {
               : `Pick ${3 - previewSel.length} more`}
           </button>
           <span class="bot-preview-note">
-            {thinking
-              ? `Opponent thinking… ${thinking.done}/${thinking.budget}`
-              : botPreviewSrc === "table"
-                ? "Opponent picks from the baked equilibrium table"
-                : botPreviewSrc === "search"
-                  ? "Opponent picks by live search (matchup not baked yet)"
-                  : ""}
+            {thinking ? (
+              <ThinkChip thinking={thinking} />
+            ) : botPreviewSrc === "table" ? (
+              "Opponent picks from the baked equilibrium table"
+            ) : botPreviewSrc === "search" ? (
+              "Opponent picks by live search (matchup not baked yet)"
+            ) : (
+              ""
+            )}
           </span>
           <button class="ghost quit-btn" onClick={props.onNewTeams}>
             Quit
@@ -389,6 +428,7 @@ export function Game(props: {
     <div class="screen battle-screen">
       <header class="battle-header">
         <span class="turn-label">Turn {view.turn}</span>
+        {humanChoices && <ThinkChip thinking={thinking} />}
         <label class="strength-label compact">
           <select
             value={props.strength}
@@ -562,7 +602,9 @@ function ThinkingBar(props: { thinking: Thinking | null; waiting: boolean }) {
       <span class="thinking-dot" />
       <span>
         {t
-          ? `Bot is thinking… ${t.done} / ${t.budget}`
+          ? t.done >= t.budget
+            ? "Bot is finishing up…" // flush in flight: answer is imminent
+            : `Bot is thinking… ${t.done} / ${t.budget}`
           : props.waiting
             ? "Waiting for the bot…"
             : "…"}
@@ -571,7 +613,7 @@ function ThinkingBar(props: { thinking: Thinking | null; waiting: boolean }) {
         <div class="think-progress">
           <div
             class="think-fill"
-            style={{ width: `${(t.done / t.budget) * 100}%` }}
+            style={{ width: `${Math.min(100, (t.done / t.budget) * 100)}%` }}
           />
         </div>
       )}

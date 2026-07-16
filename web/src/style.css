@@ -671,12 +671,73 @@ small {
   justify-content: center;
 }
 
+/* ------------------------------------------------- think / ponder chip */
+
+.think-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+.think-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  animation: think-blink 1s ease-in-out infinite;
+}
+.think-chip.pondering .think-chip-dot {
+  background: var(--good);
+  animation-duration: 2.4s;
+}
+
+/* --------------------------------------------------- device benchmark */
+
+.bench-box {
+  margin: 26px 0 12px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.bench-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bench-title {
+  font-weight: 700;
+}
+.bench-result {
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.bench-result.pass {
+  color: var(--good);
+}
+.bench-result.fail {
+  color: var(--bad);
+}
+.bench-note {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hp-fill,
   .think-fill {
     transition: none;
   }
-  .thinking-dot {
+  .thinking-dot,
+  .think-chip-dot {
     animation: none;
     opacity: 1;
   }

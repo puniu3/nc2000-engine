@@ -1,9 +1,12 @@
 // Team select: pick your team from the meta pool, then the opponent's
-// (specific team or random-from-pool).
+// (specific team or random-from-pool). Also hosts the device benchmark —
+// the M9 gate ("skuct:3000 within 2-3 s/move") is certified per device by
+// tapping it.
 
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam } from "./types";
 import { STRENGTHS } from "./app";
+import { BotWorker } from "./bot";
 
 function provenanceLine(t: PoolTeam): string {
   const p = t.provenance;
@@ -41,6 +44,97 @@ function TeamCard(props: {
         ))}
       </div>
     </button>
+  );
+}
+
+// Fixed workload: identical battle + searcher seeds + iteration count on
+// every device, so the numbers are directly comparable. 10k iterations at
+// an in-battle root ~= 4-7 s on 2025 hardware.
+const BENCH_ITERS = 10000;
+const BENCH_BATTLE_SEED = "1,2,3,4";
+const BENCH_SEARCH_SEED = 123456789;
+const GATE_ITERS = 3000; // the M9 gate strength (skuct:3000 == mcts:3000)
+const GATE_SECONDS = 3;
+
+type BenchState =
+  | { s: "idle" }
+  | { s: "running"; done: number; total: number }
+  | { s: "done"; itersPerSec: number; secPerMove: number }
+  | { s: "error"; msg: string };
+
+function DeviceBench(props: { pool: MetaPool }) {
+  const [state, setState] = useState<BenchState>({ s: "idle" });
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  async function run() {
+    if (state.s === "running") return;
+    setState({ s: "running", done: 0, total: BENCH_ITERS });
+    const bot = new BotWorker();
+    try {
+      const r = await bot.bench(
+        JSON.stringify(props.pool.teams[0].sets),
+        JSON.stringify(props.pool.teams[1].sets),
+        BENCH_BATTLE_SEED,
+        BENCH_SEARCH_SEED,
+        BENCH_ITERS,
+        (done, total) => {
+          if (aliveRef.current) setState({ s: "running", done, total });
+        },
+      );
+      const itersPerSec = r.iters / (r.ms / 1000);
+      if (aliveRef.current)
+        setState({
+          s: "done",
+          itersPerSec,
+          secPerMove: GATE_ITERS / itersPerSec,
+        });
+    } catch (e) {
+      if (aliveRef.current) setState({ s: "error", msg: String(e) });
+    } finally {
+      bot.terminate();
+    }
+  }
+
+  return (
+    <div class="bench-box">
+      <div class="bench-head">
+        <span class="bench-title">Device benchmark</span>
+        <button
+          class="ghost bench-btn"
+          disabled={state.s === "running"}
+          onClick={() => void run()}
+        >
+          {state.s === "running"
+            ? `Running… ${Math.round((state.done / state.total) * 100)}%`
+            : state.s === "idle"
+              ? "Run (~5 s)"
+              : "Run again"}
+        </button>
+      </div>
+      {state.s === "done" && (
+        <div
+          class={`bench-result ${state.secPerMove <= GATE_SECONDS ? "pass" : "fail"}`}
+          data-iters-per-sec={Math.round(state.itersPerSec)}
+          data-sec-per-move={state.secPerMove.toFixed(2)}
+        >
+          {Math.round(state.itersPerSec)} iterations/s — a{" "}
+          {GATE_ITERS / 1000}k think ≈ {state.secPerMove.toFixed(2)} s/move.
+          Strength gate (≤{GATE_SECONDS} s):{" "}
+          {state.secPerMove <= GATE_SECONDS ? "PASS" : "MISS"}
+        </div>
+      )}
+      {state.s === "error" && <div class="bench-result fail">{state.msg}</div>}
+      <div class="bench-note">
+        Fixed search workload ({BENCH_ITERS / 1000}k iterations, fixed seeds)
+        — comparable across devices.
+      </div>
+    </div>
   );
 }
 
@@ -130,6 +224,8 @@ export function TeamSelect(props: {
           />
         ))}
       </div>
+
+      <DeviceBench pool={props.pool} />
     </div>
   );
 }

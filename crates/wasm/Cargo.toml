@@ -6,6 +6,12 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# wasm-pack post-link optimization (default is `-O`); with the fat-LTO rustc
+# profile that build.sh sets via env overrides, -O3 measured best (-O4 equal
+# within noise, default -O slower). See build.sh for the canonical build.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O3"]
+
 [dependencies]
 nc2000-engine = { path = "../engine" }
 nc2000-bot = { path = "../bot" }
