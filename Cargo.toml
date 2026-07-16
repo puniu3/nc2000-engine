@@ -2,6 +2,10 @@
 members = ["crates/engine", "crates/conformance", "crates/bot", "crates/wasm"]
 resolver = "2"
 
+[workspace.package]
+license = "MIT"
+repository = "https://github.com/puniu3/nc2000-engine"
+
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }

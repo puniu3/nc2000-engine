@@ -2,6 +2,9 @@
 name = "nc2000-bot"
 version = "0.1.0"
 edition = "2021"
+description = "Search bots for nc2000-engine: MCTS/DUCT, state-keyed skuct, RM mixed strategies, imperfect-info blind agent, baked preview tables"
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 nc2000-engine = { path = "../engine" }

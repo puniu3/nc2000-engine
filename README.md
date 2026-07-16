@@ -4,6 +4,8 @@ Rust port of Pokemon Showdown's **`[Gen 2] NC 2000`** format (mod: `gen2stadium2
 
 **The source of truth is PS as actually implemented.** Divergence from cartridge GSC or real Stadium 2 hardware is out of scope. Correctness is defined as **bit-exact parity** (state + PRNG seed, at every snapshot point) against golden fixtures generated from PS by `tools/gen-fixtures.js`.
 
+**Status:** engine bit-exact vs PS (M1–M4), search bots through imperfect-info play (M5–M10), wasm + browser demo shipped (M9); currently at M12 (publication). Playable demo: *GH Pages URL to come* (see the M12 milestone below). Licensing: MIT, third-party attribution in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+
 ## Layout
 
 ```
@@ -218,3 +220,7 @@ Non-goals: exploitation/opponent modeling, large NNs / GPU inference, minor-part
 
 - Reference implementation: `PS_ROOT` (default `~/pokemon-showdown`, `node build` required). Data provenance commit: `meta.psCommit` in `data/gen2stadium2.json`.
 - Measured scope: 267 moves (88 with callbacks) / 62 items (38) / 37 conditions / 0 abilities / 251 species (246 after the 5 Ubers), 377 callbacks total, 76 distinct event hooks in use.
+
+## Licensing
+
+This repository's code is MIT (see [`LICENSE`](LICENSE)). `data/gen2stadium2.json`, `fixtures/`, `reference/`, and `PORTING.md` are derived from [Pokemon Showdown](https://github.com/smogon/pokemon-showdown) (MIT); the meta team pool transcribes credited public tournament/community data. Full attribution, including the Pokemon IP notice (names/mechanics only — no sprites, art, sound, or ROM assets anywhere in the tree): [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).

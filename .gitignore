@@ -1,3 +1,6 @@
 /target
 node_modules
 /tmp
+/web/dist
+/crates/wasm/pkg-web
+/crates/wasm/pkg-node

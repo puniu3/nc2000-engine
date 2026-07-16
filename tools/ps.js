@@ -1,7 +1,8 @@
 // Shared access to the reference Pokemon Showdown build.
 'use strict';
 const path = require('path');
-const PS_ROOT = process.env.PS_ROOT || '/home/puniu/pokemon-showdown';
+const os = require('os');
+const PS_ROOT = process.env.PS_ROOT || path.join(os.homedir(), 'pokemon-showdown');
 const sim = require(path.join(PS_ROOT, 'dist/sim'));
 const prng = require(path.join(PS_ROOT, 'dist/sim/prng'));
 const rpai = require(path.join(PS_ROOT, 'dist/sim/tools/random-player-ai'));

@@ -2,6 +2,9 @@
 name = "nc2000-wasm"
 version = "0.1.0"
 edition = "2021"
+description = "wasm-bindgen JS bridge for nc2000-engine: Dex / Battle / Searcher / PreviewTables / BlindSearcher"
+license.workspace = true
+repository.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
