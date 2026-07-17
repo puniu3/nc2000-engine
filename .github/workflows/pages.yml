@@ -71,6 +71,7 @@ jobs:
         run: |
           mkdir -p web/dist/data
           cp -r data/meta-pool-v0 data/preview-tables-v0 web/dist/data/
+          cp data/i18n-ja.json web/dist/data/
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

@@ -1,0 +1,185 @@
+// UI string tables for the two locales (M13). Battle narration lives in
+// narrate.ts; dex names in data/i18n-ja.json. Everything else the UI
+// prints is here, keyed by a typed interface so en/ja can't drift apart.
+
+export type Locale = "en" | "ja";
+
+export interface UIStrings {
+  // app shell
+  loadingEngine: string;
+  failedLoad: string;
+  settingUp: string;
+  // title / select screen
+  subtitle: string;
+  openSheetNote: string;
+  you: string;
+  bot: string;
+  randomFromPool: string;
+  randomCard: (n: number) => string;
+  startBattle: string;
+  chooseYours: string;
+  chooseOpp: string;
+  // device benchmark
+  benchTitle: string;
+  benchRun: string;
+  benchAgain: string;
+  benchRunning: (pct: number) => string;
+  benchResult: (r: {
+    ips: number;
+    fullK: number;
+    fullSec: string;
+    gateK: number;
+    gateSec: number;
+    pass: boolean;
+    sec: string;
+  }) => string;
+  benchNote: (kIters: number) => string;
+  // team preview
+  teamPreview: string;
+  foeTeam: (id: string) => string;
+  yourTeamPick: string;
+  lead: string;
+  confirmPicks: string;
+  pickMore: (n: number) => string;
+  previewFromTable: string;
+  previewFromSearch: string;
+  // battle chrome
+  quit: string;
+  turnLabel: (n: number) => string;
+  nLeft: (n: number) => string;
+  fnt: string;
+  switchLabel: string;
+  foePrefix: string;
+  fieldFoe: (cond: string) => string;
+  fieldYou: (cond: string) => string;
+  moveCat: (cat: "Physical" | "Special" | "Status") => string;
+  bp: (n: number) => string;
+  // thinking / waiting
+  thinkChip: (doneK: string, budgetK: string) => string;
+  ponderChip: (bonusK: string) => string;
+  botThinking: (done: number, budget: number) => string;
+  botFinishing: string;
+  waitingBot: string;
+  // end
+  youWin: string;
+  botWins: string;
+  tie: string;
+  rematch: string;
+  newTeams: string;
+}
+
+const EN: UIStrings = {
+  loadingEngine: "Loading engine…",
+  failedLoad: "Failed to load",
+  settingUp: "Setting up battle…",
+  subtitle: "Gen 2 · human vs bot",
+  openSheetNote:
+    "Open team sheet: the bot sees your sets, and you can read its sets " +
+    "in the team list — neither side sees which 3 the other picks until " +
+    "they're revealed in battle.",
+  you: "You",
+  bot: "Bot",
+  randomFromPool: "random from pool",
+  randomCard: (n) => `Random from pool (${n} teams)`,
+  startBattle: "Start battle",
+  chooseYours: "Choose your team",
+  chooseOpp: "Choose the opponent's team",
+  benchTitle: "Device benchmark",
+  benchRun: "Run (~5 s)",
+  benchAgain: "Run again",
+  benchRunning: (pct) => `Running… ${pct}%`,
+  benchResult: (r) =>
+    `${r.ips} iterations/s — full strength (${r.fullK}k) ≈ ${r.fullSec} ` +
+    `s/move, mostly hidden by pondering. Reference gate (${r.gateK}k ≤ ` +
+    `${r.gateSec} s): ${r.pass ? "PASS" : "MISS"} (${r.sec} s)`,
+  benchNote: (k) =>
+    `Fixed search workload (${k}k iterations, fixed seeds) — comparable ` +
+    `across devices.`,
+  teamPreview: "Team preview",
+  foeTeam: (id) => `Foe team (${id})`,
+  yourTeamPick: "Your team — pick 3, lead first",
+  lead: "Lead",
+  confirmPicks: "Confirm picks",
+  pickMore: (n) => `Pick ${n} more`,
+  previewFromTable: "Opponent picks from the baked equilibrium table",
+  previewFromSearch: "Opponent picks by live search (matchup not baked yet)",
+  quit: "Quit",
+  turnLabel: (n) => `Turn ${n}`,
+  nLeft: (n) => `${n} left`,
+  fnt: "fnt",
+  switchLabel: "switch",
+  foePrefix: "Foe ",
+  fieldFoe: (c) => `Foe: ${c}`,
+  fieldYou: (c) => `You: ${c}`,
+  moveCat: (c) => c,
+  bp: (n) => `${n} BP`,
+  thinkChip: (d, b) => `thinking ${d}/${b}`,
+  ponderChip: (x) => `pondering +${x}`,
+  botThinking: (d, b) => `Bot is thinking… ${d} / ${b}`,
+  botFinishing: "Bot is finishing up…",
+  waitingBot: "Waiting for the bot…",
+  youWin: "You win!",
+  botWins: "The bot wins!",
+  tie: "Tie",
+  rematch: "Rematch",
+  newTeams: "New teams",
+};
+
+const JA: UIStrings = {
+  loadingEngine: "エンジンを読み込み中…",
+  failedLoad: "読み込みに失敗しました",
+  settingUp: "対戦を準備中…",
+  subtitle: "第2世代 · 人間 vs ボット",
+  openSheetNote:
+    "オープンチームシート: ボットはあなたの構成(技・持ち物)を知って" +
+    "おり、あなたもチーム一覧でボットの構成を読めます。どちらの側も、" +
+    "相手がどの3体を選出したかは対戦中に明かされるまで見えません。",
+  you: "あなた",
+  bot: "ボット",
+  randomFromPool: "プールからランダム",
+  randomCard: (n) => `プールからランダム(全${n}チーム)`,
+  startBattle: "対戦開始",
+  chooseYours: "自分のチームを選ぶ",
+  chooseOpp: "相手のチームを選ぶ",
+  benchTitle: "端末ベンチマーク",
+  benchRun: "実行(約5秒)",
+  benchAgain: "もう一度",
+  benchRunning: (pct) => `実行中… ${pct}%`,
+  benchResult: (r) =>
+    `${r.ips} 回/秒 — 最大強度(${r.fullK}k) ≈ ${r.fullSec} 秒/手` +
+    `(ポンダリングでほぼ隠れます)。参照ゲート(${r.gateK}k ≤ ` +
+    `${r.gateSec}秒): ${r.pass ? "PASS" : "MISS"} (${r.sec}秒)`,
+  benchNote: (k) =>
+    `固定探索ワークロード(${k}k回・固定シード)— 端末間で比較できます。`,
+  teamPreview: "選出(見せ合い)",
+  foeTeam: (id) => `相手のチーム(${id})`,
+  yourTeamPick: "自分のチーム — 3体選ぶ(1体目が先発)",
+  lead: "先発",
+  confirmPicks: "選出を確定",
+  pickMore: (n) => `あと${n}体`,
+  previewFromTable: "相手の選出: 事前計算した均衡テーブル",
+  previewFromSearch: "相手の選出: ライブ探索(この組み合わせは未計算)",
+  quit: "やめる",
+  turnLabel: (n) => `ターン ${n}`,
+  nLeft: (n) => `残り${n}体`,
+  fnt: "ひんし",
+  switchLabel: "交代",
+  foePrefix: "相手の ",
+  fieldFoe: (c) => `相手: ${c}`,
+  fieldYou: (c) => `自分: ${c}`,
+  moveCat: (c) =>
+    c === "Physical" ? "物理" : c === "Special" ? "特殊" : "変化",
+  bp: (n) => `威力${n}`,
+  thinkChip: (d, b) => `思考中 ${d}/${b}`,
+  ponderChip: (x) => `先読み中 +${x}`,
+  botThinking: (d, b) => `ボットの思考中… ${d} / ${b}`,
+  botFinishing: "ボットが考えをまとめています…",
+  waitingBot: "ボットを待っています…",
+  youWin: "あなたの勝ち!",
+  botWins: "ボットの勝ち!",
+  tie: "ひきわけ",
+  rematch: "再戦",
+  newTeams: "チーム選択へ",
+};
+
+export const STRINGS: Record<Locale, UIStrings> = { en: EN, ja: JA };

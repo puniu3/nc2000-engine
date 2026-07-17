@@ -9,10 +9,11 @@
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { loadEngine, randomSeed32 } from "./engine";
-import { fetchPool } from "./data";
+import { fetchI18nJa, fetchPool } from "./data";
 import type { MetaPool } from "./types";
 import { TeamSelect } from "./select";
 import { Game } from "./game";
+import { loadJaNames, locale, setLocale, ui, type Locale } from "./i18n";
 
 /** The fixed bot strength: the former "Max" tier, always on. */
 export const BUDGET = 30000;
@@ -31,11 +32,18 @@ export function App() {
   const [pool, setPool] = useState<MetaPool | null>(null);
   const poolJsonRef = useRef("");
   const [game, setGame] = useState<GameSpec | null>(null);
+  const [loc, setLoc] = useState<Locale>(locale());
 
   useEffect(() => {
     void (async () => {
       try {
-        const [, pd] = await Promise.all([loadEngine(), fetchPool()]);
+        // JP name tables load alongside the engine; loadJaNames swallows
+        // failures (missing tables just mean English names).
+        const [, pd] = await Promise.all([
+          loadEngine(),
+          fetchPool(),
+          loadJaNames(fetchI18nJa),
+        ]);
         poolJsonRef.current = pd.poolJson;
         setPool(pd.pool);
         setStatus("ready");
@@ -49,7 +57,7 @@ export function App() {
   if (status === "loading") {
     return (
       <div class="center-screen">
-        <div class="loading-pulse">Loading engine…</div>
+        <div class="loading-pulse">{ui().loadingEngine}</div>
       </div>
     );
   }
@@ -57,7 +65,7 @@ export function App() {
     return (
       <div class="center-screen">
         <div class="error-box">
-          <strong>Failed to load</strong>
+          <strong>{ui().failedLoad}</strong>
           <div>{error}</div>
         </div>
       </div>
@@ -68,6 +76,11 @@ export function App() {
     return (
       <TeamSelect
         pool={pool}
+        locale={loc}
+        onLocale={(l) => {
+          setLocale(l);
+          setLoc(l);
+        }}
         onStart={(humanIdx, botIdx) => {
           const bot =
             botIdx === "random"

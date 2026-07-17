@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam } from "./types";
 import { BUDGET } from "./app";
 import { BotWorker } from "./bot";
+import { speciesName, ui, type Locale } from "./i18n";
 
 function provenanceLine(t: PoolTeam): string {
   const p = t.provenance;
@@ -43,7 +44,7 @@ function TeamCard(props: {
       <div class="team-species">
         {team.species.map((sp, i) => (
           <span class="species-chip" key={i}>
-            {sp} <small>L{team.levels[i]}</small>
+            {speciesName(sp)} <small>L{team.levels[i]}</small>
           </span>
         ))}
       </div>
@@ -112,17 +113,19 @@ function DeviceBench(props: { pool: MetaPool }) {
   return (
     <div class="bench-box">
       <div class="bench-head">
-        <span class="bench-title">Device benchmark</span>
+        <span class="bench-title">{ui().benchTitle}</span>
         <button
           class="ghost bench-btn"
           disabled={state.s === "running"}
           onClick={() => void run()}
         >
           {state.s === "running"
-            ? `Running… ${Math.round((state.done / state.total) * 100)}%`
+            ? ui().benchRunning(
+                Math.round((state.done / state.total) * 100),
+              )
             : state.s === "idle"
-              ? "Run (~5 s)"
-              : "Run again"}
+              ? ui().benchRun
+              : ui().benchAgain}
         </button>
       </div>
       {state.s === "done" && (
@@ -132,24 +135,27 @@ function DeviceBench(props: { pool: MetaPool }) {
           data-sec-per-move={state.secPerMove.toFixed(2)}
           data-sec-at-full={state.secAtFull.toFixed(2)}
         >
-          {Math.round(state.itersPerSec)} iterations/s — full strength (
-          {BUDGET / 1000}k) ≈ {state.secAtFull.toFixed(2)} s/move, mostly
-          hidden by pondering. Reference gate ({GATE_ITERS / 1000}k ≤{" "}
-          {GATE_SECONDS} s): {state.secPerMove <= GATE_SECONDS ? "PASS" : "MISS"}{" "}
-          ({state.secPerMove.toFixed(2)} s)
+          {ui().benchResult({
+            ips: Math.round(state.itersPerSec),
+            fullK: BUDGET / 1000,
+            fullSec: state.secAtFull.toFixed(2),
+            gateK: GATE_ITERS / 1000,
+            gateSec: GATE_SECONDS,
+            pass: state.secPerMove <= GATE_SECONDS,
+            sec: state.secPerMove.toFixed(2),
+          })}
         </div>
       )}
       {state.s === "error" && <div class="bench-result fail">{state.msg}</div>}
-      <div class="bench-note">
-        Fixed search workload ({BENCH_ITERS / 1000}k iterations, fixed seeds)
-        — comparable across devices.
-      </div>
+      <div class="bench-note">{ui().benchNote(BENCH_ITERS / 1000)}</div>
     </div>
   );
 }
 
 export function TeamSelect(props: {
   pool: MetaPool;
+  locale: Locale;
+  onLocale: (l: Locale) => void;
   onStart: (humanIdx: number, botIdx: number | "random") => void;
 }) {
   const [humanIdx, setHumanIdx] = useState<number | null>(null);
@@ -161,26 +167,33 @@ export function TeamSelect(props: {
     <div class="screen select-screen">
       <header class="app-header">
         <h1>NC2000</h1>
-        <span class="subtitle">Gen 2 · human vs bot</span>
+        <span class="subtitle">{ui().subtitle}</span>
+        <span class="locale-toggle">
+          {(["en", "ja"] as const).map((l) => (
+            <button
+              key={l}
+              class={`locale-btn ${props.locale === l ? "on" : ""}`}
+              onClick={() => props.onLocale(l)}
+            >
+              {l === "en" ? "EN" : "日本語"}
+            </button>
+          ))}
+        </span>
       </header>
-      <div class="botinfo-note">
-        Open team sheet: the bot sees your sets, and you can read its sets in
-        the team list — neither side sees which 3 the other picks until
-        they're revealed in battle.
-      </div>
+      <div class="botinfo-note">{ui().openSheetNote}</div>
 
       <div class="select-bar">
         <div class={`select-slot ${step === 0 ? "current" : ""}`}>
-          <span class="slot-label">You</span>
+          <span class="slot-label">{ui().you}</span>
           <span class="slot-value">
             {humanIdx === null ? "—" : teams[humanIdx].id}
           </span>
         </div>
         <span class="vs">vs</span>
         <div class={`select-slot ${step === 1 ? "current" : ""}`}>
-          <span class="slot-label">Bot</span>
+          <span class="slot-label">{ui().bot}</span>
           <span class="slot-value">
-            {botIdx === "random" ? "random from pool" : teams[botIdx].id}
+            {botIdx === "random" ? ui().randomFromPool : teams[botIdx].id}
           </span>
         </div>
         <button
@@ -188,19 +201,17 @@ export function TeamSelect(props: {
           disabled={humanIdx === null}
           onClick={() => props.onStart(humanIdx!, botIdx)}
         >
-          Start battle
+          {ui().startBattle}
         </button>
       </div>
 
-      <h2>
-        {step === 0 ? "Choose your team" : "Choose the opponent's team"}
-      </h2>
+      <h2>{step === 0 ? ui().chooseYours : ui().chooseOpp}</h2>
       {step === 1 && (
         <button
           class={`team-card random-card ${botIdx === "random" ? "selected" : ""}`}
           onClick={() => setBotIdx("random")}
         >
-          Random from pool (34 teams)
+          {ui().randomCard(teams.length)}
         </button>
       )}
       <div class="team-list">

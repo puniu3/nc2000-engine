@@ -16,6 +16,14 @@ export interface PoolData {
   poolJson: string;
 }
 
+/** JP name tables (M13). Throws on failure — the caller (i18n loadJaNames)
+ * treats any failure as "no tables" and falls back to English names. */
+export async function fetchI18nJa(): Promise<unknown> {
+  const res = await fetch(dataUrl("i18n-ja.json"));
+  if (!res.ok) throw new Error(`i18n-ja fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchPool(): Promise<PoolData> {
   const res = await fetch(dataUrl("meta-pool-v0/meta-pool.json"));
   if (!res.ok) throw new Error(`meta pool fetch failed: ${res.status}`);

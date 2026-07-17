@@ -1,8 +1,20 @@
 // Presentational pieces for the battle screen. Display semantics mirror
 // the CLI panel in crates/bot/examples/play.rs: foe HP as %, own HP exact,
 // boosts as signed chips, bench with exact HP, plus field conditions.
+//
+// M13: all display names route through i18n (species/types via the JP
+// tables, statuses/conditions/boost labels via the hand tables); status
+// badge classes stay keyed by the raw status code.
 
 import type { PokeView } from "./types";
+import {
+  boostLabel,
+  condName,
+  speciesName,
+  statusName,
+  typeName,
+  ui,
+} from "./i18n";
 
 export const TYPE_COLORS: Record<string, string> = {
   Normal: "#9fa19f",
@@ -24,54 +36,13 @@ export const TYPE_COLORS: Record<string, string> = {
   Steel: "#8f8fa3",
 };
 
-const COND_NAMES: Record<string, string> = {
-  raindance: "Rain",
-  sunnyday: "Sun",
-  sandstorm: "Sandstorm",
-  reflect: "Reflect",
-  lightscreen: "Light Screen",
-  safeguard: "Safeguard",
-  spikes: "Spikes",
-  mist: "Mist",
-  confusion: "Confused",
-  substitute: "Substitute",
-  leechseed: "Leech Seed",
-  curse: "Curse",
-  encore: "Encore",
-  attract: "Attract",
-  nightmare: "Nightmare",
-  partiallytrapped: "Trapped",
-  meanlook: "Mean Look",
-  focusenergy: "Focus Energy",
-  lockedmove: "Locked",
-  mustrecharge: "Recharging",
-  perishsong: "Perish Song",
-  disable: "Disable",
-  foresight: "Foresight",
-  destinybond: "Destiny Bond",
-};
-
-export function condName(key: string): string {
-  return COND_NAMES[key] ?? key;
-}
-
-const BOOST_LABELS: Record<string, string> = {
-  atk: "Atk",
-  def: "Def",
-  spa: "SpA",
-  spd: "SpD",
-  spe: "Spe",
-  accuracy: "Acc",
-  evasion: "Eva",
-};
-
 export function hpPct(p: PokeView): number {
   return p.maxhp > 0 ? Math.max(0, (p.hp / p.maxhp) * 100) : 0;
 }
 
 /** Rounded % with the CLI's floor-at-1 rule for a living mon. */
 export function hpPctLabel(p: PokeView): string {
-  if (p.hp <= 0) return "fnt";
+  if (p.hp <= 0) return ui().fnt;
   return `${Math.max(1, Math.round(hpPct(p)))}%`;
 }
 
@@ -87,7 +58,11 @@ export function HpBar(props: { pct: number }) {
 
 export function StatusBadge(props: { status: string }) {
   if (!props.status) return null;
-  return <span class={`status-badge st-${props.status}`}>{props.status}</span>;
+  return (
+    <span class={`status-badge st-${props.status}`}>
+      {statusName(props.status)}
+    </span>
+  );
 }
 
 export function TypeBadge(props: { type: string }) {
@@ -96,7 +71,7 @@ export function TypeBadge(props: { type: string }) {
       class="type-badge"
       style={{ background: TYPE_COLORS[props.type] ?? "#777" }}
     >
-      {props.type}
+      {typeName(props.type)}
     </span>
   );
 }
@@ -108,7 +83,7 @@ function BoostChips(props: { boosts: Record<string, number> }) {
     <span class="boost-chips">
       {chips.map(([k, v]) => (
         <span class={`boost-chip ${v > 0 ? "up" : "down"}`} key={k}>
-          {BOOST_LABELS[k] ?? k}
+          {boostLabel(k)}
           {v > 0 ? `+${v}` : v}
         </span>
       ))}
@@ -128,8 +103,8 @@ export function ActiveCard(props: {
     <div class={`active-card ${props.mine ? "mine" : "foe"}`}>
       <div class="active-head">
         <span class="mon-name">
-          {props.mine ? "" : "Foe "}
-          {p.name}
+          {props.mine ? "" : ui().foePrefix}
+          {speciesName(p.name)}
         </span>
         <span class="mon-level">L{p.level}</span>
         {p.types.map((t) => (
@@ -178,9 +153,9 @@ export function FieldStrip(props: {
   for (const p of props.pseudo)
     if (!RULE_CONDS.has(p)) bits.push({ cls: "pseudo", text: condName(p) });
   for (const c of props.foeConds)
-    bits.push({ cls: "foe-cond", text: `Foe: ${condName(c)}` });
+    bits.push({ cls: "foe-cond", text: ui().fieldFoe(condName(c)) });
   for (const c of props.mineConds)
-    bits.push({ cls: "mine-cond", text: `You: ${condName(c)}` });
+    bits.push({ cls: "mine-cond", text: ui().fieldYou(condName(c)) });
   if (bits.length === 0) return null;
   return (
     <div class="field-strip">

@@ -59,6 +59,17 @@ report via the Smogon NC2000 Resource Hub and gold.hatenadiary.jp; sample
 teams by Beelzemon 2003, Chio, Kitty, and the JP Poké Cup community; Chio's
 viability ranking via the ジムリーダーの城 wiki).
 
+## PokéAPI (name data)
+
+`data/i18n-ja.json` — the Japanese display names for the format's species,
+moves, items, and types — was generated once by `tools/build-i18n-ja.js`
+from PokéAPI (https://pokeapi.co, the `names` arrays, languages
+`ja-Hrkt`/`ja`). PokéAPI's data is free and open (BSD-3-Clause for the
+pokeapi.co API/dataset); the app never queries PokéAPI at runtime. A few
+Generation II-only item names PokéAPI does not carry were transcribed from
+Bulbapedia item infoboxes and are marked in `meta.manualFills` inside the
+JSON. The names themselves are Pokemon intellectual property (see below).
+
 ## Pokemon intellectual property
 
 Pokemon species, move, and item names and game mechanics are the intellectual

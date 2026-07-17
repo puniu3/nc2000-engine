@@ -42,6 +42,7 @@ import {
   StatusBadge,
   TypeBadge,
 } from "./battle-ui";
+import { itemName, moveName, speciesName, ui } from "./i18n";
 import { BUDGET } from "./app";
 
 const HUMAN = 0;
@@ -81,8 +82,8 @@ function ThinkChip(props: { thinking: Thinking | null }) {
     >
       <span class="think-chip-dot" />
       {pondering
-        ? `pondering +${fmtK(t.done - t.budget)}`
-        : `thinking ${fmtK(t.done)}/${fmtK(t.budget)}`}
+        ? ui().ponderChip(fmtK(t.done - t.budget))
+        : ui().thinkChip(fmtK(t.done), fmtK(t.budget))}
     </span>
   );
 }
@@ -313,7 +314,7 @@ export function Game(props: {
   if (!view) {
     return (
       <div class="center-screen">
-        <div class="loading-pulse">Setting up battle…</div>
+        <div class="loading-pulse">{ui().settingUp}</div>
       </div>
     );
   }
@@ -324,19 +325,19 @@ export function Game(props: {
   if (phase === "preview") {
     return (
       <div class="screen preview-screen">
-        <h2>Team preview</h2>
+        <h2>{ui().teamPreview}</h2>
         <section>
-          <h3>Foe team ({botTeam.id})</h3>
+          <h3>{ui().foeTeam(botTeam.id)}</h3>
           <div class="preview-foe">
             {foe.party.map((p, i) => (
               <span class="species-chip" key={i}>
-                {p.species} <small>L{p.level}</small>
+                {speciesName(p.species)} <small>L{p.level}</small>
               </span>
             ))}
           </div>
         </section>
         <section>
-          <h3>Your team — pick 3, lead first</h3>
+          <h3>{ui().yourTeamPick}</h3>
           <div class="preview-grid">
             {mine.party.map((p, i) => {
               const pos = i + 1;
@@ -349,19 +350,21 @@ export function Game(props: {
                 >
                   {order >= 0 && (
                     <span class="pick-badge">
-                      {order === 0 ? "Lead" : order + 1}
+                      {order === 0 ? ui().lead : order + 1}
                     </span>
                   )}
                   <div class="preview-mon-head">
-                    <span class="mon-name">{p.species}</span>
+                    <span class="mon-name">{speciesName(p.species)}</span>
                     <span class="mon-level">L{p.level}</span>
                     {p.types.map((t) => (
                       <TypeBadge type={t} key={t} />
                     ))}
                   </div>
-                  {p.item && <div class="preview-item">@ {p.item}</div>}
+                  {p.item && (
+                    <div class="preview-item">@ {itemName(p.item)}</div>
+                  )}
                   <div class="preview-moves">
-                    {p.moves.map((m) => m.name).join(" · ")}
+                    {p.moves.map((m) => moveName(m.name)).join(" · ")}
                   </div>
                 </button>
               );
@@ -375,22 +378,22 @@ export function Game(props: {
             onClick={confirmPreview}
           >
             {previewSel.length === 3
-              ? "Confirm picks"
-              : `Pick ${3 - previewSel.length} more`}
+              ? ui().confirmPicks
+              : ui().pickMore(3 - previewSel.length)}
           </button>
           <span class="bot-preview-note">
             {thinking ? (
               <ThinkChip thinking={thinking} />
             ) : botPreviewSrc === "table" ? (
-              "Opponent picks from the baked equilibrium table"
+              ui().previewFromTable
             ) : botPreviewSrc === "search" ? (
-              "Opponent picks by live search (matchup not baked yet)"
+              ui().previewFromSearch
             ) : (
               ""
             )}
           </span>
           <button class="ghost quit-btn" onClick={props.onNewTeams}>
-            Quit
+            {ui().quit}
           </button>
         </div>
       </div>
@@ -404,10 +407,10 @@ export function Game(props: {
   return (
     <div class="screen battle-screen">
       <header class="battle-header">
-        <span class="turn-label">Turn {view.turn}</span>
+        <span class="turn-label">{ui().turnLabel(view.turn)}</span>
         {humanChoices && <ThinkChip thinking={thinking} />}
         <button class="ghost quit-btn" onClick={props.onNewTeams}>
-          Quit
+          {ui().quit}
         </button>
       </header>
 
@@ -416,7 +419,7 @@ export function Game(props: {
           <ActiveCard
             poke={activeFoe}
             mine={false}
-            extra={`${foe.pokemonLeft} left`}
+            extra={ui().nLeft(foe.pokemonLeft)}
           />
         )}
         <FieldStrip
@@ -433,9 +436,9 @@ export function Game(props: {
                 class={`bench-chip ${p.fainted ? "fainted" : ""}`}
                 key={i}
               >
-                {p.species}{" "}
+                {speciesName(p.species)}{" "}
                 {p.fainted ? (
-                  <small>fnt</small>
+                  <small>{ui().fnt}</small>
                 ) : (
                   <small>
                     {p.hp}/{p.maxhp}
@@ -509,12 +512,12 @@ function ChoiceButtons(props: {
               key={m.input}
               onClick={() => props.onPick(m.input)}
             >
-              <span class="move-name">{m.name}</span>
+              <span class="move-name">{moveName(m.name)}</span>
               <span class="move-meta">
                 <TypeBadge type={m.type} />
-                <span class="move-cat">{m.category}</span>
+                <span class="move-cat">{ui().moveCat(m.category)}</span>
                 {m.basePower > 0 && (
-                  <span class="move-bp">{m.basePower} BP</span>
+                  <span class="move-bp">{ui().bp(m.basePower)}</span>
                 )}
                 {m.pp >= 0 && (
                   <span class="move-pp">
@@ -534,8 +537,8 @@ function ChoiceButtons(props: {
               key={s.input}
               onClick={() => props.onPick(s.input)}
             >
-              <span class="switch-label">switch</span>
-              <span class="mon-name">{s.species}</span>
+              <span class="switch-label">{ui().switchLabel}</span>
+              <span class="mon-name">{speciesName(s.species)}</span>
               <span class="switch-hp">
                 {s.hp}/{s.maxhp}
               </span>
@@ -566,10 +569,10 @@ function ThinkingBar(props: { thinking: Thinking | null; waiting: boolean }) {
       <span>
         {t
           ? t.done >= t.budget
-            ? "Bot is finishing up…" // flush in flight: answer is imminent
-            : `Bot is thinking… ${t.done} / ${t.budget}`
+            ? ui().botFinishing // flush in flight: answer is imminent
+            : ui().botThinking(t.done, t.budget)
           : props.waiting
-            ? "Waiting for the bot…"
+            ? ui().waitingBot
             : "…"}
       </span>
       {t && (
@@ -591,10 +594,10 @@ function EndBanner(props: {
 }) {
   const text =
     props.outcome === "p1"
-      ? "You win!"
+      ? ui().youWin
       : props.outcome === "p2"
-        ? "The bot wins!"
-        : "Tie";
+        ? ui().botWins
+        : ui().tie;
   return (
     <div class="end-banner">
       <div class={`end-text ${props.outcome === "p1" ? "win" : "lose"}`}>
@@ -602,10 +605,10 @@ function EndBanner(props: {
       </div>
       <div class="end-actions">
         <button class="primary" onClick={props.onRematch}>
-          Rematch
+          {ui().rematch}
         </button>
         <button class="ghost" onClick={props.onNewTeams}>
-          New teams
+          {ui().newTeams}
         </button>
       </div>
     </div>

@@ -29,6 +29,7 @@ body {
   color: var(--text);
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", Meiryo,
     sans-serif;
   font-size: 16px;
   line-height: 1.4;
@@ -130,6 +131,21 @@ small {
 }
 .subtitle {
   color: var(--text-dim);
+}
+.locale-toggle {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.locale-btn {
+  min-height: 36px;
+  padding: 4px 12px;
+  color: var(--text-dim);
+}
+.locale-btn.on {
+  color: var(--text);
+  background: var(--accent-dim);
+  border-color: var(--accent);
 }
 .strength-label {
   margin-left: auto;
