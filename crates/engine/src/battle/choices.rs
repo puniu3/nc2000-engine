@@ -9,6 +9,25 @@ use super::actions::compare_action_priority;
 use super::events::{ev, EvTarget};
 use super::{EffectHandle, EngineError, RV};
 
+/// NC2000's `Max Total Level = 155` preview cap (PS rulesets.ts
+/// `maxtotallevel`, bound in config/formats.ts). Single-format port:
+/// hardcoded like the rest of the format's rule table.
+///
+/// Certified against the live PS clone 2026-07-17
+/// (`tools/probe-max-total-level.js`):
+/// - the rule binds on the PICKED mons' level sum, threshold INCLUSIVE
+///   (sum 155 accepted, sum 156 rejected);
+/// - rejection is a CHOICE error on the player stream
+///   (`|error|[Invalid choice] Can't choose for Team Preview: Your selected
+///   team has a total level of N, but it can't be above 155.`) — the
+///   request stays open and a corrected pick is accepted;
+/// - lead ordering is irrelevant (the rule sums the picked set);
+/// - a team with NO legal triple cannot exist: TeamValidator rejects any
+///   team whose 3 lowest levels sum over 155 (`maxtotallevel.onValidateTeam`
+///   check 1; mirrored by validate.rs `level-sum`), so filtering the
+///   preview enumeration never empties it for a validator-legal team.
+pub const MAX_TOTAL_LEVEL: u32 = 155;
+
 impl Battle {
     /// battle.choose(sideid, input). Returns true if the choice committed
     /// (choices done → turn ran → log likely grew).
@@ -67,6 +86,17 @@ impl Battle {
         self.sides[side_n].party.len().min(3)
     }
 
+    /// Level sum of a team-preview pick given as display positions
+    /// (0-based). Shared by `choose_team` validation and the `search.rs`
+    /// enumeration — one rule, one code path.
+    pub(crate) fn picked_total_level(&self, side_n: usize, positions: &[usize]) -> u32 {
+        let side = &self.sides[side_n];
+        positions
+            .iter()
+            .map(|&pos| side.roster[side.party[pos] as usize].level as u32)
+            .sum()
+    }
+
     fn all_choices_done(&self) -> bool {
         (0..2).all(|n| self.is_choice_done(n))
     }
@@ -108,7 +138,19 @@ impl Battle {
                 )));
             }
         }
-        // maxtotallevel onChooseTeam: validation only (fixture choices are legal)
+        // maxtotallevel onChooseTeam (PS rulesets.ts): the picked mons'
+        // level sum must not exceed MAX_TOTAL_LEVEL — see the constant's
+        // certificate. PS sums the positions after trimming/filling to
+        // pickedTeamSize, exactly like `positions` here.
+        let total = self.picked_total_level(side_n, &positions);
+        if total > MAX_TOTAL_LEVEL {
+            return Err(EngineError::InvalidChoice(format!(
+                "p{}: selected team has a total level of {}, above the {} cap",
+                side_n + 1,
+                total,
+                MAX_TOTAL_LEVEL
+            )));
+        }
         for (index, &pos) in positions.iter().enumerate() {
             let slot = self.sides[side_n].party[pos];
             self.sides[side_n].choice.switch_ins.push(pos as u8);

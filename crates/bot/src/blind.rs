@@ -236,10 +236,11 @@ pub struct BlindSearch {
     my_acts: Vec<SearchChoice>,
     my_n: Vec<u32>,
     my_w: Vec<f64>,
-    /// M15: optional root-action legality mask (PS enforces preview rules —
-    /// Max Total Level — that the engine's enumeration does not; masked
-    /// actions are never selected or reported best). `None` = all allowed,
-    /// bit-identical to the pre-M15 behavior.
+    /// M15: optional root-action legality mask (masked actions are never
+    /// selected or reported best). `None` = all allowed, bit-identical to
+    /// the pre-M15 behavior. Historical purpose — Max Total Level at
+    /// preview — is enforced by the engine's own enumeration since the
+    /// 2026-07-17 preview-space fix; the API stays (harmless, generic).
     my_mask: Option<Vec<bool>>,
     /// Per-determinization roots + everything below (state-keyed).
     nodes: Vec<Node>,

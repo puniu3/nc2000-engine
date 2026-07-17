@@ -35,8 +35,8 @@ use std::time::Instant;
 use conformance::fixture::repo_root;
 use conformance::load_dex;
 use nc2000_bot::preview::{
-    action_index, canonical_triple, load_meta_pool, preview_actions, solve_pair, BakeCfg,
-    MatrixEst, MetaPool, PairTable, RolloutAgent,
+    action_index, canonical_triple, legal_action_indices, load_meta_pool, preview_actions,
+    solve_pair, BakeCfg, MatrixEst, MetaPool, PairTable, RolloutAgent, SPACE_VERSION,
 };
 use nc2000_bot::smmcts::{solve_rm_plus, SelRule};
 use nc2000_bot::{play_game, Agent, GameResult, RmAgent, RmConfig, SplitMix64};
@@ -104,8 +104,18 @@ fn main() {
     for &(i, j) in &pairs {
         let path = out_dir.join(format!("pair-{i:02}-{j:02}.json"));
         if path.exists() && !force {
-            eprintln!("pair {i:02}-{j:02}: exists, skipping");
-            continue;
+            // Resume check: skip only files whose action space is still
+            // valid; a stale file (pre-Max-Total-Level bake on an affected
+            // pair, or unparsable) is re-baked in place.
+            let valid = std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|text| serde_json::from_str::<PairTable>(&text).ok())
+                .is_some_and(|tab| tab.space_ok(&team_levels(&pool, i), &team_levels(&pool, j)));
+            if valid {
+                eprintln!("pair {i:02}-{j:02}: exists and valid, skipping");
+                continue;
+            }
+            eprintln!("pair {i:02}-{j:02}: stale preview space, re-baking");
         }
         let t0 = Instant::now();
         let table = bake_pair(&dex, &pool, i, j, &cfg, threads);
@@ -156,6 +166,10 @@ fn select_pairs(args: &[String], n_teams: usize) -> Vec<(usize, usize)> {
 
 // ------------------------------------------------------------- one pair
 
+fn team_levels(pool: &MetaPool, i: usize) -> Vec<u8> {
+    pool.teams[i].sets.iter().map(|s| s.level).collect()
+}
+
 fn bake_pair(
     dex: &Dex,
     pool: &MetaPool,
@@ -171,10 +185,17 @@ fn bake_pair(
     let pair_seed = cfg.seed ^ ((i as u64) << 32) ^ ((j as u64) << 16);
     let t0 = Instant::now();
 
-    // ---- 1. screen: full-width cheap games
+    // Max Total Level (2026-07-17 fix): the bake runs on the PS-legal
+    // action subset per side. The canonical 60 stays the index space —
+    // illegal rows/columns keep the MatrixEst 0.5/n=0 prior and carry no
+    // support or equilibrium mass.
+    let legal_a = legal_action_indices(&actions, &team_levels(pool, i));
+    let legal_b = legal_action_indices(&actions, &team_levels(pool, j));
+
+    // ---- 1. screen: full-width (legal×legal) cheap games
     let mut jobs = Vec::new();
-    for a in 0..60usize {
-        for b in 0..60usize {
+    for &a in &legal_a {
+        for &b in &legal_b {
             if mirror && b <= a {
                 continue; // reflected below; diagonal is 0.5 by symmetry
             }
@@ -195,14 +216,26 @@ fn bake_pair(
     let screen_secs = t0.elapsed().as_secs_f64();
 
     // ---- 2. support: screen-equilibrium BR ranking ∪ skuct advisor picks
-    let (e0, e1) = solve_rm_plus(&screen.v, [60, 60], 20_000);
-    let u_a: Vec<f64> =
-        (0..60).map(|a| (0..60).map(|b| screen.at(a, b) * e1[b]).sum()).collect();
-    let u_b: Vec<f64> =
-        (0..60).map(|b| (0..60).map(|a| (1.0 - screen.at(a, b)) * e0[a]).sum()).collect();
+    // (equilibrium solved on the legal×legal sub-matrix; support indices
+    // stay in the canonical 60-space)
+    let sub: Vec<f64> = legal_a
+        .iter()
+        .flat_map(|&a| legal_b.iter().map(move |&b| (a, b)))
+        .map(|(a, b)| screen.at(a, b))
+        .collect();
+    let (e0, e1) = solve_rm_plus(&sub, [legal_a.len(), legal_b.len()], 20_000);
+    let u_a: Vec<f64> = legal_a
+        .iter()
+        .map(|&a| legal_b.iter().zip(&e1).map(|(&b, &p)| screen.at(a, b) * p).sum())
+        .collect();
+    let u_b: Vec<f64> = legal_b
+        .iter()
+        .map(|&b| legal_a.iter().zip(&e0).map(|(&a, &p)| (1.0 - screen.at(a, b)) * p).sum())
+        .collect();
     let adv = advisor_picks(dex, row, col, &actions, cfg, pair_seed, mirror);
-    let s0 = build_support(&u_a, &adv[0], cfg.support);
-    let s1 = if mirror { s0.clone() } else { build_support(&u_b, &adv[1], cfg.support) };
+    let s0 = build_support(&u_a, &legal_a, &adv[0], cfg.support);
+    let s1 =
+        if mirror { s0.clone() } else { build_support(&u_b, &legal_b, &adv[1], cfg.support) };
 
     // ---- 3. refine: support×support skuct self-play
     let (k0, k1) = (s0.len(), s1.len());
@@ -255,6 +288,7 @@ fn bake_pair(
         team_a: pool.teams[i].id.clone(),
         team_b: pool.teams[j].id.clone(),
         actions,
+        space_version: SPACE_VERSION,
         screen,
         support: [s0, s1],
         refine,
@@ -321,14 +355,21 @@ fn advisor_picks(
 }
 
 /// Advisor picks first, then the best-response ranking fills up to `k`.
-fn build_support(u: &[f64], advisors: &[usize], k: usize) -> Vec<usize> {
+/// `u[i]` scores `legal[i]`; the output holds canonical 60-space indices,
+/// all within the legal subset (advisors come from the engine's own
+/// enumeration, which enforces Max Total Level).
+fn build_support(u: &[f64], legal: &[usize], advisors: &[usize], k: usize) -> Vec<usize> {
     let mut sup: Vec<usize> = advisors.to_vec();
+    for &a in &sup {
+        assert!(legal.contains(&a), "advisor pick {a} outside the legal space");
+    }
     let mut rank: Vec<usize> = (0..u.len()).collect();
-    rank.sort_by(|&a, &b| u[b].total_cmp(&u[a]).then(a.cmp(&b)));
-    for a in rank {
+    rank.sort_by(|&a, &b| u[b].total_cmp(&u[a]).then(legal[a].cmp(&legal[b])));
+    for r in rank {
         if sup.len() >= k {
             break;
         }
+        let a = legal[r];
         if !sup.contains(&a) {
             sup.push(a);
         }

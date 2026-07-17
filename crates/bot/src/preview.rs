@@ -29,6 +29,38 @@ use crate::smmcts::solve_rm_plus;
 
 // ------------------------------------------------------------ action space
 
+/// Preview action-space version stamped into pair tables. Bumped when the
+/// legal preview space changes; loading rejects mismatched files so stale
+/// tables are treated as missing (fallback to live search) instead of
+/// served.
+///
+/// - 0 (implicit; pre-2026-07-17 files carry no field): baked over all 60
+///   actions, WITHOUT Max Total Level. Only valid for pairs where both
+///   teams have every 3-subset legal.
+/// - 1: baked over the Max-Total-Level-legal subset per side (the engine
+///   enforces the 155 cap at preview since 2026-07-17; certificate on
+///   `nc2000_engine::battle::MAX_TOTAL_LEVEL`).
+pub const SPACE_VERSION: u32 = 1;
+
+/// Level sum of one canonical action (`levels` indexed by display position
+/// − 1).
+pub fn action_total_level(levels: &[u8], t: &[u8; 3]) -> u32 {
+    t.iter().filter(|&&s| s != 0).map(|&s| levels[s as usize - 1] as u32).sum()
+}
+
+/// Indices (into the canonical 60) legal for a team under Max Total Level.
+/// Per-pair action spaces shrink here, possibly asymmetrically; the
+/// canonical 60 stays the INDEX space (strategies embed with zero mass on
+/// illegal actions).
+pub fn legal_action_indices(actions: &[[u8; 3]], levels: &[u8]) -> Vec<usize> {
+    (0..actions.len())
+        .filter(|&i| {
+            action_total_level(levels, &actions[i])
+                <= nc2000_engine::battle::MAX_TOTAL_LEVEL
+        })
+        .collect()
+}
+
 /// Canonical preview actions: `[lead, bench_lo, bench_hi]`, 1-based display
 /// positions, subsets enumerated lexicographically, leads in subset order.
 pub fn preview_actions() -> Vec<[u8; 3]> {
@@ -190,6 +222,10 @@ pub struct PairTable {
     pub team_b: String,
     /// The canonical 60 triples (self-description; identical for all pairs).
     pub actions: Vec<[u8; 3]>,
+    /// Action-space version the bake ran under (see `SPACE_VERSION`).
+    /// serde default 0 = a pre-Max-Total-Level file.
+    #[serde(default)]
+    pub space_version: u32,
     /// Full-width screening estimate (cheap rollout-policy games).
     pub screen: MatrixEst,
     /// Refined support (indices into `actions`) per side.
@@ -199,6 +235,37 @@ pub struct PairTable {
     pub sol: PairSolution,
     pub cfg: BakeCfg,
     pub secs: f64,
+}
+
+impl PairTable {
+    /// Whether this table's action space is servable for the given team
+    /// levels (a = row team, b = column team) under the CURRENT preview
+    /// rules. Stale files must be treated as missing, never served:
+    ///
+    /// - version 0 (pre-fix): valid only when BOTH teams have every
+    ///   3-subset legal — the old bake then coincides with the legal space.
+    /// - current version: valid when all support / equilibrium / argmax
+    ///   mass sits on legal actions (defense in depth against a mislabeled
+    ///   file).
+    /// - anything newer/unknown: not servable.
+    pub fn space_ok(&self, levels_a: &[u8], levels_b: &[u8]) -> bool {
+        let cap = nc2000_engine::battle::MAX_TOTAL_LEVEL;
+        let legal = |levels: &[u8], i: usize| action_total_level(levels, &self.actions[i]) <= cap;
+        match self.space_version {
+            0 => (0..self.actions.len())
+                .all(|i| legal(levels_a, i) && legal(levels_b, i)),
+            SPACE_VERSION => {
+                let side_ok = |levels: &[u8], sup: &[usize], p: &[f64], amax: usize| {
+                    sup.iter().all(|&i| legal(levels, i))
+                        && p.iter().enumerate().all(|(i, &m)| m <= 0.0 || legal(levels, i))
+                        && legal(levels, amax)
+                };
+                side_ok(levels_a, &self.support[0], &self.sol.p_a, self.sol.argmax_a)
+                    && side_ok(levels_b, &self.support[1], &self.sol.p_b, self.sol.argmax_b)
+            }
+            _ => false,
+        }
+    }
 }
 
 // ------------------------------------------------------------- solving
@@ -285,6 +352,9 @@ fn argmin(v: &[f64]) -> usize {
 /// All baked tables + pool signatures, shared read-only across agents.
 pub struct TableSet {
     pub ids: Vec<String>,
+    /// Per-team set levels (display order) — the Max-Total-Level staleness
+    /// check needs them at `add_pair` time.
+    levels: Vec<Vec<u8>>,
     sig_to_idx: HashMap<TeamSig, usize>,
     tables: HashMap<(usize, usize), PairTable>,
     actions: Vec<[u8; 3]>,
@@ -297,22 +367,33 @@ impl TableSet {
     pub fn from_pool(dex: &Dex, pool: &MetaPool) -> TableSet {
         let mut sig_to_idx = HashMap::new();
         let mut ids = Vec::new();
+        let mut levels = Vec::new();
         for (i, t) in pool.teams.iter().enumerate() {
             ids.push(t.id.clone());
+            levels.push(t.sets.iter().map(|s| s.level).collect());
             if sig_to_idx.insert(team_sig(dex, &t.sets), i).is_some() {
                 eprintln!("warning: duplicate team signature in pool at {}", t.id);
             }
         }
-        TableSet { ids, sig_to_idx, tables: HashMap::new(), actions: preview_actions() }
+        TableSet { ids, levels, sig_to_idx, tables: HashMap::new(), actions: preview_actions() }
     }
 
     /// Register one baked pair table. Errors when the table references team
-    /// ids outside the pool.
+    /// ids outside the pool, or when its action space is STALE (baked before
+    /// the Max Total Level fix while a team has illegal subsets) — a stale
+    /// table must read as missing so consumers fall back to live search.
     pub fn add_pair(&mut self, tab: PairTable) -> Result<(), String> {
         let idx = |id: &str| self.ids.iter().position(|x| x == id);
         let (Some(i), Some(j)) = (idx(&tab.team_a), idx(&tab.team_b)) else {
             return Err(format!("pair {} vs {} references unknown teams", tab.team_a, tab.team_b));
         };
+        if !tab.space_ok(&self.levels[i], &self.levels[j]) {
+            return Err(format!(
+                "pair {} vs {}: stale preview space (space_version {}, current {SPACE_VERSION}; \
+                 Max Total Level not honored) — re-bake required",
+                tab.team_a, tab.team_b, tab.space_version
+            ));
+        }
         self.tables.insert((i, j), tab);
         Ok(())
     }

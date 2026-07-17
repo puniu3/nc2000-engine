@@ -57,6 +57,8 @@ export interface UIStrings {
   lead: string;
   confirmPicks: string;
   pickMore: (n: number) => string;
+  levelSum: (sum: number, cap: number) => string;
+  overLevelCap: (cap: number) => string;
   previewFromTable: string;
   previewFromSearch: string;
   // battle chrome
@@ -136,6 +138,8 @@ const EN: UIStrings = {
   lead: "Lead",
   confirmPicks: "Confirm picks",
   pickMore: (n) => `Pick ${n} more`,
+  levelSum: (sum, cap) => `Total level ${sum}/${cap}`,
+  overLevelCap: (cap) => `Over the total-level cap of ${cap}`,
   previewFromTable: "Opponent picks from the baked equilibrium table",
   previewFromSearch: "Opponent picks by live search (matchup not baked yet)",
   quit: "Quit",
@@ -212,6 +216,8 @@ const JA: UIStrings = {
   lead: "先発",
   confirmPicks: "選出を確定",
   pickMore: (n) => `あと${n}体`,
+  levelSum: (sum, cap) => `合計レベル ${sum}/${cap}`,
+  overLevelCap: (cap) => `合計レベルが${cap}を超えるため選べません`,
   previewFromTable: "相手の選出: 事前計算した均衡テーブル",
   previewFromSearch: "相手の選出: ライブ探索(この組み合わせは未計算)",
   quit: "やめる",

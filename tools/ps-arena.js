@@ -12,7 +12,8 @@
 //
 // Usage:
 //   node tools/ps-arena.js --games 50 --mode blind|open --opp random|maxbp \
-//     --oppteams pool|fixtures|mixed --iters 300 --seed 1 [--quiet]
+//     --oppteams pool|fixtures|mixed --iters 300 --seed 1 [--quiet] \
+//     [--affected]   # both sides from the Max-Total-Level-affected teams
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -43,11 +44,33 @@ const ITERS = parseInt(args.iters || '300', 10);
 const SEED = parseInt(args.seed || '1', 10);
 const QUIET = !!args.quiet;
 const VERIFY = !args.noverify;
+// --affected: restrict BOTH sides to pool teams with >155 triples (the
+// Max-Total-Level-affected list) — the preview-fix certification population.
+const AFFECTED_ONLY = !!args.affected;
 
 const psDex = Dex.mod('gen2stadium2');
 const validator = new TeamValidator(FORMAT);
 const pool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/meta-pool-v0/meta-pool.json'), 'utf8'));
 const poolJson = JSON.stringify(pool);
+
+/// Pool indices with at least one >155 triple (illegal picks existed pre-fix).
+const affectedIdx = pool.teams
+  .map((t, i) => {
+    const lv = t.sets.map(s => s.level);
+    for (let a = 0; a < 6; a++) {
+      for (let b = a + 1; b < 6; b++) {
+        for (let c = b + 1; c < 6; c++) {
+          if (lv[a] + lv[b] + lv[c] > 155) return i;
+        }
+      }
+    }
+    return -1;
+  })
+  .filter(i => i >= 0);
+const poolPick = master => {
+  if (!AFFECTED_ONLY) return pool.teams[master.random(pool.teams.length)].sets;
+  return pool.teams[affectedIdx[master.random(affectedIdx.length)]].sets;
+};
 
 // fixture opponent teams (validator-clean random teams — off-pool)
 const fixtureTeams = [];
@@ -213,11 +236,12 @@ async function playGame(gameIdx, master, counters) {
   const ourSlot = `p${ourSide + 1}`;
   const oppSlot = `p${2 - ourSide}`;
 
-  // teams
-  const ourTeam = pool.teams[master.random(pool.teams.length)].sets;
+  // teams (--affected: both sides from the Max-Total-Level-affected list)
+  const ourTeam = poolPick(master);
   let oppTeam;
-  const src = OPPTEAMS === 'mixed' ? (master.random(2) === 0 ? 'pool' : 'fixtures') : OPPTEAMS;
-  if (src === 'pool') oppTeam = pool.teams[master.random(pool.teams.length)].sets;
+  const src = AFFECTED_ONLY ? 'pool'
+    : OPPTEAMS === 'mixed' ? (master.random(2) === 0 ? 'pool' : 'fixtures') : OPPTEAMS;
+  if (src === 'pool') oppTeam = poolPick(master);
   else oppTeam = fixtureTeams[master.random(fixtureTeams.length)];
 
   for (const [name, team] of [['ours', ourTeam], ['opp', oppTeam]]) {
@@ -243,7 +267,12 @@ async function playGame(gameIdx, master, counters) {
   searcher.setOwnTeam(JSON.stringify(ourTeam));
   if (MODE === 'open') searcher.pinOpponent(JSON.stringify(oppTeam));
   for (const f of pairFiles) {
-    searcher.addPair(fs.readFileSync(path.join(pairDir, f), 'utf8'));
+    try {
+      searcher.addPair(fs.readFileSync(path.join(pairDir, f), 'utf8'));
+    } catch (e) {
+      // stale (pre-Max-Total-Level) or malformed table: treat as missing
+      if (gameIdx === 0) console.warn(`pair ${f} rejected: ${e.message || e}`);
+    }
   }
 
   const p1team = ourSide === 0 ? ourTeam : oppTeam;

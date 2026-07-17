@@ -23,6 +23,7 @@ pub mod pokemon;
 pub mod search;
 pub mod turn;
 
+pub use choices::MAX_TOTAL_LEVEL;
 pub use search::{Outcome, SearchChoice};
 
 use crate::dex::{toid, CondId, Dex, EffectType, ItemId, MoveId};

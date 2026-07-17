@@ -274,14 +274,24 @@ impl Battle {
         }
     }
 
-    /// All ordered picks of `picked_team_size` distinct display positions.
+    /// All ordered picks of `picked_team_size` distinct display positions
+    /// whose level sum respects Max Total Level (mirrors `choose_team`;
+    /// certificate on `MAX_TOTAL_LEVEL` in choices.rs). Never empty for a
+    /// validator-legal team — the validator guarantees a legal triple.
     fn legal_team_choices(&self, side_n: usize) -> Vec<SearchChoice> {
         let n = self.sides[side_n].party.len() as u8;
         let k = self.picked_team_size(side_n).min(3) as u8;
         let mut out = Vec::new();
+        let push = |out: &mut Vec<SearchChoice>, slots: [u8; 3]| {
+            let positions: Vec<usize> =
+                slots.iter().filter(|&&s| s != 0).map(|&s| s as usize - 1).collect();
+            if self.picked_total_level(side_n, &positions) <= super::choices::MAX_TOTAL_LEVEL {
+                out.push(SearchChoice::Team(slots));
+            }
+        };
         for a in 1..=n {
             if k <= 1 {
-                out.push(SearchChoice::Team([a, 0, 0]));
+                push(&mut out, [a, 0, 0]);
                 continue;
             }
             for b in 1..=n {
@@ -289,12 +299,12 @@ impl Battle {
                     continue;
                 }
                 if k == 2 {
-                    out.push(SearchChoice::Team([a, b, 0]));
+                    push(&mut out, [a, b, 0]);
                     continue;
                 }
                 for c in 1..=n {
                     if c != a && c != b {
-                        out.push(SearchChoice::Team([a, b, c]));
+                        push(&mut out, [a, b, c]);
                     }
                 }
             }

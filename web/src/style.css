@@ -466,6 +466,28 @@ small {
   box-shadow: 0 0 0 1px var(--accent);
   background: var(--panel-2);
 }
+/* Max Total Level: no legal completion left with this mon */
+.preview-mon.over-cap {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.cap-badge {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+}
+.level-sum {
+  margin-left: 10px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
 .pick-badge {
   position: absolute;
   top: -8px;

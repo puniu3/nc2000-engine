@@ -18,6 +18,17 @@ cargo run --release -p nc2000-bot --example bake_preview -- --summarize    # gat
   drag-in (Roar/Whirlwind) resolves to, uniform either way, so win
   probability is invariant. 120 ordered picks → 60 cells per side, 4x fewer
   matrix cells.
+- `space_version` — the action-space rule set the bake ran under
+  (`preview::SPACE_VERSION`). Version 1 (2026-07-17): only Max-Total-Level-
+  legal picks (3-mon level sum ≤ 155, the format rule PS enforces at
+  preview) are screened/refined/solved — the canonical 60 stays the INDEX
+  space, illegal actions keep the 0.5/n=0 prior and carry no support or
+  equilibrium mass, and per-pair legal spaces can shrink asymmetrically
+  (20/34 pool teams have 1–10 illegal subsets). Files without the field
+  (version 0, pre-fix) are accepted at load only when both teams have every
+  subset legal; otherwise they are STALE — `TableSet` rejects them (native
+  and wasm), consumers fall back to live preview search, and `bake_preview`
+  re-bakes them on resume.
 - `screen` — full-width 60×60 payoff estimate (side-a mean score per joint
   preview) from cheap ε-greedy max-damage self-play games. Ranking signal
   only: the policy never switches voluntarily, so its values are biased for

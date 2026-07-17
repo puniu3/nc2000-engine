@@ -52,11 +52,13 @@ use crate::preview::{MetaPool, TableSet};
 use crate::rng::SplitMix64;
 use crate::smmcts::RmConfig;
 
-/// NC2000 rule: Max Total Level = 155. The engine's preview enumeration does
-/// not enforce it (an accepted port gap — self-play is consistent both
-/// ways), but PS rejects overweight picks, so everything M15 submits to PS
-/// is projected onto this cap.
-pub const MAX_TOTAL_LEVEL: i32 = 155;
+/// NC2000 rule: Max Total Level = 155. Since the 2026-07-17 preview-space
+/// fix the ENGINE enforces this at team preview (validation + enumeration;
+/// certificate on `nc2000_engine::battle::MAX_TOTAL_LEVEL`), so the M15
+/// root mask and the filtered table sampling below are redundant belt-and-
+/// suspenders at preview — kept because they are harmless and still guard
+/// table policies fed from external files.
+pub const MAX_TOTAL_LEVEL: i32 = nc2000_engine::battle::MAX_TOTAL_LEVEL as i32;
 
 // ===================================================================== lines
 

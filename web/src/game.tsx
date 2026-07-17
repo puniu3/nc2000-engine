@@ -290,11 +290,34 @@ export function Game(props: {
 
   // -------------------------------------------------------------- preview
 
+  /** NC2000 `Max Total Level = 155`: the 3 picked mons' level sum may not
+   * exceed 155. The engine enforces it (legalChoices omits overweight
+   * picks; applyChoice rejects them), so the picker must not offer dead
+   * ends: a mon is selectable only while some legal completion exists. */
+  const MAX_TOTAL_LEVEL = 155;
+
+  /** Can the current selection, extended with display position `pos`, still
+   * be completed to a legal 3-pick? (Fill the remaining slots with the
+   * lightest unselected mons — if even that overshoots, `pos` is a dead
+   * end.) */
+  function fitsLevelCap(levels: number[], sel: number[], pos: number): boolean {
+    const picked = [...sel, pos];
+    let sum = picked.reduce((a, p) => a + levels[p - 1], 0);
+    const rest = levels
+      .map((_, i) => i + 1)
+      .filter((p) => !picked.includes(p))
+      .map((p) => levels[p - 1])
+      .sort((a, b) => a - b);
+    for (let i = 0; i < 3 - picked.length; i++) sum += rest[i];
+    return sum <= MAX_TOTAL_LEVEL;
+  }
+
   function togglePreview(pos: number) {
+    const levels = view!.sides[HUMAN].party.map((p) => p.level);
     setPreviewSel((sel) =>
       sel.includes(pos)
         ? sel.filter((x) => x !== pos)
-        : sel.length < 3
+        : sel.length < 3 && fitsLevelCap(levels, sel, pos)
           ? [...sel, pos]
           : sel,
     );
@@ -342,20 +365,42 @@ export function Game(props: {
           </div>
         </section>
         <section>
-          <h3>{ui().yourTeamPick}</h3>
+          <h3>
+            {ui().yourTeamPick}
+            <span class="level-sum">
+              {ui().levelSum(
+                previewSel.reduce((a, p) => a + mine.party[p - 1].level, 0),
+                MAX_TOTAL_LEVEL,
+              )}
+            </span>
+          </h3>
           <div class="preview-grid">
             {mine.party.map((p, i) => {
               const pos = i + 1;
               const order = previewSel.indexOf(pos);
+              const levels = mine.party.map((q) => q.level);
+              // Max Total Level: gray out mons with no legal completion left
+              // (only while a slot is open — a full selection already just
+              // ignores further clicks)
+              const overCap =
+                order < 0 &&
+                previewSel.length < 3 &&
+                !fitsLevelCap(levels, previewSel, pos);
               return (
                 <button
-                  class={`preview-mon ${order >= 0 ? "selected" : ""}`}
+                  class={`preview-mon ${order >= 0 ? "selected" : ""} ${overCap ? "over-cap" : ""}`}
                   key={i}
+                  disabled={overCap}
                   onClick={() => togglePreview(pos)}
                 >
                   {order >= 0 && (
                     <span class="pick-badge">
                       {order === 0 ? ui().lead : order + 1}
+                    </span>
+                  )}
+                  {overCap && (
+                    <span class="cap-badge">
+                      {ui().overLevelCap(MAX_TOTAL_LEVEL)}
                     </span>
                   )}
                   <div class="preview-mon-head">

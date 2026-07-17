@@ -1119,7 +1119,8 @@ mod tests {
         assert_eq!(pol["baked"], true);
 
         // into battle: stepped blind search returns a legal pick
-        b.apply_choice(0, "team 1, 2, 3").map_err(|_| "apply").unwrap();
+        // (team 0 is 52/52/52/51/51/51 — slots 1,2,4 sum 155 = Max Total Level)
+        b.apply_choice(0, "team 1, 2, 4").map_err(|_| "apply").unwrap();
         b.apply_choice(1, &baked).map_err(|_| "apply").unwrap();
         bs.observe(&b);
         assert!(bs.baked_preview().is_none());
@@ -1186,7 +1187,8 @@ mod tests {
         assert!(legal.iter().any(|c| c["input"] == baked.as_str()));
 
         // into battle: the pinned blind search returns a legal pick
-        b.apply_choice(0, "team 1, 2, 3").map_err(|_| "apply").unwrap();
+        // (team 0 is 52/52/52/51/51/51 — slots 1,2,4 sum 155 = Max Total Level)
+        b.apply_choice(0, "team 1, 2, 4").map_err(|_| "apply").unwrap();
         b.apply_choice(1, &baked).map_err(|_| "apply").unwrap();
         bs.observe(&b);
         assert!(bs.baked_preview().is_none());

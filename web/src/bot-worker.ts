@@ -233,8 +233,11 @@ async function runBench(m: {
   try {
     b.setLogEnabled(false);
     // Fixed preview picks: land on the first in-battle decision point.
-    b.applyChoice(0, "team 1, 2, 3");
-    b.applyChoice(1, "team 1, 2, 3");
+    // Max-Total-Level-legal for the fixed bench teams (pool 0: 52/52/52/51…,
+    // pool 1: 55/55/50/50…) — changed 2026-07-17 with the 155-cap fix, so
+    // benchmark numbers are comparable only within the post-fix workload.
+    b.applyChoice(0, "team 1, 2, 4");
+    b.applyChoice(1, "team 1, 3, 4");
     s = new Searcher(b, 1, m.searchSeed >>> 0);
     let done = 0;
     let ms = 0;
