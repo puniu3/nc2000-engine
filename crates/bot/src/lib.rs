@@ -11,7 +11,9 @@
 //! M10b: `BlindAgent` (`blind`) — the skuct search restricted to the
 //! observe/belief surface via per-iteration determinization. M10c:
 //! `BlindSearch` — its stepped form (the wasm/ponder substrate), driven
-//! internally by `BlindAgent`.
+//! internally by `BlindAgent`. M11a: metagame research (`teamgen`) —
+//! legal-set-space mutation operators over the M14a validator/learnsets
+//! plus gauntlet fitness, driven by `examples/research_meta.rs`.
 //!
 //! Agents see the full battle state (both teams) — self-play evaluation
 //! mode — except `BlindAgent`, which restricts itself to the
@@ -30,6 +32,7 @@ pub mod preview;
 pub mod rng;
 pub mod runner;
 pub mod smmcts;
+pub mod teamgen;
 
 pub use agent::{Agent, MaxDamageAgent, RandomAgent};
 pub use belief::Belief;
@@ -44,3 +47,4 @@ pub use preview::{BakedPreviewAgent, CounterPickAgent, PreviewMode, TableSet};
 pub use rng::SplitMix64;
 pub use runner::{play_game, GameResult};
 pub use smmcts::{RmAgent, RmConfig, SkuctSearch};
+pub use teamgen::{gauntlet_eval, to_sets, EvalCfg, EvalResult, MutOp, Proposal, TeamGen};

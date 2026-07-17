@@ -27,6 +27,20 @@
 //!       [--advisor-iters 2000] [--advisor-runs 2] [--max-turns 300] \
 //!       [--seed 1] [--threads N] [--out data/preview-tables-v0] [--force]
 //!   cargo run --release -p nc2000-bot --example bake_preview -- --summarize
+//!
+//! M11a candidate mode — the equilibrium-certification hook: bake a
+//! candidate team FILE (bare set array, {"sets": [...]}, or a research_meta
+//! lineage checkpoint, whose best-so-far "parent" team is used) against
+//! pool teams, writing cand-<id>-vs-<j>.json into a SEPARATE directory
+//! (default data/preview-tables-research — never data/preview-tables-v0).
+//! The candidate is the row player (team_a); same pipeline, budgets, and
+//! resume semantics; pair seeds derive from the candidate id.
+//!
+//!   cargo run --release -p nc2000-bot --example bake_preview -- \
+//!       --candidate FILE [--candidate-id ID] [--vs 0-7] \
+//!       [--out data/preview-tables-research] [usual budget flags]
+//!   cargo run --release -p nc2000-bot --example bake_preview -- \
+//!       --summarize --out data/preview-tables-research
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -60,9 +74,15 @@ fn main() {
     let pool_path = flag(&args, "--pool")
         .map(PathBuf::from)
         .unwrap_or_else(|| repo_root().join("data/meta-pool-v0/meta-pool.json"));
-    let out_dir = flag(&args, "--out")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| repo_root().join("data/preview-tables-v0"));
+    let candidate = flag(&args, "--candidate").map(PathBuf::from);
+    let out_dir = flag(&args, "--out").map(PathBuf::from).unwrap_or_else(|| {
+        repo_root().join(if candidate.is_some() {
+            // Candidate tables never mix into the product table dir.
+            "data/preview-tables-research"
+        } else {
+            "data/preview-tables-v0"
+        })
+    });
 
     if args.iter().any(|a| a == "--summarize") {
         summarize(&out_dir);
@@ -88,6 +108,11 @@ fn main() {
     let dex = load_dex();
     let pool = load_meta_pool(&pool_path);
     std::fs::create_dir_all(&out_dir).unwrap();
+
+    if let Some(cand_path) = candidate {
+        bake_candidate(&dex, &pool, &cand_path, &args, &out_dir, &cfg, threads, force);
+        return;
+    }
 
     let pairs = select_pairs(&args, pool.teams.len());
     eprintln!(
@@ -166,8 +191,12 @@ fn select_pairs(args: &[String], n_teams: usize) -> Vec<(usize, usize)> {
 
 // ------------------------------------------------------------- one pair
 
+fn sets_levels(sets: &[PokemonSet]) -> Vec<u8> {
+    sets.iter().map(|s| s.level).collect()
+}
+
 fn team_levels(pool: &MetaPool, i: usize) -> Vec<u8> {
-    pool.teams[i].sets.iter().map(|s| s.level).collect()
+    sets_levels(&pool.teams[i].sets)
 }
 
 fn bake_pair(
@@ -178,19 +207,47 @@ fn bake_pair(
     cfg: &BakeCfg,
     threads: usize,
 ) -> PairTable {
-    let actions = preview_actions();
-    let row = &pool.teams[i].sets;
-    let col = &pool.teams[j].sets;
-    let mirror = i == j;
+    // Pair seed derivation unchanged since M8 — pool bakes stay bit-identical.
     let pair_seed = cfg.seed ^ ((i as u64) << 32) ^ ((j as u64) << 16);
+    bake_pair_teams(
+        dex,
+        &pool.teams[i].sets,
+        &pool.teams[j].sets,
+        &pool.teams[i].id,
+        &pool.teams[j].id,
+        i == j,
+        pair_seed,
+        &format!("{i:02}-{j:02}"),
+        cfg,
+        threads,
+    )
+}
+
+/// The pair-baking core, team-source-agnostic: screen -> support -> refine
+/// -> solve between two explicit 6-mon teams. `mirror` = the two teams are
+/// the same team (upper-triangle reflection applies).
+#[allow(clippy::too_many_arguments)]
+fn bake_pair_teams(
+    dex: &Dex,
+    row: &[PokemonSet],
+    col: &[PokemonSet],
+    id_a: &str,
+    id_b: &str,
+    mirror: bool,
+    pair_seed: u64,
+    label: &str,
+    cfg: &BakeCfg,
+    threads: usize,
+) -> PairTable {
+    let actions = preview_actions();
     let t0 = Instant::now();
 
     // Max Total Level (2026-07-17 fix): the bake runs on the PS-legal
     // action subset per side. The canonical 60 stays the index space —
     // illegal rows/columns keep the MatrixEst 0.5/n=0 prior and carry no
     // support or equilibrium mass.
-    let legal_a = legal_action_indices(&actions, &team_levels(pool, i));
-    let legal_b = legal_action_indices(&actions, &team_levels(pool, j));
+    let legal_a = legal_action_indices(&actions, &sets_levels(row));
+    let legal_b = legal_action_indices(&actions, &sets_levels(col));
 
     // ---- 1. screen: full-width (legal×legal) cheap games
     let mut jobs = Vec::new();
@@ -279,14 +336,14 @@ fn bake_pair(
     screen.compact();
     refine.compact();
     eprintln!(
-        "  pair {i:02}-{j:02}: screen {:.0}s, total {:.0}s, {} refine games",
+        "  pair {label}: screen {:.0}s, total {:.0}s, {} refine games",
         screen_secs,
         t0.elapsed().as_secs_f64(),
         jobs.len(),
     );
     PairTable {
-        team_a: pool.teams[i].id.clone(),
-        team_b: pool.teams[j].id.clone(),
+        team_a: id_a.to_string(),
+        team_b: id_b.to_string(),
         actions,
         space_version: SPACE_VERSION,
         screen,
@@ -296,6 +353,122 @@ fn bake_pair(
         cfg: cfg.clone(),
         secs: t0.elapsed().as_secs_f64(),
     }
+}
+
+// --------------------------------------------------------- candidate mode
+
+/// M11a certification hook: bake candidate-vs-pool pairs from a team file.
+#[allow(clippy::too_many_arguments)]
+fn bake_candidate(
+    dex: &Dex,
+    pool: &MetaPool,
+    cand_path: &std::path::Path,
+    args: &[String],
+    out_dir: &std::path::Path,
+    cfg: &BakeCfg,
+    threads: usize,
+    force: bool,
+) {
+    let cand_id = flag(args, "--candidate-id").unwrap_or_else(|| {
+        cand_path
+            .file_stem()
+            .map(|s| s.to_string_lossy().replace([' ', '/'], "-"))
+            .unwrap_or_else(|| "candidate".into())
+    });
+    let sets = load_candidate(dex, cand_path);
+    let cand_levels = sets_levels(&sets);
+
+    let vs = flag(args, "--vs").unwrap_or_else(|| "0-7".into());
+    let (lo, hi) = vs.split_once('-').expect("--vs wants LO-HI");
+    let (lo, hi): (usize, usize) =
+        (lo.parse().unwrap(), hi.parse::<usize>().unwrap().min(pool.teams.len() - 1));
+
+    eprintln!(
+        "baking candidate '{cand_id}' vs pool teams {lo}-{hi}, {threads} threads \
+         (screen {} g/cell, refine {} g/cell @ skuct:{}, support {}) -> {}",
+        cfg.screen_games,
+        cfg.refine_games,
+        cfg.skuct_iters,
+        cfg.support,
+        out_dir.display()
+    );
+    for j in lo..=hi {
+        let path = out_dir.join(format!("cand-{cand_id}-vs-{j:02}.json"));
+        if path.exists() && !force {
+            let valid = std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|text| serde_json::from_str::<PairTable>(&text).ok())
+                .is_some_and(|tab| tab.space_ok(&cand_levels, &team_levels(pool, j)));
+            if valid {
+                eprintln!("cand vs {j:02}: exists and valid, skipping");
+                continue;
+            }
+            eprintln!("cand vs {j:02}: stale preview space, re-baking");
+        }
+        let t0 = Instant::now();
+        let pair_seed = cfg.seed ^ fnv1a64(&cand_id) ^ ((j as u64) << 16);
+        let table = bake_pair_teams(
+            dex,
+            &sets,
+            &pool.teams[j].sets,
+            &cand_id,
+            &pool.teams[j].id,
+            false,
+            pair_seed,
+            &format!("cand-vs-{j:02}"),
+            cfg,
+            threads,
+        );
+        std::fs::write(&path, serde_json::to_string(&table).unwrap()).unwrap();
+        let s = &table.sol;
+        println!(
+            "cand {} vs {j:02} {}: value {:.3}  mix |a|={} |b|={}  gate margins a {:+.3} b {:+.3}  ({:.0}s)",
+            cand_id,
+            table.team_b,
+            s.value,
+            s.p_a.iter().filter(|&&p| p > 0.0).count(),
+            s.p_b.iter().filter(|&&p| p > 0.0).count(),
+            s.guarantee_mixed_a - s.guarantee_argmax_a,
+            s.guarantee_mixed_b - s.guarantee_argmax_b,
+            t0.elapsed().as_secs_f64(),
+        );
+    }
+}
+
+/// Candidate team file: a bare set array, {"sets": [...]}, or a
+/// research_meta lineage checkpoint (best-so-far "parent" team). The team
+/// must pass the M14a validator (fix-severity findings tolerated — the
+/// battle constructor normalizes those forms).
+fn load_candidate(dex: &Dex, path: &std::path::Path) -> Vec<PokemonSet> {
+    let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let v: serde_json::Value = serde_json::from_str(&text).expect("candidate file JSON");
+    let team = [&v, &v["sets"], &v["parent"], &v["best"]["team"]]
+        .into_iter()
+        .find_map(|x| x.as_array().cloned())
+        .unwrap_or_else(|| panic!("{}: no team found (array | sets | parent)", path.display()));
+    assert_eq!(team.len(), 6, "candidate teams must have 6 mons (preview space)");
+    let ls_text = std::fs::read_to_string(repo_root().join("data/learnsets-gen2.json")).unwrap();
+    let ls = nc2000_engine::validate::Learnsets::from_json(&ls_text).unwrap();
+    let verdict = nc2000_engine::validate::validate_team(
+        dex,
+        &ls,
+        &serde_json::to_string(&team).unwrap(),
+    );
+    assert_eq!(
+        verdict["ok"],
+        serde_json::json!(true),
+        "candidate team fails the validator: {verdict}"
+    );
+    serde_json::from_value(serde_json::Value::Array(team)).expect("candidate sets")
+}
+
+fn fnv1a64(s: &str) -> u64 {
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    for b in s.bytes() {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100_0000_01b3);
+    }
+    h
 }
 
 /// Reflect a mirror pair's upper triangle: M[b][a] = 1 − M[a][b], diagonal 0.5.
