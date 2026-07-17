@@ -43,11 +43,17 @@ use nc2000_bot::{
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Category, Dex};
 use nc2000_engine::state::{Battle, Pokemon, RequestKind, Status, BOOST_NAMES};
+use nc2000_engine::validate::{canonicalize_team, validate_team, Learnsets};
 
 /// data/gen2stadium2.json baked into the binary (~416 KB, ~150 KB gzipped
 /// over the wire) — one fetch fewer and no path plumbing for the common
 /// case; `Dex.fromJson` exists for callers that want to ship it separately.
 const EMBEDDED_DEX: &str = include_str!("../../../data/gen2stadium2.json");
+
+/// data/learnsets-gen2.json baked in too (~124 KB raw, ~13 KB gzipped —
+/// well under the dex's embed precedent, and the validator is useless
+/// without it); `Validator.fromJson` exists for callers shipping their own.
+const EMBEDDED_LEARNSETS: &str = include_str!("../../../data/learnsets-gen2.json");
 
 fn js_err(e: impl std::fmt::Debug) -> JsError {
     JsError::new(&format!("{e:?}"))
@@ -74,6 +80,59 @@ impl WasmDex {
     pub fn from_json(text: &str) -> Result<WasmDex, JsError> {
         let dex = Dex::from_json(text).map_err(js_err)?;
         Ok(WasmDex { dex: Rc::new(dex) })
+    }
+}
+
+// -------------------------------------------------------------- Validator
+
+/// M14a team validator + canonicalizer (`nc2000_engine::validate`): checks
+/// custom teams against the gen2nc2000 rules the way PS's TeamValidator
+/// does, from embedded data only (dex + learnsets — no network). Move
+/// legality is a FLAT per-species set: cross-move compatibility constraints
+/// are deliberately not encoded, so a small superset of true PS legality is
+/// accepted (never the reverse — oracle-certified by
+/// `tools/validate-oracle.js`).
+#[wasm_bindgen(js_name = Validator)]
+pub struct WasmValidator {
+    dex: Rc<Dex>,
+    learnsets: Learnsets,
+}
+
+#[wasm_bindgen(js_class = Validator)]
+impl WasmValidator {
+    /// Validator over the embedded learnsets (`data/learnsets-gen2.json`).
+    #[wasm_bindgen(constructor)]
+    pub fn new(dex: &WasmDex) -> Result<WasmValidator, JsError> {
+        Self::from_json(dex, EMBEDDED_LEARNSETS)
+    }
+
+    /// Construct from caller-supplied learnsets JSON.
+    #[wasm_bindgen(js_name = fromJson)]
+    pub fn from_json(dex: &WasmDex, learnsets_json: &str) -> Result<WasmValidator, JsError> {
+        let learnsets = Learnsets::from_json(learnsets_json).map_err(|e| JsError::new(&e))?;
+        Ok(WasmValidator { dex: dex.dex.clone(), learnsets })
+    }
+
+    /// Validate a team (the same JSON array the `Battle` constructor takes).
+    /// Returns findings JSON `{ok, errors, findings: [{severity, code,
+    /// mon, slot, ...params}]}` — `severity` is `"error"` (PS's validator
+    /// rejects it) or `"fix"` (legal, but PS/the engine silently
+    /// canonicalize it; `canonicalizeTeam` applies these). Machine-readable
+    /// codes only — M14b renders the messages.
+    #[wasm_bindgen(js_name = validateTeam)]
+    pub fn validate_team(&self, team_json: &str) -> String {
+        validate_team(&self.dex, &self.learnsets, team_json).to_string()
+    }
+
+    /// Canonicalize a team: apply every `fix` plus the derivable errors
+    /// (HP DV, SpD:=SpA mirrors, gender/shiny from DVs, typed-Hidden-Power
+    /// DV spreads, EV clamps/fills, nickname repairs, duplicate moves).
+    /// Returns `{ok, team, applied, errors}` — `team` is ready for the
+    /// `Battle` constructor when `ok`; `errors` lists what remains
+    /// (species/level/move legality, clauses — user intent, not auto-fixed).
+    #[wasm_bindgen(js_name = canonicalizeTeam)]
+    pub fn canonicalize_team(&self, team_json: &str) -> String {
+        canonicalize_team(&self.dex, &self.learnsets, team_json).to_string()
     }
 }
 
@@ -803,6 +862,43 @@ mod tests {
     #[test]
     fn embedded_dex_loads() {
         let _ = WasmDex::new().map_err(|_| "dex").unwrap();
+    }
+
+    /// M14a: the embedded-learnset validator accepts fixture teams verbatim
+    /// and flags an injected illegal move; canonicalize round-trips into the
+    /// Battle constructor.
+    #[test]
+    fn validator_flow() {
+        let dex = WasmDex::new().map_err(|_| "dex").unwrap();
+        let v = WasmValidator::new(&dex).map_err(|_| "validator").unwrap();
+        let (p1, p2) = fixture_teams();
+        for team in [&p1, &p2] {
+            let r: serde_json::Value =
+                serde_json::from_str(&v.validate_team(team)).unwrap();
+            assert_eq!(r["ok"], true, "{r}");
+        }
+        // corrupt: give the first mon a move outside its learnset
+        let mut t: serde_json::Value = serde_json::from_str(&p1).unwrap();
+        t[0]["moves"][0] = serde_json::json!("Spikes");
+        let r: serde_json::Value =
+            serde_json::from_str(&v.validate_team(&t.to_string())).unwrap();
+        assert_eq!(r["ok"], false, "{r}");
+        assert!(r["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["code"] == "move-illegal"));
+        // canonicalize a sloppy but fixable team and construct a battle
+        let mut t: serde_json::Value = serde_json::from_str(&p1).unwrap();
+        t[0]["ability"] = serde_json::json!("");
+        t[0]["gender"] = serde_json::Value::Null;
+        let c: serde_json::Value =
+            serde_json::from_str(&v.canonicalize_team(&t.to_string())).unwrap();
+        assert_eq!(c["ok"], true, "{c}");
+        let fixed = c["team"].to_string();
+        let _ = WasmBattle::new(&dex, &fixed, &p2, "1,2,3,4")
+            .map_err(|_| "battle from canonicalized team")
+            .unwrap();
     }
 
     #[test]

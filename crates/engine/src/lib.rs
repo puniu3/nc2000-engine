@@ -11,3 +11,4 @@ pub mod dex;
 pub mod events;
 pub mod prng;
 pub mod state;
+pub mod validate;
