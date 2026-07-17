@@ -11,6 +11,8 @@ import {
   boostLabel,
   condName,
   speciesName,
+  statLongName,
+  statusLongName,
   statusName,
   typeName,
   ui,
@@ -46,11 +48,23 @@ export function hpPctLabel(p: PokeView): string {
   return `${Math.max(1, Math.round(hpPct(p)))}%`;
 }
 
+/** "L52" glyph with a spoken "Level 52" equivalent — drop into any level
+ * wrapper (span.mon-level, small, …); visuals unchanged. */
+export function Lvl(props: { n: number }) {
+  return (
+    <>
+      <span aria-hidden="true">L{props.n}</span>
+      <span class="sr-only">{ui().srLevel(props.n)}</span>
+    </>
+  );
+}
+
+/** Purely decorative — the owning control/summary carries the HP as text. */
 export function HpBar(props: { pct: number }) {
   const cls =
     props.pct > 50 ? "hp-high" : props.pct > 20 ? "hp-mid" : "hp-low";
   return (
-    <div class="hp-bar">
+    <div class="hp-bar" aria-hidden="true">
       <div class={`hp-fill ${cls}`} style={{ width: `${props.pct}%` }} />
     </div>
   );
@@ -58,9 +72,12 @@ export function HpBar(props: { pct: number }) {
 
 export function StatusBadge(props: { status: string }) {
   if (!props.status) return null;
+  // The compact badge code ("par") stays visual; screen readers get the
+  // expanded word ("paralyzed" / まひ).
   return (
     <span class={`status-badge st-${props.status}`}>
-      {statusName(props.status)}
+      <span aria-hidden="true">{statusName(props.status)}</span>
+      <span class="sr-only">{statusLongName(props.status)}</span>
     </span>
   );
 }
@@ -83,8 +100,13 @@ function BoostChips(props: { boosts: Record<string, number> }) {
     <span class="boost-chips">
       {chips.map(([k, v]) => (
         <span class={`boost-chip ${v > 0 ? "up" : "down"}`} key={k}>
-          {boostLabel(k)}
-          {v > 0 ? `+${v}` : v}
+          <span aria-hidden="true">
+            {boostLabel(k)}
+            {v > 0 ? `+${v}` : v}
+          </span>
+          <span class="sr-only">
+            {statLongName(k)} {v > 0 ? `+${v}` : v}
+          </span>
         </span>
       ))}
     </span>
@@ -100,13 +122,19 @@ export function ActiveCard(props: {
   const p = props.poke;
   const pct = hpPct(p);
   return (
-    <div class={`active-card ${props.mine ? "mine" : "foe"}`}>
+    <div
+      class={`active-card ${props.mine ? "mine" : "foe"}`}
+      role="group"
+      aria-label={props.mine ? ui().srYourActive : ui().srFoeActive}
+    >
       <div class="active-head">
         <span class="mon-name">
           {props.mine ? "" : ui().foePrefix}
           {speciesName(p.name)}
         </span>
-        <span class="mon-level">L{p.level}</span>
+        <span class="mon-level">
+          <Lvl n={p.level} />
+        </span>
         {p.types.map((t) => (
           <TypeBadge type={t} key={t} />
         ))}
@@ -115,6 +143,7 @@ export function ActiveCard(props: {
       <div class="active-hp">
         <HpBar pct={pct} />
         <span class="hp-num">
+          <span class="sr-only">HP </span>
           {props.mine ? `${p.hp}/${p.maxhp}` : hpPctLabel(p)}
         </span>
         <StatusBadge status={p.status} />

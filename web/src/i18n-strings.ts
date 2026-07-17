@@ -86,6 +86,22 @@ export interface UIStrings {
   tie: string;
   rematch: string;
   newTeams: string;
+  // screen reader only (UI-4) — never rendered visibly
+  srLevel: (n: number) => string;
+  srGender: (g: string) => string;
+  srBattleHeading: string;
+  srBattleLog: string;
+  srYourAction: string;
+  srYourActive: string;
+  srFoeActive: string;
+  srBench: string;
+  srYourTurn: string;
+  srChooseSwitch: string;
+  srBotThinking: string;
+  srSwitchTo: (species: string, hpPct: number) => string;
+  srPicked: (order: number) => string;
+  srDetailsFor: (species: string) => string;
+  srDeleteFor: (name: string) => string;
 }
 
 const EN: UIStrings = {
@@ -172,6 +188,22 @@ const EN: UIStrings = {
   tie: "Tie",
   rematch: "Rematch",
   newTeams: "New teams",
+  srLevel: (n) => `Level ${n}`,
+  srGender: (g) => (g === "M" ? "Male" : g === "F" ? "Female" : "Genderless"),
+  srBattleHeading: "Battle",
+  srBattleLog: "Battle log",
+  srYourAction: "Your action",
+  srYourActive: "Your active Pokémon",
+  srFoeActive: "Opponent's active Pokémon",
+  srBench: "Your bench",
+  srYourTurn: "Your turn — choose a move or a switch.",
+  srChooseSwitch: "Choose your next Pokémon.",
+  srBotThinking: "Opponent is thinking…",
+  srSwitchTo: (species, hpPct) => `Switch to ${species} — HP ${hpPct}%`,
+  srPicked: (order) =>
+    order === 0 ? "picked as lead" : `picked, number ${order + 1}`,
+  srDetailsFor: (species) => `Details — ${species}`,
+  srDeleteFor: (name) => `Delete team ${name}`,
 };
 
 const JA: UIStrings = {
@@ -260,6 +292,22 @@ const JA: UIStrings = {
   tie: "ひきわけ",
   rematch: "再戦",
   newTeams: "チーム選択へ",
+  srLevel: (n) => `レベル${n}`,
+  srGender: (g) => (g === "M" ? "オス" : g === "F" ? "メス" : "せいべつなし"),
+  srBattleHeading: "対戦",
+  srBattleLog: "バトルログ",
+  srYourAction: "あなたの行動",
+  srYourActive: "自分の場のポケモン",
+  srFoeActive: "相手の場のポケモン",
+  srBench: "自分のひかえ",
+  srYourTurn: "あなたの番です — 技か交代を選んでください。",
+  srChooseSwitch: "次のポケモンを選んでください。",
+  srBotThinking: "相手は考えている…",
+  srSwitchTo: (species, hpPct) => `${species}に交代 — HP ${hpPct}%`,
+  srPicked: (order) =>
+    order === 0 ? "選出済み・先発" : `選出済み・${order + 1}番目`,
+  srDetailsFor: (species) => `詳細 — ${species}`,
+  srDeleteFor: (name) => `チーム「${name}」を削除`,
 };
 
 export const STRINGS: Record<Locale, UIStrings> = { en: EN, ja: JA };

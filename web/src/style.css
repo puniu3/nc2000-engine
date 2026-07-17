@@ -1201,6 +1201,58 @@ span.set-field-v.has-note {
   overflow-wrap: anywhere;
 }
 
+/* ------------------------------------------ screen-reader layer (UI-4) */
+
+/* Visually-hidden text / live regions (same recipe as .bn-note). */
+.sr-only,
+.sr-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Programmatic focus targets (screen/decision headings, tabindex=-1):
+ * not tab-reachable, so no visible ring. The focusable log pane (tab
+ * stop) keeps its native ring. */
+h1[tabindex="-1"]:focus,
+h2[tabindex="-1"]:focus {
+  outline: none;
+}
+
+/* Preview title was an h2 before UI-4 retagged it h1 — keep the look. */
+.screen-title {
+  font-size: 1.1rem;
+  margin: 16px 0 10px;
+}
+/* Section headings retagged h3 -> h2 for hierarchy — keep the h3 look. */
+h2.sub-h {
+  font-size: 0.95rem;
+  margin: 12px 0 8px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+/* End banner text retagged div -> h2 — neutralize the h2 default margin. */
+h2.end-text {
+  margin: 0 0 12px;
+}
+
+/* .preview-mon over-cap now uses aria-disabled (stays focusable for the
+ * cap note), so the :disabled UA/base styles no longer apply — pin them. */
+.preview-mon.over-cap:active {
+  transform: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  button.preview-mon.over-cap:hover {
+    border-color: var(--line);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hp-fill,
   .think-fill {

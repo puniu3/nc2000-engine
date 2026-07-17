@@ -39,10 +39,20 @@ import {
   ActiveCard,
   FieldStrip,
   HpBar,
+  Lvl,
   StatusBadge,
   TypeBadge,
 } from "./battle-ui";
-import { itemName, moveName, speciesName, toId, ui } from "./i18n";
+import {
+  itemName,
+  moveName,
+  speciesName,
+  statusLongName,
+  toId,
+  typeName,
+  ui,
+} from "./i18n";
+import { announce, announceAssertive } from "./announcer";
 import { moveNote } from "./behavior-notes";
 import { noteRef } from "./tooltip";
 import { BUDGET, type SelectedTeam } from "./app";
@@ -71,9 +81,21 @@ const fmtK = (n: number) =>
       ? `${(n / 1000).toFixed(1)}k`
       : String(n);
 
+/** Whether keyboard focus has nowhere meaningful to be — the previously
+ * focused control unmounted and focus fell back to <body>. UI-4 moves
+ * focus ONLY in this state: an orphaned focus is relocated to the new
+ * screen/decision heading, a live one (reading the team-sheets modal,
+ * resting on Quit) is never yanked. */
+function focusIsOrphaned(): boolean {
+  const ae = document.activeElement;
+  return !ae || ae === document.body || !ae.isConnected;
+}
+
 /** Subtle bot-think status while the human deliberates: "thinking" =
  * required budget still running, "pondering" = budget done, bonus
- * iterations accumulating until the human commits. */
+ * iterations accumulating until the human commits. Hidden from screen
+ * readers entirely — the ticking counter must not reach the SR (the
+ * polite announcer speaks the meaningful transitions instead). */
 function ThinkChip(props: { thinking: Thinking | null }) {
   const t = props.thinking;
   if (!t) return null;
@@ -81,6 +103,7 @@ function ThinkChip(props: { thinking: Thinking | null }) {
   return (
     <span
       class={`think-chip ${pondering ? "pondering" : ""}`}
+      aria-hidden="true"
       data-done={t.done}
       data-budget={t.budget}
       data-pondering={pondering ? "1" : "0"}
@@ -127,9 +150,46 @@ export function Game(props: {
   const revealedFoeRef = useRef<Set<string>>(new Set());
   const narrator = useMemo(() => new Narrator(HUMAN), []);
   const pairPromiseRef = useRef<Promise<string | null> | null>(null);
+  // UI-4 focus targets (tabindex=-1 headings).
+  const previewHeadRef = useRef<HTMLHeadingElement>(null);
+  const battleHeadRef = useRef<HTMLHeadingElement>(null);
+  const choiceHeadRef = useRef<HTMLHeadingElement>(null);
+  const endHeadRef = useRef<HTMLHeadingElement>(null);
 
   const humanTeam = props.humanTeam;
   const botTeam = props.pool.teams[props.botIdx];
+
+  // UI-4: a new decision request — announce it politely and, if focus is
+  // orphaned (the picked button unmounted), land on the decision heading
+  // so one Tab reaches the first choice. Declared before the phase effect
+  // so on the first battle request the decision heading wins.
+  useEffect(() => {
+    if (!humanChoices || phase !== "battle") return;
+    const hasMove = humanChoices.some((c) => c.kind === "move");
+    announce(hasMove ? ui().srYourTurn : ui().srChooseSwitch);
+    // Relocate an orphaned focus — or our own battle-h1 transition focus
+    // (first decision arrives moments after the preview->battle focus).
+    if (focusIsOrphaned() || document.activeElement === battleHeadRef.current)
+      choiceHeadRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [humanChoices, phase]);
+
+  // UI-4: screen transitions — focus the new screen's heading; the
+  // outcome is additionally announced assertively.
+  useEffect(() => {
+    if (phase === "preview") {
+      if (focusIsOrphaned()) previewHeadRef.current?.focus();
+    } else if (phase === "battle") {
+      if (focusIsOrphaned()) battleHeadRef.current?.focus();
+    } else if (phase === "end") {
+      const o = view?.outcome;
+      announceAssertive(
+        o === "p1" ? ui().youWin : o === "p2" ? ui().botWins : ui().tie,
+      );
+      if (focusIsOrphaned()) endHeadRef.current?.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // ------------------------------------------------------------ lifecycle
 
@@ -178,7 +238,16 @@ export function Game(props: {
     const lines = takeNewLog(battle);
     if (lines.length > 0) {
       const entries = narrator.render(lines);
-      if (entries.length > 0) setLog((prev) => [...prev, ...entries]);
+      if (entries.length > 0) {
+        setLog((prev) => [...prev, ...entries]);
+        // One batched polite announcement per drain. Result lines are
+        // excluded — the outcome banner announces assertively instead.
+        const speak = entries
+          .filter((e) => e.kind !== "result")
+          .map((e) => e.text)
+          .join(" ");
+        if (speak) announce(speak);
+      }
     }
     const v = stateView(battle);
     // Track the foe's public reveals from what the screen shows anyway:
@@ -254,6 +323,9 @@ export function Game(props: {
     // keeps running past its budget (bonus strength) until the human
     // commits (humanPick -> flush) or the ponder cap.
     const ponder = req.needs[HUMAN] && req.picks[HUMAN] === null;
+    // A non-ponder search is a genuine wait for the human — say so once.
+    // Ponder searches run behind the human's own deliberation: silent.
+    if (!ponder) announce(ui().srBotThinking);
     setThinking({ done: 0, budget: BUDGET });
     const r = await bot.search(BOT, BUDGET, randomSeed32(), ponder, (done, b) => {
       if (aliveRef.current && req === reqRef.current)
@@ -332,13 +404,17 @@ export function Game(props: {
 
   function togglePreview(pos: number) {
     const levels = view!.sides[HUMAN].party.map((p) => p.level);
-    setPreviewSel((sel) =>
-      sel.includes(pos)
-        ? sel.filter((x) => x !== pos)
-        : sel.length < 3 && fitsLevelCap(levels, sel, pos)
-          ? [...sel, pos]
-          : sel,
-    );
+    const sel = previewSel;
+    const next = sel.includes(pos)
+      ? sel.filter((x) => x !== pos)
+      : sel.length < 3 && fitsLevelCap(levels, sel, pos)
+        ? [...sel, pos]
+        : sel;
+    if (next === sel) return; // over-cap / already-3: aria-disabled no-op
+    setPreviewSel(next);
+    // Keep the running total audible: sighted players watch the sum tick.
+    const sum = next.reduce((a, p) => a + levels[p - 1], 0);
+    announce(ui().levelSum(sum, MAX_TOTAL_LEVEL));
   }
 
   function confirmPreview() {
@@ -386,11 +462,13 @@ export function Game(props: {
 
   if (phase === "preview") {
     return (
-      <div class="screen preview-screen">
-        <h2>{ui().teamPreview}</h2>
+      <main class="screen preview-screen">
+        <h1 class="screen-title" tabIndex={-1} ref={previewHeadRef}>
+          {ui().teamPreview}
+        </h1>
         <p class="sheet-hint">{ui().previewTapHint}</p>
         <section>
-          <h3>{ui().foeTeam(botTeam.id)}</h3>
+          <h2 class="sub-h">{ui().foeTeam(botTeam.id)}</h2>
           <ul class="sheet-list">
             {botTeam.sets.map((s, i) => (
               <li key={i}>
@@ -400,15 +478,16 @@ export function Game(props: {
           </ul>
         </section>
         <section>
-          <h3>
+          <h2 class="sub-h">
             {ui().yourTeamPick}
+            <span class="sr-only">, </span>
             <span class="level-sum">
               {ui().levelSum(
                 previewSel.reduce((a, p) => a + mine.party[p - 1].level, 0),
                 MAX_TOTAL_LEVEL,
               )}
             </span>
-          </h3>
+          </h2>
           <div class="preview-grid">
             {mine.party.map((p, i) => {
               const pos = i + 1;
@@ -422,26 +501,44 @@ export function Game(props: {
                 previewSel.length < 3 &&
                 !fitsLevelCap(levels, previewSel, pos);
               const detailOpen = ownDetail.includes(pos);
+              // Complete pick-decision name: species, level, types, item,
+              // moves, then the pick state (lead / order).
+              const pickLabel = [
+                speciesName(p.species),
+                ui().srLevel(p.level),
+                p.types.map(typeName).join("/"),
+                ...(p.item ? [itemName(p.item)] : []),
+                p.moves.map((m) => moveName(m.name)).join(", "),
+                ...(order >= 0 ? [ui().srPicked(order)] : []),
+              ].join(", ");
               return (
                 <div class="preview-cell" key={i}>
                   <button
                     class={`preview-mon ${order >= 0 ? "selected" : ""} ${overCap ? "over-cap" : ""}`}
-                    disabled={overCap}
+                    // aria-disabled (not disabled): the button stays
+                    // focusable so the cap reason stays reachable; the
+                    // click is a no-op via togglePreview's cap guard.
+                    aria-disabled={overCap}
+                    aria-pressed={order >= 0}
+                    aria-label={pickLabel}
+                    aria-describedby={overCap ? `cap-note-${pos}` : undefined}
                     onClick={() => togglePreview(pos)}
                   >
                     {order >= 0 && (
-                      <span class="pick-badge">
+                      <span class="pick-badge" aria-hidden="true">
                         {order === 0 ? ui().lead : order + 1}
                       </span>
                     )}
                     {overCap && (
-                      <span class="cap-badge">
+                      <span class="cap-badge" id={`cap-note-${pos}`}>
                         {ui().overLevelCap(MAX_TOTAL_LEVEL)}
                       </span>
                     )}
                     <div class="preview-mon-head">
                       <span class="mon-name">{speciesName(p.species)}</span>
-                      <span class="mon-level">L{p.level}</span>
+                      <span class="mon-level">
+                        <Lvl n={p.level} />
+                      </span>
                       {p.types.map((t) => (
                         <TypeBadge type={t} key={t} />
                       ))}
@@ -456,6 +553,7 @@ export function Game(props: {
                   <button
                     class="ghost sheet-toggle"
                     aria-expanded={detailOpen}
+                    aria-label={ui().srDetailsFor(speciesName(p.species))}
                     data-mon={toId(p.species)}
                     onClick={() => toggleOwnDetail(pos)}
                   >
@@ -497,7 +595,7 @@ export function Game(props: {
             {ui().quit}
           </button>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -506,7 +604,10 @@ export function Game(props: {
   const bench = mine.party.filter((_, i) => i !== mine.active);
 
   return (
-    <div class="screen battle-screen">
+    <main class="screen battle-screen">
+      <h1 class="sr-only" tabIndex={-1} ref={battleHeadRef}>
+        {ui().srBattleHeading}
+      </h1>
       <header class="battle-header">
         <span class="turn-label">{ui().turnLabel(view.turn)}</span>
         {humanChoices && <ThinkChip thinking={thinking} />}
@@ -550,7 +651,7 @@ export function Game(props: {
         />
         {activeMine && <ActiveCard poke={activeMine} mine={true} />}
         {bench.length > 0 && (
-          <div class="bench-row">
+          <div class="bench-row" role="group" aria-label={ui().srBench}>
             {bench.map((p, i) => (
               <span
                 class={`bench-chip ${p.fainted ? "fainted" : ""}`}
@@ -558,9 +659,13 @@ export function Game(props: {
               >
                 {speciesName(p.species)}{" "}
                 {p.fainted ? (
-                  <small>{ui().fnt}</small>
+                  <small>
+                    <span aria-hidden="true">{ui().fnt}</span>
+                    <span class="sr-only">{statusLongName("fnt")}</span>
+                  </small>
                 ) : (
                   <small>
+                    <span class="sr-only">HP </span>
                     {p.hp}/{p.maxhp}
                   </small>
                 )}
@@ -573,40 +678,78 @@ export function Game(props: {
 
       <LogPane log={log} />
 
-      <div class="choice-panel">
+      <section class="choice-panel" aria-label={ui().srYourAction}>
+        {phase !== "end" && (
+          <h2 class="sr-only" tabIndex={-1} ref={choiceHeadRef}>
+            {ui().srYourAction}
+          </h2>
+        )}
         {phase === "end" ? (
           <EndBanner
             outcome={view.outcome}
             onRematch={props.onRematch}
             onNewTeams={props.onNewTeams}
+            headingRef={endHeadRef}
           />
         ) : humanChoices ? (
           <ChoiceButtons choices={humanChoices} onPick={humanPick} />
         ) : (
           <ThinkingBar thinking={thinking} waiting={humanWaiting} />
         )}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 
 // ------------------------------------------------------------- components
 
+/** Visible battle log. Deliberately NOT a live region (no role="log"):
+ * new lines are announced once, batched, by the off-screen announcer —
+ * a VDOM-diffed live region here would double-announce on re-render.
+ * Labelled + focusable so it stays reachable for browsing/scrolling. */
 function LogPane(props: { log: LogEntry[] }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [props.log]);
   return (
-    <div class="log-pane" ref={ref}>
+    <section
+      class="log-pane"
+      ref={ref}
+      aria-label={ui().srBattleLog}
+      tabIndex={0}
+    >
       {props.log.map((e, i) => (
         <div class={`log-line log-${e.kind}`} key={i}>
           {e.text}
         </div>
       ))}
-    </div>
+    </section>
   );
+}
+
+/** Complete spoken move name: name, type, category, power, PP. The
+ * behavior note (when present) rides separately via aria-describedby.
+ * Typeless moves (Curse's "???") skip the unpronounceable type. */
+function moveAria(m: MoveChoice): string {
+  const type = m.type === "???" ? "" : `${typeName(m.type)} `;
+  const bits = [moveName(m.name), `${type}${ui().moveCat(m.category)}`];
+  if (m.basePower > 0) bits.push(ui().bp(m.basePower));
+  if (m.pp >= 0) bits.push(`PP ${m.pp}/${m.maxpp}`);
+  return bits.join(", ");
+}
+
+/** Complete spoken switch name: species, HP percent, status. */
+function switchAria(s: SwitchChoice): string {
+  const pct =
+    s.maxhp > 0
+      ? s.hp <= 0
+        ? 0
+        : Math.max(1, Math.round((s.hp / s.maxhp) * 100))
+      : 0;
+  const base = ui().srSwitchTo(speciesName(s.species), pct);
+  return s.status ? `${base}, ${statusLongName(s.status)}` : base;
 }
 
 function ChoiceButtons(props: {
@@ -632,6 +775,7 @@ function ChoiceButtons(props: {
               <button
                 class={`move-btn${note ? " has-note" : ""}`}
                 key={m.input}
+                aria-label={moveAria(m)}
                 data-move={toId(m.name)}
                 onClick={() => props.onPick(m.input)}
               >
@@ -664,6 +808,7 @@ function ChoiceButtons(props: {
             <button
               class="switch-btn"
               key={s.input}
+              aria-label={switchAria(s)}
               onClick={() => props.onPick(s.input)}
             >
               <span class="switch-label">{ui().switchLabel}</span>
@@ -695,7 +840,9 @@ function ThinkingBar(props: { thinking: Thinking | null; waiting: boolean }) {
   return (
     <div class="thinking-bar">
       <span class="thinking-dot" />
-      <span>
+      {/* The ticking counter is visual-only; screen readers get one
+          static line (the transition itself was announced politely). */}
+      <span aria-hidden="true">
         {t
           ? t.done >= t.budget
             ? ui().botFinishing // flush in flight: answer is imminent
@@ -704,8 +851,9 @@ function ThinkingBar(props: { thinking: Thinking | null; waiting: boolean }) {
             ? ui().waitingBot
             : "…"}
       </span>
+      <span class="sr-only">{ui().srBotThinking}</span>
       {t && (
-        <div class="think-progress">
+        <div class="think-progress" aria-hidden="true">
           <div
             class="think-fill"
             style={{ width: `${Math.min(100, (t.done / t.budget) * 100)}%` }}
@@ -720,6 +868,7 @@ function EndBanner(props: {
   outcome: "p1" | "p2" | "tie" | null;
   onRematch: () => void;
   onNewTeams: () => void;
+  headingRef: { current: HTMLHeadingElement | null };
 }) {
   const text =
     props.outcome === "p1"
@@ -729,9 +878,13 @@ function EndBanner(props: {
         : ui().tie;
   return (
     <div class="end-banner">
-      <div class={`end-text ${props.outcome === "p1" ? "win" : "lose"}`}>
+      <h2
+        class={`end-text ${props.outcome === "p1" ? "win" : "lose"}`}
+        tabIndex={-1}
+        ref={props.headingRef}
+      >
         {text}
-      </div>
+      </h2>
       <div class="end-actions">
         <button class="primary" onClick={props.onRematch}>
           {ui().rematch}

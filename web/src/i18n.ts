@@ -130,6 +130,24 @@ export function statusName(code: string): string {
   return code;
 }
 
+const STATUS_LONG_EN: Record<string, string> = {
+  brn: "burned",
+  par: "paralyzed",
+  slp: "asleep",
+  frz: "frozen",
+  psn: "poisoned",
+  tox: "badly poisoned",
+  fnt: "fainted",
+};
+
+/** Screen-reader status wording: the English badge codes ("par") are
+ * cryptic when spoken, so expand them; the Japanese nouns are already
+ * plain words. */
+export function statusLongName(code: string): string {
+  if (current === "ja") return STATUS_JA[code] ?? code;
+  return STATUS_LONG_EN[code] ?? code;
+}
+
 const STAT_LONG_EN: Record<string, string> = {
   atk: "Attack",
   def: "Defense",

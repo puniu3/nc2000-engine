@@ -25,6 +25,7 @@ import {
   type CustomTeam,
 } from "./custom-teams";
 import { speciesName, ui, type Locale } from "./i18n";
+import { Lvl } from "./battle-ui";
 
 function provenanceLine(t: PoolTeam): string {
   const p = t.provenance;
@@ -46,6 +47,7 @@ function TeamCard(props: {
     <button
       class={`team-card ${selected ? "selected" : ""}`}
       onClick={props.onTap}
+      aria-pressed={selected}
       data-team={index}
     >
       <div class="team-card-head">
@@ -57,7 +59,10 @@ function TeamCard(props: {
       <div class="team-species">
         {team.species.map((sp, i) => (
           <span class="species-chip" key={i}>
-            {speciesName(sp)} <small>L{team.levels[i]}</small>
+            {speciesName(sp)}{" "}
+            <small>
+              <Lvl n={team.levels[i]} />
+            </small>
           </span>
         ))}
       </div>
@@ -132,6 +137,7 @@ function CustomImport(props: {
       <p class="import-help">{ui().importHelp}</p>
       <textarea
         class="import-text"
+        aria-label={ui().importTitle}
         placeholder={ui().importPlaceholder}
         value={text}
         onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
@@ -191,7 +197,12 @@ function CustomTeamCard(props: {
   const [confirming, setConfirming] = useState(false);
   return (
     <div class={`team-card custom-card ${selected ? "selected" : ""}`}>
-      <button class="custom-card-body" onClick={props.onTap} data-custom={team.id}>
+      <button
+        class="custom-card-body"
+        onClick={props.onTap}
+        aria-pressed={selected}
+        data-custom={team.id}
+      >
         <div class="team-card-head">
           <span class="team-id">{team.name}</span>
           <span class="team-tier custom-tier">{ui().customBadge}</span>
@@ -199,13 +210,17 @@ function CustomTeamCard(props: {
         <div class="team-species">
           {team.species.map((sp, i) => (
             <span class="species-chip" key={i}>
-              {speciesName(sp)} <small>L{team.levels[i]}</small>
+              {speciesName(sp)}{" "}
+              <small>
+                <Lvl n={team.levels[i]} />
+              </small>
             </span>
           ))}
         </div>
       </button>
       <button
         class={`ghost delete-btn ${confirming ? "confirming" : ""}`}
+        aria-label={`${ui().srDeleteFor(team.name)}${confirming ? ` — ${ui().deleteConfirm}` : ""}`}
         onClick={() => {
           if (confirming) props.onDelete();
           else {
@@ -287,6 +302,7 @@ function HumanPicker(props: {
       <p class="modal-note">{ui().openSheetNote}</p>
       <button
         class={`team-card random-card ${choice.kind === "random" ? "selected" : ""}`}
+        aria-pressed={choice.kind === "random"}
         onClick={() => props.onPick(RANDOM)}
       >
         {ui().randomCard(teams.length)}
@@ -346,6 +362,7 @@ function BotPicker(props: {
     <>
       <button
         class={`team-card random-card ${choice.kind === "random" ? "selected" : ""}`}
+        aria-pressed={choice.kind === "random"}
         onClick={() => props.onPick(RANDOM)}
       >
         {ui().randomCard(teams.length)}

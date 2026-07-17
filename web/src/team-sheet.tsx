@@ -13,7 +13,7 @@
 import { useState } from "preact/hooks";
 import type { PokeView, SideView, StateView } from "./types";
 import { TypeBadge } from "./battle-ui";
-import { itemName, moveName, speciesName, toId, ui } from "./i18n";
+import { itemName, moveName, speciesName, toId, typeName, ui } from "./i18n";
 import { itemNote, moveNote } from "./behavior-notes";
 import { noteRef } from "./tooltip";
 import {
@@ -62,7 +62,10 @@ export function SetDetail(props: { mon: SheetMon }) {
         </li>
         <li class="set-field">
           <span class="set-field-k">{ui().sheetGender}</span>
-          <span class="set-field-v">{genderMark(m.gender)}</span>
+          <span class="set-field-v">
+            <span aria-hidden="true">{genderMark(m.gender)}</span>
+            <span class="sr-only">{ui().srGender(m.gender)}</span>
+          </span>
         </li>
         {hasHp && m.ivs && (
           <li class="set-field">
@@ -114,6 +117,17 @@ export function MonSheet(props: { mon: SheetMon; marks?: MonMarks }) {
   const m = props.mon;
   const types = speciesTypes(m.species);
   const marks = props.marks ?? {};
+  // Screen-reader row name: species, spoken level, types, then the
+  // battle-public marks (選出/出場中/判明/ひんし) as plain words.
+  const label = [
+    speciesName(m.species),
+    ui().srLevel(m.level),
+    ...(types ? [types.map(typeName).join("/")] : []),
+    ...(marks.picked ? [ui().markPicked] : []),
+    ...(marks.revealed ? [ui().markRevealed] : []),
+    ...(marks.active ? [ui().markActive] : []),
+    ...(marks.fainted ? [ui().markFainted] : []),
+  ].join(", ");
   return (
     <div
       class={`mon-sheet ${open ? "open" : ""} ${marks.fainted ? "is-fainted" : ""}`}
@@ -121,6 +135,7 @@ export function MonSheet(props: { mon: SheetMon; marks?: MonMarks }) {
       <button
         class="mon-sheet-head"
         aria-expanded={open}
+        aria-label={label}
         data-mon={toId(m.species)}
         onClick={() => setOpen(!open)}
       >
