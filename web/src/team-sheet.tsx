@@ -110,13 +110,44 @@ export function SetDetail(props: { mon: SheetMon }) {
   );
 }
 
+/** Own-side preview pick affordance (UI-7): with `pick` set the row
+ * renders TWO sibling buttons — the main pick button (species / level /
+ * types + pick-state chips, aria-pressed, aria-disabled at the level cap)
+ * and a compact expand toggle (aria-expanded chevron) opening the same
+ * SetDetail the foe rows use. Strings and handlers come from the caller;
+ * this component stays pure presentation. */
+export interface PickProps {
+  /** Complete pick-control name: species, level, types, pick state. */
+  label: string;
+  pressed: boolean;
+  /** Pick-order chip text ("Lead" / "2" / "3"); null while unpicked. */
+  badge: string | null;
+  /** No legal completion under the level cap: aria-disabled + cap chip. */
+  overCap: boolean;
+  /** Compact visible chip ("Over 155") — must fit the row's one line so
+   * the cap state never resizes the row. */
+  capChip: string;
+  /** Full cap sentence, screen readers only (the describedby target). */
+  capNote: string;
+  capNoteId: string;
+  /** Expand-toggle name ("Snorlax — details"). */
+  detailsLabel: string;
+  onPick: () => void;
+}
+
 /** One expandable sheet row: species head (tap to open the full set) plus
- * optional battle-public marks. Several rows may be open at once. */
-export function MonSheet(props: { mon: SheetMon; marks?: MonMarks }) {
+ * optional battle-public marks, or — with `pick` — the own-preview
+ * pick+expand sibling pair. Several rows may be open at once. */
+export function MonSheet(props: {
+  mon: SheetMon;
+  marks?: MonMarks;
+  pick?: PickProps;
+}) {
   const [open, setOpen] = useState(false);
   const m = props.mon;
   const types = speciesTypes(m.species);
   const marks = props.marks ?? {};
+  const pick = props.pick;
   // Screen-reader row name: species, spoken level, types, then the
   // battle-public marks (選出/出場中/判明/ひんし) as plain words.
   const label = [
@@ -128,40 +159,93 @@ export function MonSheet(props: { mon: SheetMon; marks?: MonMarks }) {
     ...(marks.active ? [ui().markActive] : []),
     ...(marks.fainted ? [ui().markFainted] : []),
   ].join(", ");
+  const headContent = (
+    <>
+      <span class="mon-name">{speciesName(m.species)}</span>
+      <span class="mon-level">L{m.level}</span>
+      {types?.map((t) => (
+        <TypeBadge type={t} key={t} />
+      ))}
+    </>
+  );
   return (
     <div
-      class={`mon-sheet ${open ? "open" : ""} ${marks.fainted ? "is-fainted" : ""}`}
+      class={`mon-sheet ${open ? "open" : ""} ${marks.fainted ? "is-fainted" : ""}${
+        pick?.pressed ? " is-picked" : ""
+      }${pick?.overCap ? " over-cap" : ""}`}
     >
-      <button
-        class="mon-sheet-head"
-        aria-expanded={open}
-        aria-label={label}
-        data-mon={toId(m.species)}
-        onClick={() => setOpen(!open)}
-      >
-        <span class="mon-name">{speciesName(m.species)}</span>
-        <span class="mon-level">L{m.level}</span>
-        {types?.map((t) => (
-          <TypeBadge type={t} key={t} />
-        ))}
-        <span class="sheet-marks">
-          {marks.picked && (
-            <span class="sheet-mark picked">{ui().markPicked}</span>
-          )}
-          {marks.revealed && (
-            <span class="sheet-mark revealed">{ui().markRevealed}</span>
-          )}
-          {marks.active && (
-            <span class="sheet-mark active">{ui().markActive}</span>
-          )}
-          {marks.fainted && (
-            <span class="sheet-mark fainted">{ui().markFainted}</span>
-          )}
-        </span>
-        <span class="sheet-chevron" aria-hidden="true">
-          &#9656;
-        </span>
-      </button>
+      {pick ? (
+        // Pick + expand are SIBLINGS in one row — the expand toggle (and
+        // the focusable toggletip anchors inside SetDetail) must never
+        // nest inside the pick button.
+        <div class="mon-sheet-row">
+          <button
+            class="mon-sheet-head pick-head"
+            // aria-disabled (not disabled): the button stays focusable so
+            // the cap reason stays reachable; the click is a no-op via
+            // the caller's cap guard.
+            aria-disabled={pick.overCap}
+            aria-pressed={pick.pressed}
+            aria-label={pick.label}
+            aria-describedby={pick.overCap ? pick.capNoteId : undefined}
+            data-mon={toId(m.species)}
+            onClick={pick.onPick}
+          >
+            {headContent}
+            <span class="sheet-marks">
+              {pick.badge !== null && (
+                <span class="sheet-mark pick-order">{pick.badge}</span>
+              )}
+              {pick.overCap && (
+                <span class="sheet-mark cap">
+                  <span aria-hidden="true">{pick.capChip}</span>
+                  <span class="sr-only" id={pick.capNoteId}>
+                    {pick.capNote}
+                  </span>
+                </span>
+              )}
+            </span>
+          </button>
+          <button
+            class="sheet-expand"
+            aria-expanded={open}
+            aria-label={pick.detailsLabel}
+            data-expand={toId(m.species)}
+            onClick={() => setOpen(!open)}
+          >
+            <span class="sheet-chevron" aria-hidden="true">
+              &#9656;
+            </span>
+          </button>
+        </div>
+      ) : (
+        <button
+          class="mon-sheet-head"
+          aria-expanded={open}
+          aria-label={label}
+          data-mon={toId(m.species)}
+          onClick={() => setOpen(!open)}
+        >
+          {headContent}
+          <span class="sheet-marks">
+            {marks.picked && (
+              <span class="sheet-mark picked">{ui().markPicked}</span>
+            )}
+            {marks.revealed && (
+              <span class="sheet-mark revealed">{ui().markRevealed}</span>
+            )}
+            {marks.active && (
+              <span class="sheet-mark active">{ui().markActive}</span>
+            )}
+            {marks.fainted && (
+              <span class="sheet-mark fainted">{ui().markFainted}</span>
+            )}
+          </span>
+          <span class="sheet-chevron" aria-hidden="true">
+            &#9656;
+          </span>
+        </button>
+      )}
       {open && <SetDetail mon={m} />}
     </div>
   );
@@ -175,7 +259,9 @@ function isActive(side: SideView, entry: PokeView | null): boolean {
   // A fainted mon can still be the "active" slot while its replacement is
   // being chosen — show it as fainted only.
   return (
-    entry !== null && !entry.fainted && side.party.indexOf(entry) === side.active
+    entry !== null &&
+    !entry.fainted &&
+    side.party.indexOf(entry) === side.active
   );
 }
 

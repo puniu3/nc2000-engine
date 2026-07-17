@@ -41,7 +41,6 @@ import {
   FieldStrip,
   HpBar,
   ItemChip,
-  Lvl,
   StatusBadge,
   TypeBadge,
 } from "./battle-ui";
@@ -60,7 +59,7 @@ import { noteRef } from "./tooltip";
 import { BUDGET, type SelectedTeam } from "./app";
 import { Modal } from "./modal";
 import { sheetMon } from "./set-info";
-import { MonSheet, SetDetail, TeamSheets } from "./team-sheet";
+import { MonSheet, TeamSheets } from "./team-sheet";
 
 const HUMAN = 0;
 const BOT = 1;
@@ -135,9 +134,9 @@ export function Game(props: {
   const [humanWaiting, setHumanWaiting] = useState(false); // picked, bot still thinking
   const [thinking, setThinking] = useState<Thinking | null>(null);
   const [previewSel, setPreviewSel] = useState<number[]>([]); // 1-based display positions, lead first
-  const [botPreviewSrc, setBotPreviewSrc] = useState<
-    "table" | "search" | null
-  >(null);
+  const [botPreviewSrc, setBotPreviewSrc] = useState<"table" | "search" | null>(
+    null,
+  );
   const [sheetOpen, setSheetOpen] = useState(false); // battle: team-sheets modal
 
   const battleRef = useRef<Battle | null>(null);
@@ -212,11 +211,16 @@ export function Game(props: {
         ? Promise.resolve(null)
         : fetchPairJson(humanTeam.poolIdx, props.botIdx);
     void bot
-      .newBattle(JSON.stringify(humanTeam.sets), JSON.stringify(botTeam.sets), battle.seed(), {
-        poolJson: props.poolJson,
-        side: BOT,
-        seed: randomSeed32(),
-      })
+      .newBattle(
+        JSON.stringify(humanTeam.sets),
+        JSON.stringify(botTeam.sets),
+        battle.seed(),
+        {
+          poolJson: props.poolJson,
+          side: BOT,
+          seed: randomSeed32(),
+        },
+      )
       .then(() => {
         if (!aliveRef.current) return;
         drain();
@@ -328,10 +332,16 @@ export function Game(props: {
     // Ponder searches run behind the human's own deliberation: silent.
     if (!ponder) announce(ui().srBotThinking);
     setThinking({ done: 0, budget: BUDGET });
-    const r = await bot.search(BOT, BUDGET, randomSeed32(), ponder, (done, b) => {
-      if (aliveRef.current && req === reqRef.current)
-        setThinking({ done, budget: b });
-    });
+    const r = await bot.search(
+      BOT,
+      BUDGET,
+      randomSeed32(),
+      ponder,
+      (done, b) => {
+        if (aliveRef.current && req === reqRef.current)
+          setThinking({ done, budget: b });
+      },
+    );
     if (!aliveRef.current || req !== reqRef.current) return;
     setThinking(null);
     // Previews report their source (baked table vs live search).
@@ -451,7 +461,8 @@ export function Game(props: {
    * against drift, falling back to a species lookup. */
   function ownSet(i: number, species: string): unknown {
     const sets = humanTeam.sets as { species?: string }[];
-    if (sets[i] && toId(sets[i].species ?? "") === toId(species)) return sets[i];
+    if (sets[i] && toId(sets[i].species ?? "") === toId(species))
+      return sets[i];
     return sets.find((s) => toId(s.species ?? "") === toId(species)) ?? sets[i];
   }
 
@@ -462,88 +473,74 @@ export function Game(props: {
           {ui().teamPreview}
         </h1>
         <p class="sheet-hint">{ui().previewTapHint}</p>
-        <section>
-          <h2 class="sub-h">{ui().foeTeam(botTeam.id)}</h2>
-          <ul class="sheet-list">
-            {botTeam.sets.map((s, i) => (
-              <li key={i}>
-                <MonSheet mon={sheetMon(s)} />
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section>
-          <h2 class="sub-h">{ui().yourTeamPick}</h2>
-          <div class="preview-grid">
-            {mine.party.map((p, i) => {
-              const pos = i + 1;
-              const order = previewSel.indexOf(pos);
-              const levels = mine.party.map((q) => q.level);
-              // Max Total Level: gray out mons with no legal completion left
-              // (only while a slot is open — a full selection already just
-              // ignores further clicks)
-              const overCap =
-                order < 0 &&
-                previewSel.length < 3 &&
-                !fitsLevelCap(levels, previewSel, pos);
-              // Pick-control name: species, level, types, pick state. The
-              // set body (item / moves + notes) is no longer folded into
-              // the label — it sits permanently visible right below, as
-              // browseable content (UI-5), so repeating it here would be
-              // duplication spam on every tab stop.
-              const pickLabel = [
-                speciesName(p.species),
-                ui().srLevel(p.level),
-                p.types.map(typeName).join("/"),
-                ...(order >= 0 ? [ui().srPicked(order)] : []),
-              ].join(", ");
-              return (
-                // UI-5: the card is a plain container; the pick control is
-                // its header button and the full set detail sits below as a
-                // sibling — the detail's noted rows are tabindex=0 toggletip
-                // anchors (UI-3) and must never nest inside the button.
-                <div
-                  class={`preview-cell ${order >= 0 ? "selected" : ""} ${overCap ? "over-cap" : ""}`}
-                  key={i}
-                >
-                  <button
-                    class="preview-mon"
-                    // aria-disabled (not disabled): the button stays
-                    // focusable so the cap reason stays reachable; the
-                    // click is a no-op via togglePreview's cap guard.
-                    aria-disabled={overCap}
-                    aria-pressed={order >= 0}
-                    aria-label={pickLabel}
-                    aria-describedby={overCap ? `cap-note-${pos}` : undefined}
-                    data-mon={toId(p.species)}
-                    onClick={() => togglePreview(pos)}
-                  >
-                    {order >= 0 && (
-                      <span class="pick-badge" aria-hidden="true">
-                        {order === 0 ? ui().lead : order + 1}
-                      </span>
-                    )}
-                    {overCap && (
-                      <span class="cap-badge" id={`cap-note-${pos}`}>
-                        {ui().overLevelCap(MAX_TOTAL_LEVEL)}
-                      </span>
-                    )}
-                    <div class="preview-mon-head">
-                      <span class="mon-name">{speciesName(p.species)}</span>
-                      <span class="mon-level">
-                        <Lvl n={p.level} />
-                      </span>
-                      {p.types.map((t) => (
-                        <TypeBadge type={t} key={t} />
-                      ))}
-                    </div>
-                  </button>
-                  <SetDetail mon={sheetMon(ownSet(i, p.species))} />
-                </div>
-              );
-            })}
-          </div>
-        </section>
+        <div class="preview-cols">
+          <section>
+            <h2 class="sub-h">{ui().foeTeam(botTeam.id)}</h2>
+            <ul class="sheet-list">
+              {botTeam.sets.map((s, i) => (
+                <li key={i}>
+                  <MonSheet mon={sheetMon(s)} />
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section>
+            <h2 class="sub-h">{ui().yourTeamPick}</h2>
+            <ul class="sheet-list">
+              {mine.party.map((p, i) => {
+                const pos = i + 1;
+                const order = previewSel.indexOf(pos);
+                const levels = mine.party.map((q) => q.level);
+                // Max Total Level: gray out mons with no legal completion
+                // left (only while a slot is open — a full selection
+                // already just ignores further clicks)
+                const overCap =
+                  order < 0 &&
+                  previewSel.length < 3 &&
+                  !fitsLevelCap(levels, previewSel, pos);
+                // Pick-control name: species, level, types, pick state —
+                // the same composition as the foe rows' labels (UI-7).
+                // The set body (item / moves + notes) stays out of the
+                // label: it is one expand away behind the sibling details
+                // toggle, exactly like the foe side, so folding it in
+                // would be duplication spam on every tab stop.
+                const pickLabel = [
+                  speciesName(p.species),
+                  ui().srLevel(p.level),
+                  p.types.map(typeName).join("/"),
+                  ...(order >= 0 ? [ui().srPicked(order)] : []),
+                ].join(", ");
+                return (
+                  // UI-7: the own side reuses the foe-side MonSheet row in
+                  // pick mode — pick button + expand toggle as siblings,
+                  // SetDetail (with its tabindex=0 toggletip anchors,
+                  // UI-3) below, never inside a button.
+                  <li key={i}>
+                    <MonSheet
+                      mon={sheetMon(ownSet(i, p.species))}
+                      pick={{
+                        label: pickLabel,
+                        pressed: order >= 0,
+                        badge:
+                          order === 0
+                            ? ui().lead
+                            : order > 0
+                              ? String(order + 1)
+                              : null,
+                        overCap,
+                        capChip: ui().overCapChip(MAX_TOTAL_LEVEL),
+                        capNote: ui().overLevelCap(MAX_TOTAL_LEVEL),
+                        capNoteId: `cap-note-${pos}`,
+                        detailsLabel: ui().detailsFor(speciesName(p.species)),
+                        onPick: () => togglePreview(pos),
+                      }}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        </div>
         <div class="preview-actions">
           <button
             class="primary"
@@ -590,10 +587,7 @@ export function Game(props: {
       <header class="battle-header">
         <span class="turn-label">{ui().turnLabel(view.turn)}</span>
         {humanChoices && <ThinkChip thinking={thinking} />}
-        <button
-          class="ghost sheets-btn"
-          onClick={() => setSheetOpen(true)}
-        >
+        <button class="ghost sheets-btn" onClick={() => setSheetOpen(true)}>
           {ui().teamSheets}
         </button>
         <button class="ghost quit-btn" onClick={props.onNewTeams}>
@@ -747,9 +741,7 @@ function ChoiceButtons(props: {
   party: PokeView[];
   sets: unknown[];
 }) {
-  const moves = props.choices.filter(
-    (c): c is MoveChoice => c.kind === "move",
-  );
+  const moves = props.choices.filter((c): c is MoveChoice => c.kind === "move");
   const switches = props.choices.filter(
     (c): c is SwitchChoice => c.kind === "switch",
   );
@@ -799,9 +791,8 @@ function ChoiceButtons(props: {
             // Current item from the live view (species-matched — party
             // order and choice pos live in different index spaces).
             const pk =
-              props.party.find(
-                (p) => toId(p.species) === toId(s.species),
-              ) ?? null;
+              props.party.find((p) => toId(p.species) === toId(s.species)) ??
+              null;
             const cur = pk?.item ?? null;
             const init = initialItem(props.sets, s.species);
             return (

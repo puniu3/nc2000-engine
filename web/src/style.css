@@ -63,8 +63,11 @@ button.ghost {
     border-color: var(--accent);
   }
 }
+/* Press feedback (UI-7): border/brightness only, app-wide — geometry
+ * never changes, so text stays perfectly still under the finger. */
 button:not(:disabled):active {
-  transform: scale(0.98);
+  border-color: var(--accent);
+  filter: brightness(1.15);
 }
 
 select {
@@ -467,92 +470,31 @@ dialog.modal::backdrop {
 
 /* ---------------------------------------------------------- preview */
 
-.preview-grid {
+/* UI-7: both sides render as the same MonSheet rows; at tablet width the
+ * two team sections sit side by side (the preview alone runs a little
+ * wider than the battle screen so each column fits a full row). */
+.preview-screen {
+  max-width: 900px;
+}
+.preview-cols {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 0 20px;
   align-items: start;
 }
-/* UI-5 own card: plain container framing the pick header + inline set
- * detail. State classes (selected / over-cap) live on the card so the
- * whole unit reads as one mon. */
-.preview-cell {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-}
-.preview-cell.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-  background: var(--panel-2);
-}
-/* Max Total Level: no legal completion left with this mon */
-.preview-cell.over-cap {
-  opacity: 0.55;
-}
-/* The pick control: header button of the card (details are a sibling —
- * focusable note anchors must never nest inside a button). */
-.preview-mon {
-  position: relative;
-  width: 100%;
-  text-align: left;
-  min-height: 48px;
-  padding: 10px 12px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  border-radius: 12px 12px 0 0;
-}
-@media (hover: hover) and (pointer: fine) {
-  .preview-cell:not(.over-cap) .preview-mon:hover {
-    background: rgba(255, 255, 255, 0.04);
+@media (min-width: 700px) {
+  .preview-cols {
+    grid-template-columns: 1fr 1fr;
   }
 }
-.preview-cell.over-cap .preview-mon {
-  cursor: not-allowed;
-}
-.preview-cell.over-cap .preview-mon:active {
-  transform: none;
-}
-.cap-badge {
-  position: absolute;
-  top: -8px;
-  right: 10px;
-  background: var(--panel-2);
-  color: var(--text-dim);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-size: 0.7rem;
-  padding: 2px 8px;
-}
 /* Running total-level readout — lives in the sticky actions bar so it
- * stays visible however far the (now taller) card grid scrolls. */
+ * stays visible however far the row lists scroll. */
 .level-sum {
   color: var(--text-dim);
   font-size: 0.85rem;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-.pick-badge {
-  position: absolute;
-  top: -8px;
-  right: 10px;
-  background: var(--accent);
-  color: #fff;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 2px 8px;
-}
-.preview-mon-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 .preview-actions {
   position: sticky;
@@ -1052,8 +994,89 @@ dialog.modal::backdrop {
   display: inline-block;
   transition: transform 0.15s ease;
 }
-.mon-sheet-head[aria-expanded="true"] .sheet-chevron {
+.mon-sheet-head[aria-expanded="true"] .sheet-chevron,
+.sheet-expand[aria-expanded="true"] .sheet-chevron {
   transform: rotate(90deg);
+}
+/* Head-button press cue: background only (the global border/brightness
+ * rule has nothing visible to work with on these borderless buttons). */
+.mon-sheet-head:not([aria-disabled="true"]):active,
+.sheet-expand:active {
+  background: var(--panel-2);
+}
+
+/* --------------------------------------- own preview pick rows (UI-7) */
+
+/* Pick button + expand toggle are SIBLINGS in one row (the expand
+ * control and SetDetail's focusable toggletip anchors must never nest
+ * inside the pick button). */
+.mon-sheet-row {
+  display: flex;
+  align-items: stretch;
+}
+.mon-sheet-row .pick-head {
+  flex: 1;
+  min-width: 0;
+  border-radius: 12px 0 0 12px;
+  /* Constant reserved strip for the pick-state chip overlay below —
+   * chips appearing/disappearing never reflow or resize the row. */
+  position: relative;
+  padding-right: 64px;
+}
+.pick-head .sheet-marks {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 0;
+  flex-wrap: nowrap;
+}
+.sheet-expand {
+  flex: 0 0 auto;
+  min-width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--line);
+  border-radius: 0 12px 12px 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sheet-expand:hover {
+    background: var(--panel-2);
+  }
+}
+/* Selected: the whole row carries the accent ring — text never moves. */
+.mon-sheet.is-picked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  background: var(--panel-2);
+}
+.sheet-mark.pick-order {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+/* Cap chip: compact one-liner (">155") sized for the reserved strip; the
+ * full sentence rides sr-only via describedby. */
+.sheet-mark.cap {
+  text-transform: none;
+  font-weight: 400;
+}
+/* Max Total Level: no legal completion left with this mon. aria-disabled
+ * (not :disabled), so pin the hover/press cues quiet by hand. */
+.mon-sheet.over-cap .pick-head {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.mon-sheet.over-cap .pick-head:active {
+  filter: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mon-sheet.over-cap .pick-head:hover {
+    background: transparent;
+  }
 }
 .set-detail {
   padding: 0 12px 10px;
@@ -1095,11 +1118,6 @@ dialog.modal::backdrop {
 }
 .set-move .move-meta {
   margin-left: auto;
-}
-/* Own preview cells (UI-5): the set detail is body content of the card —
- * no frame of its own, just breathing room under the header's rule. */
-.preview-cell .set-detail {
-  padding: 8px 12px 10px;
 }
 .team-sheets section {
   margin-top: 4px;
@@ -1240,15 +1258,6 @@ h2.sub-h {
 /* End banner text retagged div -> h2 — neutralize the h2 default margin. */
 h2.end-text {
   margin: 0 0 12px;
-}
-
-/* Over-cap uses aria-disabled (stays focusable for the cap note), so the
- * :disabled UA/base styles don't apply — pin the hover edge quiet. The
- * :active transform pin lives with the preview card rules. */
-@media (hover: hover) and (pointer: fine) {
-  .preview-cell.over-cap button.preview-mon:hover {
-    border-color: var(--line);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

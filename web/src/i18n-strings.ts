@@ -48,6 +48,8 @@ export interface UIStrings {
   pickMore: (n: number) => string;
   levelSum: (sum: number, cap: number) => string;
   overLevelCap: (cap: number) => string;
+  overCapChip: (cap: number) => string;
+  detailsFor: (species: string) => string;
   previewFromTable: string;
   previewFromSearch: string;
   // open team sheets (UI-2)
@@ -131,27 +133,30 @@ const EN: UIStrings = {
     "Paste a team in the Pokémon Showdown teambuilder export format. " +
     "Fixable issues (missing gender, derived HP DV, …) are corrected " +
     "automatically; rule violations are listed below.",
-  importPlaceholder:
-    "Snorlax @ Leftovers\nLevel: 55\n- Body Slam\n- Rest\n…",
+  importPlaceholder: "Snorlax @ Leftovers\nLevel: 55\n- Body Slam\n- Rest\n…",
   importNameLabel: "Team name",
   importNamePlaceholder: "My team",
   importButton: "Import team",
   importCancel: "Close",
-  importedOk: (name) => `Saved “${name}” — it plays under the open team sheet like any pool team.`,
+  importedOk: (name) =>
+    `Saved “${name}” — it plays under the open team sheet like any pool team.`,
   appliedFixes: (n) => `${n} automatic ${n === 1 ? "fix" : "fixes"} applied`,
-  importErrors: (n) => `${n} ${n === 1 ? "problem" : "problems"} — fix and import again`,
+  importErrors: (n) =>
+    `${n} ${n === 1 ? "problem" : "problems"} — fix and import again`,
   deleteTeam: "Delete",
   deleteConfirm: "Delete?",
   teamPreview: "Team preview",
   foeTeam: (id) => `Foe team (${id})`,
   previewTapHint:
-    "Open team sheet — tap a foe Pokémon for its full set; your own sets are shown in full below.",
+    "Open team sheet — tap a foe Pokémon for its full set; on your side the ▸ button opens it.",
   yourTeamPick: "Your team — pick 3, lead first",
   lead: "Lead",
   confirmPicks: "Confirm picks",
   pickMore: (n) => `Pick ${n} more`,
   levelSum: (sum, cap) => `Total level ${sum}/${cap}`,
   overLevelCap: (cap) => `Over the total-level cap of ${cap}`,
+  overCapChip: (cap) => `>${cap}`,
+  detailsFor: (s) => `${s} — details`,
   previewFromTable: "Opponent picks from the baked equilibrium table",
   previewFromSearch: "Opponent picks by live search (matchup not baked yet)",
   teamSheets: "Team sheets",
@@ -233,8 +238,7 @@ const JA: UIStrings = {
     "Pokémon Showdown のチームビルダーからエクスポートしたテキストを" +
     "貼り付けてください。自動修正できる項目(性別の補完、HPのDV導出など)は" +
     "取り込み時に修正され、ルール違反は下に一覧表示されます。",
-  importPlaceholder:
-    "Snorlax @ Leftovers\nLevel: 55\n- Body Slam\n- Rest\n…",
+  importPlaceholder: "Snorlax @ Leftovers\nLevel: 55\n- Body Slam\n- Rest\n…",
   importNameLabel: "チーム名",
   importNamePlaceholder: "マイチーム",
   importButton: "取り込む",
@@ -248,13 +252,15 @@ const JA: UIStrings = {
   teamPreview: "選出(見せ合い)",
   foeTeam: (id) => `相手のチーム(${id})`,
   previewTapHint:
-    "オープンチームシート — 相手のポケモンはタップで構成を確認、自分の構成は下にすべて表示されています。",
+    "オープンチームシート — 相手のポケモンはタップで構成を確認、自分の側は ▸ ボタンで開けます。",
   yourTeamPick: "自分のチーム — 3体選ぶ(1体目が先発)",
   lead: "先発",
   confirmPicks: "選出を確定",
   pickMore: (n) => `あと${n}体`,
   levelSum: (sum, cap) => `合計レベル ${sum}/${cap}`,
   overLevelCap: (cap) => `合計レベルが${cap}を超えるため選べません`,
+  overCapChip: () => "超過",
+  detailsFor: (s) => `${s}の詳細`,
   previewFromTable: "相手の選出: 事前計算した均衡テーブル",
   previewFromSearch: "相手の選出: ライブ探索(この組み合わせは未計算)",
   teamSheets: "チームシート",
