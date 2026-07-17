@@ -189,25 +189,6 @@ small {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-.start-footer {
-  position: absolute;
-  bottom: calc(8px + env(safe-area-inset-bottom));
-}
-.footer-link {
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  font-size: 0.8rem;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  padding: 10px 14px;
-}
-@media (hover: hover) and (pointer: fine) {
-  .footer-link:hover {
-    color: var(--text);
-    border: none;
-  }
-}
 
 /* ------------------------------------------------------------- modal */
 
@@ -249,17 +230,6 @@ dialog.modal::backdrop {
   color: var(--text-dim);
   font-size: 0.8rem;
   margin: 0 0 10px;
-}
-/* The bench box carries its own chrome; inside the modal the frame and
- * title are the modal's. */
-.modal-body .bench-box {
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-}
-.modal-body .bench-title {
-  display: none;
 }
 
 .team-list {
@@ -497,11 +467,6 @@ dialog.modal::backdrop {
 
 /* ---------------------------------------------------------- preview */
 
-.preview-foe {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
 .preview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
@@ -947,6 +912,7 @@ dialog.modal::backdrop {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-variant-numeric: tabular-nums;
   font-size: 0.78rem;
   color: var(--text-dim);
   background: var(--panel);
@@ -984,38 +950,203 @@ dialog.modal::backdrop {
   text-overflow: ellipsis;
 }
 
-/* --------------------------------------------------- device benchmark */
+/* ----------------------------------------- open team sheets (UI-2) */
 
-.bench-box {
-  margin: 26px 0 12px;
-  padding: 12px 14px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+.sheet-hint {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin: 0 0 10px;
 }
-.bench-head {
+.sheet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mon-sheet {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.mon-sheet.is-fainted .mon-sheet-head {
+  opacity: 0.6;
+}
+.mon-sheet-head {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mon-sheet-head:hover {
+    background: var(--panel-2);
+  }
+}
+.sheet-marks {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex-wrap: wrap;
 }
-.bench-title {
+.sheet-mark {
+  font-size: 0.7rem;
   font-weight: 700;
-}
-.bench-result {
-  margin-top: 8px;
-  font-variant-numeric: tabular-nums;
-}
-.bench-result.pass {
-  color: var(--good);
-}
-.bench-result.fail {
-  color: var(--bad);
-}
-.bench-note {
-  margin-top: 6px;
-  font-size: 0.78rem;
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 6px;
   color: var(--text-dim);
+  white-space: nowrap;
+}
+.sheet-mark.picked {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.sheet-mark.active {
+  color: var(--good);
+  border-color: var(--good);
+}
+.sheet-mark.fainted {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+.sheet-chevron {
+  color: var(--text-dim);
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+.mon-sheet-head[aria-expanded="true"] .sheet-chevron,
+.sheet-toggle[aria-expanded="true"] .sheet-chevron {
+  transform: rotate(90deg);
+}
+.set-detail {
+  padding: 0 12px 10px;
+}
+.set-fields {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 0.85rem;
+}
+.set-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.set-field-k {
+  color: var(--text-dim);
+}
+.set-moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.set-move {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+.set-move .move-name {
+  font-weight: 600;
+}
+.set-move .move-meta {
+  margin-left: auto;
+}
+/* Own preview cells: pick card + a light detail toggle underneath. */
+.preview-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.preview-cell .preview-mon {
+  flex: 1;
+}
+.sheet-toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sheet-toggle:hover {
+    color: var(--text);
+    border: none;
+  }
+}
+.preview-cell .set-detail {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 10px 12px;
+}
+.team-sheets section {
+  margin-top: 4px;
+}
+
+/* Battle header: the sheets/quit buttons live in a right-pinned slot, so
+ * the think chip's per-tick width changes never push them (tabular
+ * numerals + a reserved min width keep the pill itself calm too). */
+.sheets-btn {
+  margin-left: auto;
+}
+.battle-header .think-chip {
+  min-width: 12em;
+  justify-content: center;
+}
+.preview-actions .quit-btn {
+  margin-left: auto;
+}
+@media (max-width: 480px) {
+  /* Narrow: the chip gets its own reserved row — appearing/disappearing
+   * or ticking never reflows the buttons or the arena below. */
+  .battle-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    grid-template-areas:
+      "turn . sheets quit"
+      "chip chip chip chip";
+    grid-template-rows: auto 26px;
+    column-gap: 8px;
+    row-gap: 2px;
+    align-items: center;
+  }
+  .battle-header .turn-label {
+    grid-area: turn;
+  }
+  .battle-header .sheets-btn {
+    grid-area: sheets;
+    margin-left: 0;
+  }
+  .battle-header .quit-btn {
+    grid-area: quit;
+  }
+  .battle-header .think-chip {
+    grid-area: chip;
+    justify-self: start;
+    min-width: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

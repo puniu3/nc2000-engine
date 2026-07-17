@@ -3,18 +3,17 @@
 // one tap on Start begins a game; a party button opens a modal with the
 // full selection content (pool team list with rank/provenance/species,
 // the M14 custom-team import/pick for the human side). Pinned choices
-// persist in localStorage by team id. The device benchmark (M9 gate
-// certification) lives behind a small footer link; the language selector
-// is an unobtrusive corner dropdown.
+// persist in localStorage by team id. The language selector is an
+// unobtrusive corner dropdown. (The device benchmark — a dev instrument
+// for the M9 think-time gate — was removed from the product UI in UI-2.)
 //
 // Open team sheet (M12): the bot's sets are readable in the party modal,
 // and the bot receives the human's exact sets — a single information
 // policy for pool and custom teams alike. Only picks stay hidden.
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import type { MetaPool, PoolTeam } from "./types";
-import { BUDGET, type SelectedTeam } from "./app";
-import { BotWorker } from "./bot";
+import type { SelectedTeam } from "./app";
 import { Modal } from "./modal";
 import { getValidator, randomSeed32 } from "./engine";
 import { parsePsExport } from "./ps-import";
@@ -63,106 +62,6 @@ function TeamCard(props: {
         ))}
       </div>
     </button>
-  );
-}
-
-// Fixed workload: identical battle + searcher seeds + iteration count on
-// every device, so the numbers are directly comparable. 10k iterations at
-// an in-battle root ~= 4-7 s on 2025 hardware. Reported: iters/s (the
-// cross-device number), s/move at the fixed 30k strength (what you wait,
-// mostly hidden by ponder), and the historical 3k reference gate (the M9
-// envelope — kept so old and new device numbers stay comparable).
-const BENCH_ITERS = 10000;
-const BENCH_BATTLE_SEED = "1,2,3,4";
-const BENCH_SEARCH_SEED = 123456789;
-const GATE_ITERS = 3000; // the M9 gate strength (skuct:3000 == mcts:3000)
-const GATE_SECONDS = 3;
-
-type BenchState =
-  | { s: "idle" }
-  | { s: "running"; done: number; total: number }
-  | { s: "done"; itersPerSec: number; secPerMove: number; secAtFull: number }
-  | { s: "error"; msg: string };
-
-function DeviceBench(props: { pool: MetaPool }) {
-  const [state, setState] = useState<BenchState>({ s: "idle" });
-  const aliveRef = useRef(true);
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
-
-  async function run() {
-    if (state.s === "running") return;
-    setState({ s: "running", done: 0, total: BENCH_ITERS });
-    const bot = new BotWorker();
-    try {
-      const r = await bot.bench(
-        JSON.stringify(props.pool.teams[0].sets),
-        JSON.stringify(props.pool.teams[1].sets),
-        BENCH_BATTLE_SEED,
-        BENCH_SEARCH_SEED,
-        BENCH_ITERS,
-        (done, total) => {
-          if (aliveRef.current) setState({ s: "running", done, total });
-        },
-      );
-      const itersPerSec = r.iters / (r.ms / 1000);
-      if (aliveRef.current)
-        setState({
-          s: "done",
-          itersPerSec,
-          secPerMove: GATE_ITERS / itersPerSec,
-          secAtFull: BUDGET / itersPerSec,
-        });
-    } catch (e) {
-      if (aliveRef.current) setState({ s: "error", msg: String(e) });
-    } finally {
-      bot.terminate();
-    }
-  }
-
-  return (
-    <div class="bench-box">
-      <div class="bench-head">
-        <span class="bench-title">{ui().benchTitle}</span>
-        <button
-          class="ghost bench-btn"
-          disabled={state.s === "running"}
-          onClick={() => void run()}
-        >
-          {state.s === "running"
-            ? ui().benchRunning(
-                Math.round((state.done / state.total) * 100),
-              )
-            : state.s === "idle"
-              ? ui().benchRun
-              : ui().benchAgain}
-        </button>
-      </div>
-      {state.s === "done" && (
-        <div
-          class={`bench-result ${state.secPerMove <= GATE_SECONDS ? "pass" : "fail"}`}
-          data-iters-per-sec={Math.round(state.itersPerSec)}
-          data-sec-per-move={state.secPerMove.toFixed(2)}
-          data-sec-at-full={state.secAtFull.toFixed(2)}
-        >
-          {ui().benchResult({
-            ips: Math.round(state.itersPerSec),
-            fullK: BUDGET / 1000,
-            fullSec: state.secAtFull.toFixed(2),
-            gateK: GATE_ITERS / 1000,
-            gateSec: GATE_SECONDS,
-            pass: state.secPerMove <= GATE_SECONDS,
-            sec: state.secPerMove.toFixed(2),
-          })}
-        </div>
-      )}
-      {state.s === "error" && <div class="bench-result fail">{state.msg}</div>}
-      <div class="bench-note">{ui().benchNote(BENCH_ITERS / 1000)}</div>
-    </div>
   );
 }
 
@@ -479,7 +378,7 @@ export function StartScreen(props: {
   const [picks, setPicks] = useState<Picks>(() =>
     loadPicks(props.pool, loadCustomTeams()),
   );
-  const [modal, setModal] = useState<null | "human" | "bot" | "bench">(null);
+  const [modal, setModal] = useState<null | "human" | "bot">(null);
 
   function update(next: Picks) {
     setPicks(next);
@@ -559,12 +458,6 @@ export function StartScreen(props: {
         </button>
       </main>
 
-      <footer class="start-footer">
-        <button class="footer-link" onClick={() => setModal("bench")}>
-          {ui().benchTitle}
-        </button>
-      </footer>
-
       {modal === "human" && (
         <Modal title={ui().chooseYours} onClose={() => setModal(null)}>
           <HumanPicker
@@ -601,11 +494,6 @@ export function StartScreen(props: {
               setModal(null);
             }}
           />
-        </Modal>
-      )}
-      {modal === "bench" && (
-        <Modal title={ui().benchTitle} onClose={() => setModal(null)}>
-          <DeviceBench pool={props.pool} />
         </Modal>
       )}
     </div>

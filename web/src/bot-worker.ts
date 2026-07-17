@@ -24,7 +24,7 @@
 // "table" — the pair is resolved by public signature, no identification
 // condition) or the stepped search ponders (src "search").
 
-import init, { Dex, Battle, Searcher, BlindSearcher } from "../../crates/wasm/pkg-web/nc2000_wasm";
+import init, { Dex, Battle, BlindSearcher } from "../../crates/wasm/pkg-web/nc2000_wasm";
 
 export type WorkerRequest =
   | {
@@ -46,16 +46,7 @@ export type WorkerRequest =
       ponder: boolean;
     }
   | { t: "flush" }
-  | { t: "cancel" }
-  | {
-      t: "bench";
-      id: number;
-      p1: string;
-      p2: string;
-      seed: string;
-      searchSeed: number;
-      iters: number;
-    };
+  | { t: "cancel" };
 
 export type WorkerResponse =
   | { t: "ready" }
@@ -69,8 +60,6 @@ export type WorkerResponse =
       /** Where the pick came from (preview: table/search). */
       src?: "table" | "search";
     }
-  | { t: "benchProgress"; id: number; done: number; total: number; ms: number }
-  | { t: "benchResult"; id: number; iters: number; ms: number }
   | { t: "error"; message: string };
 
 const post = (m: WorkerResponse) => self.postMessage(m);
@@ -133,9 +122,6 @@ async function handle(m: WorkerRequest): Promise<void> {
       break;
     case "search":
       await runSearch(m);
-      break;
-    case "bench":
-      await runBench(m);
       break;
   }
 }
@@ -212,47 +198,4 @@ async function runSearch(m: SearchMsg): Promise<void> {
     ms: performance.now() - t0,
     src: "search",
   });
-}
-
-// Device benchmark: a fixed, deterministic workload (fixed teams + battle
-// seed + searcher seed + iteration count => every device runs the identical
-// iteration stream), independent of the mirror battle. Measures in-battle
-// root throughput — the M9 gate quantity — on the perfect-info Searcher
-// (the historical workload: numbers stay comparable across devices and
-// releases).
-async function runBench(m: {
-  id: number;
-  p1: string;
-  p2: string;
-  seed: string;
-  searchSeed: number;
-  iters: number;
-}): Promise<void> {
-  const b = new Battle(dex, m.p1, m.p2, m.seed);
-  let s: Searcher | null = null;
-  try {
-    b.setLogEnabled(false);
-    // Fixed preview picks: land on the first in-battle decision point.
-    // Max-Total-Level-legal for the fixed bench teams (pool 0: 52/52/52/51…,
-    // pool 1: 55/55/50/50…) — changed 2026-07-17 with the 155-cap fix, so
-    // benchmark numbers are comparable only within the post-fix workload.
-    b.applyChoice(0, "team 1, 2, 4");
-    b.applyChoice(1, "team 1, 3, 4");
-    s = new Searcher(b, 1, m.searchSeed >>> 0);
-    let done = 0;
-    let ms = 0;
-    while (done < m.iters) {
-      // Timing excludes the yields (postMessage/setTimeout overhead is not
-      // search throughput; the in-game loop pays it, the gate number no).
-      const t1 = performance.now();
-      done = s.step(Math.min(500, m.iters - done));
-      ms += performance.now() - t1;
-      post({ t: "benchProgress", id: m.id, done, total: m.iters, ms });
-      await new Promise((r) => setTimeout(r, 0));
-    }
-    post({ t: "benchResult", id: m.id, iters: done, ms });
-  } finally {
-    s?.free();
-    b.free();
-  }
 }

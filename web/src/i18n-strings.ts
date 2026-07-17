@@ -38,24 +38,10 @@ export interface UIStrings {
   importErrors: (n: number) => string;
   deleteTeam: string;
   deleteConfirm: string;
-  // device benchmark
-  benchTitle: string;
-  benchRun: string;
-  benchAgain: string;
-  benchRunning: (pct: number) => string;
-  benchResult: (r: {
-    ips: number;
-    fullK: number;
-    fullSec: string;
-    gateK: number;
-    gateSec: number;
-    pass: boolean;
-    sec: string;
-  }) => string;
-  benchNote: (kIters: number) => string;
   // team preview
   teamPreview: string;
   foeTeam: (id: string) => string;
+  previewTapHint: string;
   yourTeamPick: string;
   lead: string;
   confirmPicks: string;
@@ -64,6 +50,19 @@ export interface UIStrings {
   overLevelCap: (cap: number) => string;
   previewFromTable: string;
   previewFromSearch: string;
+  // open team sheets (UI-2)
+  teamSheets: string;
+  yourTeam: (id: string) => string;
+  sheetNote: string;
+  sheetDetails: string;
+  sheetItem: string;
+  sheetNoItem: string;
+  sheetGender: string;
+  sheetHp: string;
+  markPicked: string;
+  markRevealed: string;
+  markActive: string;
+  markFainted: string;
   // battle chrome
   quit: string;
   turnLabel: (n: number) => string;
@@ -127,19 +126,10 @@ const EN: UIStrings = {
   importErrors: (n) => `${n} ${n === 1 ? "problem" : "problems"} — fix and import again`,
   deleteTeam: "Delete",
   deleteConfirm: "Delete?",
-  benchTitle: "Device benchmark",
-  benchRun: "Run (~5 s)",
-  benchAgain: "Run again",
-  benchRunning: (pct) => `Running… ${pct}%`,
-  benchResult: (r) =>
-    `${r.ips} iterations/s — full strength (${r.fullK}k) ≈ ${r.fullSec} ` +
-    `s/move, mostly hidden by pondering. Reference gate (${r.gateK}k ≤ ` +
-    `${r.gateSec} s): ${r.pass ? "PASS" : "MISS"} (${r.sec} s)`,
-  benchNote: (k) =>
-    `Fixed search workload (${k}k iterations, fixed seeds) — comparable ` +
-    `across devices.`,
   teamPreview: "Team preview",
   foeTeam: (id) => `Foe team (${id})`,
+  previewTapHint:
+    "Open team sheet — tap any Pokémon for its full set.",
   yourTeamPick: "Your team — pick 3, lead first",
   lead: "Lead",
   confirmPicks: "Confirm picks",
@@ -148,6 +138,20 @@ const EN: UIStrings = {
   overLevelCap: (cap) => `Over the total-level cap of ${cap}`,
   previewFromTable: "Opponent picks from the baked equilibrium table",
   previewFromSearch: "Opponent picks by live search (matchup not baked yet)",
+  teamSheets: "Team sheets",
+  yourTeam: (id) => `Your team (${id})`,
+  sheetNote:
+    "Both full teams are open information. Which 3 the opponent picked " +
+    "stays hidden until each Pokémon appears in battle.",
+  sheetDetails: "Details",
+  sheetItem: "Item",
+  sheetNoItem: "No item",
+  sheetGender: "Gender",
+  sheetHp: "Hidden Power",
+  markPicked: "Picked",
+  markRevealed: "Revealed",
+  markActive: "Active",
+  markFainted: "Fainted",
   quit: "Quit",
   turnLabel: (n) => `Turn ${n}`,
   nLeft: (n) => `${n} left`,
@@ -209,18 +213,10 @@ const JA: UIStrings = {
   importErrors: (n) => `問題 ${n}件 — 修正して再度取り込んでください`,
   deleteTeam: "削除",
   deleteConfirm: "削除する?",
-  benchTitle: "端末ベンチマーク",
-  benchRun: "実行(約5秒)",
-  benchAgain: "もう一度",
-  benchRunning: (pct) => `実行中… ${pct}%`,
-  benchResult: (r) =>
-    `${r.ips} 回/秒 — 最大強度(${r.fullK}k) ≈ ${r.fullSec} 秒/手` +
-    `(ポンダリングでほぼ隠れます)。参照ゲート(${r.gateK}k ≤ ` +
-    `${r.gateSec}秒): ${r.pass ? "PASS" : "MISS"} (${r.sec}秒)`,
-  benchNote: (k) =>
-    `固定探索ワークロード(${k}k回・固定シード)— 端末間で比較できます。`,
   teamPreview: "選出(見せ合い)",
   foeTeam: (id) => `相手のチーム(${id})`,
+  previewTapHint:
+    "オープンチームシート — ポケモンをタップすると構成を確認できます。",
   yourTeamPick: "自分のチーム — 3体選ぶ(1体目が先発)",
   lead: "先発",
   confirmPicks: "選出を確定",
@@ -229,6 +225,20 @@ const JA: UIStrings = {
   overLevelCap: (cap) => `合計レベルが${cap}を超えるため選べません`,
   previewFromTable: "相手の選出: 事前計算した均衡テーブル",
   previewFromSearch: "相手の選出: ライブ探索(この組み合わせは未計算)",
+  teamSheets: "チームシート",
+  yourTeam: (id) => `自分のチーム(${id})`,
+  sheetNote:
+    "両チームの構成は公開情報です。相手がどの3体を選出したかは、その" +
+    "ポケモンが場に出るまで分かりません。",
+  sheetDetails: "詳細",
+  sheetItem: "持ち物",
+  sheetNoItem: "なし",
+  sheetGender: "性別",
+  sheetHp: "めざめるパワー",
+  markPicked: "選出",
+  markRevealed: "判明",
+  markActive: "出場中",
+  markFainted: "ひんし",
   quit: "やめる",
   turnLabel: (n) => `ターン ${n}`,
   nLeft: (n) => `残り${n}体`,

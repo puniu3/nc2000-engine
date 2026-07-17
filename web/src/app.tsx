@@ -9,7 +9,8 @@
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { loadEngine, randomSeed32 } from "./engine";
-import { fetchI18nJa, fetchPool } from "./data";
+import { fetchDexJson, fetchI18nJa, fetchPool } from "./data";
+import { loadSetDex } from "./set-info";
 import type { MetaPool } from "./types";
 import { StartScreen } from "./select";
 import { Game } from "./game";
@@ -47,12 +48,14 @@ export function App() {
   useEffect(() => {
     void (async () => {
       try {
-        // JP name tables load alongside the engine; loadJaNames swallows
-        // failures (missing tables just mean English names).
+        // JP name tables and the set-sheet dex load alongside the engine;
+        // both swallow failures (missing tables just mean English names /
+        // sheets without move meta).
         const [, pd] = await Promise.all([
           loadEngine(),
           fetchPool(),
           loadJaNames(fetchI18nJa),
+          loadSetDex(fetchDexJson),
         ]);
         poolJsonRef.current = pd.poolJson;
         setPool(pd.pool);

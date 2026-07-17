@@ -42,8 +42,11 @@ import {
   StatusBadge,
   TypeBadge,
 } from "./battle-ui";
-import { itemName, moveName, speciesName, ui } from "./i18n";
+import { itemName, moveName, speciesName, toId, ui } from "./i18n";
 import { BUDGET, type SelectedTeam } from "./app";
+import { Modal } from "./modal";
+import { sheetMon } from "./set-info";
+import { MonSheet, SetDetail, TeamSheets } from "./team-sheet";
 
 const HUMAN = 0;
 const BOT = 1;
@@ -108,11 +111,18 @@ export function Game(props: {
   const [botPreviewSrc, setBotPreviewSrc] = useState<
     "table" | "search" | null
   >(null);
+  const [ownDetail, setOwnDetail] = useState<number[]>([]); // preview: own cells with the set detail open
+  const [sheetOpen, setSheetOpen] = useState(false); // battle: team-sheets modal
 
   const battleRef = useRef<Battle | null>(null);
   const botRef = useRef<BotWorker | null>(null);
   const reqRef = useRef<Request | null>(null);
   const aliveRef = useRef(true);
+  // Foe species publicly revealed so far (ever seen active at a request
+  // point — the same state the battle screen renders; faints are handled
+  // at render time). Drives the team-sheet marks WITHOUT reading which 3
+  // the foe picked from engine internals.
+  const revealedFoeRef = useRef<Set<string>>(new Set());
   const narrator = useMemo(() => new Narrator(HUMAN), []);
   const pairPromiseRef = useRef<Promise<string | null> | null>(null);
 
@@ -168,7 +178,13 @@ export function Game(props: {
       const entries = narrator.render(lines);
       if (entries.length > 0) setLog((prev) => [...prev, ...entries]);
     }
-    setView(stateView(battle));
+    const v = stateView(battle);
+    // Track the foe's public reveals from what the screen shows anyway:
+    // whichever foe mon is active at a request point has appeared.
+    const foeSide = v.sides[BOT];
+    if (foeSide.active !== null)
+      revealedFoeRef.current.add(toId(foeSide.party[foeSide.active].species));
+    setView(v);
   }
 
   function startRequest() {
@@ -350,19 +366,36 @@ export function Game(props: {
   const mine = view.sides[HUMAN];
   const foe = view.sides[BOT];
 
+  /** The static set JSON behind display position i (open team sheet: the
+   * detail panels render from the client-side team JSON, not the engine).
+   * Sets order matches the preview display order; the species check guards
+   * against drift, falling back to a species lookup. */
+  function ownSet(i: number, species: string): unknown {
+    const sets = humanTeam.sets as { species?: string }[];
+    if (sets[i] && toId(sets[i].species ?? "") === toId(species)) return sets[i];
+    return sets.find((s) => toId(s.species ?? "") === toId(species)) ?? sets[i];
+  }
+
+  function toggleOwnDetail(pos: number) {
+    setOwnDetail((open) =>
+      open.includes(pos) ? open.filter((x) => x !== pos) : [...open, pos],
+    );
+  }
+
   if (phase === "preview") {
     return (
       <div class="screen preview-screen">
         <h2>{ui().teamPreview}</h2>
+        <p class="sheet-hint">{ui().previewTapHint}</p>
         <section>
           <h3>{ui().foeTeam(botTeam.id)}</h3>
-          <div class="preview-foe">
-            {foe.party.map((p, i) => (
-              <span class="species-chip" key={i}>
-                {speciesName(p.species)} <small>L{p.level}</small>
-              </span>
+          <ul class="sheet-list">
+            {botTeam.sets.map((s, i) => (
+              <li key={i}>
+                <MonSheet mon={sheetMon(s)} />
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
         <section>
           <h3>
@@ -386,37 +419,53 @@ export function Game(props: {
                 order < 0 &&
                 previewSel.length < 3 &&
                 !fitsLevelCap(levels, previewSel, pos);
+              const detailOpen = ownDetail.includes(pos);
               return (
-                <button
-                  class={`preview-mon ${order >= 0 ? "selected" : ""} ${overCap ? "over-cap" : ""}`}
-                  key={i}
-                  disabled={overCap}
-                  onClick={() => togglePreview(pos)}
-                >
-                  {order >= 0 && (
-                    <span class="pick-badge">
-                      {order === 0 ? ui().lead : order + 1}
+                <div class="preview-cell" key={i}>
+                  <button
+                    class={`preview-mon ${order >= 0 ? "selected" : ""} ${overCap ? "over-cap" : ""}`}
+                    disabled={overCap}
+                    onClick={() => togglePreview(pos)}
+                  >
+                    {order >= 0 && (
+                      <span class="pick-badge">
+                        {order === 0 ? ui().lead : order + 1}
+                      </span>
+                    )}
+                    {overCap && (
+                      <span class="cap-badge">
+                        {ui().overLevelCap(MAX_TOTAL_LEVEL)}
+                      </span>
+                    )}
+                    <div class="preview-mon-head">
+                      <span class="mon-name">{speciesName(p.species)}</span>
+                      <span class="mon-level">L{p.level}</span>
+                      {p.types.map((t) => (
+                        <TypeBadge type={t} key={t} />
+                      ))}
+                    </div>
+                    {p.item && (
+                      <div class="preview-item">@ {itemName(p.item)}</div>
+                    )}
+                    <div class="preview-moves">
+                      {p.moves.map((m) => moveName(m.name)).join(" · ")}
+                    </div>
+                  </button>
+                  <button
+                    class="ghost sheet-toggle"
+                    aria-expanded={detailOpen}
+                    data-mon={toId(p.species)}
+                    onClick={() => toggleOwnDetail(pos)}
+                  >
+                    {ui().sheetDetails}
+                    <span class="sheet-chevron" aria-hidden="true">
+                      &#9656;
                     </span>
+                  </button>
+                  {detailOpen && (
+                    <SetDetail mon={sheetMon(ownSet(i, p.species))} />
                   )}
-                  {overCap && (
-                    <span class="cap-badge">
-                      {ui().overLevelCap(MAX_TOTAL_LEVEL)}
-                    </span>
-                  )}
-                  <div class="preview-mon-head">
-                    <span class="mon-name">{speciesName(p.species)}</span>
-                    <span class="mon-level">L{p.level}</span>
-                    {p.types.map((t) => (
-                      <TypeBadge type={t} key={t} />
-                    ))}
-                  </div>
-                  {p.item && (
-                    <div class="preview-item">@ {itemName(p.item)}</div>
-                  )}
-                  <div class="preview-moves">
-                    {p.moves.map((m) => moveName(m.name)).join(" · ")}
-                  </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -459,10 +508,29 @@ export function Game(props: {
       <header class="battle-header">
         <span class="turn-label">{ui().turnLabel(view.turn)}</span>
         {humanChoices && <ThinkChip thinking={thinking} />}
+        <button
+          class="ghost sheets-btn"
+          onClick={() => setSheetOpen(true)}
+        >
+          {ui().teamSheets}
+        </button>
         <button class="ghost quit-btn" onClick={props.onNewTeams}>
           {ui().quit}
         </button>
       </header>
+
+      {sheetOpen && (
+        <Modal title={ui().teamSheets} onClose={() => setSheetOpen(false)}>
+          <TeamSheets
+            mineId={humanTeam.id}
+            mineSets={humanTeam.sets}
+            foeId={botTeam.id}
+            foeSets={botTeam.sets}
+            view={view}
+            revealedFoe={revealedFoeRef.current}
+          />
+        </Modal>
+      )}
 
       <div class="arena">
         {activeFoe && (

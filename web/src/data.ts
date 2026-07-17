@@ -24,6 +24,16 @@ export async function fetchI18nJa(): Promise<unknown> {
   return res.json();
 }
 
+/** Dex JSON (data/gen2stadium2.json — the same data the wasm engine
+ * embeds). Consulted client-side for set-sheet move meta (type/category/
+ * BP) and species types. Throws on failure — the caller treats any
+ * failure as "no meta available". */
+export async function fetchDexJson(): Promise<unknown> {
+  const res = await fetch(dataUrl("gen2stadium2.json"));
+  if (!res.ok) throw new Error(`dex fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchPool(): Promise<PoolData> {
   const res = await fetch(dataUrl("meta-pool-v0/meta-pool.json"));
   if (!res.ok) throw new Error(`meta pool fetch failed: ${res.status}`);
