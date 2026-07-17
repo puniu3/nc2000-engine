@@ -1,0 +1,8 @@
+{
+	"name": "nc2000-tools",
+	"private": true,
+	"description": "Node tooling for nc2000-engine (PS interop harnesses and exporters)",
+	"dependencies": {
+		"ws": "^8.18.0"
+	}
+}
