@@ -471,23 +471,51 @@ dialog.modal::backdrop {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
   gap: 10px;
+  align-items: start;
 }
-.preview-mon {
+/* UI-5 own card: plain container framing the pick header + inline set
+ * detail. State classes (selected / over-cap) live on the card so the
+ * whole unit reads as one mon. */
+.preview-cell {
   position: relative;
-  text-align: left;
-  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
 }
-.preview-mon.selected {
+.preview-cell.selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
   background: var(--panel-2);
 }
 /* Max Total Level: no legal completion left with this mon */
-.preview-mon.over-cap {
-  opacity: 0.45;
+.preview-cell.over-cap {
+  opacity: 0.55;
+}
+/* The pick control: header button of the card (details are a sibling —
+ * focusable note anchors must never nest inside a button). */
+.preview-mon {
+  position: relative;
+  width: 100%;
+  text-align: left;
+  min-height: 48px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 12px 12px 0 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .preview-cell:not(.over-cap) .preview-mon:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+.preview-cell.over-cap .preview-mon {
   cursor: not-allowed;
+}
+.preview-cell.over-cap .preview-mon:active {
+  transform: none;
 }
 .cap-badge {
   position: absolute;
@@ -500,11 +528,14 @@ dialog.modal::backdrop {
   font-size: 0.7rem;
   padding: 2px 8px;
 }
+/* Running total-level readout — lives in the sticky actions bar so it
+ * stays visible however far the (now taller) card grid scrolls. */
 .level-sum {
-  margin-left: 10px;
   color: var(--text-dim);
   font-size: 0.85rem;
   font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .pick-badge {
   position: absolute;
@@ -522,15 +553,6 @@ dialog.modal::backdrop {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-.preview-item {
-  color: var(--text-dim);
-  font-size: 0.85rem;
-  margin-top: 2px;
-}
-.preview-moves {
-  font-size: 0.85rem;
-  margin-top: 4px;
 }
 .preview-actions {
   position: sticky;
@@ -1024,8 +1046,7 @@ dialog.modal::backdrop {
   display: inline-block;
   transition: transform 0.15s ease;
 }
-.mon-sheet-head[aria-expanded="true"] .sheet-chevron,
-.sheet-toggle[aria-expanded="true"] .sheet-chevron {
+.mon-sheet-head[aria-expanded="true"] .sheet-chevron {
   transform: rotate(90deg);
 }
 .set-detail {
@@ -1069,37 +1090,10 @@ dialog.modal::backdrop {
 .set-move .move-meta {
   margin-left: auto;
 }
-/* Own preview cells: pick card + a light detail toggle underneath. */
-.preview-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.preview-cell .preview-mon {
-  flex: 1;
-}
-.sheet-toggle {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: transparent;
-  border: none;
-  padding: 4px 10px;
-  font-size: 0.8rem;
-  color: var(--text-dim);
-}
-@media (hover: hover) and (pointer: fine) {
-  .sheet-toggle:hover {
-    color: var(--text);
-    border: none;
-  }
-}
+/* Own preview cells (UI-5): the set detail is body content of the card —
+ * no frame of its own, just breathing room under the header's rule. */
 .preview-cell .set-detail {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-  padding: 10px 12px;
+  padding: 8px 12px 10px;
 }
 .team-sheets section {
   margin-top: 4px;
@@ -1242,13 +1236,11 @@ h2.end-text {
   margin: 0 0 12px;
 }
 
-/* .preview-mon over-cap now uses aria-disabled (stays focusable for the
- * cap note), so the :disabled UA/base styles no longer apply — pin them. */
-.preview-mon.over-cap:active {
-  transform: none;
-}
+/* Over-cap uses aria-disabled (stays focusable for the cap note), so the
+ * :disabled UA/base styles don't apply — pin the hover edge quiet. The
+ * :active transform pin lives with the preview card rules. */
 @media (hover: hover) and (pointer: fine) {
-  button.preview-mon.over-cap:hover {
+  .preview-cell.over-cap button.preview-mon:hover {
     border-color: var(--line);
   }
 }

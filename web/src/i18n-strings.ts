@@ -54,7 +54,6 @@ export interface UIStrings {
   teamSheets: string;
   yourTeam: (id: string) => string;
   sheetNote: string;
-  sheetDetails: string;
   sheetItem: string;
   sheetNoItem: string;
   sheetGender: string;
@@ -100,7 +99,6 @@ export interface UIStrings {
   srBotThinking: string;
   srSwitchTo: (species: string, hpPct: number) => string;
   srPicked: (order: number) => string;
-  srDetailsFor: (species: string) => string;
   srDeleteFor: (name: string) => string;
 }
 
@@ -145,7 +143,7 @@ const EN: UIStrings = {
   teamPreview: "Team preview",
   foeTeam: (id) => `Foe team (${id})`,
   previewTapHint:
-    "Open team sheet — tap any Pokémon for its full set.",
+    "Open team sheet — tap a foe Pokémon for its full set; your own sets are shown in full below.",
   yourTeamPick: "Your team — pick 3, lead first",
   lead: "Lead",
   confirmPicks: "Confirm picks",
@@ -159,7 +157,6 @@ const EN: UIStrings = {
   sheetNote:
     "Both full teams are open information. Which 3 the opponent picked " +
     "stays hidden until each Pokémon appears in battle.",
-  sheetDetails: "Details",
   sheetItem: "Item",
   sheetNoItem: "No item",
   sheetGender: "Gender",
@@ -202,7 +199,6 @@ const EN: UIStrings = {
   srSwitchTo: (species, hpPct) => `Switch to ${species} — HP ${hpPct}%`,
   srPicked: (order) =>
     order === 0 ? "picked as lead" : `picked, number ${order + 1}`,
-  srDetailsFor: (species) => `Details — ${species}`,
   srDeleteFor: (name) => `Delete team ${name}`,
 };
 
@@ -248,7 +244,7 @@ const JA: UIStrings = {
   teamPreview: "選出(見せ合い)",
   foeTeam: (id) => `相手のチーム(${id})`,
   previewTapHint:
-    "オープンチームシート — ポケモンをタップすると構成を確認できます。",
+    "オープンチームシート — 相手のポケモンはタップで構成を確認、自分の構成は下にすべて表示されています。",
   yourTeamPick: "自分のチーム — 3体選ぶ(1体目が先発)",
   lead: "先発",
   confirmPicks: "選出を確定",
@@ -262,7 +258,6 @@ const JA: UIStrings = {
   sheetNote:
     "両チームの構成は公開情報です。相手がどの3体を選出したかは、その" +
     "ポケモンが場に出るまで分かりません。",
-  sheetDetails: "詳細",
   sheetItem: "持ち物",
   sheetNoItem: "なし",
   sheetGender: "性別",
@@ -306,7 +301,6 @@ const JA: UIStrings = {
   srSwitchTo: (species, hpPct) => `${species}に交代 — HP ${hpPct}%`,
   srPicked: (order) =>
     order === 0 ? "選出済み・先発" : `選出済み・${order + 1}番目`,
-  srDetailsFor: (species) => `詳細 — ${species}`,
   srDeleteFor: (name) => `チーム「${name}」を削除`,
 };
 

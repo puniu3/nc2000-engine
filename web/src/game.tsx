@@ -44,7 +44,6 @@ import {
   TypeBadge,
 } from "./battle-ui";
 import {
-  itemName,
   moveName,
   speciesName,
   statusLongName,
@@ -136,7 +135,6 @@ export function Game(props: {
   const [botPreviewSrc, setBotPreviewSrc] = useState<
     "table" | "search" | null
   >(null);
-  const [ownDetail, setOwnDetail] = useState<number[]>([]); // preview: own cells with the set detail open
   const [sheetOpen, setSheetOpen] = useState(false); // battle: team-sheets modal
 
   const battleRef = useRef<Battle | null>(null);
@@ -454,12 +452,6 @@ export function Game(props: {
     return sets.find((s) => toId(s.species ?? "") === toId(species)) ?? sets[i];
   }
 
-  function toggleOwnDetail(pos: number) {
-    setOwnDetail((open) =>
-      open.includes(pos) ? open.filter((x) => x !== pos) : [...open, pos],
-    );
-  }
-
   if (phase === "preview") {
     return (
       <main class="screen preview-screen">
@@ -478,16 +470,7 @@ export function Game(props: {
           </ul>
         </section>
         <section>
-          <h2 class="sub-h">
-            {ui().yourTeamPick}
-            <span class="sr-only">, </span>
-            <span class="level-sum">
-              {ui().levelSum(
-                previewSel.reduce((a, p) => a + mine.party[p - 1].level, 0),
-                MAX_TOTAL_LEVEL,
-              )}
-            </span>
-          </h2>
+          <h2 class="sub-h">{ui().yourTeamPick}</h2>
           <div class="preview-grid">
             {mine.party.map((p, i) => {
               const pos = i + 1;
@@ -500,21 +483,28 @@ export function Game(props: {
                 order < 0 &&
                 previewSel.length < 3 &&
                 !fitsLevelCap(levels, previewSel, pos);
-              const detailOpen = ownDetail.includes(pos);
-              // Complete pick-decision name: species, level, types, item,
-              // moves, then the pick state (lead / order).
+              // Pick-control name: species, level, types, pick state. The
+              // set body (item / moves + notes) is no longer folded into
+              // the label — it sits permanently visible right below, as
+              // browseable content (UI-5), so repeating it here would be
+              // duplication spam on every tab stop.
               const pickLabel = [
                 speciesName(p.species),
                 ui().srLevel(p.level),
                 p.types.map(typeName).join("/"),
-                ...(p.item ? [itemName(p.item)] : []),
-                p.moves.map((m) => moveName(m.name)).join(", "),
                 ...(order >= 0 ? [ui().srPicked(order)] : []),
               ].join(", ");
               return (
-                <div class="preview-cell" key={i}>
+                // UI-5: the card is a plain container; the pick control is
+                // its header button and the full set detail sits below as a
+                // sibling — the detail's noted rows are tabindex=0 toggletip
+                // anchors (UI-3) and must never nest inside the button.
+                <div
+                  class={`preview-cell ${order >= 0 ? "selected" : ""} ${overCap ? "over-cap" : ""}`}
+                  key={i}
+                >
                   <button
-                    class={`preview-mon ${order >= 0 ? "selected" : ""} ${overCap ? "over-cap" : ""}`}
+                    class="preview-mon"
                     // aria-disabled (not disabled): the button stays
                     // focusable so the cap reason stays reachable; the
                     // click is a no-op via togglePreview's cap guard.
@@ -522,6 +512,7 @@ export function Game(props: {
                     aria-pressed={order >= 0}
                     aria-label={pickLabel}
                     aria-describedby={overCap ? `cap-note-${pos}` : undefined}
+                    data-mon={toId(p.species)}
                     onClick={() => togglePreview(pos)}
                   >
                     {order >= 0 && (
@@ -543,28 +534,8 @@ export function Game(props: {
                         <TypeBadge type={t} key={t} />
                       ))}
                     </div>
-                    {p.item && (
-                      <div class="preview-item">@ {itemName(p.item)}</div>
-                    )}
-                    <div class="preview-moves">
-                      {p.moves.map((m) => moveName(m.name)).join(" · ")}
-                    </div>
                   </button>
-                  <button
-                    class="ghost sheet-toggle"
-                    aria-expanded={detailOpen}
-                    aria-label={ui().srDetailsFor(speciesName(p.species))}
-                    data-mon={toId(p.species)}
-                    onClick={() => toggleOwnDetail(pos)}
-                  >
-                    {ui().sheetDetails}
-                    <span class="sheet-chevron" aria-hidden="true">
-                      &#9656;
-                    </span>
-                  </button>
-                  {detailOpen && (
-                    <SetDetail mon={sheetMon(ownSet(i, p.species))} />
-                  )}
+                  <SetDetail mon={sheetMon(ownSet(i, p.species))} />
                 </div>
               );
             })}
@@ -580,6 +551,12 @@ export function Game(props: {
               ? ui().confirmPicks
               : ui().pickMore(3 - previewSel.length)}
           </button>
+          <span class="level-sum">
+            {ui().levelSum(
+              previewSel.reduce((a, p) => a + mine.party[p - 1].level, 0),
+              MAX_TOTAL_LEVEL,
+            )}
+          </span>
           <span class="bot-preview-note">
             {thinking ? (
               <ThinkChip thinking={thinking} />
