@@ -18,8 +18,18 @@ import { loadJaNames, locale, setLocale, ui, type Locale } from "./i18n";
 /** The fixed bot strength: the former "Max" tier, always on. */
 export const BUDGET = 30000;
 
+/** The human's selected team: a pool team (poolIdx set — baked pair tables
+ * may apply) or a saved custom team (poolIdx null — bot preview vs it is
+ * always live search). Sets are captured at start, so deleting the saved
+ * custom mid-game/rematch is safe. */
+export interface SelectedTeam {
+  id: string;
+  sets: unknown[];
+  poolIdx: number | null;
+}
+
 interface GameSpec {
-  humanIdx: number;
+  human: SelectedTeam;
   botIdx: number;
   n: number;
 }
@@ -81,12 +91,12 @@ export function App() {
           setLocale(l);
           setLoc(l);
         }}
-        onStart={(humanIdx, botIdx) => {
+        onStart={(human, botIdx) => {
           const bot =
             botIdx === "random"
               ? randomSeed32() % pool.teams.length
               : botIdx;
-          setGame({ humanIdx, botIdx: bot, n: 1 });
+          setGame({ human, botIdx: bot, n: 1 });
         }}
       />
     );
@@ -97,7 +107,7 @@ export function App() {
       key={game.n}
       pool={pool}
       poolJson={poolJsonRef.current}
-      humanIdx={game.humanIdx}
+      humanTeam={game.human}
       botIdx={game.botIdx}
       onRematch={() => setGame({ ...game, n: game.n + 1 })}
       onNewTeams={() => setGame(null)}

@@ -187,6 +187,7 @@ small {
   border-radius: 10px;
   padding: 6px 12px;
   min-width: 130px;
+  text-align: left;
 }
 .select-slot.current {
   border-color: var(--accent);
@@ -269,6 +270,176 @@ small {
   padding: 3px 8px;
   font-size: 0.85rem;
   white-space: nowrap;
+}
+
+/* ------------------------------------------- custom teams + import (M14) */
+
+.custom-section h3 {
+  margin-bottom: 0;
+}
+.team-card.custom-card {
+  border: 1px solid var(--line);
+  position: relative;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+}
+.custom-card-body {
+  flex: 1;
+  display: block;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 12px 0 0 12px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+.custom-tier {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.delete-btn {
+  align-self: stretch;
+  min-width: 56px;
+  border: none;
+  border-left: 1px solid var(--line);
+  border-radius: 0 12px 12px 0;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+.delete-btn.confirming {
+  color: #fff;
+  background: var(--bad);
+}
+.add-custom-card {
+  text-align: center;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-style: dashed;
+  min-height: 60px;
+}
+
+.import-panel {
+  margin-top: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.import-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.import-head h3 {
+  margin: 0;
+  color: var(--text);
+}
+.import-help {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin: 8px 0;
+}
+.import-text {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+.import-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.import-name-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  flex: 1;
+  min-width: 180px;
+}
+.import-name {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  min-height: 44px;
+  padding: 6px 12px;
+  width: 100%;
+}
+.import-btn {
+  min-width: 140px;
+}
+.import-result {
+  margin-top: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+}
+.import-result.ok {
+  border-color: var(--good);
+}
+.import-result.bad {
+  border-color: var(--bad);
+}
+.import-ok-note {
+  color: var(--good);
+  font-weight: 600;
+}
+.import-err-note {
+  color: var(--bad);
+  font-weight: 600;
+}
+.finding-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.finding-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+.finding-anchor {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.finding-list.error .finding-text {
+  color: var(--text);
+}
+.finding-list.fix .finding-text {
+  color: var(--text-dim);
+}
+.applied-fixes {
+  margin-top: 8px;
+}
+.applied-fixes summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
 }
 
 /* ---------------------------------------------------------- preview */

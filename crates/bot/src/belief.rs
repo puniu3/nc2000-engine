@@ -136,6 +136,28 @@ impl Belief {
         b
     }
 
+    /// Open-team-sheet belief for a caller that holds the TRUE battle (the
+    /// arena's `open` agent — the M12 product policy in native form):
+    /// pinned to reference mons cloned straight from the opponent's true
+    /// roster, which is legitimate because both sheets are public under the
+    /// policy. Equivalent to `Belief::pinned` with the opponent's set list
+    /// (the refs `build_refs` constructs from the sets ARE the roster mons
+    /// at team preview); call at team preview, where the roster is fresh.
+    pub fn pinned_from_battle(battle: &Battle, obs: &Observer) -> Belief {
+        let refs = battle.sides[obs.opp()].roster.clone();
+        Belief {
+            cands: vec![Candidate {
+                id: "opponent".to_string(),
+                sets: Vec::new(),
+                refs: Some(refs),
+            }],
+            alive: vec![0],
+            fallback: None,
+            pinned: true,
+            synced: Some(obs.revision()),
+        }
+    }
+
     /// Re-filter after new observations. Cheap no-op at an unchanged
     /// observer revision, and always for a pinned belief holding its
     /// candidate (the pinned truth passes every filter by construction).

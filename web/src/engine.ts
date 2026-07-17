@@ -5,6 +5,7 @@
 import init, {
   Dex,
   Battle,
+  Validator,
   deriveBattleSeed,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import type { Choice, StateView } from "./types";
@@ -12,6 +13,7 @@ import type { Choice, StateView } from "./types";
 export { Battle };
 
 let dex: Dex | null = null;
+let validator: Validator | null = null;
 
 export async function loadEngine(): Promise<Dex> {
   if (!dex) {
@@ -24,6 +26,13 @@ export async function loadEngine(): Promise<Dex> {
 export function getDex(): Dex {
   if (!dex) throw new Error("engine not loaded");
   return dex;
+}
+
+/** M14a team validator (embedded learnsets), lazily constructed — only the
+ * custom-team import flow needs it. */
+export function getValidator(): Validator {
+  if (!validator) validator = new Validator(getDex());
+  return validator;
 }
 
 export function randomSeed32(): number {

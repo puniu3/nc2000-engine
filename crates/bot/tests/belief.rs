@@ -435,3 +435,68 @@ fn pinned_belief_is_truth_except_picks() {
     }
     assert!(total_points > 30, "games too short to exercise the pinned belief");
 }
+
+// ------------------------- (f) M14: pinned_from_battle ≡ pinned(set list)
+
+/// The arena `open` agent builds its pinned belief from the TRUE battle
+/// (roster clones) instead of a set list. Certify the two constructions are
+/// interchangeable: identical rng state ⇒ bit-identical determinizations
+/// (exact `state_key` equality) at every sampled decision point, pool and
+/// custom opponents alike, and the battle-built belief holds the pinned
+/// invariants for a whole game.
+#[test]
+fn pinned_from_battle_matches_pinned_sets() {
+    let dex = load_dex();
+    let meta = pool();
+    let mut custom = meta.teams[2].sets.clone();
+    custom[1].level -= 1; // off-pool: like a human custom team
+    for (g, (opp_sets, seed)) in [
+        (meta.teams[0].sets.clone(), "9,9,9,9"),
+        (custom.clone(), "2,7,1,8"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut battle =
+            Battle::from_fixture(&dex, seed, &meta.teams[1].sets, &opp_sets).unwrap();
+        let mut a0 = RolloutAgent::new(0.35, 6060 + g as u64);
+        let mut a1 = RolloutAgent::new(0.35, 7070 + g as u64);
+        let mut obs = Observer::new(&battle, 0);
+        // both constructions at team preview, same observer
+        let mut from_sets = Belief::pinned(&dex, "opponent", &opp_sets, &obs);
+        let mut from_battle = Belief::pinned_from_battle(&battle, &obs);
+        let mut rng_a = SplitMix64::new(4242);
+        let mut rng_b = SplitMix64::new(4242);
+        let mut points = 0usize;
+        while battle.outcome().is_none() && battle.turn <= 80 {
+            obs.observe(&battle, &dex);
+            from_sets.sync(&dex, &obs);
+            from_battle.sync(&dex, &obs);
+            for b in [&from_sets, &from_battle] {
+                assert_eq!(b.candidate_count(), 1, "pinned belief must stay a singleton");
+                assert!(!b.is_fallback(), "pinned belief must never go fallback");
+            }
+            if points % 3 == 0 {
+                let da = from_sets.determinize(&dex, &battle, &obs, &mut rng_a);
+                let db = from_battle.determinize(&dex, &battle, &obs, &mut rng_b);
+                assert_eq!(
+                    da.state_key(),
+                    db.state_key(),
+                    "pinned_from_battle determinization diverged (game {g}, point {points})"
+                );
+                playable(&dex, db);
+            }
+            points += 1;
+            let mut picks = [None, None];
+            for s in 0..2 {
+                let cs = battle.legal_choices(&dex, s);
+                if !cs.is_empty() {
+                    let agent: &mut dyn Agent = if s == 0 { &mut a0 } else { &mut a1 };
+                    picks[s] = Some(agent.choose(&battle, &dex, s, &cs));
+                }
+            }
+            battle.apply_choices(&dex, picks).unwrap();
+        }
+        assert!(points > 8, "game {g} too short to certify the pinned equivalence");
+    }
+}

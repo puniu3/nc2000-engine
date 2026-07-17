@@ -19,6 +19,11 @@
 //!                                    determinization; baked-table preview when the
 //!                                    opponent's pool identity resolves publicly
 //!                                    (battles run log-ON for its observer)
+//!   open[:ITERS[:C[:BUCKETS]]]       M14 open-team-sheet agent (the M12 product
+//!                                    policy): the blind machinery with the opponent's
+//!                                    TRUE sets pinned as a singleton belief — only
+//!                                    picks stay hidden; preview by public-signature
+//!                                    table lookup, else pinned live search
 //!   exploit:<inner>                  best-response probe vs a frozen <inner> policy
 //!                                    (3-sample seed-marginal oracle, own budget = 3x inner's)
 //!   baked:<inner> | bakedarg:<inner>       M8 baked preview (mixed sample / argmax),
@@ -35,8 +40,8 @@ use nc2000_bot::preview::{load_meta_pool, MetaPool};
 use nc2000_bot::smmcts::SelRule;
 use nc2000_bot::{
     run_duel, Agent, BakedPreviewAgent, BlindAgent, BrAgent, CounterPickAgent, DuelSpec,
-    EvalWeights, MaxDamageAgent, MctsAgent, MctsConfig, Playout, PreviewMode, RandomAgent,
-    RmAgent, RmConfig, TableSet,
+    EvalWeights, MaxDamageAgent, MctsAgent, MctsConfig, OpenAgent, Playout, PreviewMode,
+    RandomAgent, RmAgent, RmConfig, TableSet,
 };
 use nc2000_engine::battle::PokemonSet;
 
@@ -49,6 +54,7 @@ enum AgentSpec {
     Rm { iterations: u32, probe: f64, threshold: f64, buckets: i64 },
     SkUct { iterations: u32, c: f64, buckets: i64 },
     Blind { iterations: u32, c: f64, buckets: i64 },
+    Open { iterations: u32, c: f64, buckets: i64 },
     Exploit(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
     Counter { inner: Box<AgentSpec>, target: PreviewMode },
@@ -93,6 +99,11 @@ impl AgentSpec {
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
             }),
+            "open" => Ok(AgentSpec::Open {
+                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
+                c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
+                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
+            }),
             "exploit" => {
                 let inner = s.strip_prefix("exploit:").ok_or("exploit needs an inner spec")?;
                 Ok(AgentSpec::Exploit(Box::new(AgentSpec::parse(inner)?)))
@@ -121,7 +132,8 @@ impl AgentSpec {
             | AgentSpec::Mcts5 { iterations, .. }
             | AgentSpec::Rm { iterations, .. }
             | AgentSpec::SkUct { iterations, .. }
-            | AgentSpec::Blind { iterations, .. } => *iterations,
+            | AgentSpec::Blind { iterations, .. }
+            | AgentSpec::Open { iterations, .. } => *iterations,
             AgentSpec::Exploit(inner) => inner.iterations(),
             AgentSpec::Baked { inner, .. } | AgentSpec::Counter { inner, .. } => {
                 inner.iterations()
@@ -132,17 +144,22 @@ impl AgentSpec {
 
     fn needs_tables(&self) -> bool {
         match self {
-            AgentSpec::Baked { .. } | AgentSpec::Counter { .. } | AgentSpec::Blind { .. } => true,
+            AgentSpec::Baked { .. }
+            | AgentSpec::Counter { .. }
+            | AgentSpec::Blind { .. }
+            | AgentSpec::Open { .. } => true,
             AgentSpec::Exploit(inner) => inner.needs_tables(),
             _ => false,
         }
     }
 
-    /// Blind agents need the meta pool as their belief prior (and log-on
-    /// outer battles for their observer).
+    /// Blind agents need the meta pool as their belief prior; blind AND
+    /// open agents want log-on outer battles for their observer's
+    /// trace-free reveal channel (product parity: the web worker's mirror
+    /// battle runs log-ON).
     fn is_blind(&self) -> bool {
         match self {
-            AgentSpec::Blind { .. } => true,
+            AgentSpec::Blind { .. } | AgentSpec::Open { .. } => true,
             AgentSpec::Exploit(inner)
             | AgentSpec::Baked { inner, .. }
             | AgentSpec::Counter { inner, .. } => inner.is_blind(),
@@ -207,6 +224,17 @@ impl AgentSpec {
                 tables.cloned(),
                 seed,
             )),
+            AgentSpec::Open { iterations, c, buckets } => Box::new(OpenAgent::new(
+                RmConfig {
+                    iterations: *iterations,
+                    rule: SelRule::Ucb,
+                    c: *c,
+                    hp_buckets: *buckets,
+                    ..Default::default()
+                },
+                tables.cloned(),
+                seed,
+            )),
             AgentSpec::Exploit(inner) => {
                 let model = inner.build(seed ^ 0x517C_C1B7_2722_0A95, tables, pool);
                 let cfg =
@@ -243,6 +271,9 @@ impl AgentSpec {
             }
             AgentSpec::Blind { iterations, c, buckets } => {
                 format!("blind:{iterations}:{c}:{buckets}")
+            }
+            AgentSpec::Open { iterations, c, buckets } => {
+                format!("open:{iterations}:{c}:{buckets}")
             }
             AgentSpec::Exploit(inner) => format!("exploit:{}", inner.label()),
             AgentSpec::Baked { inner, mode } => match mode {

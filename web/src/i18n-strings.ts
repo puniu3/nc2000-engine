@@ -19,6 +19,22 @@ export interface UIStrings {
   startBattle: string;
   chooseYours: string;
   chooseOpp: string;
+  // custom teams (M14)
+  customBadge: string;
+  customSection: string;
+  addCustom: string;
+  importTitle: string;
+  importHelp: string;
+  importPlaceholder: string;
+  importNameLabel: string;
+  importNamePlaceholder: string;
+  importButton: string;
+  importCancel: string;
+  importedOk: (name: string) => string;
+  appliedFixes: (n: number) => string;
+  importErrors: (n: number) => string;
+  deleteTeam: string;
+  deleteConfirm: string;
   // device benchmark
   benchTitle: string;
   benchRun: string;
@@ -84,6 +100,25 @@ const EN: UIStrings = {
   startBattle: "Start battle",
   chooseYours: "Choose your team",
   chooseOpp: "Choose the opponent's team",
+  customBadge: "custom",
+  customSection: "Your custom teams",
+  addCustom: "+ Import a custom team",
+  importTitle: "Import a custom team",
+  importHelp:
+    "Paste a team in the Pokémon Showdown teambuilder export format. " +
+    "Fixable issues (missing gender, derived HP DV, …) are corrected " +
+    "automatically; rule violations are listed below.",
+  importPlaceholder:
+    "Snorlax @ Leftovers\nLevel: 55\n- Body Slam\n- Rest\n…",
+  importNameLabel: "Team name",
+  importNamePlaceholder: "My team",
+  importButton: "Import team",
+  importCancel: "Close",
+  importedOk: (name) => `Saved “${name}” — it plays under the open team sheet like any pool team.`,
+  appliedFixes: (n) => `${n} automatic ${n === 1 ? "fix" : "fixes"} applied`,
+  importErrors: (n) => `${n} ${n === 1 ? "problem" : "problems"} — fix and import again`,
+  deleteTeam: "Delete",
+  deleteConfirm: "Delete?",
   benchTitle: "Device benchmark",
   benchRun: "Run (~5 s)",
   benchAgain: "Run again",
@@ -141,6 +176,26 @@ const JA: UIStrings = {
   startBattle: "対戦開始",
   chooseYours: "自分のチームを選ぶ",
   chooseOpp: "相手のチームを選ぶ",
+  customBadge: "カスタム",
+  customSection: "自分のカスタムチーム",
+  addCustom: "+ カスタムチームを取り込む",
+  importTitle: "カスタムチームの取り込み",
+  importHelp:
+    "Pokémon Showdown のチームビルダーからエクスポートしたテキストを" +
+    "貼り付けてください。自動修正できる項目(性別の補完、HPのDV導出など)は" +
+    "取り込み時に修正され、ルール違反は下に一覧表示されます。",
+  importPlaceholder:
+    "Snorlax @ Leftovers\nLevel: 55\n- Body Slam\n- Rest\n…",
+  importNameLabel: "チーム名",
+  importNamePlaceholder: "マイチーム",
+  importButton: "取り込む",
+  importCancel: "閉じる",
+  importedOk: (name) =>
+    `「${name}」を保存しました — プールのチームと同じくオープンシートで対戦できます。`,
+  appliedFixes: (n) => `自動修正 ${n}件`,
+  importErrors: (n) => `問題 ${n}件 — 修正して再度取り込んでください`,
+  deleteTeam: "削除",
+  deleteConfirm: "削除する?",
   benchTitle: "端末ベンチマーク",
   benchRun: "実行(約5秒)",
   benchAgain: "もう一度",

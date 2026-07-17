@@ -43,7 +43,7 @@ import {
   TypeBadge,
 } from "./battle-ui";
 import { itemName, moveName, speciesName, ui } from "./i18n";
-import { BUDGET } from "./app";
+import { BUDGET, type SelectedTeam } from "./app";
 
 const HUMAN = 0;
 const BOT = 1;
@@ -91,7 +91,7 @@ function ThinkChip(props: { thinking: Thinking | null }) {
 export function Game(props: {
   pool: MetaPool;
   poolJson: string;
-  humanIdx: number;
+  humanTeam: SelectedTeam;
   botIdx: number;
   onRematch: () => void;
   onNewTeams: () => void;
@@ -116,7 +116,7 @@ export function Game(props: {
   const narrator = useMemo(() => new Narrator(HUMAN), []);
   const pairPromiseRef = useRef<Promise<string | null> | null>(null);
 
-  const humanTeam = props.pool.teams[props.humanIdx];
+  const humanTeam = props.humanTeam;
   const botTeam = props.pool.teams[props.botIdx];
 
   // ------------------------------------------------------------ lifecycle
@@ -132,7 +132,12 @@ export function Game(props: {
       newBattleSeed(),
     );
     battleRef.current = battle;
-    pairPromiseRef.current = fetchPairJson(props.humanIdx, props.botIdx);
+    // Baked pair tables exist only between pool teams — a custom human
+    // team (poolIdx null) always sends the bot preview to live search.
+    pairPromiseRef.current =
+      humanTeam.poolIdx === null
+        ? Promise.resolve(null)
+        : fetchPairJson(humanTeam.poolIdx, props.botIdx);
     void bot
       .newBattle(JSON.stringify(humanTeam.sets), JSON.stringify(botTeam.sets), battle.seed(), {
         poolJson: props.poolJson,

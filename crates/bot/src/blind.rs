@@ -123,15 +123,30 @@ impl BlindAgent {
     // -------------------------------------------------------------- search
 
     fn search(&mut self, battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoice]) -> SearchChoice {
-        let mut bs = BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
-        debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
         let g = self.game.as_ref().expect("search after lifecycle setup");
-        for _ in 0..self.cfg.iterations {
-            bs.step_one(dex, &g.belief, &g.observer);
-        }
-        self.rng = bs.rng.clone();
-        bs.best().expect("search called with a non-empty choice list")
+        search_choose(&self.cfg, &mut self.rng, g, battle, dex, side, choices)
     }
+}
+
+/// One full `cfg.iterations` blind search at a decision point — the agent
+/// loop over `BlindSearch`, shared by `BlindAgent` and `OpenAgent` (same
+/// operation order as the original `BlindAgent::search`, bit-identical).
+fn search_choose(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    g: &GameState,
+    battle: &Battle,
+    dex: &Dex,
+    side: usize,
+    choices: &[SearchChoice],
+) -> SearchChoice {
+    let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
+    debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
+    for _ in 0..cfg.iterations {
+        bs.step_one(dex, &g.belief, &g.observer);
+    }
+    *rng = bs.rng.clone();
+    bs.best().expect("search called with a non-empty choice list")
 }
 
 /// Belief-mediated M8 table lookup at team preview: own side by signature
@@ -371,6 +386,95 @@ fn select_global(cfg: &RmConfig, rng: &mut SplitMix64, n: &mut [u32], w: &[f64])
     };
     n[pick] += 1;
     pick
+}
+
+// ------------------------------------------------- open-sheet agent (M14)
+
+/// M14 `open` agent: the M12 open-team-sheet product policy in arena form —
+/// the blind machinery with the opponent's TRUE sets pinned as a singleton
+/// belief (`Belief::pinned_from_battle`; legitimate because both sheets are
+/// public under the policy), so determinizations equal the truth except
+/// what stays hidden by policy: unseen pick identities (which 3 of 6 +
+/// lead) and the mid-turn pending-move scrub. Team preview mirrors the
+/// wasm worker's pinned path: `open_preview_pick` (both sides resolved by
+/// public signature — baked pair tables answer when the matchup is baked),
+/// else the pinned determinized preview search. This is exactly what the
+/// shipped web bot plays; `skuct` (perfect info incl. picks) is its
+/// upper-bound opponent.
+pub struct OpenAgent {
+    cfg: RmConfig,
+    rng: SplitMix64,
+    tables: Option<Arc<TableSet>>,
+    game: Option<GameState>,
+}
+
+impl OpenAgent {
+    /// Same config surface as `BlindAgent` (the RM root layer fields are
+    /// ignored — the blind/open play rule is argmax over the global root).
+    pub fn new(cfg: RmConfig, tables: Option<Arc<TableSet>>, seed: u64) -> Self {
+        OpenAgent { cfg, rng: SplitMix64::new(seed), tables, game: None }
+    }
+
+    /// The live belief (None before the first decision) — test surface.
+    pub fn belief(&self) -> Option<&Belief> {
+        self.game.as_ref().map(|g| &g.belief)
+    }
+}
+
+impl Agent for OpenAgent {
+    fn name(&self) -> String {
+        format!("open:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets)
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        let is_preview = matches!(choices[0], SearchChoice::Team(_));
+
+        // ---- per-game lifecycle (mirrors BlindAgent): (re)build at
+        // preview / on a new game. The pinned belief snapshots the
+        // opponent's true roster, so it must be built at team preview
+        // (fresh mons); the defensive mid-game rebuild degrades gracefully
+        // (refs then carry live PP marks — still a superset of public).
+        let stale = match &self.game {
+            None => true,
+            Some(g) => g.side != side || is_preview || battle.turn < g.last_turn,
+        };
+        if stale {
+            let observer = Observer::new(battle, side);
+            let belief = Belief::pinned_from_battle(battle, &observer);
+            self.game = Some(GameState { side, last_turn: battle.turn, observer, belief });
+        }
+        {
+            let g = self.game.as_mut().unwrap();
+            g.last_turn = battle.turn;
+            g.observer.observe(battle, dex);
+            g.belief.sync(dex, &g.observer);
+        }
+
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        if is_preview {
+            // Open sheet: both rosters are public — resolve the pair by
+            // signature (no identification condition; the wasm worker's
+            // pinned-mode rule). None ⇔ off-pool team or unbaked pair.
+            if let Some(tables) = self.tables.as_ref() {
+                if let Some(c) = open_preview_pick(tables, battle, side, &mut self.rng) {
+                    debug_assert!(choices.contains(&c), "open preview outside legal set");
+                    if choices.contains(&c) {
+                        return c;
+                    }
+                }
+            }
+        }
+        let g = self.game.as_ref().expect("choose after lifecycle setup");
+        search_choose(&self.cfg, &mut self.rng, g, battle, dex, side, choices)
+    }
 }
 
 impl Agent for BlindAgent {
