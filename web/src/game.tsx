@@ -31,6 +31,7 @@ import type {
   LogEntry,
   MetaPool,
   MoveChoice,
+  PokeView,
   StateView,
   SwitchChoice,
   TeamChoice,
@@ -39,11 +40,13 @@ import {
   ActiveCard,
   FieldStrip,
   HpBar,
+  ItemChip,
   Lvl,
   StatusBadge,
   TypeBadge,
 } from "./battle-ui";
 import {
+  itemName,
   moveName,
   speciesName,
   statusLongName,
@@ -578,7 +581,6 @@ export function Game(props: {
 
   const activeMine = mine.active !== null ? mine.party[mine.active] : null;
   const activeFoe = foe.active !== null ? foe.party[foe.active] : null;
-  const bench = mine.party.filter((_, i) => i !== mine.active);
 
   return (
     <main class="screen battle-screen">
@@ -612,12 +614,16 @@ export function Game(props: {
         </Modal>
       )}
 
+      {/* UI-6: no bench row here — own bench mons live on the switch
+          buttons below; the foe's remaining count rides the foe card
+          ("N left"); full detail is in the Team sheets modal. */}
       <div class="arena">
         {activeFoe && (
           <ActiveCard
             poke={activeFoe}
             mine={false}
             extra={ui().nLeft(foe.pokemonLeft)}
+            initialItem={initialItem(botTeam.sets, activeFoe.species)}
           />
         )}
         <FieldStrip
@@ -626,30 +632,12 @@ export function Game(props: {
           mineConds={mine.sideConditions}
           foeConds={foe.sideConditions}
         />
-        {activeMine && <ActiveCard poke={activeMine} mine={true} />}
-        {bench.length > 0 && (
-          <div class="bench-row" role="group" aria-label={ui().srBench}>
-            {bench.map((p, i) => (
-              <span
-                class={`bench-chip ${p.fainted ? "fainted" : ""}`}
-                key={i}
-              >
-                {speciesName(p.species)}{" "}
-                {p.fainted ? (
-                  <small>
-                    <span aria-hidden="true">{ui().fnt}</span>
-                    <span class="sr-only">{statusLongName("fnt")}</span>
-                  </small>
-                ) : (
-                  <small>
-                    <span class="sr-only">HP </span>
-                    {p.hp}/{p.maxhp}
-                  </small>
-                )}
-                <StatusBadge status={p.status} />
-              </span>
-            ))}
-          </div>
+        {activeMine && (
+          <ActiveCard
+            poke={activeMine}
+            mine={true}
+            initialItem={initialItem(humanTeam.sets, activeMine.species)}
+          />
         )}
       </div>
 
@@ -669,7 +657,12 @@ export function Game(props: {
             headingRef={endHeadRef}
           />
         ) : humanChoices ? (
-          <ChoiceButtons choices={humanChoices} onPick={humanPick} />
+          <ChoiceButtons
+            choices={humanChoices}
+            onPick={humanPick}
+            party={mine.party}
+            sets={humanTeam.sets}
+          />
         ) : (
           <ThinkingBar thinking={thinking} waiting={humanWaiting} />
         )}
@@ -717,21 +710,42 @@ function moveAria(m: MoveChoice): string {
   return bits.join(", ");
 }
 
-/** Complete spoken switch name: species, HP percent, status. */
-function switchAria(s: SwitchChoice): string {
+/** The set's starting item for `species` (open team sheet: initial sets
+ * are public). Null when no set matches (e.g. Transform changed the view
+ * species) — the item chip then shows current state only. */
+function initialItem(sets: unknown[], species: string): string | null {
+  const s = (sets as { species?: string }[]).find(
+    (x) => toId(x.species ?? "") === toId(species),
+  );
+  return s ? sheetMon(s).item : null;
+}
+
+/** Complete spoken switch name: species, HP percent, status, held item
+ * (UI-6: mentioned when held or publicly lost; silent when never held). */
+function switchAria(
+  s: SwitchChoice,
+  item: string | null,
+  initial: string | null,
+): string {
   const pct =
     s.maxhp > 0
       ? s.hp <= 0
         ? 0
         : Math.max(1, Math.round((s.hp / s.maxhp) * 100))
       : 0;
-  const base = ui().srSwitchTo(speciesName(s.species), pct);
-  return s.status ? `${base}, ${statusLongName(s.status)}` : base;
+  const bits = [ui().srSwitchTo(speciesName(s.species), pct)];
+  if (s.status) bits.push(statusLongName(s.status));
+  if (item) bits.push(ui().srItemHeld(itemName(item)));
+  else if (initial) bits.push(ui().srItemGone(itemName(initial)));
+  return bits.join(", ");
 }
 
 function ChoiceButtons(props: {
   choices: Choice[];
   onPick: (input: string) => void;
+  /** Own battle party + static sets: item source for the switch buttons. */
+  party: PokeView[];
+  sets: unknown[];
 }) {
   const moves = props.choices.filter(
     (c): c is MoveChoice => c.kind === "move",
@@ -781,22 +795,33 @@ function ChoiceButtons(props: {
       )}
       {switches.length > 0 && (
         <div class="switch-row">
-          {switches.map((s) => (
-            <button
-              class="switch-btn"
-              key={s.input}
-              aria-label={switchAria(s)}
-              onClick={() => props.onPick(s.input)}
-            >
-              <span class="switch-label">{ui().switchLabel}</span>
-              <span class="mon-name">{speciesName(s.species)}</span>
-              <span class="switch-hp">
-                {s.hp}/{s.maxhp}
-              </span>
-              <StatusBadge status={s.status} />
-              <HpBar pct={s.maxhp > 0 ? (s.hp / s.maxhp) * 100 : 0} />
-            </button>
-          ))}
+          {switches.map((s) => {
+            // Current item from the live view (species-matched — party
+            // order and choice pos live in different index spaces).
+            const pk =
+              props.party.find(
+                (p) => toId(p.species) === toId(s.species),
+              ) ?? null;
+            const cur = pk?.item ?? null;
+            const init = initialItem(props.sets, s.species);
+            return (
+              <button
+                class="switch-btn"
+                key={s.input}
+                aria-label={switchAria(s, cur, init)}
+                onClick={() => props.onPick(s.input)}
+              >
+                <span class="switch-label">{ui().switchLabel}</span>
+                <span class="mon-name">{speciesName(s.species)}</span>
+                <ItemChip item={cur} initial={init} note={false} />
+                <span class="switch-hp">
+                  {s.hp}/{s.maxhp}
+                </span>
+                <StatusBadge status={s.status} />
+                <HpBar pct={s.maxhp > 0 ? (s.hp / s.maxhp) * 100 : 0} />
+              </button>
+            );
+          })}
         </div>
       )}
       {others.map((c) => (

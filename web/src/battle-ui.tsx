@@ -1,6 +1,7 @@
 // Presentational pieces for the battle screen. Display semantics mirror
 // the CLI panel in crates/bot/examples/play.rs: foe HP as %, own HP exact,
-// boosts as signed chips, bench with exact HP, plus field conditions.
+// boosts as signed chips, plus field conditions. (UI-6: the own-bench row
+// is gone — switch buttons already carry the same mons.)
 //
 // M13: all display names route through i18n (species/types via the JP
 // tables, statuses/conditions/boost labels via the hand tables); status
@@ -10,13 +11,17 @@ import type { PokeView } from "./types";
 import {
   boostLabel,
   condName,
+  itemName,
   speciesName,
   statLongName,
   statusLongName,
   statusName,
+  toId,
   typeName,
   ui,
 } from "./i18n";
+import { itemNote } from "./behavior-notes";
+import { noteRef } from "./tooltip";
 
 export const TYPE_COLORS: Record<string, string> = {
   Normal: "#9fa19f",
@@ -93,6 +98,54 @@ export function TypeBadge(props: { type: string }) {
   );
 }
 
+/** Current held item — public for both sides under the open team sheet
+ * (initial sets are public; every item change is protocol-public: berry
+ * consumption, Thief, …). `item` is the CURRENT item from stateView;
+ * `initial` is the set's starting item, distinguishing "had one, now
+ * gone" (struck-through name) from "never held" (quiet em-dash). A UI-3
+ * behavior-note toggletip attaches when the held item has one; `note:
+ * false` renders a plain chip (inside switch buttons, where the composed
+ * aria-label carries the item and a nested tab stop would be noise). */
+export function ItemChip(props: {
+  item: string | null;
+  initial?: string | null;
+  note?: boolean;
+}) {
+  const it = props.item;
+  const note = props.note !== false && it ? itemNote(it) : null;
+  return (
+    <span
+      class={`item-chip${it ? "" : " none"}${note ? " has-note" : ""}`}
+      data-item={it ? toId(it) : undefined}
+      tabIndex={note ? 0 : undefined}
+    >
+      {it ? (
+        <>
+          <span class="sr-only">{ui().sheetItem} </span>
+          {itemName(it)}
+        </>
+      ) : props.initial ? (
+        <>
+          <span class="item-gone" aria-hidden="true">
+            {itemName(props.initial)}
+          </span>
+          <span class="sr-only">{ui().srItemGone(itemName(props.initial))}</span>
+        </>
+      ) : (
+        <>
+          <span aria-hidden="true">—</span>
+          <span class="sr-only">{ui().srNoItem}</span>
+        </>
+      )}
+      {note && (
+        <span class="bn-note" ref={noteRef}>
+          {note}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function BoostChips(props: { boosts: Record<string, number> }) {
   const chips = Object.entries(props.boosts).filter(([, v]) => v !== 0);
   if (chips.length === 0) return null;
@@ -113,11 +166,13 @@ function BoostChips(props: { boosts: Record<string, number> }) {
   );
 }
 
-/** Active mon card. `mine`: exact HP; foe: % only (play.rs semantics). */
+/** Active mon card. `mine`: exact HP; foe: % only (play.rs semantics).
+ * `initialItem`: the set's starting item (see ItemChip). */
 export function ActiveCard(props: {
   poke: PokeView;
   mine: boolean;
   extra?: string;
+  initialItem?: string | null;
 }) {
   const p = props.poke;
   const pct = hpPct(p);
@@ -138,6 +193,7 @@ export function ActiveCard(props: {
         {p.types.map((t) => (
           <TypeBadge type={t} key={t} />
         ))}
+        <ItemChip item={p.item} initial={props.initialItem} />
         {props.extra && <span class="active-extra">{props.extra}</span>}
       </div>
       <div class="active-hp">

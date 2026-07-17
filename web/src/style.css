@@ -750,23 +750,29 @@ dialog.modal::backdrop {
   color: var(--warn);
 }
 
-.bench-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.bench-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--panel);
+/* Held-item chip (UI-6): current item on both active cards and the own
+ * switch buttons — quiet tag styling, distinct from the colored type
+ * badges. `.none` = never held (em-dash); `.item-gone` = the set's item,
+ * publicly consumed/stolen (struck through). */
+.item-chip {
+  font-size: 0.75rem;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 0.85rem;
+  border-radius: 6px;
+  padding: 2px 6px;
+  color: var(--text-dim);
 }
-.bench-chip.fainted {
-  opacity: 0.55;
+.item-chip.none {
+  opacity: 0.6;
+}
+.item-chip .item-gone {
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+.item-chip.has-note {
+  cursor: help;
+  text-decoration: underline dotted var(--text-dim);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 /* -------------------------------------------------------------- log */

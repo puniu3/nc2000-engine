@@ -93,7 +93,9 @@ export interface UIStrings {
   srYourAction: string;
   srYourActive: string;
   srFoeActive: string;
-  srBench: string;
+  srNoItem: string;
+  srItemHeld: (item: string) => string;
+  srItemGone: (item: string) => string;
   srYourTurn: string;
   srChooseSwitch: string;
   srBotThinking: string;
@@ -192,7 +194,9 @@ const EN: UIStrings = {
   srYourAction: "Your action",
   srYourActive: "Your active Pokémon",
   srFoeActive: "Opponent's active Pokémon",
-  srBench: "Your bench",
+  srNoItem: "no held item",
+  srItemHeld: (it) => `holding ${it}`,
+  srItemGone: (it) => `no item, was holding ${it}`,
   srYourTurn: "Your turn — choose a move or a switch.",
   srChooseSwitch: "Choose your next Pokémon.",
   srBotThinking: "Opponent is thinking…",
@@ -294,7 +298,9 @@ const JA: UIStrings = {
   srYourAction: "あなたの行動",
   srYourActive: "自分の場のポケモン",
   srFoeActive: "相手の場のポケモン",
-  srBench: "自分のひかえ",
+  srNoItem: "もちものなし",
+  srItemHeld: (it) => `もちもの ${it}`,
+  srItemGone: (it) => `もちものなし(もとは${it})`,
   srYourTurn: "あなたの番です — 技か交代を選んでください。",
   srChooseSwitch: "次のポケモンを選んでください。",
   srBotThinking: "相手は考えている…",
