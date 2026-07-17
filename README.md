@@ -4,7 +4,7 @@ Rust port of Pokemon Showdown's **`[Gen 2] NC 2000`** format (mod: `gen2stadium2
 
 **The source of truth is PS as actually implemented.** Divergence from cartridge GSC or real Stadium 2 hardware is out of scope. Correctness is defined as **bit-exact parity** (state + PRNG seed, at every snapshot point) against golden fixtures generated from PS by `tools/gen-fixtures.js`.
 
-**Status:** engine bit-exact vs PS (M1–M4), search bots through imperfect-info play (M5–M10), wasm + browser demo shipped (M9); currently at M12 (publication). Playable demo: *GH Pages URL to come* (see the M12 milestone below). Licensing: MIT, third-party attribution in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+**Status:** engine bit-exact vs PS (M1–M4), search bots through imperfect-info play (M5–M10), wasm + browser demo shipped (M9); currently at M12 (publication). Playable demo: **https://puniu3.github.io/nc2000-engine/** Licensing: MIT, third-party attribution in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
 ## Layout
 
