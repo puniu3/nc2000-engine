@@ -9,16 +9,19 @@ export interface UIStrings {
   loadingEngine: string;
   failedLoad: string;
   settingUp: string;
-  // title / select screen
+  // title / start screen
   subtitle: string;
   openSheetNote: string;
-  you: string;
-  bot: string;
-  randomFromPool: string;
-  randomCard: (n: number) => string;
   startBattle: string;
+  yourParty: string;
+  oppParty: string;
+  randomLabel: string;
+  randomCard: (n: number) => string;
   chooseYours: string;
   chooseOpp: string;
+  poolSection: string;
+  close: string;
+  languageLabel: string;
   // custom teams (M14)
   customBadge: string;
   customSection: string;
@@ -95,13 +98,16 @@ const EN: UIStrings = {
     "Open team sheet: the bot sees your sets, and you can read its sets " +
     "in the team list — neither side sees which 3 the other picks until " +
     "they're revealed in battle.",
-  you: "You",
-  bot: "Bot",
-  randomFromPool: "random from pool",
-  randomCard: (n) => `Random from pool (${n} teams)`,
   startBattle: "Start battle",
+  yourParty: "Your party",
+  oppParty: "Opponent's party",
+  randomLabel: "Random",
+  randomCard: (n) => `Random from pool (${n} teams)`,
   chooseYours: "Choose your team",
   chooseOpp: "Choose the opponent's team",
+  poolSection: "Meta pool teams",
+  close: "Close",
+  languageLabel: "Language",
   customBadge: "custom",
   customSection: "Your custom teams",
   addCustom: "+ Import a custom team",
@@ -173,13 +179,16 @@ const JA: UIStrings = {
     "オープンチームシート: ボットはあなたの構成(技・持ち物)を知って" +
     "おり、あなたもチーム一覧でボットの構成を読めます。どちらの側も、" +
     "相手がどの3体を選出したかは対戦中に明かされるまで見えません。",
-  you: "あなた",
-  bot: "ボット",
-  randomFromPool: "プールからランダム",
-  randomCard: (n) => `プールからランダム(全${n}チーム)`,
   startBattle: "対戦開始",
+  yourParty: "自分のパーティ",
+  oppParty: "相手のパーティ",
+  randomLabel: "ランダム",
+  randomCard: (n) => `プールからランダム(全${n}チーム)`,
   chooseYours: "自分のチームを選ぶ",
   chooseOpp: "相手のチームを選ぶ",
+  poolSection: "メタプールのチーム",
+  close: "閉じる",
+  languageLabel: "言語",
   customBadge: "カスタム",
   customSection: "自分のカスタムチーム",
   addCustom: "+ カスタムチームを取り込む",

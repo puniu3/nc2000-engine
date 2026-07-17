@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { loadEngine, randomSeed32 } from "./engine";
 import { fetchI18nJa, fetchPool } from "./data";
 import type { MetaPool } from "./types";
-import { TeamSelect } from "./select";
+import { StartScreen } from "./select";
 import { Game } from "./game";
 import { loadJaNames, locale, setLocale, ui, type Locale } from "./i18n";
 
@@ -84,7 +84,7 @@ export function App() {
 
   if (!game) {
     return (
-      <TeamSelect
+      <StartScreen
         pool={pool}
         locale={loc}
         onLocale={(l) => {

@@ -1,20 +1,22 @@
-// Team select: pick your team from the meta pool — or a saved custom team
-// (M14) — then the opponent's (specific pool team or random-from-pool; the
-// bot's own team stays pool-only). Also hosts the custom-team import flow
-// (paste PS export -> parse -> canonicalize -> save to localStorage) and
-// the device benchmark — the M9 gate ("skuct:3000 within 2-3 s/move") is
-// certified per device by tapping it.
+// Start screen (UI-1): a minimal centered column — Start battle / Your
+// party / Opponent's party. Both parties default to random-from-pool, so
+// one tap on Start begins a game; a party button opens a modal with the
+// full selection content (pool team list with rank/provenance/species,
+// the M14 custom-team import/pick for the human side). Pinned choices
+// persist in localStorage by team id. The device benchmark (M9 gate
+// certification) lives behind a small footer link; the language selector
+// is an unobtrusive corner dropdown.
 //
-// Open team sheet (M12): the bot's sets are readable right here in the
-// team list, and the bot receives the human's exact sets — a single
-// information policy for pool and custom teams alike. Only picks stay
-// hidden.
+// Open team sheet (M12): the bot's sets are readable in the party modal,
+// and the bot receives the human's exact sets — a single information
+// policy for pool and custom teams alike. Only picks stay hidden.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam } from "./types";
 import { BUDGET, type SelectedTeam } from "./app";
 import { BotWorker } from "./bot";
-import { getValidator } from "./engine";
+import { Modal } from "./modal";
+import { getValidator, randomSeed32 } from "./engine";
 import { parsePsExport } from "./ps-import";
 import { findingAnchor, findingText, type Finding } from "./findings";
 import {
@@ -319,174 +321,293 @@ function CustomTeamCard(props: {
   );
 }
 
-// --------------------------------------------------------- select screen
+// ------------------------------------------------- pinned party choices
 
-type HumanPick = { kind: "pool"; idx: number } | { kind: "custom"; id: string };
+type HumanChoice =
+  | { kind: "random" }
+  | { kind: "pool"; id: string }
+  | { kind: "custom"; id: string };
+type BotChoice = { kind: "random" } | { kind: "pool"; id: string };
+interface Picks {
+  human: HumanChoice;
+  bot: BotChoice;
+}
 
-export function TeamSelect(props: {
-  pool: MetaPool;
-  locale: Locale;
-  onLocale: (l: Locale) => void;
-  onStart: (human: SelectedTeam, botIdx: number | "random") => void;
+const PICKS_KEY = "nc2000-start-picks";
+const RANDOM = { kind: "random" } as const;
+
+/** Load the pinned party choices; anything stale (pool id gone after a
+ * pool update, custom deleted elsewhere) falls back to random. */
+function loadPicks(pool: MetaPool, customs: CustomTeam[]): Picks {
+  const picks: Picks = { human: RANDOM, bot: RANDOM };
+  try {
+    const raw = localStorage.getItem(PICKS_KEY);
+    if (!raw) return picks;
+    const p = JSON.parse(raw) as Partial<Picks>;
+    const h = p.human;
+    if (
+      (h?.kind === "pool" && pool.teams.some((t) => t.id === h.id)) ||
+      (h?.kind === "custom" && customs.some((t) => t.id === h.id))
+    ) {
+      picks.human = h;
+    }
+    const b = p.bot;
+    if (b?.kind === "pool" && pool.teams.some((t) => t.id === b.id)) {
+      picks.bot = b;
+    }
+  } catch {
+    /* storage unavailable / corrupt: defaults stand */
+  }
+  return picks;
+}
+
+function storePicks(picks: Picks): void {
+  try {
+    localStorage.setItem(PICKS_KEY, JSON.stringify(picks));
+  } catch {
+    /* storage unavailable: the choice still holds this session */
+  }
+}
+
+// ------------------------------------------------- party picker modals
+
+/** Human party picker (modal body): random card, saved customs + import
+ * flow, then the pool list. Picking closes the modal (onPick); managing
+ * customs (import/delete) keeps it open. */
+function HumanPicker(props: {
+  teams: PoolTeam[];
+  choice: HumanChoice;
+  onPick: (c: HumanChoice) => void;
+  customs: CustomTeam[];
+  onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
 }) {
-  const [humanPick, setHumanPick] = useState<HumanPick | null>(null);
-  const [botIdx, setBotIdx] = useState<number | "random">("random");
-  const [step, setStep] = useState<0 | 1>(0);
-  const [customs, setCustoms] = useState<CustomTeam[]>(loadCustomTeams);
+  const { teams, choice, customs } = props;
   const [importing, setImporting] = useState(false);
-  const teams = props.pool.teams;
-
-  const pickedCustom =
-    humanPick?.kind === "custom"
-      ? customs.find((t) => t.id === humanPick.id) ?? null
-      : null;
-  const humanLabel =
-    humanPick === null
-      ? "—"
-      : humanPick.kind === "pool"
-        ? teams[humanPick.idx].id
-        : (pickedCustom?.name ?? "—");
-  const humanTeam: SelectedTeam | null =
-    humanPick === null
-      ? null
-      : humanPick.kind === "pool"
-        ? {
-            id: teams[humanPick.idx].id,
-            sets: teams[humanPick.idx].sets,
-            poolIdx: humanPick.idx,
-          }
-        : pickedCustom && {
-            id: pickedCustom.name,
-            sets: pickedCustom.sets,
-            poolIdx: null,
-          };
-
   return (
-    <div class="screen select-screen">
-      <header class="app-header">
-        <h1>NC2000</h1>
-        <span class="subtitle">{ui().subtitle}</span>
-        <span class="locale-toggle">
-          {(["en", "ja"] as const).map((l) => (
-            <button
-              key={l}
-              class={`locale-btn ${props.locale === l ? "on" : ""}`}
-              onClick={() => props.onLocale(l)}
-            >
-              {l === "en" ? "EN" : "日本語"}
-            </button>
-          ))}
-        </span>
-      </header>
-      <div class="botinfo-note">{ui().openSheetNote}</div>
-
-      <div class="select-bar">
-        {/* slots are tappable: switch which side the list below picks
-            (also the way back to your own team / custom management) */}
-        <button
-          class={`select-slot ${step === 0 ? "current" : ""}`}
-          onClick={() => setStep(0)}
-        >
-          <span class="slot-label">{ui().you}</span>
-          <span class="slot-value">{humanLabel}</span>
-        </button>
-        <span class="vs">vs</span>
-        <button
-          class={`select-slot ${step === 1 ? "current" : ""}`}
-          onClick={() => setStep(1)}
-        >
-          <span class="slot-label">{ui().bot}</span>
-          <span class="slot-value">
-            {botIdx === "random" ? ui().randomFromPool : teams[botIdx].id}
-          </span>
-        </button>
-        <button
-          class="primary start-btn"
-          disabled={!humanTeam}
-          onClick={() => props.onStart(humanTeam!, botIdx)}
-        >
-          {ui().startBattle}
-        </button>
-      </div>
-
-      <h2>{step === 0 ? ui().chooseYours : ui().chooseOpp}</h2>
-
-      {step === 0 && (
-        <section class="custom-section">
-          <h3>{ui().customSection}</h3>
-          <div class="team-list">
-            {customs.map((t) => (
-              <CustomTeamCard
-                key={t.id}
-                team={t}
-                selected={humanPick?.kind === "custom" && humanPick.id === t.id}
-                onTap={() => {
-                  setHumanPick({ kind: "custom", id: t.id });
-                  setStep(1);
-                  window.scrollTo({ top: 0 });
-                }}
-                onDelete={() => {
-                  setCustoms(deleteCustomTeam(t.id));
-                  if (humanPick?.kind === "custom" && humanPick.id === t.id) {
-                    setHumanPick(null);
-                  }
-                }}
-              />
-            ))}
-            {!importing && (
-              <button
-                class="team-card add-custom-card"
-                onClick={() => setImporting(true)}
-              >
-                {ui().addCustom}
-              </button>
-            )}
-          </div>
-          {importing && (
-            <CustomImport
-              onSaved={(t) => {
-                setCustoms(loadCustomTeams());
-                setHumanPick({ kind: "custom", id: t.id });
-              }}
-              onClose={() => setImporting(false)}
+    <>
+      <p class="modal-note">{ui().openSheetNote}</p>
+      <button
+        class={`team-card random-card ${choice.kind === "random" ? "selected" : ""}`}
+        onClick={() => props.onPick(RANDOM)}
+      >
+        {ui().randomCard(teams.length)}
+      </button>
+      <section class="custom-section">
+        <h3>{ui().customSection}</h3>
+        <div class="team-list">
+          {customs.map((t) => (
+            <CustomTeamCard
+              key={t.id}
+              team={t}
+              selected={choice.kind === "custom" && choice.id === t.id}
+              onTap={() => props.onPick({ kind: "custom", id: t.id })}
+              onDelete={() => props.onCustomsChange(deleteCustomTeam(t.id))}
             />
+          ))}
+          {!importing && (
+            <button
+              class="team-card add-custom-card"
+              onClick={() => setImporting(true)}
+            >
+              {ui().addCustom}
+            </button>
           )}
-        </section>
-      )}
-
-      {step === 1 && (
-        <button
-          class={`team-card random-card ${botIdx === "random" ? "selected" : ""}`}
-          onClick={() => setBotIdx("random")}
-        >
-          {ui().randomCard(teams.length)}
-        </button>
-      )}
+        </div>
+        {importing && (
+          <CustomImport
+            onSaved={(t) => props.onCustomsChange(loadCustomTeams(), t)}
+            onClose={() => setImporting(false)}
+          />
+        )}
+      </section>
+      <h3>{ui().poolSection}</h3>
       <div class="team-list">
         {teams.map((t, i) => (
           <TeamCard
             key={t.id}
             team={t}
             index={i}
-            selected={
-              step === 0
-                ? humanPick?.kind === "pool" && humanPick.idx === i
-                : botIdx === i
-            }
-            onTap={() => {
-              if (step === 0) {
-                setHumanPick({ kind: "pool", idx: i });
-                setStep(1);
-                window.scrollTo({ top: 0 });
-              } else {
-                setBotIdx(i);
-              }
-            }}
+            selected={choice.kind === "pool" && choice.id === t.id}
+            onTap={() => props.onPick({ kind: "pool", id: t.id })}
           />
         ))}
       </div>
+    </>
+  );
+}
 
-      <DeviceBench pool={props.pool} />
+/** Opponent party picker (modal body): random card + pool list. */
+function BotPicker(props: {
+  teams: PoolTeam[];
+  choice: BotChoice;
+  onPick: (c: BotChoice) => void;
+}) {
+  const { teams, choice } = props;
+  return (
+    <>
+      <button
+        class={`team-card random-card ${choice.kind === "random" ? "selected" : ""}`}
+        onClick={() => props.onPick(RANDOM)}
+      >
+        {ui().randomCard(teams.length)}
+      </button>
+      <div class="team-list">
+        {teams.map((t, i) => (
+          <TeamCard
+            key={t.id}
+            team={t}
+            index={i}
+            selected={choice.kind === "pool" && choice.id === t.id}
+            onTap={() => props.onPick({ kind: "pool", id: t.id })}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------- start screen
+
+export function StartScreen(props: {
+  pool: MetaPool;
+  locale: Locale;
+  onLocale: (l: Locale) => void;
+  onStart: (human: SelectedTeam, botIdx: number | "random") => void;
+}) {
+  const teams = props.pool.teams;
+  const [customs, setCustoms] = useState<CustomTeam[]>(loadCustomTeams);
+  const [picks, setPicks] = useState<Picks>(() =>
+    loadPicks(props.pool, loadCustomTeams()),
+  );
+  const [modal, setModal] = useState<null | "human" | "bot" | "bench">(null);
+
+  function update(next: Picks) {
+    setPicks(next);
+    storePicks(next);
+  }
+
+  const poolIdx = (id: string) => teams.findIndex((t) => t.id === id);
+  const humanChoice = picks.human;
+  const pickedCustom =
+    humanChoice.kind === "custom"
+      ? customs.find((t) => t.id === humanChoice.id) ?? null
+      : null;
+
+  const humanValue =
+    picks.human.kind === "random"
+      ? ui().randomLabel
+      : picks.human.kind === "pool"
+        ? picks.human.id
+        : (pickedCustom?.name ?? ui().randomLabel);
+  const botValue =
+    picks.bot.kind === "random" ? ui().randomLabel : picks.bot.id;
+
+  function start() {
+    let human: SelectedTeam;
+    if (picks.human.kind === "custom" && pickedCustom) {
+      human = { id: pickedCustom.name, sets: pickedCustom.sets, poolIdx: null };
+    } else {
+      // Random is resolved here, at start: a fresh roll every game unless
+      // the user pinned a team.
+      const idx =
+        picks.human.kind === "pool"
+          ? poolIdx(picks.human.id)
+          : randomSeed32() % teams.length;
+      human = { id: teams[idx].id, sets: teams[idx].sets, poolIdx: idx };
+    }
+    props.onStart(
+      human,
+      picks.bot.kind === "pool" ? poolIdx(picks.bot.id) : "random",
+    );
+  }
+
+  return (
+    <div class="start-screen">
+      <select
+        class="lang-select"
+        aria-label={ui().languageLabel}
+        value={props.locale}
+        onChange={(e) =>
+          props.onLocale((e.target as HTMLSelectElement).value as Locale)
+        }
+      >
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
+
+      <main class="start-col">
+        <h1 class="start-title">NC2000</h1>
+        <div class="start-subtitle">{ui().subtitle}</div>
+        <button class="primary start-main-btn" onClick={start}>
+          {ui().startBattle}
+        </button>
+        <button
+          class="party-btn"
+          data-party="human"
+          onClick={() => setModal("human")}
+        >
+          <span class="party-label">{ui().yourParty}</span>
+          <span class="party-value">{humanValue}</span>
+        </button>
+        <button
+          class="party-btn"
+          data-party="bot"
+          onClick={() => setModal("bot")}
+        >
+          <span class="party-label">{ui().oppParty}</span>
+          <span class="party-value">{botValue}</span>
+        </button>
+      </main>
+
+      <footer class="start-footer">
+        <button class="footer-link" onClick={() => setModal("bench")}>
+          {ui().benchTitle}
+        </button>
+      </footer>
+
+      {modal === "human" && (
+        <Modal title={ui().chooseYours} onClose={() => setModal(null)}>
+          <HumanPicker
+            teams={teams}
+            choice={picks.human}
+            onPick={(c) => {
+              update({ ...picks, human: c });
+              setModal(null);
+            }}
+            customs={customs}
+            onCustomsChange={(list, picked) => {
+              setCustoms(list);
+              if (picked) {
+                // Freshly imported: pin it (modal stays open so the
+                // import result / applied fixes remain readable).
+                update({ ...picks, human: { kind: "custom", id: picked.id } });
+              } else if (
+                humanChoice.kind === "custom" &&
+                !list.some((t) => t.id === humanChoice.id)
+              ) {
+                update({ ...picks, human: RANDOM }); // pinned custom deleted
+              }
+            }}
+          />
+        </Modal>
+      )}
+      {modal === "bot" && (
+        <Modal title={ui().chooseOpp} onClose={() => setModal(null)}>
+          <BotPicker
+            teams={teams}
+            choice={picks.bot}
+            onPick={(c) => {
+              update({ ...picks, bot: c });
+              setModal(null);
+            }}
+          />
+        </Modal>
+      )}
+      {modal === "bench" && (
+        <Modal title={ui().benchTitle} onClose={() => setModal(null)}>
+          <DeviceBench pool={props.pool} />
+        </Modal>
+      )}
     </div>
   );
 }

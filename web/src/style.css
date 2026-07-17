@@ -120,98 +120,151 @@ small {
   overflow-wrap: anywhere;
 }
 
-/* ------------------------------------------------------------ header */
+/* ------------------------------------------------------ start screen */
 
-.app-header {
+.start-screen {
+  position: relative;
+  min-height: 100svh;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 6px 0 2px;
+  justify-content: center;
+  padding: 64px 16px calc(56px + env(safe-area-inset-bottom));
 }
-.subtitle {
-  color: var(--text-dim);
-}
-.locale-toggle {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-}
-.locale-btn {
+/* Unobtrusive corner control: quiet until touched. */
+.lang-select {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top));
+  right: 12px;
   min-height: 36px;
-  padding: 4px 12px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
   color: var(--text-dim);
+  background: transparent;
+  border-color: transparent;
 }
-.locale-btn.on {
-  color: var(--text);
-  background: var(--accent-dim);
-  border-color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  .lang-select:hover {
+    border-color: var(--line);
+  }
 }
-.strength-label {
-  margin-left: auto;
+.start-col {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 12px;
+  width: min(400px, 100%);
+}
+.start-title {
+  font-size: 2.2rem;
+  letter-spacing: 0.06em;
+  text-align: center;
+  margin: 0;
+}
+.start-subtitle {
   color: var(--text-dim);
-  font-size: 0.9rem;
+  text-align: center;
+  margin-bottom: 20px;
 }
-.strength-label.compact {
-  margin-left: auto;
+.start-main-btn {
+  min-height: 60px;
+  font-size: 1.15rem;
+  border-radius: 14px;
 }
-.botinfo-label {
-  margin-left: 0;
-}
-.botinfo-note {
-  color: var(--text-dim);
-  font-size: 0.8rem;
-  padding: 2px 0 4px;
-}
-
-/* ------------------------------------------------------- team select */
-
-.select-bar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+.party-btn {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  background: var(--bg);
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
-}
-.select-slot {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 6px 12px;
-  min-width: 130px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   text-align: left;
+  min-height: 60px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: var(--panel);
 }
-.select-slot.current {
-  border-color: var(--accent);
-}
-.slot-label {
-  display: block;
+.party-label {
   font-size: 0.75rem;
   color: var(--text-dim);
 }
-.slot-value {
+.party-value {
   font-weight: 600;
-  font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
-.vs {
-  color: var(--text-dim);
+.start-footer {
+  position: absolute;
+  bottom: calc(8px + env(safe-area-inset-bottom));
 }
-.start-btn {
-  margin-left: auto;
+.footer-link {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 10px 14px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .footer-link:hover {
+    color: var(--text);
+    border: none;
+  }
+}
+
+/* ------------------------------------------------------------- modal */
+
+dialog.modal {
+  width: min(720px, calc(100vw - 24px));
+  max-height: min(85dvh, 85vh);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+}
+dialog.modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog.modal::backdrop {
+  background: rgba(5, 7, 11, 0.65);
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.modal-title {
+  margin: 0;
+  font-size: 1.05rem;
+  flex: 1;
+}
+.modal-body {
+  overflow-y: auto;
+  padding: 12px 14px 16px;
+  overscroll-behavior: contain;
+}
+.modal-note {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  margin: 0 0 10px;
+}
+/* The bench box carries its own chrome; inside the modal the frame and
+ * title are the modal's. */
+.modal-body .bench-box {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+.modal-body .bench-title {
+  display: none;
 }
 
 .team-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));
   gap: 10px;
   margin-top: 10px;
 }
