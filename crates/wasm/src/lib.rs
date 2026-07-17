@@ -19,7 +19,10 @@
 //!   current battle at each decision point (which also snapshots a fresh
 //!   stepped `BlindSearch` — same `step`/`best` ponder shape as `Searcher`),
 //!   baked-table preview via the belief when the opponent's pool identity
-//!   has publicly resolved, `beliefInfo()` for the UI.
+//!   has publicly resolved, `beliefInfo()` for the UI. `pinOpponent` (M12)
+//!   switches it to the open-team-sheet product policy: belief pinned to
+//!   the opponent's true sets (picks stay hidden), preview by direct
+//!   signature lookup.
 //! - `PreviewTables` — the M8 baked team-preview equilibria. JS fetches
 //!   `meta-pool.json` + `pair-*.json` and feeds them in as strings;
 //!   `resolve` returns the matchup's mixed/argmax policies, `sample` draws
@@ -34,7 +37,8 @@ use wasm_bindgen::prelude::*;
 
 use nc2000_bot::preview::{MetaPool, TableSet};
 use nc2000_bot::{
-    baked_preview_pick, Belief, BlindSearch, Observer, RmConfig, SkuctSearch, SplitMix64,
+    baked_preview_pick, open_preview_pick, Belief, BlindSearch, Observer, RmConfig, SkuctSearch,
+    SplitMix64,
 };
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Category, Dex};
@@ -298,6 +302,10 @@ pub struct WasmBlindSearcher {
     tables: TableSet,
     observer: Observer,
     belief: Belief,
+    /// Open-team-sheet mode (M12, `pinOpponent`): the belief is pinned to
+    /// the opponent's true sets and preview resolves both sides by
+    /// signature (public) instead of through pool identification.
+    pinned: bool,
     rng: SplitMix64,
     search: Option<BlindSearch>,
     baked: Option<SearchChoice>,
@@ -334,10 +342,28 @@ impl WasmBlindSearcher {
             tables,
             observer,
             belief,
+            pinned: false,
             rng: SplitMix64::new(seed as u64),
             search: None,
             baked: None,
         })
+    }
+
+    /// Open-team-sheet mode (M12 product policy): pin the belief to the
+    /// opponent's TRUE team (`team_json` = the same JSON array the Battle
+    /// was constructed with — pool or custom). Determinizations then equal
+    /// the truth except for hidden picks: which 3 of 6 + lead stay hidden
+    /// until revealed (unseen pick identities are resampled, the mid-turn
+    /// pending-move tell is scrubbed). Preview switches to the direct
+    /// table lookup — both sheets are public, so the baked pair answers
+    /// whenever the matchup is baked, collision pair included. Call once,
+    /// right after construction (at team preview).
+    #[wasm_bindgen(js_name = pinOpponent)]
+    pub fn pin_opponent(&mut self, team_json: &str) -> Result<(), JsError> {
+        let sets: Vec<PokemonSet> = serde_json::from_str(team_json).map_err(js_err)?;
+        self.belief = Belief::pinned(&self.dex, "opponent", &sets, &self.observer);
+        self.pinned = true;
+        Ok(())
     }
 
     /// Feed one baked pair table (`data/preview-tables-v0/pair-*.json`
@@ -361,13 +387,21 @@ impl WasmBlindSearcher {
         let search =
             BlindSearch::new(&battle.battle, &self.dex, self.cfg.clone(), self.side, seed);
         if search.is_preview() {
-            if let Some(c) = baked_preview_pick(
-                &self.tables,
-                &self.belief,
-                &battle.battle,
-                self.side,
-                &mut self.rng,
-            ) {
+            // Pinned (open sheet): both sheets public — resolve the pair
+            // directly by signature, no identification condition. Else the
+            // M10 belief-mediated lookup (singleton identification only).
+            let pick = if self.pinned {
+                open_preview_pick(&self.tables, &battle.battle, self.side, &mut self.rng)
+            } else {
+                baked_preview_pick(
+                    &self.tables,
+                    &self.belief,
+                    &battle.battle,
+                    self.side,
+                    &mut self.rng,
+                )
+            };
+            if let Some(c) = pick {
                 if search.actions().contains(&c) {
                     self.baked = Some(c);
                 }
@@ -877,6 +911,74 @@ mod tests {
         assert!(bfs.baked_preview().is_none());
         bfs.step(30).map_err(|_| "step").unwrap();
         let best = bfs.best().expect("fallback best");
+        let legal: Vec<serde_json::Value> =
+            serde_json::from_str(&fb.legal_choices(1)).unwrap();
+        assert!(legal.iter().any(|c| c["input"] == best.as_str()));
+    }
+
+    /// M12 open-team-sheet mode: `pinOpponent` pins the belief to the
+    /// opponent's true sets (pool or custom) and preview resolves by
+    /// direct signature lookup.
+    #[test]
+    fn pinned_open_sheet_flow() {
+        let root = conformance::fixture::repo_root();
+        let pool_json =
+            std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+        let pool: serde_json::Value = serde_json::from_str(&pool_json).unwrap();
+        let team = |i: usize| pool["teams"][i]["sets"].to_string();
+        let dex = WasmDex::new().map_err(|_| "dex").unwrap();
+
+        // pool opponent + baked pair: preview answers from the table
+        let mut b = WasmBattle::new(&dex, &team(0), &team(1), "1,2,3,4")
+            .map_err(|_| "battle")
+            .unwrap();
+        let mut bs = WasmBlindSearcher::new(&b, 1, &pool_json, 7, None, None)
+            .map_err(|_| "blind searcher")
+            .unwrap();
+        bs.pin_opponent(&team(0)).map_err(|_| "pin").unwrap();
+        let pair_json = std::fs::read_to_string(
+            root.join("data/preview-tables-v0/pair-00-01.json"),
+        )
+        .unwrap();
+        bs.add_pair(&pair_json).map_err(|_| "pair").unwrap();
+        bs.observe(&b);
+        let info: serde_json::Value = serde_json::from_str(&bs.belief_info()).unwrap();
+        assert_eq!(info["count"], 1);
+        assert_eq!(info["fallback"], false);
+        let baked = bs.baked_preview().expect("open-sheet baked preview pick");
+        let legal: Vec<serde_json::Value> =
+            serde_json::from_str(&b.legal_choices(1)).unwrap();
+        assert!(legal.iter().any(|c| c["input"] == baked.as_str()));
+
+        // into battle: the pinned blind search returns a legal pick
+        b.apply_choice(0, "team 1, 2, 3").map_err(|_| "apply").unwrap();
+        b.apply_choice(1, &baked).map_err(|_| "apply").unwrap();
+        bs.observe(&b);
+        assert!(bs.baked_preview().is_none());
+        bs.step(40).map_err(|_| "step").unwrap();
+        let best = bs.best().expect("in-battle best");
+        let legal: Vec<serde_json::Value> =
+            serde_json::from_str(&b.legal_choices(1)).unwrap();
+        assert!(legal.iter().any(|c| c["input"] == best.as_str()));
+
+        // custom (off-pool) opponent pinned: a REAL singleton belief —
+        // never fallback — with live-search preview (no table for the
+        // matchup)
+        let (p1, _) = fixture_teams();
+        let mut fb = WasmBattle::new(&dex, &p1, &team(1), "1,2,3,4")
+            .map_err(|_| "battle")
+            .unwrap();
+        let mut bfs = WasmBlindSearcher::new(&fb, 1, &pool_json, 9, None, None)
+            .map_err(|_| "blind searcher")
+            .unwrap();
+        bfs.pin_opponent(&p1).map_err(|_| "pin").unwrap();
+        bfs.observe(&fb);
+        let info: serde_json::Value = serde_json::from_str(&bfs.belief_info()).unwrap();
+        assert_eq!(info["fallback"], false);
+        assert_eq!(info["count"], 1);
+        assert!(bfs.baked_preview().is_none());
+        bfs.step(30).map_err(|_| "step").unwrap();
+        let best = bfs.best().expect("pinned custom best");
         let legal: Vec<serde_json::Value> =
             serde_json::from_str(&fb.legal_choices(1)).unwrap();
         assert!(legal.iter().any(|c| c["input"] == best.as_str()));

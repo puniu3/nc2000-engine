@@ -2,10 +2,14 @@
 // (specific team or random-from-pool). Also hosts the device benchmark —
 // the M9 gate ("skuct:3000 within 2-3 s/move") is certified per device by
 // tapping it.
+//
+// Open team sheet (M12): the bot's sets are readable right here in the
+// team list, and the bot receives the human's exact sets — a single
+// information policy, no toggle. Only picks stay hidden.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { BotInfo, MetaPool, PoolTeam } from "./types";
-import { STRENGTHS } from "./app";
+import type { MetaPool, PoolTeam } from "./types";
+import { BUDGET } from "./app";
 import { BotWorker } from "./bot";
 
 function provenanceLine(t: PoolTeam): string {
@@ -49,7 +53,10 @@ function TeamCard(props: {
 
 // Fixed workload: identical battle + searcher seeds + iteration count on
 // every device, so the numbers are directly comparable. 10k iterations at
-// an in-battle root ~= 4-7 s on 2025 hardware.
+// an in-battle root ~= 4-7 s on 2025 hardware. Reported: iters/s (the
+// cross-device number), s/move at the fixed 30k strength (what you wait,
+// mostly hidden by ponder), and the historical 3k reference gate (the M9
+// envelope — kept so old and new device numbers stay comparable).
 const BENCH_ITERS = 10000;
 const BENCH_BATTLE_SEED = "1,2,3,4";
 const BENCH_SEARCH_SEED = 123456789;
@@ -59,7 +66,7 @@ const GATE_SECONDS = 3;
 type BenchState =
   | { s: "idle" }
   | { s: "running"; done: number; total: number }
-  | { s: "done"; itersPerSec: number; secPerMove: number }
+  | { s: "done"; itersPerSec: number; secPerMove: number; secAtFull: number }
   | { s: "error"; msg: string };
 
 function DeviceBench(props: { pool: MetaPool }) {
@@ -93,6 +100,7 @@ function DeviceBench(props: { pool: MetaPool }) {
           s: "done",
           itersPerSec,
           secPerMove: GATE_ITERS / itersPerSec,
+          secAtFull: BUDGET / itersPerSec,
         });
     } catch (e) {
       if (aliveRef.current) setState({ s: "error", msg: String(e) });
@@ -122,11 +130,13 @@ function DeviceBench(props: { pool: MetaPool }) {
           class={`bench-result ${state.secPerMove <= GATE_SECONDS ? "pass" : "fail"}`}
           data-iters-per-sec={Math.round(state.itersPerSec)}
           data-sec-per-move={state.secPerMove.toFixed(2)}
+          data-sec-at-full={state.secAtFull.toFixed(2)}
         >
-          {Math.round(state.itersPerSec)} iterations/s — a{" "}
-          {GATE_ITERS / 1000}k think ≈ {state.secPerMove.toFixed(2)} s/move.
-          Strength gate (≤{GATE_SECONDS} s):{" "}
-          {state.secPerMove <= GATE_SECONDS ? "PASS" : "MISS"}
+          {Math.round(state.itersPerSec)} iterations/s — full strength (
+          {BUDGET / 1000}k) ≈ {state.secAtFull.toFixed(2)} s/move, mostly
+          hidden by pondering. Reference gate ({GATE_ITERS / 1000}k ≤{" "}
+          {GATE_SECONDS} s): {state.secPerMove <= GATE_SECONDS ? "PASS" : "MISS"}{" "}
+          ({state.secPerMove.toFixed(2)} s)
         </div>
       )}
       {state.s === "error" && <div class="bench-result fail">{state.msg}</div>}
@@ -140,10 +150,6 @@ function DeviceBench(props: { pool: MetaPool }) {
 
 export function TeamSelect(props: {
   pool: MetaPool;
-  strength: number;
-  onStrength: (n: number) => void;
-  botInfo: BotInfo;
-  onBotInfo: (v: BotInfo) => void;
   onStart: (humanIdx: number, botIdx: number | "random") => void;
 }) {
   const [humanIdx, setHumanIdx] = useState<number | null>(null);
@@ -156,40 +162,11 @@ export function TeamSelect(props: {
       <header class="app-header">
         <h1>NC2000</h1>
         <span class="subtitle">Gen 2 · human vs bot</span>
-        <label class="strength-label">
-          Bot strength{" "}
-          <select
-            value={props.strength}
-            onChange={(e) =>
-              props.onStrength(Number((e.target as HTMLSelectElement).value))
-            }
-          >
-            {STRENGTHS.map((s) => (
-              <option value={s.iters} key={s.iters}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label class="strength-label botinfo-label">
-          Bot information{" "}
-          <select
-            value={props.botInfo}
-            onChange={(e) =>
-              props.onBotInfo(
-                (e.target as HTMLSelectElement).value as BotInfo,
-              )
-            }
-          >
-            <option value="fair">Fair (blind)</option>
-            <option value="xray">X-ray (perfect info)</option>
-          </select>
-        </label>
       </header>
       <div class="botinfo-note">
-        {props.botInfo === "fair"
-          ? "Fair: the bot sees only what a human opponent would — your movesets and items stay hidden until revealed in play."
-          : "X-ray: the bot reads your exact sets, moves and items — perfect information."}
+        Open team sheet: the bot sees your sets, and you can read its sets in
+        the team list — neither side sees which 3 the other picks until
+        they're revealed in battle.
       </div>
 
       <div class="select-bar">

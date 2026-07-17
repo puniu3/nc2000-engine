@@ -1,16 +1,15 @@
-// Main-thread wasm instance: Dex + Battle + PreviewTables live here (the
-// Searcher lives in the bot worker's own instance — wasm memory is not
-// shared across threads).
+// Main-thread wasm instance: Dex + Battle live here (the searcher lives in
+// the bot worker's own instance — wasm memory is not shared across
+// threads; preview tables are consumed by the worker too).
 
 import init, {
   Dex,
   Battle,
-  PreviewTables,
   deriveBattleSeed,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import type { Choice, StateView } from "./types";
 
-export { Battle, PreviewTables };
+export { Battle };
 
 let dex: Dex | null = null;
 

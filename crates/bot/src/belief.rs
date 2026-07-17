@@ -83,6 +83,10 @@ pub struct Belief {
     alive: Vec<usize>,
     /// Synthesized imputation roster when `alive` is empty.
     fallback: Option<Vec<Pokemon>>,
+    /// Open-team-sheet mode (M12): the single candidate IS the truth —
+    /// filtering is skipped (provably a no-op, and skipping keeps a filter
+    /// bug from silently dropping the truth to fallback).
+    pinned: bool,
     synced: Option<u64>,
 }
 
@@ -98,15 +102,56 @@ impl Belief {
                 Candidate { id: t.id.clone(), sets: t.sets.clone(), refs }
             })
             .collect();
-        let mut b = Belief { cands, alive: Vec::new(), fallback: None, synced: None };
+        let mut b =
+            Belief { cands, alive: Vec::new(), fallback: None, pinned: false, synced: None };
         b.refilter(dex, obs);
         b
     }
 
+    /// Open-team-sheet belief (M12 product policy): the opponent's TRUE
+    /// sets are public, so the belief is pinned to that single candidate —
+    /// pool identification never runs. Determinizations then equal the
+    /// truth except for what stays hidden by policy: unseen pick identities
+    /// (which 3 of 6 + lead) and the mid-turn pending-move scrub. Works for
+    /// pool and custom teams uniformly. Call at team preview, right after
+    /// `Observer::new` (the refs alignment reads the preview-public facts);
+    /// `sync` is then a no-op — the truth is consistent with every
+    /// observation by construction.
+    pub fn pinned(dex: &Dex, id: &str, sets: &[PokemonSet], obs: &Observer) -> Belief {
+        let refs = build_refs(dex, sets, obs.mons());
+        debug_assert!(refs.is_some(), "pinned belief: true team failed preview alignment");
+        let alive = if refs.is_some() { vec![0] } else { Vec::new() };
+        let mut b = Belief {
+            cands: vec![Candidate { id: id.to_string(), sets: sets.to_vec(), refs }],
+            alive,
+            fallback: None,
+            pinned: true,
+            synced: Some(obs.revision()),
+        };
+        if b.alive.is_empty() {
+            // defensive only: a malformed "true" team degrades like a
+            // custom opponent under the identification path
+            b.fallback = Some(b.build_fallback(dex, obs));
+        }
+        b
+    }
+
     /// Re-filter after new observations. Cheap no-op at an unchanged
-    /// observer revision.
+    /// observer revision, and always for a pinned belief holding its
+    /// candidate (the pinned truth passes every filter by construction).
     pub fn sync(&mut self, dex: &Dex, obs: &Observer) {
         if self.synced == Some(obs.revision()) {
+            return;
+        }
+        if self.pinned && !self.alive.is_empty() {
+            debug_assert!(
+                self.cands[0]
+                    .refs
+                    .as_deref()
+                    .is_some_and(|refs| consistent(refs, obs.mons())),
+                "pinned truth filtered out (observer drift)"
+            );
+            self.synced = Some(obs.revision());
             return;
         }
         self.refilter(dex, obs);

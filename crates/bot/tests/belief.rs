@@ -370,3 +370,68 @@ fn observation_channels_fire() {
     assert!(held_reveals > 0, "log channel (Leftovers/Focus Band) never fired");
     assert!(consumed > 0, "no item consumption observed");
 }
+
+// ------------------------------------------------ (e): pinned (open sheet)
+
+/// M12 open-team-sheet policy: a belief pinned to the opponent's TRUE sets
+/// (pool or custom) stays a real singleton for the whole game — never
+/// fallback, sync never filters — and its determinizations equal the truth
+/// in every set-level field per roster slot (only pick identities / the
+/// pending-move scrub stay hidden). The custom team here is off-pool, so
+/// the identification path would go fallback — pinned must not.
+#[test]
+fn pinned_belief_is_truth_except_picks() {
+    let dex = load_dex();
+    let meta = pool();
+    let mut custom = meta.teams[0].sets.clone();
+    custom[3].level -= 1; // off-pool: identification would go fallback
+    let mut det_rng = SplitMix64::new(77);
+    let mut total_points = 0usize;
+    for (g, seed) in ["9,9,9,9", "2,7,1,8", "3,1,4,1"].iter().enumerate() {
+        let mut battle =
+            Battle::from_fixture(&dex, seed, &meta.teams[1].sets, &custom).unwrap();
+        let mut a0 = RolloutAgent::new(0.35, 4040 + g as u64);
+        let mut a1 = RolloutAgent::new(0.35, 5050 + g as u64);
+        let mut obs = Observer::new(&battle, 0);
+        let mut bel = Belief::pinned(&dex, "custom", &custom, &obs);
+        let mut points = 0usize;
+        while battle.outcome().is_none() && battle.turn <= 120 {
+            obs.observe(&battle, &dex);
+            bel.sync(&dex, &obs);
+            assert_eq!(bel.candidate_count(), 1, "pinned belief must stay a singleton");
+            assert!(!bel.is_fallback(), "pinned belief must never go fallback");
+            assert_eq!(bel.candidate_id(0), "custom");
+            if points % 4 == 0 {
+                let det = bel.determinize(&dex, &battle, &obs, &mut det_rng);
+                let truth = &battle.sides[1].roster;
+                for (slot, m) in det.sides[1].roster.iter().enumerate() {
+                    let moves = |p: &nc2000_engine::state::Pokemon| {
+                        let mut v: Vec<u16> =
+                            p.base_move_slots.iter().map(|s| s.id.0).collect();
+                        v.sort_unstable();
+                        v
+                    };
+                    assert_eq!(m.species, truth[slot].species);
+                    assert_eq!(m.base_maxhp, truth[slot].base_maxhp);
+                    assert_eq!(m.base_stored_stats, truth[slot].base_stored_stats);
+                    assert_eq!(m.set_ivs, truth[slot].set_ivs);
+                    assert_eq!(m.item, truth[slot].item, "pinned det changed an item");
+                    assert_eq!(moves(m), moves(&truth[slot]), "pinned det changed a moveset");
+                }
+                playable(&dex, det);
+            }
+            points += 1;
+            let mut picks = [None, None];
+            for s in 0..2 {
+                let cs = battle.legal_choices(&dex, s);
+                if !cs.is_empty() {
+                    let agent: &mut dyn Agent = if s == 0 { &mut a0 } else { &mut a1 };
+                    picks[s] = Some(agent.choose(&battle, &dex, s, &cs));
+                }
+            }
+            battle.apply_choices(&dex, picks).unwrap();
+        }
+        total_points += points;
+    }
+    assert!(total_points > 30, "games too short to exercise the pinned belief");
+}

@@ -159,6 +159,29 @@ pub fn baked_preview_pick(
     let (tab, i_am_a) = tables.pair_by_idx(me, opp)?;
     // sample the mixed equilibrium (same rule as BakedPreviewAgent)
     let p = if i_am_a { &tab.sol.p_a } else { &tab.sol.p_b };
+    Some(SearchChoice::Team(tables.actions()[sample_mixed(p, rng)]))
+}
+
+/// Open-team-sheet M8 table lookup at team preview (the M12 product
+/// policy): BOTH sides resolved by full-set signature — legitimate because
+/// both sheets are public — so the collision pair resolves exactly and no
+/// identification condition applies. Samples the mixed equilibrium. `None`
+/// ⇔ either team off-pool or the pair not baked: play the (pinned-belief)
+/// preview search instead.
+pub fn open_preview_pick(
+    tables: &TableSet,
+    battle: &Battle,
+    side: usize,
+    rng: &mut SplitMix64,
+) -> Option<SearchChoice> {
+    let (tab, i_am_a) = tables.lookup(battle, side)?;
+    let p = if i_am_a { &tab.sol.p_a } else { &tab.sol.p_b };
+    Some(SearchChoice::Team(tables.actions()[sample_mixed(p, rng)]))
+}
+
+/// One draw from a mixed policy (one `next_f64`; degenerate rows fall back
+/// to argmax — same rule and rng pattern as `BakedPreviewAgent`).
+fn sample_mixed(p: &[f64], rng: &mut SplitMix64) -> usize {
     let u = rng.next_f64();
     let mut acc = 0.0;
     let mut pick = (0..p.len()).max_by(|&a, &b| p[a].total_cmp(&p[b])).unwrap();
@@ -169,7 +192,7 @@ pub fn baked_preview_pick(
             break;
         }
     }
-    Some(SearchChoice::Team(tables.actions()[pick]))
+    pick
 }
 
 // --------------------------------------------------- stepped search (M10c)

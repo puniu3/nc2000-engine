@@ -1,8 +1,10 @@
 // Smoke: a full bot-vs-bot game driven end-to-end through the wasm API
 // (stepped Searcher on both sides), the baked-preview-table path
-// (pool + pair JSON fed as strings, resolve/sample at a real preview), and
-// a full blind game (M10c BlindSearcher: observe/step/best + belief surface,
-// baked preview via the belief, fallback belief vs an off-pool team).
+// (pool + pair JSON fed as strings, resolve/sample at a real preview), a
+// full blind game (M10c BlindSearcher: observe/step/best + belief surface,
+// baked preview via the belief, fallback belief vs an off-pool team), and
+// a full open-team-sheet game (M12 pinOpponent: pinned singleton belief,
+// preview by direct signature lookup, custom opponents never fallback).
 "use strict";
 
 const fs = require("fs");
@@ -257,6 +259,102 @@ const dex = new wasm.Dex();
   );
   bfs.free();
   fb.free();
+}
+
+// -------------------------------------- open team sheet (M12 pinOpponent)
+{
+  const poolJson = readData("meta-pool-v0/meta-pool.json");
+  const pool = JSON.parse(poolJson);
+  // Human stand-in (side 0, plain Searcher) plays pool team 1; the bot
+  // (side 1) plays pool team 0 — pair-00-01 is committed, so the pinned
+  // preview must come from the baked table via the signature lookup.
+  const p1 = JSON.stringify(pool.teams[1].sets);
+  const p2 = JSON.stringify(pool.teams[0].sets);
+  const battle = new wasm.Battle(dex, p1, p2, wasm.deriveBattleSeed(1212));
+  const bot = new wasm.BlindSearcher(battle, 1, poolJson, 2024);
+  bot.pinOpponent(p1);
+  bot.addPair(
+    fs.readFileSync(
+      path.join(REPO, "data", "preview-tables-v0", "pair-00-01.json"),
+      "utf8"
+    )
+  );
+
+  bot.observe(battle);
+  const info = JSON.parse(bot.beliefInfo());
+  checkEq(info.count, 1, "pinned belief is a singleton");
+  checkEq(info.fallback, false, "pinned belief is not fallback");
+  const baked = bot.bakedPreview();
+  check(typeof baked === "string", "open-sheet preview comes from the table");
+  checkEq(bot.best(), baked, "best() returns the table pick");
+
+  let decisions = 0;
+  const MAX_DECISIONS = 2000;
+  while (battle.outcome() === undefined && decisions < MAX_DECISIONS) {
+    const needs = JSON.parse(battle.needsChoice());
+    const picks = [];
+    if (needs[0]) {
+      const legal = JSON.parse(battle.legalChoices(0));
+      const s = new wasm.Searcher(battle, 0, 7000 + decisions);
+      s.step(120);
+      const best = s.best();
+      check(
+        legal.some((c) => c.input === best),
+        `searcher best "${best}" is legal (open-sheet game, side 0)`
+      );
+      picks.push([0, best]);
+      s.free();
+    }
+    if (needs[1]) {
+      const legal = JSON.parse(battle.legalChoices(1));
+      bot.observe(battle);
+      let best = bot.bakedPreview();
+      if (best === undefined) {
+        bot.step(120);
+        best = bot.best();
+      }
+      check(
+        legal.some((c) => c.input === best),
+        `open-sheet best "${best}" is legal`
+      );
+      const inf = JSON.parse(bot.beliefInfo());
+      checkEq(inf.count, 1, "pinned belief stays a singleton in battle");
+      checkEq(inf.fallback, false, "pinned belief never goes fallback");
+      picks.push([1, best]);
+    }
+    for (const [side, input] of picks) battle.applyChoice(side, input);
+    decisions += 1;
+  }
+  check(battle.outcome() !== undefined, "open-sheet game reached an outcome");
+  console.log(
+    `  open-sheet game: outcome ${battle.outcome()} in ${battle.turn()} turns, ` +
+      `${decisions} decisions, preview via signature-resolved table`
+  );
+  bot.free();
+  battle.free();
+
+  // custom (off-pool) opponent pinned: a real singleton — never fallback —
+  // with live-search preview (no table for the matchup)
+  const fx = loadFixture("full/battle-001.json");
+  const cp1 = JSON.stringify(fx.p1team);
+  const cb = new wasm.Battle(dex, cp1, p2, wasm.deriveBattleSeed(1313));
+  const cbot = new wasm.BlindSearcher(cb, 1, poolJson, 2025);
+  cbot.pinOpponent(cp1);
+  cbot.observe(cb);
+  const cinfo = JSON.parse(cbot.beliefInfo());
+  checkEq(cinfo.count, 1, "pinned custom opponent is a singleton");
+  checkEq(cinfo.fallback, false, "pinned custom opponent is not fallback");
+  checkEq(cbot.bakedPreview(), undefined, "custom matchup has no table");
+  cbot.step(60);
+  const cbest = cbot.best();
+  const clegal = JSON.parse(cb.legalChoices(1));
+  check(
+    clegal.some((c) => c.input === cbest),
+    `pinned custom best "${cbest}" is legal`
+  );
+  console.log(`  open-sheet custom: pinned singleton, live preview "${cbest}"`);
+  cbot.free();
+  cb.free();
 }
 
 finish("smoke");

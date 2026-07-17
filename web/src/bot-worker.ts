@@ -13,21 +13,18 @@
 // the budget is met, the required think still completes first. Bot-only
 // points (`ponder: false`) stop exactly at budget, as before.
 //
-// Blind mode (M10c): a `battle` message carrying `blind` creates a per-game
-// BlindSearcher — the imperfect-info agent that sees only what a human
-// opponent legitimately would (public state + protocol log + the meta-pool
-// prior). The mirror battle then runs log-ON (the observer's trace-free
-// reveal channel reads it). Per search: observe() feeds the mirror, the
-// belief is posted for the UI, then either the baked preview answers
-// instantly (src "table") or the stepped blind search ponders exactly like
-// the perfect-info path (src "search").
+// Open team sheet (M12, the single information policy): every game gets a
+// per-game BlindSearcher whose belief is PINNED to the opponent's true sets
+// (`pinOpponent`) — the bot knows the human's team exactly (as the human
+// knows the bot's, from the team list), while the human's SELECTION (which
+// 3 of 6 + lead, until revealed) stays hidden: the searcher determinizes
+// unseen pick identities per iteration. The mirror battle runs log-ON (the
+// observer's trace-free reveal channel reads it). Per search: observe()
+// feeds the mirror, then either the baked preview answers instantly (src
+// "table" — the pair is resolved by public signature, no identification
+// condition) or the stepped search ponders (src "search").
 
-import init, {
-  Dex,
-  Battle,
-  Searcher,
-  BlindSearcher,
-} from "../../crates/wasm/pkg-web/nc2000_wasm";
+import init, { Dex, Battle, Searcher, BlindSearcher } from "../../crates/wasm/pkg-web/nc2000_wasm";
 
 export type WorkerRequest =
   | {
@@ -35,8 +32,8 @@ export type WorkerRequest =
       p1: string;
       p2: string;
       seed: string;
-      /** Present = play blind (fair): per-game imperfect-info searcher. */
-      blind?: { poolJson: string; side: number; seed: number };
+      /** Open-team-sheet searcher config (always present: single policy). */
+      open: { poolJson: string; side: number; seed: number };
     }
   | { t: "pair"; json: string }
   | { t: "apply"; picks: [number, string][] }
@@ -69,10 +66,9 @@ export type WorkerResponse =
       best: string | null;
       policy: string;
       ms: number;
-      /** Blind mode only: where the pick came from (preview: table/search). */
+      /** Where the pick came from (preview: table/search). */
       src?: "table" | "search";
     }
-  | { t: "belief"; info: string }
   | { t: "benchProgress"; id: number; done: number; total: number; ms: number }
   | { t: "benchResult"; id: number; iters: number; ms: number }
   | { t: "error"; message: string };
@@ -86,7 +82,7 @@ const ready = init().then(() => {
 });
 
 let battle: Battle | null = null;
-let blind: BlindSearcher | null = null;
+let searcher: BlindSearcher | null = null;
 let gen = 0; // bumped whenever the battle state moves on -> running searches abort
 let flushed = false; // human committed: stop pondering at the next slice
 
@@ -99,29 +95,30 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
 async function handle(m: WorkerRequest): Promise<void> {
   await ready;
   switch (m.t) {
-    case "battle":
+    case "battle": {
       gen += 1;
-      blind?.free();
-      blind = null;
+      searcher?.free();
+      searcher = null;
       battle?.free();
       battle = new Battle(dex, m.p1, m.p2, m.seed);
-      // Blind: keep the protocol log ON — the observer's trace-free reveal
+      // Keep the protocol log ON — the observer's trace-free reveal
       // channel (Leftovers / Focus Band / Sleep Talk) reads it.
-      battle.setLogEnabled(!!m.blind);
-      if (m.blind) {
-        blind = new BlindSearcher(
-          battle,
-          m.blind.side,
-          m.blind.poolJson,
-          m.blind.seed >>> 0,
-        );
-      }
+      battle.setLogEnabled(true);
+      searcher = new BlindSearcher(
+        battle,
+        m.open.side,
+        m.open.poolJson,
+        m.open.seed >>> 0,
+      );
+      // Open team sheet: pin the belief to the opponent's true sets.
+      searcher.pinOpponent(m.open.side === 0 ? m.p2 : m.p1);
       break;
+    }
     case "pair":
       try {
-        blind?.addPair(m.json);
+        searcher?.addPair(m.json);
       } catch (e) {
-        console.warn("blind pair table rejected:", e);
+        console.warn("pair table rejected:", e);
       }
       break;
     case "apply":
@@ -135,8 +132,7 @@ async function handle(m: WorkerRequest): Promise<void> {
       flushed = true;
       break;
     case "search":
-      if (blind) await runBlindSearch(m);
-      else await runSearch(m);
+      await runSearch(m);
       break;
     case "bench":
       await runBench(m);
@@ -172,57 +168,25 @@ interface SearchMsg {
   ponder: boolean;
 }
 
+// One decision point on the persistent per-game searcher: observe()
+// snapshots the mirror's state (updating the pinned belief's observations),
+// then either the baked preview answers instantly or the stepped search
+// runs the ponder loop. The searcher is NOT freed per decision — it carries
+// the game's accumulated observations.
 async function runSearch(m: SearchMsg): Promise<void> {
   const myGen = gen;
   flushed = false;
   const cap = m.budget * PONDER_CAP;
-  const s = new Searcher(battle!, m.side, m.seed >>> 0);
+  const s = searcher!;
+  s.observe(battle!);
   const t0 = performance.now();
-  try {
-    let done = 0;
-    for (;;) {
-      if (gen !== myGen) return; // superseded: drop silently
-      // Required think first; then ponder until flushed or capped.
-      const target = !m.ponder || flushed ? m.budget : cap;
-      if (done >= target) break;
-      done = stepAdaptive(s, Math.min(slice, target - done));
-      post({ t: "progress", id: m.id, done, budget: m.budget });
-      // Macrotask yield: flush the progress post, let cancel/flush interleave.
-      await new Promise((r) => setTimeout(r, 0));
-    }
-    if (gen !== myGen) return;
-    post({
-      t: "result",
-      id: m.id,
-      best: s.best() ?? null,
-      policy: s.rootPolicy(),
-      ms: performance.now() - t0,
-    });
-  } finally {
-    s.free();
-  }
-}
-
-// Blind twin of runSearch on the persistent per-game BlindSearcher:
-// observe() snapshots the mirror's decision point (and updates the belief,
-// posted for the UI), then either the baked preview answers instantly or
-// the stepped search runs the identical ponder loop. The searcher is NOT
-// freed per decision — it carries the game's accumulated observations.
-async function runBlindSearch(m: SearchMsg): Promise<void> {
-  const myGen = gen;
-  flushed = false;
-  const cap = m.budget * PONDER_CAP;
-  const b = blind!;
-  b.observe(battle!);
-  post({ t: "belief", info: b.beliefInfo() });
-  const t0 = performance.now();
-  const baked = b.bakedPreview();
+  const baked = s.bakedPreview();
   if (baked !== undefined) {
     post({
       t: "result",
       id: m.id,
       best: baked,
-      policy: b.rootPolicy(),
+      policy: s.rootPolicy(),
       ms: performance.now() - t0,
       src: "table",
     });
@@ -231,18 +195,20 @@ async function runBlindSearch(m: SearchMsg): Promise<void> {
   let done = 0;
   for (;;) {
     if (gen !== myGen) return; // superseded: next observe() resets the search
+    // Required think first; then ponder until flushed or capped.
     const target = !m.ponder || flushed ? m.budget : cap;
     if (done >= target) break;
-    done = stepAdaptive(b, Math.min(slice, target - done));
+    done = stepAdaptive(s, Math.min(slice, target - done));
     post({ t: "progress", id: m.id, done, budget: m.budget });
+    // Macrotask yield: flush the progress post, let cancel/flush interleave.
     await new Promise((r) => setTimeout(r, 0));
   }
   if (gen !== myGen) return;
   post({
     t: "result",
     id: m.id,
-    best: b.best() ?? null,
-    policy: b.rootPolicy(),
+    best: s.best() ?? null,
+    policy: s.rootPolicy(),
     ms: performance.now() - t0,
     src: "search",
   });
@@ -251,7 +217,9 @@ async function runBlindSearch(m: SearchMsg): Promise<void> {
 // Device benchmark: a fixed, deterministic workload (fixed teams + battle
 // seed + searcher seed + iteration count => every device runs the identical
 // iteration stream), independent of the mirror battle. Measures in-battle
-// root throughput — the M9 gate quantity.
+// root throughput — the M9 gate quantity — on the perfect-info Searcher
+// (the historical workload: numbers stay comparable across devices and
+// releases).
 async function runBench(m: {
   id: number;
   p1: string;

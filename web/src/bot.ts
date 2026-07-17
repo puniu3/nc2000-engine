@@ -1,13 +1,13 @@
 // Main-thread client for the bot search worker.
 
 import type { WorkerRequest, WorkerResponse } from "./bot-worker";
-import type { BeliefInfo, RootPolicy } from "./types";
+import type { RootPolicy } from "./types";
 
 export interface SearchOutcome {
   best: string | null;
   policy: RootPolicy;
   ms: number;
-  /** Blind mode: where the pick came from (preview: "table" | "search"). */
+  /** Where the pick came from (preview: "table" | "search"). */
   src?: "table" | "search";
 }
 
@@ -20,8 +20,6 @@ export class BotWorker {
   private worker: Worker;
   private ready: Promise<void>;
   private nextId = 1;
-  /** Blind mode: called whenever the bot's belief updates (search start). */
-  onBelief?: (info: BeliefInfo) => void;
   private pending = new Map<
     number,
     {
@@ -65,9 +63,6 @@ export class BotWorker {
           }
           break;
         }
-        case "belief":
-          this.onBelief?.(JSON.parse(m.info) as BeliefInfo);
-          break;
         case "benchProgress":
           this.benchPending.get(m.id)?.onProgress?.(m.done, m.total, m.ms);
           break;
@@ -90,21 +85,21 @@ export class BotWorker {
     this.worker.postMessage(m);
   }
 
-  /** `blind` present = fair play: the worker's per-game imperfect-info
-   * searcher decides (public info + meta-pool prior only); absent = the
-   * perfect-info Searcher (x-ray). */
+  /** Start a game under the open-team-sheet policy: the worker's per-game
+   * searcher plays with the opponent's true sets pinned as its belief —
+   * only the opponent's picks (which 3 + lead) stay hidden to it. */
   async newBattle(
     p1: string,
     p2: string,
     seed: string,
-    blind?: { poolJson: string; side: number; seed: number },
+    open: { poolJson: string; side: number; seed: number },
   ): Promise<void> {
     await this.ready;
-    this.send({ t: "battle", p1, p2, seed, blind });
+    this.send({ t: "battle", p1, p2, seed, open });
   }
 
-  /** Blind mode: feed one baked pair table for the belief-mediated preview
-   * (call before the preview search; messages are ordered). */
+  /** Feed one baked pair table for the table preview (call before the
+   * preview search; messages are ordered). */
   addPair(json: string): void {
     this.send({ t: "pair", json });
   }

@@ -1,0 +1,88 @@
+# GH Pages build + deploy for the playable browser demo (M12).
+#
+# Build = exactly the local sequence: tuned wasm build (crates/wasm/build.sh
+# -> pkg-web) -> vite build with the project-pages base -> battle data
+# (meta pool + baked pair tables) copied into dist/data/ (the app fetches
+# it at runtime, never bundles it — a redeploy after the full-pool bake
+# finishes ships the complete tables with no code change).
+#
+# Toolchain pins mirror the machine the parity gates were measured on:
+# Rust 1.94.0 + wasm-pack 0.13.1 (wasm-opt settings ride in from
+# crates/wasm/Cargo.toml package metadata), Node 22.
+
+name: pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "web/**"
+      - "crates/**"
+      - "data/**"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.94.0"
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Install wasm-pack 0.13.1
+        run: |
+          curl -sSfL https://github.com/rustwasm/wasm-pack/releases/download/v0.13.1/wasm-pack-v0.13.1-x86_64-unknown-linux-musl.tar.gz | tar -xz
+          sudo install wasm-pack-v0.13.1-x86_64-unknown-linux-musl/wasm-pack /usr/local/bin/
+
+      - name: Build wasm (tuned profile)
+        run: crates/wasm/build.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web (project-pages base)
+        working-directory: web
+        env:
+          NC2000_BASE: /nc2000-engine/
+        run: |
+          npm ci
+          npm run build
+
+      - name: Bundle battle data
+        run: |
+          mkdir -p web/dist/data
+          cp -r data/meta-pool-v0 data/preview-tables-v0 web/dist/data/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

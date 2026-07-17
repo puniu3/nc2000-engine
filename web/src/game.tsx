@@ -4,17 +4,17 @@
 // side must make (forced single choices auto-apply), then commit both picks
 // in side order to the main battle AND the mirror.
 //
-// Bot information (M10c): fair (default) = the worker plays the blind
-// imperfect-info searcher — public observations + the meta-pool prior only,
-// no psychic tells — and its belief about the human's team is surfaced as
-// the "bot's read" chip; preview comes from the baked table when the belief
-// resolves the matchup, else determinized search (the worker reports which).
-// X-ray = the old perfect-info searcher; preview via the main-thread tables.
+// Information policy (M12): OPEN TEAM SHEET — both sides' sets are public
+// (the bot's belief is pinned to the human's true sets in the worker), only
+// selection (which 3 of 6 + lead, until revealed) is hidden: the worker's
+// searcher determinizes the human's unseen picks per iteration. Bot preview
+// comes from the M8 baked table whenever the matchup is baked (the worker
+// reports "table"), else the live search at the preview root ("search").
+// Strength is fixed at max (BUDGET) — ponder hides the wait.
 
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   Battle,
-  PreviewTables,
   getDex,
   legalChoices,
   needsChoice,
@@ -27,8 +27,6 @@ import { fetchPairJson } from "./data";
 import { BotWorker } from "./bot";
 import { Narrator } from "./narrate";
 import type {
-  BeliefInfo,
-  BotInfo,
   Choice,
   LogEntry,
   MetaPool,
@@ -44,7 +42,7 @@ import {
   StatusBadge,
   TypeBadge,
 } from "./battle-ui";
-import { STRENGTHS } from "./app";
+import { BUDGET } from "./app";
 
 const HUMAN = 0;
 const BOT = 1;
@@ -89,39 +87,11 @@ function ThinkChip(props: { thinking: Thinking | null }) {
   );
 }
 
-/** Fair-mode flavor: the blind bot's current belief about the human's team
- * (singleton → the identified pool team; several → candidate count;
- * fallback → an off-pool custom team). Absent in x-ray mode. */
-function BeliefChip(props: { read: BeliefInfo | null }) {
-  const r = props.read;
-  if (!r) return null;
-  const text = r.fallback
-    ? "custom team"
-    : r.count === 1
-      ? r.candidates[0]
-      : `${r.count} candidates`;
-  return (
-    <span
-      class="belief-chip"
-      data-count={r.count}
-      data-fallback={r.fallback ? "1" : "0"}
-      title="What the bot believes your team is (fair mode: it only sees public information)"
-    >
-      bot's read: {text}
-    </span>
-  );
-}
-
 export function Game(props: {
   pool: MetaPool;
   poolJson: string;
-  tables: PreviewTables;
-  addedPairs: Set<string>;
   humanIdx: number;
   botIdx: number;
-  strength: number;
-  onStrength: (n: number) => void;
-  botInfo: BotInfo;
   onRematch: () => void;
   onNewTeams: () => void;
 }) {
@@ -137,14 +107,11 @@ export function Game(props: {
   const [botPreviewSrc, setBotPreviewSrc] = useState<
     "table" | "search" | null
   >(null);
-  const [botRead, setBotRead] = useState<BeliefInfo | null>(null);
 
   const battleRef = useRef<Battle | null>(null);
   const botRef = useRef<BotWorker | null>(null);
   const reqRef = useRef<Request | null>(null);
   const aliveRef = useRef(true);
-  const strengthRef = useRef(props.strength);
-  strengthRef.current = props.strength;
   const narrator = useMemo(() => new Narrator(HUMAN), []);
   const pairPromiseRef = useRef<Promise<string | null> | null>(null);
 
@@ -157,9 +124,6 @@ export function Game(props: {
     aliveRef.current = true;
     const bot = new BotWorker();
     botRef.current = bot;
-    bot.onBelief = (info) => {
-      if (aliveRef.current) setBotRead(info);
-    };
     const battle = new Battle(
       getDex(),
       JSON.stringify(humanTeam.sets),
@@ -169,16 +133,11 @@ export function Game(props: {
     battleRef.current = battle;
     pairPromiseRef.current = fetchPairJson(props.humanIdx, props.botIdx);
     void bot
-      .newBattle(
-        JSON.stringify(humanTeam.sets),
-        JSON.stringify(botTeam.sets),
-        battle.seed(),
-        // Fair (default): the worker plays blind — public info + the
-        // meta-pool prior only. X-ray: the perfect-info searcher.
-        props.botInfo === "fair"
-          ? { poolJson: props.poolJson, side: BOT, seed: randomSeed32() }
-          : undefined,
-      )
+      .newBattle(JSON.stringify(humanTeam.sets), JSON.stringify(botTeam.sets), battle.seed(), {
+        poolJson: props.poolJson,
+        side: BOT,
+        seed: randomSeed32(),
+      })
       .then(() => {
         if (!aliveRef.current) return;
         drain();
@@ -255,67 +214,30 @@ export function Game(props: {
     void searchBot(req, legal);
   }
 
+  /** Bot team preview: feed the baked pair table (when it exists) to the
+   * worker, which answers from the M8 equilibrium ("table") or falls back
+   * to the live preview search ("search" — matchup not baked yet). */
   async function decideBotPreview(req: Request, legal: Choice[]) {
-    const battle = battleRef.current!;
     const pairJson = await pairPromiseRef.current;
     if (!aliveRef.current || req !== reqRef.current) return;
-
-    if (props.botInfo === "fair") {
-      // Fair: the worker's BlindSearcher decides — the baked table when the
-      // belief resolves the matchup (and the pair is baked), else the
-      // determinized preview search. The main-thread tables (a perfect-info
-      // lookup over BOTH rosters) are never consulted.
-      if (pairJson) botRef.current!.addPair(pairJson);
-      await searchBot(req, legal);
-      return;
-    }
-
-    let picked: string | null = null;
-    if (pairJson) {
-      const lo = Math.min(props.humanIdx, props.botIdx);
-      const hi = Math.max(props.humanIdx, props.botIdx);
-      const key = `${lo}-${hi}`;
-      try {
-        if (!props.addedPairs.has(key)) {
-          props.tables.addPair(pairJson);
-          props.addedPairs.add(key);
-        }
-        const res = JSON.parse(props.tables.resolve(battle, BOT)) as {
-          found: boolean;
-        };
-        if (res.found) {
-          picked = props.tables.sample(battle, BOT, randomSeed32()) ?? null;
-        }
-      } catch (e) {
-        console.warn("baked table unusable, falling back to search:", e);
-        picked = null;
-      }
-    }
-    if (picked) {
-      setBotPreviewSrc("table");
-      req.picks[BOT] = picked;
-      maybeCommit(req);
-    } else {
-      setBotPreviewSrc("search");
-      await searchBot(req, legal);
-    }
+    if (pairJson) botRef.current!.addPair(pairJson);
+    await searchBot(req, legal);
   }
 
   async function searchBot(req: Request, legal: Choice[]) {
     const bot = botRef.current!;
-    const budget = strengthRef.current;
     // Ponder iff the human still owes a pick at launch: the search then
     // keeps running past its budget (bonus strength) until the human
     // commits (humanPick -> flush) or the ponder cap.
     const ponder = req.needs[HUMAN] && req.picks[HUMAN] === null;
-    setThinking({ done: 0, budget });
-    const r = await bot.search(BOT, budget, randomSeed32(), ponder, (done, b) => {
+    setThinking({ done: 0, budget: BUDGET });
+    const r = await bot.search(BOT, BUDGET, randomSeed32(), ponder, (done, b) => {
       if (aliveRef.current && req === reqRef.current)
         setThinking({ done, budget: b });
     });
     if (!aliveRef.current || req !== reqRef.current) return;
     setThinking(null);
-    // Blind previews report their source (baked table vs live search).
+    // Previews report their source (baked table vs live search).
     if (r.src && legal[0].kind === "team") setBotPreviewSrc(r.src);
     req.picks[BOT] = r.best ?? legal[0].input;
     maybeCommit(req);
@@ -462,16 +384,11 @@ export function Game(props: {
             ) : botPreviewSrc === "table" ? (
               "Opponent picks from the baked equilibrium table"
             ) : botPreviewSrc === "search" ? (
-              props.botInfo === "fair" ? (
-                "Opponent picks by live search" // unbaked matchup OR ambiguous read
-              ) : (
-                "Opponent picks by live search (matchup not baked yet)"
-              )
+              "Opponent picks by live search (matchup not baked yet)"
             ) : (
               ""
             )}
           </span>
-          <BeliefChip read={botRead} />
           <button class="ghost quit-btn" onClick={props.onNewTeams}>
             Quit
           </button>
@@ -488,22 +405,7 @@ export function Game(props: {
     <div class="screen battle-screen">
       <header class="battle-header">
         <span class="turn-label">Turn {view.turn}</span>
-        <BeliefChip read={botRead} />
         {humanChoices && <ThinkChip thinking={thinking} />}
-        <label class="strength-label compact">
-          <select
-            value={props.strength}
-            onChange={(e) =>
-              props.onStrength(Number((e.target as HTMLSelectElement).value))
-            }
-          >
-            {STRENGTHS.map((s) => (
-              <option value={s.iters} key={s.iters}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
         <button class="ghost quit-btn" onClick={props.onNewTeams}>
           Quit
         </button>

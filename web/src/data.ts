@@ -6,13 +6,18 @@
 
 import type { MetaPool } from "./types";
 
+/** All data fetches go under the deploy base (`/` locally,
+ * `/nc2000-engine/` on GH Pages — see vite.config.ts). BASE_URL always ends
+ * with a slash. */
+const dataUrl = (rel: string) => `${import.meta.env.BASE_URL}data/${rel}`;
+
 export interface PoolData {
   pool: MetaPool;
   poolJson: string;
 }
 
 export async function fetchPool(): Promise<PoolData> {
-  const res = await fetch("data/meta-pool-v0/meta-pool.json");
+  const res = await fetch(dataUrl("meta-pool-v0/meta-pool.json"));
   if (!res.ok) throw new Error(`meta pool fetch failed: ${res.status}`);
   const poolJson = await res.text();
   return { pool: JSON.parse(poolJson) as MetaPool, poolJson };
@@ -28,7 +33,7 @@ export async function fetchPairJson(
   const lo = Math.min(i, j);
   const hi = Math.max(i, j);
   const pad = (n: number) => String(n).padStart(2, "0");
-  const url = `data/preview-tables-v0/pair-${pad(lo)}-${pad(hi)}.json`;
+  const url = dataUrl(`preview-tables-v0/pair-${pad(lo)}-${pad(hi)}.json`);
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
