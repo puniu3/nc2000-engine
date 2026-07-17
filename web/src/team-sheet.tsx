@@ -14,6 +14,8 @@ import { useState } from "preact/hooks";
 import type { PokeView, SideView, StateView } from "./types";
 import { TypeBadge } from "./battle-ui";
 import { itemName, moveName, speciesName, toId, ui } from "./i18n";
+import { itemNote, moveNote } from "./behavior-notes";
+import { noteRef } from "./tooltip";
 import {
   hiddenPowerType,
   moveMeta,
@@ -39,13 +41,23 @@ function genderMark(g: string): string {
 export function SetDetail(props: { mon: SheetMon }) {
   const m = props.mon;
   const hasHp = m.moves.some((mv) => toId(mv).startsWith("hiddenpower"));
+  const iNote = m.item ? itemNote(m.item) : null;
   return (
     <div class="set-detail">
       <ul class="set-fields">
         <li class="set-field">
           <span class="set-field-k">{ui().sheetItem}</span>
-          <span class="set-field-v">
+          <span
+            class={`set-field-v${iNote ? " has-note" : ""}`}
+            data-item={m.item ? toId(m.item) : undefined}
+            tabIndex={iNote ? 0 : undefined}
+          >
             {m.item ? itemName(m.item) : ui().sheetNoItem}
+            {iNote && (
+              <span class="bn-note" ref={noteRef}>
+                {iNote}
+              </span>
+            )}
           </span>
         </li>
         <li class="set-field">
@@ -64,8 +76,14 @@ export function SetDetail(props: { mon: SheetMon }) {
       <ul class="set-moves">
         {m.moves.map((mv) => {
           const meta = moveMeta(mv, m.ivs);
+          const note = moveNote(mv);
           return (
-            <li class="set-move" key={mv} data-move={toId(mv)}>
+            <li
+              class={`set-move${note ? " has-note" : ""}`}
+              key={mv}
+              data-move={toId(mv)}
+              tabIndex={note ? 0 : undefined}
+            >
               <span class="move-name">{moveName(mv)}</span>
               {meta && (
                 <span class="move-meta">
@@ -74,6 +92,11 @@ export function SetDetail(props: { mon: SheetMon }) {
                   {meta.basePower > 0 && (
                     <span class="move-bp">{ui().bp(meta.basePower)}</span>
                   )}
+                </span>
+              )}
+              {note && (
+                <span class="bn-note" ref={noteRef}>
+                  {note}
                 </span>
               )}
             </li>

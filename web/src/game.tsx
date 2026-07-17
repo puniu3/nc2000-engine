@@ -43,6 +43,8 @@ import {
   TypeBadge,
 } from "./battle-ui";
 import { itemName, moveName, speciesName, toId, ui } from "./i18n";
+import { moveNote } from "./behavior-notes";
+import { noteRef } from "./tooltip";
 import { BUDGET, type SelectedTeam } from "./app";
 import { Modal } from "./modal";
 import { sheetMon } from "./set-info";
@@ -624,27 +626,36 @@ function ChoiceButtons(props: {
     <div class="choices">
       {moves.length > 0 && (
         <div class="move-grid">
-          {moves.map((m) => (
-            <button
-              class="move-btn"
-              key={m.input}
-              onClick={() => props.onPick(m.input)}
-            >
-              <span class="move-name">{moveName(m.name)}</span>
-              <span class="move-meta">
-                <TypeBadge type={m.type} />
-                <span class="move-cat">{ui().moveCat(m.category)}</span>
-                {m.basePower > 0 && (
-                  <span class="move-bp">{ui().bp(m.basePower)}</span>
-                )}
-                {m.pp >= 0 && (
-                  <span class="move-pp">
-                    PP {m.pp}/{m.maxpp}
+          {moves.map((m) => {
+            const note = moveNote(m.name);
+            return (
+              <button
+                class={`move-btn${note ? " has-note" : ""}`}
+                key={m.input}
+                data-move={toId(m.name)}
+                onClick={() => props.onPick(m.input)}
+              >
+                <span class="move-name">{moveName(m.name)}</span>
+                <span class="move-meta">
+                  <TypeBadge type={m.type} />
+                  <span class="move-cat">{ui().moveCat(m.category)}</span>
+                  {m.basePower > 0 && (
+                    <span class="move-bp">{ui().bp(m.basePower)}</span>
+                  )}
+                  {m.pp >= 0 && (
+                    <span class="move-pp">
+                      PP {m.pp}/{m.maxpp}
+                    </span>
+                  )}
+                </span>
+                {note && (
+                  <span class="bn-note" ref={noteRef}>
+                    {note}
                   </span>
                 )}
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
       {switches.length > 0 && (

@@ -1149,6 +1149,58 @@ dialog.modal::backdrop {
   }
 }
 
+/* ------------------------------------- behavior-note toggletips (UI-3) */
+
+/* Screen-reader copy of the note: always in the DOM (aria-describedby
+ * target), visually hidden. */
+.bn-note {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Quiet affordance: noted names carry a dotted underline. */
+.has-note .move-name,
+span.set-field-v.has-note {
+  text-decoration: underline dotted var(--text-dim);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+/* Long-press must pop the note, not the iOS callout / text selection. */
+.has-note {
+  position: relative;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+li.set-move.has-note,
+span.set-field-v.has-note {
+  cursor: help;
+}
+
+/* The visible bubble (aria-hidden; the sr span carries the semantics). */
+.bn-tip {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(320px, calc(100vw - 12px));
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hp-fill,
   .think-fill {
