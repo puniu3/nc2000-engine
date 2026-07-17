@@ -37,8 +37,8 @@ use wasm_bindgen::prelude::*;
 
 use nc2000_bot::preview::{MetaPool, TableSet};
 use nc2000_bot::{
-    baked_preview_pick, open_preview_pick, Belief, BlindSearch, Observer, RmConfig, SkuctSearch,
-    SplitMix64,
+    baked_preview_pick, open_preview_pick, Belief, BlindSearch, Observer, ProtocolAgent,
+    RmConfig, SkuctSearch, SplitMix64,
 };
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Category, Dex};
@@ -552,6 +552,145 @@ impl WasmBlindSearcher {
             "count": self.belief.candidate_count(),
             "fallback": self.belief.is_fallback(),
             "candidates": candidates,
+        })
+        .to_string()
+    }
+}
+
+// ------------------------------------------------------- ProtocolSearcher
+
+/// M15a: the imperfect-info agent driven by PLAYER-VISIBLE information only
+/// — PS protocol lines + our request JSON — instead of a `Battle` object.
+/// One instance per GAME (like `BlindSearcher`): feed every battle line of
+/// our player stream with `pushLines`, feed each `|request|` JSON with
+/// `onRequest` (which synthesizes a battle consistent with all public info,
+/// hidden opponent fields imputed from the M10 belief), then pump
+/// `step`/`best` exactly like the other searchers. `best` is always
+/// projected onto the PS-legal choice set (incl. the Max Total Level
+/// preview rule the engine does not enforce).
+#[wasm_bindgen(js_name = ProtocolSearcher)]
+pub struct WasmProtocolSearcher {
+    dex: Rc<Dex>,
+    agent: ProtocolAgent,
+}
+
+#[wasm_bindgen(js_class = ProtocolSearcher)]
+impl WasmProtocolSearcher {
+    /// `side`: 0 = p1. `pool_json` = `meta-pool.json` contents (belief
+    /// prior for genuinely-hidden opponents). `seed` drives determinization
+    /// sampling / tie-breaking.
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        dex: &WasmDex,
+        side: usize,
+        pool_json: &str,
+        seed: u32,
+        c: Option<f64>,
+        hp_buckets: Option<i32>,
+    ) -> Result<WasmProtocolSearcher, JsError> {
+        let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
+        let cfg = skuct_config(c, hp_buckets);
+        let agent = ProtocolAgent::new(&dex.dex, side, pool, cfg, seed as u64);
+        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent })
+    }
+
+    /// Our exact team, as submitted to PS (same JSON array shape as the
+    /// `Battle` constructor). Required before the first request.
+    #[wasm_bindgen(js_name = setOwnTeam)]
+    pub fn set_own_team(&mut self, team_json: &str) -> Result<(), JsError> {
+        let sets: Vec<PokemonSet> = serde_json::from_str(team_json).map_err(js_err)?;
+        self.agent.set_own_team(sets);
+        Ok(())
+    }
+
+    /// Open-team-sheet mode: pin the opponent's true sets (the M12 product
+    /// policy). Without this the belief runs pool identification (the parked
+    /// full-blind policy — the M15 product policy for genuinely hidden
+    /// sets).
+    #[wasm_bindgen(js_name = pinOpponent)]
+    pub fn pin_opponent(&mut self, team_json: &str) -> Result<(), JsError> {
+        let sets: Vec<PokemonSet> = serde_json::from_str(team_json).map_err(js_err)?;
+        self.agent.pin_opponent(sets);
+        Ok(())
+    }
+
+    /// Feed one baked pair table for table-answered previews.
+    #[wasm_bindgen(js_name = addPair)]
+    pub fn add_pair(&mut self, pair_json: &str) -> Result<(), JsError> {
+        self.agent.add_pair_json(pair_json).map_err(|e| JsError::new(&e))
+    }
+
+    /// Feed player-visible battle protocol lines (JSON array of strings —
+    /// the lines of our player stream, `|request|` lines excluded).
+    #[wasm_bindgen(js_name = pushLines)]
+    pub fn push_lines(&mut self, lines_json: &str) -> Result<(), JsError> {
+        let lines: Vec<String> = serde_json::from_str(lines_json).map_err(js_err)?;
+        for line in &lines {
+            self.agent.push_line(&self.dex, line);
+        }
+        Ok(())
+    }
+
+    /// Feed the request JSON at a decision point. Returns `false` for a
+    /// `wait` request (nothing owed), `true` when a decision is pending
+    /// (the searcher is then ready to `step`/`best`).
+    #[wasm_bindgen(js_name = onRequest)]
+    pub fn on_request(&mut self, request_json: &str) -> Result<bool, JsError> {
+        self.agent.on_request(&self.dex, request_json).map_err(|e| JsError::new(&e))
+    }
+
+    /// The baked-table preview pick when one applies, else `null`.
+    #[wasm_bindgen(js_name = bakedPreview)]
+    pub fn baked_preview(&self) -> Option<String> {
+        self.agent.baked_preview(&self.dex)
+    }
+
+    /// Pump `n` blind iterations (fresh belief determinization each) on the
+    /// synthesized battle. No-op when a baked preview / forced choice
+    /// already decided.
+    pub fn step(&mut self, n: u32) -> Result<u32, JsError> {
+        self.agent.step(&self.dex, n).map_err(|e| JsError::new(&e))
+    }
+
+    pub fn iterations(&self) -> u32 {
+        self.agent.iterations()
+    }
+
+    /// Current best choice as a ready-to-submit PS choice string, projected
+    /// onto the request-legal set.
+    pub fn best(&mut self) -> Option<String> {
+        self.agent.best(&self.dex)
+    }
+
+    /// JSON `{iterations, baked, forced, actions: [...]}`.
+    #[wasm_bindgen(js_name = rootPolicy)]
+    pub fn root_policy(&self) -> String {
+        self.agent.root_policy(&self.dex)
+    }
+
+    /// JSON `{count, fallback, candidates}` — the belief's current read.
+    #[wasm_bindgen(js_name = beliefInfo)]
+    pub fn belief_info(&self) -> String {
+        self.agent.belief_info()
+    }
+
+    /// Full state view of the CURRENT synthesized battle (same shape as
+    /// `Battle.stateView`) — the M15a gate-b surface: every public field is
+    /// asserted against PS's true state by the harness.
+    #[wasm_bindgen(js_name = stateView)]
+    pub fn state_view(&self) -> Result<String, JsError> {
+        let battle = self
+            .agent
+            .battle()
+            .ok_or_else(|| JsError::new("stateView before onRequest"))?;
+        Ok(state_view_json(battle, &self.dex).to_string())
+    }
+
+    /// `[legality_drift, projections]` counters (target: zeros).
+    pub fn metrics(&self) -> String {
+        serde_json::json!({
+            "legalityDrift": self.agent.legality_drift,
+            "projections": self.agent.projections,
         })
         .to_string()
     }

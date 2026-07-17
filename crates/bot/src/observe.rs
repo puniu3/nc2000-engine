@@ -58,6 +58,18 @@
 use nc2000_engine::dex::{toid, Dex, ItemId, MoveId, SpeciesId};
 use nc2000_engine::state::{Battle, Gender};
 
+/// Does a revealed move match a set's move slot? Identical ids always; a
+/// PLAIN `hiddenpower` reveal (M15 protocol mode: PS normalizes typed
+/// hidden powers to the plain id, so its `|move|` lines and requests never
+/// carry the type) matches any typed hidden power. M10's own channels only
+/// ever reveal this engine's typed ids, so the lenient arm never fires
+/// there — existing behavior is bit-identical.
+pub(crate) fn move_matches(dex: &Dex, slot: MoveId, revealed: MoveId) -> bool {
+    slot == revealed
+        || (dex.moves.key(revealed) == "hiddenpower"
+            && dex.moves.key(slot).starts_with("hiddenpower"))
+}
+
 /// Public knowledge about one opponent roster mon's held item.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ItemObs {
@@ -154,6 +166,44 @@ pub struct Observer {
 }
 
 impl Observer {
+    /// M15 protocol mode: construct from preview-public facts parsed out of
+    /// the protocol (`|poke|` lines) instead of a battle. The state-diff
+    /// channel never runs (there is no true battle to diff — `observe` must
+    /// not be called); all knowledge arrives via `ingest_line`. Nicknames
+    /// are learned from switch lines by the caller (`set_name`) — subject
+    /// resolution needs them before the mon's first `|move|` line, and
+    /// switch lines always precede them.
+    pub(crate) fn from_mons(side: usize, mons: Vec<MonObs>) -> Observer {
+        let n = mons.len();
+        Observer {
+            side,
+            mons,
+            prev_item: vec![None; n],
+            log_pos: 0,
+            log_suppress: vec![false; n],
+            revision: 0,
+        }
+    }
+
+    /// Protocol mode: feed one player-visible protocol line through the log
+    /// channel (the only channel — see `from_mons`).
+    pub(crate) fn ingest_line(&mut self, line: &str, dex: &Dex) {
+        if self.scan_line(line, dex) {
+            self.revision += 1;
+        }
+    }
+
+    /// Protocol mode: a mon appeared under `name` (resolves log subjects).
+    pub(crate) fn set_name(&mut self, slot: usize, name: &str) {
+        if self.mons[slot].name != name {
+            self.mons[slot].name = name.to_string();
+        }
+        if !self.mons[slot].appeared {
+            self.mons[slot].appeared = true;
+            self.revision += 1;
+        }
+    }
+
     pub fn new(battle: &Battle, side: usize) -> Observer {
         let opp = 1 - side;
         let mons = battle.sides[opp]

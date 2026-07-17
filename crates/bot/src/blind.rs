@@ -236,6 +236,11 @@ pub struct BlindSearch {
     my_acts: Vec<SearchChoice>,
     my_n: Vec<u32>,
     my_w: Vec<f64>,
+    /// M15: optional root-action legality mask (PS enforces preview rules —
+    /// Max Total Level — that the engine's enumeration does not; masked
+    /// actions are never selected or reported best). `None` = all allowed,
+    /// bit-identical to the pre-M15 behavior.
+    my_mask: Option<Vec<bool>>,
     /// Per-determinization roots + everything below (state-keyed).
     nodes: Vec<Node>,
     table: HashMap<u64, usize>,
@@ -266,6 +271,7 @@ impl BlindSearch {
             side,
             my_n: vec![0; my_acts.len()],
             my_w: vec![0.0; my_acts.len()],
+            my_mask: None,
             my_acts,
             nodes: Vec::new(),
             table: HashMap::new(),
@@ -291,7 +297,13 @@ impl BlindSearch {
                 self.nodes.len() - 1
             }
         };
-        let my_pick = select_global(&self.cfg, &mut self.rng, &mut self.my_n, &self.my_w);
+        let my_pick = select_global(
+            &self.cfg,
+            &mut self.rng,
+            &mut self.my_n,
+            &self.my_w,
+            self.my_mask.as_deref(),
+        );
         let mut force = [None, None];
         force[self.side] = Some(my_pick);
         let mut joint = [0usize; 2];
@@ -348,10 +360,22 @@ impl BlindSearch {
             .collect()
     }
 
+    /// M15: restrict the root to `allowed` actions (aligned with
+    /// `actions()`). Masked actions keep their index (the per-iteration
+    /// root forcing is index-aligned) but are never selected or returned by
+    /// `best`. Panics if nothing stays allowed.
+    pub fn mask_actions(&mut self, allowed: &[bool]) {
+        assert_eq!(allowed.len(), self.my_acts.len(), "mask length mismatch");
+        assert!(allowed.iter().any(|&a| a), "mask leaves no legal action");
+        self.my_mask = Some(allowed.to_vec());
+    }
+
     /// Current best choice: argmax visits over the global root stats (the
-    /// blind play rule). `None` when the side owes nothing.
+    /// blind play rule), restricted to the mask when one is set. `None`
+    /// when the side owes nothing.
     pub fn best(&self) -> Option<SearchChoice> {
         (0..self.my_acts.len())
+            .filter(|&a| self.my_mask.as_ref().map_or(true, |m| m[a]))
             .max_by_key(|&a| self.my_n[a])
             .map(|a| self.my_acts[a])
     }
@@ -363,18 +387,27 @@ impl BlindSearch {
 }
 
 /// UCB1 over the global (information-set) root stats — same rule and rng
-/// draw pattern as `smmcts::select_ucb`, on plain arrays.
-fn select_global(cfg: &RmConfig, rng: &mut SplitMix64, n: &mut [u32], w: &[f64]) -> usize {
+/// draw pattern as `smmcts::select_ucb`, on plain arrays. `mask` (M15)
+/// restricts the pick to allowed indices; `None` is bit-identical to the
+/// unmasked original.
+fn select_global(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    n: &mut [u32],
+    w: &[f64],
+    mask: Option<&[bool]>,
+) -> usize {
     let k = n.len();
-    let untried: Vec<usize> = (0..k).filter(|&a| n[a] == 0).collect();
+    let ok = |a: usize| mask.map_or(true, |m| m[a]);
+    let untried: Vec<usize> = (0..k).filter(|&a| n[a] == 0 && ok(a)).collect();
     let pick = if !untried.is_empty() {
         untried[rng.below(untried.len())]
     } else {
         let total: u32 = n.iter().sum();
         let ln_total = (total as f64).ln();
-        let mut best = 0;
+        let mut best = (0..k).find(|&a| ok(a)).unwrap_or(0);
         let mut best_v = f64::NEG_INFINITY;
-        for a in 0..k {
+        for a in (0..k).filter(|&a| ok(a)) {
             let (na, wa) = (n[a] as f64, w[a]);
             let v = wa / na + cfg.c * (ln_total / na).sqrt();
             if v > best_v {

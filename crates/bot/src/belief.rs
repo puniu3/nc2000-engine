@@ -63,7 +63,7 @@ use nc2000_engine::state::{
     ActionKind, Battle, EffId, EffectState, MoveSlot, MoveSlots, PokeId, Pokemon,
 };
 
-use crate::observe::{MonObs, Observer};
+use crate::observe::{move_matches, MonObs, Observer};
 use crate::preview::MetaPool;
 use crate::rng::SplitMix64;
 
@@ -170,7 +170,7 @@ impl Belief {
                 self.cands[0]
                     .refs
                     .as_deref()
-                    .is_some_and(|refs| consistent(refs, obs.mons())),
+                    .is_some_and(|refs| consistent(dex, refs, obs.mons())),
                 "pinned truth filtered out (observer drift)"
             );
             self.synced = Some(obs.revision());
@@ -194,6 +194,24 @@ impl Belief {
 
     pub fn candidate_id(&self, pool_idx: usize) -> &str {
         &self.cands[pool_idx].id
+    }
+
+    /// M15 synthesis source: the imputation reference mons aligned to the
+    /// opponent's observed roster slots — `pick` as in `determinize_with`
+    /// (`None` = fallback roster; call `sync` first so it exists). The
+    /// protocol importer builds its from-scratch battle on these; the
+    /// per-iteration `determinize` then overwrites them with fair samples.
+    pub(crate) fn refs(&self, pick: Option<usize>) -> &[Pokemon] {
+        match pick {
+            Some(i) => self.cands[i]
+                .refs
+                .as_deref()
+                .expect("refs: candidate is preview-inconsistent"),
+            None => self
+                .fallback
+                .as_deref()
+                .expect("refs: fallback roster not built (call sync first)"),
+        }
     }
 
     /// Uniformly sample a consistent candidate (`None` = fallback roster).
@@ -382,7 +400,7 @@ impl Belief {
     fn refilter(&mut self, dex: &Dex, obs: &Observer) {
         self.alive = (0..self.cands.len())
             .filter(|&i| match &self.cands[i].refs {
-                Some(refs) => consistent(refs, obs.mons()),
+                Some(refs) => consistent(dex, refs, obs.mons()),
                 None => false,
             })
             .collect();
@@ -507,11 +525,13 @@ fn build_refs(dex: &Dex, sets: &[PokemonSet], mons: &[MonObs]) -> Option<Vec<Pok
 }
 
 /// In-battle consistency: every observation must fit the candidate.
-fn consistent(refs: &[Pokemon], mons: &[MonObs]) -> bool {
+/// (`move_matches`: a plain-hiddenpower reveal — M15 protocol mode —
+/// matches any typed hidden power; M10 reveals are typed, bit-identical.)
+fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
     refs.iter().zip(mons).all(|(r, mo)| {
         mo.revealed_moves
             .iter()
-            .all(|m| r.base_move_slots.iter().any(|s| s.id == *m))
+            .all(|m| r.base_move_slots.iter().any(|s| move_matches(dex, s.id, *m)))
             && match mo.item.original {
                 Some(orig) => r.item == orig,
                 None => true,
@@ -622,7 +642,7 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
     let old_base = *base_move_slots;
     let mut nb = MoveSlots::default();
     for rs in refm.base_move_slots.iter() {
-        if mo.revealed_moves.contains(&rs.id) {
+        if mo.revealed_moves.iter().any(|m| move_matches(dex, rs.id, *m)) {
             match old_base.iter().find(|s| s.id == rs.id) {
                 Some(os) => nb.push(MoveSlot { shared: true, ..*os }),
                 None => nb.push(*rs), // fallback-merge oddity: fresh slot
@@ -632,7 +652,9 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
         }
     }
     debug_assert!(
-        mo.revealed_moves.iter().all(|m| nb.iter().any(|s| s.id == *m)),
+        mo.revealed_moves
+            .iter()
+            .all(|m| nb.iter().any(|s| move_matches(dex, s.id, *m))),
         "revealed move missing from imputation source (filter drift)"
     );
     *base_move_slots = nb;
