@@ -1,0 +1,8333 @@
+{
+ "meta": {
+  "source": "http://psense.lib.net/_/PDINPUT2.cgi (community rental-team DB, 「一撃無し２０００ルール」 = no-OHKO NC2000)",
+  "fetched": "2026-07-19",
+  "ruleset": "no-OHKO NC2000 variant (differs from shipped gen2nc2000 which bans neither OHKO nor evasion nor Bright Powder)",
+  "teams": 28,
+  "note": "DVs/EVs are not published in the human-readable view; per-mon nationalDex + hpTypeFromPd are decoded from the page PD hidden field."
+ },
+ "teams": [
+  {
+   "cban": 1,
+   "archetype": "【オススメレンタル】キチカビ１",
+   "comment": "シンプルに強い寝言カビゴンエースと、 ゴーストに強い追い打ちブラッキーと、 岩・鋼に強いガラガラから構成された、 シンプルで分かりやすい寝言カビゴンパーティ。",
+   "provenance": {
+    "sourceUrl": "http://www.q9con.net/pokemon/PartyBox/index.php?partyNumber=64",
+    "sourceName": "キチカビ",
+    "maker": "117"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "カビゴン",
+     "moves": [
+      "すてみタックル",
+      "のろい",
+      "ねごと",
+      "ねむる"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "ブラッキ－",
+     "moves": [
+      "おいうち",
+      "どくどく",
+      "あまえる",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "ガラガラ",
+     "moves": [
+      "じしん",
+      "いわなだれ",
+      "かえんほうしゃ",
+      "つるぎのまい"
+     ],
+     "item": "ふといホネ"
+    },
+    {
+     "level": 50,
+     "species": "パルシェン",
+     "moves": [
+      "れいとうビ－ム",
+      "まきびし",
+      "リフレクタ－",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "ゲンガ－",
+     "moves": [
+      "でんじほう",
+      "くろいまなざし",
+      "ほろびのうた",
+      "みちづれ"
+     ],
+     "item": "きのみジュ－ス"
+    },
+    {
+     "level": 50,
+     "species": "スタ－ミ－",
+     "moves": [
+      "ハイドロポンプ",
+      "サイコキネシス",
+      "でんじは",
+      "じこさいせい"
+     ],
+     "item": "きせきのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 197,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 105,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 91,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 94,
+     "dvsHex": [
+      "9",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 121,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ブラッキ－",
+     "speciesId": "umbreon",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "おいうち",
+       "id": "pursuit"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "あまえる",
+       "id": "charm"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 197,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "かえんほうしゃ",
+       "id": "flamethrower"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "パルシェン",
+     "speciesId": "cloyster",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 91,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゲンガ－",
+     "speciesId": "gengar",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "でんじほう",
+       "id": "zapcannon"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      },
+      {
+       "jp": "みちづれ",
+       "id": "destinybond"
+      }
+     ],
+     "jpItem": "きのみジュ－ス",
+     "itemId": "berryjuice",
+     "nationalDex": 94,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スタ－ミ－",
+     "speciesId": "starmie",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ハイドロポンプ",
+       "id": "hydropump"
+      },
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 121,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 2,
+   "archetype": "【オススメレンタル】サンダーバンギWA",
+   "comment": "・サンダーの目覚めるパワーは氷 ・ナッシーの目覚めるパワーは草 ・カイリキーの目覚めるパワーはゴースト VC対戦では、眠りターンが長いため、 ナッシーの宿木のタネは眠り粉に変更すると良いそうです。",
+   "provenance": {
+    "sourceUrl": "https://tomika66.fc2.net/blog-entry-37.html",
+    "sourceName": "サンダーバンギラスWA～いばみがとフルアタ最終結論",
+    "maker": "もがみ"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "サンダ－",
+     "moves": [
+      "かみなり",
+      "めざめるパワ－",
+      "いばる",
+      "みがわり"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 55,
+     "species": "バンギラス",
+     "moves": [
+      "いわなだれ",
+      "じしん",
+      "ばくれつパンチ",
+      "だいもんじ"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "じしん",
+      "はらだいこ",
+      "じばく"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "パルシェン",
+     "moves": [
+      "なみのり",
+      "まきびし",
+      "のろい",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "ナッシ－",
+     "moves": [
+      "めざめるパワ－",
+      "サイコキネシス",
+      "やどりぎのタネ",
+      "だいばくはつ"
+     ],
+     "item": "まひなおしのみ"
+    },
+    {
+     "level": 50,
+     "species": "カイリキ－",
+     "moves": [
+      "クロスチョップ",
+      "いわなだれ",
+      "じしん",
+      "めざめるパワ－"
+     ],
+     "item": "せんせいのツメ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 145,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    },
+    {
+     "num": 248,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 91,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 103,
+     "dvsHex": [
+      "E",
+      "E",
+      "F",
+      "F"
+     ],
+     "hpType": "grass"
+    },
+    {
+     "num": 68,
+     "dvsHex": [
+      "D",
+      "E",
+      "F",
+      "F"
+     ],
+     "hpType": "ghost"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "サンダ－",
+     "speciesId": "zapdos",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "かみなり",
+       "id": "thunder"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "いばる",
+       "id": "swagger"
+      },
+      {
+       "jp": "みがわり",
+       "id": "substitute"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 145,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "バンギラス",
+     "speciesId": "tyranitar",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "ばくれつパンチ",
+       "id": "dynamicpunch"
+      },
+      {
+       "jp": "だいもんじ",
+       "id": "fireblast"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 248,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "はらだいこ",
+       "id": "bellydrum"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "パルシェン",
+     "speciesId": "cloyster",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 91,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ナッシ－",
+     "speciesId": "exeggutor",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 103,
+     "hpTypeFromPd": "grass",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カイリキ－",
+     "speciesId": "machamp",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "クロスチョップ",
+       "id": "crosschop"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 68,
+     "hpTypeFromPd": "ghost",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 3,
+   "archetype": "【オススメレンタル】爆破速攻TA",
+   "comment": "TAとはトリプルエースのことです。 エースであるケンタロス・ガラガラ・サンダーのうち、 相手のパーティに最も「刺さる」ポケモンで攻略しましょう！ ・サンダーの目覚めるパワーは氷 ・ガラガラの目覚めるパワーは虫 類似パーティの解説はこちら：マリオパーティ１３",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": "mario"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "ケンタロス",
+     "moves": [
+      "すてみタックル",
+      "じしん",
+      "だいもんじ",
+      "はかいこうせん"
+     ],
+     "item": "はかいのいでんし"
+    },
+    {
+     "level": 55,
+     "species": "ガラガラ",
+     "moves": [
+      "ホネブ－メラン",
+      "いわなだれ",
+      "めざめるパワ－",
+      "つるぎのまい"
+     ],
+     "item": "ふといホネ"
+    },
+    {
+     "level": 55,
+     "species": "サンダ－",
+     "moves": [
+      "１０まんボルト",
+      "めざめるパワ－",
+      "ふきとばし",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "パルシェン",
+     "moves": [
+      "れいとうビ－ム",
+      "まきびし",
+      "のろい",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "じしん",
+      "のろい",
+      "じばく"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "マルマイン",
+     "moves": [
+      "１０まんボルト",
+      "でんじは",
+      "リフレクタ－",
+      "だいばくはつ"
+     ],
+     "item": "きせきのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 128,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 105,
+     "dvsHex": [
+      "D",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "bug"
+    },
+    {
+     "num": 145,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    },
+    {
+     "num": 91,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 101,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ケンタロス",
+     "speciesId": "tauros",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "だいもんじ",
+       "id": "fireblast"
+      },
+      {
+       "jp": "はかいこうせん",
+       "id": "hyperbeam"
+      }
+     ],
+     "jpItem": "はかいのいでんし",
+     "itemId": "berserkgene",
+     "nationalDex": 128,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "ホネブ－メラン",
+       "id": "bonemerang"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "bug",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "サンダ－",
+     "speciesId": "zapdos",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "ふきとばし",
+       "id": "whirlwind"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 145,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "パルシェン",
+     "speciesId": "cloyster",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 91,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "マルマイン",
+     "speciesId": "electrode",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 101,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 4,
+   "archetype": "【オススメレンタル】王パ",
+   "comment": "非常に硬く、低速度なパーティです。 受けながらじっくり崩すような戦術が好きな人は使ってみてください。 6匹中4匹が持っている冷凍技の試行回数を稼ぐことがポイントです。 類似パーティの解説はこちら：王パCH流アレンジ原案：Venom",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": null
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "バンギラス",
+     "moves": [
+      "いわなだれ",
+      "かみくだく",
+      "れいとうビ－ム",
+      "ばくれつパンチ"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "エア－ムド",
+     "moves": [
+      "ドリルくちばし",
+      "のろい",
+      "ふきとばし",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "フシギバナ",
+     "moves": [
+      "はっぱカッタ－",
+      "やどりぎのタネ",
+      "ねむりごな",
+      "こうごうせい"
+     ],
+     "item": "まひなおしのみ"
+    },
+    {
+     "level": 50,
+     "species": "スイクン",
+     "moves": [
+      "なみのり",
+      "れいとうビ－ム",
+      "ねむる",
+      "ねごと"
+     ],
+     "item": "ひかりのこな"
+    },
+    {
+     "level": 50,
+     "species": "ハピナス",
+     "moves": [
+      "れいとうビ－ム",
+      "プレゼント",
+      "いやしのすず",
+      "タマゴうみ"
+     ],
+     "item": "せんせいのツメ"
+    },
+    {
+     "level": 55,
+     "species": "フ－ディン",
+     "moves": [
+      "サイコキネシス",
+      "れいとうパンチ",
+      "アンコ－ル",
+      "じこさいせい"
+     ],
+     "item": "きせきのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 248,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 227,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 3,
+     "dvsHex": [
+      "3",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 245,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 242,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 65,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "バンギラス",
+     "speciesId": "tyranitar",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "かみくだく",
+       "id": "crunch"
+      },
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "ばくれつパンチ",
+       "id": "dynamicpunch"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 248,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "エア－ムド",
+     "speciesId": "skarmory",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ドリルくちばし",
+       "id": "drillpeck"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ふきとばし",
+       "id": "whirlwind"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 227,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "フシギバナ",
+     "speciesId": "venusaur",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "はっぱカッタ－",
+       "id": "razorleaf"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "こうごうせい",
+       "id": "synthesis"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 3,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スイクン",
+     "speciesId": "suicune",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 245,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ハピナス",
+     "speciesId": "blissey",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "プレゼント",
+       "id": "present"
+      },
+      {
+       "jp": "いやしのすず",
+       "id": "healbell"
+      },
+      {
+       "jp": "タマゴうみ",
+       "id": "softboiled"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 242,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "フ－ディン",
+     "speciesId": "alakazam",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "れいとうパンチ",
+       "id": "icepunch"
+      },
+      {
+       "jp": "アンコ－ル",
+       "id": "encore"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 65,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 5,
+   "archetype": "【オススメレンタル】キチカビ３",
+   "comment": "＜製作者による解説＞ 寝言カビゴンパーティの最新版です。 とても強いパーティに仕上がっているので、ぜひお試しを。 5体が眠る、うち3体が寝言を持っています。 時代を１０余年遡ったと錯覚するような、受けパです。 中長期戦で決定力を出していきましょう。 ①【対サンダータンク】 従来のパーティではNo.74のサンダーミルタンクWAに勝てないので、 それに対応する形でライコウをWAとして採用しました。 磁石はミルタンクとのタイマンで勝つために持たせています。 ライコウはめざ水も可です。 選出立ち回りは良いエクササイズになるので、あなた自身で考えてみてください。 ②【カビブラガラシステム】 寝言カビゴンの基本であるカビブラガラシステムを採用しています。 これによりカビゴンが手を出せないWゴーストにも対応可能です。 またカビゴンで特殊を受けつつ、パルシェンナッシーをブラッキーで狩り、 ガラガラで抜く『受けガラ』としての動きも有力です。 ③【ミラーマッチに強い】 寝言カビゴンパーティの長所は55カビゴン対決に非常に強いことです。 さらに寝言カビゴンミラーにおいては ゲンガーナッシーブラッキーガラガラエアームドなどを採用するのが有力です。 最強のミラーマッチ組み合わせがわかったら筆者にコッソリ教えてください。 ④【対ハガネール】 ハガネールが残飯を持っていても、捨て身で殴ってスイクンで流すことを繰り返せば破壊可能です。 もし眠ってくるようなら、スイクンで裏を凍らせましょう。 ⑤【対フォレトス+55寝言サンダー】 ガラガラで大文字と剣の舞雪崩の2択を迫りましょう。2回くらいは機会を作れます。 また三枚目がガラ受けの場合は、②や④と同様の方法も駆使します。 ⑥【対エアームド】 相手にカビゴンの起点が居れば、エアームドは難なく倒せます。 すてみタックルの試行回数を増やす立ち回りや正しい鈍いの積み方を心がけましょう。 ⑦【対バンギラス】 スイクンさえ選出できればほぼ問題がありません。 エース択ゲーにされて、出したスイクンを負担にされてしまうことを気を付けましょう。 スイクンを出さなくてもカビゴンで鈍いを積んでバンギラスを圧殺することも可能です。 ライコウで対面から潰すこともあるでしょう。 ガラガラやブラッキーでも多少抵抗できますので、スイクンを出さない選択肢を持ちましょう。 ⑧【対ポリゴン２・ミルタンク】 型やサポメンにもよりますが、どちらもカビゴンで勝つことは難しいことが多いです。 ライコウで相手をすることを考えましょう。 ミルタンクよりポリゴン２を重く見る場合は、ライコウにピントレンズを持たせましょう。 ⑨【対カイリキー】 従来のカビゴンパーティと同じで、カイリキーは弱点の一つです。 ・攻撃回数を増やして急所や追加効果での突破を図る。 ・複数戦の中で読みを多用して、有利対面を作ったり爆破受けで枚数差をつけることを狙いましょう。 ・カイリキーの攻撃の命中率の悪さも考え、強引なタイマンも辞さずの構えです。 カビゴンパーティでのカイリキー対策はとても難しく、克服できていない大きな課題です。 ⑩【対ガラガラ】 ガラガラ対策は薄くなっています。 ・ドーブルを捨て身ワンパンKOする。 ・マルマインの前でカビゴンが鈍いを積み、ガラガラを圧殺する。 ・ブラッキーを駆使して、被害少なくカビゴンナッシーを処理する。 など立ち回りで対応しましょう。 ピントレンズ持ちのスイクンに祈りを捧げましょう。 エアームドの眠る＠薄荷の実を泥棒＠黄金の実にする調整もありそうです。 ⑪【対ケンタロス】 「エアームドやブラッキーが居て堅そう。ライコウもケンタロス先制できる。」 こう考えると戦えるようにも見えますが、実際はそこまで有効ではありません。 エアームドはむしろケンタロスの起点にされないように気を付ける必要があります。 基本的にはカビゴン対ケンタロスの対決に持ち込み殴り倒しましょう。 相手にリフレクターが残されていても寝言カビゴンクオリティで十分チャンスはあります。 ⑫【対ゲンガー】 寝言カビゴン+ブラッキーは55爆裂パンチゲンガーは微妙な勝負です。 このパーティではライコウを採用しているので、ゲンガーに対する手段をさらに一つ手に入れました。 ⑬【バトンタッチ】 ロックバトン・高速バトン・身代わりバトンなどを放置しています。 キチカビは従来やや汎用性を落としてメタゲーム依りにしたパですからね。 できる限り立ち回りましょう。 負けた場合は彼らの存在意義を認め、拍手を送りましょう。ブラーヴォ！ ・ライコウの目覚めるパワーは氷",
+   "provenance": {
+    "sourceUrl": "http://www.q9con.net/pokemon/PartyBox/index.php?partyNumber=76",
+    "sourceName": "寝言カビゴンライコウWA(キチカビ３)",
+    "maker": "117"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "カビゴン",
+     "moves": [
+      "すてみタックル",
+      "のろい",
+      "ねむる",
+      "ねごと"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 55,
+     "species": "ライコウ",
+     "moves": [
+      "かみなり",
+      "めざめるパワ－",
+      "ねむる",
+      "ねごと"
+     ],
+     "item": "じしゃく"
+    },
+    {
+     "level": 50,
+     "species": "ブラッキ－",
+     "moves": [
+      "おいうち",
+      "どくどく",
+      "あまえる",
+      "ねむる"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "スイクン",
+     "moves": [
+      "なみのり",
+      "れいとうビ－ム",
+      "ねむる",
+      "ねごと"
+     ],
+     "item": "ピントレンズ"
+    },
+    {
+     "level": 50,
+     "species": "エア－ムド",
+     "moves": [
+      "ドリルくちばし",
+      "どくどく",
+      "のろい",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "ガラガラ",
+     "moves": [
+      "じしん",
+      "いわなだれ",
+      "だいもんじ",
+      "つるぎのまい"
+     ],
+     "item": "ふといホネ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 243,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    },
+    {
+     "num": 197,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 245,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 227,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 105,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ライコウ",
+     "speciesId": "raikou",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "かみなり",
+       "id": "thunder"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      }
+     ],
+     "jpItem": "じしゃく",
+     "itemId": "magnet",
+     "nationalDex": 243,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ブラッキ－",
+     "speciesId": "umbreon",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "おいうち",
+       "id": "pursuit"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "あまえる",
+       "id": "charm"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 197,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スイクン",
+     "speciesId": "suicune",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      }
+     ],
+     "jpItem": "ピントレンズ",
+     "itemId": "scopelens",
+     "nationalDex": 245,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "エア－ムド",
+     "speciesId": "skarmory",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ドリルくちばし",
+       "id": "drillpeck"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 227,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "だいもんじ",
+       "id": "fireblast"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 6,
+   "archetype": "サンダータンク",
+   "comment": "・サンダーの目覚めるパワーは氷 ・ナッシーとカイリキーの目覚めるパワーは虫",
+   "provenance": {
+    "sourceUrl": "http://d.hatena.ne.jp/stoic4486/20180316/1521211605",
+    "sourceName": "サンダータンクの詳細解説",
+    "maker": "stoic"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "サンダ－",
+     "moves": [
+      "かみなり",
+      "めざめるパワ－",
+      "いばる",
+      "ふきとばし"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 55,
+     "species": "ミルタンク",
+     "moves": [
+      "おんがえし",
+      "のろい",
+      "ミルクのみ",
+      "でんじほう"
+     ],
+     "item": "ピンクのリボン"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "じしん",
+      "ねむる",
+      "じばく"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "パルシェン",
+     "moves": [
+      "れいとうビ－ム",
+      "なみのり",
+      "まきびし",
+      "だいばくはつ"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "ナッシ－",
+     "moves": [
+      "サイコキネシス",
+      "やどりぎのタネ",
+      "ねむりごな",
+      "めざめるパワ－"
+     ],
+     "item": "せんせいのツメ"
+    },
+    {
+     "level": 50,
+     "species": "カイリキ－",
+     "moves": [
+      "クロスチョップ",
+      "めざめるパワ－",
+      "じしん",
+      "いわなだれ"
+     ],
+     "item": "おうごんのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 145,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    },
+    {
+     "num": 241,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 91,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 103,
+     "dvsHex": [
+      "D",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "bug"
+    },
+    {
+     "num": 68,
+     "dvsHex": [
+      "D",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "bug"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "サンダ－",
+     "speciesId": "zapdos",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "かみなり",
+       "id": "thunder"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "いばる",
+       "id": "swagger"
+      },
+      {
+       "jp": "ふきとばし",
+       "id": "whirlwind"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 145,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ミルタンク",
+     "speciesId": "miltank",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "おんがえし",
+       "id": "return"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ミルクのみ",
+       "id": "milkdrink"
+      },
+      {
+       "jp": "でんじほう",
+       "id": "zapcannon"
+      }
+     ],
+     "jpItem": "ピンクのリボン",
+     "itemId": "pinkbow",
+     "nationalDex": 241,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "パルシェン",
+     "speciesId": "cloyster",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 91,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ナッシ－",
+     "speciesId": "exeggutor",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 103,
+     "hpTypeFromPd": "bug",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カイリキ－",
+     "speciesId": "machamp",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "クロスチョップ",
+       "id": "crosschop"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 68,
+     "hpTypeFromPd": "bug",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 7,
+   "archetype": "トキワジム",
+   "comment": "いかにしてエースのガラガラで暴れられる準備を作るかがカギです。 光の壁＋大爆発からガラガラに繋ぐと、多くの水ポケモンにガラガラが勝てるようになります。 同様にリフレクター＋大爆発からガラガラで、ミルタンクやヘラクロス等に有利になります。 エアームドや眠り粉持ちの草ポケモン等はどうしても厳しいですが、そういう時はニドキングを出動させましょう。 高速移動＋バトンタッチをカビゴンに繋いで腹太鼓を決める選択肢もあります。 運要素が絡む技はほとんどありません。 選出画面から、いかにして詰将棋的にゴールまで持っていくビジョンが見えるかが試されます。 ・ガラガラの目覚めるパワーは虫 ・ナッシーの目覚めるパワーは草",
+   "provenance": {
+    "sourceUrl": "http://majinjima.ma-jide.com/party/gym/Tokiwa.htm",
+    "sourceName": "CH流トキワジム",
+    "maker": null
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "ガラガラ",
+     "moves": [
+      "じしん",
+      "いわなだれ",
+      "めざめるパワ－",
+      "つるぎのまい"
+     ],
+     "item": "ふといホネ"
+    },
+    {
+     "level": 50,
+     "species": "マルマイン",
+     "moves": [
+      "１０まんボルト",
+      "でんじは",
+      "ひかりのかべ",
+      "だいばくはつ"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "ナッシ－",
+     "moves": [
+      "めざめるパワ－",
+      "しびれごな",
+      "リフレクタ－",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "じしん",
+      "はらだいこ",
+      "じばく"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "ド－ブル",
+     "moves": [
+      "キノコのほうし",
+      "アンコ－ル",
+      "こうそくいどう",
+      "バトンタッチ"
+     ],
+     "item": "ひかりのこな"
+    },
+    {
+     "level": 55,
+     "species": "ニドキング",
+     "moves": [
+      "じしん",
+      "だいもんじ",
+      "１０まんボルト",
+      "れいとうビ－ム"
+     ],
+     "item": "はっかのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 105,
+     "dvsHex": [
+      "D",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "bug"
+    },
+    {
+     "num": 101,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 103,
+     "dvsHex": [
+      "E",
+      "E",
+      "F",
+      "F"
+     ],
+     "hpType": "grass"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 235,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 34,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "bug",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "マルマイン",
+     "speciesId": "electrode",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "ひかりのかべ",
+       "id": "lightscreen"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 101,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ナッシ－",
+     "speciesId": "exeggutor",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "しびれごな",
+       "id": "stunspore"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 103,
+     "hpTypeFromPd": "grass",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "はらだいこ",
+       "id": "bellydrum"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ド－ブル",
+     "speciesId": "smeargle",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "キノコのほうし",
+       "id": "spore"
+      },
+      {
+       "jp": "アンコ－ル",
+       "id": "encore"
+      },
+      {
+       "jp": "こうそくいどう",
+       "id": "agility"
+      },
+      {
+       "jp": "バトンタッチ",
+       "id": "batonpass"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 235,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ニドキング",
+     "speciesId": "nidoking",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "だいもんじ",
+       "id": "fireblast"
+      },
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 34,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 8,
+   "archetype": "モーダルバンギ",
+   "comment": "＜製作者による解説＞ ●解説　＆　対戦ログ　参照ブログ http://yasupoke.hatenablog.com/entry/2017/06/07/211230 http://yasupoke.hatenablog.com/entry/2017/08/11/190929 現環境での穴埋めＡではない、バンギラスパーティ復権を目指した構築です。 バンギ＋Ｗ草、Ｗ岩Ｗ草Ｗノーマル、耐性と攻撃範囲の補完、などの工夫により、 バンギ＋α のいろんな組み合わせパターン、相手の構築や選出に対して多くの意味合いを持つ並びを作り出すことができます。 爆破、爆Ｐ持ちＷＡによりポテンシャルが高く決定力がしっかり確保されています。 タンク＋カビ、フシギバナ、ゴローニャも光ります。 ケンタロス、カビゴン、ガラガラ、ドンファン、ヘラクロス入りの崩しが厳しく、 速度が早い構築にはミルタンク軸で切りかえしましょう。 考察により厳しい組み合わせはわかっていますが、 ナシパルバナの三銃士入りミラー、カビ入り３vs３、WA片方入りミラー構築には強い構築です。 スイクン入り、ヘラ入り、ゴースト入りに抵抗できるところもポイント。 選出と立ち回りは、自分と相手の構築や選出を上から俯瞰でみて浮かび上がる構造と、 展開や相手とのあいだに生まれる会話のようなやり取りが重要になります。 金銀らしい相手に合わせつつ崩すリアクションポケモンの醍醐味をぜひ味わってみてください。",
+   "provenance": {
+    "sourceUrl": "http://www.q9con.net/pokemon/PartyBox/index.php?partyNumber=78",
+    "sourceName": "モーダルバンギタンクWA",
+    "maker": "yasu"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "バンギラス",
+     "moves": [
+      "いわなだれ",
+      "ばくれつパンチ",
+      "だいもんじ",
+      "かみくだく"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "ナッシ－",
+     "moves": [
+      "サイコキネシス",
+      "ねむりごな",
+      "やどりぎのタネ",
+      "だいばくはつ"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "フシギバナ",
+     "moves": [
+      "はっぱカッタ－",
+      "ねむりごな",
+      "やどりぎのタネ",
+      "こうごうせい"
+     ],
+     "item": "まひなおしのみ"
+    },
+    {
+     "level": 50,
+     "species": "ゴロ－ニャ",
+     "moves": [
+      "じしん",
+      "いわなだれ",
+      "のろい",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "すてみタックル",
+      "のろい",
+      "だいもんじ",
+      "じばく"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 55,
+     "species": "ミルタンク",
+     "moves": [
+      "おんがえし",
+      "のろい",
+      "ばくれつパンチ",
+      "ミルクのみ"
+     ],
+     "item": "ピンクのリボン"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 248,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 103,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 3,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 76,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 241,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "バンギラス",
+     "speciesId": "tyranitar",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "ばくれつパンチ",
+       "id": "dynamicpunch"
+      },
+      {
+       "jp": "だいもんじ",
+       "id": "fireblast"
+      },
+      {
+       "jp": "かみくだく",
+       "id": "crunch"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 248,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ナッシ－",
+     "speciesId": "exeggutor",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 103,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "フシギバナ",
+     "speciesId": "venusaur",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "はっぱカッタ－",
+       "id": "razorleaf"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "こうごうせい",
+       "id": "synthesis"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 3,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゴロ－ニャ",
+     "speciesId": "golem",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 76,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "だいもんじ",
+       "id": "fireblast"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ミルタンク",
+     "speciesId": "miltank",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "おんがえし",
+       "id": "return"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ばくれつパンチ",
+       "id": "dynamicpunch"
+      },
+      {
+       "jp": "ミルクのみ",
+       "id": "milkdrink"
+      }
+     ],
+     "jpItem": "ピンクのリボン",
+     "itemId": "pinkbow",
+     "nationalDex": 241,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 9,
+   "archetype": "55カビゴン 〜地震カビ〜",
+   "comment": "2007～8年ぐらいのパーティです。 地震カビゴンは、寝言カビゴンに比べて、相手のカビゴンや眠り粉などに弱くなりますが、 代わりに岩・鋼・ゴーストの全てに打点を持てます。 製作者による解説はこちら ・サンダーの目覚めるパワーは氷",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": "朽"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "カビゴン",
+     "moves": [
+      "すてみタックル",
+      "じしん",
+      "のろい",
+      "ねむる"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "パルシェン",
+     "moves": [
+      "れいとうビ－ム",
+      "まきびし",
+      "のろい",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "サンダ－",
+     "moves": [
+      "１０まんボルト",
+      "めざめるパワ－",
+      "でんじは",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "スタ－ミ－",
+     "moves": [
+      "なみのり",
+      "サイコキネシス",
+      "でんじは",
+      "じこさいせい"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "ハガネ－ル",
+     "moves": [
+      "じしん",
+      "どくどく",
+      "ほえる",
+      "だいばくはつ"
+     ],
+     "item": "みずたまリボン"
+    },
+    {
+     "level": 50,
+     "species": "ゲンガ－",
+     "moves": [
+      "ほのおのパンチ",
+      "くろいまなざし",
+      "ほろびのうた",
+      "みちづれ"
+     ],
+     "item": "まひなおしのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 91,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 145,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    },
+    {
+     "num": 121,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 208,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 94,
+     "dvsHex": [
+      "9",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "パルシェン",
+     "speciesId": "cloyster",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 91,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "サンダ－",
+     "speciesId": "zapdos",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 145,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スタ－ミ－",
+     "speciesId": "starmie",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 121,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ハガネ－ル",
+     "speciesId": "steelix",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "ほえる",
+       "id": "roar"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "みずたまリボン",
+     "itemId": "polkadotbow",
+     "nationalDex": 208,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゲンガ－",
+     "speciesId": "gengar",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ほのおのパンチ",
+       "id": "firepunch"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      },
+      {
+       "jp": "みちづれ",
+       "id": "destinybond"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 94,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 10,
+   "archetype": "55カビゴン 〜セミフルカビ〜",
+   "comment": "積み技は持たず、攻撃範囲を広げて多様な相手に対応出来るようにしたカビゴン。 カビゴンミラーで鈍いを積まれたら絶対に勝てないので、 エアームドやムウマで流しながら捨て身タックルの当て逃げを続けるか、ミルタンクで戦いましょう。 サンダーやライコウの昆布に対しては、カビゴンの電磁砲＋スターミーの電磁波の徹底麻痺ゲーで速度勝負です。 相手がカビゴンやハピナスを選出して来なかった場合、スターミーが刺さる可能性が高いです。 スターミーを決定力として大事に扱ってあげましょう。 受け切れそうな相手には、しっかり受け役割を守る選出をしましょう。 慌てる必要はありません。辛抱強くサイクルをしていれば、カビゴンがそのうち決定力を発揮してくれます。",
+   "provenance": {
+    "sourceUrl": "http://www.q9con.net/pokemon/PartyBox/index.php?partyNumber=146",
+    "sourceName": "セミフルカビ'23版",
+    "maker": "クラヴハンマー"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "カビゴン",
+     "moves": [
+      "すてみタックル",
+      "じしん",
+      "でんじほう",
+      "ねむる"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "エア－ムド",
+     "moves": [
+      "ドリルくちばし",
+      "どくどく",
+      "ふきとばし",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "ムウマ",
+     "moves": [
+      "でんじほう",
+      "くろいまなざし",
+      "ほろびのうた",
+      "みちづれ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "スタ－ミ－",
+     "moves": [
+      "ハイドロポンプ",
+      "サイコキネシス",
+      "でんじは",
+      "じこさいせい"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "ガラガラ",
+     "moves": [
+      "ホネブ－メラン",
+      "いわなだれ",
+      "めざめるパワ－",
+      "つるぎのまい"
+     ],
+     "item": "ふといホネ"
+    },
+    {
+     "level": 55,
+     "species": "ミルタンク",
+     "moves": [
+      "やつあたり",
+      "でんじほう",
+      "のろい",
+      "ミルクのみ"
+     ],
+     "item": "ピンクのリボン"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 227,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 200,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 121,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 105,
+     "dvsHex": [
+      "D",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "bug"
+    },
+    {
+     "num": 241,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "でんじほう",
+       "id": "zapcannon"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "エア－ムド",
+     "speciesId": "skarmory",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ドリルくちばし",
+       "id": "drillpeck"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "ふきとばし",
+       "id": "whirlwind"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 227,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ムウマ",
+     "speciesId": "misdreavus",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "でんじほう",
+       "id": "zapcannon"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      },
+      {
+       "jp": "みちづれ",
+       "id": "destinybond"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 200,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スタ－ミ－",
+     "speciesId": "starmie",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ハイドロポンプ",
+       "id": "hydropump"
+      },
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 121,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ホネブ－メラン",
+       "id": "bonemerang"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "bug",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ミルタンク",
+     "speciesId": "miltank",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "やつあたり",
+       "id": "frustration"
+      },
+      {
+       "jp": "でんじほう",
+       "id": "zapcannon"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ミルクのみ",
+       "id": "milkdrink"
+      }
+     ],
+     "jpItem": "ピンクのリボン",
+     "itemId": "pinkbow",
+     "nationalDex": 241,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 11,
+   "archetype": "55カビゴン 〜爆パンカビ〜",
+   "comment": "爆裂パンチでエアームドやミルタンク等の苦手なポケモンを混乱させながら捨て身タックルで強行突破を狙います。 ゴーストには手も足も出ませんが、ヘルガーの追い打ちで対策しましょう。 ＜製作者による解説＞ カビ☆ムウマ、カビ☆バナの組み合わせはめっちゃ使いやすいです。 スタミで麻痺を撒いて、 バナで眠りを撒いて、 ムウマでノーマルを滅ぼして、 ヘルガーでゴーストとナッシーを狩って、 サンダーで格闘を流して、 カビでフィーバーしちゃおう！ ・サンダーの目覚めるパワーは氷です。",
+   "provenance": {
+    "sourceUrl": "http://www.q9con.net/pokemon/PartyBox/index.php?partyNumber=82",
+    "sourceName": "ドラサマ爆パンカビ",
+    "maker": "ドラゴンサマー"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "カビゴン",
+     "moves": [
+      "すてみタックル",
+      "ばくれつパンチ",
+      "のろい",
+      "ねむる"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "ヘルガ－",
+     "moves": [
+      "だいもんじ",
+      "おいうち",
+      "かみくだく",
+      "ほえる"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "フシギバナ",
+     "moves": [
+      "はっぱカッタ－",
+      "やどりぎのタネ",
+      "ねむりごな",
+      "こうごうせい"
+     ],
+     "item": "まひなおしのみ"
+    },
+    {
+     "level": 50,
+     "species": "スタ－ミ－",
+     "moves": [
+      "ハイドロポンプ",
+      "サイコキネシス",
+      "でんじは",
+      "じこさいせい"
+     ],
+     "item": "ひかりのこな"
+    },
+    {
+     "level": 50,
+     "species": "サンダ－",
+     "moves": [
+      "１０まんボルト",
+      "めざめるパワ－",
+      "ふきとばし",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "ムウマ",
+     "moves": [
+      "でんじほう",
+      "くろいまなざし",
+      "ほろびのうた",
+      "みちづれ"
+     ],
+     "item": "おうごんのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 229,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 3,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 121,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 145,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    },
+    {
+     "num": 200,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "ばくれつパンチ",
+       "id": "dynamicpunch"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ヘルガ－",
+     "speciesId": "houndoom",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "だいもんじ",
+       "id": "fireblast"
+      },
+      {
+       "jp": "おいうち",
+       "id": "pursuit"
+      },
+      {
+       "jp": "かみくだく",
+       "id": "crunch"
+      },
+      {
+       "jp": "ほえる",
+       "id": "roar"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 229,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "フシギバナ",
+     "speciesId": "venusaur",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "はっぱカッタ－",
+       "id": "razorleaf"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "こうごうせい",
+       "id": "synthesis"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 3,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スタ－ミ－",
+     "speciesId": "starmie",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ハイドロポンプ",
+       "id": "hydropump"
+      },
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 121,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "サンダ－",
+     "speciesId": "zapdos",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "ふきとばし",
+       "id": "whirlwind"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 145,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ムウマ",
+     "speciesId": "misdreavus",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "でんじほう",
+       "id": "zapcannon"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      },
+      {
+       "jp": "みちづれ",
+       "id": "destinybond"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 200,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 12,
+   "archetype": "カビガラポリ",
+   "comment": "2004〜2005年に一世を風靡した「カビガラポリ」。 当時真似をしたりアレンジしたりする人が後を絶たなかったそうだが、製作者の丙さんによる原型がこちら。 眠る＋寝言での受けゲーや、どくどくでの崩しが主流だった当時、 麻痺＋高火力物理決定力という、今でこそ当たり前になっている戦術の、元祖とも言える革命的なパーティ。 金銀対戦の歴史は、まさにここがスタートと言っても過言ではない。 ・ガラガラの目覚めるパワーは飛行 ・薄荷の実が浮いているのでエアームドに持たせても良い気がする（by CH） 製作者による解説はこちら。 また、カビゴン＋ポリゴン２に関する関連記事はこちら。",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": "丙"
+   },
+   "rows": [
+    {
+     "level": 51,
+     "species": "カビゴン",
+     "moves": [
+      "すてみタックル",
+      "かえんほうしゃ",
+      "のろい",
+      "ねむる"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 51,
+     "species": "ヘラクロス",
+     "moves": [
+      "メガホ－ン",
+      "じしん",
+      "ねむる",
+      "ねごと"
+     ],
+     "item": "ピントレンズ"
+    },
+    {
+     "level": 53,
+     "species": "ガラガラ",
+     "moves": [
+      "じしん",
+      "いわなだれ",
+      "めざめるパワ－",
+      "つるぎのまい"
+     ],
+     "item": "ふといホネ"
+    },
+    {
+     "level": 53,
+     "species": "ゲンガ－",
+     "moves": [
+      "１０まんボルト",
+      "れいとうパンチ",
+      "くろいまなざし",
+      "ほろびのうた"
+     ],
+     "item": "まひなおしのみ"
+    },
+    {
+     "level": 51,
+     "species": "エア－ムド",
+     "moves": [
+      "ドリルくちばし",
+      "のろい",
+      "ふきとばし",
+      "ねむる"
+     ],
+     "item": "ひかりのこな"
+    },
+    {
+     "level": 51,
+     "species": "ポリゴン２",
+     "moves": [
+      "れいとうビ－ム",
+      "でんじは",
+      "リフレクタ－",
+      "じこさいせい"
+     ],
+     "item": "きせきのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 214,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 105,
+     "dvsHex": [
+      "C",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "flying"
+    },
+    {
+     "num": 94,
+     "dvsHex": [
+      "9",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 227,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 233,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "かえんほうしゃ",
+       "id": "flamethrower"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ヘラクロス",
+     "speciesId": "heracross",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "メガホ－ン",
+       "id": "megahorn"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      }
+     ],
+     "jpItem": "ピントレンズ",
+     "itemId": "scopelens",
+     "nationalDex": 214,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 53,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "flying",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゲンガ－",
+     "speciesId": "gengar",
+     "level": 53,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "れいとうパンチ",
+       "id": "icepunch"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 94,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "エア－ムド",
+     "speciesId": "skarmory",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "ドリルくちばし",
+       "id": "drillpeck"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ふきとばし",
+       "id": "whirlwind"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 227,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ポリゴン２",
+     "speciesId": "porygon2",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 233,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 13,
+   "archetype": "ポニョ",
+   "comment": "＜製作者による解説＞ 爆破爆破からのタイマン性能が人気の５５ポリゴン２は、５５晴れファイヤー、バンギラス、フォレトス、お化け、格闘が苦手です。 その辺りを吹き飛ばせる相方としてニョロボンとゲンガーをぶちこみました。 ■ポリゴン２ 表のエース。ノーマル対策がハガネール、エアームドあたりしかいないパーティに対して「最終的にタイマンなら全員に勝てる」ということは意外と多い。 出来る限り有利な状態でタイマンに持ち込むために、爆弾で荒らしたい。 ■ニョロボン 裏のエース１。バンギパに対して出す。 バンギパのWA出されたらだめじゃんと思うかもしれないが、バンギパにはバンギ以外に高レベポリ２対策が全くいないことも多い。 そんなとき、選出画面での威圧感は当然ポリ２＞＞ニョロボンなので、バンギがけっこうよく出てきてくれる。 腹太鼓後の黒帯地獄車で５０エアームド一発、恩返しでフシギバナヘラクロスを一発。 ハイドロじゃなくて催眠でもいいかもしれない。 ■ゲンガー 裏のエース２。いばみがっぽいサンダーパ（カビゴンがクソカビでゲンガーに無抵抗なことが多い）、ファイヤーパ、鋼ゴーストあたりのノーマル耐性がボンボンいるパーティなどに対して出す。 ニョロボンゲンガーを見て半笑いで出てくるフーディンはシャドボで叩きのめしてやろう。 ■ナッシー 爆弾１。黄金をもたせるとエアームドのドリクチ、５５サンダーのめざ氷、５５カビゴンの捨て身、中レベゲンガーの冷凍パンチなどいろいろ重要なところを２耐えしてくれる。 奇跡の実によって１ターンを消化されやすい状態異常撒きにとって、「とにかく２ターン動ける」というのはとても大きなメリットである。 ■カビゴン 爆弾２。実はこいつがエースなんじゃないかと思うくらい、残飯鈍い自爆カビゴンは強い。こいつが３タテして試合が終わってしまうこともある。 カビパには５５カビゴンくらいしかこいつを安定して受けれるやつがいないので、このカビをどれくらい暴れされるかが鍵となる。 ■ゴローニャ 爆弾３。ほのおタイプ対策やバトン対策の吠える、バンギラス＋エアームドという硬い連中を崩す、ケンタロスを爆破で殺すなど、いろいろ押し付けている。カビゴンのサブ技を文字にし、ここをハガネールにしてもいいと思う。",
+   "provenance": {
+    "sourceUrl": "http://www.q9con.net/pokemon/PartyBox/index.php?partyNumber=20",
+    "sourceName": "ポニョ",
+    "maker": "stoic"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "ポリゴン２",
+     "moves": [
+      "おんがえし",
+      "れいとうビ－ム",
+      "のろい",
+      "じこさいせい"
+     ],
+     "item": "ひかりのこな"
+    },
+    {
+     "level": 55,
+     "species": "ニョロボン",
+     "moves": [
+      "ハイドロポンプ",
+      "じごくぐるま",
+      "おんがえし",
+      "はらだいこ"
+     ],
+     "item": "くろおび"
+    },
+    {
+     "level": 55,
+     "species": "ゲンガ－",
+     "moves": [
+      "シャド－ボ－ル",
+      "１０まんボルト",
+      "れいとうパンチ",
+      "ほのおのパンチ"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "ナッシ－",
+     "moves": [
+      "サイコキネシス",
+      "やどりぎのタネ",
+      "ねむりごな",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "じしん",
+      "のろい",
+      "じばく"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "ゴロ－ニャ",
+     "moves": [
+      "じしん",
+      "だいもんじ",
+      "ほえる",
+      "だいばくはつ"
+     ],
+     "item": "せんせいのツメ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 233,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 62,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 94,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 103,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 76,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ポリゴン２",
+     "speciesId": "porygon2",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "おんがえし",
+       "id": "return"
+      },
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 233,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ニョロボン",
+     "speciesId": "poliwrath",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "ハイドロポンプ",
+       "id": "hydropump"
+      },
+      {
+       "jp": "じごくぐるま",
+       "id": "submission"
+      },
+      {
+       "jp": "おんがえし",
+       "id": "return"
+      },
+      {
+       "jp": "はらだいこ",
+       "id": "bellydrum"
+      }
+     ],
+     "jpItem": "くろおび",
+     "itemId": "blackbelt",
+     "nationalDex": 62,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゲンガ－",
+     "speciesId": "gengar",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "シャド－ボ－ル",
+       "id": "shadowball"
+      },
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "れいとうパンチ",
+       "id": "icepunch"
+      },
+      {
+       "jp": "ほのおのパンチ",
+       "id": "firepunch"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 94,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ナッシ－",
+     "speciesId": "exeggutor",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 103,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゴロ－ニャ",
+     "speciesId": "golem",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "だいもんじ",
+       "id": "fireblast"
+      },
+      {
+       "jp": "ほえる",
+       "id": "roar"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 76,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 14,
+   "archetype": "しゃわポリWA",
+   "comment": "2018年のVC版金銀のオフ会ヒストリアカップ《うら》にて行われた、 一撃無し2000ルールの大会における優勝パーティ。 ジムリーダーの城では実機とは多少の差異(詳細はこちら)がありますが、 おおむねそのまま気にせず使用できます。 ・サンダーの目覚めるパワーは氷",
+   "provenance": {
+    "sourceUrl": "http://d.hatena.ne.jp/komei48/20180311/1520739859",
+    "sourceName": "しゃわポリWA",
+    "maker": "しゃわ"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "シャワ－ズ",
+     "moves": [
+      "ハイドロポンプ",
+      "れいとうビ－ム",
+      "ねごと",
+      "ねむる"
+     ],
+     "item": "ひかりのこな"
+    },
+    {
+     "level": 55,
+     "species": "ポリゴン２",
+     "moves": [
+      "すてみタックル",
+      "れいとうビ－ム",
+      "のろい",
+      "じこさいせい"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "すてみタックル",
+      "じしん",
+      "のろい",
+      "じばく"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "サンダ－",
+     "moves": [
+      "１０まんボルト",
+      "めざめるパワ－",
+      "リフレクタ－",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "ナッシ－",
+     "moves": [
+      "サイコキネシス",
+      "やどりぎのタネ",
+      "ねむりごな",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "ハガネ－ル",
+     "moves": [
+      "じしん",
+      "どくどく",
+      "ほえる",
+      "だいばくはつ"
+     ],
+     "item": "せんせいのツメ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 134,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 233,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 145,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    },
+    {
+     "num": 103,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 208,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "シャワ－ズ",
+     "speciesId": "vaporeon",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "ハイドロポンプ",
+       "id": "hydropump"
+      },
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 134,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ポリゴン２",
+     "speciesId": "porygon2",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 233,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "サンダ－",
+     "speciesId": "zapdos",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 145,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ナッシ－",
+     "speciesId": "exeggutor",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 103,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ハガネ－ル",
+     "speciesId": "steelix",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "ほえる",
+       "id": "roar"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 208,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 15,
+   "archetype": "バランスダブルロック",
+   "comment": "黒い眼差しから展開するさまざまなテクニカルなコンボを組み込んだパーティ。 製作者による解説はこちら製作：トルン",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": null
+   },
+   "rows": [
+    {
+     "level": 52,
+     "species": "ブラッキ－",
+     "moves": [
+      "くろいまなざし",
+      "バトンタッチ",
+      "あまえる",
+      "つきのひかり"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 51,
+     "species": "ムウマ",
+     "moves": [
+      "くろいまなざし",
+      "ほろびのうた",
+      "あやしいひかり",
+      "まもる"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 52,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "じしん",
+      "のろい",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 51,
+     "species": "スタ－ミ－",
+     "moves": [
+      "なみのり",
+      "でんじは",
+      "リフレクタ－",
+      "じこさいせい"
+     ],
+     "item": "まひなおしのみ"
+    },
+    {
+     "level": 52,
+     "species": "サンダ－",
+     "moves": [
+      "１０まんボルト",
+      "めざめるパワ－",
+      "ねむる",
+      "ねごと"
+     ],
+     "item": "ピントレンズ"
+    },
+    {
+     "level": 51,
+     "species": "ウツボット",
+     "moves": [
+      "ヘドロばくだん",
+      "めざめるパワ－",
+      "アンコ－ル",
+      "こうごうせい"
+     ],
+     "item": "おうごんのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 197,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 200,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 121,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 145,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    },
+    {
+     "num": 71,
+     "dvsHex": [
+      "E",
+      "E",
+      "F",
+      "F"
+     ],
+     "hpType": "grass"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ブラッキ－",
+     "speciesId": "umbreon",
+     "level": 52,
+     "moves": [
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "バトンタッチ",
+       "id": "batonpass"
+      },
+      {
+       "jp": "あまえる",
+       "id": "charm"
+      },
+      {
+       "jp": "つきのひかり",
+       "id": "moonlight"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 197,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ムウマ",
+     "speciesId": "misdreavus",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      },
+      {
+       "jp": "あやしいひかり",
+       "id": "confuseray"
+      },
+      {
+       "jp": "まもる",
+       "id": "protect"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 200,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 52,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スタ－ミ－",
+     "speciesId": "starmie",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 121,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "サンダ－",
+     "speciesId": "zapdos",
+     "level": 52,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      }
+     ],
+     "jpItem": "ピントレンズ",
+     "itemId": "scopelens",
+     "nationalDex": 145,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ウツボット",
+     "speciesId": "victreebel",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "ヘドロばくだん",
+       "id": "sludgebomb"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "アンコ－ル",
+       "id": "encore"
+      },
+      {
+       "jp": "こうごうせい",
+       "id": "synthesis"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 71,
+     "hpTypeFromPd": "grass",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 16,
+   "archetype": "タマムシジム",
+   "comment": "＜製作者による解説＞ タマムシジムは8種類のジムの属性で最も弱点が多く、キラーパーティが非常に組まれ易いジムなのです（泣 安心して受け出しできる相手はサイドン程度であり、毎回選出して腐らせないためには対面性能が重要になります。 第五世代（BW）のキノコの胞子を覚えたテクニシャンキノガッサのようなポケモンが求められているワケですね。 「受ける」のは「勝つ」ための一手段に過ぎない。 ■ ナッシー 遥か昔2003年のユーザー主宰大会で2連続でカビゴンを凌いで人気No.1だったポケモン。 彼もまた目覚めるパワー虫のガラガラに弱いため、対面性能で生き残ってきたポケモンだが、 スイクンが冷凍ビームを搭載したり、バンギラスが噛み砕くを搭載したりなどして数を減らした。 しかし、フシギバナとは異なり、複数催眠を狙えない金銀環境で地面にも麻痺が撒ける痺れ粉、 カビゴンやフーディンなどのポケモンにも脅威となる共倒れ狙いの大爆発を覚えられるのが魅力。 また、サイコキネシスでサンダー、ヘラクロス、ゲンガーの起点になりづらいという性質も持つ。 目覚めるパワーのタイプは虫で、Lv.50のナッシーに非常に強くなる。 ■ カビゴン 金銀で対面最強と言えば、自爆カビゴンの他にいないでしょう！！ 第六世代のメガガルーラ同様、技構成をころころ変えてあげると怖いポケモンになります。 ■ ゲンガー 寝言カビゴンを起点にする駒。レベル52でレベル55のサンダーに先制できるので冷凍パンチを使いたい。 他の枠はハガネールに殴り勝てる炎のパンチや第六世代のメガゲンガーのように滅びの歌→道連れでも良い。 気狂いゲンガーの異名を持つこともあって技構成をころころ変えてあげると怖いポケモンになります。 ■ スターミー かつて怪しい光＆電磁波＆身代わり＆食べ残しコンボで2008年?2011年代に一世を風靡したポケモン。 HPの努力レベルを調整して16の倍数+1～3に調整すると5回連続で身代わりを貼れるようになる。 目覚めるパワー草や電気を覚えていないナッシーや有効打を雷しか覚えていないサンダーに強い。 草ポケモンの眠り粉から展開するのが理想的だが、寝言を持たせたカビゴンの突破は困難を極める。 ナッシーを相棒にする場合はカビゴンに大爆発を当てて共倒れに出来ると有利に立ち回れる。 ■ ミルタンク 影分身（＋光の粉）＆丸くなる＆転がるで2009年?2011年代に一世を風靡したポケモン。 レベル52で使えば、レベル55のリボン持ち捨て身タックルを超高確率で2発耐えるようになるほか、 レベル55のガルーラとファイヤーに先制できるようになり、ラス1タイマンで勝てる幅が広くなる。 黒い眼差し＆滅びの歌＆道連れのゲンガー、ムウマにはすこぶる弱いのでラス1同士で使いたい所。 なお、PBSでは転がるの1発目を受けたポケモンでなければ、カウンターの対象にはなりません。 ■ ブラッキー 追い討ちで影分身転がるミルタンクの壁となる黒い眼差し＆滅びの歌＆道連れのムウマを狩るポケモン。 追い討ちの威力はヘルガーに劣り、守るを挟まれると狩り損ねる可能性があるため、黒い眼差しを搭載している。 なお、追い討ちヘルガーを組ませて下手にサイクル戦に持って行こうとすると… こちらの試合のように相手の交代読みが安定して追い討ちが決まらなくなりますが、 ブラッキーの場合は吹き飛ばし役を当てなければ、黒い眼差し→バトンタッチのコンボが襲いかかる。 その他、このレベルから月の光が使用可能になり、ジムの苦手な日本晴れ→大文字に月の光で粘ることができる。 参考パーティ：牛骨",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": "ゴールド"
+   },
+   "rows": [
+    {
+     "level": 51,
+     "species": "ナッシ－",
+     "moves": [
+      "サイコキネシス",
+      "めざめるパワ－",
+      "やどりぎのタネ",
+      "ねむりごな"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 52,
+     "species": "ゲンガ－",
+     "moves": [
+      "れいとうパンチ",
+      "くろいまなざし",
+      "ほろびのうた",
+      "みちづれ"
+     ],
+     "item": "まひなおしのみ"
+    },
+    {
+     "level": 52,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "だいもんじ",
+      "じばく",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 52,
+     "species": "ブラッキ－",
+     "moves": [
+      "おいうち",
+      "くろいまなざし",
+      "バトンタッチ",
+      "つきのひかり"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 52,
+     "species": "スタ－ミ－",
+     "moves": [
+      "なみのり",
+      "あやしいひかり",
+      "でんじは",
+      "みがわり"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 52,
+     "species": "ミルタンク",
+     "moves": [
+      "かげぶんしん",
+      "まるくなる",
+      "ころがる",
+      "ミルクのみ"
+     ],
+     "item": "ひかりのこな"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 103,
+     "dvsHex": [
+      "D",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "bug"
+    },
+    {
+     "num": 94,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 197,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 121,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 241,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ナッシ－",
+     "speciesId": "exeggutor",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 103,
+     "hpTypeFromPd": "bug",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゲンガ－",
+     "speciesId": "gengar",
+     "level": 52,
+     "moves": [
+      {
+       "jp": "れいとうパンチ",
+       "id": "icepunch"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      },
+      {
+       "jp": "みちづれ",
+       "id": "destinybond"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 94,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 52,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "だいもんじ",
+       "id": "fireblast"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ブラッキ－",
+     "speciesId": "umbreon",
+     "level": 52,
+     "moves": [
+      {
+       "jp": "おいうち",
+       "id": "pursuit"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "バトンタッチ",
+       "id": "batonpass"
+      },
+      {
+       "jp": "つきのひかり",
+       "id": "moonlight"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 197,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スタ－ミ－",
+     "speciesId": "starmie",
+     "level": 52,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "あやしいひかり",
+       "id": "confuseray"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "みがわり",
+       "id": "substitute"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 121,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ミルタンク",
+     "speciesId": "miltank",
+     "level": 52,
+     "moves": [
+      {
+       "jp": "かげぶんしん",
+       "id": "doubleteam"
+      },
+      {
+       "jp": "まるくなる",
+       "id": "defensecurl"
+      },
+      {
+       "jp": "ころがる",
+       "id": "rollout"
+      },
+      {
+       "jp": "ミルクのみ",
+       "id": "milkdrink"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 241,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 17,
+   "archetype": "あやみが＋太鼓ガラ",
+   "comment": "2009年頃のパーティ。 ガラガラと電磁波スターミーの相性が良い。 スターミーは怪しい光＋身代わりで自力で決定力を出すことも出来る。 腹太鼓＋岩雪崩で50エアームドを高確率一撃で倒せる。",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": "文鳥"
+   },
+   "rows": [
+    {
+     "level": 53,
+     "species": "ガラガラ",
+     "moves": [
+      "じしん",
+      "いわなだれ",
+      "めざめるパワ－",
+      "はらだいこ"
+     ],
+     "item": "ふといホネ"
+    },
+    {
+     "level": 51,
+     "species": "カビゴン",
+     "moves": [
+      "おんがえし",
+      "かみなり",
+      "のろい",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 51,
+     "species": "エア－ムド",
+     "moves": [
+      "ドリルくちばし",
+      "どろぼう",
+      "どくどく",
+      "ふきとばし"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 51,
+     "species": "スタ－ミ－",
+     "moves": [
+      "なみのり",
+      "でんじは",
+      "あやしいひかり",
+      "みがわり"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 51,
+     "species": "ナッシ－",
+     "moves": [
+      "サイコキネシス",
+      "やどりぎのタネ",
+      "ねむりごな",
+      "こうごうせい"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 51,
+     "species": "ゲンガ－",
+     "moves": [
+      "かみなり",
+      "くろいまなざし",
+      "ほろびのうた",
+      "みちづれ"
+     ],
+     "item": "まひなおしのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 105,
+     "dvsHex": [
+      "C",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "flying"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 227,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 121,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 103,
+     "dvsHex": [
+      "9",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 94,
+     "dvsHex": [
+      "9",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 53,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "はらだいこ",
+       "id": "bellydrum"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "flying",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "おんがえし",
+       "id": "return"
+      },
+      {
+       "jp": "かみなり",
+       "id": "thunder"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "エア－ムド",
+     "speciesId": "skarmory",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "ドリルくちばし",
+       "id": "drillpeck"
+      },
+      {
+       "jp": "どろぼう",
+       "id": "thief"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "ふきとばし",
+       "id": "whirlwind"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 227,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スタ－ミ－",
+     "speciesId": "starmie",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "あやしいひかり",
+       "id": "confuseray"
+      },
+      {
+       "jp": "みがわり",
+       "id": "substitute"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 121,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ナッシ－",
+     "speciesId": "exeggutor",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "こうごうせい",
+       "id": "synthesis"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 103,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゲンガ－",
+     "speciesId": "gengar",
+     "level": 51,
+     "moves": [
+      {
+       "jp": "かみなり",
+       "id": "thunder"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      },
+      {
+       "jp": "みちづれ",
+       "id": "destinybond"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 94,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 18,
+   "archetype": "ライコウ昆布",
+   "comment": "",
+   "provenance": {
+    "sourceUrl": "http://pokemon.s20.xrea.com/2nd/pbs/historia_01.html",
+    "sourceName": "ジム城ヒストリア 2000～2004",
+    "maker": "bolick"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "ライコウ",
+     "moves": [
+      "１０まんボルト",
+      "めざめるパワ－",
+      "リフレクタ－",
+      "ほえる"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "パルシェン",
+     "moves": [
+      "なみのり",
+      "のろい",
+      "まきびし",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "フォレトス",
+     "moves": [
+      "まきびし",
+      "のろい",
+      "ねむる",
+      "だいばくはつ"
+     ],
+     "item": "みずたまリボン"
+    },
+    {
+     "level": 50,
+     "species": "スタ－ミ－",
+     "moves": [
+      "なみのり",
+      "サイコキネシス",
+      "でんじは",
+      "じこさいせい"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "ゲンガ－",
+     "moves": [
+      "ほのおのパンチ",
+      "くろいまなざし",
+      "ほろびのうた",
+      "みちづれ"
+     ],
+     "item": "まひなおしのみ"
+    },
+    {
+     "level": 50,
+     "species": "ガラガラ",
+     "moves": [
+      "じしん",
+      "いわなだれ",
+      "めざめるパワ－",
+      "つるぎのまい"
+     ],
+     "item": "ふといホネ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 243,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    },
+    {
+     "num": 91,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 205,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 121,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 94,
+     "dvsHex": [
+      "9",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 105,
+     "dvsHex": [
+      "D",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "bug"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ライコウ",
+     "speciesId": "raikou",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      },
+      {
+       "jp": "ほえる",
+       "id": "roar"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 243,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "パルシェン",
+     "speciesId": "cloyster",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 91,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "フォレトス",
+     "speciesId": "forretress",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "みずたまリボン",
+     "itemId": "polkadotbow",
+     "nationalDex": 205,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スタ－ミ－",
+     "speciesId": "starmie",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 121,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゲンガ－",
+     "speciesId": "gengar",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ほのおのパンチ",
+       "id": "firepunch"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      },
+      {
+       "jp": "みちづれ",
+       "id": "destinybond"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 94,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "bug",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 19,
+   "archetype": "ドラゴンエース",
+   "comment": "金銀では強力なドラゴンタイプの技が存在しない。 げきりんも威力90で、ぜんぜん強くない。 ドラゴンポケモン自体、カイリューとキングドラしかいない。 そんな金銀のドラゴンポケモンの個性を存分に活かしたパーティ。 ＜製作者による解説＞ BW以降では猛威を振るっているカイリュー、キングドラなどのドラゴンタイプだが、こんな時代もあった。 ■カイリュー どうせ氷技で４倍弱点を突かれるので、攻撃範囲を広げて打ち逃げをしまくったほうが強い。らしい。 雷はパルシェンを一撃で倒せる。 ■キングドラ 一方キングドラは弱点を突かれないので、ぬるい相手に居座って全抜きを狙いたい。 カイリューを見て出てくる冷凍持ちのハピナスやスイクン、バンギラスあたりが狙い目。 眠る暇があるかというとかなり微妙なのもあり、身代わりも面白いかもしれない。らしい。 ■カビゴン カイリューもキングドラも５０カビゴンにすら苦戦するので、５０カビミラーではまず負けない（？）寝言鈍いカビ。 ５５カビは爆パンカイリューでがんばって下さい（ 対高レベカビを考えると、攻撃技は恩返しでもいいかも。 ■ヘルガー カイリューがゲンガームウマなどのお化けに弱く、キングドラはナッシーフシギバナなどに弱い。 また両者とも冷パンフーディンがかなり辛かったりするので、どちらから見てもヘルガーは非常に相性が良い。 もちろん、寝言カビゴンの敵であるお化けを狩ることもできる。 ■フォレトス 高レベカビや鈍いヘラクロスなどが全然受からないので、フォレトス。 ヘルガー出したくないときにナッシー対策をさせたりもできる。 火吹きカビには全力で土下座しよう。 ■ナッシー 「対ガラと対ケンタロスを無理やりこなしつつ対カビを全体的にお茶濁せて電気に弱くない奴」 という無理難題を解決するためにこうなった。 サポート技のどれかを抜いて、無難に爆破のほうがいいかもしれない。 ・フォレトスの目覚めるパワーは虫",
+   "provenance": {
+    "sourceUrl": "http://www.q9con.net/pokemon/PartyBox/index.php?partyNumber=21",
+    "sourceName": "カイリューグドラWA",
+    "maker": "stoic"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "カイリュ－",
+     "moves": [
+      "すてみタックル",
+      "ばくれつパンチ",
+      "れいとうビ－ム",
+      "かみなり"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 55,
+     "species": "キングドラ",
+     "moves": [
+      "ハイドロポンプ",
+      "すてみタックル",
+      "のろい",
+      "ねむる"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "のろい",
+      "ねむる",
+      "ねごと"
+     ],
+     "item": "ひかりのこな"
+    },
+    {
+     "level": 50,
+     "species": "ヘルガ－",
+     "moves": [
+      "だいもんじ",
+      "かみくだく",
+      "おいうち",
+      "ほえる"
+     ],
+     "item": "きのみジュ－ス"
+    },
+    {
+     "level": 50,
+     "species": "フォレトス",
+     "moves": [
+      "めざめるパワ－",
+      "のろい",
+      "まきびし",
+      "ねむる"
+     ],
+     "item": "ピントレンズ"
+    },
+    {
+     "level": 50,
+     "species": "ナッシ－",
+     "moves": [
+      "サイコキネシス",
+      "ねむりごな",
+      "やどりぎのタネ",
+      "リフレクタ－"
+     ],
+     "item": "おうごんのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 149,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 230,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 229,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 205,
+     "dvsHex": [
+      "D",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "bug"
+    },
+    {
+     "num": 103,
+     "dvsHex": [
+      "9",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "カイリュ－",
+     "speciesId": "dragonite",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "ばくれつパンチ",
+       "id": "dynamicpunch"
+      },
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "かみなり",
+       "id": "thunder"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 149,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "キングドラ",
+     "speciesId": "kingdra",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "ハイドロポンプ",
+       "id": "hydropump"
+      },
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 230,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ヘルガ－",
+     "speciesId": "houndoom",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "だいもんじ",
+       "id": "fireblast"
+      },
+      {
+       "jp": "かみくだく",
+       "id": "crunch"
+      },
+      {
+       "jp": "おいうち",
+       "id": "pursuit"
+      },
+      {
+       "jp": "ほえる",
+       "id": "roar"
+      }
+     ],
+     "jpItem": "きのみジュ－ス",
+     "itemId": "berryjuice",
+     "nationalDex": 229,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "フォレトス",
+     "speciesId": "forretress",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "ピントレンズ",
+     "itemId": "scopelens",
+     "nationalDex": 205,
+     "hpTypeFromPd": "bug",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ナッシ－",
+     "speciesId": "exeggutor",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 103,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 20,
+   "archetype": "あかりちゃん司令塔エース",
+   "comment": "＜製作者による解説＞ 金銀VC対戦会第5回ヒストリア杯優勝構築。 詳しくは構築記事と対戦内容、参考記事がありますのでご覧ください。 ※環境とルールの違いにより技構成が若干異なるポケモンがいます。 構築記事 こちら 対戦内容 こちら 参考記事 こちら ライコウやサンダーに飽きてたまには別の電気エースを使ってみたいという形におすすめしたい構築です。 主役はデンリュウ。ライコウの火力にエレブーの技の多様さ併せ持ったのが特徴であるが、素早さが低いのがネック。 そこで、デンリュウに電磁波を持たせて技の範囲を広く持つことで、 エースのような全抜き性能はないが、幅広い相手への刺し役と電磁波によるサポートを展開することを目指しました。 鈍足アタッカーであるカビゴン、ガラガラと組み合わせるのが基本パターン。 炎エースや地面タイプ(特にガラガラ)ケンタロスが厳しいので、それらに強いスターミーをWAとしました。 どちらも長期のサイクル戦には強くないので、ムウマ、パルシェン、カビゴンと爆破ポケモンを三体採用して速度を維持しています。 爆破爆破からのエースタイマンも可能。 デンリュウスターミーどちらもワンチャン残せるのでタイマンには強めです。 ねむねごを採用していない前のめりな構築なので短期決戦を仕掛けて主導権を取りましょう。 補足 カスタマイズするなら以下の案があります。 out 55スターミー、ムウマ in 55ミルタンク光の粉 影分身、鈍い、ミルクのみ、恩返し 50ファイヤーはっかのみ 大文字日本晴れリフレクターねむる 地面やケンタロスの相手をミルタンクにするパターン。対面なら炎エースとも戦えます。 食べ残しが余るのでカビゴンに回してのしかかりをすてみタックルにするという選択肢ができます。 ファイヤーはパーティで重めなヘラクロス、フシギバナに対して採用。ガラガラファイヤーの火力は驚異の一言。 さらに日本晴れサポートでガラガラの対水タイプ補助やデンリュウの炎のパンチ打点をあげることができますのでご検討ください。 デンリュウ構築としてはかなり煮詰めることができたと思うので、 いつもと違ったポケモンを活躍させたい、記録よりも記憶に残る試合をしたいという方、ぜひお試しいただけたらと幸いです。製作：おかしょー",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": null
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "デンリュウ",
+     "moves": [
+      "１０まんボルト",
+      "ほのおのパンチ",
+      "ばくれつパンチ",
+      "でんじは"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 55,
+     "species": "スタ－ミ－",
+     "moves": [
+      "なみのり",
+      "サイコキネシス",
+      "あやしいひかり",
+      "みがわり"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "じしん",
+      "のろい",
+      "じばく"
+     ],
+     "item": "せんせいのツメ"
+    },
+    {
+     "level": 50,
+     "species": "ガラガラ",
+     "moves": [
+      "ホネブ－メラン",
+      "いわなだれ",
+      "めざめるパワ－",
+      "つるぎのまい"
+     ],
+     "item": "ふといホネ"
+    },
+    {
+     "level": 50,
+     "species": "パルシェン",
+     "moves": [
+      "れいとうビ－ム",
+      "まきびし",
+      "だいばくはつ",
+      "リフレクタ－"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "ムウマ",
+     "moves": [
+      "ほろびのうた",
+      "くろいまなざし",
+      "ねむる",
+      "まもる"
+     ],
+     "item": "はっかのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 181,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 121,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 105,
+     "dvsHex": [
+      "C",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "flying"
+    },
+    {
+     "num": 91,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 200,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "デンリュウ",
+     "speciesId": "ampharos",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "ほのおのパンチ",
+       "id": "firepunch"
+      },
+      {
+       "jp": "ばくれつパンチ",
+       "id": "dynamicpunch"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 181,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スタ－ミ－",
+     "speciesId": "starmie",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "あやしいひかり",
+       "id": "confuseray"
+      },
+      {
+       "jp": "みがわり",
+       "id": "substitute"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 121,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ホネブ－メラン",
+       "id": "bonemerang"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "flying",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "パルシェン",
+     "speciesId": "cloyster",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 91,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ムウマ",
+     "speciesId": "misdreavus",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "まもる",
+       "id": "protect"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 200,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 21,
+   "archetype": "エース追加型１（額縁理論）",
+   "comment": "↓の「追加」ボタンから、好きなエースをLv.55で追加してあげてください。 選りすぐりの親衛隊を揃えてありますので、 ある程度スペックが低いマイナーポケモンをエースにしてもそれなりに戦えるはずです。 持ち物は食べ残しと奇跡の実を両方余らせています。 食べ残しが余った場合はカビゴンを「のしかかり/じしん/のろい/じばく＠たべのこし」にすると強いです。 奇跡の実が余った場合はパルシェンかカイリキーに渡すのがオススメです。 ダブルエースを追加したい場合は、カイリキーかフシギバナを抜くのが良いかな。 その他カスタム例としては パルシェン→ナッシーに変更 ゴローニャ→ハガネールに変更 カイリキー→ヘラクロスやガラガラに変更 などもアリだと思います。 参考記事：額縁理論",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": null
+   },
+   "rows": [
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "じしん",
+      "ねむる",
+      "じばく"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "パルシェン",
+     "moves": [
+      "れいとうビ－ム",
+      "リフレクタ－",
+      "まきびし",
+      "だいばくはつ"
+     ],
+     "item": "きのみジュ－ス"
+    },
+    {
+     "level": 50,
+     "species": "ゴロ－ニャ",
+     "moves": [
+      "じしん",
+      "いわなだれ",
+      "のろい",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "フシギバナ",
+     "moves": [
+      "はっぱカッタ－",
+      "やどりぎのタネ",
+      "ねむりごな",
+      "こうごうせい"
+     ],
+     "item": "まひなおしのみ"
+    },
+    {
+     "level": 50,
+     "species": "カイリキ－",
+     "moves": [
+      "クロスチョップ",
+      "いわなだれ",
+      "めざめるパワ－",
+      "のろい"
+     ],
+     "item": "せんせいのツメ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 91,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 76,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 3,
+     "dvsHex": [
+      "3",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 68,
+     "dvsHex": [
+      "D",
+      "E",
+      "F",
+      "F"
+     ],
+     "hpType": "ghost"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "パルシェン",
+     "speciesId": "cloyster",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "きのみジュ－ス",
+     "itemId": "berryjuice",
+     "nationalDex": 91,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゴロ－ニャ",
+     "speciesId": "golem",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 76,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "フシギバナ",
+     "speciesId": "venusaur",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "はっぱカッタ－",
+       "id": "razorleaf"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "こうごうせい",
+       "id": "synthesis"
+      }
+     ],
+     "jpItem": "まひなおしのみ",
+     "itemId": "przcureberry",
+     "nationalDex": 3,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カイリキ－",
+     "speciesId": "machamp",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "クロスチョップ",
+       "id": "crosschop"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 68,
+     "hpTypeFromPd": "ghost",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 22,
+   "archetype": "エース追加型２（ハピムウマパ）",
+   "comment": "↓の「追加」ボタンから、好きなエースをLv.55で追加してあげてください。 受け・速攻・起点作成と柔軟に対応できる優秀なサポーターが揃っています。 持ち物は食べ残しを余らせています。 食べ残しを使わない場合はカビゴンを「のしかかり/じしん/のろい/じばく＠たべのこし」にすると強いです。 エースが奇跡の実を使いたい場合、ムウマに食べ残しを渡しても良いでしょう。 ガラガラの枠は自由度が高いです。 この型のガラガラは、エアームドを対策しています。 エースがエアームドに弱くない場合、この枠はフシギバナやスターミーでも良いでしょう。 普通に剣の舞型のガラガラもアリです。 エースがある程度耐久力のあるポケモンの場合、ハピナスの歌うの枠を癒しの鈴にしても良いです。 詳しい解説や、具体的なエース追加例はこちらを参照ください。 エース追加例１：ケンタロスエース エース追加例２：リザードンエース エース追加例３：ドードリオエース 参考記事：「ハピムウマパ」という概念製作： クラヴハンマー",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": null
+   },
+   "rows": [
+    {
+     "level": 50,
+     "species": "ハピナス",
+     "moves": [
+      "れいとうビ－ム",
+      "プレゼント",
+      "うたう",
+      "タマゴうみ"
+     ],
+     "item": "せんせいのツメ"
+    },
+    {
+     "level": 50,
+     "species": "ムウマ",
+     "moves": [
+      "どくどく",
+      "あやしいひかり",
+      "いたみわけ",
+      "ほろびのうた"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "ガラガラ",
+     "moves": [
+      "ホネブ－メラン",
+      "かえんほうしゃ",
+      "ねむる",
+      "ねごと"
+     ],
+     "item": "ふといホネ"
+    },
+    {
+     "level": 50,
+     "species": "パルシェン",
+     "moves": [
+      "れいとうビ－ム",
+      "まきびし",
+      "リフレクタ－",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "のしかかり",
+      "じしん",
+      "ねむる",
+      "じばく"
+     ],
+     "item": "はっかのみ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 242,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 200,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 105,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 91,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ハピナス",
+     "speciesId": "blissey",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "プレゼント",
+       "id": "present"
+      },
+      {
+       "jp": "うたう",
+       "id": "sing"
+      },
+      {
+       "jp": "タマゴうみ",
+       "id": "softboiled"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 242,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ムウマ",
+     "speciesId": "misdreavus",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "あやしいひかり",
+       "id": "confuseray"
+      },
+      {
+       "jp": "いたみわけ",
+       "id": "painsplit"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 200,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ホネブ－メラン",
+       "id": "bonemerang"
+      },
+      {
+       "jp": "かえんほうしゃ",
+       "id": "flamethrower"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "パルシェン",
+     "speciesId": "cloyster",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 91,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "のしかかり",
+       "id": "bodyslam"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 23,
+   "archetype": "【一撃あり用】ケンタサンダーWA",
+   "comment": "オフ会での優勝実績もあるパーティ。 解説はおかしょーさんによるこちらの記事、 原案はもがみさんによるこちらの記事をそれぞれ参照のこと。 ・サンダーの目覚めるパワーは氷 ・カイリキーの目覚めるパワーは虫 上記もがみさんの記事にカスタム例が色々載っているので、いじってみても良いでしょう。原案：もがみ　　アレンジ：おかしょー",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": null
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "ケンタロス",
+     "moves": [
+      "すてみタックル",
+      "つのドリル",
+      "じしん",
+      "みがわり"
+     ],
+     "item": "ひかりのこな"
+    },
+    {
+     "level": 55,
+     "species": "サンダ－",
+     "moves": [
+      "１０まんボルト",
+      "めざめるパワ－",
+      "ふきとばし",
+      "ねむる"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "やつあたり",
+      "じしん",
+      "ねむる",
+      "じばく"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "パルシェン",
+     "moves": [
+      "なみのり",
+      "まきびし",
+      "のろい",
+      "だいばくはつ"
+     ],
+     "item": "ピンクのリボン"
+    },
+    {
+     "level": 50,
+     "species": "ハガネ－ル",
+     "moves": [
+      "じしん",
+      "どくどく",
+      "ほえる",
+      "だいばくはつ"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "カイリキ－",
+     "moves": [
+      "クロスチョップ",
+      "じわれ",
+      "いわなだれ",
+      "めざめるパワ－"
+     ],
+     "item": "せんせいのツメ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 128,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 145,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 91,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 208,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 68,
+     "dvsHex": [
+      "D",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "bug"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ケンタロス",
+     "speciesId": "tauros",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "つのドリル",
+       "id": "horndrill"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "みがわり",
+       "id": "substitute"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 128,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "サンダ－",
+     "speciesId": "zapdos",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "ふきとばし",
+       "id": "whirlwind"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 145,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "やつあたり",
+       "id": "frustration"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "じばく",
+       "id": "selfdestruct"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 143,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "パルシェン",
+     "speciesId": "cloyster",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "なみのり",
+       "id": "surf"
+      },
+      {
+       "jp": "まきびし",
+       "id": "spikes"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "ピンクのリボン",
+     "itemId": "pinkbow",
+     "nationalDex": 91,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ハガネ－ル",
+     "speciesId": "steelix",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "ほえる",
+       "id": "roar"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 208,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カイリキ－",
+     "speciesId": "machamp",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "クロスチョップ",
+       "id": "crosschop"
+      },
+      {
+       "jp": "じわれ",
+       "id": "fissure"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 68,
+     "hpTypeFromPd": "bug",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 24,
+   "archetype": "【一撃あり用】カビライコウWA",
+   "comment": "一撃あり用55カビゴン軸の完成度の高いパーティ。 本人による解説はこちら 類似パーティの解説はこちら ・ガラガラの目覚めるパワーは虫 ・ライコウの目覚めるパワーは氷",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": "たこ"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "カビゴン",
+     "moves": [
+      "すてみタックル",
+      "じわれ",
+      "でんじほう",
+      "ねむる"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 50,
+     "species": "スタ－ミ－",
+     "moves": [
+      "ハイドロポンプ",
+      "サイコキネシス",
+      "でんじは",
+      "じこさいせい"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "エア－ムド",
+     "moves": [
+      "ドリルくちばし",
+      "どくどく",
+      "ふきとばし",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "ムウマ",
+     "moves": [
+      "でんじほう",
+      "くろいまなざし",
+      "ほろびのうた",
+      "みちづれ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "ガラガラ",
+     "moves": [
+      "ホネブ－メラン",
+      "いわなだれ",
+      "めざめるパワ－",
+      "つるぎのまい"
+     ],
+     "item": "ふといホネ"
+    },
+    {
+     "level": 55,
+     "species": "ライコウ",
+     "moves": [
+      "かみなり",
+      "めざめるパワ－",
+      "ねむる",
+      "ねごと"
+     ],
+     "item": "じしゃく"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 121,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 227,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 200,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 105,
+     "dvsHex": [
+      "D",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "bug"
+    },
+    {
+     "num": 243,
+     "dvsHex": [
+      "B",
+      "D",
+      "F",
+      "F"
+     ],
+     "hpType": "ice"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "じわれ",
+       "id": "fissure"
+      },
+      {
+       "jp": "でんじほう",
+       "id": "zapcannon"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "スタ－ミ－",
+     "speciesId": "starmie",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ハイドロポンプ",
+       "id": "hydropump"
+      },
+      {
+       "jp": "サイコキネシス",
+       "id": "psychic"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "じこさいせい",
+       "id": "recover"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 121,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "エア－ムド",
+     "speciesId": "skarmory",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ドリルくちばし",
+       "id": "drillpeck"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "ふきとばし",
+       "id": "whirlwind"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 227,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ムウマ",
+     "speciesId": "misdreavus",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "でんじほう",
+       "id": "zapcannon"
+      },
+      {
+       "jp": "くろいまなざし",
+       "id": "meanlook"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      },
+      {
+       "jp": "みちづれ",
+       "id": "destinybond"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 200,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ガラガラ",
+     "speciesId": "marowak",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ホネブ－メラン",
+       "id": "bonemerang"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 105,
+     "hpTypeFromPd": "bug",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ライコウ",
+     "speciesId": "raikou",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "かみなり",
+       "id": "thunder"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      },
+      {
+       "jp": "ねごと",
+       "id": "sleeptalk"
+      }
+     ],
+     "jpItem": "じしゃく",
+     "itemId": "magnet",
+     "nationalDex": 243,
+     "hpTypeFromPd": "ice",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 25,
+   "archetype": "【一撃あり用】ハピエア構築",
+   "comment": "一撃あり用パーティ。 ハピナス＋エアームドで受けてどくどくを回しつつ、 隙を見てエースを投入し、一撃技で崩して行く、というのが基本線になります。 受けループは相手からの一撃技に弱そうですが、 エアームドの地割れ無効化、ムウマの角ドリル無効化、ハピナスのカウンターで釘付けが出来ています。 中途半端な素早さの一撃技使いに対しては、 こちらのエースで上を取って一撃技の打ち合いで有利に持ち込むこともできます。 ハピナス＋エアームドを両方起点にして来る両刀持ちのエース（炎など）や、 カウンターが通用しない嫌な音バンギラスなどはとても受けられないので、 エースで上から恐れずどんどん一撃技を振り回して勝率を稼ぎましょう。 「外して負けるのが嫌」なんてのはただの美学。日和った行動はただ勝率を下げるだけです。 ・ナッシーの目覚めるパワーは草 →サイコキネシスにする・パルシェンに変更するなども考えられます。",
+   "provenance": {
+    "sourceUrl": "http://majinjima.ma-jide.com/party/2023/1geki.htm",
+    "sourceName": "闇討ち",
+    "maker": "クラヴハンマー"
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "ダグトリオ",
+     "moves": [
+      "じわれ",
+      "じしん",
+      "いわなだれ",
+      "みがわり"
+     ],
+     "item": "たべのこし"
+    },
+    {
+     "level": 55,
+     "species": "ケンタロス",
+     "moves": [
+      "すてみタックル",
+      "じしん",
+      "つのドリル",
+      "ねむる"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "ムウマ",
+     "moves": [
+      "どくどく",
+      "あやしいひかり",
+      "いたみわけ",
+      "ほろびのうた"
+     ],
+     "item": "ひかりのこな"
+    },
+    {
+     "level": 50,
+     "species": "ナッシ－",
+     "moves": [
+      "めざめるパワ－",
+      "やどりぎのタネ",
+      "ねむりごな",
+      "だいばくはつ"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 50,
+     "species": "エア－ムド",
+     "moves": [
+      "ドリルくちばし",
+      "どくどく",
+      "すなあらし",
+      "ねむる"
+     ],
+     "item": "はっかのみ"
+    },
+    {
+     "level": 50,
+     "species": "ハピナス",
+     "moves": [
+      "ちきゅうなげ",
+      "どくどく",
+      "カウンタ－",
+      "タマゴうみ"
+     ],
+     "item": "せんせいのツメ"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 51,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 128,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 200,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 103,
+     "dvsHex": [
+      "E",
+      "E",
+      "F",
+      "F"
+     ],
+     "hpType": "grass"
+    },
+    {
+     "num": 227,
+     "dvsHex": [
+      "7",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 242,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ダグトリオ",
+     "speciesId": "dugtrio",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "じわれ",
+       "id": "fissure"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "いわなだれ",
+       "id": "rockslide"
+      },
+      {
+       "jp": "みがわり",
+       "id": "substitute"
+      }
+     ],
+     "jpItem": "たべのこし",
+     "itemId": "leftovers",
+     "nationalDex": 51,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ケンタロス",
+     "speciesId": "tauros",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "じしん",
+       "id": "earthquake"
+      },
+      {
+       "jp": "つのドリル",
+       "id": "horndrill"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 128,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ムウマ",
+     "speciesId": "misdreavus",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "あやしいひかり",
+       "id": "confuseray"
+      },
+      {
+       "jp": "いたみわけ",
+       "id": "painsplit"
+      },
+      {
+       "jp": "ほろびのうた",
+       "id": "perishsong"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 200,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ナッシ－",
+     "speciesId": "exeggutor",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "やどりぎのタネ",
+       "id": "leechseed"
+      },
+      {
+       "jp": "ねむりごな",
+       "id": "sleeppowder"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 103,
+     "hpTypeFromPd": "grass",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "エア－ムド",
+     "speciesId": "skarmory",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ドリルくちばし",
+       "id": "drillpeck"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "すなあらし",
+       "id": "sandstorm"
+      },
+      {
+       "jp": "ねむる",
+       "id": "rest"
+      }
+     ],
+     "jpItem": "はっかのみ",
+     "itemId": "mintberry",
+     "nationalDex": 227,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ハピナス",
+     "speciesId": "blissey",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ちきゅうなげ",
+       "id": "seismictoss"
+      },
+      {
+       "jp": "どくどく",
+       "id": "toxic"
+      },
+      {
+       "jp": "カウンタ－",
+       "id": "counter"
+      },
+      {
+       "jp": "タマゴうみ",
+       "id": "softboiled"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 242,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 26,
+   "archetype": "【リトルカップ専用】",
+   "comment": "リトルカップ用のパーティです。 強いポケモンを集めた汎用的な構築です。 類似パーティの解説はこちらおよびこちら ・ストライクの目覚めるパワーは地面 ・エレキッドの目覚めるパワーは地面 ・カラカラの目覚めるパワーは岩 ・ビリリダマの目覚めるパワーは草",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": "クラヴハンマー"
+   },
+   "rows": [
+    {
+     "level": 5,
+     "species": "ストライク",
+     "moves": [
+      "すてみタックル",
+      "つばさでうつ",
+      "めざめるパワ－",
+      "つるぎのまい"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 5,
+     "species": "エレキッド",
+     "moves": [
+      "１０まんボルト",
+      "れいとうパンチ",
+      "クロスチョップ",
+      "めざめるパワ－"
+     ],
+     "item": "おうごんのみ"
+    },
+    {
+     "level": 5,
+     "species": "ラッキ－",
+     "moves": [
+      "すてみタックル",
+      "でんじは",
+      "のろい",
+      "タマゴうみ"
+     ],
+     "item": "ラッキ－パンチ"
+    },
+    {
+     "level": 5,
+     "species": "カラカラ",
+     "moves": [
+      "ホネブ－メラン",
+      "めざめるパワ－",
+      "こごえるかぜ",
+      "つるぎのまい"
+     ],
+     "item": "ふといホネ"
+    },
+    {
+     "level": 5,
+     "species": "ポリゴン",
+     "moves": [
+      "れいとうビ－ム",
+      "どろぼう",
+      "でんじは",
+      "リフレクタ－"
+     ],
+     "item": "きのみ"
+    },
+    {
+     "level": 5,
+     "species": "ビリリダマ",
+     "moves": [
+      "１０まんボルト",
+      "めざめるパワ－",
+      "リフレクタ－",
+      "だいばくはつ"
+     ],
+     "item": "きのみジュ－ス"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 123,
+     "dvsHex": [
+      "C",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "ground"
+    },
+    {
+     "num": 239,
+     "dvsHex": [
+      "C",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "ground"
+    },
+    {
+     "num": 113,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 104,
+     "dvsHex": [
+      "D",
+      "C",
+      "F",
+      "F"
+     ],
+     "hpType": "rock"
+    },
+    {
+     "num": 137,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    },
+    {
+     "num": 100,
+     "dvsHex": [
+      "E",
+      "E",
+      "F",
+      "F"
+     ],
+     "hpType": "grass"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ストライク",
+     "speciesId": "scyther",
+     "level": 5,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "つばさでうつ",
+       "id": "wingattack"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 123,
+     "hpTypeFromPd": "ground",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "エレキッド",
+     "speciesId": "elekid",
+     "level": 5,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "れいとうパンチ",
+       "id": "icepunch"
+      },
+      {
+       "jp": "クロスチョップ",
+       "id": "crosschop"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      }
+     ],
+     "jpItem": "おうごんのみ",
+     "itemId": "goldberry",
+     "nationalDex": 239,
+     "hpTypeFromPd": "ground",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ラッキ－",
+     "speciesId": "chansey",
+     "level": 5,
+     "moves": [
+      {
+       "jp": "すてみタックル",
+       "id": "doubleedge"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "のろい",
+       "id": "curse"
+      },
+      {
+       "jp": "タマゴうみ",
+       "id": "softboiled"
+      }
+     ],
+     "jpItem": "ラッキ－パンチ",
+     "itemId": "luckypunch",
+     "nationalDex": 113,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カラカラ",
+     "speciesId": "cubone",
+     "level": 5,
+     "moves": [
+      {
+       "jp": "ホネブ－メラン",
+       "id": "bonemerang"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "こごえるかぜ",
+       "id": "icywind"
+      },
+      {
+       "jp": "つるぎのまい",
+       "id": "swordsdance"
+      }
+     ],
+     "jpItem": "ふといホネ",
+     "itemId": "thickclub",
+     "nationalDex": 104,
+     "hpTypeFromPd": "rock",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ポリゴン",
+     "speciesId": "porygon",
+     "level": 5,
+     "moves": [
+      {
+       "jp": "れいとうビ－ム",
+       "id": "icebeam"
+      },
+      {
+       "jp": "どろぼう",
+       "id": "thief"
+      },
+      {
+       "jp": "でんじは",
+       "id": "thunderwave"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      }
+     ],
+     "jpItem": "きのみ",
+     "itemId": "berry",
+     "nationalDex": 137,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ビリリダマ",
+     "speciesId": "voltorb",
+     "level": 5,
+     "moves": [
+      {
+       "jp": "１０まんボルト",
+       "id": "thunderbolt"
+      },
+      {
+       "jp": "めざめるパワ－",
+       "id": "hiddenpower"
+      },
+      {
+       "jp": "リフレクタ－",
+       "id": "reflect"
+      },
+      {
+       "jp": "だいばくはつ",
+       "id": "explosion"
+      }
+     ],
+     "jpItem": "きのみジュ－ス",
+     "itemId": "berryjuice",
+     "nationalDex": 100,
+     "hpTypeFromPd": "grass",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 27,
+   "archetype": "【指振りルール専用】",
+   "comment": "指振りルール用のパーティです。息抜きにどうぞ。 ルールはこちら。 回復アイテムの使用と、意図的なポケモンチェンジ禁止という点に注意しましょう。原案： べきお",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": null
+   },
+   "rows": [
+    {
+     "level": 55,
+     "species": "ゲンガ－",
+     "moves": [
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる"
+     ],
+     "item": "ひかりのこな"
+    },
+    {
+     "level": 50,
+     "species": "カビゴン",
+     "moves": [
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる"
+     ],
+     "item": "きせきのみ"
+    },
+    {
+     "level": 50,
+     "species": "カイリキ－",
+     "moves": [
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる"
+     ],
+     "item": "みずたまリボン"
+    },
+    {
+     "level": 50,
+     "species": "ゴロ－ニャ",
+     "moves": [
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる"
+     ],
+     "item": "せんせいのツメ"
+    },
+    {
+     "level": 50,
+     "species": "グランブル",
+     "moves": [
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる"
+     ],
+     "item": "ピンクのリボン"
+    },
+    {
+     "level": 50,
+     "species": "フ－ディン",
+     "moves": [
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる",
+      "ゆびをふる"
+     ],
+     "item": "おうじゃのしるし"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 94,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 143,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 68,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 76,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 210,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    },
+    {
+     "num": 65,
+     "dvsHex": [
+      "F",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "dark"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "ゲンガ－",
+     "speciesId": "gengar",
+     "level": 55,
+     "moves": [
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      }
+     ],
+     "jpItem": "ひかりのこな",
+     "itemId": "brightpowder",
+     "nationalDex": 94,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カビゴン",
+     "speciesId": "snorlax",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      }
+     ],
+     "jpItem": "きせきのみ",
+     "itemId": "miracleberry",
+     "nationalDex": 143,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "カイリキ－",
+     "speciesId": "machamp",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      }
+     ],
+     "jpItem": "みずたまリボン",
+     "itemId": "polkadotbow",
+     "nationalDex": 68,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "ゴロ－ニャ",
+     "speciesId": "golem",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      }
+     ],
+     "jpItem": "せんせいのツメ",
+     "itemId": "quickclaw",
+     "nationalDex": 76,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "グランブル",
+     "speciesId": "granbull",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      }
+     ],
+     "jpItem": "ピンクのリボン",
+     "itemId": "pinkbow",
+     "nationalDex": 210,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    },
+    {
+     "jpSpecies": "フ－ディン",
+     "speciesId": "alakazam",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      },
+      {
+       "jp": "ゆびをふる",
+       "id": "metronome"
+      }
+     ],
+     "jpItem": "おうじゃのしるし",
+     "itemId": "kingsrock",
+     "nationalDex": 65,
+     "hpTypeFromPd": "dark",
+     "dexCheck": "ok"
+    }
+   ]
+  },
+  {
+   "cban": 28,
+   "archetype": "参考ページ等 リンク集【解説読んでね】",
+   "comment": "・ジムリーダーの城 使用マニュアル 3代目魔人島 簡易マニュアル PBSHacks 動画マニュアル チャットやシミュレータの使い方がまとめられています。 初めての方に紹介してあげましょう。 ・ジムリーダーの城 公認掲示板 現在ジムリーダーの城トップページからもリンクされている掲示板です。 大会の案内、パーティ鑑定依頼、雑談など何でもOK！ ・PBS独自仕様まとめ ジムリーダーの城のシミュレータ(PBS)は、実機のポケモンと多少異なる点があります。 それらをまとめたページです。(ジムリーダーの城トップからもリンクあり) ・一覧表など 覚える技・両立不可・素早さ関係・めざパHP対応表など すばやさ表 タイプ・種族値・性別一覧 もちもの一覧 めざめるパワーの仕組み＆対応HP一覧 ・便利なツールなど ダメージ計算ツール めざパによる個体減少や、食べ残し等にも対応しています。 Party Box ユーザから投稿された様々なパーティが置いてあります。再現して使うことも出来ます。 攻撃期待率計算機 n発以内に倒せる確率を、急所や外れも考慮した上で計算してくれます。 個体値きめるくん めざパのタイプや性別などの条件を入力することで、理想個体値を算出してくれます。 プレゼントバグ調査結果メモ GB・VC版の「プレゼント」には重大なバグがありますが、PBSでもそれに準じた効果が引き継がれています。 対戦で使用されることもあるので、一度目を通しておくことをオススメします。",
+   "provenance": {
+    "sourceUrl": null,
+    "sourceName": null,
+    "maker": null
+   },
+   "rows": [
+    {
+     "level": 50,
+     "species": "メタモン",
+     "moves": [
+      "へんしん"
+     ],
+     "item": "メタルパウダ－"
+    }
+   ],
+   "pdMons": [
+    {
+     "num": 132,
+     "dvsHex": [
+      "1",
+      "F",
+      "F",
+      "F"
+     ],
+     "hpType": "steel"
+    }
+   ],
+   "mons": [
+    {
+     "jpSpecies": "メタモン",
+     "speciesId": "ditto",
+     "level": 50,
+     "moves": [
+      {
+       "jp": "へんしん",
+       "id": "transform"
+      }
+     ],
+     "jpItem": "メタルパウダ－",
+     "itemId": "metalpowder",
+     "nationalDex": 132,
+     "hpTypeFromPd": "steel",
+     "dexCheck": "ok"
+    }
+   ]
+  }
+ ]
+}

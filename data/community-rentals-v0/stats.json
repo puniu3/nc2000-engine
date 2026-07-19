@@ -1,0 +1,765 @@
+{
+ "teams": 28,
+ "validClean": 25,
+ "failures": [
+  {
+   "cban": 16,
+   "archetype": "タマムシジム",
+   "size": 6,
+   "errorCodes": [
+    "item-clause"
+   ],
+   "errors": [
+    {
+     "severity": "error",
+     "code": "item-clause",
+     "mon": "umbreon",
+     "slot": 3,
+     "item": "miracleberry"
+    }
+   ]
+  },
+  {
+   "cban": 26,
+   "archetype": "【リトルカップ専用】",
+   "size": 6,
+   "errorCodes": [
+    "level-min",
+    "species-underleveled",
+    "level-min",
+    "species-underleveled",
+    "level-min",
+    "species-underleveled",
+    "level-min",
+    "species-underleveled",
+    "level-min",
+    "species-underleveled",
+    "level-min",
+    "species-underleveled"
+   ],
+   "errors": [
+    {
+     "severity": "error",
+     "code": "level-min",
+     "mon": "scyther",
+     "slot": 0,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "species-underleveled",
+     "mon": "scyther",
+     "slot": 0,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "level-min",
+     "mon": "elekid",
+     "slot": 1,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "species-underleveled",
+     "mon": "elekid",
+     "slot": 1,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "level-min",
+     "mon": "chansey",
+     "slot": 2,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "species-underleveled",
+     "mon": "chansey",
+     "slot": 2,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "level-min",
+     "mon": "cubone",
+     "slot": 3,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "species-underleveled",
+     "mon": "cubone",
+     "slot": 3,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "level-min",
+     "mon": "porygon",
+     "slot": 4,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "species-underleveled",
+     "mon": "porygon",
+     "slot": 4,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "level-min",
+     "mon": "voltorb",
+     "slot": 5,
+     "level": 5,
+     "min": 50
+    },
+    {
+     "severity": "error",
+     "code": "species-underleveled",
+     "mon": "voltorb",
+     "slot": 5,
+     "level": 5,
+     "min": 50
+    }
+   ]
+  },
+  {
+   "cban": 28,
+   "archetype": "参考ページ等 リンク集【解説読んでね】",
+   "size": 1,
+   "errorCodes": [
+    "team-size"
+   ],
+   "errors": [
+    {
+     "severity": "error",
+     "code": "team-size",
+     "size": 1,
+     "min": 3
+    }
+   ]
+  }
+ ],
+ "unmapped": [],
+ "unmappedUnique": [],
+ "rulesetDelta": {
+  "ohkoCount": 5,
+  "evasionCount": 1,
+  "brightPowderCount": 11,
+  "uberCount": 0,
+  "detail": [
+   {
+    "cban": 4,
+    "species": "suicune",
+    "kind": "brightpowder"
+   },
+   {
+    "cban": 7,
+    "species": "smeargle",
+    "kind": "brightpowder"
+   },
+   {
+    "cban": 11,
+    "species": "starmie",
+    "kind": "brightpowder"
+   },
+   {
+    "cban": 12,
+    "species": "skarmory",
+    "kind": "brightpowder"
+   },
+   {
+    "cban": 13,
+    "species": "porygon2",
+    "kind": "brightpowder"
+   },
+   {
+    "cban": 14,
+    "species": "vaporeon",
+    "kind": "brightpowder"
+   },
+   {
+    "cban": 16,
+    "species": "miltank",
+    "kind": "evasion",
+    "move": "doubleteam"
+   },
+   {
+    "cban": 16,
+    "species": "miltank",
+    "kind": "brightpowder"
+   },
+   {
+    "cban": 19,
+    "species": "snorlax",
+    "kind": "brightpowder"
+   },
+   {
+    "cban": 23,
+    "species": "tauros",
+    "kind": "OHKO",
+    "move": "horndrill"
+   },
+   {
+    "cban": 23,
+    "species": "tauros",
+    "kind": "brightpowder"
+   },
+   {
+    "cban": 23,
+    "species": "machamp",
+    "kind": "OHKO",
+    "move": "fissure"
+   },
+   {
+    "cban": 24,
+    "species": "snorlax",
+    "kind": "OHKO",
+    "move": "fissure"
+   },
+   {
+    "cban": 25,
+    "species": "dugtrio",
+    "kind": "OHKO",
+    "move": "fissure"
+   },
+   {
+    "cban": 25,
+    "species": "tauros",
+    "kind": "OHKO",
+    "move": "horndrill"
+   },
+   {
+    "cban": 25,
+    "species": "misdreavus",
+    "kind": "brightpowder"
+   },
+   {
+    "cban": 27,
+    "species": "gengar",
+    "kind": "brightpowder"
+   }
+  ]
+ },
+ "novelty": {
+  "exactDupes": 16,
+  "novel": 12,
+  "teams": [
+   {
+    "cban": 1,
+    "archetype": "【オススメレンタル】キチカビ１",
+    "species": [
+     "snorlax",
+     "umbreon",
+     "marowak",
+     "cloyster",
+     "gengar",
+     "starmie"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-12",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 2,
+    "archetype": "【オススメレンタル】サンダーバンギWA",
+    "species": [
+     "zapdos",
+     "tyranitar",
+     "snorlax",
+     "cloyster",
+     "exeggutor",
+     "machamp"
+    ],
+    "exactDup": false,
+    "nearestPool": "hc75-3rd-bean",
+    "nearestJaccard": 0.71
+   },
+   {
+    "cban": 3,
+    "archetype": "【オススメレンタル】爆破速攻TA",
+    "species": [
+     "tauros",
+     "marowak",
+     "zapdos",
+     "cloyster",
+     "snorlax",
+     "electrode"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-07",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 4,
+    "archetype": "【オススメレンタル】王パ",
+    "species": [
+     "tyranitar",
+     "skarmory",
+     "venusaur",
+     "suicune",
+     "blissey",
+     "alakazam"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-11",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 5,
+    "archetype": "【オススメレンタル】キチカビ３",
+    "species": [
+     "snorlax",
+     "raikou",
+     "umbreon",
+     "suicune",
+     "skarmory",
+     "marowak"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-06",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 6,
+    "archetype": "サンダータンク",
+    "species": [
+     "zapdos",
+     "miltank",
+     "snorlax",
+     "cloyster",
+     "exeggutor",
+     "machamp"
+    ],
+    "exactDup": true,
+    "nearestPool": "hc75-3rd-bean",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 7,
+    "archetype": "トキワジム",
+    "species": [
+     "marowak",
+     "electrode",
+     "exeggutor",
+     "snorlax",
+     "smeargle",
+     "nidoking"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-09",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 8,
+    "archetype": "モーダルバンギ",
+    "species": [
+     "tyranitar",
+     "exeggutor",
+     "venusaur",
+     "golem",
+     "snorlax",
+     "miltank"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-10",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 9,
+    "archetype": "55カビゴン 〜地震カビ〜",
+    "species": [
+     "snorlax",
+     "cloyster",
+     "zapdos",
+     "starmie",
+     "steelix",
+     "gengar"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-13",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 10,
+    "archetype": "55カビゴン 〜セミフルカビ〜",
+    "species": [
+     "snorlax",
+     "skarmory",
+     "misdreavus",
+     "starmie",
+     "marowak",
+     "miltank"
+    ],
+    "exactDup": false,
+    "nearestPool": "hc75-top8-tezan",
+    "nearestJaccard": 0.5
+   },
+   {
+    "cban": 11,
+    "archetype": "55カビゴン 〜爆パンカビ〜",
+    "species": [
+     "snorlax",
+     "houndoom",
+     "venusaur",
+     "starmie",
+     "zapdos",
+     "misdreavus"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-14",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 12,
+    "archetype": "カビガラポリ",
+    "species": [
+     "snorlax",
+     "heracross",
+     "marowak",
+     "gengar",
+     "skarmory",
+     "porygon2"
+    ],
+    "exactDup": false,
+    "nearestPool": "sample-03",
+    "nearestJaccard": 0.5
+   },
+   {
+    "cban": 13,
+    "archetype": "ポニョ",
+    "species": [
+     "porygon2",
+     "poliwrath",
+     "gengar",
+     "exeggutor",
+     "snorlax",
+     "golem"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-16",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 14,
+    "archetype": "しゃわポリWA",
+    "species": [
+     "vaporeon",
+     "porygon2",
+     "snorlax",
+     "zapdos",
+     "exeggutor",
+     "steelix"
+    ],
+    "exactDup": false,
+    "nearestPool": "sample-17",
+    "nearestJaccard": 0.71
+   },
+   {
+    "cban": 15,
+    "archetype": "バランスダブルロック",
+    "species": [
+     "umbreon",
+     "misdreavus",
+     "snorlax",
+     "starmie",
+     "zapdos",
+     "victreebel"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-18",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 16,
+    "archetype": "タマムシジム",
+    "species": [
+     "exeggutor",
+     "gengar",
+     "snorlax",
+     "umbreon",
+     "starmie",
+     "miltank"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-19",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 17,
+    "archetype": "あやみが＋太鼓ガラ",
+    "species": [
+     "marowak",
+     "snorlax",
+     "skarmory",
+     "starmie",
+     "exeggutor",
+     "gengar"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-20",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 18,
+    "archetype": "ライコウ昆布",
+    "species": [
+     "raikou",
+     "cloyster",
+     "forretress",
+     "starmie",
+     "gengar",
+     "marowak"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-21",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 19,
+    "archetype": "ドラゴンエース",
+    "species": [
+     "dragonite",
+     "kingdra",
+     "snorlax",
+     "houndoom",
+     "forretress",
+     "exeggutor"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-22",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 20,
+    "archetype": "あかりちゃん司令塔エース",
+    "species": [
+     "ampharos",
+     "starmie",
+     "snorlax",
+     "marowak",
+     "cloyster",
+     "misdreavus"
+    ],
+    "exactDup": true,
+    "nearestPool": "sample-23",
+    "nearestJaccard": 1
+   },
+   {
+    "cban": 21,
+    "archetype": "エース追加型１（額縁理論）",
+    "species": [
+     "snorlax",
+     "cloyster",
+     "golem",
+     "venusaur",
+     "machamp"
+    ],
+    "exactDup": false,
+    "nearestPool": "hc75-3rd-bean",
+    "nearestJaccard": 0.38
+   },
+   {
+    "cban": 22,
+    "archetype": "エース追加型２（ハピムウマパ）",
+    "species": [
+     "blissey",
+     "misdreavus",
+     "marowak",
+     "cloyster",
+     "snorlax"
+    ],
+    "exactDup": false,
+    "nearestPool": "hc75-top8-shinobu",
+    "nearestJaccard": 0.57
+   },
+   {
+    "cban": 23,
+    "archetype": "【一撃あり用】ケンタサンダーWA",
+    "species": [
+     "tauros",
+     "zapdos",
+     "snorlax",
+     "cloyster",
+     "steelix",
+     "machamp"
+    ],
+    "exactDup": false,
+    "nearestPool": "hc75-3rd-bean",
+    "nearestJaccard": 0.5
+   },
+   {
+    "cban": 24,
+    "archetype": "【一撃あり用】カビライコウWA",
+    "species": [
+     "snorlax",
+     "starmie",
+     "skarmory",
+     "misdreavus",
+     "marowak",
+     "raikou"
+    ],
+    "exactDup": false,
+    "nearestPool": "sample-15",
+    "nearestJaccard": 0.5
+   },
+   {
+    "cban": 25,
+    "archetype": "【一撃あり用】ハピエア構築",
+    "species": [
+     "dugtrio",
+     "tauros",
+     "misdreavus",
+     "exeggutor",
+     "skarmory",
+     "blissey"
+    ],
+    "exactDup": false,
+    "nearestPool": "hc75-top8-shinobu",
+    "nearestJaccard": 0.33
+   },
+   {
+    "cban": 26,
+    "archetype": "【リトルカップ専用】",
+    "species": [
+     "scyther",
+     "elekid",
+     "chansey",
+     "cubone",
+     "porygon",
+     "voltorb"
+    ],
+    "exactDup": false,
+    "nearestPool": null,
+    "nearestJaccard": 0
+   },
+   {
+    "cban": 27,
+    "archetype": "【指振りルール専用】",
+    "species": [
+     "gengar",
+     "snorlax",
+     "machamp",
+     "golem",
+     "granbull",
+     "alakazam"
+    ],
+    "exactDup": false,
+    "nearestPool": "hc75-top8-tsuru",
+    "nearestJaccard": 0.33
+   },
+   {
+    "cban": 28,
+    "archetype": "参考ページ等 リンク集【解説読んでね】",
+    "species": [
+     "ditto"
+    ],
+    "exactDup": false,
+    "nearestPool": null,
+    "nearestJaccard": 0
+   }
+  ]
+ },
+ "dexMismatches": [],
+ "rentalSpeciesFreq": {
+  "snorlax": 23,
+  "umbreon": 4,
+  "marowak": 11,
+  "cloyster": 10,
+  "gengar": 8,
+  "starmie": 10,
+  "zapdos": 8,
+  "tyranitar": 3,
+  "exeggutor": 10,
+  "machamp": 5,
+  "tauros": 3,
+  "electrode": 2,
+  "skarmory": 7,
+  "venusaur": 4,
+  "suicune": 2,
+  "blissey": 3,
+  "alakazam": 2,
+  "raikou": 3,
+  "miltank": 4,
+  "smeargle": 1,
+  "nidoking": 1,
+  "golem": 4,
+  "steelix": 3,
+  "misdreavus": 7,
+  "houndoom": 2,
+  "heracross": 1,
+  "porygon2": 3,
+  "poliwrath": 1,
+  "vaporeon": 1,
+  "victreebel": 1,
+  "forretress": 2,
+  "dragonite": 1,
+  "kingdra": 1,
+  "ampharos": 1,
+  "dugtrio": 1,
+  "scyther": 1,
+  "elekid": 1,
+  "chansey": 1,
+  "cubone": 1,
+  "porygon": 1,
+  "voltorb": 1,
+  "granbull": 1,
+  "ditto": 1
+ },
+ "poolSpeciesFreq": {
+  "alakazam": 3,
+  "umbreon": 5,
+  "snorlax": 30,
+  "steelix": 7,
+  "suicune": 5,
+  "misdreavus": 10,
+  "zapdos": 11,
+  "starmie": 16,
+  "exeggutor": 15,
+  "miltank": 6,
+  "cloyster": 11,
+  "machamp": 5,
+  "heracross": 3,
+  "golem": 4,
+  "jolteon": 2,
+  "typhlosion": 1,
+  "marowak": 11,
+  "entei": 1,
+  "nidoking": 2,
+  "tauros": 3,
+  "blissey": 3,
+  "skarmory": 6,
+  "venusaur": 5,
+  "raikou": 4,
+  "houndoom": 2,
+  "gengar": 10,
+  "tyranitar": 3,
+  "porygon2": 3,
+  "ampharos": 1,
+  "electrode": 3,
+  "victreebel": 1,
+  "rhydon": 1,
+  "kangaskhan": 1,
+  "moltres": 2,
+  "jynx": 1,
+  "forretress": 2,
+  "charizard": 1,
+  "smeargle": 1,
+  "poliwrath": 1,
+  "kingdra": 1,
+  "dragonite": 1
+ }
+}
