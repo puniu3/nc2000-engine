@@ -4,3 +4,7 @@ node_modules
 /web/dist
 /crates/wasm/pkg-web
 /crates/wasm/pkg-node
+# external human-play logs: contain real player handles; public repo → Pages, do not redistribute
+/nc2000stadium2_spectator_logs.zip
+*.spectator.*
+spectator/
