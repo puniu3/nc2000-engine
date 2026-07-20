@@ -2045,13 +2045,15 @@ impl Battle {
                     || self.sides[target.side as usize].pokemon_left > 1
                     || self.poke(target).hp > 0)
             {
-                // gen3 calcRecoilDamage
+                // post-#11704: gen4's applyRecoilDamage override (mod chain
+                // gen2stadium2→gen2→gen3→gen4) — Math.floor, and the damage
+                // source is the recoiler itself (no [of] attribution)
                 let amount = clamp_int_range(
                     (total_damage as f64 * num as f64 / den as f64).floor(),
                     Some(1.0),
                     None,
                 );
-                self.damage(dex, amount, Some(pokemon), Some(target), DamageEffect::Recoil, false);
+                self.damage(dex, amount, Some(pokemon), Some(pokemon), DamageEffect::Recoil, false);
             }
         }
         damage

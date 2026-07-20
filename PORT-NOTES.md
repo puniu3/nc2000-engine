@@ -252,10 +252,18 @@ installed into the local PS reference at `~/pokemon-showdown`). Deltas ported:
   in a recoil refactor (`applyRecoilDamage`, condition drops `move.recoil`);
   at this data era struggle carries plain `recoil: [1,4]`, so behavior is
   unchanged.
-- **Known uncertified edge**: Miracle Berry curing CONFUSION at BeforeMove —
-  the 79c04dcc core crashes on the stale confusion handler
-  (`volatiles["confusion"].time--` after the berry removed the volatile), so
-  no golden fixture exists; the server presumably runs a newer core with a
-  staleness guard. Our engine skips stale-status handlers; behavior for the
-  volatile case follows the engine's own semantics until the server core can
-  be identified.
+- **Accepted divergence (owner ruling 2026-07-21)**: Miracle Berry curing
+  CONFUSION at BeforeMove. The reference was pulled to upstream master
+  393d5c867 (the server's era — the zip's mods match it) and the crash
+  REPRODUCES there: the berry's onBeforeMove (prio 11) removes the confusion
+  volatile, then the already-collected confusion handler dereferences it
+  (`volatiles["confusion"].time--`) and the battle dies. The server runs the
+  same combination, so there is no golden behavior — the server errors the
+  battle on this path. Our engine instead skips the stale handler: cure, then
+  move normally. Pinned by `crates/conformance/tests/berry_confusion.rs`.
+- **Core moved 79c04dcc → 393d5c867 (merge fb94e8670, 2026-07-21)**: the only
+  gen2-visible delta was #11704's recoil normalize — recoil damage is now
+  self-sourced (no `[of]` in the -damage line) through gen4's
+  `applyRecoilDamage` override (Math.floor — NOT base's Math.round; the mod
+  chain gen2stadium2→gen2→gen3→gen4 inherits gen4's). All 160 fixtures were
+  regenerated against the new core and replay bit-exact.

@@ -1098,7 +1098,7 @@ mod tests {
             .map_err(|_| "blind searcher")
             .unwrap();
         let pair_json = std::fs::read_to_string(
-            root.join("data/preview-tables-v0/pair-00-01.json"),
+            root.join("fixtures/preview-tables-test/pair-00-01.json"),
         )
         .unwrap();
         bs.add_pair(&pair_json).map_err(|_| "pair").unwrap();
@@ -1173,7 +1173,7 @@ mod tests {
             .unwrap();
         bs.pin_opponent(&team(0)).map_err(|_| "pin").unwrap();
         let pair_json = std::fs::read_to_string(
-            root.join("data/preview-tables-v0/pair-00-01.json"),
+            root.join("fixtures/preview-tables-test/pair-00-01.json"),
         )
         .unwrap();
         bs.add_pair(&pair_json).map_err(|_| "pair").unwrap();

@@ -77,3 +77,13 @@ signature lookup misses.
 Bakes are deterministic for a given `--seed` at any `--threads` (verified:
 identical JSON minus the `secs` field at 3 vs 11 threads). Battle seeds and
 agent seeds derive from (pair, cell, game) indices only.
+
+## Tables removed (2026-07-21)
+
+All `pair-*.json` files were deleted (recoverable from git history). Two
+independent reasons: (1) the owner ruled the bake meaningless on ladder —
+exact-signature lookup never matches custom human teams, measured zero
+contribution; (2) the stack migrated to the no-OHKO Strict regulation and a
+new engine core, so every baked equilibrium encodes the wrong rules — a
+signature MATCH would have served a stale strategy. `TableSet` treats the
+empty directory as missing and falls back to live search everywhere.

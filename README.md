@@ -1,8 +1,8 @@
 # nc2000-engine
 
-Rust port of Pokemon Showdown's **`[Gen 2] NC 2000`** format (mod: `gen2stadium2`), built to raise bot-research search throughput by orders of magnitude.
+Rust port of Pokemon Showdown's **`[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict`** format (mod: `gen2stadium2nc2000` — the community server's no-OHKO regulation, the one with the larger player base and the one the bot actually plays on ladder; migrated from the OHKO-allowing `gen2nc2000` on 2026-07-21, see `PORT-NOTES.md`), built to raise bot-research search throughput by orders of magnitude.
 
-**The source of truth is PS as actually implemented.** Divergence from cartridge GSC or real Stadium 2 hardware is out of scope. Correctness is defined as **bit-exact parity** (state + PRNG seed, at every snapshot point) against golden fixtures generated from PS by `tools/gen-fixtures.js`.
+**The source of truth is PS as actually implemented.** Divergence from cartridge GSC or real Stadium 2 hardware is out of scope. Correctness is defined as **bit-exact parity** (state + PRNG seed, at every snapshot point) against golden fixtures generated from PS by `tools/gen-fixtures.js`. (One documented exception where PS itself crashes: `crates/conformance/tests/berry_confusion.rs`.)
 
 **Status:** engine bit-exact vs PS (M1–M4), search bots through imperfect-info play (M5–M10), wasm + browser demo shipped (M9), published (M12), Japanese localization (M13). Playable demo: **https://puniu3.github.io/nc2000-engine/** Licensing: MIT, third-party attribution in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
