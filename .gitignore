@@ -8,3 +8,6 @@ node_modules
 /nc2000stadium2_spectator_logs.zip
 *.spectator.*
 spectator/
+# saved Showdown replays (filenames and bodies carry both players' handles)
+*battle-gen2nintendocup2000*.html
+.playwright-mcp/

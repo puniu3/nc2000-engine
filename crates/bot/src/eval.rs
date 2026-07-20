@@ -42,6 +42,12 @@ pub struct EvalWeights {
     pub pp: f64,
     /// Sigmoid sharpness on the side differential.
     pub scale: f64,
+    /// Fold the gen-2 accuracy×evasion stage multipliers into the threat
+    /// feature (`Battle::hit_probability`) so a boosted-evasion foe collapses
+    /// the bot's estimated hit chance — the physically-correct danger channel
+    /// (Double Team / Baton Pass). Always true in shipped play; the tests flip
+    /// it to reproduce the pre-fix eval (base accuracy only, blind to evasion).
+    pub couple_evasion: bool,
 }
 
 impl Default for EvalWeights {
@@ -61,6 +67,7 @@ impl Default for EvalWeights {
             threat: 0.5,
             pp: 0.2,
             scale: 1.5,
+            couple_evasion: true,
         }
     }
 }
@@ -98,6 +105,9 @@ impl EvalWeights {
             threat: v[15],
             pp: v[16],
             scale,
+            // Evasion coupling is not a tuned float; shipped play always
+            // couples (the SPSA vector carries only the linear weights).
+            couple_evasion: true,
         }
     }
 }
@@ -150,7 +160,8 @@ fn side_score(b: &Battle, dex: &Dex, w: &EvalWeights, s: usize) -> f64 {
             }
             if let Some(foe) = b.active_id(1 - s) {
                 if !b.poke(foe).fainted && b.poke(foe).hp > 0 {
-                    score += w.threat * best_hit_fraction(b, dex, id, foe).min(1.0);
+                    score +=
+                        w.threat * best_hit_fraction(b, dex, id, foe, w.couple_evasion).min(1.0);
                 }
             }
         }
@@ -159,14 +170,21 @@ fn side_score(b: &Battle, dex: &Dex, w: &EvalWeights, s: usize) -> f64 {
 }
 
 /// Best expected hit fraction over the attacker's usable move slots
-/// (unclamped: >1 = expected OHKO with margin).
-pub fn best_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId) -> f64 {
+/// (unclamped: >1 = expected OHKO with margin). `couple_evasion` folds the
+/// gen-2 accuracy/evasion stage multipliers into each move's hit chance.
+pub fn best_hit_fraction(
+    b: &Battle,
+    dex: &Dex,
+    att: PokeId,
+    def: PokeId,
+    couple_evasion: bool,
+) -> f64 {
     let mut best = 0.0f64;
     for ms in b.poke(att).move_slots.iter() {
         if ms.pp <= 0 || ms.disabled {
             continue;
         }
-        best = best.max(expected_hit_fraction(b, dex, att, def, ms.id));
+        best = best.max(expected_hit_fraction(b, dex, att, def, ms.id, couple_evasion));
     }
     best
 }
@@ -181,7 +199,20 @@ fn hiddenpower_id(dex: &Dex) -> Option<MoveId> {
 /// mean roll x mean hits x accuracy. 0 for status moves and unknowable
 /// callback damage (counter/present/ohko score 0 — same class of caveat as
 /// MaxDamage's static base powers).
-pub fn expected_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId, move_id: MoveId) -> f64 {
+///
+/// `couple_evasion` picks the accuracy channel: `true` (shipped) uses
+/// `Battle::hit_probability` — the real gen-2 accuracy×evasion stage roll, so
+/// a boosted-evasion foe collapses the estimate; `false` reproduces the
+/// pre-fix behavior (base move accuracy only, blind to evasion) for the tests'
+/// before/after contrast.
+pub fn expected_hit_fraction(
+    b: &Battle,
+    dex: &Dex,
+    att: PokeId,
+    def: PokeId,
+    move_id: MoveId,
+    couple_evasion: bool,
+) -> f64 {
     let ms = dex.move_static(move_id);
     let a = b.poke(att);
     let d = b.poke(def);
@@ -204,9 +235,16 @@ pub fn expected_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId, mo
         }
     }
 
-    let acc = match ms.accuracy {
-        Accuracy::AlwaysHits => 1.0,
-        Accuracy::Pct(p) => p as f64 / 100.0,
+    let acc = if couple_evasion {
+        // Real gen-2 accuracy roll (attacker accuracy stage × defender evasion
+        // stage), matching how the engine actually rolls hits.
+        b.hit_probability(dex, att, def, move_id)
+    } else {
+        // Pre-fix: base move accuracy only, blind to evasion stages.
+        match ms.accuracy {
+            Accuracy::AlwaysHits => 1.0,
+            Accuracy::Pct(p) => p as f64 / 100.0,
+        }
     };
 
     let raw = if let Some(fd) = &ms.damage {

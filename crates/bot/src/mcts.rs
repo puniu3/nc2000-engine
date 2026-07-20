@@ -291,7 +291,8 @@ fn greedy_pick(
         let mut best: Option<(SearchChoice, f64)> = None;
         for &c in cs {
             if let SearchChoice::Move(id) = c {
-                let score = eval::expected_hit_fraction(sim, dex, att, def, id);
+                // Rollout policy always couples evasion (the accurate estimate).
+                let score = eval::expected_hit_fraction(sim, dex, att, def, id, true);
                 if best.map_or(true, |(_, b)| score > b) {
                     best = Some((c, score));
                 }
