@@ -76,9 +76,12 @@ struct TrackMon {
     switch_in_turn: u16,
     active: bool,
     fainted: bool,
-    /// Foe: last announced 1/48 pixel count (48 = untouched). Own side is
+    /// Foe: last announced HP numerator (over `hp_den`). Own side is
     /// authoritative from the request, so pixels are only a fallback.
     pixels: i32,
+    /// Denominator of the announced foe HP: 100 under HP Percentage Mod
+    /// (this format), 48 on legacy pixel-bar streams.
+    hp_den: i32,
     status: Status,
     /// Sleep came from Rest (public 2-turn counter).
     rest: bool,
@@ -123,6 +126,7 @@ impl TrackMon {
             active: false,
             fainted: false,
             pixels: 48,
+            hp_den: 48,
             status: Status::None,
             rest: false,
             slept: 0,
@@ -324,12 +328,15 @@ impl ProtocolTracker {
     }
 
     fn apply_hp_status(&mut self, side: usize, slot: usize, field: &str) {
-        let (cur, _max, status) = Self::parse_hp(field);
+        let (cur, max, status) = Self::parse_hp(field);
         let mon = &mut self.sides[side].mons[slot];
         if status == "fnt" {
             mon.pixels = 0;
         } else {
             mon.pixels = cur; // own-side exact values are unused (request wins)
+            if max > 0 {
+                mon.hp_den = max;
+            }
             let st = Status::from_str(status);
             if st != mon.status && !status.is_empty() {
                 mon.status = st;
@@ -1232,7 +1239,7 @@ impl ProtocolTracker {
                 p.status = Status::None;
             } else {
                 let maxhp = b.poke(id).maxhp;
-                let hp = impute_hp(tm.pixels, maxhp);
+                let hp = impute_hp(tm.pixels, tm.hp_den, maxhp);
                 b.poke_mut(id).hp = hp;
             }
             // item: mirror impute_mon's contract (Observer knowledge wins)
@@ -1384,6 +1391,19 @@ impl ProtocolTracker {
                 p.trapped = req.trapped;
                 p.maybe_trapped = false;
             }
+        }
+
+        // ---- pokemon_left: PS counts the picked, unfainted team. The
+        // fixture constructor counted the full 6-mon roster and the faints
+        // planted above never decremented it, so every terminal check
+        // (win / Self-KO clause) was unreachable in searched games —
+        // recount from the truncated party.
+        for s in 0..2 {
+            b.sides[s].pokemon_left = b.sides[s]
+                .party
+                .iter()
+                .filter(|&&slot| !b.sides[s].roster[slot as usize].fainted)
+                .count() as i32;
         }
 
         // ---- request bookkeeping + mid-turn queue
@@ -1676,15 +1696,18 @@ fn set_item_raw(b: &mut Battle, id: PokeId, item: Option<nc2000_engine::dex::Ite
 
 /// Impute an HP amount inside the announced 1/48 pixel bucket:
 /// px = floor(48·hp/maxhp), floored to 1 while alive.
-fn impute_hp(pixels: i32, maxhp: i32) -> i32 {
-    if pixels <= 0 {
+/// Midpoint of the true-HP range consistent with an announced `cur/den`
+/// HP string (den = 100 under HP Percentage Mod, 48 on pixel bars).
+fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
+    let den = if den > 0 { den } else { 48 };
+    if cur <= 0 {
         return 0;
     }
-    if pixels >= 48 {
+    if cur >= den {
         return maxhp;
     }
-    let lo = if pixels == 1 { 1 } else { (pixels * maxhp + 47) / 48 };
-    let hi = (((pixels + 1) * maxhp + 47) / 48 - 1).min(maxhp - 1);
+    let lo = if cur == 1 { 1 } else { (cur * maxhp + den - 1) / den };
+    let hi = (((cur + 1) * maxhp + den - 1) / den - 1).min(maxhp - 1);
     let hi = hi.max(lo);
     ((lo + hi + 1) / 2).clamp(1, maxhp)
 }
@@ -1786,6 +1809,10 @@ impl ProtocolAgent {
 
     pub fn belief(&self) -> Option<&Belief> {
         self.belief.as_ref()
+    }
+
+    pub fn search(&self) -> Option<&BlindSearch> {
+        self.search.as_ref()
     }
 
     pub fn observer(&self) -> Option<&Observer> {

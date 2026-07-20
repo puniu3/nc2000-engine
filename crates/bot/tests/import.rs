@@ -242,6 +242,15 @@ fn compare(
         stats.miss(ctx, format!("weather {w:?} vs {tw:?}"));
     }
     for s in 0..2 {
+        // pokemon_left (terminal detection depends on it: win + Self-KO)
+        if let Some(left) = snap["sides"][s]["pokemonLeft"].as_i64() {
+            if b.sides[s].pokemon_left as i64 != left {
+                stats.miss(
+                    ctx,
+                    format!("side {s} pokemonLeft {} vs {left}", b.sides[s].pokemon_left),
+                );
+            }
+        }
         // side conditions (key sets)
         let mut mine: Vec<&str> =
             b.sides[s].side_conditions.iter().map(|(c, _)| dex.conds_key(*c)).collect();
