@@ -111,10 +111,21 @@ fn main() {
                 Some(b) => b,
                 None => continue,
             };
-            let (att, def) = match (b.active_id(0), b.active_id(1)) {
-                (Some(a), Some(d)) => (a, d),
-                _ => continue,
-            };
+            // Every chosen mon on each side as attacker, not just the lead —
+            // the lead-only version missed `return` entirely (Snorlax is rarely
+            // the lead, and Return is the format's most common physical attack).
+            let atts: Vec<PokeId> = b.sides[0]
+                .party
+                .iter()
+                .map(|&s| PokeId { side: 0, slot: s })
+                .collect();
+            let defs: Vec<PokeId> = b.sides[1]
+                .party
+                .iter()
+                .map(|&s| PokeId { side: 1, slot: s })
+                .collect();
+            for att in atts {
+            for &def in defs.iter() {
             let slots: Vec<_> = b.poke(att).move_slots.iter().map(|m| m.id).collect();
             for mv in slots {
                 let ms = dex.move_static(mv);
@@ -158,6 +169,8 @@ fn main() {
                         dex.species.get(b.poke(def).species).name.clone()
                     );
                 }
+            }
+            }
             }
         }
     }
