@@ -1,0 +1,2541 @@
+{
+  "lineage": "rand-2",
+  "profile": "full",
+  "cfg": {
+    "iters": 40,
+    "lambda": 6,
+    "eval_games": 8,
+    "agent_iters": 300,
+    "max_turns": 500,
+    "gauntlet": [
+      0,
+      7
+    ],
+    "seed": 102
+  },
+  "seed_team": [
+    {
+      "name": "Ampharos",
+      "species": "Ampharos",
+      "item": "Miracle Berry",
+      "ability": "No Ability",
+      "moves": [
+        "Thunderbolt",
+        "Dynamic Punch",
+        "Fire Punch",
+        "Thunder Wave"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "M",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 55,
+      "happiness": 255
+    },
+    {
+      "name": "Forretress",
+      "species": "Forretress",
+      "item": "Polkadot Bow",
+      "ability": "No Ability",
+      "moves": [
+        "Explosion",
+        "Curse",
+        "Spikes",
+        "Rest"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "M",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 55,
+      "happiness": 255
+    },
+    {
+      "name": "Granbull",
+      "species": "Granbull",
+      "item": "Leftovers",
+      "ability": "No Ability",
+      "moves": [
+        "Hyper Beam",
+        "Thunder",
+        "Dynamic Punch",
+        "Rest"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "M",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 50,
+      "happiness": 255
+    },
+    {
+      "name": "Horsea",
+      "species": "Horsea",
+      "item": "Mystery Berry",
+      "ability": "No Ability",
+      "moves": [
+        "Hydro Pump",
+        "Blizzard",
+        "Double-Edge",
+        "Rest"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "M",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 50,
+      "happiness": 255
+    },
+    {
+      "name": "Raikou",
+      "species": "Raikou",
+      "item": "Mint Berry",
+      "ability": "No Ability",
+      "moves": [
+        "Thunderbolt",
+        "Hidden Power Ice",
+        "Rest",
+        "Sleep Talk"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "N",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 26,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 50,
+      "happiness": 255
+    },
+    {
+      "name": "Squirtle",
+      "species": "Squirtle",
+      "item": "Soft Sand",
+      "ability": "No Ability",
+      "moves": [
+        "Hydro Pump",
+        "Blizzard",
+        "Double-Edge",
+        "Rest"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "M",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 50,
+      "happiness": 255
+    }
+  ],
+  "seed_fitness": 0.21875,
+  "parent": [
+    {
+      "name": "Snorlax",
+      "species": "Snorlax",
+      "item": "Miracle Berry",
+      "ability": "No Ability",
+      "moves": [
+        "Body Slam",
+        "Earthquake",
+        "Flamethrower",
+        "Self-Destruct"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "M",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 50,
+      "happiness": 255
+    },
+    {
+      "name": "Misdreavus",
+      "species": "Misdreavus",
+      "item": "Gold Berry",
+      "ability": "No Ability",
+      "moves": [
+        "Zap Cannon",
+        "Swift",
+        "Perish Song",
+        "Destiny Bond"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 0,
+        "spd": 0,
+        "spe": 255
+      },
+      "gender": "M",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 50,
+      "happiness": 255
+    },
+    {
+      "name": "Granbull",
+      "species": "Granbull",
+      "item": "Leftovers",
+      "ability": "No Ability",
+      "moves": [
+        "Crunch",
+        "Thunder",
+        "Dynamic Punch",
+        "Rest"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "M",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 54,
+      "happiness": 255
+    },
+    {
+      "name": "Nidoqueen",
+      "species": "Nidoqueen",
+      "item": "Black Belt",
+      "ability": "No Ability",
+      "moves": [
+        "Earthquake",
+        "Hyper Beam",
+        "Fissure",
+        "Curse"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "F",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 53,
+      "happiness": 255
+    },
+    {
+      "name": "Raikou",
+      "species": "Raikou",
+      "item": "Magnet",
+      "ability": "No Ability",
+      "moves": [
+        "Thunderbolt",
+        "Hidden Power Ice",
+        "Rest",
+        "Sleep Talk"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "N",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 26,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 50,
+      "happiness": 255
+    },
+    {
+      "name": "Starmie",
+      "species": "Starmie",
+      "item": "Black Glasses",
+      "ability": "No Ability",
+      "moves": [
+        "Surf",
+        "Psychic",
+        "Confuse Ray",
+        "Substitute"
+      ],
+      "nature": "Serious",
+      "evs": {
+        "hp": 255,
+        "atk": 255,
+        "def": 255,
+        "spa": 255,
+        "spd": 255,
+        "spe": 255
+      },
+      "gender": "N",
+      "ivs": {
+        "hp": 31,
+        "atk": 31,
+        "def": 6,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "level": 55,
+      "happiness": 255
+    }
+  ],
+  "parent_fitness": 0.6875,
+  "iters_done": 40,
+  "rng": 10364354714832023578,
+  "history": [
+    {
+      "iter": 0,
+      "kind": "seed",
+      "fitness": 0.21875
+    },
+    {
+      "iter": 1,
+      "kind": "parent",
+      "fitness": 0.265625
+    },
+    {
+      "iter": 1,
+      "child": 0,
+      "op": "level-tweak",
+      "slot": 0,
+      "fitness": 0.203125,
+      "accepted": false
+    },
+    {
+      "iter": 1,
+      "child": 1,
+      "op": "move-swap",
+      "slot": 0,
+      "fitness": 0.328125,
+      "accepted": true
+    },
+    {
+      "iter": 1,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 4,
+      "fitness": 0.234375,
+      "accepted": false
+    },
+    {
+      "iter": 1,
+      "child": 3,
+      "op": "dv-tweak",
+      "slot": 3,
+      "fitness": 0.25,
+      "accepted": false
+    },
+    {
+      "iter": 1,
+      "child": 4,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.21875,
+      "accepted": false
+    },
+    {
+      "iter": 1,
+      "child": 5,
+      "op": "ev-tweak",
+      "slot": 4,
+      "fitness": 0.234375,
+      "accepted": false
+    },
+    {
+      "iter": 2,
+      "kind": "parent",
+      "fitness": 0.328125
+    },
+    {
+      "iter": 2,
+      "child": 0,
+      "op": "mon-replace",
+      "slot": 5,
+      "fitness": 0.4375,
+      "accepted": true
+    },
+    {
+      "iter": 2,
+      "child": 1,
+      "op": "level-tweak",
+      "slot": 5,
+      "fitness": 0.21875,
+      "accepted": false
+    },
+    {
+      "iter": 2,
+      "child": 2,
+      "op": "level-tweak",
+      "slot": 2,
+      "fitness": 0.328125,
+      "accepted": false
+    },
+    {
+      "iter": 2,
+      "child": 3,
+      "op": "level-tweak",
+      "slot": 0,
+      "fitness": 0.15625,
+      "accepted": false
+    },
+    {
+      "iter": 2,
+      "child": 4,
+      "op": "level-tweak",
+      "slot": 4,
+      "fitness": 0.15625,
+      "accepted": false
+    },
+    {
+      "iter": 2,
+      "child": 5,
+      "op": "mon-replace",
+      "slot": 2,
+      "fitness": 0.359375,
+      "accepted": false
+    },
+    {
+      "iter": 3,
+      "kind": "parent",
+      "fitness": 0.5625
+    },
+    {
+      "iter": 3,
+      "child": 0,
+      "op": "species-swap",
+      "slot": 5,
+      "fitness": 0.234375,
+      "accepted": false
+    },
+    {
+      "iter": 3,
+      "child": 1,
+      "op": "species-swap",
+      "slot": 5,
+      "fitness": 0.34375,
+      "accepted": false
+    },
+    {
+      "iter": 3,
+      "child": 2,
+      "op": "species-swap",
+      "slot": 1,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 3,
+      "child": 3,
+      "op": "move-swap",
+      "slot": 4,
+      "fitness": 0.390625,
+      "accepted": false
+    },
+    {
+      "iter": 3,
+      "child": 4,
+      "op": "mon-replace",
+      "slot": 1,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 3,
+      "child": 5,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.546875,
+      "accepted": false
+    },
+    {
+      "iter": 4,
+      "kind": "parent",
+      "fitness": 0.453125
+    },
+    {
+      "iter": 4,
+      "child": 0,
+      "op": "ev-tweak",
+      "slot": 1,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 4,
+      "child": 1,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 4,
+      "child": 2,
+      "op": "species-swap",
+      "slot": 4,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 4,
+      "child": 3,
+      "op": "ev-tweak",
+      "slot": 3,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 4,
+      "child": 4,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.609375,
+      "accepted": true
+    },
+    {
+      "iter": 4,
+      "child": 5,
+      "op": "mon-replace",
+      "slot": 5,
+      "fitness": 0.296875,
+      "accepted": false
+    },
+    {
+      "iter": 5,
+      "kind": "parent",
+      "fitness": 0.359375
+    },
+    {
+      "iter": 5,
+      "child": 0,
+      "op": "dv-tweak",
+      "slot": 0,
+      "fitness": 0.359375,
+      "accepted": false
+    },
+    {
+      "iter": 5,
+      "child": 1,
+      "op": "item-swap",
+      "slot": 1,
+      "fitness": 0.484375,
+      "accepted": true
+    },
+    {
+      "iter": 5,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 2,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 5,
+      "child": 3,
+      "op": "move-swap",
+      "slot": 0,
+      "fitness": 0.390625,
+      "accepted": false
+    },
+    {
+      "iter": 5,
+      "child": 4,
+      "op": "ev-tweak",
+      "slot": 2,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 5,
+      "child": 5,
+      "op": "species-swap",
+      "slot": 4,
+      "fitness": 0.21875,
+      "accepted": false
+    },
+    {
+      "iter": 6,
+      "kind": "parent",
+      "fitness": 0.40625
+    },
+    {
+      "iter": 6,
+      "child": 0,
+      "op": "item-swap",
+      "slot": 4,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 6,
+      "child": 1,
+      "op": "item-swap",
+      "slot": 4,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 6,
+      "child": 2,
+      "op": "mon-replace",
+      "slot": 0,
+      "fitness": 0.515625,
+      "accepted": true
+    },
+    {
+      "iter": 6,
+      "child": 3,
+      "op": "move-swap",
+      "slot": 4,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 6,
+      "child": 4,
+      "op": "level-tweak",
+      "slot": 1,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 6,
+      "child": 5,
+      "op": "ev-tweak",
+      "slot": 4,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 7,
+      "kind": "parent",
+      "fitness": 0.53125
+    },
+    {
+      "iter": 7,
+      "child": 0,
+      "op": "move-swap",
+      "slot": 0,
+      "fitness": 0.375,
+      "accepted": false
+    },
+    {
+      "iter": 7,
+      "child": 1,
+      "op": "dv-tweak",
+      "slot": 1,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 7,
+      "child": 2,
+      "op": "species-swap",
+      "slot": 1,
+      "fitness": 0.34375,
+      "accepted": false
+    },
+    {
+      "iter": 7,
+      "child": 3,
+      "op": "dv-tweak",
+      "slot": 1,
+      "fitness": 0.59375,
+      "accepted": true
+    },
+    {
+      "iter": 7,
+      "child": 4,
+      "op": "move-swap",
+      "slot": 2,
+      "fitness": 0.390625,
+      "accepted": false
+    },
+    {
+      "iter": 7,
+      "child": 5,
+      "op": "level-tweak",
+      "slot": 4,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 8,
+      "kind": "parent",
+      "fitness": 0.53125
+    },
+    {
+      "iter": 8,
+      "child": 0,
+      "op": "item-swap",
+      "slot": 3,
+      "fitness": 0.5625,
+      "accepted": true
+    },
+    {
+      "iter": 8,
+      "child": 1,
+      "op": "species-swap",
+      "slot": 4,
+      "fitness": 0.296875,
+      "accepted": false
+    },
+    {
+      "iter": 8,
+      "child": 2,
+      "op": "ev-tweak",
+      "slot": 3,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 8,
+      "child": 3,
+      "op": "level-tweak",
+      "slot": 2,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 8,
+      "child": 4,
+      "op": "species-swap",
+      "slot": 2,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 8,
+      "child": 5,
+      "op": "level-tweak",
+      "slot": 5,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 9,
+      "kind": "parent",
+      "fitness": 0.4375
+    },
+    {
+      "iter": 9,
+      "child": 0,
+      "op": "item-swap",
+      "slot": 2,
+      "fitness": 0.5078125,
+      "accepted": false
+    },
+    {
+      "iter": 9,
+      "child": 1,
+      "op": "dv-tweak",
+      "slot": 2,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 9,
+      "child": 2,
+      "op": "move-swap",
+      "slot": 2,
+      "fitness": 0.546875,
+      "accepted": true
+    },
+    {
+      "iter": 9,
+      "child": 3,
+      "op": "dv-tweak",
+      "slot": 5,
+      "fitness": 0.375,
+      "accepted": false
+    },
+    {
+      "iter": 9,
+      "child": 4,
+      "op": "species-swap",
+      "slot": 5,
+      "fitness": 0.15625,
+      "accepted": false
+    },
+    {
+      "iter": 9,
+      "child": 5,
+      "op": "ev-tweak",
+      "slot": 3,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 10,
+      "kind": "parent",
+      "fitness": 0.4375
+    },
+    {
+      "iter": 10,
+      "child": 0,
+      "op": "level-tweak",
+      "slot": 2,
+      "fitness": 0.5,
+      "accepted": true
+    },
+    {
+      "iter": 10,
+      "child": 1,
+      "op": "level-tweak",
+      "slot": 0,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 10,
+      "child": 2,
+      "op": "move-swap",
+      "slot": 1,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 10,
+      "child": 3,
+      "op": "ev-tweak",
+      "slot": 0,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 10,
+      "child": 4,
+      "op": "ev-tweak",
+      "slot": 3,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 10,
+      "child": 5,
+      "op": "species-swap",
+      "slot": 0,
+      "fitness": 0.359375,
+      "accepted": false
+    },
+    {
+      "iter": 11,
+      "kind": "parent",
+      "fitness": 0.453125
+    },
+    {
+      "iter": 11,
+      "child": 0,
+      "op": "species-swap",
+      "slot": 1,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 11,
+      "child": 1,
+      "op": "level-tweak",
+      "slot": 1,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 11,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 1,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 11,
+      "child": 3,
+      "op": "mon-replace",
+      "slot": 2,
+      "fitness": 0.546875,
+      "accepted": false
+    },
+    {
+      "iter": 11,
+      "child": 4,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 11,
+      "child": 5,
+      "op": "move-swap",
+      "slot": 2,
+      "fitness": 0.59375,
+      "accepted": true
+    },
+    {
+      "iter": 12,
+      "kind": "parent",
+      "fitness": 0.421875
+    },
+    {
+      "iter": 12,
+      "child": 0,
+      "op": "mon-replace",
+      "slot": 5,
+      "fitness": 0.328125,
+      "accepted": false
+    },
+    {
+      "iter": 12,
+      "child": 1,
+      "op": "level-tweak",
+      "slot": 0,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 12,
+      "child": 2,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 12,
+      "child": 3,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 12,
+      "child": 4,
+      "op": "item-swap",
+      "slot": 5,
+      "fitness": 0.515625,
+      "accepted": true
+    },
+    {
+      "iter": 12,
+      "child": 5,
+      "op": "level-tweak",
+      "slot": 0,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 13,
+      "kind": "parent",
+      "fitness": 0.4375
+    },
+    {
+      "iter": 13,
+      "child": 0,
+      "op": "item-swap",
+      "slot": 5,
+      "fitness": 0.59375,
+      "accepted": true
+    },
+    {
+      "iter": 13,
+      "child": 1,
+      "op": "species-swap",
+      "slot": 5,
+      "fitness": 0.265625,
+      "accepted": false
+    },
+    {
+      "iter": 13,
+      "child": 2,
+      "op": "mon-replace",
+      "slot": 0,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 13,
+      "child": 3,
+      "op": "level-tweak",
+      "slot": 0,
+      "fitness": 0.390625,
+      "accepted": false
+    },
+    {
+      "iter": 13,
+      "child": 4,
+      "op": "species-swap",
+      "slot": 2,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 13,
+      "child": 5,
+      "op": "item-swap",
+      "slot": 4,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 14,
+      "kind": "parent",
+      "fitness": 0.5625
+    },
+    {
+      "iter": 14,
+      "child": 0,
+      "op": "dv-tweak",
+      "slot": 4,
+      "fitness": 0.5625,
+      "accepted": false
+    },
+    {
+      "iter": 14,
+      "child": 1,
+      "op": "item-swap",
+      "slot": 5,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 14,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 4,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 14,
+      "child": 3,
+      "op": "species-swap",
+      "slot": 0,
+      "fitness": 0.390625,
+      "accepted": false
+    },
+    {
+      "iter": 14,
+      "child": 4,
+      "op": "move-swap",
+      "slot": 5,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 14,
+      "child": 5,
+      "op": "mon-replace",
+      "slot": 0,
+      "fitness": 0.359375,
+      "accepted": false
+    },
+    {
+      "iter": 15,
+      "kind": "parent",
+      "fitness": 0.46875
+    },
+    {
+      "iter": 15,
+      "child": 0,
+      "op": "level-tweak",
+      "slot": 2,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 15,
+      "child": 1,
+      "op": "species-swap",
+      "slot": 3,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 15,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 5,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 15,
+      "child": 3,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 15,
+      "child": 4,
+      "op": "item-swap",
+      "slot": 4,
+      "fitness": 0.5,
+      "accepted": true
+    },
+    {
+      "iter": 15,
+      "child": 5,
+      "op": "level-tweak",
+      "slot": 5,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 16,
+      "kind": "parent",
+      "fitness": 0.453125
+    },
+    {
+      "iter": 16,
+      "child": 0,
+      "op": "species-swap",
+      "slot": 5,
+      "fitness": 0.28125,
+      "accepted": false
+    },
+    {
+      "iter": 16,
+      "child": 1,
+      "op": "move-swap",
+      "slot": 0,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 16,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 16,
+      "child": 3,
+      "op": "species-swap",
+      "slot": 3,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 16,
+      "child": 4,
+      "op": "ev-tweak",
+      "slot": 1,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 16,
+      "child": 5,
+      "op": "ev-tweak",
+      "slot": 1,
+      "fitness": 0.59375,
+      "accepted": true
+    },
+    {
+      "iter": 17,
+      "kind": "parent",
+      "fitness": 0.421875
+    },
+    {
+      "iter": 17,
+      "child": 0,
+      "op": "species-swap",
+      "slot": 1,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 17,
+      "child": 1,
+      "op": "level-tweak",
+      "slot": 1,
+      "fitness": 0.546875,
+      "accepted": false
+    },
+    {
+      "iter": 17,
+      "child": 2,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.5625,
+      "accepted": true
+    },
+    {
+      "iter": 17,
+      "child": 3,
+      "op": "move-swap",
+      "slot": 5,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 17,
+      "child": 4,
+      "op": "dv-tweak",
+      "slot": 1,
+      "fitness": 0.5625,
+      "accepted": false
+    },
+    {
+      "iter": 17,
+      "child": 5,
+      "op": "ev-tweak",
+      "slot": 4,
+      "fitness": 0.5625,
+      "accepted": false
+    },
+    {
+      "iter": 18,
+      "kind": "parent",
+      "fitness": 0.515625
+    },
+    {
+      "iter": 18,
+      "child": 0,
+      "op": "move-swap",
+      "slot": 1,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 18,
+      "child": 1,
+      "op": "move-swap",
+      "slot": 2,
+      "fitness": 0.546875,
+      "accepted": false
+    },
+    {
+      "iter": 18,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 1,
+      "fitness": 0.5625,
+      "accepted": true
+    },
+    {
+      "iter": 18,
+      "child": 3,
+      "op": "move-swap",
+      "slot": 5,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 18,
+      "child": 4,
+      "op": "move-swap",
+      "slot": 0,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 18,
+      "child": 5,
+      "op": "ev-tweak",
+      "slot": 2,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 19,
+      "kind": "parent",
+      "fitness": 0.609375
+    },
+    {
+      "iter": 19,
+      "child": 0,
+      "op": "move-swap",
+      "slot": 1,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 19,
+      "child": 1,
+      "op": "level-tweak",
+      "slot": 1,
+      "fitness": 0.359375,
+      "accepted": false
+    },
+    {
+      "iter": 19,
+      "child": 2,
+      "op": "dv-tweak",
+      "slot": 2,
+      "fitness": 0.609375,
+      "accepted": false
+    },
+    {
+      "iter": 19,
+      "child": 3,
+      "op": "level-tweak",
+      "slot": 1,
+      "fitness": 0.359375,
+      "accepted": false
+    },
+    {
+      "iter": 19,
+      "child": 4,
+      "op": "level-tweak",
+      "slot": 4,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 19,
+      "child": 5,
+      "op": "dv-tweak",
+      "slot": 0,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 20,
+      "kind": "parent",
+      "fitness": 0.515625
+    },
+    {
+      "iter": 20,
+      "child": 0,
+      "op": "move-swap",
+      "slot": 1,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 20,
+      "child": 1,
+      "op": "mon-replace",
+      "slot": 3,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 20,
+      "child": 2,
+      "op": "dv-tweak",
+      "slot": 2,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 20,
+      "child": 3,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.609375,
+      "accepted": true
+    },
+    {
+      "iter": 20,
+      "child": 4,
+      "op": "species-swap",
+      "slot": 5,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 20,
+      "child": 5,
+      "op": "level-tweak",
+      "slot": 3,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 21,
+      "kind": "parent",
+      "fitness": 0.515625
+    },
+    {
+      "iter": 21,
+      "child": 0,
+      "op": "species-swap",
+      "slot": 3,
+      "fitness": 0.625,
+      "accepted": true
+    },
+    {
+      "iter": 21,
+      "child": 1,
+      "op": "level-tweak",
+      "slot": 1,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 21,
+      "child": 2,
+      "op": "dv-tweak",
+      "slot": 1,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 21,
+      "child": 3,
+      "op": "ev-tweak",
+      "slot": 3,
+      "fitness": 0.578125,
+      "accepted": false
+    },
+    {
+      "iter": 21,
+      "child": 4,
+      "op": "ev-tweak",
+      "slot": 5,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 21,
+      "child": 5,
+      "op": "dv-tweak",
+      "slot": 0,
+      "fitness": 0.578125,
+      "accepted": false
+    },
+    {
+      "iter": 22,
+      "kind": "parent",
+      "fitness": 0.546875
+    },
+    {
+      "iter": 22,
+      "child": 0,
+      "op": "species-swap",
+      "slot": 3,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 22,
+      "child": 1,
+      "op": "dv-tweak",
+      "slot": 1,
+      "fitness": 0.65625,
+      "accepted": true
+    },
+    {
+      "iter": 22,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 2,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 22,
+      "child": 3,
+      "op": "species-swap",
+      "slot": 2,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 22,
+      "child": 4,
+      "op": "ev-tweak",
+      "slot": 5,
+      "fitness": 0.59375,
+      "accepted": false
+    },
+    {
+      "iter": 22,
+      "child": 5,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.34375,
+      "accepted": false
+    },
+    {
+      "iter": 23,
+      "kind": "parent",
+      "fitness": 0.546875
+    },
+    {
+      "iter": 23,
+      "child": 0,
+      "op": "ev-tweak",
+      "slot": 0,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 23,
+      "child": 1,
+      "op": "ev-tweak",
+      "slot": 5,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 23,
+      "child": 2,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.65625,
+      "accepted": true
+    },
+    {
+      "iter": 23,
+      "child": 3,
+      "op": "move-swap",
+      "slot": 0,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 23,
+      "child": 4,
+      "op": "item-swap",
+      "slot": 1,
+      "fitness": 0.375,
+      "accepted": false
+    },
+    {
+      "iter": 23,
+      "child": 5,
+      "op": "species-swap",
+      "slot": 5,
+      "fitness": 0.28125,
+      "accepted": false
+    },
+    {
+      "iter": 24,
+      "kind": "parent",
+      "fitness": 0.5625
+    },
+    {
+      "iter": 24,
+      "child": 0,
+      "op": "level-tweak",
+      "slot": 4,
+      "fitness": 0.546875,
+      "accepted": false
+    },
+    {
+      "iter": 24,
+      "child": 1,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.546875,
+      "accepted": false
+    },
+    {
+      "iter": 24,
+      "child": 2,
+      "op": "mon-replace",
+      "slot": 5,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 24,
+      "child": 3,
+      "op": "mon-replace",
+      "slot": 1,
+      "fitness": 0.578125,
+      "accepted": true
+    },
+    {
+      "iter": 24,
+      "child": 4,
+      "op": "mon-replace",
+      "slot": 1,
+      "fitness": 0.578125,
+      "accepted": false
+    },
+    {
+      "iter": 24,
+      "child": 5,
+      "op": "level-tweak",
+      "slot": 5,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 25,
+      "kind": "parent",
+      "fitness": 0.5625
+    },
+    {
+      "iter": 25,
+      "child": 0,
+      "op": "move-swap",
+      "slot": 4,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 25,
+      "child": 1,
+      "op": "dv-tweak",
+      "slot": 0,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 25,
+      "child": 2,
+      "op": "level-tweak",
+      "slot": 5,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 25,
+      "child": 3,
+      "op": "item-swap",
+      "slot": 5,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 25,
+      "child": 4,
+      "op": "level-tweak",
+      "slot": 4,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 25,
+      "child": 5,
+      "op": "dv-tweak",
+      "slot": 2,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 26,
+      "kind": "parent",
+      "fitness": 0.484375
+    },
+    {
+      "iter": 26,
+      "child": 0,
+      "op": "mon-replace",
+      "slot": 1,
+      "fitness": 0.59375,
+      "accepted": true
+    },
+    {
+      "iter": 26,
+      "child": 1,
+      "op": "species-swap",
+      "slot": 3,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 26,
+      "child": 2,
+      "op": "ev-tweak",
+      "slot": 4,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 26,
+      "child": 3,
+      "op": "mon-replace",
+      "slot": 3,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 26,
+      "child": 4,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.390625,
+      "accepted": false
+    },
+    {
+      "iter": 26,
+      "child": 5,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 27,
+      "kind": "parent",
+      "fitness": 0.484375
+    },
+    {
+      "iter": 27,
+      "child": 0,
+      "op": "dv-tweak",
+      "slot": 5,
+      "fitness": 0.578125,
+      "accepted": true
+    },
+    {
+      "iter": 27,
+      "child": 1,
+      "op": "species-swap",
+      "slot": 3,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 27,
+      "child": 2,
+      "op": "move-swap",
+      "slot": 4,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 27,
+      "child": 3,
+      "op": "ev-tweak",
+      "slot": 3,
+      "fitness": 0.578125,
+      "accepted": false
+    },
+    {
+      "iter": 27,
+      "child": 4,
+      "op": "dv-tweak",
+      "slot": 1,
+      "fitness": 0.546875,
+      "accepted": false
+    },
+    {
+      "iter": 27,
+      "child": 5,
+      "op": "mon-replace",
+      "slot": 1,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 28,
+      "kind": "parent",
+      "fitness": 0.5625
+    },
+    {
+      "iter": 28,
+      "child": 0,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 28,
+      "child": 1,
+      "op": "move-swap",
+      "slot": 4,
+      "fitness": 0.359375,
+      "accepted": false
+    },
+    {
+      "iter": 28,
+      "child": 2,
+      "op": "mon-replace",
+      "slot": 0,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 28,
+      "child": 3,
+      "op": "move-swap",
+      "slot": 4,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 28,
+      "child": 4,
+      "op": "ev-tweak",
+      "slot": 2,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 28,
+      "child": 5,
+      "op": "mon-replace",
+      "slot": 3,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 29,
+      "kind": "parent",
+      "fitness": 0.59375
+    },
+    {
+      "iter": 29,
+      "child": 0,
+      "op": "mon-replace",
+      "slot": 5,
+      "fitness": 0.25,
+      "accepted": false
+    },
+    {
+      "iter": 29,
+      "child": 1,
+      "op": "move-swap",
+      "slot": 0,
+      "fitness": 0.5078125,
+      "accepted": false
+    },
+    {
+      "iter": 29,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.546875,
+      "accepted": false
+    },
+    {
+      "iter": 29,
+      "child": 3,
+      "op": "level-tweak",
+      "slot": 2,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 29,
+      "child": 4,
+      "op": "dv-tweak",
+      "slot": 3,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 29,
+      "child": 5,
+      "op": "dv-tweak",
+      "slot": 2,
+      "fitness": 0.59375,
+      "accepted": false
+    },
+    {
+      "iter": 30,
+      "kind": "parent",
+      "fitness": 0.53125
+    },
+    {
+      "iter": 30,
+      "child": 0,
+      "op": "species-swap",
+      "slot": 0,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 30,
+      "child": 1,
+      "op": "dv-tweak",
+      "slot": 0,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 30,
+      "child": 2,
+      "op": "level-tweak",
+      "slot": 0,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 30,
+      "child": 3,
+      "op": "item-swap",
+      "slot": 3,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 30,
+      "child": 4,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 30,
+      "child": 5,
+      "op": "item-swap",
+      "slot": 3,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 31,
+      "kind": "parent",
+      "fitness": 0.65625
+    },
+    {
+      "iter": 31,
+      "child": 0,
+      "op": "move-swap",
+      "slot": 4,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 31,
+      "child": 1,
+      "op": "mon-replace",
+      "slot": 0,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 31,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 5,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 31,
+      "child": 3,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 31,
+      "child": 4,
+      "op": "species-swap",
+      "slot": 4,
+      "fitness": 0.390625,
+      "accepted": false
+    },
+    {
+      "iter": 31,
+      "child": 5,
+      "op": "mon-replace",
+      "slot": 1,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 32,
+      "kind": "parent",
+      "fitness": 0.59375
+    },
+    {
+      "iter": 32,
+      "child": 0,
+      "op": "item-swap",
+      "slot": 2,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 32,
+      "child": 1,
+      "op": "ev-tweak",
+      "slot": 5,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 32,
+      "child": 2,
+      "op": "dv-tweak",
+      "slot": 1,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 32,
+      "child": 3,
+      "op": "level-tweak",
+      "slot": 4,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 32,
+      "child": 4,
+      "op": "item-swap",
+      "slot": 2,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 32,
+      "child": 5,
+      "op": "species-swap",
+      "slot": 3,
+      "fitness": 0.59375,
+      "accepted": false
+    },
+    {
+      "iter": 33,
+      "kind": "parent",
+      "fitness": 0.53125
+    },
+    {
+      "iter": 33,
+      "child": 0,
+      "op": "ev-tweak",
+      "slot": 0,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 33,
+      "child": 1,
+      "op": "level-tweak",
+      "slot": 2,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 33,
+      "child": 2,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.453125,
+      "accepted": false
+    },
+    {
+      "iter": 33,
+      "child": 3,
+      "op": "dv-tweak",
+      "slot": 4,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 33,
+      "child": 4,
+      "op": "mon-replace",
+      "slot": 5,
+      "fitness": 0.28125,
+      "accepted": false
+    },
+    {
+      "iter": 33,
+      "child": 5,
+      "op": "species-swap",
+      "slot": 3,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 34,
+      "kind": "parent",
+      "fitness": 0.578125
+    },
+    {
+      "iter": 34,
+      "child": 0,
+      "op": "item-swap",
+      "slot": 3,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 34,
+      "child": 1,
+      "op": "mon-replace",
+      "slot": 5,
+      "fitness": 0.3125,
+      "accepted": false
+    },
+    {
+      "iter": 34,
+      "child": 2,
+      "op": "mon-replace",
+      "slot": 4,
+      "fitness": 0.40625,
+      "accepted": false
+    },
+    {
+      "iter": 34,
+      "child": 3,
+      "op": "ev-tweak",
+      "slot": 5,
+      "fitness": 0.578125,
+      "accepted": false
+    },
+    {
+      "iter": 34,
+      "child": 4,
+      "op": "ev-tweak",
+      "slot": 1,
+      "fitness": 0.484375,
+      "accepted": false
+    },
+    {
+      "iter": 34,
+      "child": 5,
+      "op": "item-swap",
+      "slot": 1,
+      "fitness": 0.5625,
+      "accepted": false
+    },
+    {
+      "iter": 35,
+      "kind": "parent",
+      "fitness": 0.578125
+    },
+    {
+      "iter": 35,
+      "child": 0,
+      "op": "mon-replace",
+      "slot": 5,
+      "fitness": 0.359375,
+      "accepted": false
+    },
+    {
+      "iter": 35,
+      "child": 1,
+      "op": "species-swap",
+      "slot": 3,
+      "fitness": 0.5625,
+      "accepted": false
+    },
+    {
+      "iter": 35,
+      "child": 2,
+      "op": "species-swap",
+      "slot": 3,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 35,
+      "child": 3,
+      "op": "item-swap",
+      "slot": 2,
+      "fitness": 0.328125,
+      "accepted": false
+    },
+    {
+      "iter": 35,
+      "child": 4,
+      "op": "ev-tweak",
+      "slot": 4,
+      "fitness": 0.546875,
+      "accepted": false
+    },
+    {
+      "iter": 35,
+      "child": 5,
+      "op": "species-swap",
+      "slot": 4,
+      "fitness": 0.34375,
+      "accepted": false
+    },
+    {
+      "iter": 36,
+      "kind": "parent",
+      "fitness": 0.53125
+    },
+    {
+      "iter": 36,
+      "child": 0,
+      "op": "level-tweak",
+      "slot": 5,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 36,
+      "child": 1,
+      "op": "ev-tweak",
+      "slot": 2,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 36,
+      "child": 2,
+      "op": "ev-tweak",
+      "slot": 1,
+      "fitness": 0.546875,
+      "accepted": true
+    },
+    {
+      "iter": 36,
+      "child": 3,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 36,
+      "child": 4,
+      "op": "ev-tweak",
+      "slot": 4,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 36,
+      "child": 5,
+      "op": "mon-replace",
+      "slot": 0,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 37,
+      "kind": "parent",
+      "fitness": 0.5
+    },
+    {
+      "iter": 37,
+      "child": 0,
+      "op": "dv-tweak",
+      "slot": 5,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 37,
+      "child": 1,
+      "op": "move-swap",
+      "slot": 2,
+      "fitness": 0.546875,
+      "accepted": false
+    },
+    {
+      "iter": 37,
+      "child": 2,
+      "op": "dv-tweak",
+      "slot": 5,
+      "fitness": 0.5625,
+      "accepted": false
+    },
+    {
+      "iter": 37,
+      "child": 3,
+      "op": "item-swap",
+      "slot": 1,
+      "fitness": 0.421875,
+      "accepted": false
+    },
+    {
+      "iter": 37,
+      "child": 4,
+      "op": "move-swap",
+      "slot": 0,
+      "fitness": 0.4375,
+      "accepted": false
+    },
+    {
+      "iter": 37,
+      "child": 5,
+      "op": "level-tweak",
+      "slot": 3,
+      "fitness": 0.609375,
+      "accepted": true
+    },
+    {
+      "iter": 38,
+      "kind": "parent",
+      "fitness": 0.59375
+    },
+    {
+      "iter": 38,
+      "child": 0,
+      "op": "move-swap",
+      "slot": 1,
+      "fitness": 0.65625,
+      "accepted": false
+    },
+    {
+      "iter": 38,
+      "child": 1,
+      "op": "move-swap",
+      "slot": 3,
+      "fitness": 0.6875,
+      "accepted": true
+    },
+    {
+      "iter": 38,
+      "child": 2,
+      "op": "mon-replace",
+      "slot": 0,
+      "fitness": 0.609375,
+      "accepted": false
+    },
+    {
+      "iter": 38,
+      "child": 3,
+      "op": "mon-replace",
+      "slot": 1,
+      "fitness": 0.609375,
+      "accepted": false
+    },
+    {
+      "iter": 38,
+      "child": 4,
+      "op": "species-swap",
+      "slot": 2,
+      "fitness": 0.609375,
+      "accepted": false
+    },
+    {
+      "iter": 38,
+      "child": 5,
+      "op": "species-swap",
+      "slot": 0,
+      "fitness": 0.375,
+      "accepted": false
+    },
+    {
+      "iter": 39,
+      "kind": "parent",
+      "fitness": 0.53125
+    },
+    {
+      "iter": 39,
+      "child": 0,
+      "op": "ev-tweak",
+      "slot": 5,
+      "fitness": 0.578125,
+      "accepted": false
+    },
+    {
+      "iter": 39,
+      "child": 1,
+      "op": "item-swap",
+      "slot": 4,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 39,
+      "child": 2,
+      "op": "mon-replace",
+      "slot": 3,
+      "fitness": 0.5,
+      "accepted": false
+    },
+    {
+      "iter": 39,
+      "child": 3,
+      "op": "item-swap",
+      "slot": 0,
+      "fitness": 0.578125,
+      "accepted": false
+    },
+    {
+      "iter": 39,
+      "child": 4,
+      "op": "species-swap",
+      "slot": 4,
+      "fitness": 0.390625,
+      "accepted": false
+    },
+    {
+      "iter": 39,
+      "child": 5,
+      "op": "move-swap",
+      "slot": 1,
+      "fitness": 0.671875,
+      "accepted": true
+    },
+    {
+      "iter": 40,
+      "kind": "parent",
+      "fitness": 0.59375
+    },
+    {
+      "iter": 40,
+      "child": 0,
+      "op": "item-swap",
+      "slot": 5,
+      "fitness": 0.6875,
+      "accepted": true
+    },
+    {
+      "iter": 40,
+      "child": 1,
+      "op": "move-swap",
+      "slot": 2,
+      "fitness": 0.53125,
+      "accepted": false
+    },
+    {
+      "iter": 40,
+      "child": 2,
+      "op": "species-swap",
+      "slot": 4,
+      "fitness": 0.515625,
+      "accepted": false
+    },
+    {
+      "iter": 40,
+      "child": 3,
+      "op": "level-tweak",
+      "slot": 5,
+      "fitness": 0.46875,
+      "accepted": false
+    },
+    {
+      "iter": 40,
+      "child": 4,
+      "op": "species-swap",
+      "slot": 5,
+      "fitness": 0.265625,
+      "accepted": false
+    },
+    {
+      "iter": 40,
+      "child": 5,
+      "op": "level-tweak",
+      "slot": 3,
+      "fitness": 0.625,
+      "accepted": false
+    }
+  ],
+  "verify": {
+    "games_per_opponent": 24,
+    "seed": 2119299467,
+    "seed_fitness": 0.25,
+    "best_fitness": 0.4791666666666667
+  }
+}
