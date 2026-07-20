@@ -7,8 +7,11 @@ const sim = require(path.join(PS_ROOT, 'dist/sim'));
 const prng = require(path.join(PS_ROOT, 'dist/sim/prng'));
 const rpai = require(path.join(PS_ROOT, 'dist/sim/tools/random-player-ai'));
 
-const FORMAT = 'gen2nc2000';
-const MOD = 'gen2stadium2';
+// The community-server ladder regulation (pokemon-showdown.zip, 2026-07-21):
+// no-OHKO NC2000, Stadium2 Strict. The old OHKO-allowing 'gen2nc2000' stays
+// registered in the local PS for pre-migration fixtures.
+const FORMAT = 'gen2nintendocup2000noohkostadium2strict';
+const MOD = 'gen2stadium2nc2000';
 
 // Own enumerable function-valued property names, recursing one level into
 // plain sub-objects (condition/secondary/self blocks).

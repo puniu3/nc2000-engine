@@ -225,3 +225,37 @@ Read once from PS; keep updated as the port progresses. All line refs are PS rep
 - **gdb SIGINT sampling works where perf doesn't** (WSL2, yama ptrace_scope
   blocks attach): run the binary UNDER gdb batch with a script of
   `bt/continue` pairs and a background `pkill -INT` pulse.
+
+## Format migration: gen2stadium2nc2000 (2026-07-21)
+
+The engine now targets `gen2nintendocup2000noohkostadium2strict` (the
+community server's no-OHKO NC2000, mod `gen2stadium2nc2000` = gen2stadium2 +
+three patches; server definitions vendored in `pokemon-showdown.zip` and
+installed into the local PS reference at `~/pokemon-showdown`). Deltas ported:
+
+- **Destiny Bond expiry**: the volatile is removed after the foe's own move
+  (`onFoeAfterMoveSelf`, only while the user lives) and on foe switch-out
+  (`onFoeSwitchOut`) — DB protects only until the foe next acts.
+- **Mint/Miracle Berry timing**: `onBeforeMove` (priority 11, before the slp
+  check at 10) + `onResidual` (order 5, subOrder 1) instead of `onUpdate`.
+- **Present glitch**: getDamage uses attack=10, defense=typeIndex(attacker's
+  LAST type), level=typeIndex(defender's LAST type); JS `|| 1` maps Normal
+  (index 0) and unlisted types to 1. Type indexes are the GSC internals
+  (Fire=20, Water=21, ..., Dark=27).
+- **Sleep Clause Mod** replaces Stadium Sleep Clause: only FOE-sourced sleep
+  engages the clause (Rest does not), message differs. PS-verified scripts in
+  `crates/conformance/tests/sleep_clause.rs`.
+- **HP Percentage Mod**: shared log HP is `ceil(100*hp/maxhp)` (100-but-not-
+  full knocked to 99), replacing the 48-pixel bar.
+- Rule lines / tier line / format-effect id all follow the server's replays.
+- The zip's gen2/gen2stadium2 scripts differ from our 79c04dcc reference only
+  in a recoil refactor (`applyRecoilDamage`, condition drops `move.recoil`);
+  at this data era struggle carries plain `recoil: [1,4]`, so behavior is
+  unchanged.
+- **Known uncertified edge**: Miracle Berry curing CONFUSION at BeforeMove —
+  the 79c04dcc core crashes on the stale confusion handler
+  (`volatiles["confusion"].time--` after the berry removed the volatile), so
+  no golden fixture exists; the server presumably runs a newer core with a
+  staleness guard. Our engine skips stale-status handlers; behavior for the
+  volatile case follows the engine's own semantics until the server core can
+  be identified.

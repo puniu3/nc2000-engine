@@ -1,9 +1,9 @@
 {
  "meta": {
-  "format": "gen2nc2000",
-  "mod": "gen2stadium2",
+  "format": "gen2nintendocup2000noohkostadium2strict",
+  "mod": "gen2stadium2nc2000",
   "generated": "2026-07-16",
-  "teams": 34,
+  "teams": 32,
   "rankCriteria": "tournamentPoints (HC7.5 placement) desc, then vrMean (Chio VR) desc, then hc75UsageMean desc",
   "sources": [
    {
@@ -20,8 +20,7 @@
    }
   ],
   "excluded": [
-   "Historia Cup 10/11 (2024-25) — played under the incompatible Historia Cup 2024 special ruleset (Kanto species capped at L52 etc.), not NC2000.",
-   "sample-27 — Gligar's Earthquake is event-only on PS → Event Moves Clause violation; no documented substitute, so the team is excluded."
+   "Historia Cup 10/11 (2024-25) — played under the incompatible Historia Cup 2024 special ruleset (Kanto species capped at L52 etc.), not NC2000."
   ]
  },
  "teams": [
@@ -613,211 +612,6 @@
    "rank": 3
   },
   {
-   "id": "hc75-4th-kg",
-   "tier": "T1",
-   "provenance": {
-    "source": "Historia Cup 7.5 (live NC2000 tournament, 27 players, 2022-05-03, hosted by Gold)",
-    "event": "Historia Cup 7.5",
-    "player": "KG",
-    "placement": "4th",
-    "placementPoints": 60,
-    "url": "https://gold.hatenadiary.jp/entry/2022/05/05/151859",
-    "notes": "Transcribed from the Smogon NC2000 Resource Hub tournament report; Hidden Power DV spreads use the canonical spreads from the hub sample teams."
-   },
-   "species": [
-    "Steelix",
-    "Heracross",
-    "Snorlax",
-    "Golem",
-    "Starmie",
-    "Jolteon"
-   ],
-   "levels": [
-    55,
-    55,
-    50,
-    50,
-    50,
-    50
-   ],
-   "pedigree": {
-    "tournamentPoints": 60,
-    "vrMean": 4.5,
-    "hc75UsageMean": 26.5
-   },
-   "export": "Steelix (M) @ Leftovers  \nAbility: No Ability  \nLevel: 55  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Earthquake  \n- Fissure  \n- Sleep Talk  \n- Rest  \n\nHeracross (M) @ Black Belt  \nAbility: No Ability  \nLevel: 55  \nHidden Power: Fighting  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \nIVs: 6 HP / 24 Atk / 24 Def  \n- Megahorn  \n- Hidden Power [Fighting]  \n- Endure  \n- Reversal  \n\nSnorlax (M) @ Quick Claw  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Body Slam  \n- Earthquake  \n- Fire Blast  \n- Self-Destruct  \n\nGolem (M) @ Gold Berry  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Earthquake  \n- Rock Slide  \n- Roar  \n- Explosion  \n\nStarmie @ Miracle Berry  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Surf  \n- Psychic  \n- Thunderbolt  \n- Thunder Wave  \n\nJolteon (M) @ PRZ Cure Berry  \nAbility: No Ability  \nLevel: 50  \nHidden Power: Ice  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \nIVs: 26 Def  \n- Thunderbolt  \n- Hidden Power [Ice]  \n- Thunder Wave  \n- Charm  \n\n",
-   "packed": "Steelix||Leftovers|NoAbility|Earthquake,Fissure,SleepTalk,Rest|Serious|255,255,255,255,255,255|M|||55|]Heracross||BlackBelt|NoAbility|Megahorn,HiddenPowerFighting,Endure,Reversal|Serious|255,255,255,255,255,255|M|6,24,24,,,||55|,Fighting,,,,]Snorlax||QuickClaw|NoAbility|BodySlam,Earthquake,FireBlast,SelfDestruct|Serious|255,255,255,255,255,255|M|||50|]Golem||GoldBerry|NoAbility|Earthquake,RockSlide,Roar,Explosion|Serious|255,255,255,255,255,255|M|||50|]Starmie||MiracleBerry|NoAbility|Surf,Psychic,Thunderbolt,ThunderWave|Serious|255,255,255,255,255,255|N|||50|]Jolteon||PRZCureBerry|NoAbility|Thunderbolt,HiddenPowerIce,ThunderWave,Charm|Serious|255,255,255,255,255,255|M|,,26,,,||50|,Ice,,,,",
-   "sets": [
-    {
-     "name": "Steelix",
-     "species": "Steelix",
-     "item": "Leftovers",
-     "ability": "No Ability",
-     "moves": [
-      "Earthquake",
-      "Fissure",
-      "Sleep Talk",
-      "Rest"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 55
-    },
-    {
-     "name": "Heracross",
-     "species": "Heracross",
-     "item": "Black Belt",
-     "ability": "No Ability",
-     "moves": [
-      "Megahorn",
-      "Hidden Power Fighting",
-      "Endure",
-      "Reversal"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 6,
-      "atk": 24,
-      "def": 24,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 55,
-     "happiness": 255,
-     "hpType": "Fighting",
-     "pokeball": "",
-     "gigantamax": false,
-     "dynamaxLevel": 10,
-     "teraType": ""
-    },
-    {
-     "name": "Snorlax",
-     "species": "Snorlax",
-     "item": "Quick Claw",
-     "ability": "No Ability",
-     "moves": [
-      "Body Slam",
-      "Earthquake",
-      "Fire Blast",
-      "Self-Destruct"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 50
-    },
-    {
-     "name": "Golem",
-     "species": "Golem",
-     "item": "Gold Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Earthquake",
-      "Rock Slide",
-      "Roar",
-      "Explosion"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 50
-    },
-    {
-     "name": "Starmie",
-     "species": "Starmie",
-     "item": "Miracle Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Surf",
-      "Psychic",
-      "Thunderbolt",
-      "Thunder Wave"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "N",
-     "level": 50
-    },
-    {
-     "name": "Jolteon",
-     "species": "Jolteon",
-     "item": "PRZ Cure Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Thunderbolt",
-      "Hidden Power Ice",
-      "Thunder Wave",
-      "Charm"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 26,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255,
-     "hpType": "Ice",
-     "pokeball": "",
-     "gigantamax": false,
-     "dynamaxLevel": 10,
-     "teraType": ""
-    }
-   ],
-   "rank": 4
-  },
-  {
    "id": "hc75-top8-tezan",
    "tier": "T1",
    "provenance": {
@@ -1006,203 +800,7 @@
      "level": 50
     }
    ],
-   "rank": 5
-  },
-  {
-   "id": "hc75-top8-tako",
-   "tier": "T1",
-   "provenance": {
-    "source": "Historia Cup 7.5 (live NC2000 tournament, 27 players, 2022-05-03, hosted by Gold)",
-    "event": "Historia Cup 7.5",
-    "player": "tako",
-    "placement": "top8",
-    "placementPoints": 50,
-    "url": "https://gold.hatenadiary.jp/entry/2022/05/05/151859",
-    "notes": "Transcribed from the Smogon NC2000 Resource Hub tournament report; Hidden Power DV spreads use the canonical spreads from the hub sample teams."
-   },
-   "species": [
-    "Typhlosion",
-    "Miltank",
-    "Exeggutor",
-    "Snorlax",
-    "Misdreavus",
-    "Marowak"
-   ],
-   "levels": [
-    55,
-    55,
-    50,
-    50,
-    50,
-    50
-   ],
-   "pedigree": {
-    "tournamentPoints": 50,
-    "vrMean": 5,
-    "hc75UsageMean": 40.1
-   },
-   "export": "Typhlosion (M) @ Miracle Berry  \nAbility: No Ability  \nLevel: 55  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Fire Blast  \n- Thunder Punch  \n- Dynamic Punch  \n- Sunny Day  \n\nMiltank (F) @ Bright Powder  \nAbility: No Ability  \nLevel: 55  \nHappiness: 0  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Frustration  \n- Double Team  \n- Curse  \n- Milk Drink  \n\nExeggutor (M) @ Quick Claw  \nAbility: No Ability  \nLevel: 50  \nHidden Power: Grass  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \nIVs: 6 HP / 28 Atk / 28 Def  \n- Hidden Power [Grass]  \n- Sunny Day  \n- Sleep Powder  \n- Explosion  \n\nSnorlax (M) @ Leftovers  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Body Slam  \n- Fire Blast  \n- Fissure  \n- Self-Destruct  \n\nMisdreavus (M) @ Focus Band  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Confuse Ray  \n- Toxic  \n- Pain Split  \n- Perish Song  \n\nMarowak (M) @ Thick Club  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Bonemerang  \n- Rock Slide  \n- Fire Blast  \n- Swords Dance  \n\n",
-   "packed": "Typhlosion||MiracleBerry|NoAbility|FireBlast,ThunderPunch,DynamicPunch,SunnyDay|Serious|255,255,255,255,255,255|M|||55|]Miltank||BrightPowder|NoAbility|Frustration,DoubleTeam,Curse,MilkDrink|Serious|255,255,255,255,255,255|F|||55|0]Exeggutor||QuickClaw|NoAbility|HiddenPowerGrass,SunnyDay,SleepPowder,Explosion|Serious|255,255,255,255,255,255|M|6,28,28,,,||50|,Grass,,,,]Snorlax||Leftovers|NoAbility|BodySlam,FireBlast,Fissure,SelfDestruct|Serious|255,255,255,255,255,255|M|||50|]Misdreavus||FocusBand|NoAbility|ConfuseRay,Toxic,PainSplit,PerishSong|Serious|255,255,255,255,255,255|M|||50|]Marowak||ThickClub|NoAbility|Bonemerang,RockSlide,FireBlast,SwordsDance|Serious|255,255,255,255,255,255|M|||50|",
-   "sets": [
-    {
-     "name": "Typhlosion",
-     "species": "Typhlosion",
-     "item": "Miracle Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Fire Blast",
-      "Thunder Punch",
-      "Dynamic Punch",
-      "Sunny Day"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 55
-    },
-    {
-     "name": "Miltank",
-     "species": "Miltank",
-     "item": "Bright Powder",
-     "ability": "No Ability",
-     "moves": [
-      "Frustration",
-      "Double Team",
-      "Curse",
-      "Milk Drink"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "F",
-     "level": 55,
-     "happiness": 0,
-     "hpType": "",
-     "pokeball": "",
-     "gigantamax": false,
-     "dynamaxLevel": 10
-    },
-    {
-     "name": "Exeggutor",
-     "species": "Exeggutor",
-     "item": "Quick Claw",
-     "ability": "No Ability",
-     "moves": [
-      "Hidden Power Grass",
-      "Sunny Day",
-      "Sleep Powder",
-      "Explosion"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 6,
-      "atk": 28,
-      "def": 28,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255,
-     "hpType": "Grass",
-     "pokeball": "",
-     "gigantamax": false,
-     "dynamaxLevel": 10,
-     "teraType": ""
-    },
-    {
-     "name": "Snorlax",
-     "species": "Snorlax",
-     "item": "Leftovers",
-     "ability": "No Ability",
-     "moves": [
-      "Body Slam",
-      "Fire Blast",
-      "Fissure",
-      "Self-Destruct"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 50
-    },
-    {
-     "name": "Misdreavus",
-     "species": "Misdreavus",
-     "item": "Focus Band",
-     "ability": "No Ability",
-     "moves": [
-      "Confuse Ray",
-      "Toxic",
-      "Pain Split",
-      "Perish Song"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 50
-    },
-    {
-     "name": "Marowak",
-     "species": "Marowak",
-     "item": "Thick Club",
-     "ability": "No Ability",
-     "moves": [
-      "Bonemerang",
-      "Rock Slide",
-      "Fire Blast",
-      "Swords Dance"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 50
-    }
-   ],
-   "rank": 6
+   "rank": 4
   },
   {
    "id": "hc75-top8-tsuru",
@@ -1435,198 +1033,7 @@
      "teraType": ""
     }
    ],
-   "rank": 7
-  },
-  {
-   "id": "hc75-top8-shinobu",
-   "tier": "T1",
-   "provenance": {
-    "source": "Historia Cup 7.5 (live NC2000 tournament, 27 players, 2022-05-03, hosted by Gold)",
-    "event": "Historia Cup 7.5",
-    "player": "shinobu",
-    "placement": "top8",
-    "placementPoints": 50,
-    "url": "https://gold.hatenadiary.jp/entry/2022/05/05/151859",
-    "notes": "Transcribed from the Smogon NC2000 Resource Hub tournament report; Hidden Power DV spreads use the canonical spreads from the hub sample teams."
-   },
-   "species": [
-    "Nidoking",
-    "Tauros",
-    "Misdreavus",
-    "Cloyster",
-    "Marowak",
-    "Blissey"
-   ],
-   "levels": [
-    55,
-    55,
-    50,
-    50,
-    50,
-    50
-   ],
-   "pedigree": {
-    "tournamentPoints": 50,
-    "vrMean": 4.33,
-    "hc75UsageMean": 21.6
-   },
-   "export": "Nidoking (M) @ Leftovers  \nAbility: No Ability  \nLevel: 55  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Earthquake  \n- Ice Beam  \n- Horn Drill  \n- Counter  \n\nTauros (M) @ Bright Powder  \nAbility: No Ability  \nLevel: 55  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Double-Edge  \n- Earthquake  \n- Horn Drill  \n- Substitute  \n\nMisdreavus (M) @ Miracle Berry  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Toxic  \n- Mean Look  \n- Perish Song  \n- Destiny Bond  \n\nCloyster (M) @ Gold Berry  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Surf  \n- Ice Beam  \n- Spikes  \n- Explosion  \n\nMarowak (M) @ Thick Club  \nAbility: No Ability  \nLevel: 50  \nHidden Power: Bug  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \nIVs: 26 Atk / 26 Def  \n- Earthquake  \n- Hidden Power [Bug]  \n- Fire Blast  \n- Swords Dance  \n\nBlissey (F) @ Quick Claw  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Present  \n- Ice Beam  \n- Sing  \n- Soft-Boiled  \n\n",
-   "packed": "Nidoking||Leftovers|NoAbility|Earthquake,IceBeam,HornDrill,Counter|Serious|255,255,255,255,255,255|M|||55|]Tauros||BrightPowder|NoAbility|DoubleEdge,Earthquake,HornDrill,Substitute|Serious|255,255,255,255,255,255|M|||55|]Misdreavus||MiracleBerry|NoAbility|Toxic,MeanLook,PerishSong,DestinyBond|Serious|255,255,255,255,255,255|M|||50|]Cloyster||GoldBerry|NoAbility|Surf,IceBeam,Spikes,Explosion|Serious|255,255,255,255,255,255|M|||50|]Marowak||ThickClub|NoAbility|Earthquake,HiddenPowerBug,FireBlast,SwordsDance|Serious|255,255,255,255,255,255|M|,26,26,,,||50|,Bug,,,,]Blissey||QuickClaw|NoAbility|Present,IceBeam,Sing,SoftBoiled|Serious|255,255,255,255,255,255|F|||50|",
-   "sets": [
-    {
-     "name": "Nidoking",
-     "species": "Nidoking",
-     "item": "Leftovers",
-     "ability": "No Ability",
-     "moves": [
-      "Earthquake",
-      "Ice Beam",
-      "Horn Drill",
-      "Counter"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 55
-    },
-    {
-     "name": "Tauros",
-     "species": "Tauros",
-     "item": "Bright Powder",
-     "ability": "No Ability",
-     "moves": [
-      "Double-Edge",
-      "Earthquake",
-      "Horn Drill",
-      "Substitute"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 55
-    },
-    {
-     "name": "Misdreavus",
-     "species": "Misdreavus",
-     "item": "Miracle Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Toxic",
-      "Mean Look",
-      "Perish Song",
-      "Destiny Bond"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 50
-    },
-    {
-     "name": "Cloyster",
-     "species": "Cloyster",
-     "item": "Gold Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Surf",
-      "Ice Beam",
-      "Spikes",
-      "Explosion"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "level": 50
-    },
-    {
-     "name": "Marowak",
-     "species": "Marowak",
-     "item": "Thick Club",
-     "ability": "No Ability",
-     "moves": [
-      "Earthquake",
-      "Hidden Power Bug",
-      "Fire Blast",
-      "Swords Dance"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 26,
-      "def": 26,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255,
-     "hpType": "Bug",
-     "pokeball": "",
-     "gigantamax": false,
-     "dynamaxLevel": 10,
-     "teraType": ""
-    },
-    {
-     "name": "Blissey",
-     "species": "Blissey",
-     "item": "Quick Claw",
-     "ability": "No Ability",
-     "moves": [
-      "Present",
-      "Ice Beam",
-      "Sing",
-      "Soft-Boiled"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "F",
-     "level": 50
-    }
-   ],
-   "rank": 8
+   "rank": 5
   },
   {
    "id": "sample-08",
@@ -1841,7 +1248,7 @@
      "teraType": ""
     }
    ],
-   "rank": 9
+   "rank": 6
   },
   {
    "id": "sample-15",
@@ -2043,7 +1450,7 @@
      "level": 55
     }
    ],
-   "rank": 10
+   "rank": 7
   },
   {
    "id": "sample-04",
@@ -2230,7 +1637,7 @@
      "teraType": ""
     }
    ],
-   "rank": 11
+   "rank": 8
   },
   {
    "id": "sample-14",
@@ -2450,7 +1857,7 @@
      "teraType": ""
     }
    ],
-   "rank": 12
+   "rank": 9
   },
   {
    "id": "sample-13",
@@ -2653,7 +2060,7 @@
      "teraType": ""
     }
    ],
-   "rank": 13
+   "rank": 10
   },
   {
    "id": "sample-03",
@@ -2854,7 +2261,7 @@
      "level": 55
     }
    ],
-   "rank": 14
+   "rank": 11
   },
   {
    "id": "sample-17",
@@ -3056,7 +2463,7 @@
      "level": 50
     }
    ],
-   "rank": 15
+   "rank": 12
   },
   {
    "id": "sample-10",
@@ -3229,7 +2636,7 @@
      "level": 55
     }
    ],
-   "rank": 16
+   "rank": 13
   },
   {
    "id": "sample-23",
@@ -3416,7 +2823,7 @@
      "level": 50
     }
    ],
-   "rank": 17
+   "rank": 14
   },
   {
    "id": "sample-07",
@@ -3617,7 +3024,7 @@
      "teraType": ""
     }
    ],
-   "rank": 18
+   "rank": 15
   },
   {
    "id": "sample-06",
@@ -3804,7 +3211,7 @@
      "level": 50
     }
    ],
-   "rank": 19
+   "rank": 16
   },
   {
    "id": "sample-12",
@@ -4001,7 +3408,7 @@
      "level": 55
     }
    ],
-   "rank": 20
+   "rank": 17
   },
   {
    "id": "sample-18",
@@ -4227,7 +3634,7 @@
      "teraType": ""
     }
    ],
-   "rank": 21
+   "rank": 18
   },
   {
    "id": "sample-20",
@@ -4414,7 +3821,7 @@
      "level": 51
     }
    ],
-   "rank": 22
+   "rank": 19
   },
   {
    "id": "sample-05",
@@ -4587,7 +3994,7 @@
      "level": 55
     }
    ],
-   "rank": 23
+   "rank": 20
   },
   {
    "id": "sample-01",
@@ -4774,7 +4181,7 @@
      "level": 50
     }
    ],
-   "rank": 24
+   "rank": 21
   },
   {
    "id": "sample-19",
@@ -4986,7 +4393,7 @@
      "level": 52
     }
    ],
-   "rank": 25
+   "rank": 22
   },
   {
    "id": "sample-26",
@@ -5159,7 +4566,7 @@
      "level": 50
     }
    ],
-   "rank": 26
+   "rank": 23
   },
   {
    "id": "sample-02",
@@ -5346,7 +4753,7 @@
      "teraType": ""
     }
    ],
-   "rank": 27
+   "rank": 24
   },
   {
    "id": "sample-11",
@@ -5552,7 +4959,7 @@
      "level": 55
     }
    ],
-   "rank": 28
+   "rank": 25
   },
   {
    "id": "sample-21",
@@ -5753,7 +5160,7 @@
      "teraType": ""
     }
    ],
-   "rank": 29
+   "rank": 26
   },
   {
    "id": "sample-25",
@@ -5941,7 +5348,7 @@
      "level": 50
     }
    ],
-   "rank": 30
+   "rank": 27
   },
   {
    "id": "sample-24",
@@ -6142,7 +5549,7 @@
      "teraType": ""
     }
    ],
-   "rank": 31
+   "rank": 28
   },
   {
    "id": "sample-09",
@@ -6344,7 +5751,7 @@
      "level": 50
     }
    ],
-   "rank": 32
+   "rank": 29
   },
   {
    "id": "sample-16",
@@ -6532,7 +5939,7 @@
      "level": 50
     }
    ],
-   "rank": 33
+   "rank": 30
   },
   {
    "id": "sample-22",
@@ -6720,7 +6127,195 @@
      "level": 55
     }
    ],
-   "rank": 34
+   "rank": 31
+  },
+  {
+   "id": "sample-27",
+   "tier": "T2",
+   "provenance": {
+    "source": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "authors": "Chio, Friend of Mr. Golem 120, Japanese Poké Cup community",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "notes": "Gligar Hidden Power Rock can be Wing Attack; on cartridge GSC, Blissey Thunder becomes Present."
+   },
+   "species": [
+    "Clefable",
+    "Gengar",
+    "Machamp",
+    "Umbreon",
+    "Gligar",
+    "Blissey"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ],
+   "pedigree": {
+    "tournamentPoints": 0,
+    "vrMean": 2.67,
+    "hc75UsageMean": 6.8
+   },
+   "export": "Clefable (M) @ Leftovers  \nAbility: No Ability  \nLevel: 55  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Return  \n- Belly Drum  \n- Encore  \n- Moonlight  \n\nGengar (M) @ Polkadot Bow  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Fire Punch  \n- Explosion  \n- Sunny Day  \n- Destiny Bond  \n\nMachamp (M) @ Scope Lens  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Cross Chop  \n- Body Slam  \n- Rest  \n- Sleep Talk  \n\nUmbreon (M) @ Mint Berry  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Pursuit  \n- Charm  \n- Toxic  \n- Rest  \n\nGligar (M) @ Miracle Berry  \nAbility: No Ability  \nLevel: 50  \nHidden Power: Rock  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \nIVs: 22 HP / 26 Atk / 24 Def  \n- Earthquake  \n- Hidden Power [Rock]  \n- Thief  \n- Rest  \n\nBlissey (F) @ Quick Claw  \nAbility: No Ability  \nLevel: 50  \nEVs: 255 HP / 255 Atk / 255 Def / 255 SpA / 255 SpD / 255 Spe  \nSerious Nature  \n- Thunder  \n- Ice Beam  \n- Heal Bell  \n- Soft-Boiled  \n\n",
+   "packed": "Clefable||Leftovers|NoAbility|Return,BellyDrum,Encore,Moonlight|Serious|255,255,255,255,255,255|M|||55|]Gengar||PolkadotBow|NoAbility|FirePunch,Explosion,SunnyDay,DestinyBond|Serious|255,255,255,255,255,255|M|||50|]Machamp||ScopeLens|NoAbility|CrossChop,BodySlam,Rest,SleepTalk|Serious|255,255,255,255,255,255|M|||50|]Umbreon||MintBerry|NoAbility|Pursuit,Charm,Toxic,Rest|Serious|255,255,255,255,255,255|M|||50|]Gligar||MiracleBerry|NoAbility|Earthquake,HiddenPowerRock,Thief,Rest|Serious|255,255,255,255,255,255|M|22,26,24,,,||50|,Rock,,,,]Blissey||QuickClaw|NoAbility|Thunder,IceBeam,HealBell,SoftBoiled|Serious|255,255,255,255,255,255|F|||50|",
+   "sets": [
+    {
+     "name": "Clefable",
+     "species": "Clefable",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Return",
+      "Belly Drum",
+      "Encore",
+      "Moonlight"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "level": 55
+    },
+    {
+     "name": "Gengar",
+     "species": "Gengar",
+     "item": "Polkadot Bow",
+     "ability": "No Ability",
+     "moves": [
+      "Fire Punch",
+      "Explosion",
+      "Sunny Day",
+      "Destiny Bond"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "level": 50
+    },
+    {
+     "name": "Machamp",
+     "species": "Machamp",
+     "item": "Scope Lens",
+     "ability": "No Ability",
+     "moves": [
+      "Cross Chop",
+      "Body Slam",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "level": 50
+    },
+    {
+     "name": "Umbreon",
+     "species": "Umbreon",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Pursuit",
+      "Charm",
+      "Toxic",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "level": 50
+    },
+    {
+     "name": "Gligar",
+     "species": "Gligar",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Hidden Power Rock",
+      "Thief",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 22,
+      "atk": 26,
+      "def": 24,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255,
+     "hpType": "Rock",
+     "pokeball": "",
+     "gigantamax": false,
+     "dynamaxLevel": 10,
+     "teraType": ""
+    },
+    {
+     "name": "Blissey",
+     "species": "Blissey",
+     "item": "Quick Claw",
+     "ability": "No Ability",
+     "moves": [
+      "Thunder",
+      "Ice Beam",
+      "Heal Bell",
+      "Soft-Boiled"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "level": 50
+    }
+   ],
+   "rank": 32
   }
  ]
 }

@@ -953,6 +953,7 @@ impl Dex {
         for (id, name, callbacks) in [
             ("maxtotallevel", "Max Total Level", vec![]),
             ("stadiumsleepclause", "Stadium Sleep Clause", vec!["onSetStatus".to_string()]),
+            ("sleepclausemod", "Sleep Clause Mod", vec!["onSetStatus".to_string()]),
             ("freezeclausemod", "Freeze Clause Mod", vec!["onSetStatus".to_string()]),
         ] {
             entries.insert(

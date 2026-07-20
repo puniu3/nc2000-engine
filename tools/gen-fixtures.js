@@ -24,6 +24,11 @@ const N = parseInt(args.n || '10', 10);
 const POOL = args.pool || 'full';
 const OUT = path.join(__dirname, '..', args.out || `fixtures/corpus-v1/${POOL}`);
 const MASTER_SEED = parseInt(args.seed || '1', 10);
+// --teams FILE: JSON array of 6-mon teams (fixture set shape). Both sides
+// sample from it instead of random generation — for directed fixtures that
+// exercise specific mechanics (Present glitch, Destiny Bond expiry, ...).
+const TEAMS = args.teams ? JSON.parse(fs.readFileSync(args.teams, 'utf8')) : null;
+const clone = x => JSON.parse(JSON.stringify(x));
 
 const dex = Dex.mod(MOD);
 
@@ -37,8 +42,10 @@ function legalMoves(speciesId) {
 	if (!lsData?.learnset) return [];
 	const ids = [];
 	for (const [moveId, sources] of Object.entries(lsData.learnset)) {
-		// Gen 2 sources only (no tradebacks, no 'S' event moves — Event Moves Clause).
-		if (!sources.some(s => s.startsWith('2') && !s.includes('S'))) continue;
+		// Gen 2 sources only (no tradebacks). Event moves ('S' sources) are
+		// legal in the no-OHKO Strict format (no Event Moves Clause); OHKO
+		// moves survive this filter but the validator resamples them out.
+		if (!sources.some(s => s.startsWith('2'))) continue;
 		const move = dex.moves.get(moveId);
 		if (!legal(move)) continue;
 		if (POOL === 'puredata' && !pureDataMove(move)) continue;
@@ -220,8 +227,8 @@ function replayAndExtract(inputLog) {
 		const hex = () => master.random(0x10000).toString(16).padStart(4, '0');
 		const battleSeed = `gen5,${hex()}${hex()}${hex()}${hex()}`;
 		const aiSeedBase = `${hex()}${hex()}${hex()}`;
-		const p1team = makeTeam(master);
-		const p2team = makeTeam(master);
+		const p1team = TEAMS ? clone(TEAMS[master.random(TEAMS.length)]) : makeTeam(master);
+		const p2team = TEAMS ? clone(TEAMS[master.random(TEAMS.length)]) : makeTeam(master);
 
 		const played = await playBattle(battleSeed, p1team, p2team, aiSeedBase);
 		if (!played.ended) { console.error(`battle ${i}: did not end, skipping`); continue; }

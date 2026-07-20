@@ -1,6 +1,10 @@
-//! M14a team validator + canonicalizer for gen2nc2000 — a data-driven mirror
-//! of what PS's TeamValidator enforces for this format (probed and verified
-//! against the real validator by `tools/validate-oracle.js`).
+//! M14a team validator + canonicalizer for the played regulation
+//! (`gen2nintendocup2000noohkostadium2strict` — no-OHKO NC2000, Stadium2
+//! Strict) — a data-driven mirror of what PS's TeamValidator enforces for
+//! this format (probed and verified against the real validator by
+//! `tools/validate-oracle.js`). The OHKO Clause and the Mewtwo-line banlist
+//! arrive through `data/learnsets-gen2.json` (exported under the format's
+//! lens: OHKO moves absent, banned species absent, event moves legal).
 //!
 //! Inputs: the same team JSON the `Battle` constructor takes (fixture
 //! `p1team` / meta-pool `sets` shape), plus `data/learnsets-gen2.json`
@@ -44,7 +48,7 @@ const MAX_LEVEL: i64 = 55;
 const DEFAULT_LEVEL: i64 = 55;
 const MAX_TOTAL_LEVEL: i64 = crate::battle::MAX_TOTAL_LEVEL as i64;
 const PICKED_TEAM_SIZE: usize = 3;
-const MIN_TEAM_SIZE: usize = 3;
+const MIN_TEAM_SIZE: usize = 6; // server format: Min Team Size = 6
 const MAX_TEAM_SIZE: usize = 6;
 const MAX_MOVE_COUNT: usize = 4;
 const MAX_NICKNAME_LEN: usize = 18; // UTF-16 units, PS's limit
@@ -949,7 +953,15 @@ mod tests {
         (Dex::from_json(&dex_text).unwrap(), Learnsets::from_json(&ls_text).unwrap())
     }
 
-    fn team(sets: Vec<Value>) -> String {
+    /// Pads to the format's mandatory 6 mons with legal L50 fillers.
+    fn team(mut sets: Vec<Value>) -> String {
+        let fillers = [marowak(), zapdos(), umbreon()];
+        for f in fillers {
+            if sets.len() >= MAX_TEAM_SIZE {
+                break;
+            }
+            sets.push(f);
+        }
         serde_json::to_string(&sets).unwrap()
     }
 
@@ -984,6 +996,42 @@ mod tests {
             "nature": "Serious",
             "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
             "gender": "N",
+            "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30},
+            "level": 50
+        })
+    }
+
+    fn marowak() -> Value {
+        json!({
+            "name": "Marowak", "species": "Marowak", "item": "",
+            "ability": "No Ability", "moves": ["Earthquake", "Rest"],
+            "nature": "Serious",
+            "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+            "gender": "M",
+            "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30},
+            "level": 50
+        })
+    }
+
+    fn zapdos() -> Value {
+        json!({
+            "name": "Zapdos", "species": "Zapdos", "item": "",
+            "ability": "No Ability", "moves": ["Thunderbolt", "Rest"],
+            "nature": "Serious",
+            "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+            "gender": "N",
+            "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30},
+            "level": 50
+        })
+    }
+
+    fn umbreon() -> Value {
+        json!({
+            "name": "Umbreon", "species": "Umbreon", "item": "",
+            "ability": "No Ability", "moves": ["Toxic", "Rest"],
+            "nature": "Serious",
+            "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+            "gender": "M",
             "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30},
             "level": 50
         })
@@ -1063,23 +1111,38 @@ mod tests {
     #[test]
     fn team_level_clauses() {
         let (dex, ls) = load();
-        // 52+52+52 = 156 > 155
-        let mut a = snorlax();
-        let mut b = cloyster();
-        let mut c = suicune();
-        a["level"] = json!(52);
-        b["level"] = json!(52);
-        c["level"] = json!(52);
-        let r = validate_team(&dex, &ls, &team(vec![a, b, c]));
+        let at = |mut s: Value, lv: i64| {
+            s["level"] = json!(lv);
+            s
+        };
+        // all six at 52: every triple sums 156 > 155
+        let r = validate_team(
+            &dex,
+            &ls,
+            &team(vec![
+                at(snorlax(), 52),
+                at(cloyster(), 52),
+                at(suicune(), 52),
+                at(marowak(), 52),
+                at(zapdos(), 52),
+                at(umbreon(), 52),
+            ]),
+        );
         assert!(codes(&r).iter().any(|(_, c)| c == "level-sum"), "{r}");
-        // 55 highest + two 50s = fine; 55 + 51 + 51 = 157 -> highest unusable
-        let mut a = snorlax();
-        let mut b = cloyster();
-        let mut c = suicune();
-        a["level"] = json!(55);
-        b["level"] = json!(51);
-        c["level"] = json!(51);
-        let r = validate_team(&dex, &ls, &team(vec![a, b, c]));
+        // one 55 among five 51s: 55 + any pair = 157 > 155 -> highest
+        // unusable, but 51x3 = 153 keeps the team pickable
+        let r = validate_team(
+            &dex,
+            &ls,
+            &team(vec![
+                at(snorlax(), 55),
+                at(cloyster(), 51),
+                at(suicune(), 51),
+                at(marowak(), 51),
+                at(zapdos(), 51),
+                at(umbreon(), 51),
+            ]),
+        );
         assert!(codes(&r).iter().any(|(_, c)| c == "level-sum-highest"), "{r}");
     }
 

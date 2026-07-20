@@ -383,7 +383,7 @@ impl Battle {
             EffectHandle::Cond(c) => dex.conds_key(c),
             EffectHandle::MoveEff(m) => dex.moves.key(m),
             EffectHandle::Item(i) => dex.items.key(i),
-            EffectHandle::Format => "gen2nc2000",
+            EffectHandle::Format => "gen2nintendocup2000noohkostadium2strict",
             EffectHandle::None => "",
         }
     }
@@ -481,7 +481,7 @@ impl Battle {
         battle.add(&["gametype", "singles"]);
 
         // Rules with runtime handlers become pseudo-weathers at construction.
-        for rule in ["maxtotallevel", "stadiumsleepclause", "freezeclausemod"] {
+        for rule in ["maxtotallevel", "sleepclausemod", "freezeclausemod"] {
             let cid = dex.conds_id(rule).expect("rule condition interned");
             let state = EffectState { id: EffId::Cond(cid), ..Default::default() };
             let state = battle.init_effect_state(state, true);
@@ -723,15 +723,17 @@ impl Battle {
             return ("0 fnt".into(), "0 fnt".into());
         }
         let secret = format!("{}/{}", p.hp, p.maxhp);
-        let pixels = {
-            let px = (48 * p.hp) / p.maxhp; // floor
-            if px == 0 {
-                1
+        // HP Percentage Mod (this format): shared HP is ceil(100*hp/maxhp),
+        // with a not-quite-full 100 knocked down to 99.
+        let percentage = {
+            let pct = (100 * p.hp + p.maxhp - 1) / p.maxhp;
+            if pct == 100 && p.hp < p.maxhp {
+                99
             } else {
-                px
+                pct
             }
         };
-        let mut shared = format!("{pixels}/48");
+        let mut shared = format!("{percentage}/100");
         let mut secret = secret;
         if p.status != Status::None {
             secret.push_str(&format!(" {}", p.status.as_str()));
@@ -744,15 +746,15 @@ impl Battle {
     fn start(&mut self, dex: &Dex) {
         self.started = true;
         self.add(&["gen", "2"]);
-        self.add(&["tier", "[Gen 2] NC 2000"]);
-        // rule onBegin log lines, in ruleset order
-        self.add(&["rule", "Stadium Sleep Clause: Limit one foe put to sleep"]);
-        self.add(&["rule", "Freeze Clause Mod: Limit one foe frozen"]);
+        self.add(&["tier", "[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict"]);
+        // rule onBegin log lines, in ruleset order (matches the community
+        // server's replay logs for this format verbatim)
         self.add(&["rule", "Species Clause: Limit one of each Pokémon"]);
         self.add(&["rule", "Item Clause: Limit 1 of each item"]);
-        self.add(&["rule", "Endless Battle Clause: Forcing endless battles is banned"]);
-        self.add(&["rule", "Event Moves Clause: Event-only moves are banned"]);
-        self.add(&["rule", "Beat Up Nicknames Mod: Beat Up will not reveal any party members"]);
+        self.add(&["rule", "Sleep Clause Mod: Limit one foe put to sleep"]);
+        self.add(&["rule", "Freeze Clause Mod: Limit one foe frozen"]);
+        self.add(&["rule", "OHKO Clause: OHKO moves are banned"]);
+        self.add(&["rule", "HP Percentage Mod: HP is shown in percentages"]);
         // runPickTeam → Team Preview onTeamPreview
         self.add(&["clearpoke"]);
         for id in self.get_all_pokemon() {

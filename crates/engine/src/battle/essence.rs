@@ -11,7 +11,7 @@ fn eff_id_str<'d>(dex: &'d Dex, id: EffId) -> &'d str {
         EffId::None => "",
         EffId::Cond(c) => dex.conds_key(c),
         EffId::Item(i) => dex.items.key(i),
-        EffId::Format => "gen2nc2000",
+        EffId::Format => "gen2nintendocup2000noohkostadium2strict",
     }
 }
 

@@ -106,6 +106,7 @@ const usage = JSON.parse(fs.readFileSync(path.join(RAW, 'usage-hc75.json'), 'utf
 
 const pool = [];
 let failures = 0;
+let excluded = 0;
 
 function addTeam(id, tier, provenance, body, label) {
 	let team;
@@ -118,9 +119,12 @@ function addTeam(id, tier, provenance, body, label) {
 	}
 	const errors = validator.validateTeam(team);
 	if (errors) {
-		console.error(`VALIDATE FAIL ${id}:`);
+		// Format-illegal source teams are EXCLUDED, not fatal: the pool
+		// targets the no-OHKO regulation, and e.g. HC7.5 (an OHKO-allowed
+		// tournament) legitimately contributes some unplayable teams.
+		console.error(`EXCLUDED (format-illegal) ${id}:`);
 		for (const e of errors) console.error(`  - ${e}`);
-		failures++;
+		excluded++;
 		return;
 	}
 	const species = team.map(s => dex.species.get(s.species).name);
@@ -159,10 +163,10 @@ for (const { name, body } of splitTeams(fs.readFileSync(path.join(RAW, 'hc75-top
 	}, body, name);
 }
 
-// Thread teams that are illegal under the shipped PS format (validator-verified).
-const SAMPLE_SKIP = {
-	27: "Gligar's Earthquake is event-only on PS → Event Moves Clause violation; no documented substitute, so the team is excluded.",
-};
+// Thread teams that are illegal under the target PS format (validator-verified).
+// (sample-27's old exclusion — Gligar's event-only Earthquake — lifted: the
+// no-OHKO Strict format has no Event Moves Clause.)
+const SAMPLE_SKIP = {};
 
 // T2: Smogon NC2000 Resource Hub sample teams (expert-curated)
 for (const { name, body } of splitTeams(fs.readFileSync(path.join(RAW, 'samples-27.txt'), 'utf8'))) {
@@ -180,9 +184,10 @@ for (const { name, body } of splitTeams(fs.readFileSync(path.join(RAW, 'samples-
 }
 
 if (failures) {
-	console.error(`\n${failures} team(s) failed — pool NOT written.`);
+	console.error(`\n${failures} team(s) failed (import errors) — pool NOT written.`);
 	process.exit(1);
 }
+if (excluded) console.log(`${excluded} team(s) excluded as format-illegal.`);
 
 // Rank: tournament pedigree first, then VR support, then tournament usage support.
 pool.sort((a, b) =>

@@ -48,17 +48,31 @@ for (const dir of ['puredata', 'full']) {
 	}
 }
 
-let aFail = 0, aFixFindings = 0;
+// Agreement, not blanket acceptance: pre-migration teams (OHKO carriers,
+// <6-mon rentals, pre-155-cap fixtures) are legitimately illegal under the
+// no-OHKO Strict format — PS and ours must then agree on the rejection.
+// The hard contract stays: we must never reject a PS-legal team.
+let aFail = 0, aFixFindings = 0, aBothReject = 0;
 for (const { id, team } of baseTeams) {
 	const ps = psVerdict(team);
 	const us = ourVerdict(team);
 	aFixFindings += us.findings.length;
-	if (ps !== null) { console.log(`A REJECT(PS) ${id}: ${ps.join(' | ')}`); aFail++; }
-	if (!us.ok || us.findings.length) { console.log(`A FINDINGS(ours) ${id}: ${JSON.stringify(us.findings)}`); if (!us.ok) aFail++; }
+	if (ps !== null && !us.ok) { aBothReject++; continue; }
+	if (ps === null && !us.ok) {
+		console.log(`A WE-REJECT-PS-LEGAL ${id}: ${JSON.stringify(us.findings)}`);
+		aFail++;
+	}
+	if (ps !== null && us.ok) {
+		console.log(`A WE-ACCEPT-PS-ILLEGAL ${id}: ${ps.join(' | ')}`);
+		aFail++;
+	}
+	if (ps === null && us.ok && us.findings.length) {
+		console.log(`A FINDINGS(ours) ${id}: ${JSON.stringify(us.findings)}`);
+	}
 }
 const poolCount = pool.teams.length;
 console.log(`\nPhase A: ${baseTeams.length} teams (${poolCount} pool + ${baseTeams.length - poolCount} fixture): ` +
-	`${aFail === 0 ? 'both validators accept all' : aFail + ' FAILURES'}; stray findings: ${aFixFindings}`);
+	`${aFail === 0 ? 'agreement on all' : aFail + ' DISAGREEMENTS'}; both-reject: ${aBothReject}; stray findings: ${aFixFindings}`);
 if (aFail) process.exit(1);
 
 // ---------------------------------------------------------------- phase B

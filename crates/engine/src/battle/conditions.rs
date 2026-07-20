@@ -550,6 +550,37 @@ fn dispatch_cond(
             }
             RV::Undef
         }
+        ("sleepclausemod", "onSetStatus") => {
+            // Unlike Stadium Sleep Clause, self-/ally-inflicted sleep (Rest)
+            // does not engage the clause: only foe-sourced sleep counts.
+            let t = tpoke.unwrap();
+            if let Some(src) = source {
+                if src.side == t.side {
+                    return RV::Undef;
+                }
+            }
+            if relay == RV::Str("slp".to_string()) {
+                let side = t.side as usize;
+                let foe_sourced_slp = b.sides[side]
+                    .party
+                    .iter()
+                    .map(|&slot| &b.sides[side].roster[slot as usize])
+                    .any(|p| {
+                        p.hp > 0
+                            && p.status == Status::Slp
+                            && p.status_state
+                                .source
+                                .map(|s| s.side != t.side)
+                                .unwrap_or(true)
+                    });
+                if foe_sourced_slp {
+                    b.add(&["-message", "Sleep Clause Mod activated."]);
+                    b.hint("Sleep Clause Mod prevents players from putting more than one of their opponent's Pok\u{e9}mon to sleep at a time", false);
+                    return RV::False;
+                }
+            }
+            RV::Undef
+        }
         ("freezeclausemod", "onSetStatus") => {
             let t = tpoke.unwrap();
             if let Some(src) = source {
@@ -790,6 +821,20 @@ fn dispatch_cond(
         ("destinybond", "onMoveAborted") => {
             let t = tpoke.unwrap();
             b.remove_volatile(dex, t, "destinybond");
+            RV::Undef
+        }
+        // gen2stadium2nc2000: Destiny Bond protects only until the foe next
+        // acts — expire after the foe's own move, and on foe switch-out.
+        ("destinybond", "onFoeAfterMoveSelf") => {
+            let StateLoc::Volatile(holder, _) = state else { return RV::Undef };
+            if b.poke(holder).hp > 0 {
+                b.remove_volatile(dex, holder, "destinybond");
+            }
+            RV::Undef
+        }
+        ("destinybond", "onFoeSwitchOut") => {
+            let StateLoc::Volatile(holder, _) = state else { return RV::Undef };
+            b.remove_volatile(dex, holder, "destinybond");
             RV::Undef
         }
         // ------------------------------------------------------ perishsong

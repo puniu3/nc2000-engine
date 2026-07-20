@@ -10,7 +10,7 @@
 //!
 //! - own side EXACT: display order, hp/maxhp, status, per-move PP, item,
 //!   boosts, faint flags;
-//! - opponent: status/boosts exact, HP within the announced 1/48 bucket,
+//! - opponent: status/boosts exact, HP within the announced percentage bucket,
 //!   PP marks of revealed moves exact + no unseen usage (a missed reveal
 //!   fails here), faint flags;
 //! - side conditions + weather key sets, turn, request kind;
@@ -33,15 +33,17 @@ use nc2000_engine::dex::{toid, Dex};
 use nc2000_engine::state::{Battle, RequestState, Status, BOOST_NAMES};
 use serde_json::Value;
 
+/// The announced HP bucket under HP Percentage Mod: ceil(100*hp/maxhp),
+/// not-quite-full 100 knocked down to 99 (mirrors `Battle::get_health`).
 fn px_of(hp: i64, maxhp: i64) -> i64 {
     if hp <= 0 {
         return 0;
     }
-    let px = 48 * hp / maxhp;
-    if px == 0 {
-        1
+    let pct = (100 * hp + maxhp - 1) / maxhp;
+    if pct == 100 && hp < maxhp {
+        99
     } else {
-        px
+        pct
     }
 }
 
@@ -107,9 +109,15 @@ fn build_request(
     for p in sd["pokemon"].as_array().unwrap() {
         let ident = p["ident"].as_str().unwrap();
         let name = ident.split_once(": ").map(|(_, n)| n).unwrap_or("");
-        let species_id = p["species"].as_str().unwrap();
-        let species = dex.species.id(species_id).unwrap();
-        let disp = &dex.species.get(species).name;
+        // PS request details always show the BASE forme; a transformed mon's
+        // snapshot `species` is the copy target, so resolve the display from
+        // the ident (fixture nicknames are the species name) instead.
+        let disp = if p["transformed"].as_bool() == Some(true) {
+            name.to_string()
+        } else {
+            let species = dex.species.id(p["species"].as_str().unwrap()).unwrap();
+            dex.species.get(species).name.clone()
+        };
         let level = levels.get(name).copied().unwrap_or(100);
         let gender = genders.get(name).cloned().unwrap_or_default();
         let mut details = format!("{disp}, L{level}");
@@ -279,10 +287,18 @@ fn compare(
         }
         for tp in tmons {
             let species = tp["species"].as_str().unwrap();
+            // snapshot species reflects an active Transform — match the
+            // current species first, base species otherwise
             let Some(mon) = b.sides[s]
                 .roster
                 .iter()
-                .find(|p| dex.species.key(p.base_species) == species)
+                .find(|p| dex.species.key(p.species) == species)
+                .or_else(|| {
+                    b.sides[s]
+                        .roster
+                        .iter()
+                        .find(|p| dex.species.key(p.base_species) == species)
+                })
             else {
                 stats.miss(ctx, format!("side {s} missing {species}"));
                 continue;
@@ -335,7 +351,7 @@ fn compare(
                     }
                 }
             } else if !tfaint {
-                // opponent: HP within the announced 1/48 bucket
+                // opponent: HP within the announced percentage bucket
                 let tpx = px_of(thp, tmax);
                 let mpx = px_of(mon.hp as i64, mon.maxhp as i64);
                 if tpx != mpx {

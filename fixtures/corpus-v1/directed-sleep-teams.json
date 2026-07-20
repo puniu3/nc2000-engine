@@ -1,0 +1,10 @@
+[
+  [
+    {"name":"Parasect","species":"Parasect","item":"","ability":"No Ability","gender":"","moves":["spore","slash","gigadrain","rest"],"nature":"","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},"level":50,"happiness":255},
+    {"name":"Jynx","species":"Jynx","item":"Mint Berry","ability":"No Ability","gender":"","moves":["lovelykiss","psychic","icebeam","rest"],"nature":"","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},"level":50,"happiness":255},
+    {"name":"Gengar","species":"Gengar","item":"","ability":"No Ability","gender":"","moves":["hypnosis","nightshade","thunderbolt","rest"],"nature":"","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},"level":50,"happiness":255},
+    {"name":"Exeggutor","species":"Exeggutor","item":"Leftovers","ability":"No Ability","gender":"","moves":["sleeppowder","psychic","gigadrain","rest"],"nature":"","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},"level":50,"happiness":255},
+    {"name":"Venomoth","species":"Venomoth","item":"Gold Berry","ability":"No Ability","gender":"","moves":["sleeppowder","psychic","sludgebomb","rest"],"nature":"","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},"level":50,"happiness":255},
+    {"name":"Snorlax","species":"Snorlax","item":"Mystery Berry","ability":"No Ability","gender":"","moves":["rest","sleeptalk","bodyslam","curse"],"nature":"","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},"level":50,"happiness":255}
+  ]
+]

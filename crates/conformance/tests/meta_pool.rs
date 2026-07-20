@@ -79,8 +79,10 @@ fn meta_pool_preview_respects_max_total_level() {
             legal_subsets * 6,
         );
     }
-    // the measured meta-pool impact that motivated the fix: 20/34 teams
-    assert_eq!(affected, 20, "affected-team count drifted from the audit");
+    // the measured meta-pool impact that motivated the fix: 20/34 teams in
+    // the original pool; 17/32 after the no-OHKO re-pool (2026-07-21: 3 OHKO
+    // T1 teams excluded, sample-27 re-admitted)
+    assert_eq!(affected, 17, "affected-team count drifted from the audit");
 }
 
 #[test]

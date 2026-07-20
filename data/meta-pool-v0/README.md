@@ -63,18 +63,26 @@ All components ship in the JSON so downstream can re-weight or cut at any N.
   is max DVs.
 - All sets: `Ability: No Ability`, EVs 255 across (fully trained — fixture
   convention), happiness 255 (0 for Frustration users).
-- Every team passes PS's own `TeamValidator` for `gen2nc2000` — the same
+- Every team passes PS's own `TeamValidator` for the target format — the same
   oracle the fixture corpus uses.
 
-## Format facts discovered en route
+## Format target (re-based 2026-07-21)
 
-- The shipped PS `gen2nc2000` ruleset has **no evasion, OHKO, or Bright Powder
-  bans** (banlist is Uber only + Item/Event-Moves clauses) — so HC7.5 sets
-  with Bright Powder / Double Team / Horn Drill / Fissure are legal verbatim.
-  The sample-team thread swapped Bright Powder out assuming a ban that never
-  shipped; original items are recorded in `provenance.notes`.
+The pool now validates against **`gen2nintendocup2000noohkostadium2strict`**
+(the community server's no-OHKO NC2000 Stadium2 Strict — the regulation the
+bot actually plays; definition in `pokemon-showdown.zip`). Consequences:
+
+- **OHKO moves are banned**: 3 HC7.5 teams (`hc75-4th-kg`, `hc75-top8-tako`,
+  `hc75-top8-shinobu` — Fissure / Horn Drill carriers) are excluded as
+  format-illegal. T1 is now 5 teams. HC7.5 itself was an OHKO-allowed
+  tournament, so this is expected source attrition, not data loss.
+- **No Event Moves Clause**: event moves are legal, which re-admits
+  `sample-27` (Gligar's event-only Earthquake was the old exclusion reason).
+- Evasion / Bright Powder remain legal in BOTH regulations. The sample-team
+  thread swapped Bright Powder out assuming a ban that never shipped;
+  original items are recorded in `provenance.notes`.
 - Crystal moves (SD Marowak, Spikes Cloyster, Baton Pass Umbreon…) validate
-  fine under the shipped format.
+  fine.
 
 ## Expansion sources (not yet ingested)
 

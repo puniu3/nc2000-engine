@@ -27,3 +27,18 @@ fn puredata_corpus_replays_bit_exact() {
 fn full_corpus_replays_bit_exact() {
     run_corpus("full");
 }
+
+/// Directed fixtures: fixed teams built around the gen2stadium2nc2000 mod
+/// patches (Present glitch, Destiny Bond foe-expiry, Mint/Miracle Berry
+/// BeforeMove/Residual timing) that random teams rarely exercise.
+#[test]
+fn directed_corpus_replays_bit_exact() {
+    run_corpus("directed");
+}
+
+/// Sleep-stacked teams: sleep inflicted and re-inflicted across switches
+/// (clause pressure, sleep counters, Rest interplay).
+#[test]
+fn directed_sleep_corpus_replays_bit_exact() {
+    run_corpus("directed-sleep");
+}

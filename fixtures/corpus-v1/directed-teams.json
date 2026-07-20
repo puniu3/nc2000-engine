@@ -1,0 +1,390 @@
+[
+ [
+  {
+   "name": "Delibird",
+   "species": "Delibird",
+   "item": "Bitter Berry",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "present",
+    "icywind",
+    "toxic",
+    "rest"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  },
+  {
+   "name": "Marill",
+   "species": "Marill",
+   "item": "Gold Berry",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "present",
+    "surf",
+    "defensecurl",
+    "rest"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  },
+  {
+   "name": "Jynx",
+   "species": "Jynx",
+   "item": "Mint Berry",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "lovelykiss",
+    "psychic",
+    "icebeam",
+    "rest"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  },
+  {
+   "name": "Gengar",
+   "species": "Gengar",
+   "item": "Miracle Berry",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "hypnosis",
+    "destinybond",
+    "nightshade",
+    "curse"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  },
+  {
+   "name": "Misdreavus",
+   "species": "Misdreavus",
+   "item": "",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "destinybond",
+    "shadowball",
+    "painsplit",
+    "rest"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  },
+  {
+   "name": "Snorlax",
+   "species": "Snorlax",
+   "item": "Leftovers",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "rest",
+    "bodyslam",
+    "curse",
+    "sleeptalk"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  }
+ ],
+ [
+  {
+   "name": "Miltank",
+   "species": "Miltank",
+   "item": "Mint Berry",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "present",
+    "bodyslam",
+    "healbell",
+    "rest"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  },
+  {
+   "name": "Snubbull",
+   "species": "Snubbull",
+   "item": "Miracle Berry",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "present",
+    "return",
+    "charm",
+    "rest"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  },
+  {
+   "name": "Exeggutor",
+   "species": "Exeggutor",
+   "item": "",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "sleeppowder",
+    "psychic",
+    "stunspore",
+    "rest"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  },
+  {
+   "name": "Gastly",
+   "species": "Gastly",
+   "item": "Berserk Gene",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "hypnosis",
+    "destinybond",
+    "lick",
+    "curse"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  },
+  {
+   "name": "Pichu",
+   "species": "Pichu",
+   "item": "Berry",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "present",
+    "thunderbolt",
+    "charm",
+    "rest"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  },
+  {
+   "name": "Steelix",
+   "species": "Steelix",
+   "item": "PRZ Cure Berry",
+   "ability": "No Ability",
+   "gender": "",
+   "moves": [
+    "earthquake",
+    "curse",
+    "roar",
+    "rest"
+   ],
+   "nature": "",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "ivs": {
+    "hp": 30,
+    "atk": 30,
+    "def": 30,
+    "spa": 30,
+    "spd": 30,
+    "spe": 30
+   },
+   "level": 50,
+   "happiness": 255
+  }
+ ]
+]

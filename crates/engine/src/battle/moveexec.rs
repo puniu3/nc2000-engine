@@ -2647,6 +2647,49 @@ impl Battle {
             defense = self.get_stat(dex, target, def_stat, true, true, false) as f64;
         }
 
+        // gen2stadium2nc2000: Gen 2 Present glitch — attack fixed at 10,
+        // defense = type index of the attacker's LAST type, level = type
+        // index of the defender's LAST type (JS `|| 1` maps Normal's 0 and
+        // unlisted types to 1).
+        let is_present = self
+            .active_move
+            .as_ref()
+            .and_then(|m| m.id)
+            .map(|m| dex.moves.key(m) == "present")
+            .unwrap_or(false);
+        if is_present {
+            let type_index = |name: &str| -> f64 {
+                let i = match name {
+                    "Fighting" => 1,
+                    "Flying" => 2,
+                    "Poison" => 3,
+                    "Ground" => 4,
+                    "Rock" => 5,
+                    "Bug" => 7,
+                    "Ghost" => 8,
+                    "Steel" => 9,
+                    "Fire" => 20,
+                    "Water" => 21,
+                    "Grass" => 22,
+                    "Electric" => 23,
+                    "Psychic" => 24,
+                    "Ice" => 25,
+                    "Dragon" => 26,
+                    "Dark" => 27,
+                    _ => 1, // Normal (0) and unlisted types fall back to 1
+                };
+                i as f64
+            };
+            attack = 10.0;
+            let att = self.poke(source).types;
+            let def = self.poke(target).types;
+            let att_last = att.t[(att.n.max(1) - 1) as usize];
+            let def_last = def.t[(def.n.max(1) - 1) as usize];
+            defense = type_index(dex.type_name(att_last));
+            level = type_index(dex.type_name(def_last));
+            self.hint("Gen 2 Present has a glitched damage calculation using the secondary types of the Pokemon for the Attacker's Level and Defender's Defense.", true);
+        }
+
         // stadium2 rollover fix
         if attack >= 256.0 || defense >= 256.0 {
             attack = clamp_int_range(

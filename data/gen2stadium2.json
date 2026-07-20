@@ -1,7 +1,7 @@
 {
  "meta": {
-  "format": "gen2nc2000",
-  "mod": "gen2stadium2",
+  "format": "gen2nintendocup2000noohkostadium2strict",
+  "mod": "gen2stadium2nc2000",
   "psCommit": "79c04dcc4c055d190a7aba724ec83733ee3f7b38",
   "generator": "tools/export-dex.js"
  },
@@ -6142,7 +6142,9 @@
     "condition.onStart",
     "condition.onFaint",
     "condition.onBeforeMove",
-    "condition.onMoveAborted"
+    "condition.onMoveAborted",
+    "condition.onFoeAfterMoveSelf",
+    "condition.onFoeSwitchOut"
    ]
   },
   "haze": {
@@ -20159,6 +20161,80 @@
   }
  },
  "items": {
+  "mintberry": {
+   "name": "Mint Berry",
+   "id": "mintberry",
+   "fullname": "item: Mint Berry",
+   "effectType": "Item",
+   "exists": true,
+   "num": 150,
+   "gen": 2,
+   "isNonstandard": null,
+   "noCopy": false,
+   "affectsFainted": false,
+   "sourceEffect": "",
+   "fling": {
+    "basePower": 10
+   },
+   "isBerry": true,
+   "ignoreKlutz": false,
+   "isGem": false,
+   "isPokeball": false,
+   "isPrimalOrb": false,
+   "spritenum": 65,
+   "naturalGift": {
+    "basePower": 80,
+    "type": "Water"
+   },
+   "tags": [
+    "True Past"
+   ],
+   "onBeforeMovePriority": 11,
+   "onResidualOrder": 5,
+   "onResidualSubOrder": 1,
+   "callbacks": [
+    "onEat",
+    "onBeforeMove",
+    "onResidual"
+   ]
+  },
+  "miracleberry": {
+   "name": "Miracle Berry",
+   "id": "miracleberry",
+   "fullname": "item: Miracle Berry",
+   "effectType": "Item",
+   "exists": true,
+   "num": 157,
+   "gen": 2,
+   "isNonstandard": null,
+   "noCopy": false,
+   "affectsFainted": false,
+   "sourceEffect": "",
+   "fling": {
+    "basePower": 10
+   },
+   "isBerry": true,
+   "ignoreKlutz": false,
+   "isGem": false,
+   "isPokeball": false,
+   "isPrimalOrb": false,
+   "spritenum": 262,
+   "naturalGift": {
+    "basePower": 80,
+    "type": "Flying"
+   },
+   "tags": [
+    "True Past"
+   ],
+   "onBeforeMovePriority": 11,
+   "onResidualOrder": 5,
+   "onResidualSubOrder": 1,
+   "callbacks": [
+    "onEat",
+    "onBeforeMove",
+    "onResidual"
+   ]
+  },
   "dragonfang": {
    "name": "Dragon Fang",
    "id": "dragonfang",
@@ -21235,72 +21311,6 @@
    "naturalGift": {
     "basePower": 80,
     "type": "Grass"
-   },
-   "tags": [
-    "True Past"
-   ],
-   "callbacks": [
-    "onUpdate",
-    "onEat"
-   ]
-  },
-  "mintberry": {
-   "name": "Mint Berry",
-   "id": "mintberry",
-   "fullname": "item: Mint Berry",
-   "effectType": "Item",
-   "exists": true,
-   "num": 150,
-   "gen": 2,
-   "isNonstandard": null,
-   "noCopy": false,
-   "affectsFainted": false,
-   "sourceEffect": "",
-   "fling": {
-    "basePower": 10
-   },
-   "isBerry": true,
-   "ignoreKlutz": false,
-   "isGem": false,
-   "isPokeball": false,
-   "isPrimalOrb": false,
-   "spritenum": 65,
-   "naturalGift": {
-    "basePower": 80,
-    "type": "Water"
-   },
-   "tags": [
-    "True Past"
-   ],
-   "callbacks": [
-    "onUpdate",
-    "onEat"
-   ]
-  },
-  "miracleberry": {
-   "name": "Miracle Berry",
-   "id": "miracleberry",
-   "fullname": "item: Miracle Berry",
-   "effectType": "Item",
-   "exists": true,
-   "num": 157,
-   "gen": 2,
-   "isNonstandard": null,
-   "noCopy": false,
-   "affectsFainted": false,
-   "sourceEffect": "",
-   "fling": {
-    "basePower": 10
-   },
-   "isBerry": true,
-   "ignoreKlutz": false,
-   "isGem": false,
-   "isPokeball": false,
-   "isPrimalOrb": false,
-   "spritenum": 262,
-   "naturalGift": {
-    "basePower": 80,
-    "type": "Flying"
    },
    "tags": [
     "True Past"

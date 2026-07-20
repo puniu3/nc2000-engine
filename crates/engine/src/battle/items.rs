@@ -202,18 +202,26 @@ pub fn dispatch_item(
             b.remove_volatile(dex, t, "confusion");
             RV::Undef
         }
-        ("burntberry", "onUpdate") | ("iceberry", "onUpdate") | ("mintberry", "onUpdate")
+        ("burntberry", "onUpdate") | ("iceberry", "onUpdate")
         | ("przcureberry", "onUpdate") | ("psncureberry", "onUpdate") => {
             let t = tpoke.unwrap();
             let status = b.poke(t).status;
             let fire = match key.as_str() {
                 "burntberry" => status == Status::Frz,
                 "iceberry" => status == Status::Brn,
-                "mintberry" => status == Status::Slp,
                 "przcureberry" => status == Status::Par,
                 _ => status == Status::Psn || status == Status::Tox,
             };
             if fire {
+                b.eat_item(dex, t, false, None, EffectHandle::None);
+            }
+            RV::Undef
+        }
+        // gen2stadium2nc2000: Mint/Miracle Berry trigger onBeforeMove
+        // (priority 11, before the sleep check) + onResidual, not onUpdate.
+        ("mintberry", "onBeforeMove") | ("mintberry", "onResidual") => {
+            let t = tpoke.unwrap();
+            if b.poke(t).status == Status::Slp {
                 b.eat_item(dex, t, false, None, EffectHandle::None);
             }
             RV::Undef
@@ -234,7 +242,7 @@ pub fn dispatch_item(
             }
             RV::Undef
         }
-        ("miracleberry", "onUpdate") => {
+        ("miracleberry", "onBeforeMove") | ("miracleberry", "onResidual") => {
             let t = tpoke.unwrap();
             let has_conf =
                 crate::cond_id!(dex, "confusion").map(|c| b.poke(t).has_volatile(c)).unwrap_or(false);

@@ -70,6 +70,10 @@ neither OHKO nor evasion nor Bright Powder (README M8). Measured effect:
   The ruleset delta is therefore *honestly annotated per team*: default teams
   never run Horn Drill/Fissure/Guillotine, and the 3 variant teams that do are
   directly compatible with the project's (OHKO-permitting) format.
+  *(Addendum 2026-07-21: the project re-targeted to the no-OHKO Strict format
+  — `gen2nintendocup2000noohkostadium2strict` — so the polarity flipped: the
+  25 default teams are the format-matched ones and No.23/24/25 are now
+  format-illegal. This DB is the better-matched source overall.)*
 - **Evasion: 1** (No.16 Miltank Double Team). Legal in both rulesets — no delta.
 - **Bright Powder: 11 mons** (No.4/7/11/12/13/14/16/19/23/25/27). Legal in both —
   no delta, but notably heavier usage than the meta-pool (whose sample-team

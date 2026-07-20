@@ -1,4 +1,4 @@
-// M15b PS websocket client: plays format gen2nc2000 on a Pokemon Showdown
+// M15b PS websocket client: plays the no-OHKO NC2000 ladder format on a Pokemon Showdown
 // server over the real network protocol (SockJS raw-websocket endpoint
 // /showdown/websocket). Battles are driven by the M15a protocol->state
 // importer (wasm ProtocolSearcher: player-visible lines + request JSON in,
@@ -23,7 +23,7 @@
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
 //     [--games N] [--iters 1000] [--seed 1] [--mode blind|open] \
 //     [--opp-team-file FILE.json] [--random] [--timer] [--no-tables] \
-//     [--password PW] [--loginserver URL] [--format gen2nc2000] \
+//     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
 //     [--drop SPEC] [--quiet]
 //
 // --random turns the client into the second driver: choices are drawn

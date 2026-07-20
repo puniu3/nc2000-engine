@@ -428,6 +428,12 @@ impl ProtocolTracker {
                             *n += 1;
                         }
                     }
+                    // a confusion self-hit replaces the turn's move: a
+                    // pending two-turn charge is lost (its release would
+                    // otherwise stay imputed as the only legal choice)
+                    if parts.iter().any(|p| *p == "[from] confusion") {
+                        self.sides[s].mons[m].charging = None;
+                    }
                 }
             }
             "-status" => {
@@ -577,9 +583,22 @@ impl ProtocolTracker {
                     }
                 }
             }
+            "-anim" => {
+                // an animation right after |-prepare| = the charge released
+                // in the same turn (Solar Beam in sun): no lock next turn
+                if let Some((s, m)) = self.subject(arg(1)) {
+                    self.sides[s].mons[m].charging = None;
+                }
+            }
             "-transform" => {
                 if let (Some((s, m)), Some(t)) = (self.subject(arg(1)), self.subject(arg(2))) {
-                    self.sides[s].mons[m].transformed_into = Some(t);
+                    // Transform copies the target's stat stages (public: both
+                    // sides' boost lines are announced) — seed the tracked
+                    // boosts with the copy; later lines mutate them normally.
+                    let tb = self.sides[t.0].mons[t.1].boosts;
+                    let mon = &mut self.sides[s].mons[m];
+                    mon.transformed_into = Some(t);
+                    mon.boosts = tb;
                 }
             }
             "-mustrecharge" => {
@@ -1298,7 +1317,26 @@ impl ProtocolTracker {
                 if let Some((ts_, tslot)) = tm.transformed_into {
                     let id = PokeId { side: s as u8, slot: slot as u8 };
                     let target = PokeId { side: ts_ as u8, slot: tslot as u8 };
+                    // A live transform persists after the copy target later
+                    // faints, but transform_into refuses fainted targets —
+                    // lift the flag for the re-plant, then restore.
+                    let (was_fainted, was_hp) = {
+                        let t = b.poke(target);
+                        (t.fainted, t.hp)
+                    };
+                    if was_fainted {
+                        let t = b.poke_mut(target);
+                        t.fainted = false;
+                        if t.hp <= 0 {
+                            t.hp = 1;
+                        }
+                    }
                     let _ = b.transform_into(dex, id, target);
+                    if was_fainted {
+                        let t = b.poke_mut(target);
+                        t.fainted = true;
+                        t.hp = was_hp;
+                    }
                 }
             }
         }
@@ -1697,7 +1735,10 @@ fn set_item_raw(b: &mut Battle, id: PokeId, item: Option<nc2000_engine::dex::Ite
 /// Impute an HP amount inside the announced 1/48 pixel bucket:
 /// px = floor(48·hp/maxhp), floored to 1 while alive.
 /// Midpoint of the true-HP range consistent with an announced `cur/den`
-/// HP string (den = 100 under HP Percentage Mod, 48 on pixel bars).
+/// HP string. The announcement rounding differs by mode: HP Percentage Mod
+/// (den = 100) announces `ceil(100*hp/maxhp)` with a not-quite-full 100
+/// knocked down to 99; the legacy pixel bar (den = 48) announces
+/// `floor(48*hp/maxhp)` clamped to >= 1.
 fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
     let den = if den > 0 { den } else { 48 };
     if cur <= 0 {
@@ -1706,9 +1747,16 @@ fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
     if cur >= den {
         return maxhp;
     }
-    let lo = if cur == 1 { 1 } else { (cur * maxhp + den - 1) / den };
-    let hi = (((cur + 1) * maxhp + den - 1) / den - 1).min(maxhp - 1);
-    let hi = hi.max(lo);
+    let (lo, hi) = if den == 100 {
+        let lo = ((cur - 1) * maxhp) / 100 + 1;
+        let hi = if cur == 99 { maxhp - 1 } else { (cur * maxhp) / 100 };
+        (lo, hi)
+    } else {
+        let lo = if cur == 1 { 1 } else { (cur * maxhp + den - 1) / den };
+        let hi = ((cur + 1) * maxhp + den - 1) / den - 1;
+        (lo, hi)
+    };
+    let hi = hi.min(maxhp - 1).max(lo);
     ((lo + hi + 1) / 2).clamp(1, maxhp)
 }
 
