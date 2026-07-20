@@ -1,4 +1,4 @@
-//! Ad-hoc damage analysis for a 2026-07-20 ladder replay. Throwaway.
+//! Ad-hoc damage analysis for the sohehe-vs-puniu3 replay. Throwaway.
 //! Uses the real engine damage core (get_damage_synthetic) so Reflect,
 //! Thick Club, Swords Dance boosts, STAB and type effectiveness are all
 //! applied exactly as in a real battle. Max roll = no_damage_variance;

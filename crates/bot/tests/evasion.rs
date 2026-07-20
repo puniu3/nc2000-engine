@@ -2,7 +2,7 @@
 //! stage so a Double-Team / Baton-Pass evasion wall registers as danger (and
 //! phazing as relief) instead of being invisible.
 //!
-//! The reported weakness (2026-07-20 ladder replay: Jolteon stacks Double Team
+//! The reported weakness (sohehe-vs-puniu3 replay: Jolteon stacks Double Team
 //! to +6, Baton Passes the evasion, and the bot dithers) traced to
 //! `expected_hit_fraction` using only *base* move accuracy — a +6-evasion foe
 //! looked exactly as hittable as an unboosted one, so the search saw no danger
