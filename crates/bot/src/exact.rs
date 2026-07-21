@@ -233,10 +233,24 @@ impl<'d> ExactSolver<'d> {
     }
 }
 
+/// Full matrix-game solution: certified value bracket plus both players'
+/// strategies (the e-5 frontier scheduler steers by LP supports).
+pub struct MatrixSolution {
+    pub value: f64,
+    pub gap: f64,
+    pub x: Vec<f64>,
+    pub y: Vec<f64>,
+}
+
 /// Value of the zero-sum matrix game `a` (row maximizes, row-major n0×n1),
 /// with a certified bracket: returns ((lower+upper)/2, upper−lower) where
 /// lower = row strategy's guarantee, upper = column strategy's guarantee.
 pub fn solve_matrix(a: &[f64], n0: usize, n1: usize) -> (f64, f64) {
+    let s = solve_matrix_full(a, n0, n1);
+    (s.value, s.gap)
+}
+
+pub fn solve_matrix_full(a: &[f64], n0: usize, n1: usize) -> MatrixSolution {
     // Positive shift so the game value is > 0.
     let min = a.iter().cloned().fold(f64::INFINITY, f64::min);
     let shift = min - 1.0;
@@ -259,7 +273,15 @@ pub fn solve_matrix(a: &[f64], n0: usize, n1: usize) -> (f64, f64) {
     let mut basis: Vec<usize> = (n1..n1 + n0).collect();
 
     const EPS: f64 = 1e-12;
+    // Pivot cap + graceful exit on fp-degenerate "unbounded" directions:
+    // whatever state the tableau is left in, the best-response bracket
+    // below certifies (a bad exit only widens the gap, never unsounds it).
+    let mut pivots = 0;
     loop {
+        pivots += 1;
+        if pivots > 200 {
+            break;
+        }
         // Bland's rule: entering = lowest-index negative reduced cost.
         let Some(e) = (0..n1 + n0).find(|&j| tab[n0 * cols + j] < -EPS) else { break };
         // Ratio test; Bland tie-break on the leaving basis variable index.
@@ -279,7 +301,7 @@ pub fn solve_matrix(a: &[f64], n0: usize, n1: usize) -> (f64, f64) {
                 }
             }
         }
-        let (r, _) = leave.expect("game LP is bounded");
+        let Some((r, _)) = leave else { break };
         // Pivot on (r, e).
         let p = tab[r * cols + e];
         for j in 0..cols {
@@ -325,7 +347,7 @@ pub fn solve_matrix(a: &[f64], n0: usize, n1: usize) -> (f64, f64) {
     let upper = (0..n0)
         .map(|i| (0..n1).map(|j| y[j] * a[i * n1 + j]).sum::<f64>())
         .fold(f64::NEG_INFINITY, f64::max);
-    ((lower + upper) * 0.5, (upper - lower).max(0.0))
+    MatrixSolution { value: (lower + upper) * 0.5, gap: (upper - lower).max(0.0), x, y }
 }
 
 #[cfg(test)]

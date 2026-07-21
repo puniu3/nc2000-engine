@@ -26,7 +26,7 @@ use std::io::Write as _;
 use std::time::Instant;
 
 use nc2000_bot::eval::{eval01, EvalWeights};
-use nc2000_bot::exact::{ExactConfig, ExactSolver};
+use nc2000_bot::bounds::{BoundConfig, BoundSolver, Stop};
 use nc2000_engine::state::Battle;
 
 use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct, HumanAction};
@@ -52,7 +52,7 @@ struct Row {
     human: String,
     exact: f64,
     width: f64,
-    horizon: u16,
+    stop: u16,
     eval: f64,
     alive0: usize,
     alive1: usize,
@@ -94,10 +94,6 @@ fn main() {
         files.len()
     );
 
-    let mut solver = ExactSolver::new(
-        &dex,
-        ExactConfig { work_budget: work, ..ExactConfig::default() },
-    );
     let mut seen: HashSet<u64> = HashSet::new();
     let mut rows: Vec<Row> = Vec::new();
     let mut reconstructed = 0usize;
@@ -105,8 +101,14 @@ fn main() {
     let mut aborted = 0usize;
     let t0 = Instant::now();
 
+    let mut total_runs = 0usize;
+    let mut total_expansions = 0usize;
+    let mut worst_gap = 0.0f64;
     for (bi, path) in &files {
         let cb = load_battle(path);
+        // one graph per battle: positions inside a battle share subgames
+        let mut solver =
+            BoundSolver::new(&dex, BoundConfig { work_budget: work, ..BoundConfig::default() });
         let mut battle_attempts = 0usize;
         // walk decisions from the END: endgames live there
         for d in cb.decisions.iter().rev() {
@@ -131,9 +133,9 @@ fn main() {
             }
             attempted += 1;
             battle_attempts += 1;
-            let runs0 = solver.stats.chance_runs;
+            let ev = eval01(&b, &dex, &weights);
             let ts = Instant::now();
-            let solved = solver.solve(&b);
+            let rep = solver.solve(&b, Some((ev - 0.02, ev + 0.02)));
             let dt = ts.elapsed().as_secs_f64();
             let human = match &d.action {
                 HumanAction::Move(k) => format!("move {k}"),
@@ -155,32 +157,35 @@ fn main() {
                 format!("b{bi} T{} s{} {} vs {}", d.turn, d.side, name(0), name(1))
             };
             println!(
-                "  b{bi} T{} hp{total_hp} {a0}v{a1}: {} ({} runs, {dt:.0}s)",
-                d.turn,
-                match &solved {
-                    None => "ABORT".to_string(),
-                    Some(c) => format!("[{:.3},{:.3}] w{:.3} h{}", c.lo, c.hi, c.width(), c.horizon),
-                },
-                solver.stats.chance_runs - runs0
+                "  b{bi} T{turn} hp{total_hp} {a0}v{a1}: [{lo:.3},{hi:.3}] w{w:.3} {stop:?} ({runs} runs, {dt:.0}s)",
+                turn = d.turn,
+                lo = rep.bounds.lo,
+                hi = rep.bounds.hi,
+                w = rep.bounds.width(),
+                stop = rep.stop,
+                runs = rep.runs,
             );
-            match solved {
-                None => aborted += 1,
-                Some(c) => rows.push(Row {
-                    battle: *bi,
-                    side: d.side,
-                    turn: d.turn,
-                    human,
-                    exact: c.mid(),
-                    width: c.width(),
-                    horizon: c.horizon,
-                    eval: eval01(&b, &dex, &weights),
-                    alive0: a0,
-                    alive1: a1,
-                    total_hp,
-                    desc,
-                }),
+            if rep.stop == Stop::WorkExhausted || rep.stop == Stop::NodeBudget {
+                aborted += 1; // still bracketed — the row keeps the partial bounds
             }
+            rows.push(Row {
+                battle: *bi,
+                side: d.side,
+                turn: d.turn,
+                human,
+                exact: rep.bounds.mid(),
+                width: rep.bounds.width(),
+                stop: rep.stop as u16,
+                eval: ev,
+                alive0: a0,
+                alive1: a1,
+                total_hp,
+                desc,
+            });
         }
+        total_runs += solver.stats.runs;
+        total_expansions += solver.stats.expansions;
+        worst_gap = worst_gap.max(solver.stats.worst_gap);
     }
 
     // ---- report
@@ -191,10 +196,7 @@ fn main() {
         tight.len()
     );
     println!(
-        "solver exact-memo {} chance-runs {} worst-gap {:.2e}; wall {:.0}s",
-        solver.stats.states,
-        solver.stats.chance_runs,
-        solver.stats.worst_gap,
+        "engine runs {total_runs} expansions {total_expansions} worst-gap {worst_gap:.2e}; wall {:.0}s",
         t0.elapsed().as_secs_f64()
     );
 
@@ -231,7 +233,7 @@ fn main() {
 
     std::fs::create_dir_all("tmp").ok();
     let mut f = std::fs::File::create(&out_path).expect("csv");
-    writeln!(f, "battle,side,turn,human,exact,width,horizon,eval,alive0,alive1,total_hp,desc")
+    writeln!(f, "battle,side,turn,human,exact,width,stop,eval,alive0,alive1,total_hp,desc")
         .unwrap();
     for r in &rows {
         writeln!(
@@ -243,7 +245,7 @@ fn main() {
             r.human,
             r.exact,
             r.width,
-            r.horizon,
+            r.stop,
             r.eval,
             r.alive0,
             r.alive1,

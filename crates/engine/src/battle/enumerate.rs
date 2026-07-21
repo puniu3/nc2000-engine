@@ -53,6 +53,26 @@ struct LeafRec {
     trace: Rc<Vec<Draw>>,
 }
 
+/// One scripted engine execution of a decision step: applies `choices` to a
+/// clone of `base` under the Oracle following `script` (draws past the
+/// script take the first non-empty class) and returns the advanced battle
+/// plus the full draw trace. The lazy bound solver's expansion atom (e-5);
+/// the eager enumerator below remains as its test oracle.
+pub fn run_scripted(
+    dex: &Dex,
+    base: &Battle,
+    choices: [Option<SearchChoice>; 2],
+    script: &[usize],
+) -> (Battle, Vec<Draw>) {
+    let mut b = base.clone();
+    b.set_log_enabled(false);
+    b.prng = BattleRng::enumerating(script.to_vec());
+    b.apply_choices(dex, choices).expect("run_scripted: choices must be legal");
+    let oracle = b.prng.oracle.take().expect("oracle survives the step");
+    let Oracle { trace, .. } = *oracle;
+    (b, trace)
+}
+
 struct Ctx<'a> {
     dex: &'a Dex,
     base: &'a Battle,
@@ -67,13 +87,7 @@ impl Ctx<'_> {
             return None;
         }
         self.runs += 1;
-        let mut b = self.base.clone();
-        b.set_log_enabled(false);
-        b.prng = BattleRng::enumerating(script.to_vec());
-        b.apply_choices(self.dex, self.choices).expect("enumerate_step: choices must be legal");
-        let oracle = b.prng.oracle.take().expect("oracle survives the step");
-        let Oracle { trace, .. } = *oracle;
-        Some((b, trace))
+        Some(run_scripted(self.dex, self.base, self.choices, script))
     }
 }
 

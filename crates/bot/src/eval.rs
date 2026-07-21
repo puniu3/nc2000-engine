@@ -192,8 +192,10 @@ pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
         .iter()
         .filter_map(|k| dex.moves.id(k))
         .collect();
+    let spd0 = b.get_pokemon_action_speed(dex, id0);
+    let spd1 = b.get_pokemon_action_speed(dex, id1);
     // expected turns for `att` to KO `def` through the visible mechanics
-    let turns = |att: PokeId, def: PokeId| -> f64 {
+    let turns = |att: PokeId, def: PokeId, att_faster: bool| -> f64 {
         let e = best_hit_fraction(b, dex, att, def, w.couple_evasion);
         if e <= 1e-9 {
             return f64::INFINITY;
@@ -202,11 +204,14 @@ pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
         // the attacker out-damages the heal cycle (~half max HP per turn:
         // Rest refills everything but donates two free turns) — the duel
         // gate measured the heal-blind version losing 0.39, this format
-        // Rests everywhere.
+        // Rests everywhere. Exemption: a FASTER attacker with an expected
+        // one-shot kills before any heal resolves (threshold mining caught
+        // the un-exempted rule voiding Kadabra-vs-3HP-Articuno).
         let d = b.poke(def);
         if d.move_slots.iter().any(|m| m.pp > 0 && !m.disabled && heal_ids.contains(&m.id)) {
             let dmg_frac_max = e * d.hp as f64 / d.maxhp as f64;
-            if dmg_frac_max < 0.5 {
+            let kill_now = e >= 1.0 && att_faster;
+            if dmg_frac_max < 0.5 && !kill_now {
                 return f64::INFINITY;
             }
         }
@@ -253,7 +258,7 @@ pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
     // residual kills it first (the b293 case: a toxed racer that dies on
     // its own clock never finishes a 2-turn plan) — or the foe rotting on
     // the foe's residual with no hit needed at all.
-    let (k0, k1) = (turns(id0, id1), turns(id1, id0));
+    let (k0, k1) = (turns(id0, id1, spd0 > spd1), turns(id1, id0, spd1 > spd0));
     let (v0, v1) = (surv(id0), surv(id1));
     let k0 = if k0 <= v0 { k0 } else { f64::INFINITY };
     let k1 = if k1 <= v1 { k1 } else { f64::INFINITY };
@@ -266,8 +271,7 @@ pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
         (true, false) => 2.0,
         (false, true) => -2.0,
         _ => {
-            let s0 = b.get_pokemon_action_speed(dex, id0);
-            let s1 = b.get_pokemon_action_speed(dex, id1);
+            let (s0, s1) = (spd0, spd1);
             let edge = match s0.cmp(&s1) {
                 std::cmp::Ordering::Greater => 0.5,
                 std::cmp::Ordering::Less => -0.5,
