@@ -117,6 +117,38 @@ pub enum DamageRollMode {
     Threshold1,
     /// `Threshold1` plus next-hit and residual-damage death clocks.
     Threshold2,
+    /// KO plus thresholds backed by an actually-held item or usable move;
+    /// omits unconditional 1/4, 1/3, and 1/2 buckets.
+    ThresholdLean,
+    /// `ThresholdLean` ablations which remove one conservative exact escape.
+    ThresholdLeanNoCounter,
+    ThresholdLeanNoDrainRecoil,
+    ThresholdLeanNoMultiHit,
+    ThresholdLeanNoSubstitute,
+    /// No conservative exact escapes; retains only semantic HP thresholds.
+    ThresholdLeanMinimal,
+    /// `ThresholdLean` plus only the next equal-hit death clock.
+    ThresholdLeanNext,
+    /// `ThresholdLean` plus only the residual-damage death clock.
+    ThresholdLeanResidual,
+    /// `ThresholdLean` plus both death clocks.
+    ThresholdLeanClock,
+    /// Two representatives for damage which can enter a usable-heal region.
+    ThresholdHealSplit,
+    /// `ThresholdLeanClock`, with low-HP heal-capable targets retaining
+    /// exact damage rolls (heal/stall policy thresholds are contextual).
+    ThresholdHeal,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DamageExactReason {
+    #[default]
+    None,
+    DrainRecoil,
+    MultiHit,
+    Substitute,
+    CounterBide,
+    Heal,
 }
 
 /// State-local semantics visible after a damage roll. Thresholds are HP
@@ -126,10 +158,11 @@ pub struct DamageRollContext {
     pub hp: i32,
     pub thresholds: Vec<i32>,
     pub residual_damage: i32,
+    pub heal_threshold: i32,
     /// Damage bookkeeping can be observed numerically by mechanics such as
-    /// Counter, Bide, drain, recoil, multi-hit, and Substitute. Those cases
-    /// deliberately retain the exact roll distribution in the experiment.
-    pub force_exact: bool,
+    /// Counter, Bide, drain, recoil, multi-hit, and Substitute. Conservative
+    /// modes retain exact rolls; ablation modes can clear individual reasons.
+    pub exact_reason: DamageExactReason,
 }
 
 impl Draw {
@@ -328,13 +361,22 @@ impl BattleRng {
                     }
                 }
 
-                let mode = if context.is_some_and(|c| c.force_exact) {
+                let exact_reason = context.map_or(DamageExactReason::None, |c| c.exact_reason);
+                let mode = if exact_reason != DamageExactReason::None {
                     DamageRollMode::Exact
                 } else {
                     o.damage_mode
                 };
                 if mode == DamageRollMode::Exact {
-                    return vals[Self::pick(o, "dmgvar", counts)];
+                    let label = match exact_reason {
+                        DamageExactReason::None => "dmgvar",
+                        DamageExactReason::DrainRecoil => "dmgvar-drain-recoil",
+                        DamageExactReason::MultiHit => "dmgvar-multihit",
+                        DamageExactReason::Substitute => "dmgvar-substitute",
+                        DamageExactReason::CounterBide => "dmgvar-counter-bide",
+                        DamageExactReason::Heal => "dmgvar-heal",
+                    };
+                    return vals[Self::pick(o, label, counts)];
                 }
 
                 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -342,6 +384,7 @@ impl BattleRng {
                     threshold_band: usize,
                     next_hit_clock: u8,
                     residual_clock: u8,
+                    heal_band: u8,
                 }
 
                 let ctx = context.cloned().unwrap_or_default();
@@ -349,12 +392,31 @@ impl BattleRng {
                 let max_damage = vals.last().copied().unwrap_or(0.0) as i32;
                 let signature = |v: f64| {
                     if mode == DamageRollMode::Mean {
-                        return Signature { threshold_band: 0, next_hit_clock: 0, residual_clock: 0 };
+                        return Signature {
+                            threshold_band: 0,
+                            next_hit_clock: 0,
+                            residual_clock: 0,
+                            heal_band: 0,
+                        };
                     }
                     let post_hp = (ctx.hp - v as i32).max(0);
                     let threshold_band =
                         ctx.thresholds.iter().filter(|&&threshold| post_hp <= threshold).count();
-                    let next_hit_clock = if mode != DamageRollMode::Threshold2 || post_hp == 0 {
+                    let next_clock = matches!(
+                        mode,
+                        DamageRollMode::Threshold2
+                            | DamageRollMode::ThresholdLeanNext
+                            | DamageRollMode::ThresholdLeanClock
+                            | DamageRollMode::ThresholdHeal
+                    );
+                    let residual_clock_enabled = matches!(
+                        mode,
+                        DamageRollMode::Threshold2
+                            | DamageRollMode::ThresholdLeanResidual
+                            | DamageRollMode::ThresholdLeanClock
+                            | DamageRollMode::ThresholdHeal
+                    );
+                    let next_hit_clock = if !next_clock || post_hp == 0 {
                         0
                     } else if post_hp <= min_damage {
                         1 // every roll of the same hit KOs next time
@@ -363,7 +425,7 @@ impl BattleRng {
                     } else {
                         3 // cannot KO on the next equal hit
                     };
-                    let residual_clock = if mode == DamageRollMode::Threshold2
+                    let residual_clock = if residual_clock_enabled
                         && ctx.residual_damage > 0
                         && post_hp > 0
                     {
@@ -371,7 +433,15 @@ impl BattleRng {
                     } else {
                         0
                     };
-                    Signature { threshold_band, next_hit_clock, residual_clock }
+                    let heal_band = if mode == DamageRollMode::ThresholdHealSplit
+                        && ctx.heal_threshold > 0
+                        && (ctx.hp - min_damage).max(0) <= ctx.heal_threshold
+                    {
+                        1 + u8::from(v as i32 > (min_damage + max_damage) / 2)
+                    } else {
+                        0
+                    };
+                    Signature { threshold_band, next_hit_clock, residual_clock, heal_band }
                 };
 
                 let mut group_counts: Vec<u64> = Vec::new();
@@ -427,7 +497,7 @@ impl BattleRng {
 
 #[cfg(test)]
 mod tests {
-    use super::{BattleRng, DamageRollContext, DamageRollMode, Draw, Prng};
+    use super::{BattleRng, DamageExactReason, DamageRollContext, DamageRollMode, Draw, Prng};
 
     fn abstract_roll(
         mode: DamageRollMode,
@@ -466,13 +536,45 @@ mod tests {
         let context = DamageRollContext {
             hp: 90,
             thresholds: vec![0],
-            force_exact: true,
+            exact_reason: DamageExactReason::CounterBide,
             ..Default::default()
         };
         let (_, draw) = abstract_roll(DamageRollMode::Threshold2, vec![], &context);
-        assert_eq!(draw.label, "dmgvar");
+        assert_eq!(draw.label, "dmgvar-counter-bide");
         assert!(draw.counts.len() > 2);
         assert_eq!(draw.counts.iter().sum::<u64>(), Draw::TOTAL);
+    }
+
+    #[test]
+    fn lean_clock_components_can_be_ablated_independently() {
+        let context = DamageRollContext {
+            hp: 180,
+            thresholds: vec![0],
+            residual_damage: 30,
+            ..Default::default()
+        };
+        let (_, lean) = abstract_roll(DamageRollMode::ThresholdLean, vec![], &context);
+        let (_, next) = abstract_roll(DamageRollMode::ThresholdLeanNext, vec![], &context);
+        let (_, residual) =
+            abstract_roll(DamageRollMode::ThresholdLeanResidual, vec![], &context);
+        let (_, both) = abstract_roll(DamageRollMode::ThresholdLeanClock, vec![], &context);
+        assert_eq!(lean.counts.len(), 1);
+        assert!(next.counts.len() > lean.counts.len());
+        assert!(residual.counts.len() > lean.counts.len());
+        assert!(both.counts.len() >= next.counts.len());
+        assert!(both.counts.len() >= residual.counts.len());
+    }
+
+    #[test]
+    fn heal_split_adds_only_two_representatives() {
+        let context = DamageRollContext {
+            hp: 180,
+            thresholds: vec![0],
+            heal_threshold: 100,
+            ..Default::default()
+        };
+        let (_, draw) = abstract_roll(DamageRollMode::ThresholdHealSplit, vec![], &context);
+        assert_eq!(draw.counts.len(), 2);
     }
 
     #[test]

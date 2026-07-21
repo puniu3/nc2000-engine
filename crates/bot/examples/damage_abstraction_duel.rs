@@ -29,6 +29,17 @@ fn mode(value: &str) -> DamageRollMode {
         "mean" => DamageRollMode::Mean,
         "threshold1" | "t1" => DamageRollMode::Threshold1,
         "threshold2" | "t2" => DamageRollMode::Threshold2,
+        "lean" => DamageRollMode::ThresholdLean,
+        "lean-no-counter" | "lnc" => DamageRollMode::ThresholdLeanNoCounter,
+        "lean-no-drain" | "lnd" => DamageRollMode::ThresholdLeanNoDrainRecoil,
+        "lean-no-multihit" | "lnm" => DamageRollMode::ThresholdLeanNoMultiHit,
+        "lean-no-substitute" | "lns" => DamageRollMode::ThresholdLeanNoSubstitute,
+        "lean-minimal" | "lmin" => DamageRollMode::ThresholdLeanMinimal,
+        "lean-next" | "ln" => DamageRollMode::ThresholdLeanNext,
+        "lean-residual" | "lr" => DamageRollMode::ThresholdLeanResidual,
+        "lean-clock" | "lc" => DamageRollMode::ThresholdLeanClock,
+        "heal-split" | "hs" => DamageRollMode::ThresholdHealSplit,
+        "heal" => DamageRollMode::ThresholdHeal,
         _ => panic!("bad damage mode {value}"),
     }
 }

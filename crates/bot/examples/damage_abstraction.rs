@@ -81,6 +81,17 @@ fn mode_name(mode: DamageRollMode) -> &'static str {
         DamageRollMode::Mean => "mean",
         DamageRollMode::Threshold1 => "threshold1",
         DamageRollMode::Threshold2 => "threshold2",
+        DamageRollMode::ThresholdLean => "lean",
+        DamageRollMode::ThresholdLeanNoCounter => "lean-no-counter",
+        DamageRollMode::ThresholdLeanNoDrainRecoil => "lean-no-drain",
+        DamageRollMode::ThresholdLeanNoMultiHit => "lean-no-multihit",
+        DamageRollMode::ThresholdLeanNoSubstitute => "lean-no-substitute",
+        DamageRollMode::ThresholdLeanMinimal => "lean-minimal",
+        DamageRollMode::ThresholdLeanNext => "lean-next",
+        DamageRollMode::ThresholdLeanResidual => "lean-residual",
+        DamageRollMode::ThresholdLeanClock => "lean-clock",
+        DamageRollMode::ThresholdHealSplit => "heal-split",
+        DamageRollMode::ThresholdHeal => "heal",
     }
 }
 
@@ -92,6 +103,17 @@ fn parse_modes(value: &str) -> Vec<DamageRollMode> {
             "mean" => Some(DamageRollMode::Mean),
             "threshold1" | "t1" => Some(DamageRollMode::Threshold1),
             "threshold2" | "t2" => Some(DamageRollMode::Threshold2),
+            "lean" => Some(DamageRollMode::ThresholdLean),
+            "lean-no-counter" | "lnc" => Some(DamageRollMode::ThresholdLeanNoCounter),
+            "lean-no-drain" | "lnd" => Some(DamageRollMode::ThresholdLeanNoDrainRecoil),
+            "lean-no-multihit" | "lnm" => Some(DamageRollMode::ThresholdLeanNoMultiHit),
+            "lean-no-substitute" | "lns" => Some(DamageRollMode::ThresholdLeanNoSubstitute),
+            "lean-minimal" | "lmin" => Some(DamageRollMode::ThresholdLeanMinimal),
+            "lean-next" | "ln" => Some(DamageRollMode::ThresholdLeanNext),
+            "lean-residual" | "lr" => Some(DamageRollMode::ThresholdLeanResidual),
+            "lean-clock" | "lc" => Some(DamageRollMode::ThresholdLeanClock),
+            "heal-split" | "hs" => Some(DamageRollMode::ThresholdHealSplit),
+            "heal" => Some(DamageRollMode::ThresholdHeal),
             _ => None,
         })
         .collect()
@@ -167,6 +189,14 @@ struct Summary {
     anchor_n: usize,
     anchor_abs: f64,
     anchor_outside: f64,
+    exact_damage_draws: u128,
+    abstract_damage_draws: u128,
+    damage_classes: u128,
+    drain_recoil_draws: u128,
+    multihit_draws: u128,
+    substitute_draws: u128,
+    counter_bide_draws: u128,
+    heal_draws: u128,
 }
 
 fn run_search(
@@ -215,6 +245,7 @@ fn main() {
     let out_path = arg(&args, "--out", "tmp/damage-abstraction.csv");
     let anchor_path = arg(&args, "--anchors", "");
     let anchor_only = flag(&args, "--anchor-only");
+    let exclude_anchors = flag(&args, "--exclude-anchors");
     let verbose = flag(&args, "--verbose");
     let mut modes = parse_modes(&arg(&args, "--modes", "exact,mean,threshold1,threshold2"));
     if !modes.contains(&DamageRollMode::Exact) {
@@ -253,6 +284,9 @@ fn main() {
             let key = (battle_index, decision.side, decision.turn);
             let anchor = anchors.get(&key).copied();
             if anchor_only && anchor.is_none() {
+                continue;
+            }
+            if exclude_anchors && anchor.is_some() {
                 continue;
             }
             let Some(battle) = reconstruct(
@@ -306,6 +340,10 @@ fn main() {
             .join(","),
         anchors.len(),
     );
+    if positions.is_empty() {
+        println!("no matching positions");
+        return;
+    }
 
     if let Some(parent) = Path::new(&out_path).parent() {
         std::fs::create_dir_all(parent).unwrap();
@@ -313,7 +351,7 @@ fn main() {
     let mut output = std::fs::File::create(&out_path).expect("output csv");
     writeln!(
         output,
-        "battle,side,turn,action,alive0,alive1,total_hp,mode,complete,value,value_abs_exact,row_regret,col_regret,policy_regret,runs,leaves,states,cells,wall_s,exact_runs,exact_wall_s,anchor,anchor_width,anchor_abs,anchor_outside"
+        "battle,side,turn,action,alive0,alive1,total_hp,mode,complete,value,value_abs_exact,row_regret,col_regret,policy_regret,runs,leaves,states,cells,wall_s,exact_runs,exact_wall_s,anchor,anchor_width,anchor_abs,anchor_outside,exact_damage_draws,abstract_damage_draws,damage_classes,drain_recoil_draws,multihit_draws,substitute_draws,counter_bide_draws,heal_draws"
     )
     .unwrap();
 
@@ -354,6 +392,8 @@ fn main() {
             };
             let row = choices(&mut probe, 0);
             let col = choices(&mut probe, 1);
+            let row: Vec<String> = row.into_iter().map(|choice| choice.to_input(&dex)).collect();
+            let col: Vec<String> = col.into_iter().map(|choice| choice.to_input(&dex)).collect();
             println!("    actions row {:?} col {:?}", row, col);
         }
 
@@ -397,6 +437,14 @@ fn main() {
             summary.all_exact_seconds += exact.seconds;
             summary.all_runs += timed.stats.chance_runs as u128;
             summary.all_exact_runs += exact.stats.chance_runs as u128;
+            summary.exact_damage_draws += timed.stats.exact_damage_draws as u128;
+            summary.abstract_damage_draws += timed.stats.abstract_damage_draws as u128;
+            summary.damage_classes += timed.stats.damage_classes as u128;
+            summary.drain_recoil_draws += timed.stats.drain_recoil_draws as u128;
+            summary.multihit_draws += timed.stats.multihit_draws as u128;
+            summary.substitute_draws += timed.stats.substitute_draws as u128;
+            summary.counter_bide_draws += timed.stats.counter_bide_draws as u128;
+            summary.heal_draws += timed.stats.heal_draws as u128;
 
             let (
                 complete,
@@ -481,7 +529,7 @@ fn main() {
 
             writeln!(
                 output,
-                "{},{},{},\"{}\",{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{:.6},{},{:.6},{:.9},{:.9},{:.9},{:.9}",
+                "{},{},{},\"{}\",{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{:.6},{},{:.6},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{},{},{},{}",
                 position.battle_index,
                 position.side,
                 position.turn,
@@ -507,6 +555,14 @@ fn main() {
                 anchor_width,
                 anchor_abs,
                 anchor_outside,
+                timed.stats.exact_damage_draws,
+                timed.stats.abstract_damage_draws,
+                timed.stats.damage_classes,
+                timed.stats.drain_recoil_draws,
+                timed.stats.multihit_draws,
+                timed.stats.substitute_draws,
+                timed.stats.counter_bide_draws,
+                timed.stats.heal_draws,
             )
             .unwrap();
         }
@@ -521,6 +577,9 @@ fn main() {
         let wall_ratio = summary.matched_seconds / summary.matched_exact_seconds.max(f64::EPSILON);
         let all_run_ratio = summary.all_runs as f64 / summary.all_exact_runs.max(1) as f64;
         let all_wall_ratio = summary.all_seconds / summary.all_exact_seconds.max(f64::EPSILON);
+        let damage_draws = summary.exact_damage_draws + summary.abstract_damage_draws;
+        let exact_draw_share = summary.exact_damage_draws as f64 / damage_draws.max(1) as f64;
+        let classes_per_draw = summary.damage_classes as f64 / damage_draws.max(1) as f64;
         println!(
             "  {name:10} self {}/{} matched {} value-MAE {:.5} worst {:.5} policy-regret {:.5} worst {:.5}",
             summary.self_completed,
@@ -535,6 +594,20 @@ fn main() {
             "             matched runs {:.3}x wall {:.3}x; all-attempt work {:.3}x wall {:.3}x",
             run_ratio, wall_ratio, all_run_ratio, all_wall_ratio,
         );
+        println!(
+            "             damage probes exact-share {:.3} classes/draw {:.2} ({} observations)",
+            exact_draw_share, classes_per_draw, damage_draws,
+        );
+        if summary.exact_damage_draws > 0 {
+            println!(
+                "             forced reasons drain/recoil {} multihit {} substitute {} counter/bide {} heal {}",
+                summary.drain_recoil_draws,
+                summary.multihit_draws,
+                summary.substitute_draws,
+                summary.counter_bide_draws,
+                summary.heal_draws,
+            );
+        }
         if summary.anchor_n > 0 {
             println!(
                 "             anchors {} mid-MAE {:.5} interval-outside {:.5}",

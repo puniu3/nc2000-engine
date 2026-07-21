@@ -2,7 +2,7 @@
 //! → gen2stadium2 `tryMoveHit` → gen2 `moveHit` → gen2stadium2 `getDamage`.
 
 use crate::dex::{Cb, Accuracy, Category, Dex, HitEffect, Multihit, MoveId};
-use crate::prng::{DamageRollContext, DamageRollMode};
+use crate::prng::{DamageExactReason, DamageRollContext, DamageRollMode};
 use crate::state::*;
 
 use super::conditions::DamageEffect;
@@ -2465,20 +2465,62 @@ impl Battle {
     // ---------------------------------------------------------- getDamage
 
     /// Semantic information used by the experimental damage-roll quotient.
-    /// Mechanics which can later observe the numeric damage retain exact
+    /// Mechanics which can later observe numeric damage can retain exact
     /// rolls; the remaining thresholds describe predicates that change at a
     /// small number of meaningful post-hit HP values.
-    fn damage_roll_context(&self, dex: &Dex, target: PokeId) -> DamageRollContext {
+    fn damage_roll_context(
+        &self,
+        dex: &Dex,
+        target: PokeId,
+        mode: DamageRollMode,
+    ) -> DamageRollContext {
         let p = self.poke(target);
         let maxhp = p.maxhp.max(1);
-        let mut thresholds = vec![0, maxhp / 4, maxhp / 3, maxhp / 2];
+        let lean = matches!(
+            mode,
+            DamageRollMode::ThresholdLean
+                | DamageRollMode::ThresholdLeanNoCounter
+                | DamageRollMode::ThresholdLeanNoDrainRecoil
+                | DamageRollMode::ThresholdLeanNoMultiHit
+                | DamageRollMode::ThresholdLeanNoSubstitute
+                | DamageRollMode::ThresholdLeanMinimal
+                | DamageRollMode::ThresholdLeanNext
+                | DamageRollMode::ThresholdLeanResidual
+                | DamageRollMode::ThresholdLeanClock
+                | DamageRollMode::ThresholdHealSplit
+                | DamageRollMode::ThresholdHeal
+        );
+        let mut thresholds = if lean {
+            vec![0]
+        } else {
+            // Baseline retained for direct comparison with the original
+            // experiment. The lean modes below require an observable cause.
+            vec![0, maxhp / 4, maxhp / 3, maxhp / 2]
+        };
+
+        let usable_move = |name: &str| {
+            p.move_slots.iter().any(|slot| slot.pp > 0 && dex.moves.key(slot.id) == name)
+        };
+        if lean {
+            if usable_move("substitute") {
+                thresholds.push(maxhp / 4);
+            }
+            if usable_move("bellydrum") {
+                thresholds.push(maxhp / 2);
+            }
+            if p.item.is_some_and(|item| {
+                matches!(dex.items.key(item), "berry" | "goldberry" | "berryjuice")
+            }) {
+                thresholds.push(maxhp / 2);
+            }
+        }
 
         // Flail/Reversal's six base-power bands. Only add them when the
         // damaged Pokemon can actually make the predicate observable.
         let has_hp_power_move = p
             .move_slots
             .iter()
-            .any(|slot| matches!(dex.moves.key(slot.id), "flail" | "reversal"));
+            .any(|slot| slot.pp > 0 && matches!(dex.moves.key(slot.id), "flail" | "reversal"));
         if has_hp_power_move {
             for ratio_max in [1, 4, 9, 16, 32] {
                 let numerator = (ratio_max + 1) * maxhp;
@@ -2510,19 +2552,73 @@ impl Battle {
             0
         };
 
-        let damage_sensitive_move = self.active_move.as_ref().is_some_and(|mv| {
-            mv.drain.is_some() || mv.recoil.is_some() || mv.struggle_recoil || mv.multihit.is_some()
+        let active_exact_reason = self.active_move.as_ref().and_then(|mv| {
+            if mv.multihit.is_some() {
+                Some(DamageExactReason::MultiHit)
+            } else if mv.drain.is_some() || mv.recoil.is_some() || mv.struggle_recoil {
+                Some(DamageExactReason::DrainRecoil)
+            } else {
+                None
+            }
         });
         let has_substitute = crate::cond_id!(dex, "substitute").is_some_and(|id| p.has_volatile(id));
         let has_damage_callback = p.move_slots.iter().any(|slot| {
-            matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat" | "bide")
+            slot.pp > 0 && matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat" | "bide")
         }) || crate::cond_id!(dex, "bide").is_some_and(|id| p.has_volatile(id));
+        let has_heal_move = p.move_slots.iter().any(|slot| {
+            slot.pp > 0
+                && matches!(
+                    dex.moves.key(slot.id),
+                    "rest"
+                        | "recover"
+                        | "softboiled"
+                        | "milkdrink"
+                        | "moonlight"
+                        | "morningsun"
+                        | "synthesis"
+                )
+        });
+        let heal_sensitive =
+            mode == DamageRollMode::ThresholdHeal && p.hp <= maxhp / 2 && has_heal_move;
+        let heal_threshold = if mode == DamageRollMode::ThresholdHealSplit && has_heal_move {
+            maxhp / 2
+        } else {
+            0
+        };
+
+        let keep_exact = |reason| match (mode, reason) {
+            (DamageRollMode::ThresholdLeanMinimal, _) => false,
+            (DamageRollMode::ThresholdLeanNoCounter, DamageExactReason::CounterBide) => false,
+            (DamageRollMode::ThresholdLeanNoDrainRecoil, DamageExactReason::DrainRecoil) => false,
+            (DamageRollMode::ThresholdLeanNoMultiHit, DamageExactReason::MultiHit) => false,
+            (DamageRollMode::ThresholdLeanNoSubstitute, DamageExactReason::Substitute) => false,
+            _ => true,
+        };
+        let exact_reason = active_exact_reason
+            .filter(|&reason| keep_exact(reason))
+            .or_else(|| {
+                has_substitute
+                    .then_some(DamageExactReason::Substitute)
+                    .filter(|&reason| keep_exact(reason))
+            })
+            .or_else(|| {
+                has_damage_callback
+                    .then_some(DamageExactReason::CounterBide)
+                    .filter(|&reason| keep_exact(reason))
+            })
+            .or_else(|| {
+                heal_sensitive
+                    .then_some(DamageExactReason::Heal)
+                    .filter(|&reason| keep_exact(reason))
+            })
+            .unwrap_or_default();
 
         DamageRollContext {
             hp: p.hp,
             thresholds,
             residual_damage,
-            force_exact: damage_sensitive_move || has_substitute || has_damage_callback,
+            heal_threshold,
+            exact_reason,
         }
     }
 
@@ -2834,7 +2930,7 @@ impl Battle {
             if mode == DamageRollMode::Exact {
                 damage = self.prng.apply_damage_variance(damage);
             } else {
-                let context = self.damage_roll_context(dex, target);
+                let context = self.damage_roll_context(dex, target, mode);
                 damage = self.prng.apply_damage_variance_with_context(damage, Some(&context));
             }
         }

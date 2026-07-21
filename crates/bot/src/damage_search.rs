@@ -54,6 +54,15 @@ pub struct DamageSearchStats {
     pub matrix_cells: usize,
     pub max_matrix: [usize; 2],
     pub worst_gap: f64,
+    /// Script-run observations, including repeated enumeration probes.
+    pub exact_damage_draws: usize,
+    pub abstract_damage_draws: usize,
+    pub damage_classes: usize,
+    pub drain_recoil_draws: usize,
+    pub multihit_draws: usize,
+    pub substitute_draws: usize,
+    pub counter_bide_draws: usize,
+    pub heal_draws: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -212,6 +221,14 @@ impl<'d> DamageSearch<'d> {
                 };
                 self.stats.chance_runs += step.runs;
                 self.stats.leaves += step.leaves.len();
+                self.stats.exact_damage_draws += step.damage.exact_draws;
+                self.stats.abstract_damage_draws += step.damage.abstract_draws;
+                self.stats.damage_classes += step.damage.offered_classes;
+                self.stats.drain_recoil_draws += step.damage.drain_recoil_draws;
+                self.stats.multihit_draws += step.damage.multihit_draws;
+                self.stats.substitute_draws += step.damage.substitute_draws;
+                self.stats.counter_bide_draws += step.damage.counter_bide_draws;
+                self.stats.heal_draws += step.damage.heal_draws;
 
                 // Merge equal successor states before recursive evaluation.
                 let mut successors: HashMap<u128, (f64, usize)> = HashMap::new();
