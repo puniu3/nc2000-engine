@@ -41,6 +41,17 @@ fn range(value: &str) -> (usize, usize) {
     (lo, hi)
 }
 
+fn repo_root() -> PathBuf {
+    if let Ok(root) = std::env::var("NC2000_REPO_ROOT") {
+        return PathBuf::from(root);
+    }
+    let current = std::env::current_dir().unwrap();
+    if current.join("data/gen2stadium2.json").is_file() {
+        return current;
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
 fn alive(battle: &Battle, side: usize) -> usize {
     battle.sides[side]
         .party
@@ -204,13 +215,15 @@ fn main() {
     let out_path = arg(&args, "--out", "tmp/damage-abstraction.csv");
     let anchor_path = arg(&args, "--anchors", "");
     let anchor_only = flag(&args, "--anchor-only");
+    let verbose = flag(&args, "--verbose");
     let mut modes = parse_modes(&arg(&args, "--modes", "exact,mean,threshold1,threshold2"));
     if !modes.contains(&DamageRollMode::Exact) {
         modes.insert(0, DamageRollMode::Exact);
     }
 
-    let dex = conformance::load_dex();
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = repo_root();
+    let dex_json = std::fs::read_to_string(root.join("data/gen2stadium2.json")).unwrap();
+    let dex = nc2000_engine::dex::Dex::from_json(&dex_json).unwrap();
     let corpus = if corpus.is_absolute() {
         corpus
     } else {
@@ -329,6 +342,20 @@ fn main() {
             exact.seconds,
             if exact_report.is_some() { "" } else { " ABORT" },
         );
+        if verbose {
+            let needs = position.battle.needs_choice();
+            let mut probe = position.battle.clone();
+            let choices = |probe: &mut Battle, side: usize| {
+                if needs[side] {
+                    probe.legal_choices(&dex, side)
+                } else {
+                    Vec::new()
+                }
+            };
+            let row = choices(&mut probe, 0);
+            let col = choices(&mut probe, 1);
+            println!("    actions row {:?} col {:?}", row, col);
+        }
 
         for &mode in &modes {
             let timed = if mode == DamageRollMode::Exact {
@@ -348,6 +375,20 @@ fn main() {
                     leaf_cap,
                 )
             };
+            if verbose {
+                match timed.report.as_ref() {
+                    Some(report) => println!(
+                        "    {} value {:.9} dims {:?} row {:?} col {:?} matrix {:?}",
+                        mode_name(mode),
+                        report.value,
+                        report.dims,
+                        report.row_policy,
+                        report.col_policy,
+                        report.matrix,
+                    ),
+                    None => println!("    {} ABORT", mode_name(mode)),
+                }
+            }
             let name = mode_name(mode);
             let summary = summaries.entry(name).or_default();
             summary.attempted += 1;

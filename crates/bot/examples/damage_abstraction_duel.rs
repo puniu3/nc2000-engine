@@ -5,7 +5,9 @@
 //! back to the same SM-MCTS policy. Reported think time therefore includes
 //! both the abstraction's speed and the coverage it buys.
 
-use conformance::fixture::{corpus_files, repo_root, Fixture};
+use std::path::{Path, PathBuf};
+
+use conformance::fixture::{corpus_files, Fixture};
 use nc2000_bot::damage_search::{DamageSearchAgent, DamageSearchAgentConfig, DamageSearchConfig};
 use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::smmcts::{RmConfig, SelRule};
@@ -29,6 +31,17 @@ fn mode(value: &str) -> DamageRollMode {
         "threshold2" | "t2" => DamageRollMode::Threshold2,
         _ => panic!("bad damage mode {value}"),
     }
+}
+
+fn repo_root() -> PathBuf {
+    if let Ok(root) = std::env::var("NC2000_REPO_ROOT") {
+        return PathBuf::from(root);
+    }
+    let current = std::env::current_dir().unwrap();
+    if current.join("data/gen2stadium2.json").is_file() {
+        return current;
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 fn config(
@@ -62,8 +75,8 @@ fn config(
     }
 }
 
-fn load_fixture_pool() -> Vec<Vec<PokemonSet>> {
-    let root = repo_root().join("fixtures/corpus-v1");
+fn load_fixture_pool(repo: &Path) -> Vec<Vec<PokemonSet>> {
+    let root = repo.join("fixtures/corpus-v1");
     let mut teams = Vec::new();
     for corpus in ["puredata", "full"] {
         for path in corpus_files(&root.join(corpus)) {
@@ -94,9 +107,11 @@ fn main() {
     let max_turns: u16 = arg(&args, "--max-turns", "500").parse().unwrap();
     let pool_spec = arg(&args, "--pool", "fixtures");
 
-    let dex = conformance::load_dex();
+    let root = repo_root();
+    let dex_json = std::fs::read_to_string(root.join("data/gen2stadium2.json")).unwrap();
+    let dex = nc2000_engine::dex::Dex::from_json(&dex_json).unwrap();
     let teams = if let Some(range) = pool_spec.strip_prefix("meta") {
-        let pool = load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json"));
+        let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
         let (lo, hi) = match range.strip_prefix(':') {
             None => (0, pool.teams.len() - 1),
             Some(value) => {
@@ -112,7 +127,7 @@ fn main() {
             .map(|team| team.sets.clone())
             .collect()
     } else {
-        load_fixture_pool()
+        load_fixture_pool(&root)
     };
 
     let config_a = config(
