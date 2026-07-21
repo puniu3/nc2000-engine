@@ -21,7 +21,7 @@
 // Usage:
 //   node tools/ps-client.js --server ws://127.0.0.1:8123 --name BOTNAME \
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
-//     [--games N] [--iters 1000] [--seed 1] [--mode blind|open] \
+//     [--games N] [--iters 10000] [--seed 1] [--mode blind|open] \
 //     [--opp-team-file FILE.json] [--random] [--timer] [--no-tables] \
 //     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
 //     [--drop SPEC] [--quiet]
@@ -82,7 +82,7 @@ if (args.help || args.h) {
                     opponent's true sets — needs --opp-team-file, only
                     meaningful where sheets are genuinely open)
   --opp-team-file F opponent sets JSON for --mode open
-  --iters N         blind search iterations per decision (default 1000)
+  --iters N         blind search iterations per decision (default 10000)
   --seed N          searcher / random-mode seed (default 1)
   --random          random driver mode (no searcher; uniform legal choice)
   --timer           turn the battle timer on in every game
@@ -110,7 +110,10 @@ const CHALLENGE = args.challenge && args.challenge !== true ? String(args.challe
 const ACCEPT = args.accept && args.accept !== true ? String(args.accept) : '';
 const GAMES = parseInt(args.games || '1', 10);
 const MODE = String(args.mode || 'blind');
-const ITERS = parseInt(args.iters || '1000', 10);
+// 1000 iters left flat roots as a visit-count lottery (battle-3623 T6: argmax
+// split 23/16/7/4 over 50 seeds; unanimous at 10000 — replay_postmortem_3623).
+// ~3 s/move native at 10k vs the 150 s battle timer.
+const ITERS = parseInt(args.iters || '10000', 10);
 const SEED = parseInt(args.seed || '1', 10);
 const RANDOM = !!args.random;
 const TIMER = !!args.timer;
