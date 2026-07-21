@@ -385,6 +385,75 @@ fn main() {
         };
         println!("  {:<18} {:>5} {:>5}  {:>+9.3} {:>7.4}", f.name, any.len(), one.len(), bias, mse);
     }
+    // ---- --ab: paired eval-variant comparison on the SAME positions + GT
+    if args.iter().any(|a| a == "--ab") {
+        let mut variants: Vec<(&str, EvalWeights)> = Vec::new();
+        variants.push(("default", EvalWeights::default()));
+        let mut b = EvalWeights::default();
+        b.slp_time_scale = true;
+        variants.push(("slpTime", b.clone()));
+        let mut c = b.clone();
+        c.substitute = 0.5;
+        variants.push(("slpTime+sub0.5", c.clone()));
+        let mut d = c.clone();
+        d.slp *= 0.7;
+        d.frz *= 0.7;
+        d.tox *= 0.7;
+        variants.push(("slpTime+sub+status*0.7", d));
+
+        let feat_idx = |name: &str| fs.iter().position(|f| f.name == name).unwrap();
+        let oriented_bias = |preds: &[f64], fi: usize| -> f64 {
+            let one: Vec<usize> = (0..n)
+                .filter(|&i| {
+                    let m = positions[i].presence[fi];
+                    m == 1 || m == 2
+                })
+                .collect();
+            if one.is_empty() {
+                return f64::NAN;
+            }
+            one.iter()
+                .map(|&i| {
+                    if positions[i].presence[fi] == 1 {
+                        preds[i] - emps[i]
+                    } else {
+                        (1.0 - preds[i]) - (1.0 - emps[i])
+                    }
+                })
+                .sum::<f64>()
+                / one.len() as f64
+        };
+        println!("\n== --ab paired comparison (same positions, same GT; GT policy = default eval) ==");
+        println!(
+            "  {:<24} {:>6} {:>7} {:>7}  {:>8} {:>8} {:>8} {:>8}",
+            "variant", "r", "brier", "MSE", "slp", "sub", "frz", "tox"
+        );
+        for (name, vw) in &variants {
+            let vp: Vec<f64> = positions.iter().map(|p| eval01(&p.battle, &dex, vw)).collect();
+            let mut vbrier = 0.0;
+            let mut vcnt = 0.0;
+            for i in 0..n {
+                for &o in &results[i] {
+                    vbrier += (vp[i] - o) * (vp[i] - o);
+                    vcnt += 1.0;
+                }
+            }
+            let vmse =
+                vp.iter().zip(&emps).map(|(p, e)| (p - e) * (p - e)).sum::<f64>() / n.max(1) as f64;
+            println!(
+                "  {:<24} {:>6.3} {:>7.4} {:>7.4}  {:>+8.3} {:>+8.3} {:>+8.3} {:>+8.3}",
+                name,
+                pearson(&vp, &emps),
+                vbrier / f64::max(vcnt, 1.0),
+                vmse,
+                oriented_bias(&vp, feat_idx("slp")),
+                oriented_bias(&vp, feat_idx("substitute")),
+                oriented_bias(&vp, feat_idx("frz")),
+                oriented_bias(&vp, feat_idx("tox")),
+            );
+        }
+    }
+
     let clean: Vec<usize> = (0..n)
         .filter(|&i| positions[i].presence.iter().all(|&m| m == 0) && !positions[i].weather)
         .collect();

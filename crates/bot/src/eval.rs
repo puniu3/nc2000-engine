@@ -48,26 +48,41 @@ pub struct EvalWeights {
     /// (Double Team / Baton Pass). Always true in shipped play; the tests flip
     /// it to reproduce the pre-fix eval (base accuracy only, blind to evasion).
     pub couple_evasion: bool,
+    /// M17 candidates (measured leads from the M16a calibration; not in the
+    /// SPSA vector — gate via eval_calibration --ab before changing defaults):
+    /// scale the slp penalty by the engine's remaining sleep clock
+    /// (`DK::Time`/3) so a 2-turn Rest nap costs less than a full enemy
+    /// sleep (slp slice bias −0.17 = flat penalty too heavy)...
+    pub slp_time_scale: bool,
+    /// ...and a flat bonus while the active has a Substitute up (sub slice
+    /// bias −0.31 = the paid-for sub is invisible to the eval). 0.0 = off.
+    pub substitute: f64,
 }
 
 impl Default for EvalWeights {
-    /// Hand-written starting point (M6 pre-tuning); replaced by the SPSA
-    /// result once tuning lands.
+    /// M6 hand-written starting point, revised 2026-07-21 by the M16a/M17
+    /// paired calibration (eval_calibration --ab, 600 positions x 32
+    /// playouts, same GT): slp/frz/tox x0.7 + sleep-clock scaling +
+    /// substitute bonus improved r 0.681->0.709, Brier 0.194->0.189 and
+    /// halved the slp/sub/frz oriented biases, at strength parity in
+    /// seed-paired duels (0.485+/-0.069 @300, 0.500+/-0.098 @1000).
     fn default() -> Self {
         EvalWeights {
             hp: 1.0,
             alive: 0.5,
             brn: 0.35,
             par: 0.35,
-            slp: 0.6,
-            frz: 0.8,
+            slp: 0.42,
+            frz: 0.56,
             psn: 0.25,
-            tox: 0.5,
+            tox: 0.35,
             boost: [0.15, 0.10, 0.15, 0.10, 0.15, 0.10, 0.10],
             threat: 0.5,
             pp: 0.2,
             scale: 1.5,
             couple_evasion: true,
+            slp_time_scale: true,
+            substitute: 0.5,
         }
     }
 }
@@ -105,9 +120,11 @@ impl EvalWeights {
             threat: v[15],
             pp: v[16],
             scale,
-            // Evasion coupling is not a tuned float; shipped play always
-            // couples (the SPSA vector carries only the linear weights).
+            // Non-vector features follow the shipped defaults (the SPSA
+            // vector carries only the linear weights).
             couple_evasion: true,
+            slp_time_scale: true,
+            substitute: 0.5,
         }
     }
 }
@@ -138,7 +155,16 @@ fn side_score(b: &Battle, dex: &Dex, w: &EvalWeights, s: usize) -> f64 {
         score -= match p.status {
             Status::Brn => w.brn,
             Status::Par => w.par,
-            Status::Slp => w.slp,
+            Status::Slp => {
+                if w.slp_time_scale {
+                    // remaining sleep clock (engine DK::Time, decremented per
+                    // wake attempt): Rest = 3, natural = 2..=4 at onset
+                    let t = p.status_state.get_int(nc2000_engine::state::DK::Time).clamp(0, 4);
+                    w.slp * t as f64 / 3.0
+                } else {
+                    w.slp
+                }
+            }
             Status::Frz => w.frz,
             Status::Psn => w.psn,
             Status::Tox => w.tox,
@@ -157,6 +183,13 @@ fn side_score(b: &Battle, dex: &Dex, w: &EvalWeights, s: usize) -> f64 {
         if !p.fainted && p.hp > 0 {
             for i in 0..7 {
                 score += w.boost[i] * p.boosts[i] as f64;
+            }
+            if w.substitute != 0.0 {
+                if let Some(sub) = substitute_id(dex) {
+                    if p.has_volatile(sub) {
+                        score += w.substitute;
+                    }
+                }
             }
             if let Some(foe) = b.active_id(1 - s) {
                 if !b.poke(foe).fainted && b.poke(foe).hp > 0 {
@@ -192,6 +225,11 @@ pub fn best_hit_fraction(
 fn hiddenpower_id(dex: &Dex) -> Option<MoveId> {
     static ID: OnceLock<Option<MoveId>> = OnceLock::new();
     *ID.get_or_init(|| dex.moves.id("hiddenpower"))
+}
+
+fn substitute_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
+    static ID: OnceLock<Option<nc2000_engine::dex::CondId>> = OnceLock::new();
+    *ID.get_or_init(|| dex.conds_id("substitute"))
 }
 
 /// Expected fraction of the defender's *current* HP removed by one use of
