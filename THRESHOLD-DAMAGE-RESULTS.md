@@ -2,7 +2,7 @@
 
 Date: 2026-07-22  
 Branch/worktree: `exp/threshold-damage` / `/home/puniu/nc2000-threshold-exp`  
-Implementation commits: `17d6912`, `b7d4d2a`, `b4c99c7`
+Implementation commits: `17d6912`, `b7d4d2a`, `b4c99c7`, `7cfd38d`
 
 ## Result
 
