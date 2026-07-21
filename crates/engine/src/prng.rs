@@ -244,6 +244,22 @@ impl BattleRng {
         }
     }
 
+    /// The gen-2 damage roll: uniform in [217, 256) (PS
+    /// `random_range(217, 256)`). Seeded consumption is bit-identical to
+    /// that call; Oracle mode labels the draw "droll" so the enumeration
+    /// driver can range-merge rolls whose entire subtrees coincide
+    /// (sound: damage is monotone in the roll, so identical endpoint
+    /// subtrees pin every interior roll — owner-approved 2026-07-21).
+    pub fn damage_roll(&mut self) -> u32 {
+        match &mut self.oracle {
+            None => 217 + self.lcg.random(39),
+            Some(o) => {
+                let counts = (0..39).map(|v| uniform_count(39, v)).collect();
+                217 + Self::pick(o, "droll", counts) as u32
+            }
+        }
+    }
+
     /// PS `this.random(100) < accuracy` where accuracy is an f64 percent.
     /// Seeded mode reproduces the float comparison bit-exactly; Oracle mode
     /// merges to hit/miss.

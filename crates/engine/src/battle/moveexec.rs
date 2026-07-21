@@ -2767,7 +2767,7 @@ impl Battle {
 
         // random factor
         if !no_damage_variance && damage > 1.0 {
-            damage *= self.prng.random_range(217, 256) as f64;
+            damage *= self.prng.damage_roll() as f64;
             damage = (damage / 255.0).floor();
         }
 
