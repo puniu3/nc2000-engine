@@ -24,6 +24,7 @@ pub mod belief;
 pub mod blind;
 pub mod duel;
 pub mod eval;
+pub mod exact;
 pub mod exploit;
 pub mod import;
 pub mod mcts;
