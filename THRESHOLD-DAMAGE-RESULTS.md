@@ -2,13 +2,13 @@
 
 Date: 2026-07-22  
 Branch/worktree: `exp/threshold-damage` / `/home/puniu/nc2000-threshold-exp`  
-Implementation commits: `17d6912`, `b7d4d2a`, `b4c99c7`, `7cfd38d`
+Implementation commits: `17d6912`, `b7d4d2a`, `b4c99c7`, `7cfd38d`, `538e4fe`
 
 ## Result
 
-The semantic-threshold scheme is worth continuing. On the matched search benchmark it removes about 90% of horizon-1 engine executions while keeping average value and root-policy errors small. A 400-game fixed-work duel detected no strength loss. The waste audit found that unconditional HP fractions, the residual clock, and conservative exact escapes consume work without measurable policy benefit in this sample. The leanest arm uses 5.38% of exact runs on the 57 anchors and 2.41% on an 8-position holdout.
+The semantic-threshold scheme is worth continuing. The waste audit found that unconditional HP fractions, the residual clock, and conservative exact escapes consume work without measurable policy benefit in this sample. The leanest fixed abstraction uses 5.38% of exact runs on the 57 anchors and 2.41% on an 8-position holdout.
 
-It is not product-ready: one healing/stall position still has root-policy regret 0.056. Neither broad heal exactness nor a two-representative heal split fixes it. The next mechanism should refine exact root-matrix cells selected by equilibrium support, rather than add another global HP partition.
+Adaptive root-cell refinement fixes the healing/stall miss without another global HP partition. The final `probe-refine` arm uses 7.90% of exact work on the 57 anchors and 6.83% on holdout; worst exact-matrix policy regret is `0.0000959` and `0` respectively. A 400-game fixed-work duel against exact detected no strength loss and used 10.9% less think time. It remains experimental: the `0.01` probe threshold has only eight untuned exact-complete holdout positions, the result is not certified, an action omitted by the approximate support can still be missed, and Rest stalls retain a heavy runtime tail. The product agent remains untouched.
 
 ## Method
 
@@ -131,10 +131,52 @@ The holdout confirms the ranking: `lean-minimal` saves another 22.2% over lean w
 
 ### Decision
 
-- Default research candidate: `lean-minimal` (KO plus only live mechanical thresholds, no clocks or exact escapes).
+- Base abstraction: `lean-minimal` (KO plus only live mechanical thresholds, no clocks or exact escapes).
+- Default research candidate: low/high-screened equilibrium-support refinement described below.
 - Optional accuracy ablation: add only the next-hit clock.
 - Reject: residual clock, broad heal exactness, heal two-way split, unconditional 1/3, and unconditional 1/4/1/2.
-- Before product integration: add equilibrium-support exact cell refinement for heal/stall, adversarial Counter/Bide/drain/recoil/multi-hit/Substitute fixtures, then rerun the duel gate.
+- Before product integration: broaden the exact-complete holdout, add adversarial Counter/Bide/drain/recoil/multi-hit/Substitute fixtures, test support-discovery failures, and rerun the product-fallback duel gate.
+
+## Adaptive equilibrium-cell refinement
+
+The final search is one-shot and preserves the same finite-horizon recursion, evaluator, and matrix solver:
+
+1. Solve the full root matrix with `lean-minimal` conditional-mean representatives.
+2. Select the cross product of equilibrium-support actions and approximate pure best responses.
+3. Re-evaluate only those cells twice with the **same buckets and probability masses**, substituting each bucket's lowest and highest attainable damage. This adds no HP partition.
+4. If a cell's low/high continuation values differ by more than `0.01`, re-evaluate that cell with exact damage rolls. Low, high, and exact passes each share their recursive memo across selected root cells.
+5. Replace only refined entries in the mean matrix and solve it again.
+
+### Why full support exactness is wasteful
+
+Exact-recomputing every selected support/best-response cell is an effective control: it matched the full exact value and policy on all 57 anchors and all 8 holdout positions. It is still overkill.
+
+| arm | sample | runs | exact ratio | value MAE | worst regret | selected/exact cells |
+|---|---|---:|---:|---:|---:|---:|
+| all selected cells exact | 57 anchors | 2,096,579 | 0.21239 | 0 | 0 | 234 |
+| all selected cells exact | 8 holdout | 575,439 | 0.09625 | 0 | 0 | 25 |
+
+On the anchors, `lean-minimal` already matched exact at 41/57 roots. Full support refinement nevertheless spent 599,199 exact runs on those roots and exact-recomputed 203/234 selected cells. Only 4 roots had value error or regret above `0.001`; an impossible hindsight oracle would need 238,612 total runs, 2.42% of full exact. This motivated the cheap pre-exact instability probe.
+
+### Low/high-screened result
+
+| arm | sample | runs | exact ratio | wall ratio | value MAE | worst value error | mean regret | worst regret | exact cells |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| lean-minimal | 57 anchors | 530,638 | 0.05376 | 0.04381 | 0.000903946 | 0.025200988 | 0.000992588 | 0.056016411 | 0 |
+| probe-refine | 57 anchors | 779,791 | 0.07899 | 0.06772 | 0.000004019 | 0.000077036 | 0.000003638 | 0.000095855 | 11 |
+| lean-minimal | 8 holdout | 144,315 | 0.02414 | 0.02070 | 0.000030008 | 0.000239698 | 0.000086106 | 0.000688850 | 0 |
+| probe-refine | 8 holdout | 408,146 | 0.06827 | 0.06363 | 0.000000046 | 0.000000293 | 0 | 0 | 2 |
+
+The 57-anchor probe-refine work decomposes into 530,638 mean runs, 118,166 low/high probe runs, and 130,987 exact-refinement runs. The holdout decomposition is 144,315 + 25,572 + 238,259: two high-HP exact cells dominate, so the heavy tail is concentrated rather than removed.
+
+At the battle-455 failure pair, the probe refines 2 cells total and uses 55,192 runs (14.15% of exact), versus 157,294 runs (40.34%) for exacting all five selected cells. Worst policy regret falls from `0.056016` to `0.0000299`.
+
+Limitations:
+
+- `0.01` was selected from the 57-anchor low/high separation and only then checked on the 8-position holdout; it is not a universal constant.
+- Low/high values are diagnostics, not mathematical bounds. Damage can be non-monotone through choices and mechanics.
+- Candidate discovery starts from the mean matrix. A strategically important action misranked outside its support and approximate best responses is not probed.
+- Refinement is one-shot. It does not iteratively add support actions after exact entries move the equilibrium.
 
 ## Fixed-work duel
 
@@ -153,6 +195,15 @@ Result over 400 games:
 - think time: threshold2 `341.28 ms/move`, exact `434.08 ms/move` (21.4% lower);
 - average 21.2 turns; batch wall 772.1 s; peak observed RSS about 1.56 GiB.
 
+The final probe-refine arm was then run against exact under the same low-budget gate (same 32 teams, paired schedule, horizon 1, 20,000 work per mean/probe/exact phase, fallback 300, turn cap 100, seed 1):
+
+- probe-refine: 194 wins, 202 losses, 4 ties;
+- score `0.4900 +/- 0.0488` (95% CI): no detected strength loss;
+- think time: probe-refine `381.86 ms/move`, exact `428.76 ms/move` (10.9% lower);
+- average 21.0 turns; batch wall 790.5 s.
+
+The per-phase limit means probe-refine can theoretically spend up to four nominal work budgets (mean, low, high, exact), although its selected-cell passes used much less in the measured corpus. The think-time result, not nominal budget multiplication, is the relevant duel resource measurement.
+
 A 200,000-work/500-turn attempt reached 90/100 games in 950 s, then made no ten-game progress for over six minutes in Rest stalls; it was stopped after 21 minutes. At that setting exact search at every 1v1 decision has unacceptable tail cost. No win-rate result is claimed from the interrupted run.
 
 ## Resource projection
@@ -160,6 +211,8 @@ A 200,000-work/500-turn attempt reached 90/100 games in 950 s, then made no ten-
 - The four-arm, 57-position horizon-1 benchmark consumed about 1,205 single-core seconds (0.335 core-hours). It completed locally with three workers in minutes, not hours.
 - Linear projection to 1,200 similar endgames: about 7.0 core-hours for all four arms, before heavy-tail allowance. On a healthy 32–56 vCPU worker this is roughly 15–30 minutes including startup/synchronization; on the local 6-core machine, roughly 1–2 hours.
 - The 400-game low-budget duel consumed about 2.6 core-hours (`12 × 772 s`). A 1,200-game confidence run is about 8 core-hours at this setting.
+- The probe-refine 57-anchor pass consumed 65.2 summed single-core seconds versus 963.2 for exact; its 8-position holdout consumed 35.6 versus 559.4 seconds. These are measured sums, not parallel batch wall.
+- The 400-game probe-refine duel also consumed about 2.6 core-hours (`12 × 790.5 s`).
 - A 400-game product-fallback (3,000 iterations) gate is expected to need roughly 5–8 core-hours / 25–40 minutes on 12 cores; 1,200 games roughly triples that. Measure again because Rest-stall tails are non-linear.
 
 ## cx record
@@ -173,18 +226,22 @@ cx was authorized and attempted. Spot stockouts affected 56-, 32-, 16-, and 8-vC
 
 ```bash
 cargo test -p nc2000-engine
+cargo test -p nc2000-bot
 cargo test -p conformance
+cargo run --release -p nc2000-bot --example chance_conformance
 cargo run --release -p nc2000-bot --example damage_abstraction -- \
   --corpus /home/puniu/nc2000-engine/tmp/corpus-spectator \
   --anchors /home/puniu/nc2000-engine/tmp/eec-all.csv --anchor-only \
   --battles 0-569 --positions 999 --per-battle 99 --alive-max 3 \
-  --hp-cap 2000 --horizon 1 --work 2000000 --leaf-cap 100000 \
-  --modes exact,threshold2,lean,lean-no-drain,lean-minimal,heal-split \
+  --hp-cap 2000 --horizon 1 --work 2000000 --probe-work 2000000 \
+  --refine-work 2000000 --leaf-cap 100000 --modes exact,lean-minimal \
+  --probe-refine --probe-threshold 0.01 \
   --out /tmp/damage-abstraction-h1.csv
 
 cargo run --release -p nc2000-bot --example damage_abstraction_duel -- \
-  --a-mode threshold2 --b-mode exact --a-horizon 1 --b-horizon 1 \
-  --a-work 20000 --b-work 20000 --fallback-iters 300 \
+  --a-probe --a-mode lean-minimal --b-mode exact \
+  --a-horizon 1 --b-horizon 1 --a-work 20000 --b-work 20000 \
+  --probe-work 20000 --probe-threshold 0.01 --fallback-iters 300 \
   --games 400 --threads 12 --pool meta --max-turns 100
 ```
 
