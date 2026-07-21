@@ -77,8 +77,12 @@ impl Certified {
 pub struct ExactStats {
     /// Decision states solved (memo size).
     pub states: usize,
-    /// Chance leaves enumerated (= engine turn executions).
+    /// ACTUAL engine executions (probes and endpoint evaluations included)
+    /// — the quantity budgets and benchmarks must use.
     pub chance_runs: usize,
+    /// Resolved chance leaves (≠ work: merging returns leaves cheaper than
+    /// one run each, probing costs runs that return no leaf).
+    pub leaves: usize,
     /// Worst certified simplex bracket width seen.
     pub worst_gap: f64,
     /// Largest simultaneous matrix solved.
@@ -90,10 +94,11 @@ pub struct ExactSolver<'d> {
     pub cfg: ExactConfig,
     /// Fully-resolved subgame values (interval width 0: no truncated line
     /// contributes) — true values regardless of horizon, kept forever and
-    /// shared across positions.
-    exact_memo: HashMap<u64, f64>,
+    /// shared across positions. Keyed by the 128-bit dual-hash fingerprint
+    /// (certificate-grade identity).
+    exact_memo: HashMap<u128, f64>,
     /// Interval memo for the current (root, horizon) pass only.
-    ival_memo: HashMap<u64, (f64, f64)>,
+    ival_memo: HashMap<u128, (f64, f64)>,
     t_max: u16,
     limit: usize,
     work_limit: usize,
@@ -147,7 +152,7 @@ impl<'d> ExactSolver<'d> {
             };
             return Some((v, v));
         }
-        let key = b.state_key();
+        let key = b.state_key128();
         if let Some(&v) = self.exact_memo.get(&key) {
             return Some((v, v));
         }
@@ -181,17 +186,18 @@ impl<'d> ExactSolver<'d> {
         let mut mhi = vec![0.0f64; n0 * n1];
         for (i, &c0) in a0.iter().enumerate() {
             for (j, &c1) in a1.iter().enumerate() {
-                let leaves = enumerate_step(self.dex, b, [c0, c1], self.cfg.leaf_cap)?;
-                self.stats.chance_runs += leaves.len();
+                let step = enumerate_step(self.dex, b, [c0, c1], self.cfg.leaf_cap)?;
+                self.stats.chance_runs += step.runs;
+                self.stats.leaves += step.leaves.len();
                 // Merge identical successors before recursing.
-                let mut agg: HashMap<u64, (f64, usize)> = HashMap::new();
-                for (idx, l) in leaves.iter().enumerate() {
-                    let e = agg.entry(l.battle.state_key()).or_insert((0.0, idx));
+                let mut agg: HashMap<u128, (f64, usize)> = HashMap::new();
+                for (idx, l) in step.leaves.iter().enumerate() {
+                    let e = agg.entry(l.battle.state_key128()).or_insert((0.0, idx));
                     e.0 += l.prob;
                 }
                 let (mut elo, mut ehi) = (0.0, 0.0);
                 for (p, idx) in agg.values() {
-                    let (lo, hi) = self.ival(&leaves[*idx].battle)?;
+                    let (lo, hi) = self.ival(&step.leaves[*idx].battle)?;
                     elo += p * lo;
                     ehi += p * hi;
                 }

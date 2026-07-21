@@ -198,7 +198,28 @@ impl Battle {
     }
 
     fn state_key_with(&self, hp_buckets: Option<i64>) -> u64 {
-        use std::hash::{Hash, Hasher};
+        use std::hash::Hasher;
+        let mut h = FxHasher::default();
+        self.state_hash_into(&mut h, hp_buckets);
+        h.finish()
+    }
+
+    /// Two-independent-hash fingerprint (FxHash ‖ SipHash) for
+    /// certificate-grade state identity (M17e): the 64-bit search key
+    /// tolerates collisions (mis-aggregated statistics), a proof-carrying
+    /// merge must not — two hashes over independent functions push the
+    /// collision odds to ~2^-128.
+    pub fn state_key128(&self) -> u128 {
+        use std::hash::Hasher;
+        let mut h1 = FxHasher::default();
+        self.state_hash_into(&mut h1, None);
+        let mut h2 = std::collections::hash_map::DefaultHasher::new();
+        self.state_hash_into(&mut h2, None);
+        ((h1.finish() as u128) << 64) | h2.finish() as u128
+    }
+
+    fn state_hash_into<H: std::hash::Hasher>(&self, mut h: H, hp_buckets: Option<i64>) {
+        use std::hash::Hash;
         // Total destructuring on purpose: adding a `Battle` field breaks
         // this fn until the field is placed (hashed or explicitly skipped).
         let Battle {
@@ -234,7 +255,6 @@ impl Battle {
             listener_pool: _,  // scratch buffers
             battle_mask: _,    // derived from hashed state
         } = self;
-        let mut h = FxHasher::default();
         (turn, request_state, mid_turn, started, ended, winner).hash(&mut h);
         field.hash(&mut h);
         for side in sides.iter() {
@@ -250,7 +270,6 @@ impl Battle {
         // mid-event machinery: quiescent at request points, hashed as a guard
         (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(&mut h);
         (active_pokemon, active_target, last_move_id, pending_boosts).hash(&mut h);
-        h.finish()
     }
 
     /// All legal choices for one side at the current request point. Empty ⇔

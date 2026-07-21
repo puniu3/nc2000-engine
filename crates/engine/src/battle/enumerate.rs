@@ -38,9 +38,17 @@ pub struct ChanceLeaf {
     pub draws: usize,
 }
 
+/// Enumeration result with honest work accounting: `runs` counts actual
+/// engine executions (probes + endpoint evaluations included), which is
+/// what budgets and benchmarks must use — resolved leaf count is not work.
+pub struct StepEnum {
+    pub leaves: Vec<ChanceLeaf>,
+    pub runs: usize,
+}
+
 struct LeafRec {
     battle: Battle,
-    key: u64,
+    key: u128,
     prob: f64,
     trace: Rc<Vec<Draw>>,
 }
@@ -70,7 +78,7 @@ impl Ctx<'_> {
 }
 
 fn leaf(b: Battle, trace: Vec<Draw>) -> LeafRec {
-    let key = b.state_key();
+    let key = b.state_key128();
     let prob = trace.iter().map(Draw::prob).product();
     LeafRec { battle: b, key, prob, trace: Rc::new(trace) }
 }
@@ -84,7 +92,7 @@ fn subtree(ctx: &mut Ctx, script: &mut Vec<usize>) -> Option<Vec<LeafRec>> {
     let p = script.len();
     let d = &trace[p];
     let mut out = Vec::new();
-    if d.label == "droll" {
+    if d.label == "dmgvar" {
         let mut cache: HashMap<usize, Rc<Vec<LeafRec>>> = HashMap::new();
         droll_ranges(ctx, script, p, 0, d.counts.len() - 1, &mut cache, &mut out)?;
     } else {
@@ -182,13 +190,15 @@ pub fn enumerate_step(
     base: &Battle,
     choices: [Option<SearchChoice>; 2],
     cap: usize,
-) -> Option<Vec<ChanceLeaf>> {
+) -> Option<StepEnum> {
     let mut ctx = Ctx { dex, base, choices, cap, runs: 0 };
     let mut script = Vec::new();
     let recs = subtree(&mut ctx, &mut script)?;
-    Some(
-        recs.into_iter()
+    Some(StepEnum {
+        leaves: recs
+            .into_iter()
             .map(|l| ChanceLeaf { battle: l.battle, prob: l.prob, draws: l.trace.len() })
             .collect(),
-    )
+        runs: ctx.runs,
+    })
 }

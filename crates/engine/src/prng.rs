@@ -244,18 +244,36 @@ impl BattleRng {
         }
     }
 
-    /// The gen-2 damage roll: uniform in [217, 256) (PS
-    /// `random_range(217, 256)`). Seeded consumption is bit-identical to
-    /// that call; Oracle mode labels the draw "droll" so the enumeration
-    /// driver can range-merge rolls whose entire subtrees coincide
-    /// (sound: damage is monotone in the roll, so identical endpoint
-    /// subtrees pin every interior roll — owner-approved 2026-07-21).
-    pub fn damage_roll(&mut self) -> u32 {
+    /// The gen-2 damage random factor applied at its observable boundary:
+    /// `floor(damage * roll / 255)` for a roll uniform in [217, 256).
+    /// Seeded mode consumes exactly one `random(39)` draw (bit-parity with
+    /// PS `random_range(217, 256)`) and computes the same expression.
+    /// Oracle mode branches over DISTINCT final damage values (Phase A
+    /// integer-damage quotienting): raw roll classes with equal outcomes
+    /// are merged arithmetically before any downstream execution — sound
+    /// by construction, since the rest of the engine only ever observes
+    /// the final value. The label "dmgvar" lets the enumeration driver
+    /// apply its second-layer endpoint range merge on top (saturation
+    /// ranges where DIFFERENT damages still coincide).
+    pub fn apply_damage_variance(&mut self, damage: f64) -> f64 {
+        let out = |c: u32| (damage * (217 + c) as f64 / 255.0).floor();
         match &mut self.oracle {
-            None => 217 + self.lcg.random(39),
+            None => out(self.lcg.random(39)),
             Some(o) => {
-                let counts = (0..39).map(|v| uniform_count(39, v)).collect();
-                217 + Self::pick(o, "droll", counts) as u32
+                // Group contiguous raw classes by exact final damage
+                // (monotone in the roll, so contiguous grouping is total).
+                let mut counts: Vec<u64> = Vec::new();
+                let mut vals: Vec<f64> = Vec::new();
+                for c in 0..39u32 {
+                    let v = out(c);
+                    if vals.last() == Some(&v) {
+                        *counts.last_mut().unwrap() += uniform_count(39, c);
+                    } else {
+                        vals.push(v);
+                        counts.push(uniform_count(39, c));
+                    }
+                }
+                vals[Self::pick(o, "dmgvar", counts)]
             }
         }
     }

@@ -70,6 +70,7 @@ fn main() {
     let mut steps = 0usize;
     let mut skipped_cap = 0usize;
     let mut total_leaves = 0usize;
+    let mut total_runs = 0usize;
     let mut max_leaves = 0usize;
     let mut max_draws = 0usize;
     let mut worst_prob_sum_err = 0.0f64;
@@ -108,8 +109,10 @@ fn main() {
                 enumerated += 1;
                 match enumerate_step(&dex, &b, choices, cap) {
                     None => skipped_cap += 1,
-                    Some(leaves) => {
+                    Some(step) => {
+                        let leaves = step.leaves;
                         steps += 1;
+                        total_runs += step.runs;
                         total_leaves += leaves.len();
                         max_leaves = max_leaves.max(leaves.len());
                         max_draws = max_draws.max(leaves.iter().map(|l| l.draws).max().unwrap_or(0));
@@ -117,17 +120,17 @@ fn main() {
                         let sum: f64 = leaves.iter().map(|l| l.prob).sum();
                         worst_prob_sum_err = worst_prob_sum_err.max((sum - 1.0).abs());
 
-                        let mut merged: HashMap<u64, f64> = HashMap::new();
+                        let mut merged: HashMap<u128, f64> = HashMap::new();
                         for l in &leaves {
-                            *merged.entry(l.battle.state_key()).or_default() += l.prob;
+                            *merged.entry(l.battle.state_key128()).or_default() += l.prob;
                         }
 
-                        let mut obs: HashMap<u64, usize> = HashMap::new();
+                        let mut obs: HashMap<u128, usize> = HashMap::new();
                         for _ in 0..reps {
                             let mut c = b.clone();
                             c.reseed(((mrng.next_u32() as u64) << 32) | mrng.next_u32() as u64);
                             c.apply_choices(&dex, choices).expect("legal choices");
-                            let k = c.state_key();
+                            let k = c.state_key128();
                             replications += 1;
                             if merged.contains_key(&k) {
                                 *obs.entry(k).or_default() += 1;
@@ -159,7 +162,7 @@ fn main() {
     }
 
     println!(
-        "\nsteps {steps} (skipped-by-cap {skipped_cap}); leaves total {total_leaves}, max {max_leaves}, max draws/path {max_draws}"
+        "\nsteps {steps} (skipped-by-cap {skipped_cap}); engine runs {total_runs}, leaves total {total_leaves}, max {max_leaves}, max draws/path {max_draws}"
     );
     println!(
         "prob-sum worst |err| {worst_prob_sum_err:.3e}; replications {replications}, unmatched {unmatched}"
