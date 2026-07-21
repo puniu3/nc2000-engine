@@ -352,10 +352,11 @@ pub struct SkuctSearch {
     nodes: Vec<Node>,
     table: HashMap<u64, usize>,
     done: u32,
-    /// Per-side mask over the root action lists: `true` = the action is a
-    /// certain immediate self-loss (see [`certain_self_loss`]); `best()`
-    /// never argmaxes these while any alternative exists.
-    root_suicidal: [Vec<bool>; 2],
+    /// Per-side mask over the root action lists: `true` = the action is
+    /// dominated — a certain immediate self-loss ([`certain_self_loss`]) or
+    /// a provable no-op ([`certain_noop`]); `best()` never argmaxes these
+    /// while any alternative exists.
+    root_dominated: [Vec<bool>; 2],
 }
 
 /// A self-KO move used by the side's LAST mon is an unconditional immediate
@@ -372,6 +373,58 @@ pub(crate) fn certain_self_loss(b: &Battle, dex: &Dex, side: usize, c: SearchCho
     }
 }
 
+/// Provably-no-op moves, read off public state — the engine makes them fail
+/// outright: healing at full HP, re-casting a screen/Spikes that is already
+/// up (single layer in gen 2), a foe-directed status move onto an existing
+/// status or through a Substitute, re-inflicting a volatile the target
+/// already has (Substitute behind its own sub included). In flat or lost
+/// roots these tie with real actions and the argmax tie-break can pick them
+/// (2026-07-21 player reports: Reflect re-cast into |-fail|; Sleep Powder
+/// into a Substitute four turns running). Masked like [`certain_self_loss`]:
+/// never argmax'd while any alternative exists.
+pub(crate) fn certain_noop(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> bool {
+    use nc2000_engine::dex::Category;
+    use nc2000_engine::state::Status;
+    let SearchChoice::Move(id) = c else { return false };
+    let ms = dex.move_static(id);
+    let Some(att) = b.active_id(side) else { return false };
+    let full_hp = {
+        let me = b.poke(att);
+        me.hp >= me.maxhp
+    };
+    if ms.heal.is_some() || dex.moves.key(id) == "rest" {
+        return full_hp;
+    }
+    if let Some(sc) = ms.side_condition.as_deref() {
+        let target_side = if ms.target == "foeSide" { 1 - side } else { side };
+        return dex
+            .conds_id(sc)
+            .is_some_and(|cid| b.sides[target_side].has_side_condition(cid));
+    }
+    if ms.category != Category::Status {
+        return false;
+    }
+    if ms.status.is_some() && ms.target == "normal" {
+        if let Some(def) = b.active_id(1 - side) {
+            let d = b.poke(def);
+            if d.status != Status::None {
+                return true;
+            }
+            if dex.conds_id("substitute").is_some_and(|sid| d.has_volatile(sid)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if let Some(v) = ms.volatile_status.as_deref() {
+        let tgt = if ms.target == "self" { Some(att) } else { b.active_id(1 - side) };
+        if let (Some(t), Some(vid)) = (tgt, dex.conds_id(v)) {
+            return b.poke(t).has_volatile(vid);
+        }
+    }
+    false
+}
+
 impl SkuctSearch {
     pub fn new(battle: &Battle, dex: &Dex, cfg: RmConfig, seed: u64) -> SkuctSearch {
         Self::with_rng(battle, dex, cfg, SplitMix64::new(seed))
@@ -384,13 +437,13 @@ impl SkuctSearch {
         let nodes = vec![Node::at(&mut root, dex)];
         let mut table = HashMap::new();
         table.insert(key_of(&cfg, &root), 0usize);
-        let root_suicidal = [0usize, 1].map(|s| {
+        let root_dominated = [0usize, 1].map(|s| {
             nodes[0].acts[s]
                 .iter()
-                .map(|&c| certain_self_loss(&root, dex, s, c))
+                .map(|&c| certain_self_loss(&root, dex, s, c) || certain_noop(&root, dex, s, c))
                 .collect::<Vec<bool>>()
         });
-        SkuctSearch { cfg, rng, root, turn_cap, nodes, table, done: 0, root_suicidal }
+        SkuctSearch { cfg, rng, root, turn_cap, nodes, table, done: 0, root_dominated }
     }
 
     /// One UCB iteration (clone root, fresh chance seed, select/expand/
@@ -483,7 +536,7 @@ impl SkuctSearch {
         // without this guard the tie-break is enumeration order and can pick
         // a guaranteed instant loss (2026-07-21 last-mon-Explosion report).
         let node = &self.nodes[0];
-        let sui = &self.root_suicidal[side];
+        let sui = &self.root_dominated[side];
         (0..node.acts[side].len())
             .filter(|&a| !sui.get(a).copied().unwrap_or(false))
             .max_by_key(|&a| node.n[side][a])
@@ -737,5 +790,118 @@ impl Agent for RmAgent {
             .iter()
             .map(|c| acts.iter().position(|a| a == c).map_or(0.0, |i| probs[i]))
             .collect()
+    }
+}
+
+// ------------------------------------------------------------------- tests
+
+#[cfg(test)]
+mod dominated_action_tests {
+    use super::*;
+    use nc2000_engine::battle::{EffectHandle, PokemonSet};
+
+    fn team() -> Vec<PokemonSet> {
+        // from_fixture does not validate movesets — purpose-built slots
+        serde_json::from_str(
+            r#"[
+            {"name":"Exeggutor","species":"Exeggutor","item":"","ability":"No Ability",
+             "moves":["Sleep Powder","Reflect","Rest","Spikes"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+            {"name":"Snorlax","species":"Snorlax","item":"","ability":"No Ability",
+             "moves":["Body Slam","Substitute","Confuse Ray","Explosion"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+            {"name":"Cloyster","species":"Cloyster","item":"","ability":"No Ability",
+             "moves":["Surf","Ice Beam","Screech","Toxic"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50}
+        ]"#,
+        )
+        .unwrap()
+    }
+
+    fn setup() -> (Dex, Battle) {
+        let dex = conformance::load_dex();
+        let t = team();
+        let mut b = Battle::from_fixture(&dex, "7,8,9,10", &t, &t).unwrap();
+        b.set_log_enabled(false);
+        b.choose(&dex, 0, "team 1, 2, 3").unwrap();
+        b.choose(&dex, 1, "team 2, 1, 3").unwrap();
+        (dex, b)
+    }
+
+    fn mv(dex: &Dex, key: &str) -> SearchChoice {
+        SearchChoice::Move(dex.moves.id(key).unwrap())
+    }
+
+    #[test]
+    fn noop_mask_matches_engine_failures() {
+        let (dex, b) = setup();
+        // side 0 active: Exeggutor; side 1 active: Snorlax
+        let noop = |b: &Battle, side: usize, key: &str| certain_noop(b, &dex, side, mv(&dex, key));
+
+        // baseline: nothing up — only Rest at full HP is a no-op
+        assert!(!noop(&b, 0, "sleeppowder"));
+        assert!(!noop(&b, 0, "reflect"));
+        assert!(!noop(&b, 0, "spikes"));
+        assert!(noop(&b, 0, "rest"), "Rest at full HP");
+
+        // Rest becomes live once hurt
+        {
+            let mut b = b.clone();
+            let att = b.active_id(0).unwrap();
+            b.poke_mut(att).hp -= 10;
+            assert!(!noop(&b, 0, "rest"));
+        }
+
+        // screens/spikes re-cast (single layer)
+        {
+            let mut b = b.clone();
+            let att = b.active_id(0).unwrap();
+            b.add_side_condition(&dex, 0, "reflect", Some(att), EffectHandle::None);
+            b.add_side_condition(&dex, 1, "spikes", Some(att), EffectHandle::None);
+            assert!(noop(&b, 0, "reflect"), "Reflect already up (report B turn 6)");
+            assert!(noop(&b, 0, "spikes"), "Spikes already laid");
+        }
+
+        // status move onto an existing status / through a Substitute
+        {
+            let mut b = b.clone();
+            let def = b.active_id(1).unwrap();
+            b.set_status(&dex, def, "par", None, EffectHandle::None, true);
+            assert!(noop(&b, 0, "sleeppowder"), "status onto statused foe");
+        }
+        {
+            let mut b = b.clone();
+            let def = b.active_id(1).unwrap();
+            b.add_volatile(&dex, def, "substitute", None, EffectHandle::None);
+            assert!(noop(&b, 0, "sleeppowder"), "Sleep Powder into a Substitute");
+            // damaging moves stay live through the sub
+            assert!(!noop(&b, 1, "bodyslam"));
+        }
+
+        // re-inflicting a volatile / Substitute behind its own sub
+        {
+            let mut b = b.clone();
+            let att0 = b.active_id(0).unwrap();
+            let def = b.active_id(1).unwrap();
+            b.add_volatile(&dex, att0, "confusion", None, EffectHandle::None);
+            b.add_volatile(&dex, def, "substitute", None, EffectHandle::None);
+            assert!(noop(&b, 1, "confuseray"), "Confuse Ray onto confused foe");
+            assert!(noop(&b, 1, "substitute"), "Substitute behind its own sub");
+        }
+    }
+
+    #[test]
+    fn best_never_picks_masked_noop() {
+        let (dex, mut b) = setup();
+        let att = b.active_id(0).unwrap();
+        b.add_side_condition(&dex, 0, "reflect", Some(att), EffectHandle::None);
+        let cfg = RmConfig { rule: SelRule::Ucb, iterations: 200, ..Default::default() };
+        for seed in 1..=10u64 {
+            let mut s = SkuctSearch::new(&b, &dex, cfg.clone(), seed);
+            s.step(&dex, 200);
+            let best = s.best(0).map(|c| c.to_input(&dex)).unwrap();
+            assert_ne!(best, "move reflect", "masked no-op won argmax (seed {seed})");
+            assert_ne!(best, "move rest", "rest at full HP won argmax (seed {seed})");
+        }
     }
 }

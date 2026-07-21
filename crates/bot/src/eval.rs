@@ -222,6 +222,33 @@ pub fn expected_hit_fraction(
     } else {
         (ms.move_type, ms.base_power)
     };
+    // M16c-L1: callback base powers the dex lists as 0. damage_conformance
+    // measured `return` at exactly 0.0000 (432 samples; it lost game 3629) —
+    // the formulas mirror moveexec::modify_base_power; magnitude/present use
+    // the roll-distribution mean. counter/mirrorcoat/bide stay 0: reactive
+    // damage is unknowable from a static position.
+    let base_power = if base_power > 0 {
+        base_power
+    } else {
+        match dex.moves.key(move_id) {
+            "return" => a.happiness as i32 * 10 / 25,
+            "frustration" => (255 - a.happiness as i32) * 10 / 25,
+            "flail" | "reversal" => {
+                let ratio = ((a.hp as f64 * 48.0 / a.maxhp as f64).floor() as i32).max(1);
+                match ratio {
+                    r if r < 2 => 200,
+                    r if r < 5 => 150,
+                    r if r < 10 => 100,
+                    r if r < 17 => 80,
+                    r if r < 33 => 40,
+                    _ => 20,
+                }
+            }
+            "magnitude" => 71,
+            "present" => 40,
+            _ => 0,
+        }
+    };
 
     let mut eff = 1.0f64;
     for dt in d.types.iter() {
@@ -262,7 +289,13 @@ pub fn expected_hit_fraction(
             _ => (2, 3),
         };
         let atk = b.get_stat(dex, att, ai, false, false, false) as f64;
-        let defense = b.get_stat(dex, def, di, false, false, false) as f64;
+        let mut defense = b.get_stat(dex, def, di, false, false, false) as f64;
+        // M16c-L1: Explosion/Selfdestruct halve the physical defense
+        // (moveexec:2709); the eval's copy was measured at exactly 0.50 of
+        // the engine's damage (damage_conformance, 2847 samples).
+        if ms.selfdestruct && di == 1 {
+            defense = (defense / 2.0).floor().max(1.0);
+        }
         let core = ((a.level as f64 * 2.0 / 5.0 + 2.0).floor() * base_power as f64 * atk
             / defense
             / 50.0)
