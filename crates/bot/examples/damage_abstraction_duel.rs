@@ -8,7 +8,10 @@
 use std::path::{Path, PathBuf};
 
 use conformance::fixture::{corpus_files, Fixture};
-use nc2000_bot::damage_search::{DamageSearchAgent, DamageSearchAgentConfig, DamageSearchConfig};
+use nc2000_bot::damage_search::{
+    DamageSearchAgent, DamageSearchAgentConfig, DamageSearchConfig, ProbeRefineAgent,
+    ProbeRefineAgentConfig, ProbeRefineConfig,
+};
 use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::smmcts::{RmConfig, SelRule};
 use nc2000_bot::{run_duel, DuelSpec};
@@ -21,6 +24,10 @@ fn arg(args: &[String], key: &str, default: &str) -> String {
         .and_then(|index| args.get(index + 1))
         .cloned()
         .unwrap_or_else(|| default.to_string())
+}
+
+fn flag(args: &[String], key: &str) -> bool {
+    args.iter().any(|item| item == key)
 }
 
 fn mode(value: &str) -> DamageRollMode {
@@ -86,6 +93,27 @@ fn config(
     }
 }
 
+fn probe_config(
+    direct: &DamageSearchAgentConfig,
+    probe_work_budget: usize,
+    cell_threshold: f64,
+) -> ProbeRefineAgentConfig {
+    let mut approximate = direct.search.clone();
+    approximate.damage_mode = DamageRollMode::ThresholdLeanMinimal;
+    ProbeRefineAgentConfig {
+        refine: ProbeRefineConfig {
+            exact_work_budget: direct.search.work_budget,
+            approximate,
+            probe_work_budget,
+            response_margin: 0.0,
+            cell_threshold,
+        },
+        alive_max: direct.alive_max,
+        hp_cap: direct.hp_cap,
+        fallback: direct.fallback.clone(),
+    }
+}
+
 fn load_fixture_pool(repo: &Path) -> Vec<Vec<PokemonSet>> {
     let root = repo.join("fixtures/corpus-v1");
     let mut teams = Vec::new();
@@ -117,6 +145,10 @@ fn main() {
     let threads: usize = arg(&args, "--threads", "12").parse().unwrap();
     let max_turns: u16 = arg(&args, "--max-turns", "500").parse().unwrap();
     let pool_spec = arg(&args, "--pool", "fixtures");
+    let a_probe = flag(&args, "--a-probe");
+    let b_probe = flag(&args, "--b-probe");
+    let probe_work: usize = arg(&args, "--probe-work", "200000").parse().unwrap();
+    let probe_threshold: f64 = arg(&args, "--probe-threshold", "0.01").parse().unwrap();
 
     let root = repo_root();
     let dex_json = std::fs::read_to_string(root.join("data/gen2stadium2.json")).unwrap();
@@ -161,22 +193,42 @@ fn main() {
         hp_cap,
         fallback_iters,
     );
+    let probe_config_a = probe_config(&config_a, probe_work, probe_threshold);
+    let probe_config_b = probe_config(&config_b, probe_work, probe_threshold);
     eprintln!(
-        "{} teams; A {:?} h{} w{} vs B {:?} h{} w{}; fallback {}",
+        "{} teams; A {}{:?} h{} w{} vs B {}{:?} h{} w{}; probe w{} t{}; fallback {}",
         teams.len(),
+        if a_probe { "probe:" } else { "" },
         a_mode,
         a_horizon,
         a_work,
+        if b_probe { "probe:" } else { "" },
         b_mode,
         b_horizon,
         b_work,
+        probe_work,
+        probe_threshold,
         fallback_iters,
     );
+    let build_a = |agent_seed| -> Box<dyn nc2000_bot::Agent> {
+        if a_probe {
+            Box::new(ProbeRefineAgent::new(probe_config_a.clone(), agent_seed))
+        } else {
+            Box::new(DamageSearchAgent::new(config_a.clone(), agent_seed))
+        }
+    };
+    let build_b = |agent_seed| -> Box<dyn nc2000_bot::Agent> {
+        if b_probe {
+            Box::new(ProbeRefineAgent::new(probe_config_b.clone(), agent_seed))
+        } else {
+            Box::new(DamageSearchAgent::new(config_b.clone(), agent_seed))
+        }
+    };
     let stats = run_duel(
         &dex,
         &teams,
-        &|agent_seed| Box::new(DamageSearchAgent::new(config_a.clone(), agent_seed)),
-        &|agent_seed| Box::new(DamageSearchAgent::new(config_b.clone(), agent_seed)),
+        &build_a,
+        &build_b,
         DuelSpec {
             games,
             base_seed: seed,

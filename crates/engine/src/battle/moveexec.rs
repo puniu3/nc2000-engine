@@ -2484,6 +2484,8 @@ impl Battle {
                 | DamageRollMode::ThresholdLeanNoMultiHit
                 | DamageRollMode::ThresholdLeanNoSubstitute
                 | DamageRollMode::ThresholdLeanMinimal
+                | DamageRollMode::ThresholdLeanMinimalLow
+                | DamageRollMode::ThresholdLeanMinimalHigh
                 | DamageRollMode::ThresholdLeanNext
                 | DamageRollMode::ThresholdLeanResidual
                 | DamageRollMode::ThresholdLeanClock
@@ -2587,7 +2589,12 @@ impl Battle {
         };
 
         let keep_exact = |reason| match (mode, reason) {
-            (DamageRollMode::ThresholdLeanMinimal, _) => false,
+            (
+                DamageRollMode::ThresholdLeanMinimal
+                | DamageRollMode::ThresholdLeanMinimalLow
+                | DamageRollMode::ThresholdLeanMinimalHigh,
+                _,
+            ) => false,
             (DamageRollMode::ThresholdLeanNoCounter, DamageExactReason::CounterBide) => false,
             (DamageRollMode::ThresholdLeanNoDrainRecoil, DamageExactReason::DrainRecoil) => false,
             (DamageRollMode::ThresholdLeanNoMultiHit, DamageExactReason::MultiHit) => false,

@@ -127,6 +127,12 @@ pub enum DamageRollMode {
     ThresholdLeanNoSubstitute,
     /// No conservative exact escapes; retains only semantic HP thresholds.
     ThresholdLeanMinimal,
+    /// Diagnostic companions to `ThresholdLeanMinimal`: preserve the same
+    /// probability buckets, but use each bucket's lowest/highest attainable
+    /// damage as its representative. Their disagreement estimates whether
+    /// the conditional-mean representative is strategically fragile.
+    ThresholdLeanMinimalLow,
+    ThresholdLeanMinimalHigh,
     /// `ThresholdLean` plus only the next equal-hit death clock.
     ThresholdLeanNext,
     /// `ThresholdLean` plus only the residual-damage death clock.
@@ -460,6 +466,12 @@ impl BattleRng {
                 let representatives: Vec<f64> = group_values
                     .iter()
                     .map(|group| {
+                        if mode == DamageRollMode::ThresholdLeanMinimalLow {
+                            return group.first().unwrap().0;
+                        }
+                        if mode == DamageRollMode::ThresholdLeanMinimalHigh {
+                            return group.last().unwrap().0;
+                        }
                         let mass: u64 = group.iter().map(|(_, count)| count).sum();
                         let mean = group.iter().map(|(value, count)| value * *count as f64).sum::<f64>()
                             / mass as f64;
@@ -529,6 +541,24 @@ mod tests {
         assert_eq!(first.counts.iter().sum::<u64>(), Draw::TOTAL);
         assert!(survive < 90.0, "representative {survive}");
         assert!(ko >= 90.0, "representative {ko}");
+    }
+
+    #[test]
+    fn minimal_endpoint_probes_preserve_buckets_and_span_representatives() {
+        let context = DamageRollContext {
+            hp: 180,
+            thresholds: vec![0],
+            ..Default::default()
+        };
+        let (low, low_draw) =
+            abstract_roll(DamageRollMode::ThresholdLeanMinimalLow, vec![], &context);
+        let (mean, mean_draw) =
+            abstract_roll(DamageRollMode::ThresholdLeanMinimal, vec![], &context);
+        let (high, high_draw) =
+            abstract_roll(DamageRollMode::ThresholdLeanMinimalHigh, vec![], &context);
+        assert_eq!(low_draw.counts, mean_draw.counts);
+        assert_eq!(mean_draw.counts, high_draw.counts);
+        assert!(low < mean && mean < high, "{low} < {mean} < {high}");
     }
 
     #[test]
