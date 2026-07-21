@@ -57,6 +57,18 @@ pub struct EvalWeights {
     /// ...and a flat bonus while the active has a Substitute up (sub slice
     /// bias −0.31 = the paid-for sub is invisible to the eval). 0.0 = off.
     pub substitute: f64,
+    /// KO-race term (M17c). When BOTH sides are on their last living mon —
+    /// a pure race, no switch outs — the side that KOs first wins
+    /// regardless of remaining HP, which the material terms cannot see:
+    /// both threat features saturate at 1.0 and cancel while the HP terms
+    /// vote for the fatter side. Motivated by the 570-corpus certified
+    /// anchors (47 zero-playout proven violations; worst = ordering
+    /// inversions like eval 0.127 at a certified 1.000 win). Adds
+    /// `race × margin` to the side differential, where margin ∈ [-1, 1]
+    /// grades turns-to-KO advantage + speed order, and only short races
+    /// (≤3 turns to the faster kill) count — longer races are stall/heal
+    /// territory where the estimate lies. 0.0 = off.
+    pub race: f64,
 }
 
 impl Default for EvalWeights {
@@ -83,6 +95,7 @@ impl Default for EvalWeights {
             couple_evasion: true,
             slp_time_scale: true,
             substitute: 0.5,
+            race: 3.0,
         }
     }
 }
@@ -125,14 +138,145 @@ impl EvalWeights {
             couple_evasion: true,
             slp_time_scale: true,
             substitute: 0.5,
+            race: 3.0,
         }
     }
 }
 
 /// Win-probability-shaped eval in (0, 1) from side 0's perspective.
 pub fn eval01(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
-    let diff = side_score(b, dex, w, 0) - side_score(b, dex, w, 1);
+    let mut diff = side_score(b, dex, w, 0) - side_score(b, dex, w, 1);
+    if w.race != 0.0 {
+        diff += w.race * race_margin(b, dex, w);
+    }
     1.0 / (1.0 + (-w.scale * diff).exp())
+}
+
+/// KO-race margin from side 0's perspective, in [-1, 1]; nonzero only in
+/// last-mon-vs-last-mon states (no switches — a pure race).
+///
+/// Turns-to-KO come from `best_hit_fraction` (expected per-use fraction of
+/// the foe's current HP, accuracy folded in), adjusted by the mechanical
+/// state the certified anchors proved decisive (the v1 estimate misfired
+/// on exactly these): a recharge lock wastes the locked side's turn, a
+/// Substitute absorbs one hit, sleep sidelines the sleeper for its
+/// remaining clock UNLESS it carries usable Sleep Talk, freeze (25/256
+/// thaw) pushes past the race window, and poison/burn residual caps a
+/// side's survival regardless of the foe's attacks. Speed order breaks
+/// ties: ±0.5 turn; a full one-turn advantage saturates the margin.
+pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
+    let alive = |s: usize| {
+        b.sides[s]
+            .party
+            .iter()
+            .filter(|&&sl| {
+                let p = &b.sides[s].roster[sl as usize];
+                !p.fainted && p.hp > 0
+            })
+            .count()
+    };
+    if alive(0) != 1 || alive(1) != 1 {
+        return 0.0;
+    }
+    let (Some(id0), Some(id1)) = (b.active_id(0), b.active_id(1)) else {
+        return 0.0;
+    };
+    let (p0, p1) = (b.poke(id0), b.poke(id1));
+    if p0.fainted || p0.hp <= 0 || p1.fainted || p1.hp <= 0 {
+        return 0.0;
+    }
+
+    let recharge = dex.conds_id("mustrecharge");
+    let sleeptalk = dex.moves.id("sleeptalk");
+    let heal_ids: Vec<MoveId> = ["rest", "recover", "softboiled", "milkdrink"]
+        .iter()
+        .filter_map(|k| dex.moves.id(k))
+        .collect();
+    // expected turns for `att` to KO `def` through the visible mechanics
+    let turns = |att: PokeId, def: PokeId| -> f64 {
+        let e = best_hit_fraction(b, dex, att, def, w.couple_evasion);
+        if e <= 1e-9 {
+            return f64::INFINITY;
+        }
+        // A defender with a usable self-heal cannot be raced down unless
+        // the attacker out-damages the heal cycle (~half max HP per turn:
+        // Rest refills everything but donates two free turns) — the duel
+        // gate measured the heal-blind version losing 0.39, this format
+        // Rests everywhere.
+        let d = b.poke(def);
+        if d.move_slots.iter().any(|m| m.pp > 0 && !m.disabled && heal_ids.contains(&m.id)) {
+            let dmg_frac_max = e * d.hp as f64 / d.maxhp as f64;
+            if dmg_frac_max < 0.5 {
+                return f64::INFINITY;
+            }
+        }
+        let mut t = (1.0 / e).ceil();
+        let a = b.poke(att);
+        // a standing Substitute eats one hit
+        if let Some(sub) = substitute_id(dex) {
+            if b.poke(def).has_volatile(sub) {
+                t += 1.0;
+            }
+        }
+        // recharge lock: the locked side spends a turn doing nothing
+        if let Some(rc) = recharge {
+            if a.has_volatile(rc) {
+                t += 1.0;
+            }
+        }
+        t += match a.status {
+            Status::Slp => {
+                let talks = sleeptalk
+                    .is_some_and(|st| a.move_slots.iter().any(|m| m.id == st && m.pp > 0));
+                if talks {
+                    0.0
+                } else {
+                    a.status_state.get_int(nc2000_engine::state::DK::Time).clamp(1, 4) as f64
+                }
+            }
+            Status::Frz => 4.0,
+            _ => 0.0,
+        };
+        t
+    };
+    // residual (psn/tox/brn) self-death clock: 1/8 maxhp per turn (tox floor)
+    let surv = |x: PokeId| -> f64 {
+        let p = b.poke(x);
+        if matches!(p.status, Status::Psn | Status::Tox | Status::Brn) {
+            let tick = (p.maxhp as f64 / 8.0).max(1.0);
+            (p.hp as f64 / tick).ceil()
+        } else {
+            f64::INFINITY
+        }
+    };
+    // A side's effective "foe down" time: its own kill plan — void if its
+    // residual kills it first (the b293 case: a toxed racer that dies on
+    // its own clock never finishes a 2-turn plan) — or the foe rotting on
+    // the foe's residual with no hit needed at all.
+    let (k0, k1) = (turns(id0, id1), turns(id1, id0));
+    let (v0, v1) = (surv(id0), surv(id1));
+    let k0 = if k0 <= v0 { k0 } else { f64::INFINITY };
+    let k1 = if k1 <= v1 { k1 } else { f64::INFINITY };
+    let t0 = k0.min(v1);
+    let t1 = k1.min(v0);
+    if t0.min(t1) > 3.0 {
+        return 0.0; // long race: healing/stall dominates, no claim
+    }
+    let diff = match (t0.is_finite(), t1.is_finite()) {
+        (true, false) => 2.0,
+        (false, true) => -2.0,
+        _ => {
+            let s0 = b.get_pokemon_action_speed(dex, id0);
+            let s1 = b.get_pokemon_action_speed(dex, id1);
+            let edge = match s0.cmp(&s1) {
+                std::cmp::Ordering::Greater => 0.5,
+                std::cmp::Ordering::Less => -0.5,
+                std::cmp::Ordering::Equal => 0.0,
+            };
+            (t1 - t0) + edge
+        }
+    };
+    diff.clamp(-1.0, 1.0)
 }
 
 /// Leaf value for search cutoffs, squashed into (0.25, 0.75) so a static

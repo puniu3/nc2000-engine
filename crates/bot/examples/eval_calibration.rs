@@ -387,19 +387,12 @@ fn main() {
     }
     // ---- --ab: paired eval-variant comparison on the SAME positions + GT
     if args.iter().any(|a| a == "--ab") {
+        // M17c candidates: KO-race weight (rev-1 winners are the defaults now)
         let mut variants: Vec<(&str, EvalWeights)> = Vec::new();
         variants.push(("default", EvalWeights::default()));
-        let mut b = EvalWeights::default();
-        b.slp_time_scale = true;
-        variants.push(("slpTime", b.clone()));
-        let mut c = b.clone();
-        c.substitute = 0.5;
-        variants.push(("slpTime+sub0.5", c.clone()));
-        let mut d = c.clone();
-        d.slp *= 0.7;
-        d.frz *= 0.7;
-        d.tox *= 0.7;
-        variants.push(("slpTime+sub+status*0.7", d));
+        variants.push(("race2", EvalWeights { race: 2.0, ..EvalWeights::default() }));
+        variants.push(("race3", EvalWeights { race: 3.0, ..EvalWeights::default() }));
+        variants.push(("race4", EvalWeights { race: 4.0, ..EvalWeights::default() }));
 
         let feat_idx = |name: &str| fs.iter().position(|f| f.name == name).unwrap();
         let oriented_bias = |preds: &[f64], fi: usize| -> f64 {

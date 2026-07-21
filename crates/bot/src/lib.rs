@@ -22,6 +22,7 @@
 pub mod agent;
 pub mod belief;
 pub mod blind;
+pub mod corpus;
 pub mod duel;
 pub mod eval;
 pub mod exact;

@@ -1,10 +1,9 @@
 //! M17 gate: seed-paired direct duel between two eval-weight configurations
 //! on the same skuct agent (the M6 lesson: compare variants head-to-head,
-//! never through a third opponent). A = shipped weights, B = the
-//! calibration-measured candidate (slp time-scaling + substitute bonus +
-//! status penalties ×0.7 — eval_calibration --ab winner).
+//! never through a third opponent). A = shipped weights, B = shipped +
+//! the M17c KO-race term at `--race` (anchor-gate winner).
 //!
-//! Usage: eval_ab_duel [--games 200] [--iters 300] [--seed 1]
+//! Usage: eval_ab_duel [--games 200] [--iters 300] [--seed 1] [--race 3.0]
 
 use nc2000_bot::duel::{run_duel, DuelSpec};
 use nc2000_bot::eval::EvalWeights;
@@ -20,14 +19,8 @@ fn arg(args: &[String], key: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
-fn candidate() -> EvalWeights {
-    let mut w = EvalWeights::default();
-    w.slp_time_scale = true;
-    w.substitute = 0.5;
-    w.slp *= 0.7;
-    w.frz *= 0.7;
-    w.tox *= 0.7;
-    w
+fn candidate(race: f64) -> EvalWeights {
+    EvalWeights { race, ..EvalWeights::default() }
 }
 
 fn cfg_with(weights: EvalWeights, iters: u32) -> RmConfig {
@@ -46,6 +39,12 @@ fn main() {
     let games = arg(&args, "--games", 200);
     let iters = arg(&args, "--iters", 300) as u32;
     let seed = arg(&args, "--seed", 1) as u64;
+    let race: f64 = args
+        .iter()
+        .position(|a| a == "--race")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3.0);
 
     let dex = conformance::load_dex();
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -53,7 +52,7 @@ fn main() {
     let teams: Vec<_> = pool.teams.iter().map(|t| t.sets.clone()).collect();
 
     let a_cfg = cfg_with(EvalWeights::default(), iters);
-    let b_cfg = cfg_with(candidate(), iters);
+    let b_cfg = cfg_with(candidate(race), iters);
     let stats = run_duel(
         &dex,
         &teams,
