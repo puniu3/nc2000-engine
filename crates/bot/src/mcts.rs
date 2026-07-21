@@ -206,7 +206,8 @@ impl MctsAgent {
         if self.rng.next_f64() < eps {
             return cs[self.rng.below(cs.len())];
         }
-        greedy_pick(sim, dex, side, cs, &mut self.rng)
+        // M5/M6 historical agents keep the no-switch rollout bit-identical.
+        greedy_pick(sim, dex, side, cs, &mut self.rng, false)
     }
 
     fn leaf_eval(&self, sim: &Battle, dex: &Dex) -> f64 {
@@ -221,12 +222,120 @@ impl MctsAgent {
 /// the side-0 reward. Free-function twin of `MctsAgent::rollout` (same
 /// policy, same PRNG draw order) shared by the M7 agents; `MctsAgent` keeps
 /// its own methods so the M5/M6 gate references stay bit-identical.
+/// Rollout switch policy (M16c): when the active's best expected hit
+/// removes less than TRIGGER of the foe per turn, the rollout may switch to
+/// the bench mon with the strongest offense against the foe active, if that
+/// beats staying by MARGIN. Humans switch at 22% of decisions (570-battle
+/// corpus) and the no-switch rollout misvalued every such line — the tree's
+/// switch arms were evaluated by playouts in which nobody ever switches.
+const ROLLOUT_SWITCH_TRIGGER: f64 = 0.15;
+const ROLLOUT_SWITCH_MARGIN: f64 = 0.10;
+
+/// M16c-2 rollout pseudo-values for the format's core status moves, so the
+/// greedy rollout can prefer them over a weak attack instead of scoring
+/// every non-damaging move 0 (the corpus' top disagreement clusters: sleep,
+/// Spikes, Curse/Rest — M16b). Rough per-turn HP-fraction equivalents,
+/// accuracy-scaled, and 0 whenever the move would be a no-op (sleep clause,
+/// existing status, spikes already laid, healing near full, boosting past
+/// +2) — which also removes Rest-at-full-HP from greedy rollouts.
+const PSEUDO_SLEEP: f64 = 0.30;
+const PSEUDO_PAR: f64 = 0.10;
+const PSEUDO_SPIKES: f64 = 0.15;
+const PSEUDO_BOOST: f64 = 0.15;
+const PSEUDO_HEAL: f64 = 0.25;
+
+fn status_pseudo_score(
+    sim: &Battle,
+    dex: &Dex,
+    side: usize,
+    att: nc2000_engine::state::PokeId,
+    def: nc2000_engine::state::PokeId,
+    id: nc2000_engine::dex::MoveId,
+) -> f64 {
+    use nc2000_engine::dex::Accuracy;
+    use nc2000_engine::state::Status;
+    let ms = dex.move_static(id);
+    let acc = match ms.accuracy {
+        Accuracy::AlwaysHits => 1.0,
+        Accuracy::Pct(p) => p as f64 / 100.0,
+    };
+    match ms.status.as_deref() {
+        Some("slp") => {
+            let clause_free = sim.sides[1 - side]
+                .roster
+                .iter()
+                .all(|p| p.hp == 0 || p.status != Status::Slp);
+            if clause_free && sim.poke(def).status == Status::None {
+                return PSEUDO_SLEEP * acc;
+            }
+            return 0.0;
+        }
+        Some("par") => {
+            if sim.poke(def).status == Status::None {
+                return PSEUDO_PAR * acc;
+            }
+            return 0.0;
+        }
+        _ => {}
+    }
+    if ms.side_condition.as_deref() == Some("spikes") {
+        let foe = &sim.sides[1 - side];
+        let laid = dex.conds_id("spikes").is_some_and(|sid| foe.has_side_condition(sid));
+        if foe.pokemon_left > 1 && !laid {
+            return PSEUDO_SPIKES;
+        }
+        return 0.0;
+    }
+    if ms.heal.is_some() {
+        let me = sim.poke(att);
+        if (me.hp as f64) < 0.5 * me.maxhp as f64 {
+            return PSEUDO_HEAL;
+        }
+        return 0.0;
+    }
+    match dex.moves.key(id) {
+        "curse" => {
+            let me = sim.poke(att);
+            let ghost = dex.type_id("Ghost").is_some_and(|g| me.types.has(g));
+            if !ghost && me.boosts[0] < 2 {
+                PSEUDO_BOOST
+            } else {
+                0.0
+            }
+        }
+        "swordsdance" => {
+            if sim.poke(att).boosts[0] < 2 {
+                PSEUDO_BOOST
+            } else {
+                0.0
+            }
+        }
+        "amnesia" => {
+            if sim.poke(att).boosts[2] < 2 {
+                PSEUDO_BOOST
+            } else {
+                0.0
+            }
+        }
+        "bellydrum" => {
+            let me = sim.poke(att);
+            if me.boosts[0] < 6 && (me.hp as f64) > 0.6 * me.maxhp as f64 {
+                PSEUDO_BOOST + 0.10
+            } else {
+                0.0
+            }
+        }
+        _ => 0.0,
+    }
+}
+
 pub(crate) fn playout_value(
     sim: &mut Battle,
     dex: &Dex,
     playout: &Playout,
     turn_cap: u16,
     rng: &mut SplitMix64,
+    m16c: bool,
 ) -> f64 {
     let cutoff = match playout {
         Playout::Uniform => turn_cap,
@@ -246,7 +355,7 @@ pub(crate) fn playout_value(
         for s in 0..2 {
             let cs = sim.legal_choices(dex, s);
             if !cs.is_empty() {
-                picks[s] = Some(playout_pick(sim, dex, playout, s, &cs, rng));
+                picks[s] = Some(playout_pick(sim, dex, playout, s, &cs, rng, m16c));
             }
         }
         sim.apply_choices(dex, picks)
@@ -261,6 +370,7 @@ pub(crate) fn playout_pick(
     side: usize,
     cs: &[SearchChoice],
     rng: &mut SplitMix64,
+    m16c: bool,
 ) -> SearchChoice {
     let eps = match playout {
         Playout::Uniform => return cs[rng.below(cs.len())],
@@ -272,7 +382,7 @@ pub(crate) fn playout_pick(
     if rng.next_f64() < eps {
         return cs[rng.below(cs.len())];
     }
-    greedy_pick(sim, dex, side, cs, rng)
+    greedy_pick(sim, dex, side, cs, rng, m16c)
 }
 
 /// Greedy rollout move: strongest expected hit (never a voluntary switch);
@@ -284,6 +394,7 @@ fn greedy_pick(
     side: usize,
     cs: &[SearchChoice],
     rng: &mut SplitMix64,
+    m16c: bool,
 ) -> SearchChoice {
     let att = sim.active_id(side);
     let def = sim.active_id(1 - side);
@@ -315,9 +426,41 @@ fn greedy_pick(
                     continue;
                 }
                 // Rollout policy always couples evasion (the accurate estimate).
-                let score = eval::expected_hit_fraction(sim, dex, att, def, id, true);
+                let mut score = eval::expected_hit_fraction(sim, dex, att, def, id, true);
+                if score <= 0.0 && m16c {
+                    score = status_pseudo_score(sim, dex, side, att, def, id);
+                }
                 if best.map_or(true, |(_, b)| score > b) {
                     best = Some((c, score));
+                }
+            }
+        }
+        // M16c voluntary switch: only from a bad matchup (weak best hit), to
+        // the bench mon with the strongest offense vs the foe active, and
+        // only when that clearly beats staying. Draws no rng, so rollouts
+        // where the trigger never fires keep their exact streams.
+        if m16c {
+            if let Some((_, stay)) = best {
+                if stay < ROLLOUT_SWITCH_TRIGGER {
+                    let mut sw: Option<(SearchChoice, f64)> = None;
+                    for &c in cs {
+                        if let SearchChoice::Switch(pos) = c {
+                            let s0 = &sim.sides[side];
+                            let cand = nc2000_engine::state::PokeId {
+                                side: side as u8,
+                                slot: s0.party[(pos - 1) as usize],
+                            };
+                            let off = eval::best_hit_fraction(sim, dex, cand, def, true);
+                            if sw.as_ref().map_or(true, |&(_, b)| off > b) {
+                                sw = Some((c, off));
+                            }
+                        }
+                    }
+                    if let Some((c, off)) = sw {
+                        if off > stay + ROLLOUT_SWITCH_MARGIN {
+                            return c;
+                        }
+                    }
                 }
             }
         }

@@ -53,6 +53,8 @@ enum AgentSpec {
     Mcts5 { iterations: u32, c: f64 },
     Rm { iterations: u32, probe: f64, threshold: f64, buckets: i64 },
     SkUct { iterations: u32, c: f64, buckets: i64 },
+    /// skuct with the parked M16c rollout upgrades ON (A/B research arm).
+    SkUctNs { iterations: u32, c: f64, buckets: i64 },
     Blind { iterations: u32, c: f64, buckets: i64 },
     Open { iterations: u32, c: f64, buckets: i64 },
     Exploit(Box<AgentSpec>),
@@ -88,6 +90,11 @@ impl AgentSpec {
                 probe: opt_num(&parts, 2, "probe")?.unwrap_or(0.25),
                 threshold: opt_num(&parts, 3, "threshold")?.unwrap_or(0.5),
                 buckets: opt_num(&parts, 4, "buckets")?.unwrap_or(16),
+            }),
+            "skuctm16c" => Ok(AgentSpec::SkUctNs {
+                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
+                c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
+                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
             }),
             "skuct" => Ok(AgentSpec::SkUct {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
@@ -132,6 +139,7 @@ impl AgentSpec {
             | AgentSpec::Mcts5 { iterations, .. }
             | AgentSpec::Rm { iterations, .. }
             | AgentSpec::SkUct { iterations, .. }
+            | AgentSpec::SkUctNs { iterations, .. }
             | AgentSpec::Blind { iterations, .. }
             | AgentSpec::Open { iterations, .. } => *iterations,
             AgentSpec::Exploit(inner) => inner.iterations(),
@@ -212,6 +220,17 @@ impl AgentSpec {
                 },
                 seed,
             )),
+            AgentSpec::SkUctNs { iterations, c, buckets } => Box::new(RmAgent::new(
+                RmConfig {
+                    iterations: *iterations,
+                    rule: SelRule::Ucb,
+                    c: *c,
+                    hp_buckets: *buckets,
+                    rollout_m16c: true,
+                    ..Default::default()
+                },
+                seed,
+            )),
             AgentSpec::Blind { iterations, c, buckets } => Box::new(BlindAgent::new(
                 RmConfig {
                     iterations: *iterations,
@@ -268,6 +287,9 @@ impl AgentSpec {
             }
             AgentSpec::SkUct { iterations, c, buckets } => {
                 format!("skuct:{iterations}:{c}:{buckets}")
+            }
+            AgentSpec::SkUctNs { iterations, c, buckets } => {
+                format!("skuctm16c:{iterations}:{c}:{buckets}")
             }
             AgentSpec::Blind { iterations, c, buckets } => {
                 format!("blind:{iterations}:{c}:{buckets}")
