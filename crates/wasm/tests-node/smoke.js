@@ -80,7 +80,7 @@ const dex = new wasm.Dex();
   const tables = new wasm.PreviewTables(dex, poolJson);
   // pair-00-01: committed pilot pair (teams ranked 0 and 1)
   const pairJson = fs.readFileSync(
-    path.join(REPO, "data", "preview-tables-v0", "pair-00-01.json"),
+    path.join(REPO, "fixtures", "preview-tables-test", "pair-00-01.json"),
     "utf8"
   );
   tables.addPair(pairJson);
@@ -164,7 +164,7 @@ const dex = new wasm.Dex();
   const blind = new wasm.BlindSearcher(battle, 1, poolJson, 4242);
   blind.addPair(
     fs.readFileSync(
-      path.join(REPO, "data", "preview-tables-v0", "pair-00-01.json"),
+      path.join(REPO, "fixtures", "preview-tables-test", "pair-00-01.json"),
       "utf8"
     )
   );
@@ -275,7 +275,7 @@ const dex = new wasm.Dex();
   bot.pinOpponent(p1);
   bot.addPair(
     fs.readFileSync(
-      path.join(REPO, "data", "preview-tables-v0", "pair-00-01.json"),
+      path.join(REPO, "fixtures", "preview-tables-test", "pair-00-01.json"),
       "utf8"
     )
   );

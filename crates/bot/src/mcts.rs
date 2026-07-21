@@ -287,10 +287,33 @@ fn greedy_pick(
 ) -> SearchChoice {
     let att = sim.active_id(side);
     let def = sim.active_id(1 - side);
+    // A self-KO move from the side's LAST mon is an unconditional immediate
+    // loss (the user faints even on a miss; the Stadium Self-KO clause rules
+    // the user the loser even when it takes the foe's last mon down), yet its
+    // bp 250 tops every expected-damage ranking — pre-guard, rollouts from a
+    // last-mon position suicided in EVERY playout and flattened the root to
+    // all-zeros (2026-07-21 last-mon-Explosion report; selfko_probe).
+    let last_mon = sim.sides[side].pokemon_left == 1;
+    let suicidal = |c: &SearchChoice| match c {
+        SearchChoice::Move(id) => last_mon && dex.move_static(*id).selfdestruct,
+        _ => false,
+    };
+    let rand_non_suicidal = |rng: &mut SplitMix64| {
+        if last_mon {
+            let safe: Vec<SearchChoice> = cs.iter().copied().filter(|c| !suicidal(c)).collect();
+            if !safe.is_empty() {
+                return safe[rng.below(safe.len())];
+            }
+        }
+        cs[rng.below(cs.len())]
+    };
     if let (Some(att), Some(def)) = (att, def) {
         let mut best: Option<(SearchChoice, f64)> = None;
         for &c in cs {
             if let SearchChoice::Move(id) = c {
+                if suicidal(&c) {
+                    continue;
+                }
                 // Rollout policy always couples evasion (the accurate estimate).
                 let score = eval::expected_hit_fraction(sim, dex, att, def, id, true);
                 if best.map_or(true, |(_, b)| score > b) {
@@ -303,7 +326,7 @@ fn greedy_pick(
                 return c;
             }
             // only status/unknowable moves: fall through to random
-            return cs[rng.below(cs.len())];
+            return rand_non_suicidal(rng);
         }
     }
     // forced switch: healthiest bench target
@@ -325,7 +348,7 @@ fn greedy_pick(
             })
             .unwrap();
     }
-    cs[rng.below(cs.len())]
+    rand_non_suicidal(rng)
 }
 
 impl Agent for MctsAgent {

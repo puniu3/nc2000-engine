@@ -342,6 +342,24 @@ pub struct SkuctSearch {
     nodes: Vec<Node>,
     table: HashMap<u64, usize>,
     done: u32,
+    /// Per-side mask over the root action lists: `true` = the action is a
+    /// certain immediate self-loss (see [`certain_self_loss`]); `best()`
+    /// never argmaxes these while any alternative exists.
+    root_suicidal: [Vec<bool>; 2],
+}
+
+/// A self-KO move used by the side's LAST mon is an unconditional immediate
+/// loss in this format: the user faints even on a miss, and when it also
+/// faints the foe's last mon the Stadium Self-KO clause still rules the
+/// user the loser. Root argmax and rollouts exclude such actions while any
+/// alternative exists.
+pub(crate) fn certain_self_loss(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> bool {
+    match c {
+        SearchChoice::Move(id) => {
+            b.sides[side].pokemon_left == 1 && dex.move_static(id).selfdestruct
+        }
+        _ => false,
+    }
 }
 
 impl SkuctSearch {
@@ -356,7 +374,13 @@ impl SkuctSearch {
         let nodes = vec![Node::at(&mut root, dex)];
         let mut table = HashMap::new();
         table.insert(key_of(&cfg, &root), 0usize);
-        SkuctSearch { cfg, rng, root, turn_cap, nodes, table, done: 0 }
+        let root_suicidal = [0usize, 1].map(|s| {
+            nodes[0].acts[s]
+                .iter()
+                .map(|&c| certain_self_loss(&root, dex, s, c))
+                .collect::<Vec<bool>>()
+        });
+        SkuctSearch { cfg, rng, root, turn_cap, nodes, table, done: 0, root_suicidal }
     }
 
     /// One UCB iteration (clone root, fresh chance seed, select/expand/
@@ -443,9 +467,17 @@ impl SkuctSearch {
     /// Current best choice: argmax visits (the `skuct` play rule). `None`
     /// when the side owes nothing at this decision point.
     pub fn best(&self, side: usize) -> Option<SearchChoice> {
+        // Certain-immediate-self-loss actions (self-KO move with the last
+        // mon) never win the argmax while an alternative exists. In deep-loss
+        // positions every action's mean is exactly 0 and visits tie exactly —
+        // without this guard the tie-break is enumeration order and can pick
+        // a guaranteed instant loss (2026-07-21 last-mon-Explosion report).
         let node = &self.nodes[0];
+        let sui = &self.root_suicidal[side];
         (0..node.acts[side].len())
+            .filter(|&a| !sui.get(a).copied().unwrap_or(false))
             .max_by_key(|&a| node.n[side][a])
+            .or_else(|| (0..node.acts[side].len()).max_by_key(|&a| node.n[side][a]))
             .map(|a| node.acts[side][a])
     }
 

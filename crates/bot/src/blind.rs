@@ -242,6 +242,10 @@ pub struct BlindSearch {
     /// preview — is enforced by the engine's own enumeration since the
     /// 2026-07-17 preview-space fix; the API stays (harmless, generic).
     my_mask: Option<Vec<bool>>,
+    /// Certain-immediate-self-loss root actions (self-KO move with the last
+    /// mon — see `smmcts::certain_self_loss`): `best()` never argmaxes them
+    /// while an alternative exists.
+    my_suicidal: Vec<bool>,
     /// Per-determinization roots + everything below (state-keyed).
     nodes: Vec<Node>,
     table: HashMap<u64, usize>,
@@ -264,6 +268,10 @@ impl BlindSearch {
         base.set_log_enabled(false);
         let turn_cap = base.turn.saturating_add(cfg.horizon);
         let my_acts = base.legal_choices(dex, side);
+        let my_suicidal = my_acts
+            .iter()
+            .map(|&c| crate::smmcts::certain_self_loss(&base, dex, side, c))
+            .collect();
         BlindSearch {
             cfg,
             rng,
@@ -273,6 +281,7 @@ impl BlindSearch {
             my_n: vec![0; my_acts.len()],
             my_w: vec![0.0; my_acts.len()],
             my_mask: None,
+            my_suicidal,
             my_acts,
             nodes: Vec::new(),
             table: HashMap::new(),
@@ -375,9 +384,16 @@ impl BlindSearch {
     /// blind play rule), restricted to the mask when one is set. `None`
     /// when the side owes nothing.
     pub fn best(&self) -> Option<SearchChoice> {
+        // Deep-loss roots tie every action at mean 0 with exactly uniform
+        // visits; excluding certain-immediate-self-loss actions keeps the
+        // tie-break from picking a guaranteed instant loss (2026-07-21
+        // last-mon-Explosion report). Falls back to mask-only when nothing
+        // else is allowed.
+        let allowed = |a: usize| self.my_mask.as_ref().map_or(true, |m| m[a]);
         (0..self.my_acts.len())
-            .filter(|&a| self.my_mask.as_ref().map_or(true, |m| m[a]))
+            .filter(|&a| allowed(a) && !self.my_suicidal[a])
             .max_by_key(|&a| self.my_n[a])
+            .or_else(|| (0..self.my_acts.len()).filter(|&a| allowed(a)).max_by_key(|&a| self.my_n[a]))
             .map(|a| self.my_acts[a])
     }
 
