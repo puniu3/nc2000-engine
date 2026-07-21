@@ -9,13 +9,16 @@
 use std::collections::HashMap;
 
 use nc2000_engine::battle::enumerate::enumerate_step_with_damage_mode;
-use nc2000_engine::battle::Outcome;
+use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::prng::DamageRollMode;
 use nc2000_engine::state::Battle;
 
+use crate::agent::Agent;
 use crate::eval::{eval01, EvalWeights};
 use crate::exact::solve_matrix_full;
+use crate::rng::SplitMix64;
+use crate::smmcts::{RmAgent, RmConfig};
 
 #[derive(Clone, Debug)]
 pub struct DamageSearchConfig {
@@ -293,4 +296,112 @@ pub fn policy_regret(
     let row_regret = (reference_value - row_guarantee).max(0.0);
     let col_regret = (col_guarantee - reference_value).max(0.0);
     (row_regret, col_regret, row_regret + col_regret)
+}
+
+/// Duel-only wrapper: use the finite-horizon damage search in small
+/// endgames and the normal SM-MCTS agent elsewhere. An incomplete search
+/// also falls back, so fixed-work duels measure both speed and coverage.
+#[derive(Clone, Debug)]
+pub struct DamageSearchAgentConfig {
+    pub search: DamageSearchConfig,
+    pub alive_max: usize,
+    pub hp_cap: u64,
+    pub fallback: RmConfig,
+}
+
+impl Default for DamageSearchAgentConfig {
+    fn default() -> Self {
+        DamageSearchAgentConfig {
+            search: DamageSearchConfig::default(),
+            alive_max: 1,
+            hp_cap: 600,
+            fallback: RmConfig::default(),
+        }
+    }
+}
+
+pub struct DamageSearchAgent {
+    cfg: DamageSearchAgentConfig,
+    fallback: RmAgent,
+    rng: SplitMix64,
+}
+
+impl DamageSearchAgent {
+    pub fn new(cfg: DamageSearchAgentConfig, seed: u64) -> Self {
+        DamageSearchAgent {
+            fallback: RmAgent::new(cfg.fallback.clone(), seed ^ 0x85EB_CA77_C2B2_AE63),
+            cfg,
+            rng: SplitMix64::new(seed ^ 0x27D4_EB2F_1656_67C5),
+        }
+    }
+
+    fn eligible(&self, battle: &Battle, choices: &[SearchChoice]) -> bool {
+        if battle.turn == 0 || choices.len() < 2 {
+            return false;
+        }
+        let alive = |side: usize| {
+            battle.sides[side]
+                .party
+                .iter()
+                .filter(|&&slot| {
+                    let pokemon = &battle.sides[side].roster[slot as usize];
+                    !pokemon.fainted && pokemon.hp > 0
+                })
+                .count()
+        };
+        let hp: u64 = battle
+            .sides
+            .iter()
+            .flat_map(|side| {
+                side.party
+                    .iter()
+                    .map(|&slot| side.roster[slot as usize].hp.max(0) as u64)
+            })
+            .sum();
+        alive(0) <= self.cfg.alive_max && alive(1) <= self.cfg.alive_max && hp <= self.cfg.hp_cap
+    }
+
+    fn sample(&mut self, probabilities: &[f64]) -> usize {
+        let target = self.rng.next_f64();
+        let mut cumulative = 0.0;
+        for (index, &probability) in probabilities.iter().enumerate() {
+            cumulative += probability.max(0.0);
+            if target < cumulative {
+                return index;
+            }
+        }
+        probabilities.len().saturating_sub(1)
+    }
+}
+
+impl Agent for DamageSearchAgent {
+    fn name(&self) -> String {
+        format!(
+            "damage:{:?}:h{}:w{}",
+            self.cfg.search.damage_mode, self.cfg.search.horizon, self.cfg.search.work_budget
+        )
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        if self.eligible(battle, choices) {
+            let mut search = DamageSearch::new(dex, self.cfg.search.clone());
+            if let Some(report) = search.solve(battle) {
+                let policy = if side == 0 {
+                    &report.row_policy
+                } else {
+                    &report.col_policy
+                };
+                if policy.len() == choices.len() {
+                    return choices[self.sample(policy)];
+                }
+            }
+        }
+        self.fallback.choose(battle, dex, side, choices)
+    }
 }
