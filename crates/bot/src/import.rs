@@ -173,6 +173,32 @@ impl TrackMon {
     }
 }
 
+/// Public per-mon snapshot for harness consumers — see
+/// [`ProtocolTracker::snapshot`].
+#[derive(Clone, Debug)]
+pub struct MonSnapshot {
+    pub species: SpeciesId,
+    pub level: u8,
+    pub gender: Gender,
+    pub name: String,
+    pub appeared: bool,
+    pub active: bool,
+    pub fainted: bool,
+    /// Announced HP as a fraction of max (percentage-granular under HP% Mod).
+    pub hp_frac: f64,
+    pub status: Status,
+    /// Sleep came from Rest (public 2-turn clock).
+    pub rest: bool,
+    pub boosts: [i8; 7],
+    /// Announced volatile keys (+ the locked/binding move where tracked).
+    pub vols: Vec<(String, Option<MoveId>)>,
+    /// PP-mark deductions by move id = revealed moves + use counts.
+    pub uses: Vec<(MoveId, i32)>,
+    /// Mid-action state that removes or distorts the choice (thrash lock,
+    /// two-turn charge, recharge, transform).
+    pub choiceless: bool,
+}
+
 /// One announced volatile.
 #[derive(Clone, Debug)]
 struct TVol {
@@ -259,6 +285,37 @@ impl ProtocolTracker {
 
     pub fn opp_roster_len(&self) -> usize {
         self.sides[1 - self.side].mons.len()
+    }
+
+    /// Read-only public snapshot of `side`'s tracked state + active roster
+    /// slot — for harnesses that fabricate requests from a public stream
+    /// (M16b human-agreement corpus replay). Facts only; no imputation.
+    pub fn snapshot(&self, side: usize) -> (Vec<MonSnapshot>, Option<usize>) {
+        let ts = &self.sides[side];
+        let mons = ts
+            .mons
+            .iter()
+            .map(|m| MonSnapshot {
+                species: m.species,
+                level: m.level,
+                gender: m.gender,
+                name: m.name.clone(),
+                appeared: m.appeared,
+                active: m.active,
+                fainted: m.fainted,
+                hp_frac: (m.pixels as f64 / m.hp_den.max(1) as f64).clamp(0.0, 1.0),
+                status: m.status,
+                rest: m.rest,
+                boosts: m.boosts,
+                vols: m.vols.iter().map(|v| (v.key.clone(), v.move_id)).collect(),
+                uses: m.uses.clone(),
+                choiceless: m.locked.is_some()
+                    || m.charging.is_some()
+                    || m.must_recharge
+                    || m.transformed_into.is_some(),
+            })
+            .collect();
+        (mons, ts.active)
     }
 
     // ------------------------------------------------------------ subjects
