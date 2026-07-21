@@ -381,16 +381,9 @@ pub fn dispatch_move_callback(
             RV::Undef
         }
         ("magnitude", "onModifyMove") => {
-            let i = b.prng.random(100);
-            let (mag, bp) = match i {
-                0..=4 => (4, 10),
-                5..=14 => (5, 30),
-                15..=34 => (6, 50),
-                35..=64 => (7, 70),
-                65..=84 => (8, 90),
-                85..=94 => (9, 110),
-                _ => (10, 150),
-            };
+            const MAGS: [(i64, i32); 7] =
+                [(4, 10), (5, 30), (6, 50), (7, 70), (8, 90), (9, 110), (10, 150)];
+            let (mag, bp) = MAGS[b.prng.random_bucketed(100, &[5, 15, 35, 65, 85, 95, 100])];
             if let Some(am) = b.active_move.as_mut() {
                 am.magnitude = Some(mag);
                 am.base_power = bp;
@@ -398,17 +391,16 @@ pub fn dispatch_move_callback(
             RV::Undef
         }
         ("present", "onModifyMove") => {
-            let rand = b.prng.random(10);
+            let bucket = b.prng.random_bucketed(10, &[2, 6, 9, 10]);
             if let Some(am) = b.active_move.as_mut() {
-                if rand < 2 {
-                    am.heal = Some((1, 4));
-                    am.infiltrates = true;
-                } else if rand < 6 {
-                    am.base_power = 40;
-                } else if rand < 9 {
-                    am.base_power = 80;
-                } else {
-                    am.base_power = 120;
+                match bucket {
+                    0 => {
+                        am.heal = Some((1, 4));
+                        am.infiltrates = true;
+                    }
+                    1 => am.base_power = 40,
+                    2 => am.base_power = 80,
+                    _ => am.base_power = 120,
                 }
             }
             RV::Undef
@@ -1243,7 +1235,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
         );
         let hit = match acc_rv {
             RV::True => true,
-            RV::Num(a) => (b.prng.random(100) as f64) < a,
+            RV::Num(a) => b.prng.chance_percent(a),
             _ => false,
         };
         if !hit {
@@ -1963,8 +1955,8 @@ impl Battle {
             let mut hits = match mh {
                 Multihit::Fixed(n) => n,
                 Multihit::Range(2, 5) => {
-                    const TABLE: [i32; 8] = [2, 2, 2, 3, 3, 3, 4, 5];
-                    TABLE[self.prng.sample_index(8)]
+                    // PS's 8-entry table [2,2,2,3,3,3,4,5], consumed by bucket.
+                    [2, 3, 4, 5][self.prng.random_bucketed(8, &[3, 6, 7, 8])]
                 }
                 Multihit::Range(lo, hi) => self.prng.random_range(lo as u32, hi as u32 + 1) as i32,
             };
@@ -2361,7 +2353,7 @@ impl Battle {
         if let Some(self_block) = md.self_effect.clone() {
             // All self drops grab a random number (in-game RNG behavior)
             if !is_secondary && !self_block.boosts.is_empty() {
-                self.prng.random(100);
+                self.prng.burn(100);
             }
             self.move_hit(
                 dex,

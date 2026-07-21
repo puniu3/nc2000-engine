@@ -11,7 +11,7 @@
 //! `pokemon.position` is kept in sync exactly like PS does.
 
 use crate::dex::{Accuracy, Category, CondId, FixedDamage, HitEffect, ItemId, MoveId, Multihit, SparseBoosts, SpeciesId, TypeId, TypeList};
-use crate::prng::Prng;
+use crate::prng::BattleRng;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1099,7 +1099,7 @@ impl ActiveMove {
 
 #[derive(Clone, Debug)]
 pub struct Battle {
-    pub prng: Prng,
+    pub prng: BattleRng,
     pub turn: u16,
     pub request_state: RequestState,
     pub mid_turn: bool,

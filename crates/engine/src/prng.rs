@@ -89,3 +89,172 @@ impl Prng {
         }
     }
 }
+
+// ---------------------------------------------------------------- BattleRng
+
+/// One chance-node consumption recorded in Oracle mode: the exact partition
+/// of the underlying u32 draw into outcome classes (`counts[c]` = how many
+/// of the 2^32 raw draws land in class `c`; the counts always sum to 2^32,
+/// so `counts[c] / 2^32` is the class's exact probability), plus which class
+/// this run took.
+#[derive(Clone, Debug)]
+pub struct Draw {
+    pub label: &'static str,
+    pub counts: Vec<u64>,
+    pub chosen: usize,
+}
+
+impl Draw {
+    pub const TOTAL: u64 = 1 << 32;
+
+    pub fn prob(&self) -> f64 {
+        self.counts[self.chosen] as f64 / Self::TOTAL as f64
+    }
+}
+
+/// Oracle state: a script of prescribed class choices (positions past the
+/// script's end take the first non-empty class) and the trace of every
+/// consumption. `trace.len()` is the cursor.
+#[derive(Clone, Debug, Default)]
+pub struct Oracle {
+    pub script: Vec<usize>,
+    pub trace: Vec<Draw>,
+}
+
+/// The battle's RNG: either the bit-exact seeded LCG (normal play, search,
+/// fixtures) or an enumeration Oracle that records the exact outcome-class
+/// partition of every draw (M17e chance-node enumeration). All battle code
+/// consumes randomness through this type; in Seeded mode every method's LCG
+/// consumption is bit-identical to the pre-BattleRng `Prng` calls.
+#[derive(Clone, Debug)]
+pub struct BattleRng {
+    pub lcg: Prng,
+    pub oracle: Option<Box<Oracle>>,
+}
+
+/// # of raw u32 draws `x` with `floor(x * n / 2^32) == v` (PS `random(n)`).
+fn uniform_count(n: u32, v: u32) -> u64 {
+    let ceil = |a: u64, b: u64| a.div_ceil(b);
+    ceil((v as u64 + 1) << 32, n as u64) - ceil((v as u64) << 32, n as u64)
+}
+
+/// # of raw u32 draws mapping to a `random(n)` value in `[lo, hi)`.
+fn range_count(n: u32, lo: u32, hi: u32) -> u64 {
+    let ceil = |a: u64, b: u64| a.div_ceil(b);
+    ceil((hi as u64) << 32, n as u64) - ceil((lo as u64) << 32, n as u64)
+}
+
+impl BattleRng {
+    pub fn seeded(lcg: Prng) -> Self {
+        BattleRng { lcg, oracle: None }
+    }
+
+    /// Oracle mode following `script`; draws past the script take the first
+    /// non-empty class. The `lcg` is untouched dead weight in this mode.
+    pub fn enumerating(script: Vec<usize>) -> Self {
+        BattleRng { lcg: Prng::new(0), oracle: Some(Box::new(Oracle { script, trace: Vec::new() })) }
+    }
+
+    pub fn seed_str(&self) -> String {
+        self.lcg.seed_str()
+    }
+
+    /// Oracle-mode class pick: scripted if in range, else first non-empty.
+    fn pick(o: &mut Oracle, label: &'static str, counts: Vec<u64>) -> usize {
+        assert_eq!(counts.iter().sum::<u64>(), Draw::TOTAL, "{label}: partition must cover u32");
+        let pos = o.trace.len();
+        let chosen = match o.script.get(pos) {
+            Some(&c) => c,
+            None => counts.iter().position(|&c| c > 0).expect("some class has mass"),
+        };
+        o.trace.push(Draw { label, counts, chosen });
+        chosen
+    }
+
+    pub fn random(&mut self, n: u32) -> u32 {
+        match &mut self.oracle {
+            None => self.lcg.random(n),
+            Some(o) => {
+                let counts = (0..n).map(|v| uniform_count(n, v)).collect();
+                Self::pick(o, "random", counts) as u32
+            }
+        }
+    }
+
+    pub fn random_range(&mut self, from: u32, to: u32) -> u32 {
+        from + self.random(to - from)
+    }
+
+    pub fn random_chance(&mut self, num: u32, den: u32) -> bool {
+        match &mut self.oracle {
+            None => self.lcg.random_chance(num, den),
+            Some(o) => {
+                let t = range_count(den, 0, num.min(den));
+                Self::pick(o, "chance", vec![t, Draw::TOTAL - t]) == 0
+            }
+        }
+    }
+
+    pub fn sample_index(&mut self, len: usize) -> usize {
+        assert!(len > 0, "cannot sample an empty slice");
+        self.random(len as u32) as usize
+    }
+
+    pub fn shuffle<T>(&mut self, items: &mut [T], mut start: usize, end: usize) {
+        while start + 1 < end {
+            let next = self.random_range(start as u32, end as u32) as usize;
+            if start != next {
+                items.swap(start, next);
+            }
+            start += 1;
+        }
+    }
+
+    /// A draw whose value is discarded (in-game RNG burn kept for LCG
+    /// parity). Oracle mode records nothing: one class, probability 1.
+    pub fn burn(&mut self, n: u32) {
+        if self.oracle.is_none() {
+            self.lcg.random(n);
+        }
+    }
+
+    /// `random(n)` consumed only through the bucket index it falls in.
+    /// `cuts` are ascending exclusive upper bounds per bucket; the last cut
+    /// must equal `n`. Seeded mode consumes exactly like `random(n)`; Oracle
+    /// mode branches over buckets instead of all n values.
+    pub fn random_bucketed(&mut self, n: u32, cuts: &'static [u32]) -> usize {
+        debug_assert_eq!(*cuts.last().unwrap(), n);
+        match &mut self.oracle {
+            None => {
+                let v = self.lcg.random(n);
+                cuts.iter().position(|&c| v < c).unwrap()
+            }
+            Some(o) => {
+                let mut lo = 0;
+                let counts = cuts
+                    .iter()
+                    .map(|&c| {
+                        let cnt = range_count(n, lo, c);
+                        lo = c;
+                        cnt
+                    })
+                    .collect();
+                Self::pick(o, "bucketed", counts)
+            }
+        }
+    }
+
+    /// PS `this.random(100) < accuracy` where accuracy is an f64 percent.
+    /// Seeded mode reproduces the float comparison bit-exactly; Oracle mode
+    /// merges to hit/miss.
+    pub fn chance_percent(&mut self, a: f64) -> bool {
+        match &mut self.oracle {
+            None => (self.lcg.random(100) as f64) < a,
+            Some(o) => {
+                let hit_vals = (0..100u32).filter(|&v| (v as f64) < a).count() as u32;
+                let t = range_count(100, 0, hit_vals);
+                Self::pick(o, "percent", vec![t, Draw::TOTAL - t]) == 0
+            }
+        }
+    }
+}

@@ -14,6 +14,7 @@ pub mod actions;
 pub mod choices;
 pub mod conditions;
 pub mod dmg;
+pub mod enumerate;
 pub mod essence;
 pub mod events;
 pub mod fieldfx;
@@ -442,7 +443,7 @@ impl Battle {
         let prng = Prng::from_seed_str(seed)
             .ok_or_else(|| EngineError::InvalidChoice(format!("bad seed: {seed}")))?;
         let mut battle = Battle {
-            prng,
+            prng: crate::prng::BattleRng::seeded(prng),
             turn: 0,
             request_state: RequestState::None,
             mid_turn: false,

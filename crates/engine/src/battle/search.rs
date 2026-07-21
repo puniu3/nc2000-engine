@@ -165,7 +165,7 @@ impl Battle {
     /// Replace the PRNG (determinized playouts: clone the battle, reseed the
     /// clone). The seed is the raw 64-bit LCG state.
     pub fn reseed(&mut self, seed: u64) {
-        self.prng = Prng::new(seed);
+        self.prng = crate::prng::BattleRng::seeded(Prng::new(seed));
     }
 
     /// Hash of the decision-relevant battle state — everything the game's
