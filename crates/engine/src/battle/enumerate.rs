@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::dex::Dex;
-use crate::prng::{BattleRng, Draw, Oracle};
+use crate::prng::{BattleRng, DamageRollMode, Draw, Oracle};
 use crate::state::Battle;
 
 use super::search::SearchChoice;
@@ -64,9 +64,21 @@ pub fn run_scripted(
     choices: [Option<SearchChoice>; 2],
     script: &[usize],
 ) -> (Battle, Vec<Draw>) {
+    run_scripted_with_damage_mode(dex, base, choices, script, DamageRollMode::Exact)
+}
+
+/// Experimental counterpart of `run_scripted`. The production exact path
+/// above always fixes `Exact`; callers must opt into damage abstraction.
+pub fn run_scripted_with_damage_mode(
+    dex: &Dex,
+    base: &Battle,
+    choices: [Option<SearchChoice>; 2],
+    script: &[usize],
+    damage_mode: DamageRollMode,
+) -> (Battle, Vec<Draw>) {
     let mut b = base.clone();
     b.set_log_enabled(false);
-    b.prng = BattleRng::enumerating(script.to_vec());
+    b.prng = BattleRng::enumerating_with_damage_mode(script.to_vec(), damage_mode);
     b.apply_choices(dex, choices).expect("run_scripted: choices must be legal");
     let oracle = b.prng.oracle.take().expect("oracle survives the step");
     let Oracle { trace, .. } = *oracle;
@@ -77,6 +89,7 @@ struct Ctx<'a> {
     dex: &'a Dex,
     base: &'a Battle,
     choices: [Option<SearchChoice>; 2],
+    damage_mode: DamageRollMode,
     cap: usize,
     runs: usize,
 }
@@ -87,7 +100,13 @@ impl Ctx<'_> {
             return None;
         }
         self.runs += 1;
-        Some(run_scripted(self.dex, self.base, self.choices, script))
+        Some(run_scripted_with_damage_mode(
+            self.dex,
+            self.base,
+            self.choices,
+            script,
+            self.damage_mode,
+        ))
     }
 }
 
@@ -205,7 +224,19 @@ pub fn enumerate_step(
     choices: [Option<SearchChoice>; 2],
     cap: usize,
 ) -> Option<StepEnum> {
-    let mut ctx = Ctx { dex, base, choices, cap, runs: 0 };
+    enumerate_step_with_damage_mode(dex, base, choices, cap, DamageRollMode::Exact)
+}
+
+/// Enumerate one decision step while quotienting damage rolls according to
+/// `damage_mode`. This is approximate unless `damage_mode == Exact`.
+pub fn enumerate_step_with_damage_mode(
+    dex: &Dex,
+    base: &Battle,
+    choices: [Option<SearchChoice>; 2],
+    cap: usize,
+    damage_mode: DamageRollMode,
+) -> Option<StepEnum> {
+    let mut ctx = Ctx { dex, base, choices, damage_mode, cap, runs: 0 };
     let mut script = Vec::new();
     let recs = subtree(&mut ctx, &mut script)?;
     Some(StepEnum {

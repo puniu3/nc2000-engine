@@ -2,6 +2,7 @@
 //! → gen2stadium2 `tryMoveHit` → gen2 `moveHit` → gen2stadium2 `getDamage`.
 
 use crate::dex::{Cb, Accuracy, Category, Dex, HitEffect, Multihit, MoveId};
+use crate::prng::{DamageRollContext, DamageRollMode};
 use crate::state::*;
 
 use super::conditions::DamageEffect;
@@ -2463,6 +2464,68 @@ impl Battle {
 
     // ---------------------------------------------------------- getDamage
 
+    /// Semantic information used by the experimental damage-roll quotient.
+    /// Mechanics which can later observe the numeric damage retain exact
+    /// rolls; the remaining thresholds describe predicates that change at a
+    /// small number of meaningful post-hit HP values.
+    fn damage_roll_context(&self, dex: &Dex, target: PokeId) -> DamageRollContext {
+        let p = self.poke(target);
+        let maxhp = p.maxhp.max(1);
+        let mut thresholds = vec![0, maxhp / 4, maxhp / 3, maxhp / 2];
+
+        // Flail/Reversal's six base-power bands. Only add them when the
+        // damaged Pokemon can actually make the predicate observable.
+        let has_hp_power_move = p
+            .move_slots
+            .iter()
+            .any(|slot| matches!(dex.moves.key(slot.id), "flail" | "reversal"));
+        if has_hp_power_move {
+            for ratio_max in [1, 4, 9, 16, 32] {
+                let numerator = (ratio_max + 1) * maxhp;
+                let boundary = (numerator + 47) / 48 - 1;
+                if boundary > 0 && boundary < maxhp {
+                    thresholds.push(boundary);
+                }
+            }
+        }
+        thresholds.sort_unstable();
+        thresholds.dedup();
+
+        // The next status tick's nominal damage. This clock is a grouping
+        // hint, not a battle-rule replacement; the engine still executes the
+        // real residual handlers on every representative state.
+        let residual_damage = if matches!(p.status, Status::Brn | Status::Psn | Status::Tox) {
+            let residual = crate::cond_id!(dex, "residualdmg");
+            if let Some(state) = residual.and_then(|id| p.volatile(id)) {
+                let counter = state.get_int(DK::Counter) as i32;
+                if p.status == Status::Tox && counter == 0 {
+                    0
+                } else {
+                    ((maxhp / 16).max(1) * counter.max(1)).max(1)
+                }
+            } else {
+                (maxhp / 8).max(1)
+            }
+        } else {
+            0
+        };
+
+        let damage_sensitive_move = self.active_move.as_ref().is_some_and(|mv| {
+            mv.drain.is_some() || mv.recoil.is_some() || mv.struggle_recoil || mv.multihit.is_some()
+        });
+        let has_substitute = crate::cond_id!(dex, "substitute").is_some_and(|id| p.has_volatile(id));
+        let has_damage_callback = p.move_slots.iter().any(|slot| {
+            matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat" | "bide")
+        }) || crate::cond_id!(dex, "bide").is_some_and(|id| p.has_volatile(id));
+
+        DamageRollContext {
+            hp: p.hp,
+            thresholds,
+            residual_damage,
+            force_exact: damage_sensitive_move || has_substitute || has_damage_callback,
+        }
+    }
+
     /// gen2stadium2 getDamage on the current active move.
     pub fn get_damage(
         &mut self,
@@ -2767,7 +2830,13 @@ impl Battle {
 
         // random factor
         if !no_damage_variance && damage > 1.0 {
-            damage = self.prng.apply_damage_variance(damage);
+            let mode = self.prng.damage_roll_mode();
+            if mode == DamageRollMode::Exact {
+                damage = self.prng.apply_damage_variance(damage);
+            } else {
+                let context = self.damage_roll_context(dex, target);
+                damage = self.prng.apply_damage_variance_with_context(damage, Some(&context));
+            }
         }
 
         if base_power != 0.0 && damage.floor() == 0.0 {
