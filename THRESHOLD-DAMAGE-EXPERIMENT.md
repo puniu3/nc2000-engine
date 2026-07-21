@@ -1,6 +1,6 @@
 # Threshold-preserving damage-roll experiment
 
-Status: ACTIVE
+Status: FIRST BENCHMARK COMPLETE
 
 ## Contract
 
@@ -43,5 +43,6 @@ The approximation starts with one probability-weighted representative damage. It
 - 2026-07-22: added matched finite-horizon value/policy benchmark. A 12-position local horizon-0 smoke completed 10 exact controls; threshold2 used about 9% of exact engine runs on completed roots, with value MAE 0.00011 and zero measured root-policy regret. Two exact roots exhausted the 2M-run cap; treat this only as a harness smoke, not the result.
 - 2026-07-22: added a seed-paired duel wrapper: identical SM-MCTS fallback outside 1v1 endgames, exact/abstract finite-horizon search inside, fallback again on work exhaustion. Four-game wiring smoke was 2-2; threshold2 used 10.5 ms/move versus exact 71.2 ms/move at 20k work. Sample is intentionally too small for a strength claim.
 - 2026-07-22: full engine/conformance suite passed, including bit-exact replay corpora; the production seeded RNG path is unchanged.
-- cx task `20260722-013928` is the current horizon-0 certified-anchor run (12 CPU declaration after larger Spot stockouts). Its outputs return under `/home/puniu/cx/results/20260722-013928/out/`.
-- Next writer: do not change the abstraction contract while cx benchmark jobs are active. Inspect this log and `cx status` first.
+- 2026-07-22: full results recorded in `THRESHOLD-DAMAGE-RESULTS.md`. Horizon-1 threshold2 used 10.0% of exact engine runs; its value MAE was 0.000835 and mean policy regret 0.000996. Fixed-work 400-game duel score was 0.4913 ± 0.0489, with 21.4% lower think time.
+- 2026-07-22: no cx jobs remain active. Spot stockouts and two environment probes are documented in the results memo.
+- Next writer: preserve the exact/approximate naming boundary. The next useful arm is adaptive refinement for heal/stall policy thresholds, validated on a fresh holdout rather than tuned only to battle 455.
