@@ -32,6 +32,9 @@
 //!   counter:<inner> | counterarg:<inner>   M8 counter-picking probe: best-responds at
 //!                                          preview to the baked mixed/argmax policy
 
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::path::Path;
 use std::sync::Arc;
 
 use conformance::fixture::{corpus_files, repo_root, Fixture};
@@ -314,10 +317,19 @@ fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
 
+fn write_jsonl(path: &Path, row: &serde_json::Value) {
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    let mut out = BufWriter::new(File::create(path).unwrap());
+    serde_json::to_writer(&mut out, row).unwrap();
+    writeln!(out).unwrap();
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.len() < 2 {
-        eprintln!("usage: arena <agentA> <agentB> [--games N] [--seed S] [--threads T] [--max-turns M]");
+        eprintln!("usage: arena <agentA> <agentB> [--games N] [--seed S] [--threads T] [--max-turns M] [--jsonl FILE]");
         std::process::exit(2);
     }
     let spec_a = AgentSpec::parse(&args[0]).unwrap();
@@ -387,6 +399,64 @@ fn main() {
         stats.a_ms_per_move,
         stats.b_ms_per_move
     );
+    println!(
+        "turn caps {}   think p95/p99 ms A {:.1}/{:.1} B {:.1}/{:.1}",
+        stats.turn_caps, stats.a_p95_ms, stats.a_p99_ms, stats.b_p95_ms, stats.b_p99_ms
+    );
+
+    if let Some(path) = flag(&args, "--jsonl") {
+        let ci95 = stats.ci95.is_finite().then_some(stats.ci95);
+        let row = serde_json::json!({
+            "schema": "nc2000-arena-v1",
+            "agent_a": spec_a.label(),
+            "agent_b": spec_b.label(),
+            "config": {
+                "requested_games": games,
+                "base_seed": base_seed,
+                "threads": threads,
+                "max_turns": max_turns,
+                "pool": pool_spec,
+                "teams": teams.len(),
+                "baked_tables": tables.as_ref().map_or(0, |t| t.len()),
+                "log_on": is_blind,
+            },
+            "result": {
+                "games": stats.games,
+                "pairs": stats.pairs,
+                "wins": stats.wins,
+                "losses": stats.losses,
+                "ties": stats.ties,
+                "turn_caps": stats.turn_caps,
+                "score": stats.score,
+                "ci95": ci95,
+                "ci_unit": "side_swap_pair",
+                "pair_scores": &stats.pair_scores,
+                "turns_sum": stats.turns_sum,
+                "avg_turns": stats.avg_turns,
+                "wall_secs": stats.secs,
+            },
+            "timing": {
+                "unit": "choose_call",
+                "a": {
+                    "moves": stats.a_moves,
+                    "total_ns": stats.a_total_ns,
+                    "mean_ms": stats.a_ms_per_move,
+                    "p95_ms": stats.a_p95_ms,
+                    "p99_ms": stats.a_p99_ms,
+                    "samples_ns": &stats.a_samples_ns,
+                },
+                "b": {
+                    "moves": stats.b_moves,
+                    "total_ns": stats.b_total_ns,
+                    "mean_ms": stats.b_ms_per_move,
+                    "p95_ms": stats.b_p95_ms,
+                    "p99_ms": stats.b_p99_ms,
+                    "samples_ns": &stats.b_samples_ns,
+                },
+            },
+        });
+        write_jsonl(Path::new(&path), &row);
+    }
 }
 
 fn load_team_pool() -> Vec<Vec<PokemonSet>> {

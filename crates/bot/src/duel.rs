@@ -41,27 +41,59 @@ impl DuelSpec {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct DuelStats {
     pub games: usize,
+    /// Number of independent schedule blocks. Each block is the same teams
+    /// and battle seed played once with A on each side.
+    pub pairs: usize,
     pub wins: usize,
     pub losses: usize,
     pub ties: usize,
     pub turn_caps: usize,
     /// Agent A's mean score (win 1 / tie 0.5 / loss 0).
     pub score: f64,
-    /// 95% CI half-width on `score`.
+    /// 95% CI half-width over side-swapped block means. `NaN` when there is
+    /// only one block, because its sampling variance is unknowable.
     pub ci95: f64,
+    /// Side-swapped block means retained for exact cross-shard aggregation.
+    pub pair_scores: Vec<f64>,
+    pub turns_sum: u64,
     pub avg_turns: f64,
     pub secs: f64,
     /// Mean thinking time per `choose()` call — the equal-wall-clock
     /// evidence for budget-matched comparisons.
+    pub a_total_ns: u64,
+    pub a_moves: u64,
     pub a_ms_per_move: f64,
+    pub b_total_ns: u64,
+    pub b_moves: u64,
     pub b_ms_per_move: f64,
     pub a_p95_ms: f64,
     pub a_p99_ms: f64,
     pub b_p95_ms: f64,
     pub b_p99_ms: f64,
+    /// Sorted per-choice samples; nanoseconds make merged percentiles exact.
+    pub a_samples_ns: Vec<u64>,
+    pub b_samples_ns: Vec<u64>,
+}
+
+fn mean_ci95(samples: &[f64]) -> (f64, f64) {
+    let n = samples.len() as f64;
+    let mean = samples.iter().sum::<f64>() / n;
+    if samples.len() < 2 {
+        return (mean, f64::NAN);
+    }
+    let var = samples.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (n - 1.0);
+    (mean, 1.96 * (var / n).sqrt())
+}
+
+fn percentile_ms(samples: &[u64], percentile: usize) -> f64 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    let rank = (samples.len() * percentile).div_ceil(100);
+    samples[rank.saturating_sub(1).min(samples.len() - 1)] as f64 / 1e6
 }
 
 /// Delegating wrapper that accumulates time spent inside `choose`.
@@ -196,13 +228,15 @@ pub fn run_duel(
         results = all.into_iter().map(|(_, r)| r).collect();
     });
 
-    let n = results.len() as f64;
     let wins = results.iter().filter(|r| r.0 == 1.0).count();
     let losses = results.iter().filter(|r| r.0 == 0.0).count();
     let ties = results.len() - wins - losses;
     let turn_caps = results.iter().filter(|r| r.2).count();
-    let score: f64 = results.iter().map(|r| r.0).sum::<f64>() / n;
-    let var: f64 = results.iter().map(|r| (r.0 - score).powi(2)).sum::<f64>() / (n - 1.0);
+    let pair_scores: Vec<f64> = results
+        .chunks_exact(2)
+        .map(|pair| (pair[0].0 + pair[1].0) / 2.0)
+        .collect();
+    let (score, ci95) = mean_ci95(&pair_scores);
     let ms_per_move = |ns: u64, moves: u64| ns as f64 / 1e6 / (moves.max(1)) as f64;
     let (a_ns, a_moves) = results.iter().fold((0, 0), |(ns, m), r| (ns + r.3, m + r.4));
     let (b_ns, b_moves) = results.iter().fold((0, 0), |(ns, m), r| (ns + r.6, m + r.7));
@@ -210,26 +244,57 @@ pub fn run_duel(
     let mut b_samples: Vec<u64> = results.iter().flat_map(|r| r.8.iter().copied()).collect();
     a_samples.sort_unstable();
     b_samples.sort_unstable();
-    let percentile_ms = |samples: &[u64], percentile: usize| {
-        if samples.is_empty() { return 0.0; }
-        let rank = (samples.len() * percentile).div_ceil(100);
-        samples[rank.saturating_sub(1).min(samples.len() - 1)] as f64 / 1e6
-    };
+    let turns_sum = results.iter().map(|r| r.1 as u64).sum();
     DuelStats {
         games: results.len(),
+        pairs: pair_scores.len(),
         wins,
         losses,
         ties,
         turn_caps,
         score,
-        ci95: 1.96 * (var / n).sqrt(),
-        avg_turns: results.iter().map(|r| r.1 as f64).sum::<f64>() / n,
+        ci95,
+        pair_scores,
+        turns_sum,
+        avg_turns: turns_sum as f64 / results.len() as f64,
         secs: t0.elapsed().as_secs_f64(),
+        a_total_ns: a_ns,
+        a_moves,
         a_ms_per_move: ms_per_move(a_ns, a_moves),
+        b_total_ns: b_ns,
+        b_moves,
         b_ms_per_move: ms_per_move(b_ns, b_moves),
         a_p95_ms: percentile_ms(&a_samples, 95),
         a_p99_ms: percentile_ms(&a_samples, 99),
         b_p95_ms: percentile_ms(&b_samples, 95),
         b_p99_ms: percentile_ms(&b_samples, 99),
+        a_samples_ns: a_samples,
+        b_samples_ns: b_samples,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{mean_ci95, percentile_ms};
+
+    #[test]
+    fn confidence_interval_uses_block_samples() {
+        let (mean, ci) = mean_ci95(&[0.5, 1.0]);
+        assert_eq!(mean, 0.75);
+        assert!((ci - 0.49).abs() < 1e-12);
+    }
+
+    #[test]
+    fn one_block_has_no_fake_confidence_interval() {
+        let (mean, ci) = mean_ci95(&[0.5]);
+        assert_eq!(mean, 0.5);
+        assert!(ci.is_nan());
+    }
+
+    #[test]
+    fn percentile_uses_nearest_rank() {
+        let samples: Vec<u64> = (1..=100).map(|ms| ms * 1_000_000).collect();
+        assert_eq!(percentile_ms(&samples, 95), 95.0);
+        assert_eq!(percentile_ms(&samples, 99), 99.0);
     }
 }
