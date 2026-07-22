@@ -338,6 +338,59 @@ impl BlindSearch {
         r
     }
 
+    /// One iteration with a caller-selected own root action, while keeping
+    /// the same determinization table and opponent-root statistics as every
+    /// other forced action. This is the equal-allocation measurement path
+    /// used by M17a confirmation; unlike separate one-hot trees, it does not
+    /// let the simultaneous opponent condition its root policy on our move.
+    pub fn step_forced(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        my_pick: usize,
+    ) -> f64 {
+        assert!(my_pick < self.my_acts.len(), "forced root action out of range");
+        assert!(
+            self.my_mask.as_ref().map_or(true, |mask| mask[my_pick]),
+            "forced root action is masked"
+        );
+        let mut sim = belief.determinize(dex, &self.base, obs, &mut self.rng);
+        let key = key_of(&self.cfg, &sim);
+        let root = match self.table.get(&key) {
+            Some(&i) => i,
+            None => {
+                let node = Node::at(&mut sim, dex);
+                debug_assert_eq!(
+                    node.acts[self.side], self.my_acts,
+                    "determinization changed the observer's own root actions"
+                );
+                self.nodes.push(node);
+                self.table.insert(key, self.nodes.len() - 1);
+                self.nodes.len() - 1
+            }
+        };
+        self.my_n[my_pick] += 1;
+        let mut force = [None, None];
+        force[self.side] = Some(my_pick);
+        let mut joint = [0usize; 2];
+        let r = run_iteration(
+            &self.cfg,
+            &mut self.rng,
+            &mut self.nodes,
+            &mut self.table,
+            &mut sim,
+            dex,
+            self.turn_cap,
+            root,
+            force,
+            &mut joint,
+        );
+        self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
+        self.done += 1;
+        r
+    }
+
     /// Pump `n` iterations, return the total run so far.
     pub fn step(&mut self, dex: &Dex, belief: &Belief, obs: &Observer, n: u32) -> u32 {
         for _ in 0..n {

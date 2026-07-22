@@ -132,5 +132,10 @@ pub fn corpus_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
 
 /// Repo root (crates/conformance/../..).
 pub fn repo_root() -> std::path::PathBuf {
+    if let Some(root) = std::env::var_os("NC2000_REPO_ROOT") {
+        return std::path::PathBuf::from(root)
+            .canonicalize()
+            .expect("NC2000_REPO_ROOT must name an existing directory");
+    }
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap()
 }

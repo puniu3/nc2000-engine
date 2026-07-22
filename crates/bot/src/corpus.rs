@@ -1,23 +1,64 @@
-//! Corpus-position reconstruction shared by the M17e harnesses
-//! (endgame_exactness_corpus, anchor_gate). Fabrication logic mirrors
-//! examples/human_agreement.rs (which keeps its own copy — migrate it here
-//! on its next substantive edit): tracker over the protocol prefix, set
-//! fabrication from rentals/pool/learnsets, synthesized full battle via
-//! ProtocolAgent::on_request, no search step.
+//! Corpus-position reconstruction shared by the M16b/M17 harnesses:
+//! tracker state from the protocol prefix, full-log evidence for the acting
+//! side's own submitted set, remaining-set fabrication from
+//! rentals/pool/learnsets, then `ProtocolAgent::on_request` synthesis.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::import::{MonSnapshot, ProtocolAgent, ProtocolTracker};
-use crate::preview::load_meta_pool;
+use crate::preview::{load_meta_pool, MetaPool};
 use crate::smmcts::{RmConfig, SelRule};
 use nc2000_engine::dex::{toid, Dex, SpeciesId};
 use nc2000_engine::state::{Battle, MoveSlot, Status};
 
-/// One loaded corpus battle: filtered protocol lines, eaten-berry facts,
-/// and the extracted observable decisions.
+/// Full-log facts about the acting side's own set. These are legitimate in
+/// an offline reconstruction: a live bot knows its submitted team even when
+/// the spectator prefix has not revealed it yet. Battle state and opponent
+/// information still come strictly from the decision prefix.
+#[derive(Clone, Debug, Default)]
+pub struct SetEvidence {
+    moves: HashMap<(usize, String), Vec<String>>,
+    items: HashMap<(usize, String), ItemEvent>,
+    species_names: HashMap<(usize, String), String>,
+}
+
+#[derive(Clone, Debug)]
+struct ItemEvent {
+    cut: usize,
+    item: String,
+}
+
+impl SetEvidence {
+    fn resolved_name<'a>(&'a self, side: usize, name: &'a str, species: &str) -> &'a str {
+        if !name.is_empty() {
+            name
+        } else {
+            self.species_names
+                .get(&(side, species.to_string()))
+                .map(String::as_str)
+                .unwrap_or(name)
+        }
+    }
+
+    fn moves(&self, side: usize, name: &str, species: &str) -> &[String] {
+        let name = self.resolved_name(side, name, species);
+        self.moves
+            .get(&(side, name.to_string()))
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
+
+    fn item(&self, side: usize, name: &str, species: &str) -> Option<&ItemEvent> {
+        let name = self.resolved_name(side, name, species);
+        self.items.get(&(side, name.to_string()))
+    }
+}
+
+/// One loaded corpus battle: filtered protocol lines, full-log own-set
+/// evidence, and the extracted observable decisions.
 pub struct CorpusBattle {
     pub lines: Vec<String>,
-    pub eaten: Vec<(usize, String)>,
+    pub evidence: SetEvidence,
     pub decisions: Vec<Decision>,
 }
 
@@ -43,30 +84,128 @@ pub fn load_battle(path: &std::path::Path) -> CorpusBattle {
         .map(String::from)
         .collect();
     let decisions = extract_decisions(&lines);
-    let mut eaten: Vec<(usize, String)> = Vec::new();
-    for ln in &lines {
-        if ln.contains("|-enditem|") && ln.contains("[eat]") {
-            let p: Vec<&str> = ln.split('|').collect();
-            if let Some(subj) = p.get(2) {
-                let side = if subj.as_bytes().get(1) == Some(&b'2') { 1 } else { 0 };
-                if let Some(nick) = subj.split(':').nth(1) {
-                    eaten.push((side, nick.trim().to_string()));
+    let evidence = collect_set_evidence(&lines);
+    CorpusBattle {
+        lines,
+        evidence,
+        decisions,
+    }
+}
+
+fn collect_set_evidence(lines: &[String]) -> SetEvidence {
+    let mut evidence = SetEvidence::default();
+    let mut active_names: [Option<String>; 2] = std::array::from_fn(|_| None);
+    let mut transformed: HashSet<(usize, String)> = HashSet::new();
+    for (cut, line) in lines.iter().enumerate() {
+        let parts: Vec<&str> = line.split('|').collect();
+        let Some(subject) = parts.get(2) else {
+            continue;
+        };
+        let side = if subject.as_bytes().get(1) == Some(&b'2') {
+            1
+        } else {
+            0
+        };
+        let name = subject.split(':').nth(1).unwrap_or("").trim();
+        if name.is_empty() {
+            continue;
+        }
+        match parts.get(1).copied().unwrap_or("") {
+            "switch" | "drag" | "replace" => {
+                if let Some(outgoing) = active_names[side].replace(name.to_string()) {
+                    transformed.remove(&(side, outgoing));
+                }
+                // A transformed mon returns to its base set on re-entry.
+                // `replace` is the protocol's identity-replacement analogue
+                // of a switch and likewise must not retain copied moves.
+                transformed.remove(&(side, name.to_string()));
+                let species = parts
+                    .get(3)
+                    .map(|details| toid(details.split(',').next().unwrap_or("")))
+                    .unwrap_or_default();
+                if !species.is_empty() {
+                    evidence
+                        .species_names
+                        .entry((side, species))
+                        .or_insert_with(|| name.to_string());
                 }
             }
+            "-transform" => {
+                transformed.insert((side, name.to_string()));
+            }
+            "-end"
+                if parts
+                    .get(3)
+                    .is_some_and(|effect| toid(effect) == "transform") =>
+            {
+                transformed.remove(&(side, name.to_string()));
+            }
+            "faint" => {
+                transformed.remove(&(side, name.to_string()));
+                if active_names[side].as_deref() == Some(name) {
+                    active_names[side] = None;
+                }
+            }
+            "move" => {
+                // A move executed through Transform belongs to the copied
+                // set, not the submitted one.
+                if transformed.contains(&(side, name.to_string())) {
+                    continue;
+                }
+                let Some(move_name) = parts.get(3) else {
+                    continue;
+                };
+                let key = plain(&toid(move_name));
+                // `[from] <other move>` is a called move. Sleep Talk is the
+                // deliberate exception: its result is one of the submitted
+                // slots. `[from] Pursuit` names the executing move itself,
+                // so it is an ordinary submitted-move reveal.
+                let from_key = parts
+                    .iter()
+                    .find_map(|part| part.strip_prefix("[from] "))
+                    .map(|from| plain(&toid(from.strip_prefix("move: ").unwrap_or(from))));
+                if from_key.is_some_and(|from| from != key && from != "sleeptalk") {
+                    continue;
+                }
+                let moves = evidence.moves.entry((side, name.to_string())).or_default();
+                if !moves.contains(&key) {
+                    moves.push(key);
+                }
+            }
+            "-enditem" if line.contains("[eat]") => {
+                let Some(item) = parts.get(3) else { continue };
+                evidence
+                    .items
+                    .entry((side, name.to_string()))
+                    .or_insert(ItemEvent {
+                        cut,
+                        item: (*item).to_string(),
+                    });
+            }
+            _ => {}
         }
     }
-    CorpusBattle { lines, eaten, decisions }
+    evidence
 }
 
 pub fn cfg() -> RmConfig {
-    RmConfig { rule: SelRule::Ucb, c: 1.0, hp_buckets: 16, ..RmConfig::default() }
+    RmConfig {
+        rule: SelRule::Ucb,
+        c: 1.0,
+        hp_buckets: 16,
+        ..RmConfig::default()
+    }
 }
 
 pub fn plain(key: &str) -> String {
-    if key.starts_with("hiddenpower") { "hiddenpower".into() } else { key.into() }
+    if key.starts_with("hiddenpower") {
+        "hiddenpower".into()
+    } else {
+        key.into()
+    }
 }
 
-// -- fabrication machinery: verbatim from examples/human_agreement.rs ------
+// -- fabrication machinery -------------------------------------------------
 
 pub struct SetSources {
     #[allow(dead_code)]
@@ -117,7 +256,11 @@ pub fn load_sources(dex: &Dex, root: &std::path::Path) -> SetSources {
         for (k, v) in sp {
             let moves: Vec<String> = v["moves"]
                 .as_array()
-                .map(|a| a.iter().filter_map(|m| m.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|m| m.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             learnsets.insert(k.clone(), moves);
         }
@@ -125,11 +268,20 @@ pub fn load_sources(dex: &Dex, root: &std::path::Path) -> SetSources {
     let mut hp_dvs = HashMap::new();
     if let Some(o) = ls["hpDvs"].as_object() {
         for (k, v) in o {
-            hp_dvs
-                .insert(k.clone(), (v["atk"].as_i64().unwrap_or(15), v["def"].as_i64().unwrap_or(15)));
+            hp_dvs.insert(
+                k.clone(),
+                (
+                    v["atk"].as_i64().unwrap_or(15),
+                    v["def"].as_i64().unwrap_or(15),
+                ),
+            );
         }
     }
-    SetSources { by_species, learnsets, hp_dvs }
+    SetSources {
+        by_species,
+        learnsets,
+        hp_dvs,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -158,7 +310,13 @@ pub fn extract_decisions(lines: &[String]) -> Vec<Decision> {
         if p.len() < 2 {
             continue;
         }
-        let side_of = |s: &str| -> usize { if s.as_bytes().get(1) == Some(&b'2') { 1 } else { 0 } };
+        let side_of = |s: &str| -> usize {
+            if s.as_bytes().get(1) == Some(&b'2') {
+                1
+            } else {
+                0
+            }
+        };
         match p[1] {
             "turn" => {
                 turn_open = true;
@@ -212,23 +370,46 @@ pub fn fabricate_set(
     dex: &Dex,
     src: &SetSources,
     m: &MonSnapshot,
-    eaten: bool,
+    future_moves: &[String],
+    known_item: Option<&str>,
+    item_consumed: bool,
 ) -> (serde_json::Value, &'static str) {
     let sp_key = dex.species.key(m.species).to_string();
     let sp_name = dex.species.get(m.species).name.clone();
-    let revealed: Vec<String> = m.uses.iter().map(|(id, _)| plain(dex.moves.key(*id))).collect();
-    let nick = if m.name.is_empty() { sp_name.clone() } else { m.name.clone() };
+    let mut revealed: Vec<String> = m
+        .uses
+        .iter()
+        .map(|(id, _)| plain(dex.moves.key(*id)))
+        .collect();
+    for key in future_moves {
+        if !revealed.contains(key) {
+            revealed.push(key.clone());
+        }
+    }
+    let nick = if m.name.is_empty() {
+        sp_name.clone()
+    } else {
+        m.name.clone()
+    };
     let gender = match format!("{:?}", m.gender).as_str() {
         "M" => "M",
         "F" => "F",
         _ => "",
     };
 
-    let cands = src.by_species.get(&m.species).map(|v| v.as_slice()).unwrap_or(&[]);
+    let cands = src
+        .by_species
+        .get(&m.species)
+        .map(|v| v.as_slice())
+        .unwrap_or(&[]);
     let norm_moves = |set: &serde_json::Value| -> Vec<String> {
         set["moves"]
             .as_array()
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(|s| plain(&toid(s)))).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(|s| plain(&toid(s))))
+                    .collect()
+            })
             .unwrap_or_default()
     };
     let mut best: Option<(usize, bool, usize)> = None;
@@ -236,8 +417,10 @@ pub fn fabricate_set(
         let cm = norm_moves(c);
         let overlap = revealed.iter().filter(|r| cm.contains(r)).count();
         let full = overlap == revealed.len();
-        let key = (overlap, full, usize::MAX - i);
-        if best.map_or(true, |(o, f, bi)| key > (o, f, usize::MAX - (usize::MAX - bi))) {
+        let better = best.map_or(true, |(o, f, bi)| {
+            overlap > o || (overlap == o && (full > f || (full == f && i < bi)))
+        });
+        if better {
             best = Some((overlap, full, i));
         }
     }
@@ -253,7 +436,11 @@ pub fn fabricate_set(
             set = cands[i].clone();
             let cm: Vec<String> = set["moves"]
                 .as_array()
-                .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             let mut moves: Vec<String> = Vec::new();
             for r in &revealed {
@@ -326,7 +513,10 @@ pub fn fabricate_set(
     set["name"] = serde_json::json!(nick);
     set["level"] = serde_json::json!(m.level);
     set["gender"] = serde_json::json!(gender);
-    if eaten {
+    if let Some(item) = known_item {
+        set["item"] = serde_json::json!(item);
+    }
+    if item_consumed {
         set["item"] = serde_json::json!("");
     }
     (set, provenance)
@@ -346,15 +536,65 @@ pub fn details(dex: &Dex, m: &MonSnapshot) -> String {
 // -- position reconstruction (human_agreement's per-decision body through
 // on_request; no search step) ---------------------------------------------
 
-pub fn reconstruct(
+/// Reconstruct one public-information decision point and retain the
+/// protocol agent's belief/observer alongside the synthesized battle.  The
+/// M17a regret miner needs all three to repeat blind searches from exactly
+/// the same information set.
+pub fn reconstruct_agent(
     dex: &Dex,
     src: &SetSources,
     pool_path: &std::path::Path,
     lines: &[String],
-    eaten: &[(usize, String)],
+    evidence: &SetEvidence,
     d: &Decision,
     seed: u64,
-) -> Option<Battle> {
+) -> Option<ProtocolAgent> {
+    reconstruct_agent_with_pool(
+        dex,
+        src,
+        load_meta_pool(pool_path),
+        lines,
+        evidence,
+        d,
+        seed,
+    )
+}
+
+/// Reconstruction plus the fabrication metadata used by the standing
+/// human-agreement coverage report.
+pub struct ReconstructedDecision {
+    pub agent: ProtocolAgent,
+    pub active_slot: usize,
+    pub revealed_moves: usize,
+    pub provenance: Vec<&'static str>,
+    pub imputed_pick: bool,
+}
+
+/// [`reconstruct_agent`] with a caller-supplied pool. Corpus-scale tools
+/// load the JSON once and clone the parsed pool per independent seed.
+pub fn reconstruct_agent_with_pool(
+    dex: &Dex,
+    src: &SetSources,
+    pool: MetaPool,
+    lines: &[String],
+    evidence: &SetEvidence,
+    d: &Decision,
+    seed: u64,
+) -> Option<ProtocolAgent> {
+    reconstruct_context_with_pool(dex, src, pool, lines, evidence, d, seed)
+        .map(|reconstructed| reconstructed.agent)
+}
+
+/// [`reconstruct_agent_with_pool`] retaining fabrication metadata.
+pub fn reconstruct_context_with_pool(
+    dex: &Dex,
+    src: &SetSources,
+    pool: MetaPool,
+    lines: &[String],
+    evidence: &SetEvidence,
+    d: &Decision,
+    seed: u64,
+) -> Option<ReconstructedDecision> {
     let mut tr = ProtocolTracker::new(d.side);
     for ln in &lines[..=d.cut] {
         tr.push_line(dex, ln);
@@ -366,10 +606,20 @@ pub fn reconstruct(
     }
 
     let mut own_sets_json = Vec::new();
+    let mut provenance = Vec::new();
     for m in &mons {
-        let ate = eaten.iter().any(|(s, n)| *s == d.side && !m.name.is_empty() && *n == m.name);
-        let (set, _prov) = fabricate_set(dex, src, m, ate);
+        let species = dex.species.key(m.species);
+        let item = evidence.item(d.side, &m.name, species);
+        let (set, prov) = fabricate_set(
+            dex,
+            src,
+            m,
+            evidence.moves(d.side, &m.name, species),
+            item.map(|event| event.item.as_str()),
+            item.is_some_and(|event| event.cut <= d.cut),
+        );
         own_sets_json.push(set);
+        provenance.push(prov);
     }
     let own_sets: Vec<nc2000_engine::battle::PokemonSet> =
         serde_json::from_value(serde_json::json!(own_sets_json.clone())).ok()?;
@@ -388,12 +638,14 @@ pub fn reconstruct(
             picked.push(i);
         }
     }
+    let mut imputed_pick = false;
     for (i, m) in mons.iter().enumerate() {
         if picked.len() >= 3 {
             break;
         }
         if !m.appeared {
             picked.push(i);
+            imputed_pick = true;
         }
     }
     if picked.len() < 3 {
@@ -404,11 +656,26 @@ pub fn reconstruct(
     let act = &mons[active_slot];
     let act_set_moves: Vec<String> = own_sets_json[active_slot]["moves"]
         .as_array()
-        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
-    let encore = act.vols.iter().find(|(k, _)| k == "encore").and_then(|(_, m)| *m);
-    let disable = act.vols.iter().find(|(k, _)| k == "disable").and_then(|(_, m)| *m);
-    let trapped = act.vols.iter().any(|(k, _)| k == "meanlook" || k == "partiallytrapped");
+    let encore = act
+        .vols
+        .iter()
+        .find(|(k, _)| k == "encore")
+        .and_then(|(_, m)| *m);
+    let disable = act
+        .vols
+        .iter()
+        .find(|(k, _)| k == "disable")
+        .and_then(|(_, m)| *m);
+    let trapped = act
+        .vols
+        .iter()
+        .any(|(k, _)| k == "meanlook" || k == "partiallytrapped");
     let uses_of = |key: &str| -> i32 {
         act.uses
             .iter()
@@ -472,13 +739,35 @@ pub fn reconstruct(
     })
     .to_string();
 
-    let mut agent = ProtocolAgent::new(dex, d.side, load_meta_pool(pool_path), cfg(), seed);
+    let mut agent = ProtocolAgent::new(dex, d.side, pool, cfg(), seed);
     agent.set_own_team(own_sets);
     for ln in &lines[..=d.cut] {
         agent.push_line(dex, ln);
     }
     agent.on_request(dex, &req).ok()?;
-    agent.battle().cloned()
+    Some(ReconstructedDecision {
+        agent,
+        active_slot,
+        revealed_moves: act.uses.len().min(4),
+        provenance,
+        imputed_pick,
+    })
+}
+
+/// Reconstruct only the synthesized battle.  Kept as the compact API used
+/// by the M17e exact-equity harnesses.
+pub fn reconstruct(
+    dex: &Dex,
+    src: &SetSources,
+    pool_path: &std::path::Path,
+    lines: &[String],
+    evidence: &SetEvidence,
+    d: &Decision,
+    seed: u64,
+) -> Option<Battle> {
+    reconstruct_agent(dex, src, pool_path, lines, evidence, d, seed)?
+        .battle()
+        .cloned()
 }
 
 /// Moves publicly used by each currently-active Pokemon anywhere in the
@@ -489,29 +778,21 @@ pub fn active_future_revealed_moves(
     battle: &Battle,
     lines: &[String],
 ) -> [Vec<String>; 2] {
+    let evidence = collect_set_evidence(lines);
     let mut out: [Vec<String>; 2] = std::array::from_fn(|_| Vec::new());
-    for side in 0..2 {
-        let Some(id) = battle.active_id(side) else { continue };
+    for (side, moves) in out.iter_mut().enumerate() {
+        let Some(id) = battle.active_id(side) else {
+            continue;
+        };
         let name = battle.poke(id).name.to_string();
-        for line in lines {
-            let parts: Vec<&str> = line.split('|').collect();
-            if parts.get(1) != Some(&"move")
-                || (line.contains("[from]") && !line.contains("[from] Sleep Talk"))
-            {
-                continue;
-            }
-            let Some(subject) = parts.get(2) else { continue };
-            let subject_side = if subject.as_bytes().get(1) == Some(&b'2') { 1 } else { 0 };
-            let subject_name = subject.split(':').nth(1).unwrap_or("").trim();
-            if subject_side != side || subject_name != name {
-                continue;
-            }
-            let Some(move_name) = parts.get(3) else { continue };
-            let key = plain(&toid(move_name));
-            if dex.moves.id(&key).is_some() && !out[side].contains(&key) {
-                out[side].push(key);
-            }
-        }
+        let species = dex.species.key(battle.poke(id).species);
+        moves.extend(
+            evidence
+                .moves(side, &name, species)
+                .iter()
+                .filter(|key| dex.moves.id(key).is_some())
+                .cloned(),
+        );
     }
     out
 }
@@ -530,7 +811,9 @@ pub fn complete_active_moves_from_future(
 ) -> [Vec<String>; 2] {
     let revealed = active_future_revealed_moves(dex, battle, lines);
     for side in 0..2 {
-        let Some(id) = battle.active_id(side) else { continue };
+        let Some(id) = battle.active_id(side) else {
+            continue;
+        };
         if battle.poke(id).transformed {
             continue;
         }
@@ -539,7 +822,12 @@ pub fn complete_active_moves_from_future(
             .filter_map(|key| dex.moves.id(key))
             .collect();
         for move_id in revealed_ids.iter().copied() {
-            if battle.poke(id).move_slots.iter().any(|slot| slot.id == move_id) {
+            if battle
+                .poke(id)
+                .move_slots
+                .iter()
+                .any(|slot| slot.id == move_id)
+            {
                 continue;
             }
             let replacement = battle
@@ -587,6 +875,7 @@ pub fn complete_active_moves_from_future(
 mod tests {
     use super::*;
     use nc2000_engine::battle::PokemonSet;
+    use nc2000_engine::state::Gender;
 
     fn splash_set() -> PokemonSet {
         PokemonSet {
@@ -601,6 +890,207 @@ mod tests {
             happiness: None,
             gender: None,
         }
+    }
+
+    fn transform_set() -> PokemonSet {
+        PokemonSet {
+            name: "Ditto".into(),
+            species: "Ditto".into(),
+            item: String::new(),
+            ability: String::new(),
+            moves: vec!["Transform".into()],
+            level: 50,
+            evs: None,
+            ivs: None,
+            happiness: None,
+            gender: None,
+        }
+    }
+
+    fn snapshot(dex: &Dex, species: &str, moves: &[&str]) -> MonSnapshot {
+        MonSnapshot {
+            species: dex.species.id(species).unwrap(),
+            level: 50,
+            gender: Gender::N,
+            name: species.to_string(),
+            appeared: true,
+            active: true,
+            fainted: false,
+            hp_frac: 1.0,
+            status: Status::None,
+            rest: false,
+            boosts: [0; 7],
+            vols: Vec::new(),
+            uses: moves
+                .iter()
+                .map(|key| (dex.moves.id(key).unwrap(), 1))
+                .collect(),
+            choiceless: false,
+        }
+    }
+
+    #[test]
+    fn full_log_own_moves_select_the_matching_set_and_item_is_time_aware() {
+        let dex = conformance::load_dex();
+        let snorlax = dex.species.id("snorlax").unwrap();
+        let mut by_species = HashMap::new();
+        by_species.insert(
+            snorlax,
+            vec![
+                serde_json::json!({"species":"Snorlax","item":"Leftovers",
+                    "moves":["Body Slam","Earthquake","Self-Destruct","Belly Drum"]}),
+                serde_json::json!({"species":"Snorlax","item":"Mint Berry",
+                    "moves":["Body Slam","Earthquake","Rest","Curse"]}),
+            ],
+        );
+        let src = SetSources {
+            by_species,
+            learnsets: HashMap::new(),
+            hp_dvs: HashMap::new(),
+        };
+        let mon = snapshot(&dex, "snorlax", &["bodyslam", "earthquake"]);
+
+        let (before, provenance) = fabricate_set(
+            &dex,
+            &src,
+            &mon,
+            &["rest".into()],
+            Some("Mint Berry"),
+            false,
+        );
+        assert_eq!(provenance, "cand-full");
+        assert_eq!(before["item"], "Mint Berry");
+        assert!(before["moves"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m == "Rest"));
+
+        let (after, _) =
+            fabricate_set(&dex, &src, &mon, &["rest".into()], Some("Mint Berry"), true);
+        assert_eq!(after["item"], "");
+    }
+
+    #[test]
+    fn equal_candidate_scores_keep_the_earlier_source() {
+        let dex = conformance::load_dex();
+        let pikachu = dex.species.id("pikachu").unwrap();
+        let mut by_species = HashMap::new();
+        by_species.insert(
+            pikachu,
+            vec![
+                serde_json::json!({"species":"Pikachu","item":"Mint Berry","moves":["Splash"]}),
+                serde_json::json!({"species":"Pikachu","item":"Gold Berry","moves":["Splash"]}),
+            ],
+        );
+        let src = SetSources {
+            by_species,
+            learnsets: HashMap::new(),
+            hp_dvs: HashMap::new(),
+        };
+        let mon = snapshot(&dex, "pikachu", &["splash"]);
+        let (set, _) = fabricate_set(&dex, &src, &mon, &[], None, false);
+        assert_eq!(set["item"], "Mint Berry");
+    }
+
+    #[test]
+    fn evidence_excludes_generic_called_moves_but_keeps_sleep_talk_calls() {
+        let lines = vec![
+            "|switch|p1a: Snorlax|Snorlax, L50, M|100/100".into(),
+            "|move|p1a: Snorlax|Body Slam|p2a: Pikachu".into(),
+            "|move|p1a: Snorlax|Thunder|p2a: Pikachu|[from] Metronome".into(),
+            "|move|p1a: Snorlax|Rest|p1a: Snorlax|[from] Sleep Talk".into(),
+            "|move|p1a: Snorlax|Pursuit|p2a: Pikachu|[from] Pursuit".into(),
+            "|-enditem|p1a: Snorlax|Mint Berry|[eat]".into(),
+        ];
+        let evidence = collect_set_evidence(&lines);
+        assert_eq!(
+            evidence.moves(0, "", "snorlax"),
+            ["bodyslam", "rest", "pursuit"]
+        );
+        let item = evidence.item(0, "", "snorlax").unwrap();
+        assert_eq!(item.cut, 5);
+        assert_eq!(item.item, "Mint Berry");
+    }
+
+    #[test]
+    fn transformed_moves_are_not_submitted_set_evidence_and_switch_or_replace_clears_it() {
+        let switched = vec![
+            "|switch|p1a: Mew|Mew, L50|100/100".into(),
+            "|move|p1a: Mew|Transform|p2a: Snorlax".into(),
+            "|-transform|p1a: Mew|p2a: Snorlax".into(),
+            "|move|p1a: Mew|Body Slam|p2a: Snorlax".into(),
+            "|switch|p1a: Pikachu|Pikachu, L50|100/100".into(),
+            "|switch|p1a: Mew|Mew, L50|100/100".into(),
+            "|move|p1a: Mew|Psychic|p2a: Snorlax".into(),
+        ];
+        let evidence = collect_set_evidence(&switched);
+        assert_eq!(evidence.moves(0, "Mew", "mew"), ["transform", "psychic"]);
+
+        let replaced = vec![
+            "|switch|p1a: Mew|Mew, L50|100/100".into(),
+            "|move|p1a: Mew|Transform|p2a: Snorlax".into(),
+            "|-transform|p1a: Mew|p2a: Snorlax".into(),
+            "|move|p1a: Mew|Body Slam|p2a: Snorlax".into(),
+            "|replace|p1a: Mew|Mew, L50|100/100".into(),
+            "|move|p1a: Mew|Psychic|p2a: Snorlax".into(),
+        ];
+        let evidence = collect_set_evidence(&replaced);
+        assert_eq!(evidence.moves(0, "Mew", "mew"), ["transform", "psychic"]);
+    }
+
+    #[test]
+    fn ditto_transform_corpus_excerpt_does_not_leak_copied_move_to_future_oracle() {
+        // battle-gen2...pbs-F-20260401-121508-7c046d6831be.raw.log
+        // lines 51-66: Ditto transforms into Snorlax, then uses Body Slam.
+        let dex = conformance::load_dex();
+        let team = vec![transform_set()];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &team, &team).unwrap();
+        let p1 = battle.legal_choices(&dex, 0)[0];
+        let p2 = battle.legal_choices(&dex, 1)[0];
+        battle.apply_choices(&dex, [Some(p1), Some(p2)]).unwrap();
+        let lines = vec![
+            "|switch|p1a: Ditto|Ditto, L50|100/100".into(),
+            "|move|p1a: Ditto|Transform|p2a: Snorlax".into(),
+            "|-transform|p1a: Ditto|p2a: Snorlax".into(),
+            "|move|p1a: Ditto|Body Slam|p2a: Snorlax".into(),
+        ];
+
+        let evidence = collect_set_evidence(&lines);
+        assert_eq!(evidence.moves(0, "Ditto", "ditto"), ["transform"]);
+        assert_eq!(
+            active_future_revealed_moves(&dex, &battle, &lines)[0],
+            ["transform"]
+        );
+    }
+
+    #[test]
+    fn tracker_does_not_retain_transformed_move_as_base_set_evidence() {
+        let dex = conformance::load_dex();
+        let mut tracker = ProtocolTracker::new(0);
+        for line in [
+            "|poke|p1|Ditto, L50|",
+            "|poke|p1|Pikachu, L50|",
+            "|poke|p2|Snorlax, L50, M|",
+            "|switch|p1a: Ditto|Ditto, L50|100/100",
+            "|switch|p2a: Snorlax|Snorlax, L50, M|100/100",
+            "|turn|2",
+            "|move|p1a: Ditto|Transform|p2a: Snorlax",
+            "|-transform|p1a: Ditto|p2a: Snorlax",
+            "|turn|3",
+            "|move|p1a: Ditto|Body Slam|p2a: Snorlax",
+            "|switch|p1a: Pikachu|Pikachu, L50|100/100",
+            "|switch|p1a: Ditto|Ditto, L50|100/100",
+        ] {
+            tracker.push_line(&dex, line);
+        }
+        let (mons, _) = tracker.snapshot(0);
+        let moves: Vec<_> = mons[0]
+            .uses
+            .iter()
+            .map(|(id, _)| dex.moves.key(*id))
+            .collect();
+        assert_eq!(moves, ["transform"]);
     }
 
     #[test]
@@ -618,12 +1108,19 @@ mod tests {
         ];
 
         let revealed = active_future_revealed_moves(&dex, &battle, &lines);
-        assert_eq!(revealed, [vec!["rest".to_string()], vec!["rest".to_string()]]);
+        assert_eq!(
+            revealed,
+            [vec!["rest".to_string()], vec!["rest".to_string()]]
+        );
         complete_active_moves_from_future(&dex, &mut battle, &lines);
         let rest = dex.moves.id("rest").unwrap();
         for side in 0..2 {
             let id = battle.active_id(side).unwrap();
-            assert!(battle.poke(id).move_slots.iter().any(|slot| slot.id == rest));
+            assert!(battle
+                .poke(id)
+                .move_slots
+                .iter()
+                .any(|slot| slot.id == rest));
         }
     }
 }

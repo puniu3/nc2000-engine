@@ -33,6 +33,7 @@ pub mod import;
 pub mod mcts;
 pub mod observe;
 pub mod preview;
+pub mod regret;
 pub mod rng;
 pub mod runner;
 pub mod smmcts;

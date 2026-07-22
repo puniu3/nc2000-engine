@@ -90,7 +90,7 @@ fn main() {
     println!("anchors: {} from {csv_path}; race {race}; metric {metric}; leaf alpha {leaf_alpha}", anchors.len());
 
     let dex = conformance::load_dex();
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = conformance::fixture::repo_root();
     let src = load_sources(&dex, &root);
     let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
     let files = corpus_files(&root.join(&corpus));
@@ -118,7 +118,7 @@ fn main() {
                 println!("STALE (no decision): b{} s{} T{}", a.battle, a.side, a.turn);
                 continue;
             };
-            let Some(b) = reconstruct(&dex, &src, &pool_path, &cb.lines, &cb.eaten, d, 1) else {
+            let Some(b) = reconstruct(&dex, &src, &pool_path, &cb.lines, &cb.evidence, d, 1) else {
                 stale += 1;
                 println!("STALE (reconstruct failed): b{} s{} T{}", a.battle, a.side, a.turn);
                 continue;

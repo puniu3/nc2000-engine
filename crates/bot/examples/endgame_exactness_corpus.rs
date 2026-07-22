@@ -5,15 +5,12 @@
 //! of random-legal self-play — owner decision 2026-07-21: similar positions
 //! recur in live games, so anchor the eval where it will actually be asked.
 //!
-//! Position reconstruction is `human_agreement`'s fabrication path (tracker
-//! over the protocol prefix → set fabrication from rentals/pool/learnsets →
-//! synthesized full battle via ProtocolAgent::on_request), WITHOUT running
-//! the search. The exact value is therefore exact FOR THE IMPUTED
-//! DETERMINIZATION — the same full-info state family the eval scores, so
-//! the comparison is apples-to-apples; it is not the true hidden-set game.
-//! (Fabrication helpers are copied from examples/human_agreement.rs —
-//! examples cannot import each other; dedup into bot::corpus when a third
-//! user appears.)
+//! Position reconstruction is the shared `bot::corpus` path: battle state
+//! and opponent information come from the protocol prefix, while full-log
+//! own-side move/item reveals stand in for the submitted team a live bot
+//! would know; remaining own-set fields come from rentals/pool/learnsets.
+//! The exact value is therefore exact FOR THE IMPUTED DETERMINIZATION — the
+//! same full-info state family the eval scores, not the true hidden-set game.
 //!
 //! Reports certified-tight comparisons plus PROVEN bracket violations
 //! (eval outside a certified interval, any width — zero playouts involved).
@@ -107,7 +104,7 @@ fn main() {
     };
 
     let dex = conformance::load_dex();
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = conformance::fixture::repo_root();
     let src = load_sources(&dex, &root);
     let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
     let weights = EvalWeights::default();
@@ -180,7 +177,7 @@ fn main() {
             if battle_attempts >= per_battle {
                 break;
             }
-            let Some(b) = reconstruct(&dex, &src, &pool_path, &cb.lines, &cb.eaten, d, 1) else {
+            let Some(b) = reconstruct(&dex, &src, &pool_path, &cb.lines, &cb.evidence, d, 1) else {
                 continue;
             };
             reconstructed += 1;

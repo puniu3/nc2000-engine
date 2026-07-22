@@ -97,12 +97,12 @@ pub fn canonical_triple(t: [u8; 3]) -> [u8; 3] {
 
 // -------------------------------------------------------------- meta pool
 
-#[derive(serde::Deserialize)]
+#[derive(Clone, serde::Deserialize)]
 pub struct MetaPool {
     pub teams: Vec<MetaTeam>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Clone, serde::Deserialize)]
 pub struct MetaTeam {
     pub id: String,
     pub sets: Vec<PokemonSet>,

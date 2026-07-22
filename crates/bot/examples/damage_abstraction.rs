@@ -670,7 +670,7 @@ fn main() {
                 &sources,
                 &pool_path,
                 &corpus_battle.lines,
-                &corpus_battle.eaten,
+                &corpus_battle.evidence,
                 decision,
                 1,
             ) else {

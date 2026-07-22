@@ -23,6 +23,7 @@
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
 //     [--games N] [--iters 10000] [--seed 1] [--mode blind|open] \
 //     [--opp-team-file FILE.json] [--random] [--timer] [--no-tables] \
+//     [--decision-log FILE.jsonl] \
 //     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
 //     [--drop SPEC] [--quiet]
 //
@@ -89,6 +90,9 @@ if (args.help || args.h) {
   --no-tables       skip loading baked preview tables
   --drop SPEC       verification hook: socket kills at chosen decision
                     points (see header comment)
+  --decision-log F  append private (mode 0600) JSONL for regret replay:
+                    request, incremental visible protocol, exact own team,
+                    submitted action, diagnostic state, root policy/config
   --quiet           per-game lines only`);
 	process.exit(0);
 }
@@ -118,8 +122,34 @@ const SEED = parseInt(args.seed || '1', 10);
 const RANDOM = !!args.random;
 const TIMER = !!args.timer;
 const QUIET = !!args.quiet;
+const DECISION_LOG = args['decision-log'] && args['decision-log'] !== true ?
+	path.resolve(String(args['decision-log'])) : '';
 const DEBOUNCE_MS = 100; // network analogue of the M15a stream-quiescence wait
 const RECONNECT_MS = 500;
+
+if (DECISION_LOG) {
+	fs.mkdirSync(path.dirname(DECISION_LOG), { recursive: true });
+	if (!fs.existsSync(DECISION_LOG)) fs.closeSync(fs.openSync(DECISION_LOG, 'a', 0o600));
+	fs.chmodSync(DECISION_LOG, 0o600);
+}
+
+function appendDecision(row) {
+	if (!DECISION_LOG) return;
+	fs.appendFileSync(DECISION_LOG, `${JSON.stringify(row)}\n`, { mode: 0o600 });
+}
+
+function safeServer(raw) {
+	try {
+		const url = new URL(/^wss?:\/\//.test(raw) ? raw : `ws://${raw}`);
+		url.username = '';
+		url.password = '';
+		url.search = '';
+		url.hash = '';
+		return url.toString();
+	} catch {
+		return 'invalid-server-url';
+	}
+}
 
 const toID = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -274,6 +304,10 @@ class BattleDriver {
 		this.searcher = null;
 		this.side = -1;
 		this.lineBuffer = [];
+		this.visibleLines = [];
+		this.loggedLineCount = 0;
+		this.protocolReset = false;
+		this.loggedRqids = new Set();
 		this.pendingReq = null;
 		this.lastReq = null; // last non-wait request seen (|error| recovery)
 		this.errRecoveries = 0;
@@ -310,6 +344,9 @@ class BattleDriver {
 	resetForRejoin() {
 		this.freeSearcher();
 		this.lineBuffer = [];
+		this.visibleLines = [];
+		this.loggedLineCount = 0;
+		this.protocolReset = true;
 		this.pendingReq = null;
 		this.lastReq = null;
 		this.errRecoveries = 0;
@@ -368,6 +405,7 @@ class BattleDriver {
 		}
 		if (NOISE.has(cmd)) return;
 		this.lineBuffer.push(line);
+		this.visibleLines.push(line);
 		if (cmd === 'win' || cmd === 'tie') this.finalize();
 	}
 
@@ -437,12 +475,13 @@ class BattleDriver {
 		if (RANDOM) {
 			this.pendingReq = null;
 			if (req.wait) return;
+			if (this.sentchoice) return; // rejoin replay: already answered
 			this.decisions++;
 			stats.decisions++;
 			if (this.maybeDrop(req, 'pre')) return;
-			if (this.sentchoice) return; // rejoin replay: already answered
 			const choice = randomChoice(req);
 			this.client.send(`${this.room}|/choose ${choice}${rqid !== undefined ? `|${rqid}` : ''}`);
+			this.recordDecision(req, choice, null, null, 'random');
 			this.maybeDrop(req, 'post');
 			return;
 		}
@@ -491,9 +530,14 @@ class BattleDriver {
 			this.preDropView = null;
 		}
 		if (!owes) return;
+		if (this.sentchoice) {
+			// rejoin replay of a request we had already answered: the server
+			// kept our choice (|sentchoice|); a re-send would be refused
+			this.log(`already answered rqid ${rqid} (sentchoice=${this.sentchoice}); not re-sending`);
+			return;
+		}
 		this.decisions++;
 		stats.decisions++;
-
 		if (this.maybeDrop(req, 'pre')) return;
 
 		const t0 = Date.now();
@@ -507,14 +551,49 @@ class BattleDriver {
 		stats.thinkMsSum += think;
 		stats.thinkN++;
 		if (!choice) throw new Error('searcher returned no choice');
-		if (this.sentchoice) {
-			// rejoin replay of a request we had already answered: the server
-			// kept our choice (|sentchoice|); a re-send would be refused
-			this.log(`already answered rqid ${rqid} (sentchoice=${this.sentchoice}); not re-sending`);
-			return;
-		}
 		this.client.send(`${this.room}|/choose ${choice}${rqid !== undefined ? `|${rqid}` : ''}`);
+		let policy = null;
+		try { policy = JSON.parse(this.searcher.rootPolicy()); } catch { /* diagnostic only */ }
+		let state = null;
+		try { state = JSON.parse(this.searcher.stateView()); } catch { /* diagnostic only */ }
+		this.recordDecision(req, choice, policy, state, 'search');
 		this.maybeDrop(req, 'post');
+	}
+
+	recordDecision(req, choice, rootPolicy, stateView, driver) {
+		if (!DECISION_LOG) return;
+		const rqidKey = String(req.rqid ?? `decision-${this.decisions}`);
+		if (this.loggedRqids.has(rqidKey)) return;
+		this.loggedRqids.add(rqidKey);
+		const protocolDelta = this.visibleLines.slice(this.loggedLineCount);
+		this.loggedLineCount = this.visibleLines.length;
+		appendDecision({
+			version: 2,
+			type: 'decision',
+			room: this.room,
+			battle: this.battleIdx,
+			decision: this.decisions,
+			rqid: req.rqid,
+			side: this.side >= 0 ? this.side : (req.side && req.side.id === 'p2' ? 1 : 0),
+			turn: this.turn,
+			server: safeServer(SERVER_RAW),
+			format: FORMATID,
+			mode: MODE,
+			driver,
+			iterations: driver === 'search' ? ITERS : 0,
+			seed: SEED * 1000 + this.battleIdx,
+			teamLabel: this.client.currentTeam.label.startsWith('pool:') ?
+				this.client.currentTeam.label : path.basename(this.client.currentTeam.label),
+			ownTeam: this.client.currentTeam.sets,
+			request: req,
+			protocolReset: this.protocolReset,
+			protocolDelta,
+			submitted: choice,
+			rootPolicy,
+			stateViewKind: 'diagnostic-imputed',
+			stateView,
+		});
+		this.protocolReset = false;
 	}
 
 	maybeDrop(req, when) {

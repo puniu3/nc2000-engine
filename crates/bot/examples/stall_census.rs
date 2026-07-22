@@ -161,7 +161,7 @@ fn main() {
             }
             std::process::exit(1);
         });
-    let mut b0 = reconstruct(&dex, &src, &pool_path, &cb.lines, &cb.eaten, d, 1)
+    let mut b0 = reconstruct(&dex, &src, &pool_path, &cb.lines, &cb.evidence, d, 1)
         .expect("reconstruction failed");
     if args.iter().any(|arg| arg == "--oracle-future-moves") {
         complete_active_moves_from_future(&dex, &mut b0, &cb.lines);

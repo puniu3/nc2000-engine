@@ -826,7 +826,12 @@ impl ProtocolTracker {
             }
             mon.locked = None;
         }
-        mon.deduct(mid);
+        // A transformed mon is executing the copied set. Preserve copied
+        // move lifecycle above/below, but do not retain its PP mark as
+        // evidence about the submitted base set after switching back.
+        if mon.transformed_into.is_none() {
+            mon.deduct(mid);
+        }
         if THRASH_CLASS.contains(&key) || key == "rollout" {
             mon.locked = Some((mid, 1));
         }
@@ -2120,7 +2125,7 @@ impl ProtocolAgent {
                     .zip(visits.iter().zip(means.iter()))
                     .map(|(&a, (&n, &m))| {
                         serde_json::json!({
-                            "input": a.to_input(dex),
+                            "input": ps_input(dex, a),
                             "visits": n,
                             "mean": m,
                             "frac": if total > 0 { n as f64 / total as f64 } else { 0.0 },
@@ -2240,4 +2245,54 @@ fn sample_filtered(
         pick
     };
     Some(SearchChoice::Team(actions[pick]))
+}
+
+#[cfg(test)]
+mod m17a_tests {
+    use super::*;
+
+    #[test]
+    fn diagnostic_policy_uses_ps_canonical_hidden_power() {
+        let dex = conformance::load_dex();
+        let ice = dex.moves.id("hiddenpowerice").unwrap();
+        assert_eq!(ps_input(&dex, SearchChoice::Move(ice)), "move hiddenpower");
+    }
+
+    #[test]
+    fn transformed_moves_keep_charge_and_lock_lifecycle_without_base_pp_evidence() {
+        let dex = conformance::load_dex();
+        let mut tracker = ProtocolTracker::new(0);
+        for line in [
+            "|poke|p1|Ditto, L50|",
+            "|poke|p2|Snorlax, L50, M|",
+            "|switch|p1a: Ditto|Ditto, L50|100/100",
+            "|switch|p2a: Snorlax|Snorlax, L50, M|100/100",
+            "|move|p1a: Ditto|Transform|p2a: Snorlax",
+            "|-transform|p1a: Ditto|p2a: Snorlax",
+            "|move|p1a: Ditto|Solar Beam|p2a: Snorlax",
+            "|-prepare|p1a: Ditto|Solar Beam|p2a: Snorlax",
+        ] {
+            tracker.push_line(&dex, line);
+        }
+        let solar_beam = dex.moves.id("solarbeam").unwrap();
+        assert_eq!(tracker.sides[0].mons[0].charging, Some(solar_beam));
+
+        tracker.push_line(&dex, "|move|p1a: Ditto|Solar Beam|p2a: Snorlax");
+        assert_eq!(tracker.sides[0].mons[0].charging, None);
+
+        let thrash = dex.moves.id("thrash").unwrap();
+        tracker.push_line(&dex, "|move|p1a: Ditto|Thrash|p2a: Snorlax");
+        assert_eq!(tracker.sides[0].mons[0].locked, Some((thrash, 1)));
+        tracker.push_line(&dex, "|move|p1a: Ditto|Thrash|p2a: Snorlax");
+        assert_eq!(tracker.sides[0].mons[0].locked, Some((thrash, 2)));
+        tracker.push_line(&dex, "|move|p1a: Ditto|Thrash|p2a: Snorlax");
+        assert_eq!(tracker.sides[0].mons[0].locked, None);
+
+        let uses: Vec<_> = tracker.sides[0].mons[0]
+            .uses
+            .iter()
+            .map(|(id, _)| dex.moves.key(*id))
+            .collect();
+        assert_eq!(uses, ["transform"]);
+    }
 }
