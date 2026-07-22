@@ -10,7 +10,10 @@
 //! `side.pokemon` array is mirrored by `Side::party` (display order); PS's
 //! `pokemon.position` is kept in sync exactly like PS does.
 
-use crate::dex::{Accuracy, Category, CondId, FixedDamage, HitEffect, ItemId, MoveId, Multihit, SparseBoosts, SpeciesId, TypeId, TypeList};
+use crate::dex::{
+    Accuracy, Category, CondId, FixedDamage, HitEffect, ItemId, MoveId, Multihit, SparseBoosts,
+    SpeciesId, TypeId, TypeList,
+};
 use crate::prng::BattleRng;
 use std::collections::BTreeMap;
 
@@ -197,15 +200,22 @@ pub struct DataBag {
 
 impl DataBag {
     pub fn iter(&self) -> impl Iterator<Item = &(DK, Scalar)> {
-        self.entries[..self.n as usize].iter().map(|e| e.as_ref().unwrap())
+        self.entries[..self.n as usize]
+            .iter()
+            .map(|e| e.as_ref().unwrap())
     }
 
     fn iter_mut(&mut self) -> impl Iterator<Item = &mut (DK, Scalar)> {
-        self.entries[..self.n as usize].iter_mut().map(|e| e.as_mut().unwrap())
+        self.entries[..self.n as usize]
+            .iter_mut()
+            .map(|e| e.as_mut().unwrap())
     }
 
     pub fn push(&mut self, key: DK, value: Scalar) {
-        assert!((self.n as usize) < self.entries.len(), "DataBag overflow at {key:?}");
+        assert!(
+            (self.n as usize) < self.entries.len(),
+            "DataBag overflow at {key:?}"
+        );
         self.entries[self.n as usize] = Some((key, value));
         self.n += 1;
     }
@@ -233,7 +243,10 @@ pub struct LinkedPokes {
 
 impl LinkedPokes {
     pub fn one(id: PokeId) -> LinkedPokes {
-        LinkedPokes { p: [Some(id), None], n: 1 }
+        LinkedPokes {
+            p: [Some(id), None],
+            n: 1,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -251,7 +264,9 @@ impl LinkedPokes {
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut PokeId> {
-        self.p[..self.n as usize].iter_mut().map(|e| e.as_mut().unwrap())
+        self.p[..self.n as usize]
+            .iter_mut()
+            .map(|e| e.as_mut().unwrap())
     }
 
     pub fn retain(&mut self, mut keep: impl FnMut(PokeId) -> bool) {
@@ -456,7 +471,10 @@ impl PokeName {
         assert!(bytes.len() <= 24, "pokemon name too long: {name}");
         let mut buf = [0u8; 24];
         buf[..bytes.len()].copy_from_slice(bytes);
-        PokeName { buf, len: bytes.len() as u8 }
+        PokeName {
+            buf,
+            len: bytes.len() as u8,
+        }
     }
 
     pub fn as_str(&self) -> &str {
@@ -628,6 +646,19 @@ impl Pokemon {
     /// abstraction); `None` hashes them exactly. Destructuring is total on
     /// purpose: adding a `Pokemon` field breaks this fn until it is placed.
     pub fn hash_with<H: std::hash::Hasher>(&self, h: &mut H, hp_buckets: Option<i64>) {
+        self.hash_with_options(h, hp_buckets, false);
+    }
+
+    /// Solver-key variant. `omit_damage_bookkeeping` may only be enabled
+    /// after proving that no reachable move can observe `attacked_by`
+    /// (currently Counter/Mirror Coat). The other omitted fields are written
+    /// by the engine but never read by future battle behavior.
+    pub(crate) fn hash_with_options<H: std::hash::Hasher>(
+        &self,
+        h: &mut H,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+    ) {
         use std::hash::Hash;
         let Pokemon {
             species,
@@ -695,14 +726,14 @@ impl Pokemon {
         (set_ivs, set_evs, base_move_slots).hash(h);
         (hp_type, hp_power, base_hp_type, base_hp_power).hash(h);
         (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(h);
-        match hp_buckets {
-            None => {
+        match (hp_buckets, omit_damage_bookkeeping) {
+            (None, false) => {
                 hp.hash(h);
                 hurt_this_turn.hash(h);
                 last_damage.hash(h);
                 attacked_by.as_slice().hash(h);
             }
-            Some(b) => {
+            (Some(b), false) => {
                 // quantized: hp as a maxhp-relative bucket, roll-magnitude
                 // bookkeeping in coarse absolute steps
                 ((*hp as i64) * b / (*maxhp).max(1) as i64).hash(h);
@@ -714,27 +745,62 @@ impl Pokemon {
                     a.damage_value.map(|v| v / 16).hash(h);
                 }
             }
+            (None, true) => hp.hash(h),
+            (Some(b), true) => ((*hp as i64) * b / (*maxhp).max(1) as i64).hash(h),
         }
         (status, status_state, boosts, move_slots).hash(h);
         (item, last_item, item_state, types).hash(h);
         (volatiles, handler_mask).hash(h);
         (transformed, fainted, faint_queued).hash(h);
-        (is_active, is_started, position, active_turns, active_move_actions).hash(h);
-        (newly_switched, being_called_back, dragged_in, previously_switched_in).hash(h);
+        (
+            is_active,
+            is_started,
+            position,
+            active_turns,
+            active_move_actions,
+        )
+            .hash(h);
+        (
+            newly_switched,
+            being_called_back,
+            dragged_in,
+            previously_switched_in,
+        )
+            .hash(h);
         (switch_flag, force_switch_flag, skip_before_switch_out).hash(h);
         (trapped, maybe_trapped).hash(h);
-        (last_move, last_move_encore, last_move_used, last_move_target_loc).hash(h);
+        (
+            last_move,
+            last_move_encore,
+            last_move_used,
+            last_move_target_loc,
+        )
+            .hash(h);
         (move_this_turn, move_this_turn_result, move_last_turn_result).hash(h);
-        (stats_raised_this_turn, stats_lowered_this_turn, used_item_this_turn).hash(h);
-        (times_attacked, speed).hash(h);
+        (
+            stats_raised_this_turn,
+            stats_lowered_this_turn,
+            used_item_this_turn,
+        )
+            .hash(h);
+        if !omit_damage_bookkeeping {
+            times_attacked.hash(h);
+        }
+        speed.hash(h);
     }
 
     pub fn volatile(&self, id: CondId) -> Option<&EffectState> {
-        self.volatiles.iter().find(|(k, _)| *k == id).map(|(_, v)| v)
+        self.volatiles
+            .iter()
+            .find(|(k, _)| *k == id)
+            .map(|(_, v)| v)
     }
 
     pub fn volatile_mut(&mut self, id: CondId) -> Option<&mut EffectState> {
-        self.volatiles.iter_mut().find(|(k, _)| *k == id).map(|(_, v)| v)
+        self.volatiles
+            .iter_mut()
+            .find(|(k, _)| *k == id)
+            .map(|(_, v)| v)
     }
 
     pub fn has_volatile(&self, id: CondId) -> bool {
@@ -843,6 +909,15 @@ impl std::hash::Hash for Side {
 impl Side {
     /// See `Pokemon::hash_with`. Total destructuring on purpose.
     pub fn hash_with<H: std::hash::Hasher>(&self, h: &mut H, hp_buckets: Option<i64>) {
+        self.hash_with_options(h, hp_buckets, false);
+    }
+
+    pub(crate) fn hash_with_options<H: std::hash::Hasher>(
+        &self,
+        h: &mut H,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+    ) {
         use std::hash::Hash;
         let Side {
             name,
@@ -863,7 +938,7 @@ impl Side {
         name.hash(h);
         roster.len().hash(h);
         for p in roster.iter() {
-            p.hash_with(h, hp_buckets);
+            p.hash_with_options(h, hp_buckets, omit_damage_bookkeeping);
         }
         (party, active, pokemon_left, total_fainted).hash(h);
         (side_conditions, slot_conditions, handler_mask).hash(h);
@@ -876,7 +951,10 @@ impl Side {
     }
 
     pub fn side_condition(&self, id: CondId) -> Option<&EffectState> {
-        self.side_conditions.iter().find(|(k, _)| *k == id).map(|(_, v)| v)
+        self.side_conditions
+            .iter()
+            .find(|(k, _)| *k == id)
+            .map(|(_, v)| v)
     }
 
     pub fn has_side_condition(&self, id: CondId) -> bool {
@@ -954,11 +1032,25 @@ pub enum ActionKind {
     Start,
     BeforeTurn,
     Residual,
-    Team { index: u8 },
-    Move { move_id: MoveId, target_loc: i8, original_target: Option<PokeId>, source_effect: Option<MoveId> },
+    Team {
+        index: u8,
+    },
+    Move {
+        move_id: MoveId,
+        target_loc: i8,
+        original_target: Option<PokeId>,
+        source_effect: Option<MoveId>,
+    },
     /// beforeTurnCallback carrier (pursuit).
-    BeforeTurnMove { move_id: MoveId, target_loc: i8 },
-    Switch { insta: bool, target: PokeId, source_effect: Option<MoveId> },
+    BeforeTurnMove {
+        move_id: MoveId,
+        target_loc: i8,
+    },
+    Switch {
+        insta: bool,
+        target: PokeId,
+        source_effect: Option<MoveId>,
+    },
     RunSwitch,
 }
 
@@ -1085,7 +1177,12 @@ impl ActiveMove {
         if !self.move_hit_data.iter().any(|(s, _)| *s == slot) {
             self.move_hit_data.push((slot.clone(), (false, 0)));
         }
-        &mut self.move_hit_data.iter_mut().find(|(s, _)| *s == slot).unwrap().1
+        &mut self
+            .move_hit_data
+            .iter_mut()
+            .find(|(s, _)| *s == slot)
+            .unwrap()
+            .1
     }
 
     pub fn hit_data(&self, slot: &str) -> (bool, i32) {

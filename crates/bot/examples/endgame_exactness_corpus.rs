@@ -19,14 +19,15 @@
 //! (eval outside a certified interval, any width — zero playouts involved).
 //!
 //! Usage: endgame_exactness_corpus [--corpus DIR] [--battles LO-HI]
-//!        [--hp-cap N] [--work N] [--per-battle N] [--out CSV]
+//!        [--side N] [--turn N] [--hp-cap N] [--work N] [--nodes N]
+//!        [--per-battle N] [--no-dead-damage-quotient] [--out CSV]
 
 use std::collections::HashSet;
 use std::io::Write as _;
 use std::time::Instant;
 
-use nc2000_bot::eval::{eval01, EvalWeights};
 use nc2000_bot::bounds::{BoundConfig, BoundSolver, Stop};
+use nc2000_bot::eval::{eval01, EvalWeights};
 use nc2000_engine::state::Battle;
 
 use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct, HumanAction};
@@ -34,7 +35,11 @@ use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct, H
 // ------------------------------------------------------------------- main
 
 fn alive(b: &Battle, side: usize) -> usize {
-    b.sides[side].party.iter().filter(|&&s| !b.sides[side].roster[s as usize].fainted).count()
+    b.sides[side]
+        .party
+        .iter()
+        .filter(|&&s| !b.sides[side].roster[s as usize].fainted)
+        .count()
 }
 
 fn arg_s(args: &[String], key: &str, default: &str) -> String {
@@ -68,8 +73,20 @@ fn main() {
     let range = arg_s(&args, "--battles", "0-49");
     let hp_cap: u64 = arg_s(&args, "--hp-cap", "150").parse().unwrap();
     let work: usize = arg_s(&args, "--work", "1000000").parse().unwrap();
+    let node_budget: usize = arg_s(&args, "--nodes", "120000").parse().unwrap();
     let per_battle: usize = arg_s(&args, "--per-battle", "2").parse().unwrap();
     let out_path = arg_s(&args, "--out", "tmp/endgame-exactness-corpus.csv");
+    let side_filter = args
+        .iter()
+        .position(|a| a == "--side")
+        .and_then(|i| args.get(i + 1))
+        .map(|s| s.parse::<usize>().unwrap());
+    let turn_filter = args
+        .iter()
+        .position(|a| a == "--turn")
+        .and_then(|i| args.get(i + 1))
+        .map(|s| s.parse::<u16>().unwrap());
+    let dead_damage_quotient = !args.iter().any(|a| a == "--no-dead-damage-quotient");
     let (lo, hi) = {
         let mut it = range.split('-');
         (
@@ -90,7 +107,7 @@ fn main() {
         .filter(|(i, _)| *i >= lo && *i <= hi)
         .collect();
     println!(
-        "corpus battles {} (index {lo}-{hi}), hp-cap {hp_cap}, work {work}, per-battle {per_battle}",
+        "corpus battles {} (index {lo}-{hi}), hp-cap {hp_cap}, work {work}, nodes {node_budget}, per-battle {per_battle}, dead-damage-quotient {dead_damage_quotient}",
         files.len()
     );
 
@@ -103,15 +120,28 @@ fn main() {
 
     let mut total_runs = 0usize;
     let mut total_expansions = 0usize;
+    let mut total_nodes = 0usize;
     let mut worst_gap = 0.0f64;
     for (bi, path) in &files {
         let cb = load_battle(path);
         // one graph per battle: positions inside a battle share subgames
-        let mut solver =
-            BoundSolver::new(&dex, BoundConfig { work_budget: work, ..BoundConfig::default() });
+        let mut solver = BoundSolver::new(
+            &dex,
+            BoundConfig {
+                work_budget: work,
+                node_budget,
+                dead_damage_quotient,
+                ..BoundConfig::default()
+            },
+        );
         let mut battle_attempts = 0usize;
         // walk decisions from the END: endgames live there
         for d in cb.decisions.iter().rev() {
+            if side_filter.is_some_and(|side| d.side != side)
+                || turn_filter.is_some_and(|turn| d.turn != turn)
+            {
+                continue;
+            }
             if battle_attempts >= per_battle {
                 break;
             }
@@ -185,6 +215,7 @@ fn main() {
         }
         total_runs += solver.stats.runs;
         total_expansions += solver.stats.expansions;
+        total_nodes += solver.node_count();
         worst_gap = worst_gap.max(solver.stats.worst_gap);
     }
 
@@ -196,7 +227,7 @@ fn main() {
         tight.len()
     );
     println!(
-        "engine runs {total_runs} expansions {total_expansions} worst-gap {worst_gap:.2e}; wall {:.0}s",
+        "engine runs {total_runs} expansions {total_expansions} nodes {total_nodes} worst-gap {worst_gap:.2e}; wall {:.0}s",
         t0.elapsed().as_secs_f64()
     );
 
@@ -225,16 +256,28 @@ fn main() {
         let k = tight.len() as f64;
         let bias = tight.iter().map(|r| r.eval - r.exact).sum::<f64>() / k;
         let mae = tight.iter().map(|r| (r.eval - r.exact).abs()).sum::<f64>() / k;
-        println!("\ncertified-tight n {}: bias {bias:+.4} MAE {mae:.4}", tight.len());
+        println!(
+            "\ncertified-tight n {}: bias {bias:+.4} MAE {mae:.4}",
+            tight.len()
+        );
         for r in tight.iter().take(10) {
-            println!("  exact {:.3}±{:.3} eval {:.3}  {}", r.exact, r.width / 2.0, r.eval, r.desc);
+            println!(
+                "  exact {:.3}±{:.3} eval {:.3}  {}",
+                r.exact,
+                r.width / 2.0,
+                r.eval,
+                r.desc
+            );
         }
     }
 
     std::fs::create_dir_all("tmp").ok();
     let mut f = std::fs::File::create(&out_path).expect("csv");
-    writeln!(f, "battle,side,turn,human,exact,width,stop,eval,alive0,alive1,total_hp,desc")
-        .unwrap();
+    writeln!(
+        f,
+        "battle,side,turn,human,exact,width,stop,eval,alive0,alive1,total_hp,desc"
+    )
+    .unwrap();
     for r in &rows {
         writeln!(
             f,

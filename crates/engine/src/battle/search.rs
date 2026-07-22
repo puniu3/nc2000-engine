@@ -182,7 +182,7 @@ impl Battle {
     /// of hashed state). Mid-event machinery is quiescent at request points;
     /// its occupancy is hashed as a cheap guard.
     pub fn state_key(&self) -> u64 {
-        self.state_key_with(None)
+        self.state_key_with(None, false)
     }
 
     /// `state_key` with search-tree abstraction: HP is hashed as one of
@@ -194,13 +194,13 @@ impl Battle {
     /// aliasing M7 exists to fix. The bucketing trades a bounded value
     /// blur inside a node for sample density below it.
     pub fn state_key_bucketed(&self, buckets: i64) -> u64 {
-        self.state_key_with(Some(buckets))
+        self.state_key_with(Some(buckets), false)
     }
 
-    fn state_key_with(&self, hp_buckets: Option<i64>) -> u64 {
+    fn state_key_with(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
         use std::hash::Hasher;
         let mut h = FxHasher::default();
-        self.state_hash_into(&mut h, hp_buckets);
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping);
         h.finish()
     }
 
@@ -210,20 +210,51 @@ impl Battle {
     /// merge must not — two hashes over independent functions push the
     /// collision odds to ~2^-128.
     pub fn state_key128(&self) -> u128 {
+        self.state_key128_with(false)
+    }
+
+    /// Certificate-grade solver key with damage-history fields removed.
+    /// Callers MUST first establish `!damage_bookkeeping_observable(dex)`;
+    /// the method is separate from `state_key128` so ordinary exact identity
+    /// can never silently acquire this semantic quotient.
+    pub fn state_key128_without_damage_bookkeeping(&self) -> u128 {
+        self.state_key128_with(true)
+    }
+
+    fn state_key128_with(&self, omit_damage_bookkeeping: bool) -> u128 {
         use std::hash::Hasher;
         let mut h1 = FxHasher::default();
-        self.state_hash_into(&mut h1, None);
+        self.state_hash_into(&mut h1, None, omit_damage_bookkeeping);
         let mut h2 = std::collections::hash_map::DefaultHasher::new();
-        self.state_hash_into(&mut h2, None);
+        self.state_hash_into(&mut h2, None, omit_damage_bookkeeping);
         ((h1.finish() as u128) << 64) | h2.finish() as u128
     }
 
-    fn state_hash_into<H: std::hash::Hasher>(&self, mut h: H, hp_buckets: Option<i64>) {
+    /// Whether dropping damage-history fields can change future behavior.
+    /// Counter/Mirror Coat read `attacked_by`. Mimic/Mirror Move/Transform
+    /// need no special case because their possible source move is present in
+    /// some roster's base/current slots, both of which are scanned. Neither
+    /// observer is in Metronome's flagged call pool.
+    pub fn damage_bookkeeping_observable(&self, dex: &Dex) -> bool {
+        self.sides.iter().flat_map(|s| s.roster.iter()).any(|p| {
+            p.base_move_slots
+                .iter()
+                .chain(p.move_slots.iter())
+                .any(|slot| matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat"))
+        })
+    }
+
+    fn state_hash_into<H: std::hash::Hasher>(
+        &self,
+        mut h: H,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+    ) {
         use std::hash::Hash;
         // Total destructuring on purpose: adding a `Battle` field breaks
         // this fn until the field is placed (hashed or explicitly skipped).
         let Battle {
-            prng: _,           // chance is resampled by search
+            prng: _, // chance is resampled by search
             turn,
             request_state,
             mid_turn,
@@ -234,7 +265,7 @@ impl Battle {
             sides,
             queue,
             faint_queue,
-            log: _,            // protocol log + bookkeeping: not state
+            log: _, // protocol log + bookkeeping: not state
             log_enabled: _,
             effect_order,
             event_depth,
@@ -244,7 +275,7 @@ impl Battle {
             quick_claw_roll,
             speed_order,
             format_data,
-            sent_log_pos: _,   // log bookkeeping
+            sent_log_pos: _, // log bookkeeping
             event_stack,
             effect_stack,
             active_move,
@@ -252,19 +283,21 @@ impl Battle {
             active_target,
             last_move_id,
             pending_boosts,
-            listener_pool: _,  // scratch buffers
-            battle_mask: _,    // derived from hashed state
+            listener_pool: _, // scratch buffers
+            battle_mask: _,   // derived from hashed state
         } = self;
         (turn, request_state, mid_turn, started, ended, winner).hash(&mut h);
         field.hash(&mut h);
         for side in sides.iter() {
-            side.hash_with(&mut h, hp_buckets);
+            side.hash_with_options(&mut h, hp_buckets, omit_damage_bookkeeping);
         }
         (queue, faint_queue, effect_order, event_depth).hash(&mut h);
         last_successful_move_this_turn.hash(&mut h);
-        match hp_buckets {
-            None => last_damage.hash(&mut h),
-            Some(_) => (last_damage / 16).hash(&mut h),
+        if !omit_damage_bookkeeping {
+            match hp_buckets {
+                None => last_damage.hash(&mut h),
+                Some(_) => (last_damage / 16).hash(&mut h),
+            }
         }
         (quick_claw_roll, speed_order, format_data).hash(&mut h);
         // mid-event machinery: quiescent at request points, hashed as a guard
@@ -302,8 +335,11 @@ impl Battle {
         let k = self.picked_team_size(side_n).min(3) as u8;
         let mut out = Vec::new();
         let push = |out: &mut Vec<SearchChoice>, slots: [u8; 3]| {
-            let positions: Vec<usize> =
-                slots.iter().filter(|&&s| s != 0).map(|&s| s as usize - 1).collect();
+            let positions: Vec<usize> = slots
+                .iter()
+                .filter(|&&s| s != 0)
+                .map(|&s| s as usize - 1)
+                .collect();
             if self.picked_total_level(side_n, &positions) <= super::choices::MAX_TOTAL_LEVEL {
                 out.push(SearchChoice::Team(slots));
             }

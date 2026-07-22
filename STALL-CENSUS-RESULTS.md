@@ -94,6 +94,34 @@ Raw `state_key128` layers (turn mode, 3M runs): 310 / 9,704 / ≥30,000.
   RESULTS.md): probe-refine fixes the abstraction's policy at the root;
   the census addresses how deep exact/bounded solving can be scheduled.
 
+## Implemented follow-up: guarded semantic key
+
+Commit following this memo adds a certificate-domain-tagged
+`NoDamageBookkeeping` key to `bot::bounds`. It omits the behavior-dead
+`Battle::last_damage` and Pokemon `last_damage`/`hurt_this_turn`/
+`times_attacked` fields, plus `attacked_by` only when a scan of every
+roster's base and current move slots proves Counter and Mirror Coat absent.
+Raw and semantic fingerprints are distinct key domains; an unsafe corpus
+root can never cross-merge with a safe one when a solver is reused.
+
+Correctness gates cover individual key equality/inequality, direct and
+copied observer moves, tagged-domain isolation, and an exhaustive 2x2
+turn-1000 successor/value comparison between full-key-distinct states.
+
+Measured on the same b455 s0 T39 root with identical 200,000-run budgets:
+
+| key | stop | interval | expansions | live nodes | wall |
+|---|---|---|---:|---:|---:|
+| raw | WorkExhausted | [0.003, 0.940] | 11,730 | 25,848 | 23 s |
+| guarded semantic | WorkExhausted | [0.003, 0.940] | 4,156 | 22,005 | 24 s |
+
+At a 23,000-node limit the raw key stopped at `NodeBudget` after 174,037
+runs and 23,067 nodes. The guarded key completed the full 200,004 runs with
+21,252 nodes and the same interval. Thus the immediate win is 64.6% fewer
+expansions and avoiding the node-budget wall, not a wall-time reduction.
+This is the prerequisite for closed-generation folding; hashing alone does
+not tighten the healthy-stall bracket.
+
 ## Reproduction
 
 ```bash

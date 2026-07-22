@@ -50,6 +50,10 @@ pub struct BoundConfig {
     /// mass, so a naive mass×width rule needle-dives hundreds of plies
     /// with zero information gained.)
     pub descend_floor: f64,
+    /// Merge states that differ only in damage-history fields when no move
+    /// in either roster can observe them. The key domain is tagged, so a
+    /// solver reused across safe and unsafe corpus roots cannot cross-merge.
+    pub dead_damage_quotient: bool,
 }
 
 impl Default for BoundConfig {
@@ -61,6 +65,7 @@ impl Default for BoundConfig {
             eps: 0.02,
             trial_depth: 24,
             descend_floor: 0.1,
+            dead_damage_quotient: true,
         }
     }
 }
@@ -116,8 +121,16 @@ struct Pending {
     mass: f64,
 }
 
+/// The tag is part of identity: a raw exact fingerprint and a semantic
+/// fingerprint are never compared even if their 128-bit payloads coincide.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum NodeKey {
+    Exact(u128),
+    NoDamageBookkeeping(u128),
+}
+
 struct Cell {
-    resolved: Vec<(f64, u128)>,
+    resolved: Vec<(f64, NodeKey)>,
     pending: Vec<Pending>,
     pending_mass: f64,
     lo: f64,
@@ -143,7 +156,7 @@ struct Node {
 pub struct BoundSolver<'d> {
     dex: &'d Dex,
     pub cfg: BoundConfig,
-    nodes: HashMap<u128, Node>,
+    nodes: HashMap<NodeKey, Node>,
     pub stats: BoundStats,
 }
 
@@ -151,7 +164,12 @@ const TOTAL: f64 = (1u64 << 32) as f64;
 
 impl<'d> BoundSolver<'d> {
     pub fn new(dex: &'d Dex, cfg: BoundConfig) -> Self {
-        BoundSolver { dex, cfg, nodes: HashMap::new(), stats: BoundStats::default() }
+        BoundSolver {
+            dex,
+            cfg,
+            nodes: HashMap::new(),
+            stats: BoundStats::default(),
+        }
     }
 
     pub fn node_count(&self) -> usize {
@@ -192,7 +210,11 @@ impl<'d> BoundSolver<'d> {
                 None
             });
             if let Some(stop) = stop {
-                return SolveReport { bounds, stop, runs: self.stats.runs - start_runs };
+                return SolveReport {
+                    bounds,
+                    stop,
+                    runs: self.stats.runs - start_runs,
+                };
             }
             if self.trial(root) {
                 idle = 0;
@@ -213,38 +235,56 @@ impl<'d> BoundSolver<'d> {
     }
 
     /// Current certified interval of a state, if it is in the graph.
-    pub fn peek(&self, key: u128) -> Option<Bounds> {
+    pub fn peek(&self, b: &Battle) -> Option<Bounds> {
+        let key = self.node_key(b);
         self.nodes.get(&key).map(|n| Bounds { lo: n.lo, hi: n.hi })
     }
 
-    fn intern(&mut self, b: Battle) -> u128 {
-        let key = b.state_key128();
-        if !self.nodes.contains_key(&key) {
-            let node = match b.outcome() {
-                Some(o) => {
-                    let v = match o {
-                        Outcome::P1Win => 1.0,
-                        Outcome::Tie => 0.5,
-                        Outcome::P2Win => 0.0,
-                    };
-                    Node { battle: None, acts0: vec![], acts1: vec![], cells: vec![], lo: v, hi: v, strat: None }
-                }
-                None => Node {
-                    battle: Some(b),
+    fn node_key(&self, b: &Battle) -> NodeKey {
+        if self.cfg.dead_damage_quotient && !b.damage_bookkeeping_observable(self.dex) {
+            NodeKey::NoDamageBookkeeping(b.state_key128_without_damage_bookkeeping())
+        } else {
+            NodeKey::Exact(b.state_key128())
+        }
+    }
+
+    fn intern(&mut self, b: Battle) -> NodeKey {
+        let key = self.node_key(&b);
+        if self.nodes.contains_key(&key) {
+            return key;
+        }
+        let node = match b.outcome() {
+            Some(o) => {
+                let v = match o {
+                    Outcome::P1Win => 1.0,
+                    Outcome::Tie => 0.5,
+                    Outcome::P2Win => 0.0,
+                };
+                Node {
+                    battle: None,
                     acts0: vec![],
                     acts1: vec![],
                     cells: vec![],
-                    lo: 0.0,
-                    hi: 1.0,
+                    lo: v,
+                    hi: v,
                     strat: None,
-                },
-            };
-            self.nodes.insert(key, node);
-        }
+                }
+            }
+            None => Node {
+                battle: Some(b),
+                acts0: vec![],
+                acts1: vec![],
+                cells: vec![],
+                lo: 0.0,
+                hi: 1.0,
+                strat: None,
+            },
+        };
+        self.nodes.insert(key, node);
         key
     }
 
-    fn init_cells(&mut self, key: u128) {
+    fn init_cells(&mut self, key: NodeKey) {
         let node = self.nodes.get_mut(&key).unwrap();
         if !node.cells.is_empty() || node.battle.is_none() {
             return;
@@ -253,7 +293,11 @@ impl<'d> BoundSolver<'d> {
         let needs = probe.needs_choice();
         let mut acts = |side: usize| -> Vec<Option<SearchChoice>> {
             if needs[side] {
-                probe.legal_choices(self.dex, side).into_iter().map(Some).collect()
+                probe
+                    .legal_choices(self.dex, side)
+                    .into_iter()
+                    .map(Some)
+                    .collect()
             } else {
                 vec![None]
             }
@@ -264,7 +308,10 @@ impl<'d> BoundSolver<'d> {
         node.cells = (0..n_cells)
             .map(|_| Cell {
                 resolved: vec![],
-                pending: vec![Pending { script: vec![], mass: 1.0 }],
+                pending: vec![Pending {
+                    script: vec![],
+                    mass: 1.0,
+                }],
                 pending_mass: 1.0,
                 lo: 0.0,
                 hi: 1.0,
@@ -277,10 +324,10 @@ impl<'d> BoundSolver<'d> {
 
     /// One trial: descend by LP-support × uncertainty, expand one pending
     /// chance script at the frontier, back up along the path.
-    fn trial(&mut self, root: u128) -> bool {
+    fn trial(&mut self, root: NodeKey) -> bool {
         self.stats.trials += 1;
         let mut did_work = false;
-        let mut path: Vec<u128> = Vec::new();
+        let mut path: Vec<NodeKey> = Vec::new();
         let mut cur = root;
         for _ in 0..self.cfg.trial_depth {
             let n = &self.nodes[&cur];
@@ -337,7 +384,7 @@ impl<'d> BoundSolver<'d> {
 
     /// Cell choice: product of the lo/hi LP supports times cell width —
     /// spend work where the equilibria actually look.
-    fn select_cell(&mut self, key: u128) -> usize {
+    fn select_cell(&mut self, key: NodeKey) -> usize {
         let node = &self.nodes[&key];
         let (n0, n1) = (node.acts0.len(), node.acts1.len());
         if n0 * n1 == 1 {
@@ -347,9 +394,7 @@ impl<'d> BoundSolver<'d> {
             node.cells
                 .iter()
                 .enumerate()
-                .max_by(|a, b| {
-                    (a.1.hi - a.1.lo).partial_cmp(&(b.1.hi - b.1.lo)).unwrap()
-                })
+                .max_by(|a, b| (a.1.hi - a.1.lo).partial_cmp(&(b.1.hi - b.1.lo)).unwrap())
                 .map(|(i, _)| i)
                 .unwrap()
         };
@@ -378,7 +423,7 @@ impl<'d> BoundSolver<'d> {
     /// First visit of a virgin cell: attempt the eager enumerator (range
     /// merge intact) within `cell_cap` runs; on success the whole cell
     /// resolves at once. Returns whether it did the work.
-    fn try_eager(&mut self, key: u128, ci: usize) -> bool {
+    fn try_eager(&mut self, key: NodeKey, ci: usize) -> bool {
         let (battle, choices) = {
             let node = self.nodes.get_mut(&key).unwrap();
             let cell = &mut node.cells[ci];
@@ -388,7 +433,10 @@ impl<'d> BoundSolver<'d> {
             cell.tried_eager = true;
             let n1 = node.acts1.len();
             let (i, j) = (ci / n1, ci % n1);
-            (node.battle.take().expect("frontier node keeps its battle"), [node.acts0[i], node.acts1[j]])
+            (
+                node.battle.take().expect("frontier node keeps its battle"),
+                [node.acts0[i], node.acts1[j]],
+            )
         };
         let step = enumerate_step(self.dex, &battle, choices, self.cfg.cell_cap);
         self.nodes.get_mut(&key).unwrap().battle = Some(battle);
@@ -398,7 +446,7 @@ impl<'d> BoundSolver<'d> {
         };
         self.stats.runs += step.runs;
         self.stats.expansions += 1;
-        let mut agg: HashMap<u128, f64> = HashMap::new();
+        let mut agg: HashMap<NodeKey, f64> = HashMap::new();
         for l in step.leaves {
             let prob = l.prob;
             let k = self.intern(l.battle);
@@ -416,7 +464,7 @@ impl<'d> BoundSolver<'d> {
     /// yields the representative leaf; every non-default class after the
     /// prefix becomes a pending sibling at its exact mass. The leaf plus
     /// siblings partition the expanded mass exactly.
-    fn expand(&mut self, key: u128, ci: usize) {
+    fn expand(&mut self, key: NodeKey, ci: usize) {
         let (battle, choices, pending) = {
             let node = self.nodes.get_mut(&key).unwrap();
             let n1 = node.acts1.len();
@@ -431,7 +479,11 @@ impl<'d> BoundSolver<'d> {
                 .map(|(i, _)| i)
                 .unwrap();
             let pending = cell.pending.swap_remove(pi);
-            (node.battle.take().expect("frontier node keeps its battle"), choices, pending)
+            (
+                node.battle.take().expect("frontier node keeps its battle"),
+                choices,
+                pending,
+            )
         };
 
         let (leaf, trace) = run_scripted(self.dex, &battle, choices, &pending.script);
@@ -446,10 +498,12 @@ impl<'d> BoundSolver<'d> {
             if p >= pending.script.len() {
                 for (c, &cnt) in d.counts.iter().enumerate() {
                     if c != d.chosen && cnt > 0 {
-                        let mut script: Vec<usize> =
-                            trace[..p].iter().map(|t| t.chosen).collect();
+                        let mut script: Vec<usize> = trace[..p].iter().map(|t| t.chosen).collect();
                         script.push(c);
-                        siblings.push(Pending { script, mass: prefix * cnt as f64 / TOTAL });
+                        siblings.push(Pending {
+                            script,
+                            mass: prefix * cnt as f64 / TOTAL,
+                        });
                     }
                 }
             }
@@ -474,7 +528,7 @@ impl<'d> BoundSolver<'d> {
     /// Recompute one node's cell and node bounds from current children.
     /// Bounds are clamped monotone; resolved/fully-expanded nodes drop
     /// their Battle snapshot. Returns whether the node's bounds moved.
-    fn backup(&mut self, key: u128) -> bool {
+    fn backup(&mut self, key: NodeKey) -> bool {
         let (n0, n1, cell_bounds): (usize, usize, Vec<(f64, f64)>) = {
             let node = &self.nodes[&key];
             let bounds = node
@@ -540,5 +594,200 @@ impl<'d> BoundSolver<'d> {
             node.battle = None;
         }
         moved
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use nc2000_engine::battle::enumerate::enumerate_step;
+    use nc2000_engine::battle::{Outcome, PokemonSet};
+    use nc2000_engine::dex::MoveId;
+    use nc2000_engine::state::{Attacker, Battle, PokeId};
+
+    use super::{BoundConfig, BoundSolver};
+    use crate::exact::solve_matrix;
+
+    fn mon(moves: &[&str]) -> PokemonSet {
+        PokemonSet {
+            name: "Pikachu".into(),
+            species: "Pikachu".into(),
+            item: String::new(),
+            ability: String::new(),
+            moves: moves.iter().map(|m| (*m).into()).collect(),
+            level: 50,
+            evs: None,
+            ivs: None,
+            happiness: None,
+            gender: None,
+        }
+    }
+
+    fn battle(dex: &nc2000_engine::dex::Dex, moves0: &[&str], moves1: &[&str]) -> Battle {
+        Battle::from_fixture(dex, "1,2,3,4", &[mon(moves0)], &[mon(moves1)]).unwrap()
+    }
+
+    fn perturb_damage_history(b: &mut Battle, move_id: MoveId) {
+        b.last_damage = 991;
+        let p = &mut b.sides[0].roster[0];
+        p.hurt_this_turn = Some(17);
+        p.last_damage = 83;
+        p.times_attacked = 4;
+        p.attacked_by.push(Attacker {
+            source: PokeId { side: 1, slot: 0 },
+            damage: 37,
+            move_id,
+            this_turn: true,
+            damage_value: Some(37),
+        });
+    }
+
+    #[test]
+    fn semantic_key_omits_only_damage_history_payload() {
+        let dex = conformance::load_dex();
+        let a = battle(&dex, &["Tackle"], &["Splash"]);
+        let mut b = a.clone();
+        perturb_damage_history(&mut b, dex.moves.id("tackle").unwrap());
+
+        assert_ne!(a.state_key128(), b.state_key128());
+        assert_eq!(
+            a.state_key128_without_damage_bookkeeping(),
+            b.state_key128_without_damage_bookkeeping()
+        );
+        b.sides[0].roster[0].hp -= 1;
+        assert_ne!(
+            a.state_key128_without_damage_bookkeeping(),
+            b.state_key128_without_damage_bookkeeping(),
+            "decision-relevant HP must remain exact"
+        );
+    }
+
+    #[test]
+    fn observer_guard_covers_direct_and_generated_counter_moves() {
+        let dex = conformance::load_dex();
+        for move_name in ["Counter", "Mirror Coat"] {
+            let b = battle(&dex, &[move_name], &["Splash"]);
+            assert!(b.damage_bookkeeping_observable(&dex), "{move_name}");
+        }
+        for move_name in [
+            "Splash",
+            "Mimic",
+            "Transform",
+            "Mirror Move",
+            "Metronome",
+            "Bide",
+        ] {
+            let b = battle(&dex, &[move_name], &["Splash"]);
+            assert!(!b.damage_bookkeeping_observable(&dex), "{move_name}");
+        }
+
+        // Acquired moves and original slots are both relevant: Mimic and
+        // Transform can rewrite current slots while the old base set remains.
+        let safe = battle(&dex, &["Splash"], &["Splash"]);
+        let counter = battle(&dex, &["Counter"], &["Splash"]);
+        let mut acquired = safe.clone();
+        acquired.sides[0].roster[0].move_slots = counter.sides[0].roster[0].move_slots.clone();
+        assert!(acquired.damage_bookkeeping_observable(&dex));
+        let mut replaced = counter;
+        replaced.sides[0].roster[0].move_slots = safe.sides[0].roster[0].move_slots.clone();
+        assert!(replaced.damage_bookkeeping_observable(&dex));
+    }
+
+    #[test]
+    fn tagged_solver_key_merges_safe_states_but_not_observer_states() {
+        let dex = conformance::load_dex();
+        let mut safe_a = battle(&dex, &["Tackle"], &["Splash"]);
+        let mut safe_b = safe_a.clone();
+        perturb_damage_history(&mut safe_b, dex.moves.id("tackle").unwrap());
+        let mut solver = BoundSolver::new(&dex, BoundConfig::default());
+        assert_eq!(solver.intern(safe_a.clone()), solver.intern(safe_b.clone()));
+        assert_eq!(solver.node_count(), 1);
+
+        // The exact and semantic domains are tagged, even if a future hash
+        // implementation happened to produce the same payload.
+        safe_a.sides[0].roster[0].move_slots = battle(&dex, &["Counter"], &["Splash"]).sides[0]
+            .roster[0]
+            .move_slots
+            .clone();
+        safe_b.sides[0].roster[0].move_slots = safe_a.sides[0].roster[0].move_slots.clone();
+        assert_ne!(solver.intern(safe_a), solver.intern(safe_b));
+        assert_eq!(solver.node_count(), 3);
+    }
+
+    #[test]
+    fn safe_states_have_identical_semantic_successor_distributions() {
+        let dex = conformance::load_dex();
+        let mut a = battle(
+            &dex,
+            &["Quick Attack", "Splash"],
+            &["Quick Attack", "Splash"],
+        );
+        let mut b = a.clone();
+
+        // Advance both through preview, then compare a real stochastic move
+        // step under the semantic quotient.
+        for state in [&mut a, &mut b] {
+            let c0 = state.legal_choices(&dex, 0)[0];
+            let c1 = state.legal_choices(&dex, 1)[0];
+            state.apply_choices(&dex, [Some(c0), Some(c1)]).unwrap();
+        }
+        for state in [&mut a, &mut b] {
+            state.turn = 1000;
+            for side in 0..2 {
+                let id = state.active_id(side).unwrap();
+                state.poke_mut(id).hp = 1;
+            }
+        }
+        perturb_damage_history(&mut b, dex.moves.id("quickattack").unwrap());
+        assert_ne!(a.state_key128(), b.state_key128());
+        assert_eq!(
+            a.state_key128_without_damage_bookkeeping(),
+            b.state_key128_without_damage_bookkeeping()
+        );
+        let aa = [a.legal_choices(&dex, 0), a.legal_choices(&dex, 1)];
+        let ab = [b.legal_choices(&dex, 0), b.legal_choices(&dex, 1)];
+        assert_eq!(aa, ab);
+        let aggregate = |step: &nc2000_engine::battle::enumerate::StepEnum| {
+            let mut out: HashMap<u128, f64> = HashMap::new();
+            for leaf in &step.leaves {
+                *out.entry(leaf.battle.state_key128_without_damage_bookkeeping())
+                    .or_default() += leaf.prob;
+            }
+            out
+        };
+        let payoff = |step: &nc2000_engine::battle::enumerate::StepEnum| {
+            step.leaves
+                .iter()
+                .map(|leaf| {
+                    let v = match leaf
+                        .battle
+                        .outcome()
+                        .expect("turn-1000 successor is terminal")
+                    {
+                        Outcome::P1Win => 1.0,
+                        Outcome::Tie => 0.5,
+                        Outcome::P2Win => 0.0,
+                    };
+                    leaf.prob * v
+                })
+                .sum::<f64>()
+        };
+        let mut ma = Vec::new();
+        let mut mb = Vec::new();
+        for &c0 in &aa[0] {
+            for &c1 in &aa[1] {
+                let sa = enumerate_step(&dex, &a, [Some(c0), Some(c1)], 100_000).unwrap();
+                let sb = enumerate_step(&dex, &b, [Some(c0), Some(c1)], 100_000).unwrap();
+                assert_eq!(aggregate(&sa), aggregate(&sb));
+                ma.push(payoff(&sa));
+                mb.push(payoff(&sb));
+            }
+        }
+        assert_eq!(ma, mb);
+        let (va, ga) = solve_matrix(&ma, aa[0].len(), aa[1].len());
+        let (vb, gb) = solve_matrix(&mb, ab[0].len(), ab[1].len());
+        assert!((va - vb).abs() < 1e-12);
+        assert!(ga < 1e-12 && gb < 1e-12);
     }
 }
