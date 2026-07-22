@@ -17,12 +17,13 @@
 //!
 //! **Fallback** (no pool team consistent — a human custom team): a per-mon
 //! imputation roster is synthesized instead — nearest pool set by species
-//! (first in pedigree order) merged with the revealed knowledge (revealed
-//! moves first, pool filler after, observed level/gender, revealed item;
-//! unknown item with a preview item flag keeps the pool set's item, or none
-//! if the species is outside the pool). Marked by `is_fallback()`. The
-//! construction is defensive at every step — a filter dead-end mid-game
-//! degrades, never panics.
+//! (first in pedigree order), then the community-rental prior when the
+//! species is absent from the pool, merged with the revealed knowledge
+//! (revealed moves first, prior filler after, observed level/gender,
+//! revealed item). A species absent from both sources receives a
+//! deterministic format-legal move, never an empty set/implicit Struggle.
+//! Marked by `is_fallback()`. The construction is defensive at every step —
+//! a filter dead-end mid-game degrades, never panics.
 //!
 //! # Determinizer — the hidden-field contract
 //!
@@ -56,16 +57,56 @@
 //! shared per-turn coin — non-goal), and the whole observing side.
 
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use nc2000_engine::battle::{tr, PokemonSet};
 use nc2000_engine::dex::{toid, Dex, MoveId};
 use nc2000_engine::state::{
     ActionKind, Battle, EffId, EffectState, MoveSlot, MoveSlots, PokeId, Pokemon,
 };
+use nc2000_engine::validate::Learnsets;
 
 use crate::observe::{move_matches, MonObs, Observer};
 use crate::preview::MetaPool;
 use crate::rng::SplitMix64;
+
+/// Canonicalized no-OHKO community rentals, baked into the bot so the live
+/// protocol/WASM paths get the prior without runtime filesystem plumbing.
+/// Parsing is paid once per process; source order is the deterministic
+/// pedigree order.
+const COMMUNITY_RENTALS_JSON: &str =
+    include_str!("../../../data/community-rentals-v0/teams.json");
+const FORMAT_LEARNSETS_JSON: &str = include_str!("../../../data/learnsets-gen2.json");
+
+#[derive(serde::Deserialize)]
+struct CommunityRentalDb {
+    teams: Vec<CommunityRentalTeam>,
+}
+
+#[derive(serde::Deserialize)]
+struct CommunityRentalTeam {
+    sets: Vec<PokemonSet>,
+}
+
+fn community_rental_sets() -> &'static [PokemonSet] {
+    static SETS: OnceLock<Vec<PokemonSet>> = OnceLock::new();
+    SETS.get_or_init(|| {
+        serde_json::from_str::<CommunityRentalDb>(COMMUNITY_RENTALS_JSON)
+            .expect("embedded community rentals must parse")
+            .teams
+            .into_iter()
+            .flat_map(|t| t.sets)
+            .collect()
+    })
+}
+
+fn format_learnsets() -> &'static Learnsets {
+    static LEARNSETS: OnceLock<Learnsets> = OnceLock::new();
+    LEARNSETS.get_or_init(|| {
+        Learnsets::from_json(FORMAT_LEARNSETS_JSON)
+            .expect("embedded format learnsets must parse")
+    })
+}
 
 /// One pool team as an imputation source: reference mons aligned to the
 /// opponent's roster slots (`None` = preview-inconsistent).
@@ -437,28 +478,48 @@ impl Belief {
 
     fn fallback_set(&self, dex: &Dex, mo: &MonObs) -> PokemonSet {
         // nearest pool set by species (first in pedigree order)
-        let nearest: Option<&PokemonSet> = self.cands.iter().find_map(|c| {
+        let pool_set: Option<&PokemonSet> = self.cands.iter().find_map(|c| {
             c.sets
                 .iter()
                 .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
         });
-        let mut set = nearest.cloned().unwrap_or_else(|| base_set(dex, mo));
+        // A separate prior, not a pool candidate: it can fill hidden fields
+        // without pretending an exact rental-team identity survived the
+        // preview filter. Pool pedigree remains first, preserving existing
+        // same-species behavior.
+        let prior = pool_set.or_else(|| {
+            community_rental_sets()
+                .iter()
+                .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
+        });
+        let mut set = prior.cloned().unwrap_or_else(|| base_set(dex, mo));
         set.level = mo.level;
         set.gender = Some(match mo.gender.as_str() {
             "" => "N".to_string(),
             g => g.to_string(),
         });
         set.name = String::new();
-        // moves: revealed first, pool filler after
+        // moves: revealed first, empirical-prior filler after
         let mut moves: Vec<String> =
             mo.revealed_moves.iter().map(|&m| dex.moves.key(m).to_string()).collect();
-        for name in nearest.map(|s| s.moves.clone()).unwrap_or_default() {
+        for name in prior.map(|s| s.moves.clone()).unwrap_or_default() {
             if moves.len() >= 4 {
                 break;
             }
-            if dex.moves.id(&toid(&name)).map_or(true, |id| !mo.revealed_moves.contains(&id)) {
+            let Some(id) = dex.moves.id(&toid(&name)) else { continue };
+            if format_move_legal_at_level(
+                dex.species.key(mo.species),
+                dex.moves.key(id),
+                mo.level,
+            )
+                && !mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
+                && !moves.iter().any(|m| dex.moves.id(&toid(m)) == Some(id))
+            {
                 moves.push(name);
             }
+        }
+        if moves.is_empty() {
+            moves.push(legal_fallback_move(dex, mo));
         }
         moves.truncate(4); // hard cap: >4 slots would assert in construction
         set.moves = moves;
@@ -487,7 +548,7 @@ fn base_set(dex: &Dex, mo: &MonObs) -> PokemonSet {
         species: dex.species.key(mo.species).to_string(),
         item: String::new(),
         ability: "No Ability".to_string(),
-        moves: Vec::new(),
+        moves: vec![legal_fallback_move(dex, mo)],
         level: mo.level,
         evs: Some(evs),
         ivs: None,
@@ -497,6 +558,35 @@ fn base_set(dex: &Dex, mo: &MonObs) -> PokemonSet {
             g => g.to_string(),
         }),
     }
+}
+
+/// Empirical priors predate the no-OHKO format lens and can contain a move
+/// that is illegal at the observed level. Filter every filler through the
+/// same exported acceptance table as the validator.
+fn format_move_legal_at_level(species_id: &str, move_id: &str, level: u8) -> bool {
+    let Some(learnset) = format_learnsets().species(species_id) else { return false };
+    let base = if move_id.starts_with("hiddenpower") { "hiddenpower" } else { move_id };
+    learnset.allows(base)
+        && learnset.move_min_level.get(base).is_none_or(|&min| level as i64 >= min)
+}
+
+/// Deterministic nonempty set for a format-legal species absent from every
+/// empirical prior: the lexicographically first move accepted at its
+/// observed level by the format's full learnset lens.
+fn legal_fallback_move(dex: &Dex, mo: &MonObs) -> String {
+    let species = dex.species.key(mo.species);
+    format_learnsets()
+        .species(species)
+        .and_then(|l| {
+            l.moves.iter().find(|m| {
+                dex.moves.id(m).is_some()
+                    && format_move_legal_at_level(species, m, mo.level)
+            })
+        })
+        .cloned()
+        // Defensive malformed/off-format input: still never reintroduce the
+        // empty-set/implicit-Struggle failure this function closes.
+        .unwrap_or_else(|| "return".to_string())
 }
 
 /// Construct a pool team's reference mons and align them to the opponent's
@@ -761,5 +851,198 @@ fn audit_battle_hidden(b: &Battle) {
             choice: _,           // empty between commits; forced-switch counters
                                  //   derive from public party state
         } = side;
+    }
+}
+
+#[cfg(test)]
+mod fallback_tests {
+    use super::*;
+    use crate::observe::ItemObs;
+    use nc2000_engine::state::Gender;
+    use serde_json::Value;
+
+    const DEX_JSON: &str = include_str!("../../../data/gen2stadium2.json");
+    const LEARNSETS_JSON: &str = include_str!("../../../data/learnsets-gen2.json");
+    const META_POOL_JSON: &str = include_str!("../../../data/meta-pool-v0/meta-pool.json");
+
+    fn test_dex() -> Dex {
+        Dex::from_json(DEX_JSON).unwrap()
+    }
+
+    fn test_belief() -> Belief {
+        let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
+        Belief {
+            cands: pool
+                .teams
+                .into_iter()
+                .map(|t| Candidate { id: t.id, sets: t.sets, refs: None })
+                .collect(),
+            alive: Vec::new(),
+            fallback: None,
+            pinned: false,
+            synced: None,
+        }
+    }
+
+    fn mon(dex: &Dex, species: &str, level: u8, revealed: &[&str]) -> MonObs {
+        MonObs {
+            species: dex.species.id(species).unwrap(),
+            level,
+            gender: Gender::N,
+            name: species.to_string(),
+            preview_has_item: false,
+            revealed_moves: revealed.iter().map(|m| dex.moves.id(m).unwrap()).collect(),
+            item: ItemObs::default(),
+            appeared: false,
+        }
+    }
+
+    fn base_move_id(name: &str) -> String {
+        let id = toid(name);
+        if id.starts_with("hiddenpower") {
+            "hiddenpower".to_string()
+        } else {
+            id
+        }
+    }
+
+    #[test]
+    fn every_format_species_gets_one_to_four_legal_moves_at_zero_reveal() {
+        let dex = test_dex();
+        let belief = test_belief();
+        let table: Value = serde_json::from_str(LEARNSETS_JSON).unwrap();
+        let species = table["species"].as_object().unwrap();
+
+        for (sid, entry) in species {
+            let legal: Vec<&str> =
+                entry["moves"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+            let min_level = entry["minLevel"].as_u64().unwrap_or(50).max(50) as u8;
+            for level in min_level..=55 {
+                let set = belief.fallback_set(&dex, &mon(&dex, sid, level, &[]));
+                assert!(
+                    (1..=4).contains(&set.moves.len()),
+                    "{sid} L{level}: fallback move count {} ({:?})",
+                    set.moves.len(),
+                    set.moves
+                );
+                for mv in &set.moves {
+                    let mid = base_move_id(mv);
+                    assert!(
+                        legal.contains(&mid.as_str()),
+                        "{sid} L{level}: illegal fallback move {mv}"
+                    );
+                    let floor = entry["moveMinLevel"][&mid].as_u64().unwrap_or(50) as u8;
+                    assert!(
+                        level >= floor,
+                        "{sid}: {mv} requires level {floor}, got {level}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fallback_priority_is_reveal_then_pool_then_rental_then_legal_default() {
+        let dex = test_dex();
+        let belief = test_belief();
+
+        // Existing same-species pool behavior stays first for every pool
+        // species, even when the rental DB carries another set.
+        let mut seen = std::collections::HashSet::new();
+        for source in belief.cands.iter().flat_map(|c| &c.sets) {
+            let sid = toid(&source.species);
+            if seen.insert(sid.clone()) {
+                let fallback = belief.fallback_set(
+                    &dex,
+                    &mon(&dex, &sid, source.level, &[]),
+                );
+                assert_eq!(fallback.moves, source.moves, "pool source changed for {sid}");
+            }
+        }
+
+        // Chansey is absent from the meta pool but present in the community
+        // rentals, so its first rental set supplies the filler.
+        assert!(belief
+            .cands
+            .iter()
+            .flat_map(|c| &c.sets)
+            .all(|s| toid(&s.species) != "chansey"));
+        let rental_chansey = community_rental_sets()
+            .iter()
+            .find(|s| toid(&s.species) == "chansey")
+            .unwrap();
+        let chansey = belief.fallback_set(&dex, &mon(&dex, "chansey", 50, &[]));
+        assert_eq!(chansey.moves, rental_chansey.moves);
+        let revealed_chansey =
+            belief.fallback_set(&dex, &mon(&dex, "chansey", 50, &["toxic"]));
+        assert_eq!(toid(&revealed_chansey.moves[0]), "toxic");
+        assert_eq!(revealed_chansey.moves.len(), 4);
+
+        // Reveals lead and survive even when neither empirical source has
+        // the species. Zero reveal gets the legal deterministic default.
+        assert!(belief
+            .cands
+            .iter()
+            .flat_map(|c| &c.sets)
+            .chain(community_rental_sets())
+            .all(|s| toid(&s.species) != "bulbasaur"));
+        let revealed = belief.fallback_set(&dex, &mon(&dex, "bulbasaur", 50, &["tackle"]));
+        assert_eq!(revealed.moves, ["tackle"]);
+        let zero = belief.fallback_set(&dex, &mon(&dex, "bulbasaur", 50, &[]));
+        assert_eq!(zero.moves, ["ancientpower"]);
+    }
+
+    fn plain_set(species: &str) -> PokemonSet {
+        PokemonSet {
+            name: species.to_string(),
+            species: species.to_string(),
+            item: String::new(),
+            ability: "No Ability".to_string(),
+            moves: vec!["Return".to_string()],
+            level: 50,
+            evs: None,
+            ivs: None,
+            happiness: None,
+            gender: Some("M".to_string()),
+        }
+    }
+
+    fn determinized_fallback_moves(seed: u64) -> Vec<Vec<u16>> {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
+        let custom: Vec<PokemonSet> = [
+            "Bulbasaur",
+            "Ivysaur",
+            "Venusaur",
+            "Charmander",
+            "Charmeleon",
+            "Charizard",
+        ]
+        .into_iter()
+        .map(plain_set)
+        .collect();
+        let battle = Battle::from_fixture(&dex, "1,2,3,4", &pool.teams[0].sets, &custom)
+            .unwrap();
+        let obs = Observer::new(&battle, 0);
+        let belief = Belief::new(&dex, &pool, &obs);
+        assert!(belief.is_fallback());
+        let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(seed));
+        det.sides[1]
+            .roster
+            .iter()
+            .map(|p| p.base_move_slots.iter().map(|m| m.id.0).collect())
+            .collect()
+    }
+
+    #[test]
+    fn fallback_moves_are_seed_and_thread_deterministic() {
+        let expected = determinized_fallback_moves(1);
+        assert_eq!(expected, determinized_fallback_moves(u64::MAX));
+        let jobs: Vec<_> = (0..4)
+            .map(|i| std::thread::spawn(move || determinized_fallback_moves(10_000 + i)))
+            .collect();
+        for job in jobs {
+            assert_eq!(expected, job.join().unwrap());
+        }
     }
 }
