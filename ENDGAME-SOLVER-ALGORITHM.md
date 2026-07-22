@@ -1,8 +1,8 @@
 # Certified Endgame Solver: Search-Space Reduction Proposal
 
-Status: Phases A and B plus the first Phase C step are implemented. This file
-remains the design rationale; measured follow-ups are recorded in the project
-README and `STALL-CENSUS-RESULTS.md`.
+Status: Phases A-C and the two-sided resource-DAG extension are implemented.
+This file remains the design rationale; measured follow-ups are recorded in
+the project README and `STALL-CENSUS-RESULTS.md`.
 
 Audience: AI agents working on M17e or later exact/certified endgame analysis.
 

@@ -66,8 +66,6 @@ struct Row {
     alive0: usize,
     alive1: usize,
     total_hp: u64,
-    one_sided_heal: bool,
-    two_sided_heal: bool,
     desc: String,
 }
 
@@ -280,8 +278,6 @@ fn main() {
                 alive0: a0,
                 alive1: a1,
                 total_hp,
-                one_sided_heal,
-                two_sided_heal,
                 desc,
             });
         }
@@ -369,13 +365,13 @@ fn main() {
     let mut f = std::fs::File::create(&out_path).expect("csv");
     writeln!(
         f,
-        "battle,side,turn,human,exact,width,stop,eval,alive0,alive1,total_hp,one_sided_heal,two_sided_heal,desc"
+        "battle,side,turn,human,exact,width,stop,eval,alive0,alive1,total_hp,desc"
     )
     .unwrap();
     for r in &rows {
         writeln!(
             f,
-            "{},{},{},\"{}\",{:.6},{:.6},{},{:.6},{},{},{},{},{},\"{}\"",
+            "{},{},{},\"{}\",{:.6},{:.6},{},{:.6},{},{},{},\"{}\"",
             r.battle,
             r.side,
             r.turn,
@@ -387,8 +383,6 @@ fn main() {
             r.alive0,
             r.alive1,
             r.total_hp,
-            r.one_sided_heal,
-            r.two_sided_heal,
             r.desc
         )
         .unwrap();

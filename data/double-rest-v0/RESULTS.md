@@ -66,6 +66,9 @@ pressure. It permits both HP values to rise and proves progress from
 componentwise PP nonincrease plus increasing turn. On b455, a 7,800-node cap
 separates the arms: resource ordering reaches the threshold proof in 56,696
 runs/7,695 live nodes; the off arm hits the cap at 53,118 runs/7,921 nodes.
+Across the full 570-battle holdout, 28 of 72 eligible roots received this
+two-sided certificate, alongside 24 one-sided roots; all 52 admitted roots had
+zero edge-invariant invalidations.
 
 ## Double-Rest duel gate
 
