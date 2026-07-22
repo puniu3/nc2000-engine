@@ -25,7 +25,10 @@ use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
 
 use crate::exact::solve_matrix_full;
-use crate::stall::{classify_one_sided_heal, MonotoneRank, OneSidedHeal};
+use crate::stall::{
+    classify_one_sided_heal, classify_two_sided_heal, MonotoneRank, OneSidedHeal, ResourceRank,
+    TwoSidedHeal,
+};
 
 #[derive(Clone, Debug)]
 pub struct BoundConfig {
@@ -65,6 +68,10 @@ pub struct BoundConfig {
     /// conservatively classified one-sided-heal subgame. Every generated
     /// edge is checked; the first violation disables only this scheduler.
     pub monotone_stall_scheduling: bool,
+    /// Extend resource-ordered scheduling to certified two-sided-heal
+    /// last-mon endings. HP is deliberately absent from this proof rank;
+    /// total PP and distance to the turn cap make the exact graph a DAG.
+    pub two_sided_resource_scheduling: bool,
     /// Permanently remove a pure action only after cell intervals prove it
     /// pointwise dominated by another live action. The reduced matrix has
     /// the same true value; unresolved actions are never assumed irrelevant.
@@ -88,6 +95,7 @@ impl Default for BoundConfig {
             fold_terminal_nodes: true,
             fold_closed_nodes: true,
             monotone_stall_scheduling: true,
+            two_sided_resource_scheduling: true,
             certified_action_pruning: true,
             support_br_scheduling: true,
         }
@@ -142,6 +150,11 @@ pub struct BoundStats {
     pub closed_folds: usize,
     pub monotone_roots: usize,
     pub monotone_invalidations: usize,
+    pub two_sided_roots: usize,
+    pub two_sided_invalidations: usize,
+    pub one_sided_handoffs: usize,
+    pub min_healing_pp: Option<i64>,
+    pub min_resource_pp: Option<i64>,
     pub dominated_rows: usize,
     pub dominated_cols: usize,
     pub dominance_checks: usize,
@@ -207,6 +220,7 @@ struct Node {
     select_count: usize,
     fair_cursor: usize,
     stall_rank: Option<(OneSidedHeal, MonotoneRank)>,
+    resource_rank: Option<(TwoSidedHeal, ResourceRank, bool)>,
 }
 
 pub struct BoundSolver<'d> {
@@ -216,6 +230,7 @@ pub struct BoundSolver<'d> {
     closed: HashMap<NodeKey, Bounds>,
     roots: HashSet<NodeKey>,
     active_stall: Option<OneSidedHeal>,
+    active_two_sided: Option<TwoSidedHeal>,
     pub stats: BoundStats,
 }
 
@@ -230,6 +245,7 @@ impl<'d> BoundSolver<'d> {
             closed: HashMap::new(),
             roots: HashSet::new(),
             active_stall: None,
+            active_two_sided: None,
             stats: BoundStats::default(),
         }
     }
@@ -253,6 +269,15 @@ impl<'d> BoundSolver<'d> {
             .flatten();
         if self.active_stall.is_some() {
             self.stats.monotone_roots += 1;
+        }
+        self.active_two_sided =
+            if self.active_stall.is_none() && self.cfg.two_sided_resource_scheduling {
+                classify_two_sided_heal(b, self.dex).ok()
+            } else {
+                None
+            };
+        if self.active_two_sided.is_some() {
+            self.stats.two_sided_roots += 1;
         }
         let lookup = self.node_key(b);
         if let Some(&bounds) = self.closed.get(&lookup) {
@@ -350,9 +375,18 @@ impl<'d> BoundSolver<'d> {
             .active_stall
             .as_ref()
             .and_then(|class| class.rank(&b).ok().map(|rank| (class.clone(), rank)));
+        let resource_rank = self.active_two_sided.as_ref().and_then(|class| {
+            class.rank(&b).ok().map(|rank| {
+                let handoff = classify_one_sided_heal(&b, self.dex).is_ok();
+                (class.clone(), rank, handoff)
+            })
+        });
         if let Some(node) = self.nodes.get_mut(&key) {
             if stall_rank.is_some() {
                 node.stall_rank = stall_rank;
+            }
+            if resource_rank.is_some() {
+                node.resource_rank = resource_rank;
             }
             return key;
         }
@@ -376,6 +410,7 @@ impl<'d> BoundSolver<'d> {
                     select_count: 0,
                     fair_cursor: 0,
                     stall_rank,
+                    resource_rank,
                 }
             }
             None => Node {
@@ -391,8 +426,24 @@ impl<'d> BoundSolver<'d> {
                 select_count: 0,
                 fair_cursor: 0,
                 stall_rank,
+                resource_rank,
             },
         };
+        if let Some((_, rank, handoff)) = node.resource_rank.as_ref() {
+            if *handoff {
+                self.stats.one_sided_handoffs += 1;
+            }
+            self.stats.min_healing_pp = Some(
+                self.stats
+                    .min_healing_pp
+                    .map_or(rank.healing_pp, |old| old.min(rank.healing_pp)),
+            );
+            self.stats.min_resource_pp = Some(
+                self.stats
+                    .min_resource_pp
+                    .map_or(rank.pp_total, |old| old.min(rank.pp_total)),
+            );
+        }
         self.nodes.insert(key, node);
         self.stats.peak_nodes = self.stats.peak_nodes.max(self.nodes.len());
         key
@@ -464,28 +515,55 @@ impl<'d> BoundSolver<'d> {
             let cell = &self.nodes[&cur].cells[ci];
             // Expand pending mass while it dominates the cell's remaining
             // uncertainty; otherwise descend into the widest child term.
-            let closure_mode = self.active_stall.is_some()
+            let closure_mode = (self.active_stall.is_some() || self.active_two_sided.is_some())
                 && self.nodes.len().saturating_mul(4) >= self.cfg.node_budget.saturating_mul(3);
             let best_child = if closure_mode {
-                let class = self.active_stall.as_ref().unwrap();
-                let mut best: Option<(i64, f64, NodeKey)> = None;
-                for &(mass, child) in &cell.resolved {
-                    let node = &self.nodes[&child];
-                    let Some((child_class, rank)) = node.stall_rank.as_ref() else {
-                        continue;
-                    };
-                    if child_class != class {
-                        continue;
+                if let Some(class) = self.active_stall.as_ref() {
+                    let mut best: Option<(i64, f64, NodeKey)> = None;
+                    for &(mass, child) in &cell.resolved {
+                        let node = &self.nodes[&child];
+                        let Some((child_class, rank)) = node.stall_rank.as_ref() else {
+                            continue;
+                        };
+                        if child_class != class {
+                            continue;
+                        }
+                        let width_mass = mass * (node.hi - node.lo);
+                        let replace = best.is_none_or(|(r, w, _)| {
+                            rank.value < r || (rank.value == r && width_mass > w)
+                        });
+                        if replace {
+                            best = Some((rank.value, width_mass, child));
+                        }
                     }
-                    let width_mass = mass * (node.hi - node.lo);
-                    let replace = best.is_none_or(|(r, w, _)| {
-                        rank.value < r || (rank.value == r && width_mass > w)
-                    });
-                    if replace {
-                        best = Some((rank.value, width_mass, child));
+                    best.map(|(_, width_mass, child)| (width_mass, child))
+                } else {
+                    let class = self.active_two_sided.as_ref().unwrap();
+                    let mut best: Option<((u8, i64, i64, i64), f64, NodeKey)> = None;
+                    for &(mass, child) in &cell.resolved {
+                        let node = &self.nodes[&child];
+                        let Some((child_class, rank, handoff)) = node.resource_rank.as_ref() else {
+                            continue;
+                        };
+                        if child_class != class {
+                            continue;
+                        }
+                        let key = (
+                            u8::from(!*handoff),
+                            rank.healing_pp,
+                            rank.pp_total,
+                            rank.turns_remaining,
+                        );
+                        let width_mass = mass * (node.hi - node.lo);
+                        let replace = best.as_ref().is_none_or(|(old, w, _)| {
+                            key < *old || (key == *old && width_mass > *w)
+                        });
+                        if replace {
+                            best = Some((key, width_mass, child));
+                        }
                     }
+                    best.map(|(_, width_mass, child)| (width_mass, child))
                 }
-                best.map(|(_, width_mass, child)| (width_mass, child))
             } else {
                 None
             }
@@ -986,6 +1064,14 @@ impl<'d> BoundSolver<'d> {
         if invalid {
             self.active_stall = None;
             self.stats.monotone_invalidations += 1;
+        }
+        let invalid_two = self
+            .active_two_sided
+            .as_ref()
+            .is_some_and(|class| class.check_edge(parent, child).is_err());
+        if invalid_two {
+            self.active_two_sided = None;
+            self.stats.two_sided_invalidations += 1;
         }
     }
 }
@@ -1533,6 +1619,7 @@ mod tests {
             select_count,
             fair_cursor,
             stall_rank: None,
+            resource_rank: None,
         }
     }
 
@@ -1552,5 +1639,32 @@ mod tests {
         solver.nodes.insert(key, synthetic_node(31, 2));
         assert_eq!(solver.select_cell(key), 2);
         assert_eq!(solver.stats.fair_cell_picks, 1);
+    }
+
+    #[test]
+    fn solver_tracks_a_two_sided_resource_root_without_invariant_failure() {
+        let dex = conformance::load_dex();
+        let mut root = battle(
+            &dex,
+            &["Rest", "Tackle", "Protect"],
+            &["Rest", "Tackle", "Protect"],
+        );
+        let c0 = root.legal_choices(&dex, 0)[0];
+        let c1 = root.legal_choices(&dex, 1)[0];
+        root.apply_choices(&dex, [Some(c0), Some(c1)]).unwrap();
+        assert!(crate::stall::classify_two_sided_heal(&root, &dex).is_ok());
+
+        let mut solver = BoundSolver::new(
+            &dex,
+            BoundConfig {
+                work_budget: 1,
+                cell_cap: 100,
+                ..BoundConfig::default()
+            },
+        );
+        solver.solve(&root, None);
+        assert_eq!(solver.stats.two_sided_roots, 1);
+        assert_eq!(solver.stats.two_sided_invalidations, 0);
+        assert!(solver.stats.min_resource_pp.is_some());
     }
 }

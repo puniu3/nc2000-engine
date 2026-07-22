@@ -22,8 +22,8 @@
 //!        [--side N] [--turn N] [--hp-cap N] [--work N] [--nodes N]
 //!        [--per-battle N] [--no-dead-damage-quotient]
 //!        [--no-fold-terminal-nodes] [--no-fold-closed-nodes]
-//!        [--no-monotone-stall] [--no-action-pruning] [--no-support-br]
-//!        [--diagnose-stall] [--out CSV]
+//!        [--no-monotone-stall] [--no-two-sided-resource]
+//!        [--no-action-pruning] [--no-support-br] [--diagnose-stall] [--out CSV]
 
 use std::collections::HashSet;
 use std::io::Write as _;
@@ -31,7 +31,7 @@ use std::time::Instant;
 
 use nc2000_bot::bounds::{BoundConfig, BoundSolver, Stop};
 use nc2000_bot::eval::{eval01, EvalWeights};
-use nc2000_bot::stall::classify_one_sided_heal;
+use nc2000_bot::stall::{classify_one_sided_heal, classify_two_sided_heal};
 use nc2000_engine::state::Battle;
 
 use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct, HumanAction};
@@ -67,6 +67,7 @@ struct Row {
     alive1: usize,
     total_hp: u64,
     one_sided_heal: bool,
+    two_sided_heal: bool,
     desc: String,
 }
 
@@ -95,6 +96,7 @@ fn main() {
     let fold_terminal_nodes = !args.iter().any(|a| a == "--no-fold-terminal-nodes");
     let fold_closed_nodes = !args.iter().any(|a| a == "--no-fold-closed-nodes");
     let monotone_stall_scheduling = !args.iter().any(|a| a == "--no-monotone-stall");
+    let two_sided_resource_scheduling = !args.iter().any(|a| a == "--no-two-sided-resource");
     let certified_action_pruning = !args.iter().any(|a| a == "--no-action-pruning");
     let support_br_scheduling = !args.iter().any(|a| a == "--no-support-br");
     let diagnose_stall = args.iter().any(|a| a == "--diagnose-stall");
@@ -118,7 +120,7 @@ fn main() {
         .filter(|(i, _)| *i >= lo && *i <= hi)
         .collect();
     println!(
-        "corpus battles {} (index {lo}-{hi}), hp-cap {hp_cap}, work {work}, nodes {node_budget}, per-battle {per_battle}, dead-damage-quotient {dead_damage_quotient}, fold-terminal {fold_terminal_nodes}, fold-closed {fold_closed_nodes}, monotone-stall {monotone_stall_scheduling}, action-pruning {certified_action_pruning}, support-br {support_br_scheduling}",
+        "corpus battles {} (index {lo}-{hi}), hp-cap {hp_cap}, work {work}, nodes {node_budget}, per-battle {per_battle}, dead-damage-quotient {dead_damage_quotient}, fold-terminal {fold_terminal_nodes}, fold-closed {fold_closed_nodes}, monotone-stall {monotone_stall_scheduling}, two-sided-resource {two_sided_resource_scheduling}, action-pruning {certified_action_pruning}, support-br {support_br_scheduling}",
         files.len()
     );
 
@@ -137,6 +139,11 @@ fn main() {
     let mut total_closed_folds = 0usize;
     let mut monotone_roots = 0usize;
     let mut monotone_invalidations = 0usize;
+    let mut two_sided_roots = 0usize;
+    let mut two_sided_invalidations = 0usize;
+    let mut one_sided_handoffs = 0usize;
+    let mut min_healing_pp: Option<i64> = None;
+    let mut min_resource_pp: Option<i64> = None;
     let mut dominated_rows = 0usize;
     let mut dominated_cols = 0usize;
     let mut dominance_checks = 0usize;
@@ -158,6 +165,7 @@ fn main() {
                 fold_terminal_nodes,
                 fold_closed_nodes,
                 monotone_stall_scheduling,
+                two_sided_resource_scheduling,
                 certified_action_pruning,
                 support_br_scheduling,
                 ..BoundConfig::default()
@@ -193,11 +201,20 @@ fn main() {
             attempted += 1;
             battle_attempts += 1;
             let one_sided_heal = classify_one_sided_heal(&b, &dex).is_ok();
+            let two_sided_heal = classify_two_sided_heal(&b, &dex).is_ok();
+            let heal_class = if one_sided_heal {
+                "one"
+            } else if two_sided_heal {
+                "two"
+            } else {
+                "none"
+            };
             if diagnose_stall {
                 println!(
-                    "  b{bi} T{} stall-class {:?}; active {:?}; leechseed {:?}",
+                    "  b{bi} T{} stall-class one={:?} two={:?}; active {:?}; leechseed {:?}",
                     d.turn,
                     classify_one_sided_heal(&b, &dex),
+                    classify_two_sided_heal(&b, &dex),
                     [b.active_id(0), b.active_id(1)],
                     dex.conds_id("leechseed").map(|id| [
                         b.active_id(0).and_then(|p| b.poke(p).volatile(id).copied()),
@@ -240,7 +257,7 @@ fn main() {
                 format!("b{bi} T{} s{} {} vs {}", d.turn, d.side, name(0), name(1))
             };
             println!(
-                "  b{bi} T{turn} hp{total_hp} {a0}v{a1} stall={one_sided_heal}: [{lo:.3},{hi:.3}] w{w:.3} {stop:?} ({runs} runs, {dt:.0}s)",
+                "  b{bi} T{turn} hp{total_hp} {a0}v{a1} heal={heal_class}: [{lo:.3},{hi:.3}] w{w:.3} {stop:?} ({runs} runs, {dt:.0}s)",
                 turn = d.turn,
                 lo = rep.bounds.lo,
                 hi = rep.bounds.hi,
@@ -264,6 +281,7 @@ fn main() {
                 alive1: a1,
                 total_hp,
                 one_sided_heal,
+                two_sided_heal,
                 desc,
             });
         }
@@ -275,6 +293,15 @@ fn main() {
         total_closed_folds += solver.stats.closed_folds;
         monotone_roots += solver.stats.monotone_roots;
         monotone_invalidations += solver.stats.monotone_invalidations;
+        two_sided_roots += solver.stats.two_sided_roots;
+        two_sided_invalidations += solver.stats.two_sided_invalidations;
+        one_sided_handoffs += solver.stats.one_sided_handoffs;
+        if let Some(value) = solver.stats.min_healing_pp {
+            min_healing_pp = Some(min_healing_pp.map_or(value, |old| old.min(value)));
+        }
+        if let Some(value) = solver.stats.min_resource_pp {
+            min_resource_pp = Some(min_resource_pp.map_or(value, |old| old.min(value)));
+        }
         dominated_rows += solver.stats.dominated_rows;
         dominated_cols += solver.stats.dominated_cols;
         dominance_checks += solver.stats.dominance_checks;
@@ -294,7 +321,7 @@ fn main() {
         tight.len()
     );
     println!(
-        "engine runs {total_runs} expansions {total_expansions} live {total_nodes} peak {total_peak_nodes} closed {total_closed}/{total_closed_folds} monotone {monotone_roots} roots/{monotone_invalidations} invalid dominance {dominated_rows}r/{dominated_cols}c/{avoided_cells} cells ({dominance_checks} checks) schedule {lower_br_picks}lo/{upper_br_picks}hi/{legacy_support_picks}legacy/{fair_cell_picks}fair worst-gap {worst_gap:.2e}; wall {:.0}s",
+        "engine runs {total_runs} expansions {total_expansions} live {total_nodes} peak {total_peak_nodes} closed {total_closed}/{total_closed_folds} one-sided {monotone_roots} roots/{monotone_invalidations} invalid two-sided {two_sided_roots} roots/{two_sided_invalidations} invalid/{one_sided_handoffs} handoffs min-pp {min_healing_pp:?}/{min_resource_pp:?} dominance {dominated_rows}r/{dominated_cols}c/{avoided_cells} cells ({dominance_checks} checks) schedule {lower_br_picks}lo/{upper_br_picks}hi/{legacy_support_picks}legacy/{fair_cell_picks}fair worst-gap {worst_gap:.2e}; wall {:.0}s",
         t0.elapsed().as_secs_f64()
     );
 
@@ -342,13 +369,13 @@ fn main() {
     let mut f = std::fs::File::create(&out_path).expect("csv");
     writeln!(
         f,
-        "battle,side,turn,human,exact,width,stop,eval,alive0,alive1,total_hp,one_sided_heal,desc"
+        "battle,side,turn,human,exact,width,stop,eval,alive0,alive1,total_hp,one_sided_heal,two_sided_heal,desc"
     )
     .unwrap();
     for r in &rows {
         writeln!(
             f,
-            "{},{},{},\"{}\",{:.6},{:.6},{},{:.6},{},{},{},{},\"{}\"",
+            "{},{},{},\"{}\",{:.6},{:.6},{},{:.6},{},{},{},{},{},\"{}\"",
             r.battle,
             r.side,
             r.turn,
@@ -361,6 +388,7 @@ fn main() {
             r.alive1,
             r.total_hp,
             r.one_sided_heal,
+            r.two_sided_heal,
             r.desc
         )
         .unwrap();

@@ -1,9 +1,9 @@
-//! Conservative classification and monotone rank for one-sided-heal endings.
+//! Conservative classification and monotone ranks for last-mon heal endings.
 //!
 //! This module only recognizes quiescent, nonterminal, last-mon 1v1 move
 //! requests.  The returned class is a proof obligation for a later solver:
-//! callers must run [`OneSidedHeal::check_edge`] on every nonterminal child
-//! before scheduling or freeing generations by [`MonotoneRank`].
+//! callers must run the certificate's `check_edge` on every nonterminal child
+//! before scheduling or freeing resource generations.
 
 use nc2000_engine::dex::{Dex, MoveId};
 use nc2000_engine::state::{Battle, PokeId, RequestState};
@@ -20,6 +20,18 @@ pub struct OneSidedHeal {
     max_hp: [i32; 2],
 }
 
+/// A fixed-roster last-mon ending in which both sides can currently heal.
+///
+/// Unlike [`OneSidedHeal`], this certificate makes no HP-monotonicity claim:
+/// its well-founded rank is the lexicographic pair (total PP, turns left).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TwoSidedHeal {
+    active: [PokeId; 2],
+    move_ids: [Vec<MoveId>; 2],
+    max_hp: [i32; 2],
+    healing_slots: [Vec<usize>; 2],
+}
+
 /// Components of the well-founded scheduling rank.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MonotoneRank {
@@ -27,6 +39,23 @@ pub struct MonotoneRank {
     pub pp_total: i64,
     pub non_healer_hp: i32,
     pub turns_remaining: i64,
+}
+
+/// Resource components for a two-sided-heal ending.
+///
+/// `healing_pp` is exposed as a scheduling signal, but the proof order is
+/// [`ResourceRank::lexicographic_key`]: total PP, then turns remaining.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ResourceRank {
+    pub healing_pp: i64,
+    pub pp_total: i64,
+    pub turns_remaining: i64,
+}
+
+impl ResourceRank {
+    pub fn lexicographic_key(self) -> (i64, i64) {
+        (self.pp_total, self.turns_remaining)
+    }
 }
 
 /// Why a state was not admitted to the v1 one-sided-heal domain.
@@ -40,6 +69,7 @@ pub enum ClassifyError {
     UnsafeMove { side: usize, move_key: String },
     MysteryBerry { side: usize },
     NotExactlyOneHealer,
+    NotBothHealers,
     NonHealerHealingItem { side: usize, item_key: String },
 }
 
@@ -77,10 +107,63 @@ pub enum EdgeError {
         parent: i64,
         child: i64,
     },
+    ResourceRankDidNotDecrease {
+        parent: (i64, i64),
+        child: (i64, i64),
+    },
+}
+
+struct RootAudit {
+    active: [PokeId; 2],
+    move_ids: [Vec<MoveId>; 2],
+    max_hp: [i32; 2],
+    repeatable_heal: [bool; 2],
+    healing_slots: [Vec<usize>; 2],
 }
 
 /// Classify a state for the conservative v1 one-sided-heal scheduler.
 pub fn classify_one_sided_heal(b: &Battle, dex: &Dex) -> Result<OneSidedHeal, ClassifyError> {
+    let audit = audit_root(b, dex)?;
+    let healer = match audit.repeatable_heal {
+        [true, false] => 0,
+        [false, true] => 1,
+        _ => return Err(ClassifyError::NotExactlyOneHealer),
+    };
+    let non_healer = 1 - healer;
+    if let Some(item) = b.poke(audit.active[non_healer]).item {
+        let key = dex.items.key(item);
+        if is_hp_healing_item(key) {
+            return Err(ClassifyError::NonHealerHealingItem {
+                side: non_healer,
+                item_key: key.to_string(),
+            });
+        }
+    }
+
+    Ok(OneSidedHeal {
+        healer,
+        non_healer,
+        active: audit.active,
+        move_ids: audit.move_ids,
+        max_hp: audit.max_hp,
+    })
+}
+
+/// Classify a fixed-roster last-mon ending where both sides can heal.
+pub fn classify_two_sided_heal(b: &Battle, dex: &Dex) -> Result<TwoSidedHeal, ClassifyError> {
+    let audit = audit_root(b, dex)?;
+    if audit.repeatable_heal != [true, true] {
+        return Err(ClassifyError::NotBothHealers);
+    }
+    Ok(TwoSidedHeal {
+        active: audit.active,
+        move_ids: audit.move_ids,
+        max_hp: audit.max_hp,
+        healing_slots: audit.healing_slots,
+    })
+}
+
+fn audit_root(b: &Battle, dex: &Dex) -> Result<RootAudit, ClassifyError> {
     if !is_quiescent_move_request(b) {
         return Err(ClassifyError::NotQuiescent);
     }
@@ -92,6 +175,7 @@ pub fn classify_one_sided_heal(b: &Battle, dex: &Dex) -> Result<OneSidedHeal, Cl
     let mut move_ids: [Vec<MoveId>; 2] = std::array::from_fn(|_| Vec::new());
     let mut max_hp = [0; 2];
     let mut repeatable_heal = [false; 2];
+    let mut healing_slots: [Vec<usize>; 2] = std::array::from_fn(|_| Vec::new());
     let mut seeded_healers = Vec::new();
 
     for side in 0..2 {
@@ -113,7 +197,7 @@ pub fn classify_one_sided_heal(b: &Battle, dex: &Dex) -> Result<OneSidedHeal, Cl
             // slot; the edge checker can then require immutable slot ids.
             return Err(ClassifyError::ChangedMoveSlots { side });
         }
-        for slot in p.move_slots.iter() {
+        for (slot_index, slot) in p.move_slots.iter().enumerate() {
             let key = dex.moves.key(slot.id);
             if unsafe_move(key) {
                 return Err(ClassifyError::UnsafeMove {
@@ -123,6 +207,7 @@ pub fn classify_one_sided_heal(b: &Battle, dex: &Dex) -> Result<OneSidedHeal, Cl
             }
             if slot.pp > 0 && move_can_heal(dex, slot.id) {
                 repeatable_heal[side] = true;
+                healing_slots[side].push(slot_index);
             }
         }
 
@@ -160,28 +245,12 @@ pub fn classify_one_sided_heal(b: &Battle, dex: &Dex) -> Result<OneSidedHeal, Cl
         repeatable_heal[side] = true;
     }
 
-    let healer = match repeatable_heal {
-        [true, false] => 0,
-        [false, true] => 1,
-        _ => return Err(ClassifyError::NotExactlyOneHealer),
-    };
-    let non_healer = 1 - healer;
-    if let Some(item) = b.poke(active[non_healer]).item {
-        let key = dex.items.key(item);
-        if is_hp_healing_item(key) {
-            return Err(ClassifyError::NonHealerHealingItem {
-                side: non_healer,
-                item_key: key.to_string(),
-            });
-        }
-    }
-
-    Ok(OneSidedHeal {
-        healer,
-        non_healer,
+    Ok(RootAudit {
         active,
         move_ids,
         max_hp,
+        repeatable_heal,
+        healing_slots,
     })
 }
 
@@ -219,21 +288,7 @@ impl OneSidedHeal {
     pub fn check_edge(&self, parent: &Battle, child: &Battle) -> Result<(), EdgeError> {
         self.check_identity(parent)?;
         self.check_identity(child)?;
-
-        for side in 0..2 {
-            let p = parent.poke(self.active[side]);
-            let c = child.poke(self.active[side]);
-            for (slot, (pm, cm)) in p.move_slots.iter().zip(c.move_slots.iter()).enumerate() {
-                if cm.pp > pm.pp {
-                    return Err(EdgeError::PpIncreased {
-                        side,
-                        slot,
-                        parent: pm.pp,
-                        child: cm.pp,
-                    });
-                }
-            }
-        }
+        check_pp_nonincrease(&self.active, parent, child)?;
 
         let parent_hp = parent.poke(self.active[self.non_healer]).hp;
         let child_hp = child.poke(self.active[self.non_healer]).hp;
@@ -262,27 +317,115 @@ impl OneSidedHeal {
     }
 
     fn check_identity(&self, b: &Battle) -> Result<(), EdgeError> {
-        if !is_quiescent_move_request(b) {
-            return Err(EdgeError::NotQuiescent);
+        check_identity(&self.active, &self.move_ids, &self.max_hp, b)
+    }
+}
+
+impl TwoSidedHeal {
+    /// Compute the resource rank after checking fixed-roster invariants.
+    pub fn rank(&self, b: &Battle) -> Result<ResourceRank, EdgeError> {
+        self.check_identity(b)?;
+        let pp_total = self
+            .active
+            .iter()
+            .map(|&id| {
+                b.poke(id)
+                    .move_slots
+                    .iter()
+                    .map(|slot| i64::from(slot.pp))
+                    .sum::<i64>()
+            })
+            .sum();
+        let healing_pp = (0..2)
+            .flat_map(|side| {
+                self.healing_slots[side]
+                    .iter()
+                    .map(move |&slot| i64::from(b.poke(self.active[side]).move_slots[slot].pp))
+            })
+            .sum();
+        Ok(ResourceRank {
+            healing_pp,
+            pp_total,
+            turns_remaining: TURN_LIMIT_RANK_BASE - i64::from(b.turn),
+        })
+    }
+
+    /// Verify the fixed-resource proof obligations on a nonterminal edge.
+    pub fn check_edge(&self, parent: &Battle, child: &Battle) -> Result<(), EdgeError> {
+        self.check_identity(parent)?;
+        self.check_identity(child)?;
+        check_pp_nonincrease(&self.active, parent, child)?;
+        if child.turn <= parent.turn {
+            return Err(EdgeError::TurnDidNotIncrease {
+                parent: parent.turn,
+                child: child.turn,
+            });
         }
-        if b.turn > 1000 {
-            return Err(EdgeError::TurnPastLimit { turn: b.turn });
-        }
-        for side in 0..2 {
-            if b.active_id(side) != Some(self.active[side]) {
-                return Err(EdgeError::ActiveChanged { side });
-            }
-            let p = b.poke(self.active[side]);
-            if p.maxhp != self.max_hp[side] {
-                return Err(EdgeError::MaxHpChanged { side });
-            }
-            let ids: Vec<MoveId> = p.move_slots.iter().map(|m| m.id).collect();
-            if ids != self.move_ids[side] {
-                return Err(EdgeError::MoveSlotsChanged { side });
-            }
+
+        let parent_rank = self.rank(parent)?.lexicographic_key();
+        let child_rank = self.rank(child)?.lexicographic_key();
+        if child_rank >= parent_rank {
+            return Err(EdgeError::ResourceRankDidNotDecrease {
+                parent: parent_rank,
+                child: child_rank,
+            });
         }
         Ok(())
     }
+
+    fn check_identity(&self, b: &Battle) -> Result<(), EdgeError> {
+        check_identity(&self.active, &self.move_ids, &self.max_hp, b)
+    }
+}
+
+fn check_identity(
+    active: &[PokeId; 2],
+    move_ids: &[Vec<MoveId>; 2],
+    max_hp: &[i32; 2],
+    b: &Battle,
+) -> Result<(), EdgeError> {
+    if !is_quiescent_move_request(b) {
+        return Err(EdgeError::NotQuiescent);
+    }
+    if b.turn > 1000 {
+        return Err(EdgeError::TurnPastLimit { turn: b.turn });
+    }
+    for side in 0..2 {
+        if b.active_id(side) != Some(active[side]) {
+            return Err(EdgeError::ActiveChanged { side });
+        }
+        let p = b.poke(active[side]);
+        if p.maxhp != max_hp[side] {
+            return Err(EdgeError::MaxHpChanged { side });
+        }
+        let ids: Vec<MoveId> = p.move_slots.iter().map(|m| m.id).collect();
+        if ids != move_ids[side] {
+            return Err(EdgeError::MoveSlotsChanged { side });
+        }
+    }
+    Ok(())
+}
+
+fn check_pp_nonincrease(
+    active: &[PokeId; 2],
+    parent: &Battle,
+    child: &Battle,
+) -> Result<(), EdgeError> {
+    for side in 0..2 {
+        let p = parent.poke(active[side]);
+        let c = child.poke(active[side]);
+        for (slot, (pm, cm)) in p.move_slots.iter().zip(c.move_slots.iter()).enumerate() {
+            if cm.pp > pm.pp {
+                return Err(EdgeError::PpIncreased {
+                    side,
+                    slot,
+                    parent: pm.pp,
+                    child: cm.pp,
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 fn is_quiescent_move_request(b: &Battle) -> bool {
@@ -404,6 +547,15 @@ mod tests {
         )
     }
 
+    fn double_rest() -> (Dex, Battle) {
+        battle(
+            ["Rest", "Double-Edge", "Earthquake", "Curse"],
+            "",
+            ["Rest", "Toxic", "Drill Peck", "Protect"],
+            "",
+        )
+    }
+
     #[test]
     fn classifies_last_mon_one_sided_rest_and_builds_rank() {
         let (dex, b) = normal();
@@ -424,6 +576,113 @@ mod tests {
             rank.value,
             expected_pp + i64::from(rank.non_healer_hp) + 1001 - i64::from(b.turn)
         );
+    }
+
+    #[test]
+    fn classifies_rest_vs_rest_and_leftovers_vs_rest() {
+        let (dex, b) = double_rest();
+        let class = classify_two_sided_heal(&b, &dex).unwrap();
+        let rank = class.rank(&b).unwrap();
+        assert!(rank.healing_pp > 0);
+        assert_eq!(
+            rank.lexicographic_key(),
+            (rank.pp_total, rank.turns_remaining)
+        );
+
+        // b455 shape: Snorlax heals from Leftovers while only Skarmory has
+        // a healing move slot.
+        let (dex, b) = battle(
+            ["Double-Edge", "Earthquake", "Self-Destruct", "Curse"],
+            "Leftovers",
+            ["Toxic", "Whirlwind", "Drill Peck", "Rest"],
+            "",
+        );
+        let class = classify_two_sided_heal(&b, &dex).unwrap();
+        let rank = class.rank(&b).unwrap();
+        let skarmory = b.active_id(1).unwrap();
+        let rest = dex.moves.id("rest").unwrap();
+        let expected_healing_pp = b
+            .poke(skarmory)
+            .move_slots
+            .iter()
+            .find(|slot| slot.id == rest)
+            .unwrap()
+            .pp;
+        assert_eq!(rank.healing_pp, i64::from(expected_healing_pp));
+    }
+
+    #[test]
+    fn two_sided_edge_allows_both_hp_to_rise_and_rank_decreases() {
+        let (dex, mut parent) = double_rest();
+        for side in 0..2 {
+            let active = parent.active_id(side).unwrap();
+            parent.poke_mut(active).hp -= 20;
+        }
+        let class = classify_two_sided_heal(&parent, &dex).unwrap();
+        let mut child = parent.clone();
+        child.turn += 1;
+        for side in 0..2 {
+            let active = child.active_id(side).unwrap();
+            child.poke_mut(active).hp += 10;
+        }
+
+        assert!(class.check_edge(&parent, &child).is_ok());
+        let parent_rank = class.rank(&parent).unwrap();
+        let child_rank = class.rank(&child).unwrap();
+        assert_eq!(child_rank.healing_pp, parent_rank.healing_pp);
+        assert!(child_rank.lexicographic_key() < parent_rank.lexicographic_key());
+    }
+
+    #[test]
+    fn two_sided_edge_rejects_pp_increase_and_same_turn() {
+        let (dex, parent) = double_rest();
+        let class = classify_two_sided_heal(&parent, &dex).unwrap();
+
+        let mut pp_increase = parent.clone();
+        pp_increase.turn += 1;
+        let active = pp_increase.active_id(0).unwrap();
+        pp_increase.poke_mut(active).move_slots[0].pp += 1;
+        assert!(matches!(
+            class.check_edge(&parent, &pp_increase),
+            Err(EdgeError::PpIncreased {
+                side: 0,
+                slot: 0,
+                ..
+            })
+        ));
+
+        let mut same_turn = parent.clone();
+        let active = same_turn.active_id(0).unwrap();
+        same_turn.poke_mut(active).move_slots[0].pp -= 1;
+        assert!(matches!(
+            class.check_edge(&parent, &same_turn),
+            Err(EdgeError::TurnDidNotIncrease { .. })
+        ));
+    }
+
+    #[test]
+    fn two_sided_classifier_rejects_pp_and_slot_mutation_roots() {
+        let (dex, b) = battle(
+            ["Rest", "Sleep Talk", "Earthquake", "Curse"],
+            "Mystery Berry",
+            ["Rest", "Toxic", "Drill Peck", "Protect"],
+            "",
+        );
+        assert_eq!(
+            classify_two_sided_heal(&b, &dex),
+            Err(ClassifyError::MysteryBerry { side: 0 })
+        );
+
+        let (dex, b) = battle(
+            ["Rest", "Mimic", "Earthquake", "Curse"],
+            "",
+            ["Rest", "Toxic", "Drill Peck", "Protect"],
+            "",
+        );
+        assert!(matches!(
+            classify_two_sided_heal(&b, &dex),
+            Err(ClassifyError::UnsafeMove { side: 0, .. })
+        ));
     }
 
     #[test]

@@ -143,6 +143,24 @@ cap, the scheduler completed the 200k work budget with 11,696 live nodes; the
 ordinary scheduler hit the cap at 198k runs/12,003 nodes. The gain is modest;
 closed folding is the larger memory win.
 
+## Implemented follow-up: two-sided resource DAG
+
+The classifier now covers the actual b455 shape: Leftovers on one side and
+Rest on the other. It does not assert HP monotonicity. Instead, fixed active
+ids/move ids/max HP plus componentwise nonincreasing PP and increasing turn
+prove a lexicographically decreasing `(total PP, turns remaining)` rank.
+Healing PP is exposed only as a scheduling coordinate. Branches that later
+become one-sided are preferred, then lower healing/total PP generations.
+
+At a 7,800-node cap, b455 with resource ordering reached the existing
+evaluation-threshold proof `[0.004, 0.865]` after 56,696 runs with 7,695 live
+nodes. Disabling only the two-sided resource scheduler stopped at the node
+cap after 53,118 runs/7,921 nodes with `[0.004, 0.874]`, short of the proof.
+The 0–100 corpus slice classified 5/7 roots as two-sided and 1/7 as one-sided,
+with zero edge invalidations. No SCC pass is planned: retaining absolute turn
+makes the exact graph acyclic, while dropping it would unsoundly merge states
+with different distance to the turn-1000 tie.
+
 ## Reproduction
 
 ```bash

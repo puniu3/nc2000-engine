@@ -60,6 +60,13 @@ states with different distance-to-tie values. The next exact step is therefore
 a two-sided-heal resource rank and scheduling/freeing over the resulting DAG,
 not Tarjan-style cycle solving.
 
+Implemented: `stall::TwoSidedHeal` supplies that exact resource-DAG
+certificate and `bot::bounds` uses it only as a frontier order under node
+pressure. It permits both HP values to rise and proves progress from
+componentwise PP nonincrease plus increasing turn. On b455, a 7,800-node cap
+separates the arms: resource ordering reaches the threshold proof in 56,696
+runs/7,695 live nodes; the off arm hits the cap at 53,118 runs/7,921 nodes.
+
 ## Double-Rest duel gate
 
 The duel harness has `--pool rest` (57 frequency-weighted Rest sets) and

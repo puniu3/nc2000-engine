@@ -313,6 +313,18 @@ permanent because intervals only tighten. Strategies from the reduced matrix
 are embedded back into the original action space. Approximate damage-search
 values never enter a cell bound, closed memo, or pruning certificate.
 
+### Implemented resource-DAG extension (2026-07-22)
+
+Two-sided healing does not require an SCC solver. Certificate-grade keys keep
+absolute turn, each decision edge advances it, and the engine ends after turn
+1000. `stall::TwoSidedHeal` therefore checks fixed active mons, move ids and
+max HP, rejects PP restoration/slot mutation, permits both HP values to rise,
+and proves lexicographic decrease of `(total PP, turns remaining)` on every
+nonterminal edge. Healing PP is tracked only to order frontier work. Near the
+node cap, the scheduler prefers branches that have become one-sided, then low
+healing PP, total PP, and remaining turns. Any failed edge invariant disables
+the optimization while leaving the ordinary certified search active.
+
 ## Optional exact state reductions
 
 These are secondary optimizations. Apply them only with an explicit future-use
