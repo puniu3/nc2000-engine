@@ -96,9 +96,16 @@ fn collect_set_evidence(lines: &[String]) -> SetEvidence {
     let mut evidence = SetEvidence::default();
     let mut active_names: [Option<String>; 2] = std::array::from_fn(|_| None);
     let mut transformed: HashSet<(usize, String)> = HashSet::new();
+    // A called two-turn move is announced with `[from] Caller` only on its
+    // charge turn.  The release is a plain `|move|` line, so remember the
+    // authoritative `|-prepare|` that follows the called announcement.
+    let mut previous_called: Option<(usize, String, String)> = None;
+    let mut called_charging: HashMap<(usize, String), String> = HashMap::new();
     for (cut, line) in lines.iter().enumerate() {
         let parts: Vec<&str> = line.split('|').collect();
+        let command = parts.get(1).copied().unwrap_or("");
         let Some(subject) = parts.get(2) else {
+            previous_called = None;
             continue;
         };
         let side = if subject.as_bytes().get(1) == Some(&b'2') {
@@ -108,17 +115,34 @@ fn collect_set_evidence(lines: &[String]) -> SetEvidence {
         };
         let name = subject.split(':').nth(1).unwrap_or("").trim();
         if name.is_empty() {
+            previous_called = None;
             continue;
         }
-        match parts.get(1).copied().unwrap_or("") {
+        if command == "-prepare" {
+            let prepared = parts
+                .get(3)
+                .map(|move_name| plain(&toid(move_name)))
+                .unwrap_or_default();
+            if previous_called
+                .take()
+                .is_some_and(|(s, n, key)| s == side && n == name && key == prepared)
+            {
+                called_charging.insert((side, name.to_string()), prepared);
+            }
+        } else {
+            previous_called = None;
+        }
+        match command {
             "switch" | "drag" | "replace" => {
                 if let Some(outgoing) = active_names[side].replace(name.to_string()) {
-                    transformed.remove(&(side, outgoing));
+                    transformed.remove(&(side, outgoing.clone()));
+                    called_charging.remove(&(side, outgoing));
                 }
                 // A transformed mon returns to its base set on re-entry.
                 // `replace` is the protocol's identity-replacement analogue
                 // of a switch and likewise must not retain copied moves.
                 transformed.remove(&(side, name.to_string()));
+                called_charging.remove(&(side, name.to_string()));
                 let species = parts
                     .get(3)
                     .map(|details| toid(details.split(',').next().unwrap_or("")))
@@ -142,9 +166,13 @@ fn collect_set_evidence(lines: &[String]) -> SetEvidence {
             }
             "faint" => {
                 transformed.remove(&(side, name.to_string()));
+                called_charging.remove(&(side, name.to_string()));
                 if active_names[side].as_deref() == Some(name) {
                     active_names[side] = None;
                 }
+            }
+            "cant" | "-anim" => {
+                called_charging.remove(&(side, name.to_string()));
             }
             "move" => {
                 // A move executed through Transform belongs to the copied
@@ -156,6 +184,10 @@ fn collect_set_evidence(lines: &[String]) -> SetEvidence {
                     continue;
                 };
                 let key = plain(&toid(move_name));
+                // These are engine-selected actions, never submitted slots.
+                if matches!(key.as_str(), "struggle" | "recharge") {
+                    continue;
+                }
                 // `[from] <other move>` is a called move. Sleep Talk is the
                 // deliberate exception: its result is one of the submitted
                 // slots. `[from] Pursuit` names the executing move itself,
@@ -164,7 +196,18 @@ fn collect_set_evidence(lines: &[String]) -> SetEvidence {
                     .iter()
                     .find_map(|part| part.strip_prefix("[from] "))
                     .map(|from| plain(&toid(from.strip_prefix("move: ").unwrap_or(from))));
-                if from_key.is_some_and(|from| from != key && from != "sleeptalk") {
+                if let Some(from) = from_key {
+                    if from != key && from != "sleeptalk" {
+                        if line.contains("[still]") {
+                            previous_called = Some((side, name.to_string(), key));
+                        }
+                        continue;
+                    }
+                } else if called_charging
+                    .get(&(side, name.to_string()))
+                    .is_some_and(|called| *called == key)
+                {
+                    called_charging.remove(&(side, name.to_string()));
                     continue;
                 }
                 let moves = evidence.moves.entry((side, name.to_string())).or_default();
@@ -1000,6 +1043,8 @@ mod tests {
             "|move|p1a: Snorlax|Body Slam|p2a: Pikachu".into(),
             "|move|p1a: Snorlax|Thunder|p2a: Pikachu|[from] Metronome".into(),
             "|move|p1a: Snorlax|Rest|p1a: Snorlax|[from] Sleep Talk".into(),
+            "|move|p1a: Snorlax|Struggle|p2a: Pikachu|[from] Sleep Talk".into(),
+            "|move|p1a: Snorlax|Recharge|p1a: Snorlax".into(),
             "|move|p1a: Snorlax|Pursuit|p2a: Pikachu|[from] Pursuit".into(),
             "|-enditem|p1a: Snorlax|Mint Berry|[eat]".into(),
         ];
@@ -1009,8 +1054,49 @@ mod tests {
             ["bodyslam", "rest", "pursuit"]
         );
         let item = evidence.item(0, "", "snorlax").unwrap();
-        assert_eq!(item.cut, 5);
+        assert_eq!(item.cut, 7);
         assert_eq!(item.item, "Mint Berry");
+    }
+
+    #[test]
+    fn evidence_excludes_plain_release_of_called_two_turn_moves() {
+        // battle 215: Metronome's charge line names its caller, but the
+        // following-turn release does not. `-prepare` is the authoritative
+        // indication that the plain line is a continuation.
+        let lines = vec![
+            "|switch|p1a: Snorlax|Snorlax, L55, F|100/100".into(),
+            "|move|p1a: Snorlax|Metronome|p1a: Snorlax".into(),
+            "|move|p1a: Snorlax|Razor Wind||[from] Metronome|[still]".into(),
+            "|-prepare|p1a: Snorlax|Razor Wind".into(),
+            "|upkeep".into(),
+            "|turn|2".into(),
+            "|move|p1a: Snorlax|Razor Wind|p2a: Shuckle|[miss]".into(),
+            "|move|p1a: Snorlax|Metronome|p1a: Snorlax".into(),
+            "|move|p1a: Snorlax|Solar Beam||[from] Metronome|[still]".into(),
+            "|-prepare|p1a: Snorlax|Solar Beam".into(),
+            "|upkeep".into(),
+            "|turn|3".into(),
+            "|move|p1a: Snorlax|Solar Beam|p2a: Shuckle".into(),
+        ];
+        let evidence = collect_set_evidence(&lines);
+        assert_eq!(evidence.moves(0, "Snorlax", "snorlax"), ["metronome"]);
+    }
+
+    #[test]
+    fn failed_called_two_turn_marker_does_not_hide_a_later_real_move() {
+        // `[still]` alone is not sufficient: PS can attach it to a failed
+        // move. Without `-prepare`, a later ordinary use is submitted-set
+        // evidence.
+        let lines = vec![
+            "|switch|p1a: Snorlax|Snorlax, L55, F|100/100".into(),
+            "|move|p1a: Snorlax|Solar Beam||[from] Metronome|[still]".into(),
+            "|-fail|p1a: Snorlax".into(),
+            "|upkeep".into(),
+            "|turn|2".into(),
+            "|move|p1a: Snorlax|Solar Beam|p2a: Shuckle".into(),
+        ];
+        let evidence = collect_set_evidence(&lines);
+        assert_eq!(evidence.moves(0, "Snorlax", "snorlax"), ["solarbeam"]);
     }
 
     #[test]
