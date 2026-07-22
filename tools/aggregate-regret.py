@@ -20,6 +20,13 @@ MODE_INFO = {
     "live-confirm": ("live", "confirm"),
 }
 
+ROW_SCHEMA = "nc2000-regret-v3"
+RUN_SCHEMA = "nc2000-regret-run-v3"
+RECONSTRUCTION_INPUTS = {
+    "dex_file", "meta_pool_file", "community_rentals_file", "learnsets_file",
+    "embedded_community_rentals", "embedded_learnsets",
+}
+
 T95 = [
     0.0, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262,
     2.228, 2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093,
@@ -27,7 +34,79 @@ T95 = [
 ]
 
 
+def fnv1a64(data):
+    value = 0xCBF29CE484222325
+    for byte in data:
+        value = ((value ^ byte) * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
+    return value
+
+
+def fnv_id(data):
+    return f"fnv1a64:{fnv1a64(data):016x}"
+
+
+def canonical_json(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":")).encode("utf-8")
+
+
+def validate_integer_config(value, where):
+    if isinstance(value, dict):
+        if any(not isinstance(key, str) for key in value):
+            raise SystemExit(f"{where}: config object keys must be text")
+        for key, child in value.items():
+            validate_integer_config(child, f"{where}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            validate_integer_config(child, f"{where}[{index}]")
+    elif isinstance(value, str):
+        return
+    elif isinstance(value, int) and not isinstance(value, bool):
+        if not -(1 << 63) <= value <= (1 << 64) - 1:
+            raise SystemExit(f"{where}: integer is outside serde_json i64/u64 range")
+    else:
+        raise SystemExit(
+            f"{where}: run config permits only objects/arrays/text/integers"
+        )
+
+
+def fnv_fingerprint(value):
+    return (
+        isinstance(value, str)
+        and len(value) == 24
+        and value.startswith("fnv1a64:")
+        and all(char in "0123456789abcdef" for char in value[8:])
+    )
+
+
+def is_current_schema(row):
+    return row.get("schema") == ROW_SCHEMA
+
+
+def source_coordinate(row):
+    mode = str(row.get("mode", ""))
+    if mode in ("live-screen", "live-confirm"):
+        values = (
+            "live", row.get("room"), row.get("rqid"), row.get("battle"),
+            row.get("decision"), row.get("side"), row.get("turn"), row.get("input_line"),
+        )
+    else:
+        values = (
+            "offline", row.get("file"), row.get("battle"), row.get("decision"),
+            row.get("side"), row.get("turn"),
+        )
+    return "\0".join(str(value) for value in values) + "\n"
+
+
+def coordinate_fingerprint(rows):
+    payload = "".join(sorted(source_coordinate(row) for row in rows)).encode("utf-8")
+    return fnv_id(payload)
+
+
 def family(row):
+    if is_current_schema(row):
+        run = row["run"]
+        return run["lineage"], run["source"], run["source_fingerprint"]
     lineage, _ = MODE_INFO[str(row.get("mode"))]
     default_source = "corpus" if lineage == "offline" else "missing-source"
     source = row.get("source", default_source)
@@ -43,6 +122,21 @@ def family_name(key):
 
 def number(value, default=float("nan")):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else default
+
+
+def integer(value, where, minimum=0):
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise SystemExit(f"{where}: expected integer >= {minimum}")
+    return value
+
+
+def state_key(value):
+    return (
+        isinstance(value, str)
+        and len(value) == 41
+        and value.startswith("state128:")
+        and all(char in "0123456789abcdef" for char in value[9:])
+    )
 
 
 def finite_number(value, where):
@@ -256,12 +350,138 @@ def comparable_row(row):
     return comparable
 
 
+def validate_run(row, where):
+    run = row.get("run")
+    if not isinstance(run, dict):
+        raise SystemExit(f"{where}: v3 row requires a run object")
+    mode = str(row.get("mode", "missing"))
+    if mode not in MODE_INFO:
+        raise SystemExit(f"{where}: v3 row has unknown mode {mode!r}")
+    lineage, stage = MODE_INFO[mode]
+    required_text = [
+        "schema", "lineage", "stage", "source", "source_fingerprint",
+        "pool_fingerprint", "reconstruction_rev", "build_identity", "config_fingerprint",
+    ]
+    for field in required_text:
+        if not isinstance(run.get(field), str) or not run[field]:
+            raise SystemExit(f"{where}: run.{field} must be non-empty text")
+    executable_fingerprint = run["build_identity"].rsplit(";exe=", 1)
+    if len(executable_fingerprint) != 2 or not fnv_fingerprint(executable_fingerprint[1]):
+        raise SystemExit(f"{where}: run.build_identity lacks executable content identity")
+    if run["schema"] != RUN_SCHEMA:
+        raise SystemExit(f"{where}: run schema must be {RUN_SCHEMA!r}")
+    if run["lineage"] != lineage or run["stage"] != stage:
+        raise SystemExit(
+            f"{where}: run lineage/stage {run['lineage']}/{run['stage']} "
+            f"does not match mode {mode}"
+        )
+    expected_source = "corpus" if lineage == "offline" else "live-decision-log-v2"
+    if run["source"] != expected_source:
+        raise SystemExit(
+            f"{where}: run.source {run['source']!r} != {expected_source!r}"
+        )
+    integer(run.get("base_seed"), f"{where}: run.base_seed", 0)
+    run_samples = integer(run.get("samples"), f"{where}: run.samples", 1)
+    if not isinstance(run.get("budget"), dict):
+        raise SystemExit(f"{where}: run.budget must be an object")
+    expected_budget = (
+        {"product_iters", "oracle_iters"}
+        if (lineage, stage) == ("offline", "screen")
+        else {"oracle_iters"}
+        if stage == "screen"
+        else {"iters_per_action"}
+    )
+    if set(run["budget"]) != expected_budget:
+        raise SystemExit(
+            f"{where}: run.budget fields {sorted(run['budget'])!r} "
+            f"!= {sorted(expected_budget)!r}"
+        )
+    for field in expected_budget:
+        integer(run["budget"][field], f"{where}: run.budget.{field}", 1)
+    body = dict(run)
+    actual = body.pop("config_fingerprint")
+    validate_integer_config(body, f"{where}: run")
+    expected = fnv_id(canonical_json(body))
+    if actual != expected:
+        raise SystemExit(
+            f"{where}: run.config_fingerprint {actual!r} != recomputed {expected!r}"
+        )
+    coverage = run.get("coverage")
+    if not isinstance(coverage, dict):
+        raise SystemExit(f"{where}: run.coverage must be an object")
+    integer(coverage.get("expected_rows"), f"{where}: run.coverage.expected_rows", 0)
+    fingerprint = coverage.get("coordinate_fingerprint")
+    if not (
+        isinstance(fingerprint, str)
+        and len(fingerprint) == 24
+        and fingerprint.startswith("fnv1a64:")
+        and all(char in "0123456789abcdef" for char in fingerprint[8:])
+    ):
+        raise SystemExit(f"{where}: invalid run.coverage.coordinate_fingerprint")
+    selection = run.get("selection")
+    if (lineage, stage) == ("offline", "screen"):
+        if not isinstance(selection, dict):
+            raise SystemExit(f"{where}: offline screen run.selection must be an object")
+        for field in ("decision_lo", "decision_hi", "per_battle"):
+            integer(selection.get(field), f"{where}: run.selection.{field}", 0)
+        integer(coverage.get("battle_count"), f"{where}: run.coverage.battle_count", 0)
+    elif stage == "confirm":
+        if not isinstance(selection, dict):
+            raise SystemExit(f"{where}: confirm run.selection must be an object")
+        integer(selection.get("top"), f"{where}: run.selection.top", 0)
+        integer(selection.get("min_regret_bits"),
+                f"{where}: run.selection.min_regret_bits", 0)
+    if lineage == "live":
+        if row.get("input_fingerprint") != run["source_fingerprint"]:
+            raise SystemExit(f"{where}: input/run source fingerprints disagree")
+    elif row.get("corpus_fingerprint") != run["source_fingerprint"]:
+        raise SystemExit(f"{where}: corpus/run source fingerprints disagree")
+    inputs = run.get("input_fingerprints")
+    if not isinstance(inputs, dict) or set(inputs) != RECONSTRUCTION_INPUTS:
+        raise SystemExit(
+            f"{where}: run.input_fingerprints must contain exactly "
+            f"{sorted(RECONSTRUCTION_INPUTS)!r}"
+        )
+    for field, fingerprint in inputs.items():
+        if not fnv_fingerprint(fingerprint):
+            raise SystemExit(f"{where}: invalid input fingerprint {field}")
+    if run["pool_fingerprint"] != inputs["meta_pool_file"]:
+        raise SystemExit(f"{where}: pool fingerprint disagrees with input manifest")
+    if inputs["community_rentals_file"] != inputs["embedded_community_rentals"]:
+        raise SystemExit(f"{where}: runtime/embedded community rentals disagree")
+    if inputs["learnsets_file"] != inputs["embedded_learnsets"]:
+        raise SystemExit(f"{where}: runtime/embedded learnsets disagree")
+    if stage == "confirm":
+        integer(row.get("rank"), f"{where}: rank", 0)
+        discovery = run.get("discovery_fingerprint")
+        if not isinstance(discovery, str) or not discovery:
+            raise SystemExit(f"{where}: confirm run lacks discovery_fingerprint")
+    if "skip" not in row:
+        samples = integer(row.get("samples"), f"{where}: samples", 1)
+        if samples != run_samples:
+            raise SystemExit(f"{where}: row samples disagree with run.samples")
+        for field in expected_budget:
+            value = integer(row.get(field), f"{where}: {field}", 1)
+            if value != run["budget"][field]:
+                raise SystemExit(f"{where}: row {field} disagrees with run.budget")
+        state_keys = row.get("state_keys")
+        if not isinstance(state_keys, list) or len(state_keys) != samples:
+            raise SystemExit(f"{where}: state_keys must have one entry per sample")
+        if any(not state_key(key) for key in state_keys):
+            raise SystemExit(f"{where}: invalid state128 fingerprint")
+    return run
+
+
 def validate_row(row, where):
     if not isinstance(row, dict):
         raise SystemExit(f"{where}: row must be an object")
+    if "schema" in row and not is_current_schema(row):
+        raise SystemExit(f"{where}: unknown row schema {row.get('schema')!r}")
     mode = str(row.get("mode", "missing"))
     if mode not in MODE_INFO:
         return
+    if is_current_schema(row):
+        validate_run(row, where)
     lineage, stage = MODE_INFO[mode]
     if lineage == "live":
         fingerprint = row.get("input_fingerprint")
@@ -343,11 +563,71 @@ def print_family_report(key, data, top, qualified):
               f"{pair:<24} [{tag}]")
 
 
+def validate_v3_coverage(stage_rows, allow_partial):
+    screen_runs = {}
+    for (key, stage), rows in stage_rows.items():
+        run = rows[0]["run"]
+        expected = run["coverage"]["expected_rows"]
+        actual_fingerprint = coordinate_fingerprint(rows)
+        expected_fingerprint = run["coverage"]["coordinate_fingerprint"]
+        if not allow_partial:
+            if len(rows) != expected:
+                raise SystemExit(
+                    f"{family_name(key)}/{stage}: coverage {len(rows)} != expected {expected}"
+                )
+            if actual_fingerprint != expected_fingerprint:
+                raise SystemExit(
+                    f"{family_name(key)}/{stage}: coordinate coverage fingerprint "
+                    f"{actual_fingerprint} != expected {expected_fingerprint}"
+                )
+            if stage == "confirm":
+                ranks = sorted(row.get("rank") for row in rows)
+                if ranks != list(range(expected)):
+                    raise SystemExit(
+                        f"{family_name(key)}/confirm: ranks do not cover 0..{expected - 1}"
+                    )
+        if stage == "screen":
+            screen_runs[key] = run
+
+    for (key, stage), rows in stage_rows.items():
+        if stage != "confirm":
+            continue
+        if key not in screen_runs:
+            raise SystemExit(
+                f"{family_name(key)}/confirm: confirm-only aggregation is rejected; "
+                "include its complete screen artifact"
+            )
+        confirm_run = rows[0]["run"]
+        screen_run = screen_runs[key]
+        for field in (
+            "source_fingerprint", "build_identity", "pool_fingerprint",
+            "reconstruction_rev", "input_fingerprints",
+        ):
+            if confirm_run[field] != screen_run[field]:
+                raise SystemExit(
+                    f"{family_name(key)}/confirm: {field} differs from screen run"
+                )
+        discovery = confirm_run["discovery_fingerprint"]
+        if discovery != screen_run["config_fingerprint"]:
+            raise SystemExit(
+                f"{family_name(key)}/confirm: discovery fingerprint {discovery} "
+                f"does not match screen {screen_run['config_fingerprint']}"
+            )
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("files", nargs="*", help="regret-miner JSONL shard(s)")
     parser.add_argument("--top", type=int, default=20, help="rows/clusters to print (default: 20)")
     parser.add_argument("--merge-out", help="also write all rows in deterministic key order")
+    parser.add_argument(
+        "--allow-partial", action="store_true",
+        help="permit incomplete v3 shard sets (config and duplicate checks remain strict)",
+    )
+    parser.add_argument(
+        "--allow-legacy", action="store_true",
+        help="explicitly accept provenance-incomplete v1 artifacts",
+    )
     parser.add_argument("--self-test", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.self_test:
@@ -364,6 +644,10 @@ def main(argv=None):
     total = 0
     duplicates = 0
     seen = {}
+    v3_seen = {}
+    artifact_version = None
+    run_configs = {}
+    stage_rows = defaultdict(list)
     for path in args.files:
         with open(path, encoding="utf-8") as src:
             for lineno, line in enumerate(src, 1):
@@ -374,18 +658,48 @@ def main(argv=None):
                 except json.JSONDecodeError as error:
                     raise SystemExit(f"{path}:{lineno}: {error}") from error
                 validate_row(row, f"{path}:{lineno}")
-                key = row_identity(row)
-                if key in seen:
-                    first = seen[key]
-                    if comparable_row(first) != comparable_row(row):
-                        raise SystemExit(f"conflicting duplicate row key {key}: {path}:{lineno}")
-                    ranks = [value for value in (first.get("rank"), row.get("rank"))
-                             if isinstance(value, int) and not isinstance(value, bool)]
-                    if ranks:
-                        first["rank"] = min(ranks)
-                    duplicates += 1
-                    continue
-                seen[key] = row
+                version = "v3" if is_current_schema(row) else "legacy-v1"
+                if artifact_version is None:
+                    artifact_version = version
+                elif artifact_version != version:
+                    raise SystemExit(
+                        f"{path}:{lineno}: cannot mix {artifact_version} and {version} artifacts"
+                    )
+                if version == "v3":
+                    mode = str(row["mode"])
+                    lineage, stage = MODE_INFO[mode]
+                    fam = family(row)
+                    config_key = fam, stage
+                    fingerprint = row["run"]["config_fingerprint"]
+                    previous = run_configs.setdefault(config_key, fingerprint)
+                    if previous != fingerprint:
+                        raise SystemExit(
+                            f"{path}:{lineno}: {family_name(fam)}/{stage} mixes run configs "
+                            f"{previous} and {fingerprint}"
+                        )
+                    coordinate = fam, stage, source_coordinate(row)
+                    if coordinate in v3_seen:
+                        raise SystemExit(
+                            f"{path}:{lineno}: duplicate v3 {stage} source coordinate "
+                            f"(first at {v3_seen[coordinate]})"
+                        )
+                    v3_seen[coordinate] = f"{path}:{lineno}"
+                    stage_rows[(fam, stage)].append(row)
+                else:
+                    key = row_identity(row)
+                    if key in seen:
+                        first = seen[key]
+                        if comparable_row(first) != comparable_row(row):
+                            raise SystemExit(
+                                f"conflicting duplicate row key {key}: {path}:{lineno}"
+                            )
+                        ranks = [value for value in (first.get("rank"), row.get("rank"))
+                                 if isinstance(value, int) and not isinstance(value, bool)]
+                        if ranks:
+                            first["rank"] = min(ranks)
+                        duplicates += 1
+                        continue
+                    seen[key] = row
                 total += 1
                 all_rows.append(row)
                 mode = str(row.get("mode", "missing"))
@@ -397,6 +711,25 @@ def main(argv=None):
                     families[family(row)][MODE_INFO[mode][1]].append(row)
                 else:
                     unknown[mode] += 1
+
+    if artifact_version == "v3":
+        validate_v3_coverage(stage_rows, args.allow_partial)
+    else:
+        if not args.allow_legacy:
+            raise SystemExit(
+                "legacy v1 artifacts are rejected by default; pass --allow-legacy explicitly"
+            )
+        for key, data in families.items():
+            screen_mode = "screen" if key[0] == "offline" else "live-screen"
+            screen_rows = len(data["screen"]) + sum(
+                count for (mode, _), count in data["skips"].items()
+                if mode == screen_mode
+            )
+            if data["confirm"] and screen_rows == 0:
+                raise SystemExit(
+                    f"{family_name(key)}/confirm: confirm-only aggregation is rejected"
+                )
+        print("WARNING: legacy v1 artifacts lack run/state/coverage provenance", file=sys.stderr)
 
     if args.merge_out:
         all_rows.sort(key=semantic_sort_key)
@@ -487,6 +820,80 @@ def test_confirm(mode, deltas=None, fingerprint="fnv1a64:aaaaaaaaaaaaaaaa"):
     return row
 
 
+def test_input_fingerprints():
+    return {
+        "dex_file": "fnv1a64:1111111111111111",
+        "meta_pool_file": "fnv1a64:2222222222222222",
+        "community_rentals_file": "fnv1a64:3333333333333333",
+        "learnsets_file": "fnv1a64:4444444444444444",
+        "embedded_community_rentals": "fnv1a64:3333333333333333",
+        "embedded_learnsets": "fnv1a64:4444444444444444",
+    }
+
+
+def v3_artifact(rows, discovery_fingerprint=None, run_overrides=None):
+    rows = [json.loads(json.dumps(row)) for row in rows]
+    mode = rows[0]["mode"]
+    lineage, stage = MODE_INFO[mode]
+    source = "corpus" if lineage == "offline" else "live-decision-log-v2"
+    source_fingerprint = (
+        rows[0].get("corpus_fingerprint", "fnv1a64:cccccccccccccccc:1files")
+        if lineage == "offline" else rows[0]["input_fingerprint"]
+    )
+    for index, row in enumerate(rows):
+        if lineage == "offline":
+            row["corpus_fingerprint"] = source_fingerprint
+        if stage == "screen":
+            row.setdefault("samples", 3)
+            row.setdefault("oracle_iters", 30_000)
+            if lineage == "offline":
+                row.setdefault("product_iters", 10_000)
+        else:
+            row["rank"] = row.get("rank", index)
+        if "skip" not in row:
+            row["state_keys"] = [f"state128:{sample + 1:032x}"
+                                 for sample in range(row["samples"])]
+    coverage = {
+        "expected_rows": len(rows),
+        "coordinate_fingerprint": coordinate_fingerprint(rows),
+    }
+    if (lineage, stage) == ("offline", "screen"):
+        coverage["battle_count"] = len({row["battle"] for row in rows})
+    budget = (
+        {"product_iters": 10_000, "oracle_iters": 30_000}
+        if stage == "screen" and lineage == "offline"
+        else {"oracle_iters": 60_000}
+        if stage == "screen"
+        else {"iters_per_action": 60_000}
+    )
+    for row in rows:
+        if "skip" not in row:
+            row.update(budget)
+    run = {
+        "schema": RUN_SCHEMA, "lineage": lineage, "stage": stage, "source": source,
+        "source_fingerprint": source_fingerprint,
+        "pool_fingerprint": "fnv1a64:2222222222222222",
+        "input_fingerprints": test_input_fingerprints(),
+        "reconstruction_rev": "test-reconstruction-v2",
+        "build_identity": "test@1;exe=fnv1a64:5555555555555555",
+        "base_seed": 1, "budget": budget, "samples": rows[0]["samples"],
+        "coverage": coverage,
+    }
+    if stage == "screen":
+        run["selection"] = {"decision_lo": 0, "decision_hi": 999999,
+                            "per_battle": 999999}
+    else:
+        run["selection"] = {"top": len(rows), "min_regret_bits": 0}
+        run["discovery_fingerprint"] = discovery_fingerprint or "fnv1a64:discovery"
+    if run_overrides:
+        run.update(run_overrides)
+    run["config_fingerprint"] = fnv_id(canonical_json(run))
+    for row in rows:
+        row["schema"] = ROW_SCHEMA
+        row["run"] = json.loads(json.dumps(run))
+    return rows, run["config_fingerprint"]
+
+
 class SelfTest(unittest.TestCase):
     def write_rows(self, rows):
         handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False)
@@ -500,8 +907,173 @@ class SelfTest(unittest.TestCase):
         path = self.write_rows(rows)
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            self.assertEqual(main([path, "--top", "10"]), 0)
+            self.assertEqual(main([path, "--top", "10", "--allow-legacy"]), 0)
         return output.getvalue()
+
+    def run_v3(self, rows, *extra):
+        path = self.write_rows(rows)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(main([path, "--top", "10", *extra]), 0)
+        return output.getvalue()
+
+    def test_canonical_config_hash_matches_rust_golden(self):
+        body = {
+            "z": (1 << 64) - 1,
+            "a": {"neg": -(1 << 63), "unicode": "雪"},
+            "list": [0, 9_007_199_254_740_993],
+        }
+        validate_integer_config(body, "golden")
+        self.assertEqual(canonical_json(body),
+                         ('{"a":{"neg":-9223372036854775808,"unicode":"雪"},'
+                          '"list":[0,9007199254740993],'
+                          '"z":18446744073709551615}').encode())
+        self.assertEqual(fnv_id(canonical_json(body)), "fnv1a64:c38972634d174986")
+        for invalid in (1.0, True, None, (1 << 64)):
+            with self.assertRaises(SystemExit):
+                validate_integer_config(invalid, "invalid")
+
+    def test_v3_full_screen_and_confirm_coverage(self):
+        screen_a = test_screen("screen")
+        screen_b = test_screen("screen")
+        screen_b.update({"battle": 1, "decision": 1, "file": "z.raw.log"})
+        screens, discovery = v3_artifact([screen_a, screen_b])
+        confirm_a = test_confirm("confirm")
+        confirm_b = test_confirm("confirm")
+        confirm_b.update({"rank": 1, "battle": 1, "decision": 1, "file": "z.raw.log"})
+        confirms, _ = v3_artifact([confirm_a, confirm_b], discovery)
+        output = self.run_v3(screens + confirms)
+        self.assertIn("screen 2 / attempted 2", output)
+        self.assertIn("confirm 2", output)
+
+    def test_v3_live_full_screen_and_confirm_coverage(self):
+        screen_a = test_screen("live-screen", ordinal=0)
+        screen_b = test_screen("live-screen", ordinal=1)
+        screens, discovery = v3_artifact([screen_a, screen_b])
+        confirm_a = test_confirm("live-confirm")
+        confirm_b = test_confirm("live-confirm")
+        confirm_b.update({
+            "rank": 1, "input_line": 2, "room": "battle-live-1", "rqid": 11,
+        })
+        confirms, _ = v3_artifact([confirm_a, confirm_b], discovery)
+        output = self.run_v3(screens + confirms)
+        self.assertIn("screen 2 / attempted 2", output)
+        self.assertIn("confirm 2", output)
+
+    def test_v3_skips_are_part_of_required_screen_coverage(self):
+        success = test_screen("screen")
+        skipped = test_screen("screen")
+        skipped.update({"battle": 1, "decision": 1, "file": "z.raw.log",
+                        "skip": "reconstruct"})
+        rows, _ = v3_artifact([success, skipped])
+        output = self.run_v3(rows)
+        self.assertIn("screen 1 / attempted 2", output)
+        path = self.write_rows(rows[:1])
+        with self.assertRaisesRegex(SystemExit, "coverage 1 != expected 2"):
+            main([path])
+
+    def test_v3_rejects_run_hash_and_row_budget_tampering(self):
+        rows, _ = v3_artifact([test_screen("screen")])
+        rows[0]["run"]["base_seed"] = 2
+        path = self.write_rows(rows)
+        with self.assertRaisesRegex(SystemExit, "recomputed"):
+            main([path])
+
+        rows, _ = v3_artifact([test_screen("screen")])
+        rows[0]["product_iters"] += 1
+        path = self.write_rows(rows)
+        with self.assertRaisesRegex(SystemExit, "disagrees with run.budget"):
+            main([path])
+
+    def test_v3_duplicate_source_coordinate_is_rejected_even_when_payload_matches(self):
+        rows, _ = v3_artifact([test_screen("screen")])
+        path = self.write_rows(rows + [json.loads(json.dumps(rows[0]))])
+        with self.assertRaisesRegex(SystemExit, "duplicate v3 screen source coordinate"):
+            main([path])
+
+    def test_v3_mixed_run_configs_are_rejected(self):
+        first, _ = v3_artifact([test_screen("screen")])
+        second_row = test_screen("screen")
+        second_row.update({"battle": 1, "decision": 1, "file": "z.raw.log"})
+        second, _ = v3_artifact([second_row], run_overrides={"base_seed": 2})
+        path = self.write_rows(first + second)
+        with self.assertRaisesRegex(SystemExit, "mixes run configs"):
+            main([path])
+
+    def test_v3_missing_screen_coverage_is_rejected(self):
+        a = test_screen("screen")
+        b = test_screen("screen")
+        b.update({"battle": 1, "decision": 1, "file": "z.raw.log"})
+        rows, _ = v3_artifact([a, b])
+        path = self.write_rows(rows[:1])
+        with self.assertRaisesRegex(SystemExit, "coverage 1 != expected 2"):
+            main([path])
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main([path, "--allow-partial"]), 0)
+
+    def test_v3_missing_confirm_rank_is_rejected(self):
+        a = test_confirm("confirm")
+        b = test_confirm("confirm")
+        b.update({"rank": 1, "battle": 1, "decision": 1, "file": "z.raw.log"})
+        rows, _ = v3_artifact([a, b])
+        rows[1]["rank"] = 2
+        path = self.write_rows(rows)
+        with self.assertRaisesRegex(SystemExit, "ranks do not cover"):
+            main([path])
+
+    def test_v3_confirm_discovery_must_match_screen_run(self):
+        screens, discovery = v3_artifact([test_screen("screen")])
+        confirms, _ = v3_artifact([test_confirm("confirm")], "fnv1a64:wrong")
+        self.assertNotEqual(discovery, "fnv1a64:wrong")
+        path = self.write_rows(screens + confirms)
+        with self.assertRaisesRegex(SystemExit, "does not match screen"):
+            main([path])
+
+    def test_v3_confirm_only_is_rejected(self):
+        confirms, _ = v3_artifact([test_confirm("confirm")])
+        path = self.write_rows(confirms)
+        with self.assertRaisesRegex(SystemExit, "confirm-only aggregation is rejected"):
+            main([path])
+
+    def test_v3_screen_confirm_provenance_must_match(self):
+        cases = {
+            "build_identity": {
+                "build_identity": "test@2;exe=fnv1a64:6666666666666666",
+            },
+            "reconstruction_rev": {"reconstruction_rev": "other-reconstruction"},
+            "input_fingerprints": {
+                "input_fingerprints": {
+                    **test_input_fingerprints(),
+                    "dex_file": "fnv1a64:7777777777777777",
+                },
+            },
+            "pool_fingerprint": {
+                "pool_fingerprint": "fnv1a64:8888888888888888",
+                "input_fingerprints": {
+                    **test_input_fingerprints(),
+                    "meta_pool_file": "fnv1a64:8888888888888888",
+                },
+            },
+        }
+        for field, overrides in cases.items():
+            with self.subTest(field=field):
+                screens, discovery = v3_artifact([test_screen("screen")])
+                confirms, _ = v3_artifact(
+                    [test_confirm("confirm")], discovery, run_overrides=overrides,
+                )
+                path = self.write_rows(screens + confirms)
+                with self.assertRaisesRegex(SystemExit, f"{field} differs from screen run"):
+                    main([path])
+
+    def test_legacy_requires_explicit_flag(self):
+        path = self.write_rows([test_screen("screen")])
+        with self.assertRaisesRegex(SystemExit, "--allow-legacy"):
+            main([path])
+
+    def test_legacy_confirm_only_is_rejected(self):
+        path = self.write_rows([test_confirm("confirm")])
+        with self.assertRaisesRegex(SystemExit, "confirm-only aggregation is rejected"):
+            main([path, "--allow-legacy"])
 
     def test_legacy_offline_headings_and_stability_are_preserved(self):
         output = self.run_main([test_screen("screen")])
@@ -571,8 +1143,8 @@ class SelfTest(unittest.TestCase):
         first = test_confirm("confirm")
         second = dict(first)
         second["rank"] = 99
-        output = self.run_main([second, first])
-        self.assertIn("rows 1", output)
+        output = self.run_main([test_screen("screen"), second, first])
+        self.assertIn("rows 2", output)
         self.assertIn("duplicates 1", output)
 
     def test_report_is_invariant_to_input_order_for_ties(self):

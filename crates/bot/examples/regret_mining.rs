@@ -41,7 +41,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use nc2000_bot::blind::BlindSearch;
 use nc2000_bot::corpus::{
@@ -55,6 +55,13 @@ use nc2000_bot::smmcts::{RmConfig, SelRule};
 use nc2000_engine::battle::{PokemonSet, SearchChoice};
 use nc2000_engine::dex::{toid, Dex};
 use nc2000_engine::state::{Battle, Status};
+
+const ROW_SCHEMA: &str = "nc2000-regret-v3";
+const RUN_SCHEMA: &str = "nc2000-regret-run-v3";
+/// Bump whenever corpus/live synthesis semantics change.  Corpus bytes do
+/// not capture importer/fabrication changes, so artifacts bind this value
+/// independently of their source fingerprint.
+const RECONSTRUCTION_REV: &str = "m17a-reconstruct-2026-07-23-v4";
 
 fn arg(args: &[String], key: &str, default: usize) -> usize {
     match args.iter().position(|a| a == key) {
@@ -200,6 +207,163 @@ fn fnv1a64_update(hash: u64, bytes: &[u8]) -> u64 {
 
 fn fnv1a64(bytes: &[u8]) -> u64 {
     fnv1a64_update(0xcbf2_9ce4_8422_2325, bytes)
+}
+
+fn fnv_id(bytes: &[u8]) -> String {
+    format!("fnv1a64:{:016x}", fnv1a64(bytes))
+}
+
+fn file_source_id(path: &Path) -> String {
+    let bytes = std::fs::read(path)
+        .unwrap_or_else(|error| panic!("read fingerprint source {}: {error}", path.display()));
+    fnv_id(&bytes)
+}
+
+fn executable_content_fingerprint(path: &Path) -> String {
+    let bytes = std::fs::read(path).unwrap_or_else(|error| {
+        panic!(
+            "read current executable {} for run identity: {error}",
+            path.display()
+        )
+    });
+    fnv_id(&bytes)
+}
+
+fn build_identity() -> &'static str {
+    static ID: OnceLock<String> = OnceLock::new();
+    ID.get_or_init(|| {
+        let executable =
+            std::env::current_exe().expect("resolve current executable for run identity");
+        let fingerprint = executable_content_fingerprint(&executable);
+        format!(
+            "{}@{};exe={fingerprint}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        )
+    })
+}
+
+fn reconstruction_input_fingerprints(root: &Path) -> serde_json::Value {
+    let runtime_rentals = file_source_id(&root.join("data/community-rentals-v0/teams.json"));
+    let runtime_learnsets = file_source_id(&root.join("data/learnsets-gen2.json"));
+    let embedded_rentals = fnv_id(include_bytes!(
+        "../../../data/community-rentals-v0/teams.json"
+    ));
+    let embedded_learnsets = fnv_id(include_bytes!("../../../data/learnsets-gen2.json"));
+    assert_eq!(
+        runtime_rentals, embedded_rentals,
+        "runtime community rentals differ from the prior embedded in this executable"
+    );
+    assert_eq!(
+        runtime_learnsets, embedded_learnsets,
+        "runtime learnsets differ from the prior embedded in this executable"
+    );
+    serde_json::json!({
+        "dex_file":file_source_id(&root.join("data/gen2stadium2.json")),
+        "meta_pool_file":file_source_id(&root.join("data/meta-pool-v0/meta-pool.json")),
+        "community_rentals_file":runtime_rentals,
+        "learnsets_file":runtime_learnsets,
+        // Belief fallback consumes compile-time copies while offline own-set
+        // fabrication consumes the runtime files above. Bind both identities.
+        "embedded_community_rentals":embedded_rentals,
+        "embedded_learnsets":embedded_learnsets,
+    })
+}
+
+fn canonical_json(value: &serde_json::Value) -> Vec<u8> {
+    fn write(value: &serde_json::Value, out: &mut Vec<u8>) {
+        match value {
+            serde_json::Value::Array(values) => {
+                out.push(b'[');
+                for (index, value) in values.iter().enumerate() {
+                    if index != 0 {
+                        out.push(b',');
+                    }
+                    write(value, out);
+                }
+                out.push(b']');
+            }
+            serde_json::Value::Object(object) => {
+                out.push(b'{');
+                let mut keys = object.keys().collect::<Vec<_>>();
+                keys.sort_unstable();
+                for (index, key) in keys.into_iter().enumerate() {
+                    if index != 0 {
+                        out.push(b',');
+                    }
+                    serde_json::to_writer(&mut *out, key).expect("serialize run config key");
+                    out.push(b':');
+                    write(&object[key], out);
+                }
+                out.push(b'}');
+            }
+            _ => serde_json::to_writer(out, value).expect("serialize run config value"),
+        }
+    }
+
+    let mut bytes = Vec::new();
+    write(value, &mut bytes);
+    bytes
+}
+
+fn config_fingerprint(value: &serde_json::Value) -> String {
+    fnv_id(&canonical_json(value))
+}
+
+fn integer_only_config(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::String(_) => true,
+        serde_json::Value::Number(number) => number.is_i64() || number.is_u64(),
+        serde_json::Value::Array(values) => values.iter().all(integer_only_config),
+        serde_json::Value::Object(object) => object.values().all(integer_only_config),
+        serde_json::Value::Null | serde_json::Value::Bool(_) => false,
+    }
+}
+
+fn run_meta(mut body: serde_json::Value) -> serde_json::Value {
+    let object = body.as_object_mut().expect("run metadata is an object");
+    object.insert("schema".into(), RUN_SCHEMA.into());
+    object.insert("reconstruction_rev".into(), RECONSTRUCTION_REV.into());
+    object.insert("build_identity".into(), build_identity().into());
+    assert!(
+        integer_only_config(&body),
+        "run config must contain only objects/arrays/text/integers"
+    );
+    let fingerprint = config_fingerprint(&body);
+    body.as_object_mut()
+        .unwrap()
+        .insert("config_fingerprint".into(), fingerprint.into());
+    body
+}
+
+fn state_fingerprint(battle: &Battle) -> String {
+    format!("state128:{:032x}", battle.state_key128())
+}
+
+fn coordinate_fingerprint(mut coordinates: Vec<String>) -> String {
+    coordinates.sort();
+    let mut hash = 0xcbf2_9ce4_8422_2325;
+    for coordinate in coordinates {
+        hash = fnv1a64_update(hash, coordinate.as_bytes());
+    }
+    format!("fnv1a64:{hash:016x}")
+}
+
+fn offline_coordinate(
+    file: &str,
+    battle: usize,
+    decision: usize,
+    side: usize,
+    turn: u16,
+) -> String {
+    format!("offline\0{file}\0{battle}\0{decision}\0{side}\0{turn}\n")
+}
+
+fn live_coordinate(row: &LiveLogRow) -> String {
+    format!(
+        "live\0{}\0{}\0{}\0{}\0{}\0{}\0{}\n",
+        row.room, row.rqid, row.battle, row.decision, row.side, row.turn, row.input_line
+    )
 }
 
 fn corpus_source_id(files: &[PathBuf]) -> String {
@@ -564,6 +728,8 @@ fn screen_decision(
     dex: &Dex,
     src: &SetSources,
     pool: &MetaPool,
+    run: &serde_json::Value,
+    shard: (usize, usize),
     corpus_fingerprint: &str,
     loaded: &LoadedBattle,
     di: usize,
@@ -574,9 +740,11 @@ fn screen_decision(
 ) -> serde_json::Value {
     let d = &loaded.data.decisions[di];
     let base = serde_json::json!({
+        "schema":ROW_SCHEMA, "run":run,
         "mode": "screen", "corpus_fingerprint":corpus_fingerprint,
         "battle": loaded.index, "file": file_key(&loaded.path),
         "decision": di, "side": d.side, "turn": d.turn,
+        "shard":{"battle_lo":shard.0,"battle_hi":shard.1},
     });
     if oracle_iters < product_iters || samples == 0 {
         return merge(base, serde_json::json!({"skip":"bad-budget"}));
@@ -589,6 +757,7 @@ fn screen_decision(
     let mut product_choices = Vec::new();
     let mut oracle_choices = Vec::new();
     let mut position_tags = Vec::new();
+    let mut state_keys = Vec::new();
 
     for rep in 0..samples {
         let synth_seed = job_seed(base_seed, loaded.index, di, rep, 0x51A7_0001);
@@ -604,6 +773,7 @@ fn screen_decision(
             return merge(base, serde_json::json!({"skip":"reconstruct"}));
         };
         let battle = agent.battle().unwrap();
+        state_keys.push(state_fingerprint(battle));
         let belief = agent.belief().unwrap();
         let observer = agent.observer().unwrap();
         let mut search = BlindSearch::new(
@@ -631,7 +801,7 @@ fn screen_decision(
             return merge(
                 base,
                 serde_json::json!({
-                    "skip":"trivial", "n_actions": labels.len()
+                    "skip":"trivial", "n_actions": labels.len(), "state_keys":state_keys
                 }),
             );
         }
@@ -677,12 +847,19 @@ fn screen_decision(
             "product_choices": product_choices, "oracle_choices": oracle_choices,
             "actions": actions, "tags": position_tags,
             "product_iters": product_iters, "oracle_iters": oracle_iters, "samples": samples,
+            "state_keys":state_keys,
         }),
     )
 }
 
-fn live_base(input: &str, source_id: &str, row: &LiveLogRow) -> serde_json::Value {
+fn live_base(
+    input: &str,
+    source_id: &str,
+    run: &serde_json::Value,
+    row: &LiveLogRow,
+) -> serde_json::Value {
     serde_json::json!({
+        "schema":ROW_SCHEMA, "run":run,
         "mode":"live-screen", "source":"live-decision-log-v2",
         "input_file":file_key(Path::new(input)), "input_fingerprint":source_id,
         "input_line":row.input_line,
@@ -699,13 +876,14 @@ fn live_screen_decision(
     pool: &MetaPool,
     input: &str,
     source_id: &str,
+    run: &serde_json::Value,
     row: &LiveLogRow,
     protocol: &[String],
     iters: u32,
     samples: usize,
     base_seed: u64,
 ) -> serde_json::Value {
-    let base = live_base(input, source_id, row);
+    let base = live_base(input, source_id, run, row);
     if row.driver == "random" {
         return merge(base, serde_json::json!({"skip":"random"}));
     }
@@ -740,6 +918,7 @@ fn live_screen_decision(
     let mut seed_visits = Vec::<Vec<u32>>::new();
     let mut oracle_choices = Vec::<String>::new();
     let mut position_tags = Vec::<String>::new();
+    let mut state_keys = Vec::<String>::new();
     for rep in 0..samples {
         let synth_seed = live_seed(base_seed, row, rep, 0x11E0_0001);
         let agent = match reconstruct_live_agent(dex, pool, row, protocol, synth_seed) {
@@ -752,6 +931,7 @@ fn live_screen_decision(
             }
         };
         let battle = agent.battle().unwrap();
+        state_keys.push(state_fingerprint(battle));
         let belief = agent.belief().unwrap();
         let observer = agent.observer().unwrap();
         let mut search = BlindSearch::new(
@@ -781,7 +961,9 @@ fn live_screen_decision(
         if labels.len() <= 1 {
             return merge(
                 base,
-                serde_json::json!({"skip":"trivial", "n_actions":labels.len()}),
+                serde_json::json!({
+                    "skip":"trivial", "n_actions":labels.len(), "state_keys":state_keys
+                }),
             );
         }
         search.step(dex, belief, observer, iters);
@@ -830,6 +1012,7 @@ fn live_screen_decision(
             "actions":actions, "tags":position_tags,
             "oracle_iters":iters, "samples":samples,
             "logged_iterations":row.iterations,
+            "state_keys":state_keys,
         }),
     )
 }
@@ -883,11 +1066,31 @@ fn run_live_screen(
         samples > 0,
         "live screen needs at least one independent search"
     );
-    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
+    let input_fingerprints = reconstruction_input_fingerprints(root);
+    let pool_fingerprint = input_fingerprints["meta_pool_file"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let pool = load_meta_pool(&pool_path);
     let live_log = load_live_log(input);
     let source_id = live_log.source_id;
     let rooms = live_log.rooms;
     let decisions: usize = rooms.iter().map(|room| room.rows.len()).sum();
+    let coverage_fingerprint = coordinate_fingerprint(
+        rooms
+            .iter()
+            .flat_map(|room| room.rows.iter().map(live_coordinate))
+            .collect(),
+    );
+    let run = run_meta(serde_json::json!({
+        "lineage":"live", "stage":"screen", "source":"live-decision-log-v2",
+        "source_fingerprint":source_id, "pool_fingerprint":pool_fingerprint,
+        "input_fingerprints":input_fingerprints,
+        "base_seed":seed, "budget":{"oracle_iters":iters}, "samples":samples,
+        "coverage":{"expected_rows":decisions,
+                    "coordinate_fingerprint":coverage_fingerprint},
+    }));
     eprintln!(
         "live-screen rooms {} decisions {decisions} iters {iters} samples {samples} threads {threads}",
         rooms.len()
@@ -907,7 +1110,7 @@ fn run_live_screen(
                 for row in &room.rows {
                     apply_protocol_delta(&mut protocol, row.protocol_reset, &row.protocol_delta);
                     local.push(live_screen_decision(
-                        dex, &pool, input, &source_id, row, &protocol, iters, samples, seed,
+                        dex, &pool, input, &source_id, &run, row, &protocol, iters, samples, seed,
                     ));
                     let n = done.fetch_add(1, Ordering::Relaxed) + 1;
                     if n.is_multiple_of(25) || n == decisions {
@@ -939,11 +1142,48 @@ fn run_screen(
 ) {
     validate_screen_budget(product_iters, oracle_iters, samples);
     let src = load_sources(dex, root);
-    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
+    let input_fingerprints = reconstruction_input_fingerprints(root);
+    let pool_fingerprint = input_fingerprints["meta_pool_file"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let pool = load_meta_pool(&pool_path);
     let files = corpus_files(&root.join(corpus));
     let corpus_fingerprint = corpus_source_id(&files);
+    let mut expected_coordinates = Vec::new();
+    for (battle, path) in files.iter().enumerate() {
+        let data = load_battle(path);
+        for (decision, point) in data.decisions.iter().take(per_battle).enumerate() {
+            if decision >= decision_range.0 && decision <= decision_range.1 {
+                expected_coordinates.push(offline_coordinate(
+                    &file_key(path),
+                    battle,
+                    decision,
+                    point.side,
+                    point.turn,
+                ));
+            }
+        }
+    }
+    let expected_rows = expected_coordinates.len();
+    let coverage_fingerprint = coordinate_fingerprint(expected_coordinates);
+    let run = run_meta(serde_json::json!({
+        "lineage":"offline", "stage":"screen", "source":"corpus",
+        "source_fingerprint":corpus_fingerprint,
+        "pool_fingerprint":pool_fingerprint,
+        "input_fingerprints":input_fingerprints,
+        "base_seed":seed,
+        "budget":{"product_iters":product_iters,"oracle_iters":oracle_iters},
+        "samples":samples,
+        "selection":{"decision_lo":decision_range.0,"decision_hi":decision_range.1,
+                     "per_battle":per_battle},
+        "coverage":{"expected_rows":expected_rows,"battle_count":files.len(),
+                    "coordinate_fingerprint":coverage_fingerprint},
+    }));
     let loaded: Vec<LoadedBattle> = files
-        .into_iter()
+        .iter()
+        .cloned()
         .enumerate()
         .filter(|(i, _)| *i >= battle_range.0 && *i <= battle_range.1)
         .map(|(index, path)| {
@@ -988,6 +1228,8 @@ fn run_screen(
                         dex,
                         &src,
                         &pool,
+                        &run,
+                        battle_range,
                         &corpus_fingerprint,
                         b,
                         di,
@@ -1015,8 +1257,147 @@ struct Candidate {
     row: serde_json::Value,
 }
 
+fn is_current_schema(row: &serde_json::Value) -> bool {
+    row["schema"].as_str() == Some(ROW_SCHEMA)
+}
+
+fn validate_run(path: &str, line_no: usize, row: &serde_json::Value, stage: &str) {
+    let bad = |why: &str| panic!("{path}:{line_no}: invalid {RUN_SCHEMA} metadata: {why}");
+    if row["schema"].as_str() != Some(ROW_SCHEMA) {
+        bad("row schema mismatch");
+    }
+    let Some(run) = row["run"].as_object() else {
+        bad("run object missing");
+        unreachable!()
+    };
+    if run.get("schema").and_then(|value| value.as_str()) != Some(RUN_SCHEMA)
+        || run.get("stage").and_then(|value| value.as_str()) != Some(stage)
+        || run
+            .get("reconstruction_rev")
+            .and_then(|value| value.as_str())
+            != Some(RECONSTRUCTION_REV)
+        || run
+            .get("build_identity")
+            .and_then(|value| value.as_str())
+            .is_none()
+        || run
+            .get("pool_fingerprint")
+            .and_then(|value| value.as_str())
+            .is_none()
+        || run
+            .get("input_fingerprints")
+            .and_then(|value| value.as_object())
+            .is_none()
+        || run
+            .get("base_seed")
+            .and_then(|value| value.as_u64())
+            .is_none()
+        || run
+            .get("samples")
+            .and_then(|value| value.as_u64())
+            .is_none_or(|samples| samples == 0)
+        || run
+            .get("budget")
+            .and_then(|value| value.as_object())
+            .is_none()
+        || run
+            .get("coverage")
+            .and_then(|value| value.as_object())
+            .is_none()
+    {
+        bad("schema/stage/reconstruction/build/pool field mismatch");
+    }
+    let Some(actual) = run
+        .get("config_fingerprint")
+        .and_then(|value| value.as_str())
+    else {
+        bad("config_fingerprint missing");
+        unreachable!()
+    };
+    let mut body = row["run"].clone();
+    body.as_object_mut().unwrap().remove("config_fingerprint");
+    if !integer_only_config(&body) {
+        bad("config contains a non-integer scalar");
+    }
+    if actual != config_fingerprint(&body) {
+        bad("config_fingerprint does not match run body");
+    }
+    let inputs = &row["run"]["input_fingerprints"];
+    let required_inputs = [
+        "dex_file",
+        "meta_pool_file",
+        "community_rentals_file",
+        "learnsets_file",
+        "embedded_community_rentals",
+        "embedded_learnsets",
+    ];
+    if inputs.as_object().unwrap().len() != required_inputs.len() {
+        bad("reconstruction input manifest has unknown/missing fields");
+    }
+    for field in required_inputs {
+        if inputs[field]
+            .as_str()
+            .is_none_or(|value| !valid_fnv_id(value))
+        {
+            bad("reconstruction input fingerprint missing");
+        }
+    }
+    if row["run"]["pool_fingerprint"] != inputs["meta_pool_file"] {
+        bad("pool fingerprint disagrees with reconstruction inputs");
+    }
+    if inputs["community_rentals_file"] != inputs["embedded_community_rentals"]
+        || inputs["learnsets_file"] != inputs["embedded_learnsets"]
+    {
+        bad("runtime/embedded reconstruction inputs disagree");
+    }
+    let executable_id = row["run"]["build_identity"].as_str().and_then(|value| {
+        value
+            .rsplit_once(";exe=")
+            .map(|(_, fingerprint)| fingerprint)
+    });
+    if executable_id.is_none_or(|value| !valid_fnv_id(value)) {
+        bad("build identity lacks executable content fingerprint");
+    }
+    let coverage = &row["run"]["coverage"];
+    if coverage["expected_rows"].as_u64().is_none()
+        || coverage["coordinate_fingerprint"]
+            .as_str()
+            .is_none_or(str::is_empty)
+    {
+        bad("coverage fields missing or invalid");
+    }
+}
+
+fn valid_state_key(value: &serde_json::Value) -> bool {
+    value.as_str().is_some_and(|value| {
+        value.len() == 41
+            && value.starts_with("state128:")
+            && value[9..].bytes().all(|byte| byte.is_ascii_hexdigit())
+    })
+}
+
+fn valid_fnv_id(value: &str) -> bool {
+    value.len() == 24
+        && value.starts_with("fnv1a64:")
+        && value[8..]
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 fn validate_screen_row(path: &str, line_no: usize, row: &serde_json::Value) {
     let bad = |why: &str| panic!("{path}:{line_no}: invalid screen row: {why}");
+    if is_current_schema(row) {
+        validate_run(path, line_no, row, "screen");
+        let run = &row["run"];
+        if run["lineage"] != "offline"
+            || run["source"] != "corpus"
+            || run["source_fingerprint"] != row["corpus_fingerprint"]
+        {
+            bad("row source disagrees with run metadata");
+        }
+    } else if row.get("schema").is_some() {
+        bad("unknown row schema");
+    }
     if row["corpus_fingerprint"].as_str().is_none_or(str::is_empty)
         || row["file"].as_str().is_none_or(str::is_empty)
     {
@@ -1028,6 +1409,30 @@ fn validate_screen_row(path: &str, line_no: usize, row: &serde_json::Value) {
         || row["turn"].as_u64().is_none()
     {
         bad("decision coordinates missing or invalid");
+    }
+    if row.get("skip").is_some() {
+        if row["skip"].as_str().is_none_or(str::is_empty) {
+            bad("skip must be non-empty text");
+        }
+        return;
+    }
+    if is_current_schema(row) {
+        let run = &row["run"];
+        if run["samples"] != row["samples"]
+            || run["budget"]["product_iters"] != row["product_iters"]
+            || run["budget"]["oracle_iters"] != row["oracle_iters"]
+        {
+            bad("row statistics disagree with run metadata");
+        }
+        let Some(state_keys) = row["state_keys"].as_array() else {
+            bad("state_keys missing");
+            return;
+        };
+        if state_keys.len() != row["samples"].as_u64().unwrap_or(0) as usize
+            || state_keys.iter().any(|key| !valid_state_key(key))
+        {
+            bad("state_keys must bind every reconstruction sample");
+        }
     }
     for field in [
         "human",
@@ -1081,6 +1486,32 @@ fn hypothesis_key(row: &serde_json::Value, live: bool) -> String {
     }
 }
 
+fn source_coordinate_key(row: &serde_json::Value, live: bool) -> String {
+    if live {
+        serde_json::json!([
+            row["input_fingerprint"],
+            row["input_line"],
+            row["room"],
+            row["rqid"],
+            row["battle"],
+            row["decision"],
+            row["side"],
+            row["turn"],
+        ])
+        .to_string()
+    } else {
+        serde_json::json!([
+            row["corpus_fingerprint"],
+            row["file"],
+            row["battle"],
+            row["decision"],
+            row["side"],
+            row["turn"],
+        ])
+        .to_string()
+    }
+}
+
 fn same_hypothesis_payload(a: &serde_json::Value, b: &serde_json::Value, live: bool) -> bool {
     if !live {
         return a == b;
@@ -1101,8 +1532,17 @@ fn dedupe_hypotheses(
     let mut out = Vec::<serde_json::Value>::new();
     let mut duplicates = 0usize;
     for (line_no, row) in rows {
-        let key = hypothesis_key(&row, live);
+        let current_schema = is_current_schema(&row);
+        let key = if current_schema {
+            source_coordinate_key(&row, live)
+        } else {
+            hypothesis_key(&row, live)
+        };
         if let Some(&(first_line, first_index)) = seen.get(&key) {
+            assert!(
+                !current_schema,
+                "{path}:{line_no}: duplicate v3 screen source coordinate (first at line {first_line})"
+            );
             assert!(
                 same_hypothesis_payload(&out[first_index], &row, live),
                 "{path}:{line_no}: conflicting duplicate hypothesis (first at line {first_line})"
@@ -1117,6 +1557,95 @@ fn dedupe_hypotheses(
         eprintln!("deduplicated {duplicates} repeated hypotheses from {path}");
     }
     out
+}
+
+fn validate_screen_artifact(
+    path: &str,
+    rows: &[(usize, serde_json::Value)],
+    live: bool,
+    expected_source: &str,
+) -> serde_json::Value {
+    assert!(!rows.is_empty(), "{path}: screen artifact is empty");
+    let expected_mode = if live { "live-screen" } else { "screen" };
+    let mut seen = HashMap::<String, usize>::new();
+    let mut coordinates = Vec::with_capacity(rows.len());
+    for (line_no, row) in rows {
+        assert_eq!(
+            row["mode"].as_str(),
+            Some(expected_mode),
+            "{path}:{line_no}: confirm input must contain only {expected_mode} rows"
+        );
+        assert!(
+            is_current_schema(row),
+            "{path}:{line_no}: legacy screen artifacts are rejected; regenerate {ROW_SCHEMA}"
+        );
+        if live {
+            validate_live_screen_row(path, *line_no, row);
+            assert_eq!(
+                row["input_fingerprint"].as_str(),
+                Some(expected_source),
+                "{path}:{line_no}: screen row belongs to a different decision log"
+            );
+            coordinates.push(format!(
+                "live\0{}\0{}\0{}\0{}\0{}\0{}\0{}\n",
+                row["room"].as_str().unwrap(),
+                row["rqid"].as_u64().unwrap(),
+                row["battle"].as_u64().unwrap(),
+                row["decision"].as_u64().unwrap(),
+                row["side"].as_u64().unwrap(),
+                row["turn"].as_u64().unwrap(),
+                row["input_line"].as_u64().unwrap(),
+            ));
+        } else {
+            validate_screen_row(path, *line_no, row);
+            assert_eq!(
+                row["corpus_fingerprint"].as_str(),
+                Some(expected_source),
+                "{path}:{line_no}: screen row belongs to a different corpus"
+            );
+            coordinates.push(offline_coordinate(
+                row["file"].as_str().unwrap(),
+                row["battle"].as_u64().unwrap() as usize,
+                row["decision"].as_u64().unwrap() as usize,
+                row["side"].as_u64().unwrap() as usize,
+                row["turn"].as_u64().unwrap() as u16,
+            ));
+        }
+        let coordinate = source_coordinate_key(row, live);
+        if let Some(first_line) = seen.insert(coordinate, *line_no) {
+            panic!(
+                "{path}:{line_no}: duplicate v3 screen source coordinate \
+                 (first at line {first_line})"
+            );
+        }
+    }
+    let first = rows[0].1["run"].clone();
+    assert!(
+        rows.iter().all(|(_, row)| row["run"] == first),
+        "{path}: screen input mixes run configurations"
+    );
+    assert_eq!(
+        first["source_fingerprint"].as_str(),
+        Some(expected_source),
+        "screen run source fingerprint mismatch"
+    );
+    assert_eq!(
+        first["build_identity"].as_str(),
+        Some(build_identity()),
+        "confirmation must use the exact screen executable"
+    );
+    assert_eq!(
+        first["coverage"]["expected_rows"].as_u64(),
+        Some(rows.len() as u64),
+        "{path}: incomplete screen coverage"
+    );
+    let actual_fingerprint = coordinate_fingerprint(coordinates);
+    assert_eq!(
+        first["coverage"]["coordinate_fingerprint"].as_str(),
+        Some(actual_fingerprint.as_str()),
+        "{path}: screen coordinate coverage mismatch"
+    );
+    first
 }
 
 fn cmp_field_str(a: &serde_json::Value, b: &serde_json::Value, field: &str) -> std::cmp::Ordering {
@@ -1177,20 +1706,37 @@ fn live_snapshots(rooms: Vec<LiveRoom>, wanted: &HashSet<usize>) -> HashMap<usiz
     snapshots
 }
 
-fn live_confirm_base(candidate: &Candidate) -> serde_json::Value {
+fn live_confirm_base(candidate: &Candidate, run: Option<&serde_json::Value>) -> serde_json::Value {
     let row = &candidate.row;
-    serde_json::json!({
+    let mut base = serde_json::json!({
         "mode":"live-confirm", "rank":candidate.rank,
         "source":"live-decision-log-v2", "input_file":row["input_file"],
         "input_fingerprint":row["input_fingerprint"],
         "input_line":row["input_line"], "room":row["room"], "rqid":row["rqid"],
         "battle":row["battle"], "decision":row["decision"],
         "side":row["side"], "turn":row["turn"],
-    })
+    });
+    if let Some(run) = run {
+        base["schema"] = ROW_SCHEMA.into();
+        base["run"] = run.clone();
+    }
+    base
 }
 
 fn validate_live_screen_row(path: &str, line_no: usize, row: &serde_json::Value) {
     let bad = |why: &str| panic!("{path}:{line_no}: invalid live-screen row: {why}");
+    if is_current_schema(row) {
+        validate_run(path, line_no, row, "screen");
+        let run = &row["run"];
+        if run["lineage"] != "live"
+            || run["source"] != "live-decision-log-v2"
+            || run["source_fingerprint"] != row["input_fingerprint"]
+        {
+            bad("row source disagrees with run metadata");
+        }
+    } else if row.get("schema").is_some() {
+        bad("unknown row schema");
+    }
     if row["input_file"].as_str().is_none() {
         bad("input_file missing");
     }
@@ -1209,6 +1755,28 @@ fn validate_live_screen_row(path: &str, line_no: usize, row: &serde_json::Value)
         || row["turn"].as_u64().is_none()
     {
         bad("decision coordinates missing or invalid");
+    }
+    if row.get("skip").is_some() {
+        if row["skip"].as_str().is_none_or(str::is_empty) {
+            bad("skip must be non-empty text");
+        }
+        return;
+    }
+    if is_current_schema(row) {
+        let run = &row["run"];
+        if run["samples"] != row["samples"] || run["budget"]["oracle_iters"] != row["oracle_iters"]
+        {
+            bad("row statistics disagree with run metadata");
+        }
+        let Some(state_keys) = row["state_keys"].as_array() else {
+            bad("state_keys missing");
+            return;
+        };
+        if state_keys.len() != row["samples"].as_u64().unwrap_or(0) as usize
+            || state_keys.iter().any(|key| !valid_state_key(key))
+        {
+            bad("state_keys must bind every reconstruction sample");
+        }
     }
     for field in [
         "human",
@@ -1239,12 +1807,13 @@ fn confirm_live_candidate(
     candidate: &Candidate,
     snapshot: Option<&LiveSnapshot>,
     source_id: &str,
+    run: Option<&serde_json::Value>,
     iters: u32,
     samples: usize,
     base_seed: u64,
 ) -> serde_json::Value {
     let screen = &candidate.row;
-    let base = live_confirm_base(candidate);
+    let base = live_confirm_base(candidate, run);
     let Some(snapshot) = snapshot else {
         return merge(base, serde_json::json!({"skip":"input-line-missing"}));
     };
@@ -1263,6 +1832,7 @@ fn confirm_live_candidate(
     };
     let mut reference_values = Vec::with_capacity(samples);
     let mut candidate_values = Vec::with_capacity(samples);
+    let mut state_keys = Vec::with_capacity(samples);
     for rep in 0..samples {
         let synth_seed = live_seed(base_seed, live, rep, 0x11C0_0001);
         let agent = match reconstruct_live_agent(dex, pool, live, &snapshot.protocol, synth_seed) {
@@ -1275,6 +1845,7 @@ fn confirm_live_candidate(
             }
         };
         let battle = agent.battle().unwrap();
+        state_keys.push(state_fingerprint(battle));
         let belief = agent.belief().unwrap();
         let observer = agent.observer().unwrap();
         let mut choice_battle = battle.clone();
@@ -1322,6 +1893,7 @@ fn confirm_live_candidate(
             "regret":estimate.mean, "ci95":estimate.ci95, "lower95":estimate.lower95,
             "reference_values":reference_values, "candidate_values":candidate_values,
             "iters_per_action":iters, "samples":samples,
+            "state_keys":state_keys,
             "estimand":"shared-opponent-root-equal-allocation",
         }),
     )
@@ -1368,6 +1940,7 @@ fn confirm_candidate(
     pool: &MetaPool,
     files: &[PathBuf],
     candidate: &Candidate,
+    run: Option<&serde_json::Value>,
     iters: u32,
     samples: usize,
     base_seed: u64,
@@ -1375,23 +1948,28 @@ fn confirm_candidate(
     let row = &candidate.row;
     let bi = row["battle"].as_u64().unwrap() as usize;
     let di = row["decision"].as_u64().unwrap() as usize;
+    let mut base = serde_json::json!({
+        "mode":"confirm", "rank":candidate.rank,
+        "corpus_fingerprint":row["corpus_fingerprint"],
+        "battle":bi, "file":row["file"], "decision":di,
+        "side":row["side"], "turn":row["turn"], "human":row["human"],
+    });
+    if let Some(run) = run {
+        base["schema"] = ROW_SCHEMA.into();
+        base["run"] = run.clone();
+    }
     let Some(path) = files.get(bi) else {
-        return serde_json::json!({
-            "mode":"confirm", "rank":candidate.rank, "battle":bi, "decision":di,
-            "skip":"battle-missing"
-        });
+        return merge(base, serde_json::json!({"skip":"battle-missing"}));
     };
     let data = load_battle(path);
     let Some(d) = data.decisions.get(di) else {
-        return serde_json::json!({
-            "mode":"confirm", "rank":candidate.rank, "battle":bi, "decision":di,
-            "skip":"decision-missing"
-        });
+        return merge(base, serde_json::json!({"skip":"decision-missing"}));
     };
     let reference = row["reference"].as_str().unwrap_or("");
     let proposed = row["candidate"].as_str().unwrap_or("");
     let mut reference_values = Vec::new();
     let mut candidate_values = Vec::new();
+    let mut state_keys = Vec::new();
 
     for rep in 0..samples {
         let synth_seed = job_seed(base_seed, bi, di, rep, 0xC0F1_0001);
@@ -1404,14 +1982,10 @@ fn confirm_candidate(
             d,
             synth_seed,
         ) else {
-            return merge(
-                row.clone(),
-                serde_json::json!({
-                    "mode":"confirm", "rank":candidate.rank, "skip":"reconstruct"
-                }),
-            );
+            return merge(base, serde_json::json!({"skip":"reconstruct"}));
         };
         let battle = agent.battle().unwrap();
+        state_keys.push(state_fingerprint(battle));
         let belief = agent.belief().unwrap();
         let observer = agent.observer().unwrap();
         let mut choice_battle = battle.clone();
@@ -1421,20 +1995,10 @@ fn confirm_candidate(
             .map(|&a| choice_label(battle, dex, d.side, a))
             .collect();
         let Some(ri) = labels.iter().position(|a| a == reference) else {
-            return merge(
-                row.clone(),
-                serde_json::json!({
-                    "mode":"confirm", "rank":candidate.rank, "skip":"reference-missing"
-                }),
-            );
+            return merge(base, serde_json::json!({"skip":"reference-missing"}));
         };
         let Some(ci) = labels.iter().position(|a| a == proposed) else {
-            return merge(
-                row.clone(),
-                serde_json::json!({
-                    "mode":"confirm", "rank":candidate.rank, "skip":"candidate-missing"
-                }),
-            );
+            return merge(base, serde_json::json!({"skip":"candidate-missing"}));
         };
         let search_seed = job_seed(base_seed, bi, di, rep, 0xC0F1_1001);
         let mut search = BlindSearch::new(battle, dex, cfg(), d.side, search_seed);
@@ -1455,19 +2019,19 @@ fn confirm_candidate(
         candidate_values.push(means[ci]);
     }
     let estimate = paired_regret(&candidate_values, &reference_values);
-    serde_json::json!({
-        "mode":"confirm", "rank":candidate.rank,
-        "corpus_fingerprint":row["corpus_fingerprint"],
-        "battle":bi, "file":row["file"], "decision":di,
-        "side":row["side"], "turn":row["turn"], "human":row["human"],
-        "reference":reference, "candidate":proposed,
-        "reference_class":row["reference_class"], "candidate_class":row["candidate_class"],
-        "tags":row["tags"], "discovery_regret":row["regret"],
-        "regret":estimate.mean, "ci95":estimate.ci95, "lower95":estimate.lower95,
-        "reference_values":reference_values, "candidate_values":candidate_values,
-        "iters_per_action":iters, "samples":samples,
-        "estimand":"shared-opponent-root-equal-allocation",
-    })
+    merge(
+        base,
+        serde_json::json!({
+            "reference":reference, "candidate":proposed,
+            "reference_class":row["reference_class"], "candidate_class":row["candidate_class"],
+            "tags":row["tags"], "discovery_regret":row["regret"],
+            "regret":estimate.mean, "ci95":estimate.ci95, "lower95":estimate.lower95,
+            "reference_values":reference_values, "candidate_values":candidate_values,
+            "iters_per_action":iters, "samples":samples,
+            "state_keys":state_keys,
+            "estimand":"shared-opponent-root-equal-allocation",
+        }),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1489,28 +2053,24 @@ fn run_confirm(
     let files = corpus_files(&root.join(corpus));
     let corpus_fingerprint = corpus_source_id(&files);
     let text = std::fs::read_to_string(input).unwrap_or_else(|e| panic!("read {input}: {e}"));
-    let parsed: Vec<(usize, serde_json::Value)> = text
+    let artifact: Vec<(usize, serde_json::Value)> = text
         .lines()
         .enumerate()
         .filter(|(_, line)| !line.trim().is_empty())
-        .filter_map(|(line_index, line)| {
+        .map(|(line_index, line)| {
             let line_no = line_index + 1;
             let row: serde_json::Value =
                 serde_json::from_str(line).unwrap_or_else(|e| panic!("{input}:{line_no}: {e}"));
             assert!(row.is_object(), "{input}:{line_no}: row must be an object");
-            if row["mode"] != "screen" || row.get("skip").is_some() {
-                return None;
-            }
-            validate_screen_row(input, line_no, &row);
-            assert_eq!(
-                row["corpus_fingerprint"].as_str(),
-                Some(corpus_fingerprint.as_str()),
-                "{input}:{line_no}: screen row belongs to a different corpus"
-            );
-            Some((line_no, row))
+            (line_no, row)
         })
         .collect();
-    let mut rows = dedupe_hypotheses(input, parsed, false);
+    let discovery = validate_screen_artifact(input, &artifact, false, &corpus_fingerprint);
+    let mut rows: Vec<serde_json::Value> = artifact
+        .into_iter()
+        .filter(|(_, row)| row.get("skip").is_none())
+        .map(|(_, row)| row)
+        .collect();
     rows.retain(|row| {
         row["reference"] != row["candidate"] && row["regret"].as_f64().unwrap() >= min_regret
     });
@@ -1522,6 +2082,46 @@ fn run_confirm(
             .then_with(|| cmp_offline_identity(a, b))
     });
     rows.truncate(top);
+    let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
+    let input_fingerprints = reconstruction_input_fingerprints(root);
+    let pool_fingerprint = input_fingerprints["meta_pool_file"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        discovery["pool_fingerprint"].as_str(),
+        Some(pool_fingerprint.as_str()),
+        "confirmation pool differs from screen pool"
+    );
+    assert_eq!(
+        discovery["input_fingerprints"], input_fingerprints,
+        "confirmation reconstruction inputs differ from screen inputs"
+    );
+    let expected_rows = rows.len();
+    let coverage_fingerprint = coordinate_fingerprint(
+        rows.iter()
+            .map(|row| {
+                offline_coordinate(
+                    row["file"].as_str().unwrap(),
+                    row["battle"].as_u64().unwrap() as usize,
+                    row["decision"].as_u64().unwrap() as usize,
+                    row["side"].as_u64().unwrap() as usize,
+                    row["turn"].as_u64().unwrap() as u16,
+                )
+            })
+            .collect(),
+    );
+    let confirm_run = run_meta(serde_json::json!({
+        "lineage":"offline", "stage":"confirm", "source":"corpus",
+        "source_fingerprint":corpus_fingerprint,
+        "pool_fingerprint":pool_fingerprint,
+        "input_fingerprints":input_fingerprints,
+        "base_seed":seed, "budget":{"iters_per_action":iters}, "samples":samples,
+        "selection":{"top":top,"min_regret_bits":min_regret.to_bits()},
+        "coverage":{"expected_rows":expected_rows,
+                    "coordinate_fingerprint":coverage_fingerprint},
+        "discovery_fingerprint":discovery["config_fingerprint"],
+    }));
     let candidates: Vec<Candidate> = rows
         .into_iter()
         .enumerate()
@@ -1532,7 +2132,7 @@ fn run_confirm(
         bind_offline_candidate(&files, candidate);
     }
     let src = load_sources(dex, root);
-    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    let pool = load_meta_pool(&pool_path);
     eprintln!(
         "confirm corpus {corpus_fingerprint} candidates {} iters {iters} samples {samples} \
          threads {threads}",
@@ -1555,6 +2155,7 @@ fn run_confirm(
                     &pool,
                     &files,
                     &candidates[j],
+                    Some(&confirm_run),
                     iters,
                     samples,
                     seed,
@@ -1590,39 +2191,24 @@ fn run_live_confirm(
     let loaded_live_log = load_live_log(live_log);
     let source_id = loaded_live_log.source_id;
     let text = std::fs::read_to_string(input).unwrap_or_else(|e| panic!("read {input}: {e}"));
-    let mut source_matches = 0usize;
-    let mut source_mismatches = 0usize;
-    let parsed: Vec<(usize, serde_json::Value)> = text
+    let artifact: Vec<(usize, serde_json::Value)> = text
         .lines()
         .enumerate()
         .filter(|(_, line)| !line.trim().is_empty())
-        .filter_map(|(line_index, line)| {
+        .map(|(line_index, line)| {
             let line_no = line_index + 1;
             let row: serde_json::Value =
                 serde_json::from_str(line).unwrap_or_else(|e| panic!("{input}:{line_no}: {e}"));
             assert!(row.is_object(), "{input}:{line_no}: row must be an object");
-            if row["mode"] != "live-screen" || row.get("skip").is_some() {
-                return None;
-            }
-            validate_live_screen_row(input, line_no, &row);
-            if row["input_fingerprint"].as_str() != Some(source_id.as_str()) {
-                source_mismatches += 1;
-                return None;
-            }
-            source_matches += 1;
-            Some((line_no, row))
+            (line_no, row)
         })
         .collect();
-    assert!(
-        source_matches != 0 || source_mismatches == 0,
-        "live-confirm: no live-screen rows match decision log fingerprint {source_id} \
-         ({source_mismatches} rows belong to other logs)"
-    );
-    eprintln!(
-        "live-confirm source {source_id}: {source_matches} matching rows, \
-         {source_mismatches} rows from other logs ignored"
-    );
-    let mut rows = dedupe_hypotheses(input, parsed, true);
+    let discovery = validate_screen_artifact(input, &artifact, true, &source_id);
+    let mut rows: Vec<serde_json::Value> = artifact
+        .into_iter()
+        .filter(|(_, row)| row.get("skip").is_none())
+        .map(|(_, row)| row)
+        .collect();
     rows.retain(|row| {
         row["reference"] != row["candidate"] && row["regret"].as_f64().unwrap() >= min_regret
     });
@@ -1634,6 +2220,48 @@ fn run_live_confirm(
             .then_with(|| cmp_live_identity(a, b))
     });
     rows.truncate(top);
+    let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
+    let input_fingerprints = reconstruction_input_fingerprints(root);
+    let pool_fingerprint = input_fingerprints["meta_pool_file"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        discovery["pool_fingerprint"].as_str(),
+        Some(pool_fingerprint.as_str()),
+        "live confirmation pool differs from screen pool"
+    );
+    assert_eq!(
+        discovery["input_fingerprints"], input_fingerprints,
+        "live confirmation reconstruction inputs differ from screen inputs"
+    );
+    let expected_rows = rows.len();
+    let coverage_fingerprint = coordinate_fingerprint(
+        rows.iter()
+            .map(|row| {
+                format!(
+                    "live\0{}\0{}\0{}\0{}\0{}\0{}\0{}\n",
+                    row["room"].as_str().unwrap(),
+                    row["rqid"].as_u64().unwrap(),
+                    row["battle"].as_u64().unwrap(),
+                    row["decision"].as_u64().unwrap(),
+                    row["side"].as_u64().unwrap(),
+                    row["turn"].as_u64().unwrap(),
+                    row["input_line"].as_u64().unwrap(),
+                )
+            })
+            .collect(),
+    );
+    let confirm_run = run_meta(serde_json::json!({
+        "lineage":"live", "stage":"confirm", "source":"live-decision-log-v2",
+        "source_fingerprint":source_id, "pool_fingerprint":pool_fingerprint,
+        "input_fingerprints":input_fingerprints,
+        "base_seed":seed, "budget":{"iters_per_action":iters}, "samples":samples,
+        "selection":{"top":top,"min_regret_bits":min_regret.to_bits()},
+        "coverage":{"expected_rows":expected_rows,
+                    "coordinate_fingerprint":coverage_fingerprint},
+        "discovery_fingerprint":discovery["config_fingerprint"],
+    }));
     let candidates: Vec<Candidate> = rows
         .into_iter()
         .enumerate()
@@ -1645,7 +2273,7 @@ fn run_live_confirm(
         .filter_map(|candidate| candidate.row["input_line"].as_u64().map(|n| n as usize))
         .collect();
     let snapshots = live_snapshots(loaded_live_log.rooms, &wanted);
-    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    let pool = load_meta_pool(&pool_path);
     eprintln!(
         "live-confirm candidates {} iters {iters} samples {samples} threads {threads}",
         candidates.len()
@@ -1663,7 +2291,15 @@ fn run_live_confirm(
                 let input_line = candidate.row["input_line"].as_u64().map(|n| n as usize);
                 let snapshot = input_line.and_then(|line| snapshots.get(&line));
                 let row = confirm_live_candidate(
-                    dex, &pool, candidate, snapshot, &source_id, iters, samples, seed,
+                    dex,
+                    &pool,
+                    candidate,
+                    snapshot,
+                    &source_id,
+                    Some(&confirm_run),
+                    iters,
+                    samples,
+                    seed,
                 );
                 out.lock().unwrap().push(row);
                 let n = done.fetch_add(1, Ordering::Relaxed) + 1;
@@ -1792,6 +2428,17 @@ mod live_tests {
         })
     }
 
+    fn test_input_fingerprints() -> serde_json::Value {
+        serde_json::json!({
+            "dex_file":"fnv1a64:1111111111111111",
+            "meta_pool_file":"fnv1a64:2222222222222222",
+            "community_rentals_file":"fnv1a64:3333333333333333",
+            "learnsets_file":"fnv1a64:4444444444444444",
+            "embedded_community_rentals":"fnv1a64:3333333333333333",
+            "embedded_learnsets":"fnv1a64:4444444444444444",
+        })
+    }
+
     #[test]
     fn cli_numbers_and_ranges_fail_closed() {
         let overflow = vec!["x".into(), "--iters".into(), "4294967296".into()];
@@ -1811,6 +2458,61 @@ mod live_tests {
     }
 
     #[test]
+    fn canonical_config_hash_matches_python_golden() {
+        let body = serde_json::json!({
+            "z":u64::MAX,
+            "a":{"neg":i64::MIN,"unicode":"雪"},
+            "list":[0, 9_007_199_254_740_993u64],
+        });
+        assert!(integer_only_config(&body));
+        assert_eq!(
+            String::from_utf8(canonical_json(&body)).unwrap(),
+            r#"{"a":{"neg":-9223372036854775808,"unicode":"雪"},"list":[0,9007199254740993],"z":18446744073709551615}"#
+        );
+        assert_eq!(config_fingerprint(&body), "fnv1a64:c38972634d174986");
+        for invalid in [
+            serde_json::json!(1.0),
+            serde_json::json!(true),
+            serde_json::Value::Null,
+        ] {
+            assert!(!integer_only_config(&invalid));
+        }
+    }
+
+    #[test]
+    fn reconstruction_manifest_binds_every_runtime_and_embedded_input() {
+        let root = conformance::fixture::repo_root();
+        let inputs = reconstruction_input_fingerprints(&root);
+        assert_eq!(inputs.as_object().unwrap().len(), 6);
+        assert_eq!(
+            inputs["dex_file"].as_str(),
+            Some(file_source_id(&root.join("data/gen2stadium2.json")).as_str())
+        );
+        assert_eq!(
+            inputs["meta_pool_file"].as_str(),
+            Some(file_source_id(&root.join("data/meta-pool-v0/meta-pool.json")).as_str())
+        );
+        assert_eq!(
+            inputs["community_rentals_file"],
+            inputs["embedded_community_rentals"]
+        );
+        assert_eq!(inputs["learnsets_file"], inputs["embedded_learnsets"]);
+    }
+
+    #[test]
+    fn unreadable_executable_identity_is_fatal() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let missing = std::env::temp_dir().join(format!(
+            "nc2000-missing-regret-executable-{}-{nonce}",
+            std::process::id()
+        ));
+        assert!(std::panic::catch_unwind(|| executable_content_fingerprint(&missing)).is_err());
+    }
+
+    #[test]
     fn hypothesis_duplicates_are_exact_or_fatal() {
         let row = screen_row();
         let deduped =
@@ -1821,6 +2523,79 @@ mod live_tests {
         conflict["regret"] = serde_json::json!(0.5);
         assert!(std::panic::catch_unwind(|| {
             dedupe_hypotheses("synthetic", vec![(1, row), (2, conflict)], false)
+        })
+        .is_err());
+    }
+
+    #[test]
+    fn v3_hypotheses_are_unique_by_source_coordinate() {
+        let mut row = screen_row();
+        row["schema"] = ROW_SCHEMA.into();
+        row["run"] = run_meta(serde_json::json!({
+            "lineage":"offline", "stage":"screen", "source":"corpus",
+            "source_fingerprint":"fnv1a64:test:1files",
+            "pool_fingerprint":"fnv1a64:2222222222222222",
+            "input_fingerprints":test_input_fingerprints(), "base_seed":1,
+            "budget":{"product_iters":1,"oracle_iters":2}, "samples":1,
+            "selection":{"decision_lo":0,"decision_hi":9,"per_battle":9},
+            "coverage":{"expected_rows":1,"coordinate_fingerprint":"fnv1a64:test"},
+        }));
+        row["state_keys"] = serde_json::json!(["state128:00000000000000000000000000000001"]);
+        validate_screen_row("synthetic", 1, &row);
+        let mut different_hypothesis = row.clone();
+        different_hypothesis["candidate"] = "move thunder".into();
+        assert!(std::panic::catch_unwind(|| {
+            dedupe_hypotheses(
+                "synthetic",
+                vec![(1, row), (2, different_hypothesis)],
+                false,
+            )
+        })
+        .is_err());
+    }
+
+    #[test]
+    fn v3_screen_artifact_requires_full_coverage_including_skips() {
+        let source = "fnv1a64:test:2files";
+        let mut success = screen_row();
+        success["corpus_fingerprint"] = source.into();
+        let mut skipped = serde_json::json!({
+            "mode":"screen", "corpus_fingerprint":source,
+            "battle":1, "file":"second.raw.log", "decision":0, "side":1, "turn":2,
+            "skip":"reconstruct",
+        });
+        let coverage = coordinate_fingerprint(vec![
+            offline_coordinate("battle.raw.log", 0, 1, 0, 1),
+            offline_coordinate("second.raw.log", 1, 0, 1, 2),
+        ]);
+        let run = run_meta(serde_json::json!({
+            "lineage":"offline", "stage":"screen", "source":"corpus",
+            "source_fingerprint":source,
+            "pool_fingerprint":"fnv1a64:2222222222222222",
+            "input_fingerprints":test_input_fingerprints(),
+            "base_seed":1, "budget":{"product_iters":1,"oracle_iters":2}, "samples":1,
+            "selection":{"decision_lo":0,"decision_hi":9,"per_battle":9},
+            "coverage":{"expected_rows":2,"battle_count":2,
+                        "coordinate_fingerprint":coverage},
+        }));
+        for row in [&mut success, &mut skipped] {
+            row["schema"] = ROW_SCHEMA.into();
+            row["run"] = run.clone();
+        }
+        success["state_keys"] = serde_json::json!(["state128:00000000000000000000000000000001"]);
+        let artifact = vec![(1, success), (2, skipped)];
+        assert_eq!(
+            validate_screen_artifact("synthetic", &artifact, false, source),
+            run
+        );
+        assert!(std::panic::catch_unwind(|| {
+            validate_screen_artifact("synthetic", &artifact[..1], false, source)
+        })
+        .is_err());
+
+        let legacy = vec![(1, screen_row())];
+        assert!(std::panic::catch_unwind(|| {
+            validate_screen_artifact("synthetic", &legacy, false, "fnv1a64:test:1files")
         })
         .is_err());
     }
