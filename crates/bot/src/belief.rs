@@ -117,6 +117,48 @@ struct Candidate {
     refs: Option<Vec<Pokemon>>,
 }
 
+/// Hidden-set synthesis policy used after every meta-pool candidate has
+/// been rejected. `Layered` is the shipped policy. `LegacyMetaOnly` exists
+/// only as an evaluation control: it reproduces the old revealed -> pool ->
+/// empty-set/implicit-Struggle path without changing the production default.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FallbackPolicy {
+    LegacyMetaOnly,
+    #[default]
+    Layered,
+}
+
+impl FallbackPolicy {
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::LegacyMetaOnly => "legacy-meta-only-v1",
+            Self::Layered => "layered-meta-rentals-learnset-v1",
+        }
+    }
+}
+
+/// The per-mon source actually selected by fallback synthesis at the
+/// current observation. Exposed so evaluation artifacts can prove they
+/// exercised the layer they claim to measure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FallbackSource {
+    Meta,
+    CommunityRental,
+    Learnset,
+    LegacyEmpty,
+}
+
+impl FallbackSource {
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Meta => "meta",
+            Self::CommunityRental => "community-rental",
+            Self::Learnset => "learnset",
+            Self::LegacyEmpty => "legacy-empty",
+        }
+    }
+}
+
 pub struct Belief {
     cands: Vec<Candidate>,
     /// Pool indices of the candidates consistent with all observations so
@@ -128,6 +170,7 @@ pub struct Belief {
     /// filtering is skipped (provably a no-op, and skipping keeps a filter
     /// bug from silently dropping the truth to fallback).
     pinned: bool,
+    fallback_policy: FallbackPolicy,
     synced: Option<u64>,
 }
 
@@ -135,6 +178,17 @@ impl Belief {
     /// Build the candidate set and apply the preview filter. Call at team
     /// preview, right after `Observer::new`.
     pub fn new(dex: &Dex, pool: &MetaPool, obs: &Observer) -> Belief {
+        Self::with_fallback_policy(dex, pool, obs, FallbackPolicy::Layered)
+    }
+
+    /// Evaluation surface for comparing fallback synthesis policies. Live
+    /// callers should use `new`, which is pinned to the shipped policy.
+    pub fn with_fallback_policy(
+        dex: &Dex,
+        pool: &MetaPool,
+        obs: &Observer,
+        fallback_policy: FallbackPolicy,
+    ) -> Belief {
         let cands: Vec<Candidate> = pool
             .teams
             .iter()
@@ -143,8 +197,14 @@ impl Belief {
                 Candidate { id: t.id.clone(), sets: t.sets.clone(), refs }
             })
             .collect();
-        let mut b =
-            Belief { cands, alive: Vec::new(), fallback: None, pinned: false, synced: None };
+        let mut b = Belief {
+            cands,
+            alive: Vec::new(),
+            fallback: None,
+            pinned: false,
+            fallback_policy,
+            synced: None,
+        };
         b.refilter(dex, obs);
         b
     }
@@ -167,6 +227,7 @@ impl Belief {
             alive,
             fallback: None,
             pinned: true,
+            fallback_policy: FallbackPolicy::Layered,
             synced: Some(obs.revision()),
         };
         if b.alive.is_empty() {
@@ -195,6 +256,7 @@ impl Belief {
             alive: vec![0],
             fallback: None,
             pinned: true,
+            fallback_policy: FallbackPolicy::Layered,
             synced: Some(obs.revision()),
         }
     }
@@ -231,6 +293,16 @@ impl Belief {
 
     pub fn is_fallback(&self) -> bool {
         self.alive.is_empty()
+    }
+
+    pub fn fallback_policy(&self) -> FallbackPolicy {
+        self.fallback_policy
+    }
+
+    /// Per-mon synthesis sources in observer roster order. Meaningful when
+    /// `is_fallback()`; callers may inspect it at preview before any reveal.
+    pub fn fallback_sources(&self, dex: &Dex, obs: &Observer) -> Vec<FallbackSource> {
+        obs.mons().iter().map(|mo| self.fallback_source(dex, mo)).collect()
     }
 
     pub fn candidate_id(&self, pool_idx: usize) -> &str {
@@ -457,6 +529,15 @@ impl Belief {
     fn build_fallback(&self, dex: &Dex, obs: &Observer) -> Vec<Pokemon> {
         let sets: Vec<PokemonSet> =
             obs.mons().iter().map(|mo| self.fallback_set(dex, mo)).collect();
+        self.build_fallback_from_sets(dex, obs, &sets)
+    }
+
+    fn build_fallback_from_sets(
+        &self,
+        dex: &Dex,
+        obs: &Observer,
+        sets: &[PokemonSet],
+    ) -> Vec<Pokemon> {
         match Battle::from_fixture(dex, "1,2,3,4", &sets, &sets) {
             Ok(b) => b.sides[0].roster.clone(),
             Err(_) => {
@@ -465,7 +546,10 @@ impl Belief {
                 let minimal: Vec<PokemonSet> = obs
                     .mons()
                     .iter()
-                    .map(|mo| base_set(dex, mo))
+                    .map(|mo| match self.fallback_policy {
+                        FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
+                        FallbackPolicy::Layered => base_set(dex, mo),
+                    })
                     .collect();
                 Battle::from_fixture(dex, "1,2,3,4", &minimal, &minimal)
                     .expect("minimal fallback set must construct")
@@ -473,6 +557,27 @@ impl Belief {
                     .roster
                     .clone()
             }
+        }
+    }
+
+    fn fallback_source(&self, dex: &Dex, mo: &MonObs) -> FallbackSource {
+        if self.cands.iter().any(|c| {
+            c.sets
+                .iter()
+                .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
+        }) {
+            return FallbackSource::Meta;
+        }
+        match self.fallback_policy {
+            FallbackPolicy::LegacyMetaOnly => FallbackSource::LegacyEmpty,
+            FallbackPolicy::Layered
+                if community_rental_sets()
+                    .iter()
+                    .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species)) =>
+            {
+                FallbackSource::CommunityRental
+            }
+            FallbackPolicy::Layered => FallbackSource::Learnset,
         }
     }
 
@@ -487,12 +592,19 @@ impl Belief {
         // without pretending an exact rental-team identity survived the
         // preview filter. Pool pedigree remains first, preserving existing
         // same-species behavior.
-        let prior = pool_set.or_else(|| {
-            community_rental_sets()
+        let source = self.fallback_source(dex, mo);
+        let prior = pool_set.or_else(|| match source {
+            FallbackSource::CommunityRental => community_rental_sets()
                 .iter()
-                .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
+                .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species)),
+            _ => None,
         });
-        let mut set = prior.cloned().unwrap_or_else(|| base_set(dex, mo));
+        let mut set = prior.cloned().unwrap_or_else(|| match self.fallback_policy {
+            // Deliberately empty: the engine safely enumerates implicit
+            // Struggle, matching the pre-M17d control without a fake move.
+            FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
+            FallbackPolicy::Layered => base_set(dex, mo),
+        });
         set.level = mo.level;
         set.gender = Some(match mo.gender.as_str() {
             "" => "N".to_string(),
@@ -518,7 +630,7 @@ impl Belief {
                 moves.push(name);
             }
         }
-        if moves.is_empty() {
+        if moves.is_empty() && self.fallback_policy == FallbackPolicy::Layered {
             moves.push(legal_fallback_move(dex, mo));
         }
         moves.truncate(4); // hard cap: >4 slots would assert in construction
@@ -533,6 +645,12 @@ impl Belief {
         };
         set
     }
+}
+
+fn legacy_base_set(dex: &Dex, mo: &MonObs) -> PokemonSet {
+    let mut set = base_set(dex, mo);
+    set.moves.clear();
+    set
 }
 
 /// Species/level/gender-only set (always constructible: every field comes
@@ -880,13 +998,14 @@ mod fallback_tests {
             alive: Vec::new(),
             fallback: None,
             pinned: false,
+            fallback_policy: FallbackPolicy::Layered,
             synced: None,
         }
     }
 
     fn mon(dex: &Dex, species: &str, level: u8, revealed: &[&str]) -> MonObs {
         MonObs {
-            species: dex.species.id(species).unwrap(),
+            species: dex.species.id(&toid(species)).unwrap(),
             level,
             gender: Gender::N,
             name: species.to_string(),
@@ -973,6 +1092,10 @@ mod fallback_tests {
             .unwrap();
         let chansey = belief.fallback_set(&dex, &mon(&dex, "chansey", 50, &[]));
         assert_eq!(chansey.moves, rental_chansey.moves);
+        assert_eq!(
+            belief.fallback_source(&dex, &mon(&dex, "chansey", 50, &[])),
+            FallbackSource::CommunityRental
+        );
         let revealed_chansey =
             belief.fallback_set(&dex, &mon(&dex, "chansey", 50, &["toxic"]));
         assert_eq!(toid(&revealed_chansey.moves[0]), "toxic");
@@ -990,6 +1113,57 @@ mod fallback_tests {
         assert_eq!(revealed.moves, ["tackle"]);
         let zero = belief.fallback_set(&dex, &mon(&dex, "bulbasaur", 50, &[]));
         assert_eq!(zero.moves, ["ancientpower"]);
+        assert_eq!(
+            belief.fallback_source(&dex, &mon(&dex, "bulbasaur", 50, &[])),
+            FallbackSource::Learnset
+        );
+    }
+
+    #[test]
+    fn legacy_control_reproduces_meta_only_then_implicit_struggle() {
+        let dex = test_dex();
+        let mut belief = test_belief();
+        belief.fallback_policy = FallbackPolicy::LegacyMetaOnly;
+
+        let source = belief.cands.iter().flat_map(|c| &c.sets).next().unwrap();
+        let from_pool =
+            belief.fallback_set(&dex, &mon(&dex, &source.species, source.level, &[]));
+        assert_eq!(from_pool.moves, source.moves);
+
+        let zero = belief.fallback_set(&dex, &mon(&dex, "chansey", 50, &[]));
+        assert!(zero.moves.is_empty());
+        assert_eq!(
+            belief.fallback_source(&dex, &mon(&dex, "chansey", 50, &[])),
+            FallbackSource::LegacyEmpty
+        );
+        let revealed = belief.fallback_set(&dex, &mon(&dex, "chansey", 50, &["toxic"]));
+        assert_eq!(revealed.moves, ["toxic"]);
+        let z = vec![zero; 6];
+        let r = vec![revealed; 6];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &z, &r).unwrap();
+        assert!(battle.sides[0].roster[0].base_move_slots.is_empty());
+        let obs = Observer::new(&battle, 0);
+        let mut invalid = z.clone();
+        invalid[0].species = "not-a-species".to_string();
+        let legacy_defensive = belief.build_fallback_from_sets(&dex, &obs, &invalid);
+        assert!(legacy_defensive.iter().all(|p| p.base_move_slots.is_empty()));
+        belief.fallback_policy = FallbackPolicy::Layered;
+        let layered_defensive = belief.build_fallback_from_sets(&dex, &obs, &invalid);
+        assert!(layered_defensive.iter().all(|p| !p.base_move_slots.is_empty()));
+        let p0 = battle.legal_choices(&dex, 0)[0];
+        let p1 = battle.legal_choices(&dex, 1)[0];
+        battle.apply_choices(&dex, [Some(p0), Some(p1)]).unwrap();
+        let moves: Vec<_> = battle
+            .legal_choices(&dex, 0)
+            .into_iter()
+            .filter(|c| matches!(c, nc2000_engine::battle::SearchChoice::Move(_)))
+            .collect();
+        assert_eq!(
+            moves,
+            [nc2000_engine::battle::SearchChoice::Move(
+                dex.moves.id("struggle").unwrap()
+            )]
+        );
     }
 
     fn plain_set(species: &str) -> PokemonSet {

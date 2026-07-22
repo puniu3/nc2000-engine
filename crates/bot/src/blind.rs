@@ -67,7 +67,7 @@ use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
 
 use crate::agent::Agent;
-use crate::belief::Belief;
+use crate::belief::{Belief, FallbackPolicy};
 use crate::observe::Observer;
 use crate::preview::{MetaPool, TableSet};
 use crate::rng::SplitMix64;
@@ -85,6 +85,7 @@ pub struct BlindAgent {
     rng: SplitMix64,
     pool: Arc<MetaPool>,
     tables: Option<Arc<TableSet>>,
+    fallback_policy: FallbackPolicy,
     game: Option<GameState>,
 }
 
@@ -98,7 +99,32 @@ impl BlindAgent {
         tables: Option<Arc<TableSet>>,
         seed: u64,
     ) -> Self {
-        BlindAgent { cfg, rng: SplitMix64::new(seed), pool, tables, game: None }
+        Self::new_with_fallback_policy(
+            cfg,
+            pool,
+            tables,
+            seed,
+            FallbackPolicy::Layered,
+        )
+    }
+
+    /// Evaluation control for fallback-policy A/B tests. The ordinary
+    /// constructor remains permanently bound to the shipped layered policy.
+    pub fn new_with_fallback_policy(
+        cfg: RmConfig,
+        pool: Arc<MetaPool>,
+        tables: Option<Arc<TableSet>>,
+        seed: u64,
+        fallback_policy: FallbackPolicy,
+    ) -> Self {
+        BlindAgent {
+            cfg,
+            rng: SplitMix64::new(seed),
+            pool,
+            tables,
+            fallback_policy,
+            game: None,
+        }
     }
 
     /// The live belief (None before the first decision) — test surface.
@@ -605,7 +631,12 @@ impl Agent for BlindAgent {
         };
         if stale {
             let observer = Observer::new(battle, side);
-            let belief = Belief::new(dex, &self.pool, &observer);
+            let belief = Belief::with_fallback_policy(
+                dex,
+                &self.pool,
+                &observer,
+                self.fallback_policy,
+            );
             self.game = Some(GameState { side, last_turn: battle.turn, observer, belief });
         }
         {
