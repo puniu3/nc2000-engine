@@ -11,7 +11,7 @@ use crate::import::{MonSnapshot, ProtocolAgent, ProtocolTracker};
 use crate::preview::load_meta_pool;
 use crate::smmcts::{RmConfig, SelRule};
 use nc2000_engine::dex::{toid, Dex, SpeciesId};
-use nc2000_engine::state::{Battle, Status};
+use nc2000_engine::state::{Battle, MoveSlot, Status};
 
 /// One loaded corpus battle: filtered protocol lines, eaten-berry facts,
 /// and the extracted observable decisions.
@@ -481,3 +481,149 @@ pub fn reconstruct(
     agent.battle().cloned()
 }
 
+/// Moves publicly used by each currently-active Pokemon anywhere in the
+/// complete log. This deliberately looks past `cut`: it is an offline corpus
+/// label, never information a live agent may consume.
+pub fn active_future_revealed_moves(
+    dex: &Dex,
+    battle: &Battle,
+    lines: &[String],
+) -> [Vec<String>; 2] {
+    let mut out: [Vec<String>; 2] = std::array::from_fn(|_| Vec::new());
+    for side in 0..2 {
+        let Some(id) = battle.active_id(side) else { continue };
+        let name = battle.poke(id).name.to_string();
+        for line in lines {
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.get(1) != Some(&"move")
+                || (line.contains("[from]") && !line.contains("[from] Sleep Talk"))
+            {
+                continue;
+            }
+            let Some(subject) = parts.get(2) else { continue };
+            let subject_side = if subject.as_bytes().get(1) == Some(&b'2') { 1 } else { 0 };
+            let subject_name = subject.split(':').nth(1).unwrap_or("").trim();
+            if subject_side != side || subject_name != name {
+                continue;
+            }
+            let Some(move_name) = parts.get(3) else { continue };
+            let key = plain(&toid(move_name));
+            if dex.moves.id(&key).is_some() && !out[side].contains(&key) {
+                out[side].push(key);
+            }
+        }
+    }
+    out
+}
+
+/// Research-only oracle completion for the currently active pair. Future
+/// public move reveals replace only candidate slots that had not been used at
+/// the reconstruction cut. State, HP, status, already-observed PP, and every
+/// opponent-hidden field remain exactly as reconstructed.
+///
+/// This is intentionally separate from `reconstruct`: callers must opt into
+/// future leakage explicitly, and product agents cannot reach this API.
+pub fn complete_active_moves_from_future(
+    dex: &Dex,
+    battle: &mut Battle,
+    lines: &[String],
+) -> [Vec<String>; 2] {
+    let revealed = active_future_revealed_moves(dex, battle, lines);
+    for side in 0..2 {
+        let Some(id) = battle.active_id(side) else { continue };
+        if battle.poke(id).transformed {
+            continue;
+        }
+        let revealed_ids: Vec<_> = revealed[side]
+            .iter()
+            .filter_map(|key| dex.moves.id(key))
+            .collect();
+        for move_id in revealed_ids.iter().copied() {
+            if battle.poke(id).move_slots.iter().any(|slot| slot.id == move_id) {
+                continue;
+            }
+            let replacement = battle
+                .poke(id)
+                .move_slots
+                .iter()
+                .enumerate()
+                .rev()
+                .find(|(_, slot)| {
+                    !slot.used
+                        && !revealed_ids.contains(&slot.id)
+                        && battle.poke(id).last_move != Some(slot.id)
+                        && battle.poke(id).last_move_used != Some(slot.id)
+                })
+                .map(|(index, _)| index);
+            let maxpp = dex.moves.get(move_id).pp as i32 * 8 / 5;
+            let slot = MoveSlot {
+                id: move_id,
+                pp: maxpp,
+                maxpp,
+                disabled: false,
+                used: false,
+                shared: true,
+            };
+            let pokemon = battle.poke_mut(id);
+            match replacement {
+                Some(index) => {
+                    pokemon.move_slots[index] = slot;
+                    if index < pokemon.base_move_slots.len() {
+                        pokemon.base_move_slots[index] = slot;
+                    }
+                }
+                None if pokemon.move_slots.len() < 4 => {
+                    pokemon.move_slots.push(slot);
+                    pokemon.base_move_slots.push(slot);
+                }
+                None => {}
+            }
+        }
+    }
+    revealed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nc2000_engine::battle::PokemonSet;
+
+    fn splash_set() -> PokemonSet {
+        PokemonSet {
+            name: "Pikachu".into(),
+            species: "Pikachu".into(),
+            item: String::new(),
+            ability: String::new(),
+            moves: vec!["Splash".into()],
+            level: 50,
+            evs: None,
+            ivs: None,
+            happiness: None,
+            gender: None,
+        }
+    }
+
+    #[test]
+    fn future_move_oracle_counts_sleep_talk_calls_but_not_other_called_moves() {
+        let dex = conformance::load_dex();
+        let team = vec![splash_set()];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &team, &team).unwrap();
+        let p1 = battle.legal_choices(&dex, 0)[0];
+        let p2 = battle.legal_choices(&dex, 1)[0];
+        battle.apply_choices(&dex, [Some(p1), Some(p2)]).unwrap();
+        let lines = vec![
+            "|move|p1a: Pikachu|Rest|p1a: Pikachu".into(),
+            "|move|p1a: Pikachu|Thunderbolt|p2a: Pikachu|[from] Metronome".into(),
+            "|move|p2a: Pikachu|Rest|p2a: Pikachu|[from] Sleep Talk".into(),
+        ];
+
+        let revealed = active_future_revealed_moves(&dex, &battle, &lines);
+        assert_eq!(revealed, [vec!["rest".to_string()], vec!["rest".to_string()]]);
+        complete_active_moves_from_future(&dex, &mut battle, &lines);
+        let rest = dex.moves.id("rest").unwrap();
+        for side in 0..2 {
+            let id = battle.active_id(side).unwrap();
+            assert!(battle.poke(id).move_slots.iter().any(|slot| slot.id == rest));
+        }
+    }
+}

@@ -97,6 +97,8 @@ fn probe_config(
     direct: &DamageSearchAgentConfig,
     probe_work_budget: usize,
     cell_threshold: f64,
+    audit_rounds: usize,
+    audit_epsilon: f64,
 ) -> ProbeRefineAgentConfig {
     let mut approximate = direct.search.clone();
     approximate.damage_mode = DamageRollMode::ThresholdLeanMinimal;
@@ -107,6 +109,8 @@ fn probe_config(
             probe_work_budget,
             response_margin: 0.0,
             cell_threshold,
+            audit_rounds,
+            audit_epsilon,
         },
         alive_max: direct.alive_max,
         hp_cap: direct.hp_cap,
@@ -125,6 +129,26 @@ fn load_fixture_pool(repo: &Path) -> Vec<Vec<PokemonSet>> {
         }
     }
     teams
+}
+
+/// Every entry is a one-Pokemon team whose set contains Rest. Repeated sets
+/// intentionally retain their meta-pool frequency, so every scheduled game
+/// is a real double-Rest 1v1 drawn from the format prior.
+fn load_rest_pool(repo: &Path, require_sleep_talk: bool) -> Vec<Vec<PokemonSet>> {
+    load_meta_pool(&repo.join("data/meta-pool-v0/meta-pool.json"))
+        .teams
+        .into_iter()
+        .flat_map(|team| team.sets)
+        .filter(|set| {
+            let has = |needle: &str| {
+                set.moves.iter().any(|move_name| {
+                    move_name.replace(' ', "").eq_ignore_ascii_case(needle)
+                })
+            };
+            has("rest") && (!require_sleep_talk || has("sleeptalk"))
+        })
+        .map(|set| vec![set])
+        .collect()
 }
 
 fn main() {
@@ -149,11 +173,19 @@ fn main() {
     let b_probe = flag(&args, "--b-probe");
     let probe_work: usize = arg(&args, "--probe-work", "200000").parse().unwrap();
     let probe_threshold: f64 = arg(&args, "--probe-threshold", "0.01").parse().unwrap();
+    let probe_audit_rounds: usize = arg(&args, "--probe-audit-rounds", "0").parse().unwrap();
+    let probe_audit_epsilon: f64 = arg(&args, "--probe-audit-epsilon", "0.005")
+        .parse()
+        .unwrap();
 
     let root = repo_root();
     let dex_json = std::fs::read_to_string(root.join("data/gen2stadium2.json")).unwrap();
     let dex = nc2000_engine::dex::Dex::from_json(&dex_json).unwrap();
-    let teams = if let Some(range) = pool_spec.strip_prefix("meta") {
+    let teams = if matches!(pool_spec.as_str(), "rest" | "double-rest") {
+        load_rest_pool(&root, false)
+    } else if matches!(pool_spec.as_str(), "rest-talk" | "double-rest-talk") {
+        load_rest_pool(&root, true)
+    } else if let Some(range) = pool_spec.strip_prefix("meta") {
         let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
         let (lo, hi) = match range.strip_prefix(':') {
             None => (0, pool.teams.len() - 1),
@@ -193,10 +225,22 @@ fn main() {
         hp_cap,
         fallback_iters,
     );
-    let probe_config_a = probe_config(&config_a, probe_work, probe_threshold);
-    let probe_config_b = probe_config(&config_b, probe_work, probe_threshold);
+    let probe_config_a = probe_config(
+        &config_a,
+        probe_work,
+        probe_threshold,
+        probe_audit_rounds,
+        probe_audit_epsilon,
+    );
+    let probe_config_b = probe_config(
+        &config_b,
+        probe_work,
+        probe_threshold,
+        probe_audit_rounds,
+        probe_audit_epsilon,
+    );
     eprintln!(
-        "{} teams; A {}{:?} h{} w{} vs B {}{:?} h{} w{}; probe w{} t{}; fallback {}",
+        "{} teams; A {}{:?} h{} w{} vs B {}{:?} h{} w{}; probe w{} t{} audit {} e{}; fallback {}",
         teams.len(),
         if a_probe { "probe:" } else { "" },
         a_mode,
@@ -208,6 +252,8 @@ fn main() {
         b_work,
         probe_work,
         probe_threshold,
+        probe_audit_rounds,
+        probe_audit_epsilon,
         fallback_iters,
     );
     let build_a = |agent_seed| -> Box<dyn nc2000_bot::Agent> {
@@ -244,8 +290,8 @@ fn main() {
         a_mode, a_horizon, a_work, b_mode, b_horizon, b_work, stats.games, seed,
     );
     println!(
-        "A {}W {}L {}T score {:.4} +/- {:.4} (95% CI)",
-        stats.wins, stats.losses, stats.ties, stats.score, stats.ci95,
+        "A {}W {}L {}T ({} turn-capped) score {:.4} +/- {:.4} (95% CI)",
+        stats.wins, stats.losses, stats.ties, stats.turn_caps, stats.score, stats.ci95,
     );
     println!(
         "avg turns {:.1}; wall {:.1}s; {:.3} games/s; think ms/move A {:.2} B {:.2}",
@@ -254,5 +300,9 @@ fn main() {
         stats.games as f64 / stats.secs,
         stats.a_ms_per_move,
         stats.b_ms_per_move,
+    );
+    println!(
+        "think tail ms/move A p95 {:.2} p99 {:.2}; B p95 {:.2} p99 {:.2}",
+        stats.a_p95_ms, stats.a_p99_ms, stats.b_p95_ms, stats.b_p99_ms,
     );
 }

@@ -15,7 +15,10 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct, HumanAction};
+use nc2000_bot::corpus::{
+    active_future_revealed_moves, complete_active_moves_from_future, corpus_files, load_battle,
+    load_sources, reconstruct, HumanAction,
+};
 use nc2000_bot::damage_search::{
     policy_regret, solve_probe_refined, solve_support_refined, DamageSearch, DamageSearchConfig,
     DamageSearchReport, DamageSearchStats, ProbeRefineConfig, SupportRefineConfig,
@@ -74,6 +77,75 @@ fn total_hp(battle: &Battle) -> u64 {
                 .map(|&slot| side.roster[slot as usize].hp.max(0) as u64)
         })
         .sum()
+}
+
+fn active_move_pp(
+    battle: &Battle,
+    dex: &nc2000_engine::dex::Dex,
+    side: usize,
+    key: &str,
+) -> Option<i32> {
+    let id = battle.active_id(side)?;
+    let move_id = dex.moves.id(key)?;
+    battle
+        .poke(id)
+        .move_slots
+        .iter()
+        .find(|slot| slot.id == move_id)
+        .map(|slot| slot.pp)
+}
+
+fn active_species(battle: &Battle, dex: &nc2000_engine::dex::Dex, side: usize) -> String {
+    battle
+        .active_id(side)
+        .map(|id| dex.species.key(battle.poke(id).species).to_string())
+        .unwrap_or_default()
+}
+
+fn protocol_active_names(lines: &[String], cut: usize) -> [String; 2] {
+    let mut names: [String; 2] = std::array::from_fn(|_| String::new());
+    for line in lines.iter().take(cut.saturating_add(1)) {
+        let parts: Vec<&str> = line.split('|').collect();
+        if !matches!(parts.get(1), Some(&"switch") | Some(&"replace")) {
+            continue;
+        }
+        let Some(subject) = parts.get(2) else {
+            continue;
+        };
+        let side = if subject.as_bytes().get(1) == Some(&b'2') {
+            1
+        } else {
+            0
+        };
+        names[side] = subject.split(':').nth(1).unwrap_or("").trim().to_string();
+    }
+    names
+}
+
+fn full_move_users(lines: &[String], move_key: &str) -> HashSet<(usize, String)> {
+    let mut users = HashSet::new();
+    for line in lines {
+        let parts: Vec<&str> = line.split('|').collect();
+        if parts.get(1) != Some(&"move")
+            || parts.get(3).map(|name| nc2000_engine::dex::toid(name)) != Some(move_key.to_string())
+            || (line.contains("[from]") && !line.contains("[from] Sleep Talk"))
+        {
+            continue;
+        }
+        let Some(subject) = parts.get(2) else {
+            continue;
+        };
+        let side = if subject.as_bytes().get(1) == Some(&b'2') {
+            1
+        } else {
+            0
+        };
+        users.insert((
+            side,
+            subject.split(':').nth(1).unwrap_or("").trim().to_string(),
+        ));
+    }
+    users
 }
 
 fn mode_name(mode: DamageRollMode) -> &'static str {
@@ -164,6 +236,11 @@ struct Position {
     action: String,
     alive: [usize; 2],
     total_hp: u64,
+    species: [String; 2],
+    status: [String; 2],
+    rest_pp: [i32; 2],
+    sleep_talk: [bool; 2],
+    future_rest_revealed: [bool; 2],
     battle: Battle,
     anchor: Option<Anchor>,
 }
@@ -208,6 +285,9 @@ struct Summary {
     refined_cells: u128,
     refine_runs: u128,
     probe_runs: u128,
+    transition_cache_hits: u128,
+    transition_cache_inserts: u128,
+    refinement_aborts: u128,
 }
 
 fn run_search(
@@ -290,6 +370,8 @@ fn run_probe_refine(
     leaf_cap: usize,
     response_margin: f64,
     cell_threshold: f64,
+    audit_rounds: usize,
+    audit_epsilon: f64,
 ) -> TimedReport {
     let cfg = ProbeRefineConfig {
         approximate: DamageSearchConfig {
@@ -304,6 +386,8 @@ fn run_probe_refine(
         exact_work_budget,
         response_margin,
         cell_threshold,
+        audit_rounds,
+        audit_epsilon,
     };
     let start = Instant::now();
     let attempt = solve_probe_refined(dex, battle, &cfg);
@@ -350,6 +434,9 @@ fn record_arm(
     summary.refined_cells += timed.refined_cells as u128;
     summary.refine_runs += timed.refine_runs as u128;
     summary.probe_runs += timed.probe_runs as u128;
+    summary.transition_cache_hits += timed.stats.transition_cache_hits as u128;
+    summary.transition_cache_inserts += timed.stats.transition_cache_inserts as u128;
+    summary.refinement_aborts += timed.stats.refinement_aborts as u128;
 
     let (complete, value, value_abs, row_regret, col_regret, regret, runs, leaves, states, cells) =
         match (&timed.report, exact_report) {
@@ -424,7 +511,7 @@ fn record_arm(
 
     writeln!(
         output,
-        "{},{},{},\"{}\",{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{:.6},{},{:.6},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{},{},{},{},{},{},{}",
+        "{},{},{},\"{}\",{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{:.6},{},{:.6},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
         position.battle_index,
         position.side,
         position.turn,
@@ -432,6 +519,16 @@ fn record_arm(
         position.alive[0],
         position.alive[1],
         position.total_hp,
+        position.species[0],
+        position.species[1],
+        position.status[0],
+        position.status[1],
+        position.rest_pp[0],
+        position.rest_pp[1],
+        position.sleep_talk[0] as u8,
+        position.sleep_talk[1] as u8,
+        position.future_rest_revealed[0] as u8,
+        position.future_rest_revealed[1] as u8,
         name,
         complete,
         value,
@@ -461,6 +558,9 @@ fn record_arm(
         timed.refined_cells,
         timed.refine_runs,
         timed.probe_runs,
+        timed.stats.transition_cache_hits,
+        timed.stats.transition_cache_inserts,
+        timed.stats.refinement_aborts,
     )
     .unwrap();
 }
@@ -484,6 +584,10 @@ fn main() {
     let verbose = flag(&args, "--verbose");
     let support_refine = flag(&args, "--support-refine");
     let probe_refine = flag(&args, "--probe-refine");
+    let both_rest = flag(&args, "--both-rest");
+    let both_rest_revealed = flag(&args, "--both-rest-revealed");
+    let oracle_future_moves = flag(&args, "--oracle-future-moves");
+    let collect_only = flag(&args, "--collect-only");
     let refine_work_budget: usize = arg(&args, "--refine-work", &work_budget.to_string())
         .parse()
         .unwrap();
@@ -492,6 +596,10 @@ fn main() {
         .parse()
         .unwrap();
     let probe_threshold: f64 = arg(&args, "--probe-threshold", "0.01").parse().unwrap();
+    let probe_audit_rounds: usize = arg(&args, "--probe-audit-rounds", "0").parse().unwrap();
+    let probe_audit_epsilon: f64 = arg(&args, "--probe-audit-epsilon", "0.005")
+        .parse()
+        .unwrap();
     let mut modes = parse_modes(&arg(&args, "--modes", "exact,mean,threshold1,threshold2"));
     if !modes.contains(&DamageRollMode::Exact) {
         modes.insert(0, DamageRollMode::Exact);
@@ -500,8 +608,13 @@ fn main() {
     if support_refine {
         arm_names.push("support-refine");
     }
+    let probe_name = if probe_audit_rounds > 0 {
+        "probe-audit"
+    } else {
+        "probe-refine"
+    };
     if probe_refine {
-        arm_names.push("probe-refine");
+        arm_names.push(probe_name);
     }
 
     let root = repo_root();
@@ -528,6 +641,7 @@ fn main() {
             break;
         }
         let corpus_battle = load_battle(&path);
+        let rest_users = full_move_users(&corpus_battle.lines, "rest");
         let mut accepted = 0;
         for decision in corpus_battle.decisions.iter().rev() {
             if positions.len() >= positions_limit || accepted >= per_battle {
@@ -541,7 +655,17 @@ fn main() {
             if exclude_anchors && anchor.is_some() {
                 continue;
             }
-            let Some(battle) = reconstruct(
+            if both_rest_revealed && matches!(decision.action, HumanAction::Move(_)) {
+                let names = protocol_active_names(&corpus_battle.lines, decision.cut);
+                if names
+                    .iter()
+                    .enumerate()
+                    .any(|(side, name)| !rest_users.contains(&(side, name.clone())))
+                {
+                    continue;
+                }
+            }
+            let Some(mut battle) = reconstruct(
                 &dex,
                 &sources,
                 &pool_path,
@@ -552,6 +676,24 @@ fn main() {
             ) else {
                 continue;
             };
+            let future_moves = active_future_revealed_moves(&dex, &battle, &corpus_battle.lines);
+            let future_rest_revealed = [
+                future_moves[0].iter().any(|key| key == "rest"),
+                future_moves[1].iter().any(|key| key == "rest"),
+            ];
+            if both_rest_revealed && !future_rest_revealed.iter().all(|&revealed| revealed) {
+                continue;
+            }
+            if oracle_future_moves {
+                complete_active_moves_from_future(&dex, &mut battle, &corpus_battle.lines);
+            }
+            let rest_pp = [
+                active_move_pp(&battle, &dex, 0, "rest").unwrap_or(-1),
+                active_move_pp(&battle, &dex, 1, "rest").unwrap_or(-1),
+            ];
+            if both_rest && rest_pp.iter().any(|&pp| pp < 0) {
+                continue;
+            }
             let alive_now = [alive(&battle, 0), alive(&battle, 1)];
             let hp = total_hp(&battle);
             if alive_now[0] > alive_max || alive_now[1] > alive_max || hp > hp_cap {
@@ -571,6 +713,22 @@ fn main() {
                 action,
                 alive: alive_now,
                 total_hp: hp,
+                species: [
+                    active_species(&battle, &dex, 0),
+                    active_species(&battle, &dex, 1),
+                ],
+                status: std::array::from_fn(|side| {
+                    battle
+                        .active_id(side)
+                        .map(|id| battle.poke(id).status.as_str().to_string())
+                        .unwrap_or_default()
+                }),
+                rest_pp,
+                sleep_talk: [
+                    active_move_pp(&battle, &dex, 0, "sleeptalk").is_some(),
+                    active_move_pp(&battle, &dex, 1, "sleeptalk").is_some(),
+                ],
+                future_rest_revealed,
                 battle,
                 anchor,
             });
@@ -596,10 +754,54 @@ fn main() {
     if let Some(parent) = Path::new(&out_path).parent() {
         std::fs::create_dir_all(parent).unwrap();
     }
+    if collect_only {
+        let mut output = std::fs::File::create(&out_path).expect("output csv");
+        writeln!(
+            output,
+            "battle,side,turn,action,alive0,alive1,total_hp,species0,species1,status0,status1,rest_pp0,rest_pp1,sleeptalk0,sleeptalk1,future_rest0,future_rest1,pair_group,split,state_key128"
+        )
+        .unwrap();
+        for position in &positions {
+            let mut pair = position.species.clone();
+            pair.sort();
+            let pair_group = format!("{}--{}", pair[0], pair[1]);
+            let pair_hash = pair_group.bytes().fold(0u64, |hash, byte| {
+                hash.wrapping_mul(131).wrapping_add(byte as u64)
+            });
+            let split = if pair_hash % 5 == 0 { "holdout" } else { "dev" };
+            writeln!(
+                output,
+                "{},{},{},\"{}\",{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:032x}",
+                position.battle_index,
+                position.side,
+                position.turn,
+                position.action,
+                position.alive[0],
+                position.alive[1],
+                position.total_hp,
+                position.species[0],
+                position.species[1],
+                position.status[0],
+                position.status[1],
+                position.rest_pp[0],
+                position.rest_pp[1],
+                position.sleep_talk[0] as u8,
+                position.sleep_talk[1] as u8,
+                position.future_rest_revealed[0] as u8,
+                position.future_rest_revealed[1] as u8,
+                pair_group,
+                split,
+                position.battle.state_key128(),
+            )
+            .unwrap();
+        }
+        println!("manifest: {out_path}");
+        return;
+    }
     let mut output = std::fs::File::create(&out_path).expect("output csv");
     writeln!(
         output,
-        "battle,side,turn,action,alive0,alive1,total_hp,mode,complete,value,value_abs_exact,row_regret,col_regret,policy_regret,runs,leaves,states,cells,wall_s,exact_runs,exact_wall_s,anchor,anchor_width,anchor_abs,anchor_outside,exact_damage_draws,abstract_damage_draws,damage_classes,drain_recoil_draws,multihit_draws,substitute_draws,counter_bide_draws,heal_draws,refined_cells,refine_runs,probe_runs"
+        "battle,side,turn,action,alive0,alive1,total_hp,species0,species1,status0,status1,rest_pp0,rest_pp1,sleeptalk0,sleeptalk1,future_rest0,future_rest1,mode,complete,value,value_abs_exact,row_regret,col_regret,policy_regret,runs,leaves,states,cells,wall_s,exact_runs,exact_wall_s,anchor,anchor_width,anchor_abs,anchor_outside,exact_damage_draws,abstract_damage_draws,damage_classes,drain_recoil_draws,multihit_draws,substitute_draws,counter_bide_draws,heal_draws,refined_cells,refine_runs,probe_runs,transition_cache_hits,transition_cache_inserts,refinement_aborts"
     )
     .unwrap();
 
@@ -741,6 +943,8 @@ fn main() {
                 leaf_cap,
                 refine_margin,
                 probe_threshold,
+                probe_audit_rounds,
+                probe_audit_epsilon,
             );
             if verbose {
                 match timed.report.as_ref() {
@@ -765,7 +969,7 @@ fn main() {
                 &mut output,
                 &mut summaries,
                 position,
-                "probe-refine",
+                probe_name,
                 &timed,
                 &exact,
             );
@@ -821,6 +1025,15 @@ fn main() {
                 "             probe-runs {} exact-runs 0",
                 summary.probe_runs
             );
+        }
+        if summary.transition_cache_hits > 0 || summary.transition_cache_inserts > 0 {
+            println!(
+                "             transition-cache hits {} inserts {}",
+                summary.transition_cache_hits, summary.transition_cache_inserts,
+            );
+        }
+        if summary.refinement_aborts > 0 {
+            println!("             refinement aborts {} (kept last complete policy)", summary.refinement_aborts);
         }
         if summary.anchor_n > 0 {
             println!(

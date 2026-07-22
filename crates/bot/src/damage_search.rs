@@ -6,7 +6,9 @@
 //! bounds. Keeping the decision recursion, leaf evaluator, and matrix solver
 //! identical isolates the effect of quotienting damage rolls.
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::rc::Rc;
 
 use nc2000_engine::battle::enumerate::enumerate_step_with_damage_mode;
 use nc2000_engine::battle::{Outcome, SearchChoice};
@@ -65,6 +67,9 @@ pub struct DamageSearchStats {
     pub substitute_draws: usize,
     pub counter_bide_draws: usize,
     pub heal_draws: usize,
+    pub transition_cache_hits: usize,
+    pub transition_cache_inserts: usize,
+    pub refinement_aborts: usize,
 }
 
 impl DamageSearchStats {
@@ -85,6 +90,9 @@ impl DamageSearchStats {
         self.substitute_draws += other.substitute_draws;
         self.counter_bide_draws += other.counter_bide_draws;
         self.heal_draws += other.heal_draws;
+        self.transition_cache_hits += other.transition_cache_hits;
+        self.transition_cache_inserts += other.transition_cache_inserts;
+        self.refinement_aborts += other.refinement_aborts;
     }
 }
 
@@ -118,6 +126,13 @@ pub struct ProbeRefineConfig {
     /// Exact-refine a candidate cell only when its low/high representative
     /// continuation values disagree by more than this amount.
     pub cell_threshold: f64,
+    /// Audit every pure action against the opponent's new equilibrium
+    /// support after refinement, then refine newly unstable cells. Zero
+    /// preserves the original one-shot experiment.
+    pub audit_rounds: usize,
+    /// Only refine an excluded action when its optimistic low/high payoff
+    /// can improve the incumbent by more than this amount.
+    pub audit_epsilon: f64,
 }
 
 impl Default for ProbeRefineConfig {
@@ -129,6 +144,8 @@ impl Default for ProbeRefineConfig {
             response_margin: support.response_margin,
             approximate: support.approximate,
             cell_threshold: 0.01,
+            audit_rounds: 0,
+            audit_epsilon: 0.005,
         }
     }
 }
@@ -163,12 +180,79 @@ struct NodeSolution {
     dims: [usize; 2],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct TransitionKey {
+    state: u128,
+    choices: [Option<SearchChoice>; 2],
+    damage_mode: DamageRollMode,
+}
+
+#[derive(Clone)]
+struct CachedTransition {
+    successors: Vec<(Battle, f64)>,
+}
+
+/// Bounded, semantics-only cache for successful one-step chance expansion.
+/// Values and horizon cutoffs are deliberately excluded, so the cache is
+/// safe to carry across turns and reroots.
+pub struct DamageTransitionCache {
+    entries: HashMap<TransitionKey, CachedTransition>,
+    recency: VecDeque<TransitionKey>,
+    max_entries: usize,
+    max_successors: usize,
+}
+
+impl DamageTransitionCache {
+    pub fn new(max_entries: usize, max_successors: usize) -> Self {
+        DamageTransitionCache {
+            entries: HashMap::new(),
+            recency: VecDeque::new(),
+            max_entries,
+            max_successors,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn get(&mut self, key: &TransitionKey) -> Option<CachedTransition> {
+        let value = self.entries.get(key)?.clone();
+        self.recency.retain(|candidate| candidate != key);
+        self.recency.push_back(*key);
+        Some(value)
+    }
+
+    fn insert(&mut self, key: TransitionKey, value: CachedTransition) -> bool {
+        if self.max_entries == 0 || value.successors.len() > self.max_successors {
+            return false;
+        }
+        if self.entries.contains_key(&key) {
+            self.recency.retain(|candidate| candidate != &key);
+        } else if self.entries.len() >= self.max_entries {
+            if let Some(oldest) = self.recency.pop_front() {
+                self.entries.remove(&oldest);
+            }
+        }
+        self.entries.insert(key, value);
+        self.recency.push_back(key);
+        true
+    }
+}
+
+pub type SharedDamageTransitionCache = Rc<RefCell<DamageTransitionCache>>;
+
+fn default_transition_cache() -> SharedDamageTransitionCache {
+    Rc::new(RefCell::new(DamageTransitionCache::new(256, 64)))
+}
+
 pub struct DamageSearch<'d> {
     dex: &'d Dex,
     pub cfg: DamageSearchConfig,
     memo: HashMap<u128, f64>,
     t_max: u16,
     stats: DamageSearchStats,
+    transition_cache: Option<SharedDamageTransitionCache>,
 }
 
 impl<'d> DamageSearch<'d> {
@@ -179,7 +263,18 @@ impl<'d> DamageSearch<'d> {
             memo: HashMap::new(),
             t_max: 0,
             stats: DamageSearchStats::default(),
+            transition_cache: None,
         }
+    }
+
+    fn with_transition_cache(
+        dex: &'d Dex,
+        cfg: DamageSearchConfig,
+        transition_cache: SharedDamageTransitionCache,
+    ) -> Self {
+        let mut search = Self::new(dex, cfg);
+        search.transition_cache = Some(transition_cache);
+        search
     }
 
     pub fn solve(&mut self, battle: &Battle) -> Option<DamageSearchReport> {
@@ -285,43 +380,65 @@ impl<'d> DamageSearch<'d> {
         row_action: Option<SearchChoice>,
         col_action: Option<SearchChoice>,
     ) -> Option<f64> {
-        let remaining = self.cfg.work_budget.saturating_sub(self.stats.chance_runs);
-        let cap = self.cfg.leaf_cap.min(remaining);
-        if cap == 0 {
-            return None;
-        }
-        let Some(step) = enumerate_step_with_damage_mode(
-            self.dex,
-            battle,
-            [row_action, col_action],
-            cap,
-            self.cfg.damage_mode,
-        ) else {
-            self.stats.chance_runs += cap;
-            return None;
+        let key = TransitionKey {
+            state: battle.state_key128(),
+            choices: [row_action, col_action],
+            damage_mode: self.cfg.damage_mode,
         };
-        self.stats.chance_runs += step.runs;
-        self.stats.leaves += step.leaves.len();
-        self.stats.exact_damage_draws += step.damage.exact_draws;
-        self.stats.abstract_damage_draws += step.damage.abstract_draws;
-        self.stats.damage_classes += step.damage.offered_classes;
-        self.stats.drain_recoil_draws += step.damage.drain_recoil_draws;
-        self.stats.multihit_draws += step.damage.multihit_draws;
-        self.stats.substitute_draws += step.damage.substitute_draws;
-        self.stats.counter_bide_draws += step.damage.counter_bide_draws;
-        self.stats.heal_draws += step.damage.heal_draws;
+        let cached = self
+            .transition_cache
+            .as_ref()
+            .and_then(|cache| cache.borrow_mut().get(&key));
+        let transition = if let Some(cached) = cached {
+            self.stats.transition_cache_hits += 1;
+            cached
+        } else {
+            let remaining = self.cfg.work_budget.saturating_sub(self.stats.chance_runs);
+            let cap = self.cfg.leaf_cap.min(remaining);
+            if cap == 0 {
+                return None;
+            }
+            let Some(step) = enumerate_step_with_damage_mode(
+                self.dex,
+                battle,
+                key.choices,
+                cap,
+                self.cfg.damage_mode,
+            ) else {
+                self.stats.chance_runs += cap;
+                return None;
+            };
+            self.stats.chance_runs += step.runs;
+            self.stats.leaves += step.leaves.len();
+            self.stats.exact_damage_draws += step.damage.exact_draws;
+            self.stats.abstract_damage_draws += step.damage.abstract_draws;
+            self.stats.damage_classes += step.damage.offered_classes;
+            self.stats.drain_recoil_draws += step.damage.drain_recoil_draws;
+            self.stats.multihit_draws += step.damage.multihit_draws;
+            self.stats.substitute_draws += step.damage.substitute_draws;
+            self.stats.counter_bide_draws += step.damage.counter_bide_draws;
+            self.stats.heal_draws += step.damage.heal_draws;
 
-        // Merge equal successor states before recursive evaluation.
-        let mut successors: HashMap<u128, (f64, usize)> = HashMap::new();
-        for (index, leaf) in step.leaves.iter().enumerate() {
-            successors
-                .entry(leaf.battle.state_key128())
-                .and_modify(|entry| entry.0 += leaf.prob)
-                .or_insert((leaf.prob, index));
-        }
+            let mut merged: HashMap<u128, (Battle, f64)> = HashMap::new();
+            for leaf in step.leaves {
+                merged
+                    .entry(leaf.battle.state_key128())
+                    .and_modify(|entry| entry.1 += leaf.prob)
+                    .or_insert((leaf.battle, leaf.prob));
+            }
+            let transition = CachedTransition {
+                successors: merged.into_values().collect(),
+            };
+            if let Some(cache) = &self.transition_cache {
+                if cache.borrow_mut().insert(key, transition.clone()) {
+                    self.stats.transition_cache_inserts += 1;
+                }
+            }
+            transition
+        };
         let mut expected = 0.0;
-        for &(probability, index) in successors.values() {
-            expected += probability * self.value(&step.leaves[index].battle)?;
+        for (successor, probability) in &transition.successors {
+            expected += probability * self.value(successor)?;
         }
         Some(expected)
     }
@@ -483,6 +600,258 @@ fn probe_refine_cells(
         .collect()
 }
 
+/// Cells required to audit every pure root action as a best response against
+/// the opponent's current support.
+fn best_response_audit_candidates(report: &DamageSearchReport) -> Vec<(usize, usize)> {
+    let [rows, cols] = report.dims;
+    let support_rows: Vec<usize> = report
+        .row_policy
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &p)| (p > SUPPORT_EPSILON).then_some(i))
+        .collect();
+    let support_cols: Vec<usize> = report
+        .col_policy
+        .iter()
+        .enumerate()
+        .filter_map(|(j, &p)| (p > SUPPORT_EPSILON).then_some(j))
+        .collect();
+    let mut selected = vec![false; rows * cols];
+    for i in 0..rows {
+        for &j in &support_cols {
+            selected[i * cols + j] = true;
+        }
+    }
+    for &i in &support_rows {
+        for j in 0..cols {
+            selected[i * cols + j] = true;
+        }
+    }
+    selected
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, yes)| yes.then_some((index / cols, index % cols)))
+        .collect()
+}
+
+fn probe_refine_audit_cells(
+    report: &DamageSearchReport,
+    low_values: &[(usize, usize, f64)],
+    high_values: &[(usize, usize, f64)],
+    cell_threshold: f64,
+    response_margin: f64,
+    audit_epsilon: f64,
+) -> Vec<(usize, usize)> {
+    let [rows, cols] = report.dims;
+    let values: HashMap<(usize, usize), (f64, f64)> = low_values
+        .iter()
+        .zip(high_values)
+        .map(|(&(li, lj, low), &(hi, hj, high))| {
+            debug_assert_eq!((li, lj), (hi, hj));
+            ((li, lj), (low, high))
+        })
+        .collect();
+    let unstable = |i: usize, j: usize| {
+        values.get(&(i, j)).is_some_and(|&(low, high)| {
+            (low - high).abs() > cell_threshold.max(0.0) + SUPPORT_EPSILON
+        })
+    };
+    let support_rows: Vec<usize> = (0..rows)
+        .filter(|&i| report.row_policy[i] > SUPPORT_EPSILON)
+        .collect();
+    let support_cols: Vec<usize> = (0..cols)
+        .filter(|&j| report.col_policy[j] > SUPPORT_EPSILON)
+        .collect();
+    let margin = response_margin.max(0.0);
+    let epsilon = audit_epsilon.max(0.0);
+    let mut selected = HashSet::new();
+
+    // A row can matter only if its optimistic low/high payoff against the
+    // current column policy reaches the incumbent game value.
+    for i in 0..rows {
+        let optimistic: Option<f64> = support_cols
+            .iter()
+            .map(|&j| {
+                values
+                    .get(&(i, j))
+                    .map(|&(low, high)| report.col_policy[j] * low.max(high))
+            })
+            .sum();
+        if optimistic.is_some_and(|value| value > report.value + epsilon - margin) {
+            for &j in &support_cols {
+                if unstable(i, j) {
+                    selected.insert((i, j));
+                }
+            }
+        }
+    }
+
+    // Symmetrically, a column matters only if its optimistic payoff for the
+    // minimizer can reach below the incumbent value.
+    for j in 0..cols {
+        let optimistic: Option<f64> = support_rows
+            .iter()
+            .map(|&i| {
+                values
+                    .get(&(i, j))
+                    .map(|&(low, high)| report.row_policy[i] * low.min(high))
+            })
+            .sum();
+        if optimistic.is_some_and(|value| value < report.value - epsilon + margin) {
+            for &i in &support_rows {
+                if unstable(i, j) {
+                    selected.insert((i, j));
+                }
+            }
+        }
+    }
+    let mut selected: Vec<_> = selected.into_iter().collect();
+    selected.sort_unstable();
+    selected
+}
+
+struct ProbeBatch {
+    exact_values: Vec<(usize, usize, f64)>,
+    stats: DamageSearchStats,
+    refine_stats: DamageSearchStats,
+    refined_cells: Vec<(usize, usize)>,
+    incomplete: bool,
+}
+
+fn run_probe_batch(
+    dex: &Dex,
+    battle: &Battle,
+    cfg: &ProbeRefineConfig,
+    candidates: &[(usize, usize)],
+    audit_report: Option<&DamageSearchReport>,
+    bounds: &mut HashMap<(usize, usize), (f64, f64)>,
+    already_refined: &HashSet<(usize, usize)>,
+    transition_cache: &SharedDamageTransitionCache,
+) -> ProbeBatch {
+    let missing: Vec<_> = candidates
+        .iter()
+        .copied()
+        .filter(|cell| !bounds.contains_key(cell))
+        .collect();
+    let mut stats = DamageSearchStats::default();
+    if !missing.is_empty() {
+        let mut probe_cfg = cfg.approximate.clone();
+        probe_cfg.damage_mode = DamageRollMode::ThresholdLeanMinimalLow;
+        probe_cfg.work_budget = cfg.probe_work_budget;
+        let mut low =
+            DamageSearch::with_transition_cache(dex, probe_cfg.clone(), transition_cache.clone());
+        let Some(low_values) = low.solve_root_cells(battle, &missing) else {
+            return ProbeBatch {
+                exact_values: Vec::new(),
+                stats: low.stats().clone(),
+                refine_stats: DamageSearchStats::default(),
+                refined_cells: Vec::new(),
+                incomplete: true,
+            };
+        };
+        let low_stats = low.stats().clone();
+
+        probe_cfg.damage_mode = DamageRollMode::ThresholdLeanMinimalHigh;
+        let mut high =
+            DamageSearch::with_transition_cache(dex, probe_cfg, transition_cache.clone());
+        let Some(high_values) = high.solve_root_cells(battle, &missing) else {
+            let mut failed_stats = low_stats;
+            failed_stats.absorb(high.stats());
+            return ProbeBatch {
+                exact_values: Vec::new(),
+                stats: failed_stats,
+                refine_stats: DamageSearchStats::default(),
+                refined_cells: Vec::new(),
+                incomplete: true,
+            };
+        };
+        let high_stats = high.stats().clone();
+        stats.absorb(&low_stats);
+        stats.absorb(&high_stats);
+
+        let highs: HashMap<_, _> = high_values
+            .into_iter()
+            .map(|(i, j, value)| ((i, j), value))
+            .collect();
+        for (i, j, low_value) in low_values {
+            let Some(&high_value) = highs.get(&(i, j)) else {
+                return ProbeBatch {
+                    exact_values: Vec::new(),
+                    stats,
+                    refine_stats: DamageSearchStats::default(),
+                    refined_cells: Vec::new(),
+                    incomplete: true,
+                };
+            };
+            bounds.insert((i, j), (low_value, high_value));
+        }
+    }
+
+    let low_values: Vec<_> = candidates
+        .iter()
+        .filter_map(|&(i, j)| bounds.get(&(i, j)).map(|&(low, _)| (i, j, low)))
+        .collect();
+    let high_values: Vec<_> = candidates
+        .iter()
+        .filter_map(|&(i, j)| bounds.get(&(i, j)).map(|&(_, high)| (i, j, high)))
+        .collect();
+    if low_values.len() != candidates.len() || high_values.len() != candidates.len() {
+        return ProbeBatch {
+            exact_values: Vec::new(),
+            stats,
+            refine_stats: DamageSearchStats::default(),
+            refined_cells: Vec::new(),
+            incomplete: true,
+        };
+    }
+
+    let mut refined_cells = match audit_report {
+        Some(report) => probe_refine_audit_cells(
+            report,
+            &low_values,
+            &high_values,
+            cfg.cell_threshold,
+            cfg.response_margin,
+            cfg.audit_epsilon,
+        ),
+        None => probe_refine_cells(&low_values, &high_values, cfg.cell_threshold),
+    };
+    refined_cells.retain(|cell| !already_refined.contains(cell));
+    if refined_cells.is_empty() {
+        return ProbeBatch {
+            exact_values: Vec::new(),
+            stats,
+            refine_stats: DamageSearchStats::default(),
+            refined_cells,
+            incomplete: false,
+        };
+    }
+
+    let mut exact_cfg = cfg.approximate.clone();
+    exact_cfg.damage_mode = DamageRollMode::Exact;
+    exact_cfg.work_budget = cfg.exact_work_budget;
+    let mut exact = DamageSearch::with_transition_cache(dex, exact_cfg, transition_cache.clone());
+    let exact_values = exact.solve_root_cells(battle, &refined_cells);
+    let refine_stats = exact.stats().clone();
+    stats.absorb(&refine_stats);
+    let Some(exact_values) = exact_values else {
+        return ProbeBatch {
+            exact_values: Vec::new(),
+            stats,
+            refine_stats,
+            refined_cells: Vec::new(),
+            incomplete: true,
+        };
+    };
+    ProbeBatch {
+        exact_values,
+        stats,
+        refine_stats,
+        refined_cells,
+        incomplete: false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -523,6 +892,189 @@ mod tests {
         let high = vec![(0, 0, 0.205), (0, 1, 0.42), (1, 0, 0.59)];
         assert_eq!(probe_refine_cells(&low, &high, 0.01), vec![(0, 1)]);
     }
+
+    #[test]
+    fn best_response_audit_crosses_every_action_with_current_support() {
+        let report = report(vec![0.5; 9]);
+        assert_eq!(
+            best_response_audit_candidates(&report),
+            vec![(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0)]
+        );
+    }
+
+    #[test]
+    fn audit_refines_only_actions_that_can_break_the_incumbent() {
+        let report = report(vec![0.5; 9]);
+        let low = vec![
+            (0, 0, 0.5),
+            (0, 1, 0.7),
+            (0, 2, 0.1),
+            (1, 0, 0.5),
+            (1, 1, 0.7),
+            (1, 2, 0.1),
+            (2, 0, 0.1),
+        ];
+        let high = vec![
+            (0, 0, 0.5),
+            (0, 1, 0.8),
+            (0, 2, 0.2),
+            (1, 0, 0.5),
+            (1, 1, 0.8),
+            (1, 2, 0.2),
+            (2, 0, 0.9),
+        ];
+        assert_eq!(
+            probe_refine_audit_cells(&report, &low, &high, 0.01, 0.0, 0.005),
+            vec![(0, 2), (1, 2), (2, 0)]
+        );
+    }
+
+    #[test]
+    fn transition_cache_reuses_identical_root_expansions_without_value_drift() {
+        let dex = conformance::load_dex();
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let pool = crate::preview::load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+        let mut battle =
+            Battle::from_fixture(&dex, "1,2,3,4", &pool.teams[0].sets, &pool.teams[1].sets)
+                .unwrap();
+        battle.set_log_enabled(false);
+        let first0 = battle.legal_choices(&dex, 0)[0];
+        let first1 = battle.legal_choices(&dex, 1)[0];
+        battle
+            .apply_choices(&dex, [Some(first0), Some(first1)])
+            .unwrap();
+
+        let cfg = DamageSearchConfig {
+            horizon: 0,
+            damage_mode: DamageRollMode::ThresholdLeanMinimal,
+            work_budget: 200_000,
+            ..DamageSearchConfig::default()
+        };
+        let cache = Rc::new(RefCell::new(DamageTransitionCache::new(256, 128)));
+        let mut first = DamageSearch::with_transition_cache(&dex, cfg.clone(), cache.clone());
+        let first_report = first.solve(&battle).unwrap();
+        assert!(first_report.stats.chance_runs > 0);
+        assert!(cache.borrow().len() > 0);
+
+        let mut second = DamageSearch::with_transition_cache(&dex, cfg, cache);
+        let second_report = second.solve(&battle).unwrap();
+        assert_eq!(first_report.matrix, second_report.matrix);
+        assert_eq!(first_report.row_policy, second_report.row_policy);
+        assert_eq!(first_report.col_policy, second_report.col_policy);
+        assert!(second_report.stats.transition_cache_hits > 0);
+        assert!(second_report.stats.chance_runs < first_report.stats.chance_runs);
+    }
+
+    #[test]
+    fn transition_cache_evicts_the_least_recent_entry() {
+        let dex = conformance::load_dex();
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let pool = crate::preview::load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+        let battle = Battle::from_fixture(
+            &dex,
+            "1,2,3,4",
+            &pool.teams[0].sets,
+            &pool.teams[1].sets,
+        )
+        .unwrap();
+        let key = |state| TransitionKey {
+            state,
+            choices: [None, None],
+            damage_mode: DamageRollMode::Exact,
+        };
+        let value = || CachedTransition {
+            successors: vec![(battle.clone(), 1.0)],
+        };
+        let mut cache = DamageTransitionCache::new(2, 1);
+        assert!(cache.insert(key(1), value()));
+        assert!(cache.insert(key(2), value()));
+        assert!(cache.get(&key(1)).is_some());
+        assert!(cache.insert(key(3), value()));
+        assert!(cache.entries.contains_key(&key(1)));
+        assert!(!cache.entries.contains_key(&key(2)));
+        assert!(cache.entries.contains_key(&key(3)));
+        assert_eq!(cache.len(), 2);
+    }
+
+    #[test]
+    fn transition_cache_survives_a_real_reroot() {
+        let dex = conformance::load_dex();
+        let team = vec![nc2000_engine::battle::PokemonSet {
+            name: "Pikachu".into(),
+            species: "Pikachu".into(),
+            item: String::new(),
+            ability: String::new(),
+            moves: vec!["Splash".into()],
+            level: 50,
+            evs: None,
+            ivs: None,
+            happiness: None,
+            gender: None,
+        }];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &team, &team).unwrap();
+        let first0 = battle.legal_choices(&dex, 0)[0];
+        let first1 = battle.legal_choices(&dex, 1)[0];
+        battle.apply_choices(&dex, [Some(first0), Some(first1)]).unwrap();
+
+        let cache = Rc::new(RefCell::new(DamageTransitionCache::new(10_000, 10_000)));
+        let cfg = DamageSearchConfig {
+            horizon: 1,
+            damage_mode: DamageRollMode::ThresholdLeanMinimal,
+            state_budget: 1_000,
+            work_budget: 1_000,
+            leaf_cap: 1_000,
+            ..Default::default()
+        };
+        let root_choices = [
+            Some(battle.legal_choices(&dex, 0)[0]),
+            Some(battle.legal_choices(&dex, 1)[0]),
+        ];
+        let mut first = DamageSearch::with_transition_cache(&dex, cfg.clone(), cache.clone());
+        assert!(first.solve(&battle).is_some());
+
+        let (rerooted, _) = nc2000_engine::battle::enumerate::run_scripted_with_damage_mode(
+            &dex,
+            &battle,
+            root_choices,
+            &[],
+            cfg.damage_mode,
+        );
+        let mut reroot_cfg = cfg;
+        reroot_cfg.horizon = 0;
+        let mut second = DamageSearch::with_transition_cache(&dex, reroot_cfg, cache);
+        assert!(second.solve(&rerooted).is_some());
+        assert!(second.stats().transition_cache_hits > 0);
+    }
+
+    #[test]
+    fn probe_refinement_keeps_the_approximate_policy_when_exact_work_exhausts() {
+        let dex = conformance::load_dex();
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let pool = crate::preview::load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+        let mut battle = Battle::from_fixture(
+            &dex,
+            "1,2,3,4",
+            &pool.teams[0].sets,
+            &pool.teams[1].sets,
+        )
+        .unwrap();
+        let first0 = battle.legal_choices(&dex, 0)[0];
+        let first1 = battle.legal_choices(&dex, 1)[0];
+        battle.apply_choices(&dex, [Some(first0), Some(first1)]).unwrap();
+        let mut cfg = ProbeRefineConfig::default();
+        cfg.approximate.horizon = 0;
+        cfg.approximate.work_budget = 100_000;
+        cfg.approximate.leaf_cap = 100_000;
+        cfg.probe_work_budget = 100_000;
+        cfg.exact_work_budget = 1;
+        cfg.cell_threshold = -1.0;
+
+        let attempt = solve_probe_refined(&dex, &battle, &cfg);
+        assert!(attempt.report.is_some());
+        assert!(attempt.refine_stats.chance_runs > 0);
+        assert_eq!(attempt.refined_cells, 0);
+        assert_eq!(attempt.stats.refinement_aborts, 1);
+    }
 }
 
 pub fn solve_support_refined(
@@ -562,12 +1114,15 @@ pub fn solve_support_refined(
     let mut stats = approximate_stats.clone();
     stats.absorb(&refine_stats);
     let Some(exact_values) = exact_values else {
+        stats.refinement_aborts += 1;
+        let mut report = approximate_report;
+        report.stats = stats.clone();
         return SupportRefineAttempt {
-            report: None,
+            report: Some(report),
             stats,
             approximate_stats,
             refine_stats,
-            refined_cells: cells.len(),
+            refined_cells: 0,
         };
     };
 
@@ -604,7 +1159,17 @@ pub fn solve_probe_refined(
     battle: &Battle,
     cfg: &ProbeRefineConfig,
 ) -> SupportRefineAttempt {
-    let mut approximate = DamageSearch::new(dex, cfg.approximate.clone());
+    solve_probe_refined_cached(dex, battle, cfg, default_transition_cache())
+}
+
+pub fn solve_probe_refined_cached(
+    dex: &Dex,
+    battle: &Battle,
+    cfg: &ProbeRefineConfig,
+    transition_cache: SharedDamageTransitionCache,
+) -> SupportRefineAttempt {
+    let mut approximate =
+        DamageSearch::with_transition_cache(dex, cfg.approximate.clone(), transition_cache.clone());
     let Some(approximate_report) = approximate.solve(battle) else {
         let stats = approximate.stats().clone();
         return SupportRefineAttempt {
@@ -616,93 +1181,72 @@ pub fn solve_probe_refined(
         };
     };
     let approximate_stats = approximate_report.stats.clone();
-    let candidates = support_refine_candidates(&approximate_report, cfg.response_margin.max(0.0));
-    if candidates.is_empty() {
-        return SupportRefineAttempt {
-            report: Some(approximate_report),
-            stats: approximate_stats.clone(),
-            approximate_stats,
-            refine_stats: DamageSearchStats::default(),
-            refined_cells: 0,
-        };
-    }
-
-    let mut probe_cfg = cfg.approximate.clone();
-    probe_cfg.damage_mode = DamageRollMode::ThresholdLeanMinimalLow;
-    probe_cfg.work_budget = cfg.probe_work_budget;
-    let mut low = DamageSearch::new(dex, probe_cfg.clone());
-    let low_values = low.solve_root_cells(battle, &candidates);
-    let low_stats = low.stats().clone();
-
-    probe_cfg.damage_mode = DamageRollMode::ThresholdLeanMinimalHigh;
-    let mut high = DamageSearch::new(dex, probe_cfg);
-    let high_values = high.solve_root_cells(battle, &candidates);
-    let high_stats = high.stats().clone();
-
-    let mut stats = approximate_stats.clone();
-    stats.absorb(&low_stats);
-    stats.absorb(&high_stats);
-    let (Some(low_values), Some(high_values)) = (low_values, high_values) else {
-        return SupportRefineAttempt {
-            report: None,
-            stats,
-            approximate_stats,
-            refine_stats: DamageSearchStats::default(),
-            refined_cells: 0,
-        };
-    };
-    let cells = probe_refine_cells(&low_values, &high_values, cfg.cell_threshold);
-    if cells.is_empty() {
-        let mut report = approximate_report;
-        report.stats = stats.clone();
-        return SupportRefineAttempt {
-            report: Some(report),
-            stats,
-            approximate_stats,
-            refine_stats: DamageSearchStats::default(),
-            refined_cells: 0,
-        };
-    }
-
-    let mut exact_cfg = cfg.approximate.clone();
-    exact_cfg.damage_mode = DamageRollMode::Exact;
-    exact_cfg.work_budget = cfg.exact_work_budget;
-    let mut exact = DamageSearch::new(dex, exact_cfg);
-    let exact_values = exact.solve_root_cells(battle, &cells);
-    let refine_stats = exact.stats().clone();
-    stats.absorb(&refine_stats);
-    let Some(exact_values) = exact_values else {
-        return SupportRefineAttempt {
-            report: None,
-            stats,
-            approximate_stats,
-            refine_stats,
-            refined_cells: cells.len(),
-        };
-    };
-
     let [rows, cols] = approximate_report.dims;
-    let mut matrix = approximate_report.matrix;
-    for (i, j, value) in exact_values {
-        matrix[i * cols + j] = value;
+    let mut report = approximate_report;
+    let mut stats = approximate_stats.clone();
+    let mut refine_stats = DamageSearchStats::default();
+    let mut bounds = HashMap::new();
+    let mut refined = HashSet::new();
+
+    for round in 0..=cfg.audit_rounds {
+        let candidates = if round == 0 {
+            support_refine_candidates(&report, cfg.response_margin.max(0.0))
+        } else {
+            best_response_audit_candidates(&report)
+        };
+        if candidates.is_empty() {
+            break;
+        }
+        let audit_report = (round > 0).then_some(&report);
+        let batch = run_probe_batch(
+            dex,
+            battle,
+            cfg,
+            &candidates,
+            audit_report,
+            &mut bounds,
+            &refined,
+            &transition_cache,
+        );
+        stats.absorb(&batch.stats);
+        refine_stats.absorb(&batch.refine_stats);
+        if batch.incomplete {
+            stats.refinement_aborts += 1;
+            report.stats = stats.clone();
+            return SupportRefineAttempt {
+                report: Some(report),
+                stats,
+                approximate_stats,
+                refine_stats,
+                refined_cells: refined.len(),
+            };
+        }
+        for cell in batch.refined_cells {
+            refined.insert(cell);
+        }
+        if batch.exact_values.is_empty() {
+            if round > 0 || cfg.audit_rounds == 0 {
+                break;
+            }
+            continue;
+        }
+        for (i, j, value) in batch.exact_values {
+            report.matrix[i * cols + j] = value;
+        }
+        let (value, gap, row_policy, col_policy) = solve_game(&report.matrix, rows, cols);
+        stats.worst_gap = stats.worst_gap.max(gap);
+        report.value = value;
+        report.gap = gap;
+        report.row_policy = row_policy;
+        report.col_policy = col_policy;
     }
-    let (value, gap, row_policy, col_policy) = solve_game(&matrix, rows, cols);
-    stats.worst_gap = stats.worst_gap.max(gap);
-    let report = DamageSearchReport {
-        value,
-        gap,
-        row_policy,
-        col_policy,
-        matrix,
-        dims: [rows, cols],
-        stats: stats.clone(),
-    };
+    report.stats = stats.clone();
     SupportRefineAttempt {
         report: Some(report),
         stats,
         approximate_stats,
         refine_stats,
-        refined_cells: cells.len(),
+        refined_cells: refined.len(),
     }
 }
 
@@ -807,6 +1351,7 @@ pub struct DamageSearchAgent {
     cfg: DamageSearchAgentConfig,
     fallback: RmAgent,
     rng: SplitMix64,
+    transition_cache: SharedDamageTransitionCache,
 }
 
 impl DamageSearchAgent {
@@ -815,6 +1360,7 @@ impl DamageSearchAgent {
             fallback: RmAgent::new(cfg.fallback.clone(), seed ^ 0x85EB_CA77_C2B2_AE63),
             cfg,
             rng: SplitMix64::new(seed ^ 0x27D4_EB2F_1656_67C5),
+            transition_cache: default_transition_cache(),
         }
     }
 }
@@ -835,7 +1381,11 @@ impl Agent for DamageSearchAgent {
         choices: &[SearchChoice],
     ) -> SearchChoice {
         if endgame_eligible(battle, choices, self.cfg.alive_max, self.cfg.hp_cap) {
-            let mut search = DamageSearch::new(dex, self.cfg.search.clone());
+            let mut search = DamageSearch::with_transition_cache(
+                dex,
+                self.cfg.search.clone(),
+                self.transition_cache.clone(),
+            );
             if let Some(report) = search.solve(battle) {
                 let policy = if side == 0 {
                     &report.row_policy
@@ -877,6 +1427,7 @@ pub struct ProbeRefineAgent {
     cfg: ProbeRefineAgentConfig,
     fallback: RmAgent,
     rng: SplitMix64,
+    transition_cache: SharedDamageTransitionCache,
 }
 
 impl ProbeRefineAgent {
@@ -885,6 +1436,7 @@ impl ProbeRefineAgent {
             fallback: RmAgent::new(cfg.fallback.clone(), seed ^ 0x85EB_CA77_C2B2_AE63),
             cfg,
             rng: SplitMix64::new(seed ^ 0x27D4_EB2F_1656_67C5),
+            transition_cache: default_transition_cache(),
         }
     }
 }
@@ -892,12 +1444,14 @@ impl ProbeRefineAgent {
 impl Agent for ProbeRefineAgent {
     fn name(&self) -> String {
         format!(
-            "damage:probe-refine:h{}:w{}:p{}:e{}:t{}",
+            "damage:probe-refine:h{}:w{}:p{}:e{}:t{}:a{}:ae{}",
             self.cfg.refine.approximate.horizon,
             self.cfg.refine.approximate.work_budget,
             self.cfg.refine.probe_work_budget,
             self.cfg.refine.exact_work_budget,
             self.cfg.refine.cell_threshold,
+            self.cfg.refine.audit_rounds,
+            self.cfg.refine.audit_epsilon,
         )
     }
 
@@ -909,7 +1463,12 @@ impl Agent for ProbeRefineAgent {
         choices: &[SearchChoice],
     ) -> SearchChoice {
         if endgame_eligible(battle, choices, self.cfg.alive_max, self.cfg.hp_cap) {
-            let attempt = solve_probe_refined(dex, battle, &self.cfg.refine);
+            let attempt = solve_probe_refined_cached(
+                dex,
+                battle,
+                &self.cfg.refine,
+                self.transition_cache.clone(),
+            );
             if let Some(report) = attempt.report {
                 let policy = if side == 0 {
                     &report.row_policy

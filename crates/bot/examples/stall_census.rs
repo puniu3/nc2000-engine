@@ -33,7 +33,9 @@ use std::hash::{Hash, Hasher};
 use std::io::Write as _;
 use std::time::Instant;
 
-use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct};
+use nc2000_bot::corpus::{
+    complete_active_moves_from_future, corpus_files, load_battle, load_sources, reconstruct,
+};
 use nc2000_bot::eval::{eval01, EvalWeights};
 use nc2000_engine::battle::enumerate::enumerate_step;
 use nc2000_engine::battle::SearchChoice;
@@ -107,6 +109,17 @@ fn is_post_rest(b: &Battle) -> bool {
     })
 }
 
+fn repo_root() -> std::path::PathBuf {
+    if let Ok(root) = std::env::var("NC2000_REPO_ROOT") {
+        return root.into();
+    }
+    let current = std::env::current_dir().unwrap();
+    if current.join("data/gen2stadium2.json").is_file() {
+        return current;
+    }
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let corpus = arg_s(&args, "--corpus", "tmp/corpus-spectator");
@@ -126,12 +139,15 @@ fn main() {
     let quot_mode = arg_s(&args, "--quot", "turn");
     let out_path = arg_s(&args, "--out", "tmp/stall-census.csv");
 
-    let dex = conformance::load_dex();
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = repo_root();
+    let dex_json = std::fs::read_to_string(root.join("data/gen2stadium2.json")).unwrap();
+    let dex = Dex::from_json(&dex_json).unwrap();
     let src = load_sources(&dex, &root);
     let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
 
-    let files = corpus_files(&root.join(&corpus));
+    let corpus = std::path::PathBuf::from(corpus);
+    let corpus = if corpus.is_absolute() { corpus } else { root.join(corpus) };
+    let files = corpus_files(&corpus);
     let path = &files[battle_idx];
     let cb = load_battle(path);
     let d = cb
@@ -145,8 +161,11 @@ fn main() {
             }
             std::process::exit(1);
         });
-    let b0 = reconstruct(&dex, &src, &pool_path, &cb.lines, &cb.eaten, d, 1)
+    let mut b0 = reconstruct(&dex, &src, &pool_path, &cb.lines, &cb.eaten, d, 1)
         .expect("reconstruction failed");
+    if args.iter().any(|arg| arg == "--oracle-future-moves") {
+        complete_active_moves_from_future(&dex, &mut b0, &cb.lines);
+    }
 
     let w = EvalWeights::default();
     if quot_mode == "proj" {

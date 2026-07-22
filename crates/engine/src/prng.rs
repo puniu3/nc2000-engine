@@ -106,7 +106,7 @@ pub struct Draw {
 
 /// Experimental damage-roll quotient used only by exhaustive enumeration.
 /// Seeded play and `Exact` enumeration retain the bit-exact production path.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum DamageRollMode {
     #[default]
     Exact,

@@ -47,6 +47,7 @@ pub struct DuelStats {
     pub wins: usize,
     pub losses: usize,
     pub ties: usize,
+    pub turn_caps: usize,
     /// Agent A's mean score (win 1 / tie 0.5 / loss 0).
     pub score: f64,
     /// 95% CI half-width on `score`.
@@ -57,6 +58,10 @@ pub struct DuelStats {
     /// evidence for budget-matched comparisons.
     pub a_ms_per_move: f64,
     pub b_ms_per_move: f64,
+    pub a_p95_ms: f64,
+    pub a_p99_ms: f64,
+    pub b_p95_ms: f64,
+    pub b_p99_ms: f64,
 }
 
 /// Delegating wrapper that accumulates time spent inside `choose`.
@@ -64,6 +69,7 @@ struct Timed {
     inner: Box<dyn Agent>,
     ns: u64,
     moves: u64,
+    samples_ns: Vec<u64>,
 }
 
 impl Agent for Timed {
@@ -80,8 +86,10 @@ impl Agent for Timed {
     ) -> nc2000_engine::battle::SearchChoice {
         let t = Instant::now();
         let c = self.inner.choose(battle, dex, side, choices);
-        self.ns += t.elapsed().as_nanos() as u64;
+        let elapsed = t.elapsed().as_nanos() as u64;
+        self.ns += elapsed;
         self.moves += 1;
+        self.samples_ns.push(elapsed);
         c
     }
 }
@@ -116,8 +124,8 @@ pub fn run_duel(
     let done = AtomicUsize::new(0);
     let t0 = Instant::now();
 
-    // per-game record: (a_score, turns, a_ns, a_moves, b_ns, b_moves)
-    type Rec = (f64, u16, u64, u64, u64, u64);
+    // per-game record: score, turns, cap flag, aggregate and per-move timing.
+    type Rec = (f64, u16, bool, u64, u64, Vec<u64>, u64, u64, Vec<u64>);
     let mut results: Vec<Rec> = Vec::with_capacity(games);
     std::thread::scope(|scope| {
         let mut handles = Vec::new();
@@ -134,8 +142,12 @@ pub fn run_duel(
                     // agent seeds derive from game index only -> thread-count invariant
                     let sa = spec.base_seed ^ (i as u64).wrapping_mul(0xA24B_AED4_963E_E407);
                     let sb = spec.base_seed ^ (i as u64).wrapping_mul(0x9FB2_1C65_1E98_DF25);
-                    let mut agent_a = Timed { inner: build_a(sa), ns: 0, moves: 0 };
-                    let mut agent_b = Timed { inner: build_b(sb), ns: 0, moves: 0 };
+                    let mut agent_a = Timed {
+                        inner: build_a(sa), ns: 0, moves: 0, samples_ns: Vec::new(),
+                    };
+                    let mut agent_b = Timed {
+                        inner: build_b(sb), ns: 0, moves: 0, samples_ns: Vec::new(),
+                    };
                     let mut battle = Battle::from_fixture(
                         dex,
                         &g.battle_seed,
@@ -158,7 +170,11 @@ pub fn run_duel(
                     let a_score = if g.a_is_p1 { p1_score } else { 1.0 - p1_score };
                     out.push((
                         i,
-                        (a_score, battle.turn, agent_a.ns, agent_a.moves, agent_b.ns, agent_b.moves),
+                        (
+                            a_score, battle.turn, matches!(res, GameResult::TurnCapped),
+                            agent_a.ns, agent_a.moves, agent_a.samples_ns,
+                            agent_b.ns, agent_b.moves, agent_b.samples_ns,
+                        ),
                     ));
                     let d = done.fetch_add(1, Ordering::Relaxed) + 1;
                     if spec.progress && (d % 10 == 0 || d == specs.len()) {
@@ -184,21 +200,36 @@ pub fn run_duel(
     let wins = results.iter().filter(|r| r.0 == 1.0).count();
     let losses = results.iter().filter(|r| r.0 == 0.0).count();
     let ties = results.len() - wins - losses;
+    let turn_caps = results.iter().filter(|r| r.2).count();
     let score: f64 = results.iter().map(|r| r.0).sum::<f64>() / n;
     let var: f64 = results.iter().map(|r| (r.0 - score).powi(2)).sum::<f64>() / (n - 1.0);
     let ms_per_move = |ns: u64, moves: u64| ns as f64 / 1e6 / (moves.max(1)) as f64;
-    let (a_ns, a_moves) = results.iter().fold((0, 0), |(ns, m), r| (ns + r.2, m + r.3));
-    let (b_ns, b_moves) = results.iter().fold((0, 0), |(ns, m), r| (ns + r.4, m + r.5));
+    let (a_ns, a_moves) = results.iter().fold((0, 0), |(ns, m), r| (ns + r.3, m + r.4));
+    let (b_ns, b_moves) = results.iter().fold((0, 0), |(ns, m), r| (ns + r.6, m + r.7));
+    let mut a_samples: Vec<u64> = results.iter().flat_map(|r| r.5.iter().copied()).collect();
+    let mut b_samples: Vec<u64> = results.iter().flat_map(|r| r.8.iter().copied()).collect();
+    a_samples.sort_unstable();
+    b_samples.sort_unstable();
+    let percentile_ms = |samples: &[u64], percentile: usize| {
+        if samples.is_empty() { return 0.0; }
+        let rank = (samples.len() * percentile).div_ceil(100);
+        samples[rank.saturating_sub(1).min(samples.len() - 1)] as f64 / 1e6
+    };
     DuelStats {
         games: results.len(),
         wins,
         losses,
         ties,
+        turn_caps,
         score,
         ci95: 1.96 * (var / n).sqrt(),
         avg_turns: results.iter().map(|r| r.1 as f64).sum::<f64>() / n,
         secs: t0.elapsed().as_secs_f64(),
         a_ms_per_move: ms_per_move(a_ns, a_moves),
         b_ms_per_move: ms_per_move(b_ns, b_moves),
+        a_p95_ms: percentile_ms(&a_samples, 95),
+        a_p99_ms: percentile_ms(&a_samples, 99),
+        b_p95_ms: percentile_ms(&b_samples, 95),
+        b_p99_ms: percentile_ms(&b_samples, 99),
     }
 }
