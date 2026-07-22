@@ -31,6 +31,7 @@ pub mod exact;
 pub mod exploit;
 pub mod import;
 pub mod mcts;
+pub mod m17e_artifact;
 pub mod observe;
 pub mod preview;
 pub mod regret;

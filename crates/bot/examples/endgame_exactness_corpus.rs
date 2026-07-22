@@ -15,15 +15,26 @@
 //! Reports certified-tight comparisons plus PROVEN bracket violations
 //! (eval outside a certified interval, any width — zero playouts involved).
 //!
-//! Usage: endgame_exactness_corpus [--corpus DIR] [--battles LO-HI]
-//!        [--side N] [--turn N] [--hp-cap N] [--work N] [--nodes N]
-//!        [--per-battle N] [--no-dead-damage-quotient]
+//! Formal three-shard sweep (each command must use the same built binary):
+//!   cargo run --release -p nc2000-bot --example endgame_exactness_corpus -- \
+//!     --shard 0/3 --out tmp/m17e-0.json
+//!   # repeat with 1/3 and 2/3, then:
+//!   python3 tools/merge-m17e.py --out tmp/m17e-merged-v3.json tmp/m17e-{0,1,2}.json
+//!   cargo run --release -p nc2000-bot --example anchor_gate -- \
+//!     --artifact tmp/m17e-merged-v3.json
+//!
+//! Use `--battles LO-HI` only for custom/manual partitioning. A merge is
+//! accepted only when its ranges cover the entire content-bound corpus.
+//!
+//! Solver/selection overrides: [--side N] [--turn N] [--hp-cap N]
+//!        [--work N] [--nodes N] [--cell-cap N] [--solver-eps F]
+//!        [--trial-depth N] [--descend-floor F] [--threshold-radius F]
+//!        [--per-battle N] [--reconstruction-seed N] [--no-dead-damage-quotient]
 //!        [--no-fold-terminal-nodes] [--no-fold-closed-nodes]
 //!        [--no-monotone-stall] [--no-two-sided-resource]
-//!        [--no-action-pruning] [--no-support-br] [--diagnose-stall] [--out CSV]
+//!        [--no-action-pruning] [--no-support-br] [--diagnose-stall] [--out JSON]
 
 use std::collections::HashSet;
-use std::io::Write as _;
 use std::time::Instant;
 
 use nc2000_bot::bounds::{BoundConfig, BoundSolver, Stop};
@@ -31,7 +42,14 @@ use nc2000_bot::eval::{eval01, EvalWeights};
 use nc2000_bot::stall::{classify_one_sided_heal, classify_two_sided_heal};
 use nc2000_engine::state::Battle;
 
-use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct, HumanAction};
+use nc2000_bot::corpus::{
+    corpus_files, corpus_fingerprint, load_battle, load_sources, reconstruct, HumanAction,
+};
+use nc2000_bot::m17e_artifact::{
+    generator_executable_fingerprint, runtime_data_fingerprints, solver_build_fingerprint,
+    summarize_rows, validate_shard, Row, RunIdentity, SelectionConfig, ShardArtifact,
+    ShardDescriptor, SolverConfig, CUSTOM_PROFILE, FORMAL_PROFILE, SHARD_SCHEMA,
+};
 
 // ------------------------------------------------------------------- main
 
@@ -51,32 +69,119 @@ fn arg_s(args: &[String], key: &str, default: &str) -> String {
         .unwrap_or_else(|| default.to_string())
 }
 
-struct Row {
-    battle: usize,
-    side: usize,
-    turn: u16,
-    human: String,
-    exact: f64,
-    width: f64,
-    stop: u16,
-    eval: f64,
-    alive0: usize,
-    alive1: usize,
-    total_hp: u64,
-    desc: String,
+fn arg(args: &[String], key: &str) -> Option<String> {
+    args.iter()
+        .position(|value| value == key)
+        .and_then(|index| args.get(index + 1))
+        .cloned()
+}
+
+fn validate_args(args: &[String]) {
+    const VALUES: &[&str] = &[
+        "--corpus",
+        "--battles",
+        "--shard",
+        "--side",
+        "--turn",
+        "--hp-cap",
+        "--work",
+        "--nodes",
+        "--cell-cap",
+        "--solver-eps",
+        "--trial-depth",
+        "--descend-floor",
+        "--threshold-radius",
+        "--per-battle",
+        "--reconstruction-seed",
+        "--out",
+    ];
+    const FLAGS: &[&str] = &[
+        "--no-dead-damage-quotient",
+        "--no-fold-terminal-nodes",
+        "--no-fold-closed-nodes",
+        "--no-monotone-stall",
+        "--no-two-sided-resource",
+        "--no-action-pruning",
+        "--no-support-br",
+        "--diagnose-stall",
+        "--help",
+    ];
+    let mut index = 1;
+    while index < args.len() {
+        let key = args[index].as_str();
+        if VALUES.contains(&key) {
+            assert!(index + 1 < args.len(), "{key} requires a value");
+            index += 2;
+        } else if FLAGS.contains(&key) {
+            index += 1;
+        } else {
+            panic!("unknown argument {key}; use --help");
+        }
+    }
+}
+
+fn battle_range(args: &[String], corpus_count: usize) -> (usize, usize) {
+    assert!(corpus_count > 0, "corpus is empty");
+    let explicit = arg(args, "--battles");
+    let shard = arg(args, "--shard");
+    assert!(
+        explicit.is_none() || shard.is_none(),
+        "use exactly one of --battles and --shard"
+    );
+    let (lo, hi) = if let Some(range) = explicit {
+        let (lo, hi) = range
+            .split_once('-')
+            .unwrap_or_else(|| panic!("--battles must be LO-HI"));
+        (
+            lo.parse().expect("battle LO"),
+            hi.parse().expect("battle HI"),
+        )
+    } else if let Some(shard) = shard {
+        let (index, total) = shard
+            .split_once('/')
+            .unwrap_or_else(|| panic!("--shard must be INDEX/TOTAL"));
+        let index: usize = index.parse().expect("shard INDEX");
+        let total: usize = total.parse().expect("shard TOTAL");
+        assert!(
+            total > 0 && index < total,
+            "--shard requires 0 <= INDEX < TOTAL"
+        );
+        let lo = index * corpus_count / total;
+        let end = (index + 1) * corpus_count / total;
+        assert!(lo < end, "--shard TOTAL exceeds corpus size");
+        (lo, end - 1)
+    } else {
+        (0, corpus_count - 1)
+    };
+    assert!(
+        lo <= hi && hi < corpus_count,
+        "battle range {lo}-{hi} is outside 0-{}",
+        corpus_count - 1
+    );
+    (lo, hi)
 }
 
 const SOLVED_W: f64 = 0.05;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    validate_args(&args);
+    if args.iter().any(|arg| arg == "--help") {
+        println!("formal: endgame_exactness_corpus --shard INDEX/TOTAL --out SHARD.json\nmerge: python3 tools/merge-m17e.py --out MERGED.json SHARD.json...");
+        return;
+    }
     let corpus = arg_s(&args, "--corpus", "tmp/corpus-spectator");
-    let range = arg_s(&args, "--battles", "0-49");
     let hp_cap: u64 = arg_s(&args, "--hp-cap", "150").parse().unwrap();
     let work: usize = arg_s(&args, "--work", "1000000").parse().unwrap();
     let node_budget: usize = arg_s(&args, "--nodes", "120000").parse().unwrap();
+    let cell_cap: usize = arg_s(&args, "--cell-cap", "4096").parse().unwrap();
+    let solver_eps: f64 = arg_s(&args, "--solver-eps", "0.02").parse().unwrap();
+    let trial_depth: usize = arg_s(&args, "--trial-depth", "24").parse().unwrap();
+    let descend_floor: f64 = arg_s(&args, "--descend-floor", "0.1").parse().unwrap();
+    let threshold_radius: f64 = arg_s(&args, "--threshold-radius", "0.02").parse().unwrap();
     let per_battle: usize = arg_s(&args, "--per-battle", "2").parse().unwrap();
-    let out_path = arg_s(&args, "--out", "tmp/endgame-exactness-corpus.csv");
+    let reconstruction_seed: u64 = arg_s(&args, "--reconstruction-seed", "1").parse().unwrap();
+    let out_path = arg_s(&args, "--out", "tmp/m17e-shard-v3.json");
     let side_filter = args
         .iter()
         .position(|a| a == "--side")
@@ -95,13 +200,14 @@ fn main() {
     let certified_action_pruning = !args.iter().any(|a| a == "--no-action-pruning");
     let support_br_scheduling = !args.iter().any(|a| a == "--no-support-br");
     let diagnose_stall = args.iter().any(|a| a == "--diagnose-stall");
-    let (lo, hi) = {
-        let mut it = range.split('-');
-        (
-            it.next().unwrap_or("0").parse::<usize>().unwrap_or(0),
-            it.next().unwrap_or("49").parse::<usize>().unwrap_or(49),
-        )
-    };
+    assert!(per_battle > 0 && work > 0 && node_budget > 0 && cell_cap > 0 && trial_depth > 0);
+    assert!(solver_eps.is_finite() && solver_eps > 0.0);
+    assert!(descend_floor.is_finite() && descend_floor >= 0.0);
+    assert!(threshold_radius.is_finite() && threshold_radius >= 0.0);
+    assert!(
+        side_filter.is_none_or(|side| side <= 1),
+        "--side must be 0 or 1"
+    );
 
     let dex = conformance::load_dex();
     let root = conformance::fixture::repo_root();
@@ -109,17 +215,63 @@ fn main() {
     let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
     let weights = EvalWeights::default();
 
-    let files: Vec<(usize, std::path::PathBuf)> = corpus_files(&root.join(&corpus))
+    let all_files = corpus_files(&root.join(&corpus));
+    let corpus_id = corpus_fingerprint(&all_files);
+    let corpus_count = all_files.len();
+    let (lo, hi) = battle_range(&args, corpus_count);
+    let solver_config = SolverConfig {
+        work_budget: work,
+        node_budget,
+        cell_cap,
+        eps: solver_eps,
+        trial_depth,
+        descend_floor,
+        dead_damage_quotient,
+        fold_terminal_nodes,
+        fold_closed_nodes,
+        monotone_stall_scheduling,
+        two_sided_resource_scheduling,
+        certified_action_pruning,
+        support_br_scheduling,
+        threshold_radius,
+    };
+    let selection = SelectionConfig {
+        hp_cap,
+        max_alive_per_side: 2,
+        per_battle,
+        side_filter,
+        turn_filter,
+        decision_order: "reverse".to_string(),
+        reconstruction_seed,
+    };
+    let profile =
+        if solver_config == SolverConfig::formal() && selection == SelectionConfig::formal() {
+            FORMAL_PROFILE
+        } else {
+            CUSTOM_PROFILE
+        };
+    let run = RunIdentity {
+        profile: profile.to_string(),
+        solver_build_fingerprint: solver_build_fingerprint().to_string(),
+        generator_executable_fingerprint: generator_executable_fingerprint()
+            .unwrap_or_else(|error| panic!("{error}")),
+        runtime_data: runtime_data_fingerprints(&root).unwrap_or_else(|error| panic!("{error}")),
+        corpus_fingerprint: corpus_id,
+        corpus_count,
+        solver: solver_config.clone(),
+        selection: selection.clone(),
+    };
+    let files: Vec<(usize, std::path::PathBuf)> = all_files
         .into_iter()
         .enumerate()
         .filter(|(i, _)| *i >= lo && *i <= hi)
         .collect();
     println!(
-        "corpus battles {} (index {lo}-{hi}), hp-cap {hp_cap}, work {work}, nodes {node_budget}, per-battle {per_battle}, dead-damage-quotient {dead_damage_quotient}, fold-terminal {fold_terminal_nodes}, fold-closed {fold_closed_nodes}, monotone-stall {monotone_stall_scheduling}, two-sided-resource {two_sided_resource_scheduling}, action-pruning {certified_action_pruning}, support-br {support_br_scheduling}",
+        "profile {profile}; corpus battles {} (index {lo}-{hi}), hp-cap {hp_cap}, work {work}, nodes {node_budget}, per-battle {per_battle}, dead-damage-quotient {dead_damage_quotient}, fold-terminal {fold_terminal_nodes}, fold-closed {fold_closed_nodes}, monotone-stall {monotone_stall_scheduling}, two-sided-resource {two_sided_resource_scheduling}, action-pruning {certified_action_pruning}, support-br {support_br_scheduling}",
         files.len()
     );
 
-    let mut seen: HashSet<u64> = HashSet::new();
+    let mut seen: HashSet<u128> = HashSet::new();
     let mut rows: Vec<Row> = Vec::new();
     let mut reconstructed = 0usize;
     let mut attempted = 0usize;
@@ -156,6 +308,10 @@ fn main() {
             BoundConfig {
                 work_budget: work,
                 node_budget,
+                cell_cap,
+                eps: solver_eps,
+                trial_depth,
+                descend_floor,
                 dead_damage_quotient,
                 fold_terminal_nodes,
                 fold_closed_nodes,
@@ -168,7 +324,7 @@ fn main() {
         );
         let mut battle_attempts = 0usize;
         // walk decisions from the END: endgames live there
-        for d in cb.decisions.iter().rev() {
+        for (decision, d) in cb.decisions.iter().enumerate().rev() {
             if side_filter.is_some_and(|side| d.side != side)
                 || turn_filter.is_some_and(|turn| d.turn != turn)
             {
@@ -177,7 +333,15 @@ fn main() {
             if battle_attempts >= per_battle {
                 break;
             }
-            let Some(b) = reconstruct(&dex, &src, &pool_path, &cb.lines, &cb.evidence, d, 1) else {
+            let Some(b) = reconstruct(
+                &dex,
+                &src,
+                &pool_path,
+                &cb.lines,
+                &cb.evidence,
+                d,
+                reconstruction_seed,
+            ) else {
                 continue;
             };
             reconstructed += 1;
@@ -187,10 +351,14 @@ fn main() {
                 .iter()
                 .flat_map(|s| s.party.iter().map(|&sl| s.roster[sl as usize].hp as u64))
                 .sum();
-            if !(a0 <= 2 && a1 <= 2 && total_hp <= hp_cap) {
+            if !(a0 <= selection.max_alive_per_side
+                && a1 <= selection.max_alive_per_side
+                && total_hp <= hp_cap)
+            {
                 continue;
             }
-            if !seen.insert(b.state_key()) {
+            let state_key128 = b.state_key128();
+            if !seen.insert(state_key128) {
                 continue;
             }
             attempted += 1;
@@ -230,7 +398,7 @@ fn main() {
             }
             let ev = eval01(&b, &dex, &weights);
             let ts = Instant::now();
-            let rep = solver.solve(&b, Some((ev - 0.02, ev + 0.02)));
+            let rep = solver.solve(&b, Some((ev - threshold_radius, ev + threshold_radius)));
             let dt = ts.elapsed().as_secs_f64();
             let human = match &d.action {
                 HumanAction::Move(k) => format!("move {k}"),
@@ -265,6 +433,7 @@ fn main() {
             }
             rows.push(Row {
                 battle: *bi,
+                decision,
                 side: d.side,
                 turn: d.turn,
                 human,
@@ -275,6 +444,7 @@ fn main() {
                 alive0: a0,
                 alive1: a1,
                 total_hp,
+                state_key128: format!("{state_key128:032x}"),
                 desc,
             });
         }
@@ -358,31 +528,26 @@ fn main() {
         }
     }
 
-    std::fs::create_dir_all("tmp").ok();
-    let mut f = std::fs::File::create(&out_path).expect("csv");
-    writeln!(
-        f,
-        "battle,side,turn,human,exact,width,stop,eval,alive0,alive1,total_hp,desc"
-    )
-    .unwrap();
-    for r in &rows {
-        writeln!(
-            f,
-            "{},{},{},\"{}\",{:.6},{:.6},{},{:.6},{},{},{},\"{}\"",
-            r.battle,
-            r.side,
-            r.turn,
-            r.human,
-            r.exact,
-            r.width,
-            r.stop,
-            r.eval,
-            r.alive0,
-            r.alive1,
-            r.total_hp,
-            r.desc
-        )
-        .unwrap();
+    rows.sort_by_key(Row::coordinate);
+    let artifact = ShardArtifact {
+        schema: SHARD_SCHEMA.to_string(),
+        run,
+        shard: ShardDescriptor {
+            battle_lo: lo,
+            battle_hi: hi,
+            summary: summarize_rows(&rows),
+        },
+        rows,
+    };
+    validate_shard(&artifact).unwrap_or_else(|error| panic!("invalid generated shard: {error}"));
+    let out = std::path::Path::new(&out_path);
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent).unwrap_or_else(|error| {
+            panic!("create output directory {}: {error}", parent.display())
+        });
     }
-    println!("\ncsv: {out_path}");
+    let file = std::fs::File::create(out)
+        .unwrap_or_else(|error| panic!("create {}: {error}", out.display()));
+    serde_json::to_writer_pretty(file, &artifact).expect("serialize M17e v3 shard");
+    println!("\nshard artifact: {out_path}");
 }

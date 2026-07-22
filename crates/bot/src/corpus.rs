@@ -73,6 +73,49 @@ pub fn corpus_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     files
 }
 
+fn fnv1a64_update(hash: u64, bytes: &[u8]) -> u64 {
+    bytes.iter().fold(hash, |hash, &byte| {
+        (hash ^ byte as u64).wrapping_mul(0x0000_0100_0000_01b3)
+    })
+}
+
+fn fingerprint_part(hash: u64, bytes: &[u8]) -> u64 {
+    let hash = fnv1a64_update(hash, &(bytes.len() as u64).to_le_bytes());
+    fnv1a64_update(hash, bytes)
+}
+
+/// Content identity of a sorted corpus file list. Paths outside the corpus
+/// are deliberately excluded; basenames and bytes are both bound so moving
+/// an intact corpus is harmless while renames, additions, and edits are not.
+pub fn corpus_fingerprint(files: &[std::path::PathBuf]) -> String {
+    let mut hash = 0xcbf2_9ce4_8422_2325;
+    for path in files {
+        let name = path.file_name().unwrap_or_default().to_string_lossy();
+        let contents = std::fs::read(path)
+            .unwrap_or_else(|e| panic!("read corpus file {}: {e}", path.display()));
+        hash = fingerprint_part(hash, name.as_bytes());
+        hash = fingerprint_part(hash, &contents);
+    }
+    format!("fnv1a64:{hash:016x}:{}files", files.len())
+}
+
+/// Fingerprint of the code that maps a corpus prefix plus own-set evidence
+/// into a battle. Embedding the relevant sources makes importer/fabricator
+/// changes invalidate old proof artifacts automatically, even when their
+/// coarse HP/alive diagnostics happen to remain unchanged.
+pub fn reconstruction_schema_fingerprint() -> String {
+    let sources: [(&str, &[u8]); 2] = [
+        ("corpus.rs", include_bytes!("corpus.rs").as_slice()),
+        ("import.rs", include_bytes!("import.rs").as_slice()),
+    ];
+    let mut hash = 0xcbf2_9ce4_8422_2325;
+    for (name, contents) in sources {
+        hash = fingerprint_part(hash, name.as_bytes());
+        hash = fingerprint_part(hash, contents);
+    }
+    format!("fnv1a64:{hash:016x}:corpus-reconstruction-v1")
+}
+
 pub fn load_battle(path: &std::path::Path) -> CorpusBattle {
     let text = std::fs::read_to_string(path).unwrap_or_default();
     let lines: Vec<String> = text
