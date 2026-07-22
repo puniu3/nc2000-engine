@@ -587,4 +587,28 @@ mod tests {
             .unwrap_err()
             .contains("duplicate state_key128"));
     }
+
+    #[test]
+    fn serde_json_roundtrips_real_fingerprint_float_bits() {
+        // Real formal-sweep values that serde_json's non-float_roundtrip
+        // parser moved by one ULP. The Python merger locks the same vectors.
+        let cases = [
+            ("0.9771190913748681", 0x3fef_448f_41b8_12cb),
+            ("0.013179792033705595", 0x3f8a_fe01_be05_d493),
+            ("0.9483924278886207", 0x3fee_593b_13b1_c800),
+        ];
+        for (decimal, expected_bits) in cases {
+            let parsed: f64 = serde_json::from_str(decimal).unwrap();
+            assert_eq!(parsed.to_bits(), expected_bits, "{decimal}");
+        }
+
+        let mut actual = row(0, 3, 1);
+        actual.eval = f64::from_bits(cases[0].1);
+        actual.exact = f64::from_bits(cases[1].1);
+        actual.width = f64::from_bits(cases[2].1);
+        let encoded = serde_json::to_string(&actual).unwrap();
+        let decoded: Row = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(row_record(&decoded), row_record(&actual));
+        assert_eq!(summarize_rows(&[decoded]), summarize_rows(&[actual]));
+    }
 }

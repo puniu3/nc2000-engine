@@ -384,6 +384,17 @@ class SelfTest(unittest.TestCase):
         self.assertEqual([row["battle"] for row in merged["rows"]], [0, 1])
         self.assertEqual(merged["merge"]["summary"]["row_count"], 2)
 
+    def test_real_float_vectors_use_correctly_rounded_bits(self):
+        # Real formal-sweep values that differed by one ULP in serde_json's
+        # old default parser. Rust locks the same decimal->bits vectors.
+        cases = [
+            (0.9771190913748681, b"3fef448f41b812cb"),
+            (0.013179792033705595, b"3f8afe01be05d493"),
+            (0.9483924278886207, b"3fee593b13b1c800"),
+        ]
+        for value, expected_bits in cases:
+            self.assertEqual(float_bits(value), expected_bits)
+
     def test_deleted_row_breaks_shard_summary(self):
         path = self.write_shard("a.json", 0, 1, [self.row(0, 1), self.row(1, 2)])
         with open(path, encoding="utf-8") as source:
