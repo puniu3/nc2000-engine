@@ -1,0 +1,65 @@
+{
+  "schema": "nc2000-arena-tier-gate-v1",
+  "tiers": [10000, 20000, 40000, 80000],
+  "pool": "meta",
+  "max_turns": 500,
+  "expected": {
+    "fingerprints": {
+      "build": "fnv1a64:0f8abcd8b46b2f30:arena-build-v1:1parts",
+      "dex": "fnv1a64:36de7e3d21880504:arena-dex-v1:1parts",
+      "pool": "fnv1a64:8d49972095ef9b30:arena-pool-v1:3parts",
+      "tables": "fnv1a64:cbf29ce484222325:arena-tables-v1:0parts"
+    },
+    "baked_tables": 0
+  },
+  "comparisons": [
+    {
+      "lower_iters": 10000,
+      "higher_iters": 20000,
+      "discovery": {
+        "agent_a": "blind:20000:1:16",
+        "agent_b": "blind:10000:1:16",
+        "base_seeds": [1700000001, 1700000002, 1700000003, 1700000004],
+        "games_per_seed": 200
+      },
+      "confirm": {
+        "agent_a": "blind:20000:1:16",
+        "agent_b": "blind:10000:1:16",
+        "base_seeds": [2700000001, 2700000002, 2700000003, 2700000004],
+        "games_per_seed": 200
+      }
+    },
+    {
+      "lower_iters": 20000,
+      "higher_iters": 40000,
+      "discovery": {
+        "agent_a": "blind:40000:1:16",
+        "agent_b": "blind:20000:1:16",
+        "base_seeds": [1700000001, 1700000002, 1700000003, 1700000004],
+        "games_per_seed": 200
+      },
+      "confirm": {
+        "agent_a": "blind:40000:1:16",
+        "agent_b": "blind:20000:1:16",
+        "base_seeds": [2700000001, 2700000002, 2700000003, 2700000004],
+        "games_per_seed": 200
+      }
+    },
+    {
+      "lower_iters": 40000,
+      "higher_iters": 80000,
+      "discovery": {
+        "agent_a": "blind:80000:1:16",
+        "agent_b": "blind:40000:1:16",
+        "base_seeds": [1700000001, 1700000002, 1700000003, 1700000004],
+        "games_per_seed": 200
+      },
+      "confirm": {
+        "agent_a": "blind:80000:1:16",
+        "agent_b": "blind:40000:1:16",
+        "base_seeds": [2700000001, 2700000002, 2700000003, 2700000004],
+        "games_per_seed": 200
+      }
+    }
+  ]
+}

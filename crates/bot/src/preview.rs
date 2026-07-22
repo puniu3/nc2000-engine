@@ -394,6 +394,12 @@ impl TableSet {
                 tab.team_a, tab.team_b, tab.space_version
             ));
         }
+        if self.tables.contains_key(&(i, j)) {
+            return Err(format!(
+                "duplicate pair {} vs {}; table inputs must be unique",
+                tab.team_a, tab.team_b
+            ));
+        }
         self.tables.insert((i, j), tab);
         Ok(())
     }
@@ -408,11 +414,13 @@ impl TableSet {
     pub fn load(dex: &Dex, pool: &MetaPool, dir: &Path) -> Arc<TableSet> {
         let mut set = TableSet::from_pool(dex, pool);
         if let Ok(entries) = std::fs::read_dir(dir) {
-            for e in entries.flatten() {
-                let p = e.path();
-                if p.extension().and_then(|x| x.to_str()) != Some("json") {
-                    continue;
-                }
+            let mut paths: Vec<_> = entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().and_then(|x| x.to_str()) == Some("json"))
+                .collect();
+            paths.sort();
+            for p in paths {
                 let Ok(text) = std::fs::read_to_string(&p) else { continue };
                 let Ok(tab) = serde_json::from_str::<PairTable>(&text) else { continue };
                 if let Err(e) = set.add_pair(tab) {
@@ -764,5 +772,21 @@ mod tests {
         // column player prefers col 1 (0.7/0.2 vs 0.8/0.3)
         assert_eq!(sol.argmax_b, 7);
         assert!((sol.guarantee_mixed_a - sol.guarantee_argmax_a).abs() < 0.02);
+    }
+
+    #[test]
+    fn duplicate_pair_input_is_rejected() {
+        let root = conformance::fixture::repo_root();
+        let dex = conformance::load_dex();
+        let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+        let text = std::fs::read_to_string(
+            root.join("fixtures/preview-tables-test/pair-00-01.json"),
+        )
+        .unwrap();
+        let table: PairTable = serde_json::from_str(&text).unwrap();
+        let mut tables = TableSet::from_pool(&dex, &pool);
+        tables.add_pair(table.clone()).unwrap();
+        let error = tables.add_pair(table).unwrap_err();
+        assert!(error.contains("duplicate pair"), "{error}");
     }
 }

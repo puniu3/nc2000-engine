@@ -34,7 +34,7 @@
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use conformance::fixture::{corpus_files, repo_root, Fixture};
@@ -326,6 +326,92 @@ fn write_jsonl(path: &Path, row: &serde_json::Value) {
     writeln!(out).unwrap();
 }
 
+fn fnv1a64_update(hash: u64, bytes: &[u8]) -> u64 {
+    bytes.iter().fold(hash, |hash, &byte| {
+        (hash ^ byte as u64).wrapping_mul(0x0000_0100_0000_01b3)
+    })
+}
+
+fn fingerprint_part(hash: u64, bytes: &[u8]) -> u64 {
+    let hash = fnv1a64_update(hash, &(bytes.len() as u64).to_le_bytes());
+    fnv1a64_update(hash, bytes)
+}
+
+fn content_fingerprint<'a>(tag: &str, parts: impl IntoIterator<Item = &'a [u8]>) -> String {
+    let mut hash = 0xcbf2_9ce4_8422_2325;
+    let mut count = 0usize;
+    for part in parts {
+        hash = fingerprint_part(hash, part);
+        count += 1;
+    }
+    format!("fnv1a64:{hash:016x}:{tag}:{count}parts")
+}
+
+/// Identity of the exact executable being measured, not merely a source
+/// revision which could hide local edits or different compiler settings.
+fn build_fingerprint() -> String {
+    let executable = std::env::current_exe().expect("resolve arena executable");
+    let bytes = std::fs::read(&executable)
+        .unwrap_or_else(|e| panic!("read arena executable {}: {e}", executable.display()));
+    content_fingerprint("arena-build-v1", [bytes.as_slice()])
+}
+
+/// Bind both the scheduled teams and (when present) the complete meta prior.
+/// Blind search samples the latter even when `--pool meta:LO-HI` schedules a
+/// strict subset, so both are behaviorally relevant inputs.
+fn pool_fingerprint(
+    pool_spec: &str,
+    teams: &[Vec<PokemonSet>],
+    meta_path: Option<&Path>,
+) -> String {
+    // PokemonSet is intentionally Deserialize-only; its derived Debug form is
+    // deterministic (the only maps are BTreeMaps) and binds every field.
+    let mut teams_bytes = Vec::new();
+    for team in teams {
+        for set in team {
+            teams_bytes.extend_from_slice(format!("{set:?}\n").as_bytes());
+        }
+        teams_bytes.extend_from_slice(b"--team--\n");
+    }
+    let meta_bytes = meta_path.map(|path| {
+        std::fs::read(path)
+            .unwrap_or_else(|e| panic!("read meta pool {}: {e}", path.display()))
+    });
+    let mut parts: Vec<&[u8]> = vec![pool_spec.as_bytes(), teams_bytes.as_slice()];
+    if let Some(bytes) = meta_bytes.as_ref() {
+        parts.push(bytes.as_slice());
+    }
+    content_fingerprint("arena-pool-v1", parts)
+}
+
+/// Hash exactly the immediate JSON inputs considered by `TableSet::load`.
+/// Basenames are bound but the directory path is not, so copied CX payloads
+/// retain identity while additions, removals, renames, and edits do not.
+fn tables_fingerprint(dir: Option<&Path>) -> String {
+    let Some(dir) = dir else {
+        return content_fingerprint("arena-tables-v1", std::iter::empty());
+    };
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().and_then(|x| x.to_str()) == Some("json"))
+                .collect()
+        })
+        .unwrap_or_default();
+    paths.sort();
+    let mut owned = Vec::with_capacity(paths.len() * 2);
+    for path in paths {
+        owned.push(path.file_name().unwrap_or_default().to_string_lossy().as_bytes().to_vec());
+        owned.push(
+            std::fs::read(&path)
+                .unwrap_or_else(|e| panic!("read baked table {}: {e}", path.display())),
+        );
+    }
+    content_fingerprint("arena-tables-v1", owned.iter().map(Vec::as_slice))
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.len() < 2 {
@@ -341,14 +427,15 @@ fn main() {
         .map(|v| v.parse().unwrap())
         .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4));
 
+    let root = repo_root();
+    let dex_path = root.join("data/gen2stadium2.json");
     let dex = load_dex();
     let pool_spec = flag(&args, "--pool").unwrap_or_else(|| "fixtures".into());
     let is_blind = spec_a.is_blind() || spec_b.is_blind();
     let needs_meta =
         pool_spec.starts_with("meta") || spec_a.needs_tables() || spec_b.needs_tables();
-    let meta = needs_meta.then(|| {
-        Arc::new(load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json")))
-    });
+    let meta_path = root.join("data/meta-pool-v0/meta-pool.json");
+    let meta = needs_meta.then(|| Arc::new(load_meta_pool(&meta_path)));
     let teams = if let Some(range) = pool_spec.strip_prefix("meta") {
         let pool = meta.as_ref().unwrap();
         let (lo, hi) = match range.strip_prefix(':') {
@@ -364,10 +451,12 @@ fn main() {
     };
     eprintln!("{} teams in pool ({pool_spec})", teams.len());
 
-    let tables = (spec_a.needs_tables() || spec_b.needs_tables()).then(|| {
-        let dir = flag(&args, "--tables")
+    let tables_dir = (spec_a.needs_tables() || spec_b.needs_tables()).then(|| {
+        flag(&args, "--tables")
             .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| repo_root().join("data/preview-tables-v0"));
+            .unwrap_or_else(|| root.join("data/preview-tables-v0"))
+    });
+    let tables = tables_dir.as_ref().map(|dir| {
         let ts = TableSet::load(&dex, meta.as_ref().unwrap(), &dir);
         eprintln!("{} baked pair tables loaded from {}", ts.len(), dir.display());
         ts
@@ -380,6 +469,21 @@ fn main() {
         &|seed| spec_b.build(seed, tables.as_ref(), meta.as_ref()),
         DuelSpec { games, base_seed, threads, max_turns, progress: true, log_on: is_blind },
     );
+
+    // Hash only after all measured work. Reading the executable and large
+    // data inputs immediately before the duel would warm the filesystem page
+    // cache and bias timing relative to shards launched on a cold worker.
+    let fingerprints = serde_json::json!({
+        "build": build_fingerprint(),
+        "dex": content_fingerprint(
+            "arena-dex-v1",
+            [std::fs::read(&dex_path)
+                .unwrap_or_else(|e| panic!("read dex {}: {e}", dex_path.display()))
+                .as_slice()],
+        ),
+        "pool": pool_fingerprint(&pool_spec, &teams, needs_meta.then_some(meta_path.as_path())),
+        "tables": tables_fingerprint(tables_dir.as_deref()),
+    });
 
     println!(
         "A={} vs B={}   {} games, seed {base_seed}, {threads} threads",
@@ -415,6 +519,8 @@ fn main() {
                 "base_seed": base_seed,
                 "threads": threads,
                 "max_turns": max_turns,
+                "agent_a_iterations": spec_a.iterations(),
+                "agent_b_iterations": spec_b.iterations(),
                 "pool": pool_spec,
                 "teams": teams.len(),
                 "baked_tables": tables.as_ref().map_or(0, |t| t.len()),
@@ -427,6 +533,7 @@ fn main() {
                 "losses": stats.losses,
                 "ties": stats.ties,
                 "turn_caps": stats.turn_caps,
+                "invalid_games": 0,
                 "score": stats.score,
                 "ci95": ci95,
                 "ci_unit": "side_swap_pair",
@@ -454,6 +561,7 @@ fn main() {
                     "samples_ns": &stats.b_samples_ns,
                 },
             },
+            "fingerprints": fingerprints,
         });
         write_jsonl(Path::new(&path), &row);
     }
