@@ -24,6 +24,7 @@ pub mod belief;
 pub mod blind;
 pub mod bounds;
 pub mod corpus;
+pub mod damage_search;
 pub mod duel;
 pub mod eval;
 pub mod exact;

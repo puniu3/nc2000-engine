@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::dex::Dex;
-use crate::prng::{BattleRng, Draw, Oracle};
+use crate::prng::{BattleRng, DamageRollMode, Draw, Oracle};
 use crate::state::Battle;
 
 use super::search::SearchChoice;
@@ -44,6 +44,21 @@ pub struct ChanceLeaf {
 pub struct StepEnum {
     pub leaves: Vec<ChanceLeaf>,
     pub runs: usize,
+    /// Diagnostic observations across scripted engine runs. These are not
+    /// unique battle events: probes deliberately replay the same prefix.
+    pub damage: DamageEnumStats,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DamageEnumStats {
+    pub exact_draws: usize,
+    pub abstract_draws: usize,
+    pub offered_classes: usize,
+    pub drain_recoil_draws: usize,
+    pub multihit_draws: usize,
+    pub substitute_draws: usize,
+    pub counter_bide_draws: usize,
+    pub heal_draws: usize,
 }
 
 struct LeafRec {
@@ -64,9 +79,21 @@ pub fn run_scripted(
     choices: [Option<SearchChoice>; 2],
     script: &[usize],
 ) -> (Battle, Vec<Draw>) {
+    run_scripted_with_damage_mode(dex, base, choices, script, DamageRollMode::Exact)
+}
+
+/// Experimental counterpart of `run_scripted`. The production exact path
+/// above always fixes `Exact`; callers must opt into damage abstraction.
+pub fn run_scripted_with_damage_mode(
+    dex: &Dex,
+    base: &Battle,
+    choices: [Option<SearchChoice>; 2],
+    script: &[usize],
+    damage_mode: DamageRollMode,
+) -> (Battle, Vec<Draw>) {
     let mut b = base.clone();
     b.set_log_enabled(false);
-    b.prng = BattleRng::enumerating(script.to_vec());
+    b.prng = BattleRng::enumerating_with_damage_mode(script.to_vec(), damage_mode);
     b.apply_choices(dex, choices).expect("run_scripted: choices must be legal");
     let oracle = b.prng.oracle.take().expect("oracle survives the step");
     let Oracle { trace, .. } = *oracle;
@@ -77,8 +104,10 @@ struct Ctx<'a> {
     dex: &'a Dex,
     base: &'a Battle,
     choices: [Option<SearchChoice>; 2],
+    damage_mode: DamageRollMode,
     cap: usize,
     runs: usize,
+    damage: DamageEnumStats,
 }
 
 impl Ctx<'_> {
@@ -87,7 +116,42 @@ impl Ctx<'_> {
             return None;
         }
         self.runs += 1;
-        Some(run_scripted(self.dex, self.base, self.choices, script))
+        let result = run_scripted_with_damage_mode(
+            self.dex,
+            self.base,
+            self.choices,
+            script,
+            self.damage_mode,
+        );
+        for draw in &result.1 {
+            match draw.label {
+                "dmgvar" => self.damage.exact_draws += 1,
+                "dmgvar-drain-recoil" => {
+                    self.damage.exact_draws += 1;
+                    self.damage.drain_recoil_draws += 1;
+                }
+                "dmgvar-multihit" => {
+                    self.damage.exact_draws += 1;
+                    self.damage.multihit_draws += 1;
+                }
+                "dmgvar-substitute" => {
+                    self.damage.exact_draws += 1;
+                    self.damage.substitute_draws += 1;
+                }
+                "dmgvar-counter-bide" => {
+                    self.damage.exact_draws += 1;
+                    self.damage.counter_bide_draws += 1;
+                }
+                "dmgvar-heal" => {
+                    self.damage.exact_draws += 1;
+                    self.damage.heal_draws += 1;
+                }
+                "dmgabs" => self.damage.abstract_draws += 1,
+                _ => continue,
+            }
+            self.damage.offered_classes += draw.counts.len();
+        }
+        Some(result)
     }
 }
 
@@ -106,7 +170,7 @@ fn subtree(ctx: &mut Ctx, script: &mut Vec<usize>) -> Option<Vec<LeafRec>> {
     let p = script.len();
     let d = &trace[p];
     let mut out = Vec::new();
-    if d.label == "dmgvar" {
+    if d.label.starts_with("dmgvar") {
         let mut cache: HashMap<usize, Rc<Vec<LeafRec>>> = HashMap::new();
         droll_ranges(ctx, script, p, 0, d.counts.len() - 1, &mut cache, &mut out)?;
     } else {
@@ -205,7 +269,27 @@ pub fn enumerate_step(
     choices: [Option<SearchChoice>; 2],
     cap: usize,
 ) -> Option<StepEnum> {
-    let mut ctx = Ctx { dex, base, choices, cap, runs: 0 };
+    enumerate_step_with_damage_mode(dex, base, choices, cap, DamageRollMode::Exact)
+}
+
+/// Enumerate one decision step while quotienting damage rolls according to
+/// `damage_mode`. This is approximate unless `damage_mode == Exact`.
+pub fn enumerate_step_with_damage_mode(
+    dex: &Dex,
+    base: &Battle,
+    choices: [Option<SearchChoice>; 2],
+    cap: usize,
+    damage_mode: DamageRollMode,
+) -> Option<StepEnum> {
+    let mut ctx = Ctx {
+        dex,
+        base,
+        choices,
+        damage_mode,
+        cap,
+        runs: 0,
+        damage: DamageEnumStats::default(),
+    };
     let mut script = Vec::new();
     let recs = subtree(&mut ctx, &mut script)?;
     Some(StepEnum {
@@ -214,5 +298,6 @@ pub fn enumerate_step(
             .map(|l| ChanceLeaf { battle: l.battle, prob: l.prob, draws: l.trace.len() })
             .collect(),
         runs: ctx.runs,
+        damage: ctx.damage,
     })
 }

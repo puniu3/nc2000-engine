@@ -104,6 +104,73 @@ pub struct Draw {
     pub chosen: usize,
 }
 
+/// Experimental damage-roll quotient used only by exhaustive enumeration.
+/// Seeded play and `Exact` enumeration retain the bit-exact production path.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DamageRollMode {
+    #[default]
+    Exact,
+    /// Replace the complete damage distribution by its nearest attainable
+    /// probability-weighted mean.
+    Mean,
+    /// Split only when a roll crosses an immediate HP semantic threshold.
+    Threshold1,
+    /// `Threshold1` plus next-hit and residual-damage death clocks.
+    Threshold2,
+    /// KO plus thresholds backed by an actually-held item or usable move;
+    /// omits unconditional 1/4, 1/3, and 1/2 buckets.
+    ThresholdLean,
+    /// `ThresholdLean` ablations which remove one conservative exact escape.
+    ThresholdLeanNoCounter,
+    ThresholdLeanNoDrainRecoil,
+    ThresholdLeanNoMultiHit,
+    ThresholdLeanNoSubstitute,
+    /// No conservative exact escapes; retains only semantic HP thresholds.
+    ThresholdLeanMinimal,
+    /// Diagnostic companions to `ThresholdLeanMinimal`: preserve the same
+    /// probability buckets, but use each bucket's lowest/highest attainable
+    /// damage as its representative. Their disagreement estimates whether
+    /// the conditional-mean representative is strategically fragile.
+    ThresholdLeanMinimalLow,
+    ThresholdLeanMinimalHigh,
+    /// `ThresholdLean` plus only the next equal-hit death clock.
+    ThresholdLeanNext,
+    /// `ThresholdLean` plus only the residual-damage death clock.
+    ThresholdLeanResidual,
+    /// `ThresholdLean` plus both death clocks.
+    ThresholdLeanClock,
+    /// Two representatives for damage which can enter a usable-heal region.
+    ThresholdHealSplit,
+    /// `ThresholdLeanClock`, with low-HP heal-capable targets retaining
+    /// exact damage rolls (heal/stall policy thresholds are contextual).
+    ThresholdHeal,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DamageExactReason {
+    #[default]
+    None,
+    DrainRecoil,
+    MultiHit,
+    Substitute,
+    CounterBide,
+    Heal,
+}
+
+/// State-local semantics visible after a damage roll. Thresholds are HP
+/// values at which a downstream predicate changes (KO, HP fractions, etc.).
+#[derive(Clone, Debug, Default)]
+pub struct DamageRollContext {
+    pub hp: i32,
+    pub thresholds: Vec<i32>,
+    pub residual_damage: i32,
+    pub heal_threshold: i32,
+    /// Damage bookkeeping can be observed numerically by mechanics such as
+    /// Counter, Bide, drain, recoil, multi-hit, and Substitute. Conservative
+    /// modes retain exact rolls; ablation modes can clear individual reasons.
+    pub exact_reason: DamageExactReason,
+}
+
 impl Draw {
     pub const TOTAL: u64 = 1 << 32;
 
@@ -119,6 +186,7 @@ impl Draw {
 pub struct Oracle {
     pub script: Vec<usize>,
     pub trace: Vec<Draw>,
+    pub damage_mode: DamageRollMode,
 }
 
 /// The battle's RNG: either the bit-exact seeded LCG (normal play, search,
@@ -152,7 +220,19 @@ impl BattleRng {
     /// Oracle mode following `script`; draws past the script take the first
     /// non-empty class. The `lcg` is untouched dead weight in this mode.
     pub fn enumerating(script: Vec<usize>) -> Self {
-        BattleRng { lcg: Prng::new(0), oracle: Some(Box::new(Oracle { script, trace: Vec::new() })) }
+        Self::enumerating_with_damage_mode(script, DamageRollMode::Exact)
+    }
+
+    pub fn enumerating_with_damage_mode(script: Vec<usize>, damage_mode: DamageRollMode) -> Self {
+        BattleRng {
+            lcg: Prng::new(0),
+            oracle: Some(Box::new(Oracle { script, trace: Vec::new(), damage_mode })),
+        }
+    }
+
+    /// Seeded play reports `Exact`: abstraction is an Oracle-only experiment.
+    pub fn damage_roll_mode(&self) -> DamageRollMode {
+        self.oracle.as_ref().map_or(DamageRollMode::Exact, |o| o.damage_mode)
     }
 
     pub fn seed_str(&self) -> String {
@@ -256,6 +336,19 @@ impl BattleRng {
     /// apply its second-layer endpoint range merge on top (saturation
     /// ranges where DIFFERENT damages still coincide).
     pub fn apply_damage_variance(&mut self, damage: f64) -> f64 {
+        self.apply_damage_variance_with_context(damage, None)
+    }
+
+    /// Damage variance with state-local semantic quotienting. Approximate
+    /// groups retain exact probability mass; their representative is the
+    /// attainable damage nearest that group's conditional mean. The new
+    /// `dmgabs` label intentionally bypasses the exact enumerator's endpoint
+    /// proof, which applies only to unmodified `dmgvar` classes.
+    pub fn apply_damage_variance_with_context(
+        &mut self,
+        damage: f64,
+        context: Option<&DamageRollContext>,
+    ) -> f64 {
         let out = |c: u32| (damage * (217 + c) as f64 / 255.0).floor();
         match &mut self.oracle {
             None => out(self.lcg.random(39)),
@@ -273,7 +366,128 @@ impl BattleRng {
                         counts.push(uniform_count(39, c));
                     }
                 }
-                vals[Self::pick(o, "dmgvar", counts)]
+
+                let exact_reason = context.map_or(DamageExactReason::None, |c| c.exact_reason);
+                let mode = if exact_reason != DamageExactReason::None {
+                    DamageRollMode::Exact
+                } else {
+                    o.damage_mode
+                };
+                if mode == DamageRollMode::Exact {
+                    let label = match exact_reason {
+                        DamageExactReason::None => "dmgvar",
+                        DamageExactReason::DrainRecoil => "dmgvar-drain-recoil",
+                        DamageExactReason::MultiHit => "dmgvar-multihit",
+                        DamageExactReason::Substitute => "dmgvar-substitute",
+                        DamageExactReason::CounterBide => "dmgvar-counter-bide",
+                        DamageExactReason::Heal => "dmgvar-heal",
+                    };
+                    return vals[Self::pick(o, label, counts)];
+                }
+
+                #[derive(Clone, Copy, PartialEq, Eq)]
+                struct Signature {
+                    threshold_band: usize,
+                    next_hit_clock: u8,
+                    residual_clock: u8,
+                    heal_band: u8,
+                }
+
+                let ctx = context.cloned().unwrap_or_default();
+                let min_damage = vals.first().copied().unwrap_or(0.0) as i32;
+                let max_damage = vals.last().copied().unwrap_or(0.0) as i32;
+                let signature = |v: f64| {
+                    if mode == DamageRollMode::Mean {
+                        return Signature {
+                            threshold_band: 0,
+                            next_hit_clock: 0,
+                            residual_clock: 0,
+                            heal_band: 0,
+                        };
+                    }
+                    let post_hp = (ctx.hp - v as i32).max(0);
+                    let threshold_band =
+                        ctx.thresholds.iter().filter(|&&threshold| post_hp <= threshold).count();
+                    let next_clock = matches!(
+                        mode,
+                        DamageRollMode::Threshold2
+                            | DamageRollMode::ThresholdLeanNext
+                            | DamageRollMode::ThresholdLeanClock
+                            | DamageRollMode::ThresholdHeal
+                    );
+                    let residual_clock_enabled = matches!(
+                        mode,
+                        DamageRollMode::Threshold2
+                            | DamageRollMode::ThresholdLeanResidual
+                            | DamageRollMode::ThresholdLeanClock
+                            | DamageRollMode::ThresholdHeal
+                    );
+                    let next_hit_clock = if !next_clock || post_hp == 0 {
+                        0
+                    } else if post_hp <= min_damage {
+                        1 // every roll of the same hit KOs next time
+                    } else if post_hp <= max_damage {
+                        2 // only some rolls KO next time
+                    } else {
+                        3 // cannot KO on the next equal hit
+                    };
+                    let residual_clock = if residual_clock_enabled
+                        && ctx.residual_damage > 0
+                        && post_hp > 0
+                    {
+                        ((post_hp + ctx.residual_damage - 1) / ctx.residual_damage).min(4) as u8
+                    } else {
+                        0
+                    };
+                    let heal_band = if mode == DamageRollMode::ThresholdHealSplit
+                        && ctx.heal_threshold > 0
+                        && (ctx.hp - min_damage).max(0) <= ctx.heal_threshold
+                    {
+                        1 + u8::from(v as i32 > (min_damage + max_damage) / 2)
+                    } else {
+                        0
+                    };
+                    Signature { threshold_band, next_hit_clock, residual_clock, heal_band }
+                };
+
+                let mut group_counts: Vec<u64> = Vec::new();
+                let mut group_values: Vec<Vec<(f64, u64)>> = Vec::new();
+                let mut last_signature: Option<Signature> = None;
+                for (&value, &count) in vals.iter().zip(&counts) {
+                    let sig = signature(value);
+                    if last_signature != Some(sig) {
+                        group_counts.push(0);
+                        group_values.push(Vec::new());
+                        last_signature = Some(sig);
+                    }
+                    *group_counts.last_mut().unwrap() += count;
+                    group_values.last_mut().unwrap().push((value, count));
+                }
+                let representatives: Vec<f64> = group_values
+                    .iter()
+                    .map(|group| {
+                        if mode == DamageRollMode::ThresholdLeanMinimalLow {
+                            return group.first().unwrap().0;
+                        }
+                        if mode == DamageRollMode::ThresholdLeanMinimalHigh {
+                            return group.last().unwrap().0;
+                        }
+                        let mass: u64 = group.iter().map(|(_, count)| count).sum();
+                        let mean = group.iter().map(|(value, count)| value * *count as f64).sum::<f64>()
+                            / mass as f64;
+                        group
+                            .iter()
+                            .min_by(|(a, _), (b, _)| {
+                                (a - mean)
+                                    .abs()
+                                    .partial_cmp(&(b - mean).abs())
+                                    .unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                            .unwrap()
+                            .0
+                    })
+                    .collect();
+                representatives[Self::pick(o, "dmgabs", group_counts)]
             }
         }
     }
@@ -290,5 +504,117 @@ impl BattleRng {
                 Self::pick(o, "percent", vec![t, Draw::TOTAL - t]) == 0
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BattleRng, DamageExactReason, DamageRollContext, DamageRollMode, Draw, Prng};
+
+    fn abstract_roll(
+        mode: DamageRollMode,
+        script: Vec<usize>,
+        context: &DamageRollContext,
+    ) -> (f64, super::Draw) {
+        let mut rng = BattleRng::enumerating_with_damage_mode(script, mode);
+        let value = rng.apply_damage_variance_with_context(100.0, Some(context));
+        let draw = rng.oracle.unwrap().trace.into_iter().next().unwrap();
+        (value, draw)
+    }
+
+    #[test]
+    fn mean_damage_is_one_probability_preserving_class() {
+        let context = DamageRollContext { hp: 90, thresholds: vec![0], ..Default::default() };
+        let (value, draw) = abstract_roll(DamageRollMode::Mean, vec![], &context);
+        assert_eq!(draw.label, "dmgabs");
+        assert_eq!(draw.counts, vec![Draw::TOTAL]);
+        assert!((85.0..=100.0).contains(&value));
+    }
+
+    #[test]
+    fn threshold_damage_splits_ko_from_survival() {
+        let context = DamageRollContext { hp: 90, thresholds: vec![0], ..Default::default() };
+        let (survive, first) = abstract_roll(DamageRollMode::Threshold1, vec![0], &context);
+        let (ko, second) = abstract_roll(DamageRollMode::Threshold1, vec![1], &context);
+        assert_eq!(first.counts.len(), 2);
+        assert_eq!(first.counts, second.counts);
+        assert_eq!(first.counts.iter().sum::<u64>(), Draw::TOTAL);
+        assert!(survive < 90.0, "representative {survive}");
+        assert!(ko >= 90.0, "representative {ko}");
+    }
+
+    #[test]
+    fn minimal_endpoint_probes_preserve_buckets_and_span_representatives() {
+        let context = DamageRollContext {
+            hp: 180,
+            thresholds: vec![0],
+            ..Default::default()
+        };
+        let (low, low_draw) =
+            abstract_roll(DamageRollMode::ThresholdLeanMinimalLow, vec![], &context);
+        let (mean, mean_draw) =
+            abstract_roll(DamageRollMode::ThresholdLeanMinimal, vec![], &context);
+        let (high, high_draw) =
+            abstract_roll(DamageRollMode::ThresholdLeanMinimalHigh, vec![], &context);
+        assert_eq!(low_draw.counts, mean_draw.counts);
+        assert_eq!(mean_draw.counts, high_draw.counts);
+        assert!(low < mean && mean < high, "{low} < {mean} < {high}");
+    }
+
+    #[test]
+    fn sensitive_damage_falls_back_to_exact_classes() {
+        let context = DamageRollContext {
+            hp: 90,
+            thresholds: vec![0],
+            exact_reason: DamageExactReason::CounterBide,
+            ..Default::default()
+        };
+        let (_, draw) = abstract_roll(DamageRollMode::Threshold2, vec![], &context);
+        assert_eq!(draw.label, "dmgvar-counter-bide");
+        assert!(draw.counts.len() > 2);
+        assert_eq!(draw.counts.iter().sum::<u64>(), Draw::TOTAL);
+    }
+
+    #[test]
+    fn lean_clock_components_can_be_ablated_independently() {
+        let context = DamageRollContext {
+            hp: 180,
+            thresholds: vec![0],
+            residual_damage: 30,
+            ..Default::default()
+        };
+        let (_, lean) = abstract_roll(DamageRollMode::ThresholdLean, vec![], &context);
+        let (_, next) = abstract_roll(DamageRollMode::ThresholdLeanNext, vec![], &context);
+        let (_, residual) =
+            abstract_roll(DamageRollMode::ThresholdLeanResidual, vec![], &context);
+        let (_, both) = abstract_roll(DamageRollMode::ThresholdLeanClock, vec![], &context);
+        assert_eq!(lean.counts.len(), 1);
+        assert!(next.counts.len() > lean.counts.len());
+        assert!(residual.counts.len() > lean.counts.len());
+        assert!(both.counts.len() >= next.counts.len());
+        assert!(both.counts.len() >= residual.counts.len());
+    }
+
+    #[test]
+    fn heal_split_adds_only_two_representatives() {
+        let context = DamageRollContext {
+            hp: 180,
+            thresholds: vec![0],
+            heal_threshold: 100,
+            ..Default::default()
+        };
+        let (_, draw) = abstract_roll(DamageRollMode::ThresholdHealSplit, vec![], &context);
+        assert_eq!(draw.counts.len(), 2);
+    }
+
+    #[test]
+    fn seeded_context_path_is_bit_identical() {
+        let mut ordinary = BattleRng::seeded(Prng::new(0x1234_5678_9abc_def0));
+        let mut contextual = ordinary.clone();
+        let context = DamageRollContext { hp: 1, thresholds: vec![0], ..Default::default() };
+        let a = ordinary.apply_damage_variance(237.0);
+        let b = contextual.apply_damage_variance_with_context(237.0, Some(&context));
+        assert_eq!(a, b);
+        assert_eq!(ordinary.seed_str(), contextual.seed_str());
     }
 }
