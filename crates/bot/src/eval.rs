@@ -69,6 +69,9 @@ pub struct EvalWeights {
     /// (≤3 turns to the faster kill) count — longer races are stall/heal
     /// territory where the estimate lies. 0.0 = off.
     pub race: f64,
+    /// Search-cutoff backup around 0.5. M6 used 0.5, compressing `eval01`
+    /// into (0.25, 0.75); M17c uses 1.0 to retain probability semantics.
+    pub leaf_alpha: f64,
 }
 
 impl Default for EvalWeights {
@@ -96,6 +99,7 @@ impl Default for EvalWeights {
             slp_time_scale: true,
             substitute: 0.5,
             race: 3.0,
+            leaf_alpha: 1.0,
         }
     }
 }
@@ -139,6 +143,7 @@ impl EvalWeights {
             slp_time_scale: true,
             substitute: 0.5,
             race: 3.0,
+            leaf_alpha: 1.0,
         }
     }
 }
@@ -283,10 +288,11 @@ pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
     diff.clamp(-1.0, 1.0)
 }
 
-/// Leaf value for search cutoffs, squashed into (0.25, 0.75) so a static
-/// judgment never outranks a real win/loss.
+/// Leaf value for search cutoffs. The calibrated probability is backed up
+/// directly at alpha 1; smaller alpha shrinks it toward 0.5.
 pub fn eval_leaf(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
-    0.25 + 0.5 * eval01(b, dex, w)
+    assert!((0.0..=1.0).contains(&w.leaf_alpha), "leaf alpha must be in [0,1]");
+    0.5 + w.leaf_alpha * (eval01(b, dex, w) - 0.5)
 }
 
 fn side_score(b: &Battle, dex: &Dex, w: &EvalWeights, s: usize) -> f64 {

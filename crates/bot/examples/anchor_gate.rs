@@ -16,12 +16,13 @@
 //! regenerate the anchors when that starts happening.
 //!
 //! Usage: anchor_gate [--csv tmp/eec-all.csv] [--corpus tmp/corpus-spectator]
-//!                    [--race F] [--eps 0.02] [--list]
+//!                    [--race F] [--leaf-alpha F] [--metric raw|leaf]
+//!                    [--eps 0.02] [--list]
 
 use std::collections::HashMap;
 
 use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct};
-use nc2000_bot::eval::{eval01, EvalWeights};
+use nc2000_bot::eval::{eval01, eval_leaf, EvalWeights};
 use nc2000_engine::state::Battle;
 
 fn arg_s(args: &[String], key: &str, default: &str) -> String {
@@ -59,9 +60,12 @@ fn main() {
         .and_then(|i| args.get(i + 1))
         .and_then(|v| v.parse().ok())
         .unwrap_or(EvalWeights::default().race);
+    let leaf_alpha: f64 = arg_s(&args, "--leaf-alpha", "1").parse().unwrap();
+    let metric = arg_s(&args, "--metric", "raw");
+    assert!(metric == "raw" || metric == "leaf", "--metric must be raw or leaf");
     let list = args.iter().any(|a| a == "--list");
 
-    let weights = EvalWeights { race, ..EvalWeights::default() };
+    let weights = EvalWeights { race, leaf_alpha, ..EvalWeights::default() };
 
     // ---- parse anchors (CSV fields quoted only in the trailing desc)
     let text = std::fs::read_to_string(&csv_path).unwrap_or_else(|e| panic!("{csv_path}: {e}"));
@@ -83,7 +87,7 @@ fn main() {
             desc: p[11].trim_matches('"').to_string(),
         });
     }
-    println!("anchors: {} from {csv_path}; race weight {race}", anchors.len());
+    println!("anchors: {} from {csv_path}; race {race}; metric {metric}; leaf alpha {leaf_alpha}", anchors.len());
 
     let dex = conformance::load_dex();
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -133,7 +137,11 @@ fn main() {
                 continue;
             }
             evaluated += 1;
-            let e = eval01(&b, &dex, &weights);
+            let e = if metric == "leaf" {
+                eval_leaf(&b, &dex, &weights)
+            } else {
+                eval01(&b, &dex, &weights)
+            };
             let (lo, hi) = (a.exact - a.width / 2.0, a.exact + a.width / 2.0);
             let v = (e - hi).max(lo - e).max(0.0);
             if v > eps {

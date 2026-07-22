@@ -18,14 +18,26 @@
 //! arms.
 
 use nc2000_bot::blind::BlindSearch;
+use nc2000_bot::eval::EvalWeights;
 use nc2000_bot::import::ProtocolAgent;
+use nc2000_bot::mcts::Playout;
 use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::smmcts::{RmConfig, SelRule};
 use nc2000_engine::battle::PokemonSet;
 use nc2000_engine::dex::Dex;
 
-fn cfg() -> RmConfig {
-    RmConfig { rule: SelRule::Ucb, c: 1.0, hp_buckets: 16, ..RmConfig::default() }
+fn cfg(leaf_alpha: f64) -> RmConfig {
+    RmConfig {
+        rule: SelRule::Ucb,
+        c: 1.0,
+        hp_buckets: 16,
+        playout: Playout::Heavy {
+            eps: 0.2,
+            turns: 8,
+            weights: EvalWeights { leaf_alpha, ..Default::default() },
+        },
+        ..RmConfig::default()
+    }
 }
 
 /// Own team in |poke| preview order. Snorlax's 4 moves are all revealed in
@@ -267,10 +279,10 @@ fn show(label: &str, seed: u64, s: &BlindSearch, dex: &Dex) {
     println!();
 }
 
-fn run_case(dex: &Dex, pool_path: &std::path::Path, label: &str, lines: &[&str], req: &str, iters: u32) {
+fn run_case(dex: &Dex, pool_path: &std::path::Path, label: &str, lines: &[&str], req: &str, iters: u32, leaf_alpha: f64) {
     let mut census: std::collections::BTreeMap<String, u32> = Default::default();
     for seed in 1u64..=30 {
-        let mut agent = ProtocolAgent::new(dex, 1, load_meta_pool(pool_path), cfg(), seed);
+        let mut agent = ProtocolAgent::new(dex, 1, load_meta_pool(pool_path), cfg(leaf_alpha), seed);
         agent.set_own_team(own_team());
         for line in lines {
             agent.push_line(dex, line);
@@ -281,8 +293,8 @@ fn run_case(dex: &Dex, pool_path: &std::path::Path, label: &str, lines: &[&str],
             println!("[{label}] belief: {}", agent.belief_info());
             // counterfactual: how much does the eval fear the foe's boosts?
             {
-                use nc2000_bot::eval::{eval01, EvalWeights};
-                let w = EvalWeights::default();
+                use nc2000_bot::eval::eval01;
+                let w = EvalWeights { leaf_alpha, ..EvalWeights::default() };
                 let mut nb = b.clone();
                 if let Some(foe) = nb.active_id(0) {
                     nb.poke_mut(foe).boosts = [0; 7];
@@ -313,6 +325,13 @@ fn run_case(dex: &Dex, pool_path: &std::path::Path, label: &str, lines: &[&str],
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let leaf_alpha: f64 = args
+        .iter()
+        .position(|a| a == "--leaf-alpha")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(EvalWeights::default().leaf_alpha);
     let dex = conformance::load_dex();
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
@@ -321,7 +340,7 @@ fn main() {
     let team = own_team();
     let probe = nc2000_engine::state::Battle::from_fixture(&dex, "1,2,3,4", &team, &team).unwrap();
     let maxhp = probe.sides[0].roster[0].maxhp;
-    println!("Snorlax L55 maxhp {maxhp}");
+    println!("Snorlax L55 maxhp {maxhp}; leaf alpha {leaf_alpha}");
 
     let pre: Vec<&str> = PREAMBLE.lines().collect();
     let mut t19 = pre.clone();
@@ -331,10 +350,10 @@ fn main() {
 
     for iters in [1000u32, 10000] {
         run_case(&dex, &pool_path, "T4 healthy-vs-Gengar", &pre,
-            &req(100, "", 14, 24, 16, 16, maxhp), iters);
+            &req(100, "", 14, 24, 16, 16, maxhp), iters, leaf_alpha);
         run_case(&dex, &pool_path, "T19 frz-vs-Marowak+0", &t19,
-            &req(97, "frz", 14, 18, 13, 14, maxhp), iters);
+            &req(97, "frz", 14, 18, 13, 14, maxhp), iters, leaf_alpha);
         run_case(&dex, &pool_path, "T21 frz-vs-Marowak+4", &t21,
-            &req(100, "frz", 14, 18, 13, 14, maxhp), iters);
+            &req(100, "frz", 14, 18, 13, 14, maxhp), iters, leaf_alpha);
     }
 }

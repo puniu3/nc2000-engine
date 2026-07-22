@@ -214,7 +214,8 @@ fn eval_symmetry_and_direction() {
     let e = eval::eval01(&b, &dex, &w);
     assert!((e - 0.5).abs() < 1e-12, "mirror eval {e}");
 
-    // damage side 1's whole team -> side 0 favored, leaf stays in (0.25, 0.75)
+    // damage side 1's whole team -> side 0 favored; the shipped cutoff
+    // keeps eval01's probability-shaped value.
     let mut b2 = b.clone();
     for p in b2.sides[1].roster.iter_mut() {
         p.hp = (p.maxhp / 10).max(1);
@@ -222,7 +223,11 @@ fn eval_symmetry_and_direction() {
     let e2 = eval::eval01(&b2, &dex, &w);
     assert!(e2 > 0.6, "damaged-foe eval {e2}");
     let leaf = eval::eval_leaf(&b2, &dex, &w);
-    assert!((0.25..0.75).contains(&leaf), "leaf {leaf}");
+    assert!((leaf - e2).abs() < 1e-12, "leaf {leaf} eval {e2}");
+
+    let legacy = EvalWeights { leaf_alpha: 0.5, ..EvalWeights::default() };
+    let legacy_leaf = eval::eval_leaf(&b2, &dex, &legacy);
+    assert!((legacy_leaf - (0.25 + 0.5 * e2)).abs() < 1e-12);
 }
 
 #[test]

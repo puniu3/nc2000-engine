@@ -1,9 +1,10 @@
 //! M17 gate: seed-paired direct duel between two eval-weight configurations
 //! on the same skuct agent (the M6 lesson: compare variants head-to-head,
-//! never through a third opponent). A = shipped weights, B = shipped +
-//! the M17c KO-race term at `--race` (anchor-gate winner).
+//! never through a third opponent). A = the historical M6 leaf squash;
+//! B = the M17c probability-backup candidate.
 //!
-//! Usage: eval_ab_duel [--games 200] [--iters 300] [--seed 1] [--race 3.0]
+//! Usage: eval_ab_duel [--games 200] [--iters 300] [--seed 1]
+//!                     [--leaf-alpha 1.0]
 
 use nc2000_bot::duel::{run_duel, DuelSpec};
 use nc2000_bot::eval::EvalWeights;
@@ -19,8 +20,8 @@ fn arg(args: &[String], key: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
-fn candidate(race: f64) -> EvalWeights {
-    EvalWeights { race, ..EvalWeights::default() }
+fn weights(leaf_alpha: f64) -> EvalWeights {
+    EvalWeights { leaf_alpha, ..EvalWeights::default() }
 }
 
 fn cfg_with(weights: EvalWeights, iters: u32) -> RmConfig {
@@ -39,20 +40,20 @@ fn main() {
     let games = arg(&args, "--games", 200);
     let iters = arg(&args, "--iters", 300) as u32;
     let seed = arg(&args, "--seed", 1) as u64;
-    let race: f64 = args
+    let leaf_alpha: f64 = args
         .iter()
-        .position(|a| a == "--race")
+        .position(|a| a == "--leaf-alpha")
         .and_then(|i| args.get(i + 1))
         .and_then(|v| v.parse().ok())
-        .unwrap_or(3.0);
+        .unwrap_or(1.0);
 
     let dex = conformance::load_dex();
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
     let teams: Vec<_> = pool.teams.iter().map(|t| t.sets.clone()).collect();
 
-    let a_cfg = cfg_with(EvalWeights::default(), iters);
-    let b_cfg = cfg_with(candidate(race), iters);
+    let a_cfg = cfg_with(weights(0.5), iters);
+    let b_cfg = cfg_with(weights(leaf_alpha), iters);
     let stats = run_duel(
         &dex,
         &teams,
@@ -61,7 +62,7 @@ fn main() {
         DuelSpec::new(games, seed),
     );
     println!(
-        "A(shipped) vs B(candidate): {}W {}L {}T  A-score {:.3} +/- {:.3}  avg turns {:.1}  think A {:.0} B {:.0} ms",
+        "A(leaf alpha 0.5) vs B(alpha {leaf_alpha}): {}W {}L {}T  A-score {:.3} +/- {:.3}  avg turns {:.1}  think A {:.0} B {:.0} ms",
         stats.wins, stats.losses, stats.ties, stats.score, stats.ci95, stats.avg_turns,
         stats.a_ms_per_move, stats.b_ms_per_move
     );
