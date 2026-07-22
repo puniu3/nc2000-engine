@@ -2,6 +2,8 @@
 
 Status: FIRST BENCHMARK COMPLETE
 
+> **Provenance note (2026-07-23):** The benchmark's 57-anchor/38-tight reference is pre-v3 and suffered reconstruction drift. Preserve its recorded experiment numbers as historical; do not treat them as current ground truth. The fail-closed M17e v3 artifact reconstructs 72/72 rows across all 570 corpus coordinates, with 29 tight rows, 45 violations at ε=0.02, total margin 6.088, and tight MAE 0.0952.
+
 ## Contract
 
 Measure, before any product integration, how much a selective damage-roll abstraction changes:
@@ -17,7 +19,7 @@ The approximation starts with one probability-weighted representative damage. It
 - Branch/worktree: `exp/threshold-damage` at `/home/puniu/nc2000-threshold-exp`
 - Base: `cc660bc`
 - Current exact implementation remains the control.
-- Existing certified anchors remain ground truth; healthy positions use matched finite-horizon exact enumeration.
+- At experiment time, the pre-v3 certified anchors were the control; they are historical now. Healthy positions use matched finite-horizon exact enumeration.
 - Never label representative-mode output `exact` or `certified`.
 
 ## Planned variants

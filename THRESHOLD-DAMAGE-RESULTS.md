@@ -4,6 +4,8 @@ Date: 2026-07-22
 Branch/worktree: `exp/threshold-damage` / `/home/puniu/nc2000-threshold-exp`  
 Implementation commits: `17d6912`, `b7d4d2a`, `b4c99c7`, `7cfd38d`, `538e4fe`
 
+> **Provenance note (2026-07-23):** This experiment used the pre-v3 57-row anchor artifact. Its anchor counts, 38-row tight subset, interval comparisons, and derived MAE/violation figures are historical controls, not current ground truth; reconstruction drift was discovered afterward. The fail-closed M17e v3 artifact covers all 570 corpus coordinates with 72/72 rows reconstructed, 29 tight rows, 45 violations at ε=0.02, total margin 6.088, and tight MAE 0.0952. The matched exact-vs-approximate experiment numbers below are preserved as measured.
+
 ## Result
 
 The semantic-threshold scheme is worth continuing. The waste audit found that unconditional HP fractions, the residual clock, and conservative exact escapes consume work without measurable policy benefit in this sample. The leanest fixed abstraction uses 5.38% of exact runs on the 57 anchors and 2.41% on an 8-position holdout.
@@ -12,14 +14,14 @@ Adaptive root-cell refinement fixes the healing/stall miss without another globa
 
 ## Method
 
-- 57 reconstructed real-game endgame positions from the existing certified-anchor corpus.
+- 57 reconstructed real-game endgame positions from the then-current pre-v3 anchor corpus.
 - Same state, legal actions, horizon, `eval01` leaf evaluator, probability mass, and matrix solver in every arm. Only the damage-roll partition changes.
 - `exact`: existing distinct integer damage classes and proven endpoint merge.
 - `mean`: one probability-weighted attainable representative.
 - `threshold1`: split on KO/survival and HP 1/4, 1/3, 1/2 predicates.
 - `threshold2`: `threshold1` plus same-hit two-shot class and status-residual death clock.
 - Counter/Mirror Coat/Bide, drain/recoil, multi-hit, and Substitute retain exact damage classes.
-- Values below are finite-horizon estimates, not certified bounds. The older certified intervals are used as an independent accuracy check.
+- Values below are finite-horizon estimates, not certified bounds. The then-current pre-v3 intervals were used as an independent historical accuracy check.
 
 ## Matched value/policy benchmark
 
@@ -45,7 +47,7 @@ Adaptive root-cell refinement fixes the healing/stall miss without another globa
 
 Threshold2 therefore saved 90.0% of engine runs and 90.7% of elapsed work at horizon 1. Its value-error p95 was 0.00794 and worst value error was 0.02520. Three of 57 roots had nonzero policy regret.
 
-For the 38 tight certified anchors (`width <= 0.05`):
+For the 38 tight rows in the pre-v3 artifact (`width <= 0.05`; historical, not the current formal gate):
 
 | horizon-1 estimate | MAE to certified midpoint | proven outside-interval violations > 0.02 |
 |---|---:|---:|

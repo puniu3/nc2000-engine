@@ -2,6 +2,9 @@
 
 Date: 2026-07-22
 Harness: `crates/bot/examples/stall_census.rs` (a9d6c4e)
+
+> **Provenance note (2026-07-23):** This memo records a pre-v3 solver experiment. Its 57-row anchor-gate figures are historical and were affected by reconstruction drift; they are not current ground truth. The fail-closed M17e v3 artifact covers all 570 corpus coordinates with 72/72 rows reconstructed, 29 tight rows, 45 violations at ε=0.02, total margin 6.088, and tight MAE 0.0952.
+
 Root: b455 s0 T39 — Snorlax 53/292 @ Leftovers
 (doubleedge/earthquake/selfdestruct/curse) vs Skarmory 97/171
 (toxic/whirlwind/drillpeck/rest), the battle-455 stall anchor. This
@@ -160,8 +163,9 @@ The full 570-battle holdout reconstructed 19,843 decisions and attempted all 72
 eligible endgame roots: 24 were one-sided, 28 were two-sided, and 20 admitted
 neither certificate. Every admitted root completed with zero edge-invariant
 invalidations; no classifier was widened in response to the holdout. The
-standing anchor gate also remained stable at 57/57 rows, zero stale anchors,
-35 certified violations, and 0.186 tight-anchor MAE. No SCC pass is planned:
+then-current pre-v3 anchor gate reported 57/57 rows, zero stale anchors,
+35 certified violations, and 0.186 tight-anchor MAE. Those values are
+historical, not the current formal gate. No SCC pass is planned:
 retaining absolute turn makes the exact graph acyclic, while dropping it would
 unsoundly merge states with different distance to the turn-1000 tie.
 
