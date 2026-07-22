@@ -36,6 +36,7 @@ pub mod preview;
 pub mod rng;
 pub mod runner;
 pub mod smmcts;
+pub mod stall;
 pub mod teamgen;
 
 pub use agent::{Agent, MaxDamageAgent, RandomAgent};

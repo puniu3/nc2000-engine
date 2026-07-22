@@ -2,12 +2,13 @@
 
 Date: 2026-07-22
 Harness: `crates/bot/examples/stall_census.rs` (a9d6c4e)
-Root: b455 s0 T39 — Snorlax 53/292 (doubleedge/earthquake/selfdestruct/curse)
-vs Skarmory 97/171 (toxic/whirlwind/drillpeck/rest), the battle-455 stall
-anchor. Note: this imputation gives Snorlax NO heal (the human's actual Rest
-was not yet revealed at the reconstruction cut) — this is the same
-determinization every solver/eval measurement uses, and it makes the
-position a ONE-SIDED-heal stall.
+Root: b455 s0 T39 — Snorlax 53/292 @ Leftovers
+(doubleedge/earthquake/selfdestruct/curse) vs Skarmory 97/171
+(toxic/whirlwind/drillpeck/rest), the battle-455 stall anchor. This
+imputation gives Snorlax no healing *move*, but Leftovers still restores HP;
+the position is therefore TWO-SIDED healing. The earlier one-sided label was
+wrong. The layer counts remain valid, but the one-sided monotonicity inference
+below is superseded by the implemented classifier measurements.
 
 ## Question
 
@@ -56,14 +57,12 @@ Raw `state_key128` layers (turn mode, 3M runs): 310 / 9,704 / ≥30,000.
    at a different turn with equal PP. Turn is layer-redundant GIVEN PP
    (+ bounded sleep interleavings); the unroll dimension that matters is
    PP, not turn.
-3. **One-sided-heal stalls are monotone-coordinate DAGs with a tiny
-   recurrent fiber.** In this anchor every dimension except the healer's
-   own HP × sleep clock is monotone: both PP vectors ↓, no-heal side's HP ↓,
-   Toxic counter ↑, Curse boosts ↑ (bounded). Non-monotone fiber ≈
-   Skarmory-HP × slp-clock ≤ ~500 points. A solver sweeping in monotone
-   order (PP, then no-heal HP, then tox) never needs a whole layer in
-   memory and can free resolved generations safely — the 15k–60k/layer
-   census counts are traversal volume, not resident-set size.
+3. **The b455 census does not prove the one-sided-heal DAG claim.** Snorlax's
+   Leftovers makes its HP non-monotone alongside Skarmory's Rest. A separate,
+   conservative classifier now proves the claim state-by-state: exactly one
+   side may regain HP, PP never increases, move identities/max HP/active mons
+   remain fixed, the non-healer's HP never increases, and every nonterminal
+   edge strictly decreases `PP total + non-healer HP + turns remaining`.
 4. **Per-layer census grows but decelerates** (×14.7 → ×8.3 → ×≥3.2).
    Semantic space is bounded (HP lattice × bounded clocks/boosts × PP
    paths) but the transient fan is far beyond eager per-layer solving at
@@ -77,9 +76,8 @@ Raw `state_key128` layers (turn mode, 3M runs): 310 / 9,704 / ≥30,000.
 ## Caveats
 
 - Depth ≥4 counts are lower bounds (frontier cap + work budget).
-- TWO-SIDED-heal stalls weaken finding 3: both HP dims become
-  non-monotone, fiber grows toward the HP-pair lattice (~50k). Not yet
-  measured — next census target.
+- b455 is already a two-sided-heal case. Both HP dimensions are non-monotone;
+  PP/resource/SCC treatment is still required after strategic pruning.
 - proj quotient soundness is per-matchup (observer-move check).
 
 ## Implications for ENDGAME-SOLVER-ALGORITHM.md
@@ -121,6 +119,29 @@ runs and 23,067 nodes. The guarded key completed the full 200,004 runs with
 expansions and avoiding the node-budget wall, not a wall-time reduction.
 This is the prerequisite for closed-generation folding; hashing alone does
 not tighten the healthy-stall bracket.
+
+## Implemented follow-up: terminal/closed folding and monotone scheduler
+
+Terminal successors now contribute directly to their parent cells. Exact
+non-root nodes are swept into a persistent closed memo; every live edge to a
+folded node is replaced by the same fixed interval contribution. No unresolved
+descendant is pruned. On b455 at 200,000 runs, terminal folding reduced live
+nodes 22,652→16,477 and wall 24→21 s at the same `[0.003, 0.940]` interval.
+With a 17,000-node cap, closed folding completed 200,002 runs with 16,267 live
+nodes; disabling it stopped at the node cap after 192,028 runs and 17,209
+nodes, again with the same interval.
+
+The one-sided-heal classifier scans active move slots and items, including
+Rest, static heal/drain, weather heals, Leech Seed, Leftovers, and healing
+berries; it rejects move/PP mutation and HP-transfer paths. Existing Leech
+Seed follows `source_slot`, the field used by mechanics, rather than a stale
+object reference from reconstruction. Every generated nonterminal edge is
+checked before its rank can affect scheduling; any violation disables only
+the optimization, never certification. A 570-corpus endgame coverage pass
+admitted 24/72 roots with zero invalidations. On classified b51 at a 12k-node
+cap, the scheduler completed the 200k work budget with 11,696 live nodes; the
+ordinary scheduler hit the cap at 198k runs/12,003 nodes. The gain is modest;
+closed folding is the larger memory win.
 
 ## Reproduction
 

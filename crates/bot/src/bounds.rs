@@ -17,7 +17,7 @@
 //! chance/simultaneous analogue of a null-window search. Default for
 //! corpus violation mining; width mode remains for numeric anchors.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use nc2000_engine::battle::enumerate::{enumerate_step, run_scripted};
 use nc2000_engine::battle::{Outcome, SearchChoice};
@@ -25,6 +25,7 @@ use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
 
 use crate::exact::solve_matrix_full;
+use crate::stall::{classify_one_sided_heal, MonotoneRank, OneSidedHeal};
 
 #[derive(Clone, Debug)]
 pub struct BoundConfig {
@@ -54,6 +55,16 @@ pub struct BoundConfig {
     /// in either roster can observe them. The key domain is tagged, so a
     /// solver reused across safe and unsafe corpus roots cannot cross-merge.
     pub dead_damage_quotient: bool,
+    /// Fold terminal successor mass directly into its parent cell instead
+    /// of retaining one graph node per terminal fingerprint.
+    pub fold_terminal_nodes: bool,
+    /// Periodically fold exact non-root nodes into a compact closed memo.
+    /// This is graph-local and does not depend on stall classification.
+    pub fold_closed_nodes: bool,
+    /// Near the node budget, prefer lower proven resource generations in a
+    /// conservatively classified one-sided-heal subgame. Every generated
+    /// edge is checked; the first violation disables only this scheduler.
+    pub monotone_stall_scheduling: bool,
 }
 
 impl Default for BoundConfig {
@@ -66,6 +77,9 @@ impl Default for BoundConfig {
             trial_depth: 24,
             descend_floor: 0.1,
             dead_damage_quotient: true,
+            fold_terminal_nodes: true,
+            fold_closed_nodes: true,
+            monotone_stall_scheduling: true,
         }
     }
 }
@@ -114,6 +128,10 @@ pub struct BoundStats {
     pub trials: usize,
     pub lp_solves: usize,
     pub worst_gap: f64,
+    pub peak_nodes: usize,
+    pub closed_folds: usize,
+    pub monotone_roots: usize,
+    pub monotone_invalidations: usize,
 }
 
 struct Pending {
@@ -131,6 +149,10 @@ enum NodeKey {
 
 struct Cell {
     resolved: Vec<(f64, NodeKey)>,
+    /// Exact contribution from terminal/closed successors already folded
+    /// out of the live graph.
+    fixed_lo: f64,
+    fixed_hi: f64,
     pending: Vec<Pending>,
     pending_mass: f64,
     lo: f64,
@@ -151,12 +173,16 @@ struct Node {
     /// LP supports cached by the last backup (lo-matrix x/y ‖ hi-matrix
     /// x/y) — the cell selector steers by these instead of re-solving.
     strat: Option<(Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>)>,
+    stall_rank: Option<(OneSidedHeal, MonotoneRank)>,
 }
 
 pub struct BoundSolver<'d> {
     dex: &'d Dex,
     pub cfg: BoundConfig,
     nodes: HashMap<NodeKey, Node>,
+    closed: HashMap<NodeKey, Bounds>,
+    roots: HashSet<NodeKey>,
+    active_stall: Option<OneSidedHeal>,
     pub stats: BoundStats,
 }
 
@@ -168,6 +194,9 @@ impl<'d> BoundSolver<'d> {
             dex,
             cfg,
             nodes: HashMap::new(),
+            closed: HashMap::new(),
+            roots: HashSet::new(),
+            active_stall: None,
             stats: BoundStats::default(),
         }
     }
@@ -176,15 +205,39 @@ impl<'d> BoundSolver<'d> {
         self.nodes.len()
     }
 
+    pub fn closed_count(&self) -> usize {
+        self.closed.len()
+    }
+
     /// Tighten the root's certified interval until a stop condition fires.
     /// `tau` = optional threshold band (lo, hi) for certificate mode.
     /// Never discards work: repeated calls resume where the graph stands.
     pub fn solve(&mut self, b: &Battle, tau: Option<(f64, f64)>) -> SolveReport {
+        self.active_stall = self
+            .cfg
+            .monotone_stall_scheduling
+            .then(|| classify_one_sided_heal(b, self.dex).ok())
+            .flatten();
+        if self.active_stall.is_some() {
+            self.stats.monotone_roots += 1;
+        }
+        let lookup = self.node_key(b);
+        if let Some(&bounds) = self.closed.get(&lookup) {
+            return SolveReport {
+                bounds,
+                stop: Stop::WidthMet,
+                runs: 0,
+            };
+        }
         let root = self.intern(b.clone());
+        self.roots.insert(root);
         let start_runs = self.stats.runs;
         let work_limit = start_runs + self.cfg.work_budget;
         let mut idle = 0usize;
         loop {
+            if self.cfg.fold_closed_nodes && self.nodes.len() >= self.cfg.node_budget {
+                self.fold_closed_graph();
+            }
             let n = &self.nodes[&root];
             let bounds = Bounds { lo: n.lo, hi: n.hi };
             let stop = if bounds.width() <= self.cfg.eps {
@@ -218,6 +271,13 @@ impl<'d> BoundSolver<'d> {
             }
             if self.trial(root) {
                 idle = 0;
+                if self.cfg.fold_closed_nodes
+                    && (self.stats.trials % 4096 == 0
+                        || self.nodes.len().saturating_mul(4)
+                            >= self.cfg.node_budget.saturating_mul(3))
+                {
+                    self.fold_closed_graph();
+                }
             } else {
                 idle += 1;
                 if idle > 256 {
@@ -237,7 +297,10 @@ impl<'d> BoundSolver<'d> {
     /// Current certified interval of a state, if it is in the graph.
     pub fn peek(&self, b: &Battle) -> Option<Bounds> {
         let key = self.node_key(b);
-        self.nodes.get(&key).map(|n| Bounds { lo: n.lo, hi: n.hi })
+        self.nodes
+            .get(&key)
+            .map(|n| Bounds { lo: n.lo, hi: n.hi })
+            .or_else(|| self.closed.get(&key).copied())
     }
 
     fn node_key(&self, b: &Battle) -> NodeKey {
@@ -250,7 +313,14 @@ impl<'d> BoundSolver<'d> {
 
     fn intern(&mut self, b: Battle) -> NodeKey {
         let key = self.node_key(&b);
-        if self.nodes.contains_key(&key) {
+        let stall_rank = self
+            .active_stall
+            .as_ref()
+            .and_then(|class| class.rank(&b).ok().map(|rank| (class.clone(), rank)));
+        if let Some(node) = self.nodes.get_mut(&key) {
+            if stall_rank.is_some() {
+                node.stall_rank = stall_rank;
+            }
             return key;
         }
         let node = match b.outcome() {
@@ -268,6 +338,7 @@ impl<'d> BoundSolver<'d> {
                     lo: v,
                     hi: v,
                     strat: None,
+                    stall_rank,
                 }
             }
             None => Node {
@@ -278,9 +349,11 @@ impl<'d> BoundSolver<'d> {
                 lo: 0.0,
                 hi: 1.0,
                 strat: None,
+                stall_rank,
             },
         };
         self.nodes.insert(key, node);
+        self.stats.peak_nodes = self.stats.peak_nodes.max(self.nodes.len());
         key
     }
 
@@ -308,6 +381,8 @@ impl<'d> BoundSolver<'d> {
         node.cells = (0..n_cells)
             .map(|_| Cell {
                 resolved: vec![],
+                fixed_lo: 0.0,
+                fixed_hi: 0.0,
                 pending: vec![Pending {
                     script: vec![],
                     mass: 1.0,
@@ -346,14 +421,40 @@ impl<'d> BoundSolver<'d> {
             let cell = &self.nodes[&cur].cells[ci];
             // Expand pending mass while it dominates the cell's remaining
             // uncertainty; otherwise descend into the widest child term.
-            let best_child = cell
-                .resolved
-                .iter()
-                .map(|&(m, k)| {
-                    let c = &self.nodes[&k];
-                    (m * (c.hi - c.lo), k)
-                })
-                .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+            let closure_mode = self.active_stall.is_some()
+                && self.nodes.len().saturating_mul(4) >= self.cfg.node_budget.saturating_mul(3);
+            let best_child = if closure_mode {
+                let class = self.active_stall.as_ref().unwrap();
+                let mut best: Option<(i64, f64, NodeKey)> = None;
+                for &(mass, child) in &cell.resolved {
+                    let node = &self.nodes[&child];
+                    let Some((child_class, rank)) = node.stall_rank.as_ref() else {
+                        continue;
+                    };
+                    if child_class != class {
+                        continue;
+                    }
+                    let width_mass = mass * (node.hi - node.lo);
+                    let replace = best.is_none_or(|(r, w, _)| {
+                        rank.value < r || (rank.value == r && width_mass > w)
+                    });
+                    if replace {
+                        best = Some((rank.value, width_mass, child));
+                    }
+                }
+                best.map(|(_, width_mass, child)| (width_mass, child))
+            } else {
+                None
+            }
+            .or_else(|| {
+                cell.resolved
+                    .iter()
+                    .map(|&(m, k)| {
+                        let c = &self.nodes[&k];
+                        (m * (c.hi - c.lo), k)
+                    })
+                    .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+            });
             match best_child {
                 Some((cw, k)) if cw > cell.pending_mass.max(self.cfg.descend_floor) => {
                     cur = k;
@@ -439,22 +540,41 @@ impl<'d> BoundSolver<'d> {
             )
         };
         let step = enumerate_step(self.dex, &battle, choices, self.cfg.cell_cap);
-        self.nodes.get_mut(&key).unwrap().battle = Some(battle);
         let Some(step) = step else {
+            self.nodes.get_mut(&key).unwrap().battle = Some(battle);
             self.stats.runs += self.cfg.cell_cap; // the aborted probe's cost
             return false;
         };
         self.stats.runs += step.runs;
         self.stats.expansions += 1;
         let mut agg: HashMap<NodeKey, f64> = HashMap::new();
+        let mut fixed_lo = 0.0;
+        let mut fixed_hi = 0.0;
         for l in step.leaves {
             let prob = l.prob;
+            self.check_stall_edge(&battle, &l.battle);
+            if self.cfg.fold_terminal_nodes {
+                if let Some(v) = outcome_value(&l.battle) {
+                    fixed_lo += prob * v;
+                    fixed_hi += prob * v;
+                    continue;
+                }
+            }
+            let lookup = self.node_key(&l.battle);
+            if let Some(bounds) = self.closed.get(&lookup).copied() {
+                fixed_lo += prob * bounds.lo;
+                fixed_hi += prob * bounds.hi;
+                continue;
+            }
             let k = self.intern(l.battle);
             *agg.entry(k).or_default() += prob;
         }
+        self.nodes.get_mut(&key).unwrap().battle = Some(battle);
         let node = self.nodes.get_mut(&key).unwrap();
         let cell = &mut node.cells[ci];
         cell.resolved = agg.into_iter().map(|(k, m)| (m, k)).collect();
+        cell.fixed_lo = fixed_lo;
+        cell.fixed_hi = fixed_hi;
         cell.pending.clear();
         cell.pending_mass = 0.0;
         true
@@ -487,6 +607,7 @@ impl<'d> BoundSolver<'d> {
         };
 
         let (leaf, trace) = run_scripted(self.dex, &battle, choices, &pending.script);
+        self.check_stall_edge(&battle, &leaf);
         self.nodes.get_mut(&key).unwrap().battle = Some(battle);
         self.stats.runs += 1;
         self.stats.expansions += 1;
@@ -516,13 +637,32 @@ impl<'d> BoundSolver<'d> {
             "pending mass must be partitioned exactly"
         );
 
-        let child = self.intern(leaf);
+        let terminal_value = self
+            .cfg
+            .fold_terminal_nodes
+            .then(|| outcome_value(&leaf))
+            .flatten();
+        let closed_bounds = if terminal_value.is_none() {
+            self.closed.get(&self.node_key(&leaf)).copied()
+        } else {
+            None
+        };
+        let child =
+            (terminal_value.is_none() && closed_bounds.is_none()).then(|| self.intern(leaf));
         let node = self.nodes.get_mut(&key).unwrap();
         let cell = &mut node.cells[ci];
         cell.pending_mass = (cell.pending_mass - pending.mass).max(0.0)
             + siblings.iter().map(|s| s.mass).sum::<f64>();
         cell.pending.extend(siblings);
-        cell.resolved.push((leaf_mass, child));
+        if let Some(v) = terminal_value {
+            cell.fixed_lo += leaf_mass * v;
+            cell.fixed_hi += leaf_mass * v;
+        } else if let Some(bounds) = closed_bounds {
+            cell.fixed_lo += leaf_mass * bounds.lo;
+            cell.fixed_hi += leaf_mass * bounds.hi;
+        } else {
+            cell.resolved.push((leaf_mass, child.unwrap()));
+        }
     }
 
     /// Recompute one node's cell and node bounds from current children.
@@ -535,8 +675,8 @@ impl<'d> BoundSolver<'d> {
                 .cells
                 .iter()
                 .map(|cell| {
-                    let mut lo = 0.0;
-                    let mut hi = cell.pending_mass;
+                    let mut lo = cell.fixed_lo;
+                    let mut hi = cell.fixed_hi + cell.pending_mass;
                     for &(m, k) in &cell.resolved {
                         let c = &self.nodes[&k];
                         lo += m * c.lo;
@@ -595,6 +735,72 @@ impl<'d> BoundSolver<'d> {
         }
         moved
     }
+
+    /// Compact every exact non-root node into its parents. This runs only
+    /// between trials, after reverse-path backup. Cached parent bounds are
+    /// deliberately left unchanged: replacing an edge by the same frozen
+    /// interval is semantics-neutral, and the normal later backup propagates
+    /// it without perturbing the current scheduling decision.
+    fn fold_closed_graph(&mut self) {
+        let fold: HashMap<NodeKey, Bounds> = self
+            .nodes
+            .iter()
+            .filter_map(|(&key, node)| {
+                (!self.roots.contains(&key) && node.lo == node.hi).then_some((
+                    key,
+                    Bounds {
+                        lo: node.lo,
+                        hi: node.hi,
+                    },
+                ))
+            })
+            .collect();
+        if fold.is_empty() {
+            return;
+        }
+
+        for node in self.nodes.values_mut() {
+            for cell in &mut node.cells {
+                let mut keep = Vec::with_capacity(cell.resolved.len());
+                for (mass, child) in cell.resolved.drain(..) {
+                    if let Some(bounds) = fold.get(&child) {
+                        cell.fixed_lo += mass * bounds.lo;
+                        cell.fixed_hi += mass * bounds.hi;
+                    } else {
+                        keep.push((mass, child));
+                    }
+                }
+                cell.resolved = keep;
+            }
+        }
+        for (key, bounds) in fold {
+            self.nodes.remove(&key);
+            self.closed.insert(key, bounds);
+            self.stats.closed_folds += 1;
+        }
+    }
+
+    fn check_stall_edge(&mut self, parent: &Battle, child: &Battle) {
+        if child.outcome().is_some() {
+            return;
+        }
+        let invalid = self
+            .active_stall
+            .as_ref()
+            .is_some_and(|class| class.check_edge(parent, child).is_err());
+        if invalid {
+            self.active_stall = None;
+            self.stats.monotone_invalidations += 1;
+        }
+    }
+}
+
+fn outcome_value(b: &Battle) -> Option<f64> {
+    b.outcome().map(|o| match o {
+        Outcome::P1Win => 1.0,
+        Outcome::Tie => 0.5,
+        Outcome::P2Win => 0.0,
+    })
 }
 
 #[cfg(test)]
@@ -789,5 +995,82 @@ mod tests {
         let (vb, gb) = solve_matrix(&mb, ab[0].len(), ab[1].len());
         assert!((va - vb).abs() < 1e-12);
         assert!(ga < 1e-12 && gb < 1e-12);
+    }
+
+    #[test]
+    fn terminal_folding_preserves_bounds_and_releases_leaf_nodes() {
+        let dex = conformance::load_dex();
+        let mut root = battle(
+            &dex,
+            &["Quick Attack", "Splash"],
+            &["Quick Attack", "Splash"],
+        );
+        let c0 = root.legal_choices(&dex, 0)[0];
+        let c1 = root.legal_choices(&dex, 1)[0];
+        root.apply_choices(&dex, [Some(c0), Some(c1)]).unwrap();
+        root.turn = 1000;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = 1;
+        }
+
+        let run = |fold_terminal_nodes| {
+            let mut solver = BoundSolver::new(
+                &dex,
+                BoundConfig {
+                    work_budget: 100_000,
+                    cell_cap: 100_000,
+                    eps: 0.0,
+                    fold_terminal_nodes,
+                    fold_closed_nodes: false,
+                    ..BoundConfig::default()
+                },
+            );
+            let report = solver.solve(&root, None);
+            (report, solver.node_count())
+        };
+        let (folded, folded_nodes) = run(true);
+        let (raw, raw_nodes) = run(false);
+        assert!((folded.bounds.lo - raw.bounds.lo).abs() < 1e-12);
+        assert!((folded.bounds.hi - raw.bounds.hi).abs() < 1e-12);
+        assert!(folded_nodes < raw_nodes, "{folded_nodes} !< {raw_nodes}");
+    }
+
+    #[test]
+    fn closed_sweep_preserves_root_bounds_and_compacts_exact_children() {
+        let dex = conformance::load_dex();
+        let mut root = battle(
+            &dex,
+            &["Quick Attack", "Splash"],
+            &["Quick Attack", "Splash"],
+        );
+        let c0 = root.legal_choices(&dex, 0)[0];
+        let c1 = root.legal_choices(&dex, 1)[0];
+        root.apply_choices(&dex, [Some(c0), Some(c1)]).unwrap();
+        root.turn = 1000;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = 1;
+        }
+        let mut solver = BoundSolver::new(
+            &dex,
+            BoundConfig {
+                work_budget: 100_000,
+                cell_cap: 100_000,
+                eps: 0.0,
+                fold_terminal_nodes: false,
+                fold_closed_nodes: false,
+                ..BoundConfig::default()
+            },
+        );
+        let before = solver.solve(&root, None).bounds;
+        let before_nodes = solver.node_count();
+        solver.fold_closed_graph();
+        let after = solver.peek(&root).unwrap();
+        assert_eq!(before.lo, after.lo);
+        assert_eq!(before.hi, after.hi);
+        assert!(solver.node_count() < before_nodes);
+        assert!(solver.closed_count() > 0);
+        assert!(solver.stats.closed_folds > 0);
     }
 }

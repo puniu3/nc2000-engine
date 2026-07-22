@@ -20,7 +20,9 @@
 //!
 //! Usage: endgame_exactness_corpus [--corpus DIR] [--battles LO-HI]
 //!        [--side N] [--turn N] [--hp-cap N] [--work N] [--nodes N]
-//!        [--per-battle N] [--no-dead-damage-quotient] [--out CSV]
+//!        [--per-battle N] [--no-dead-damage-quotient]
+//!        [--no-fold-terminal-nodes] [--no-fold-closed-nodes]
+//!        [--no-monotone-stall] [--diagnose-stall] [--out CSV]
 
 use std::collections::HashSet;
 use std::io::Write as _;
@@ -28,6 +30,7 @@ use std::time::Instant;
 
 use nc2000_bot::bounds::{BoundConfig, BoundSolver, Stop};
 use nc2000_bot::eval::{eval01, EvalWeights};
+use nc2000_bot::stall::classify_one_sided_heal;
 use nc2000_engine::state::Battle;
 
 use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct, HumanAction};
@@ -62,6 +65,7 @@ struct Row {
     alive0: usize,
     alive1: usize,
     total_hp: u64,
+    one_sided_heal: bool,
     desc: String,
 }
 
@@ -87,6 +91,10 @@ fn main() {
         .and_then(|i| args.get(i + 1))
         .map(|s| s.parse::<u16>().unwrap());
     let dead_damage_quotient = !args.iter().any(|a| a == "--no-dead-damage-quotient");
+    let fold_terminal_nodes = !args.iter().any(|a| a == "--no-fold-terminal-nodes");
+    let fold_closed_nodes = !args.iter().any(|a| a == "--no-fold-closed-nodes");
+    let monotone_stall_scheduling = !args.iter().any(|a| a == "--no-monotone-stall");
+    let diagnose_stall = args.iter().any(|a| a == "--diagnose-stall");
     let (lo, hi) = {
         let mut it = range.split('-');
         (
@@ -107,7 +115,7 @@ fn main() {
         .filter(|(i, _)| *i >= lo && *i <= hi)
         .collect();
     println!(
-        "corpus battles {} (index {lo}-{hi}), hp-cap {hp_cap}, work {work}, nodes {node_budget}, per-battle {per_battle}, dead-damage-quotient {dead_damage_quotient}",
+        "corpus battles {} (index {lo}-{hi}), hp-cap {hp_cap}, work {work}, nodes {node_budget}, per-battle {per_battle}, dead-damage-quotient {dead_damage_quotient}, fold-terminal {fold_terminal_nodes}, fold-closed {fold_closed_nodes}, monotone-stall {monotone_stall_scheduling}",
         files.len()
     );
 
@@ -121,6 +129,11 @@ fn main() {
     let mut total_runs = 0usize;
     let mut total_expansions = 0usize;
     let mut total_nodes = 0usize;
+    let mut total_closed = 0usize;
+    let mut total_peak_nodes = 0usize;
+    let mut total_closed_folds = 0usize;
+    let mut monotone_roots = 0usize;
+    let mut monotone_invalidations = 0usize;
     let mut worst_gap = 0.0f64;
     for (bi, path) in &files {
         let cb = load_battle(path);
@@ -131,6 +144,9 @@ fn main() {
                 work_budget: work,
                 node_budget,
                 dead_damage_quotient,
+                fold_terminal_nodes,
+                fold_closed_nodes,
+                monotone_stall_scheduling,
                 ..BoundConfig::default()
             },
         );
@@ -163,6 +179,30 @@ fn main() {
             }
             attempted += 1;
             battle_attempts += 1;
+            let one_sided_heal = classify_one_sided_heal(&b, &dex).is_ok();
+            if diagnose_stall {
+                println!(
+                    "  b{bi} T{} stall-class {:?}; active {:?}; leechseed {:?}",
+                    d.turn,
+                    classify_one_sided_heal(&b, &dex),
+                    [b.active_id(0), b.active_id(1)],
+                    dex.conds_id("leechseed").map(|id| [
+                        b.active_id(0).and_then(|p| b.poke(p).volatile(id).copied()),
+                        b.active_id(1).and_then(|p| b.poke(p).volatile(id).copied()),
+                    ])
+                );
+                for s in 0..2 {
+                    let p = b.poke(b.active_id(s).unwrap());
+                    println!(
+                        "    s{s} item {:?} moves {:?}",
+                        p.item.map(|id| dex.items.key(id)),
+                        p.move_slots
+                            .iter()
+                            .map(|m| (dex.moves.key(m.id), m.pp))
+                            .collect::<Vec<_>>()
+                    );
+                }
+            }
             let ev = eval01(&b, &dex, &weights);
             let ts = Instant::now();
             let rep = solver.solve(&b, Some((ev - 0.02, ev + 0.02)));
@@ -187,7 +227,7 @@ fn main() {
                 format!("b{bi} T{} s{} {} vs {}", d.turn, d.side, name(0), name(1))
             };
             println!(
-                "  b{bi} T{turn} hp{total_hp} {a0}v{a1}: [{lo:.3},{hi:.3}] w{w:.3} {stop:?} ({runs} runs, {dt:.0}s)",
+                "  b{bi} T{turn} hp{total_hp} {a0}v{a1} stall={one_sided_heal}: [{lo:.3},{hi:.3}] w{w:.3} {stop:?} ({runs} runs, {dt:.0}s)",
                 turn = d.turn,
                 lo = rep.bounds.lo,
                 hi = rep.bounds.hi,
@@ -210,12 +250,18 @@ fn main() {
                 alive0: a0,
                 alive1: a1,
                 total_hp,
+                one_sided_heal,
                 desc,
             });
         }
         total_runs += solver.stats.runs;
         total_expansions += solver.stats.expansions;
         total_nodes += solver.node_count();
+        total_closed += solver.closed_count();
+        total_peak_nodes += solver.stats.peak_nodes;
+        total_closed_folds += solver.stats.closed_folds;
+        monotone_roots += solver.stats.monotone_roots;
+        monotone_invalidations += solver.stats.monotone_invalidations;
         worst_gap = worst_gap.max(solver.stats.worst_gap);
     }
 
@@ -227,7 +273,7 @@ fn main() {
         tight.len()
     );
     println!(
-        "engine runs {total_runs} expansions {total_expansions} nodes {total_nodes} worst-gap {worst_gap:.2e}; wall {:.0}s",
+        "engine runs {total_runs} expansions {total_expansions} live {total_nodes} peak {total_peak_nodes} closed {total_closed}/{total_closed_folds} monotone {monotone_roots} roots/{monotone_invalidations} invalid worst-gap {worst_gap:.2e}; wall {:.0}s",
         t0.elapsed().as_secs_f64()
     );
 
@@ -275,13 +321,13 @@ fn main() {
     let mut f = std::fs::File::create(&out_path).expect("csv");
     writeln!(
         f,
-        "battle,side,turn,human,exact,width,stop,eval,alive0,alive1,total_hp,desc"
+        "battle,side,turn,human,exact,width,stop,eval,alive0,alive1,total_hp,one_sided_heal,desc"
     )
     .unwrap();
     for r in &rows {
         writeln!(
             f,
-            "{},{},{},\"{}\",{:.6},{:.6},{},{:.6},{},{},{},\"{}\"",
+            "{},{},{},\"{}\",{:.6},{:.6},{},{:.6},{},{},{},{},\"{}\"",
             r.battle,
             r.side,
             r.turn,
@@ -293,6 +339,7 @@ fn main() {
             r.alive0,
             r.alive1,
             r.total_hp,
+            r.one_sided_heal,
             r.desc
         )
         .unwrap();
