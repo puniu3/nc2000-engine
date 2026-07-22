@@ -51,7 +51,14 @@ it is not a replacement for support selection. The live order is:
 3. Exact-refine cells whose low/high representatives can change the policy.
 4. Optionally audit excluded actions; stop anytime on budget exhaustion.
 5. Reuse bounded LRU one-step transitions across reroots.
-6. Apply PP/resource/SCC solving only to the small residual stall subgame.
+6. Apply PP/resource-DAG solving only to the small residual stall subgame.
+
+An SCC pass is unnecessary with the certificate-grade state key: it retains
+absolute turn, every decision-to-decision edge advances turn, and turn 1000
+terminates. Dropping turn would create apparent cycles but would also merge
+states with different distance-to-tie values. The next exact step is therefore
+a two-sided-heal resource rank and scheduling/freeing over the resulting DAG,
+not Tarjan-style cycle solving.
 
 ## Double-Rest duel gate
 

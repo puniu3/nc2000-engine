@@ -65,6 +65,14 @@ pub struct BoundConfig {
     /// conservatively classified one-sided-heal subgame. Every generated
     /// edge is checked; the first violation disables only this scheduler.
     pub monotone_stall_scheduling: bool,
+    /// Permanently remove a pure action only after cell intervals prove it
+    /// pointwise dominated by another live action. The reduced matrix has
+    /// the same true value; unresolved actions are never assumed irrelevant.
+    pub certified_action_pruning: bool,
+    /// In addition to current LP-support cells, prioritize optimistic pure
+    /// best responses crossed with the opponent's support. This changes only
+    /// frontier order; certification still uses every unpruned action.
+    pub support_br_scheduling: bool,
 }
 
 impl Default for BoundConfig {
@@ -80,6 +88,8 @@ impl Default for BoundConfig {
             fold_terminal_nodes: true,
             fold_closed_nodes: true,
             monotone_stall_scheduling: true,
+            certified_action_pruning: true,
+            support_br_scheduling: true,
         }
     }
 }
@@ -132,6 +142,15 @@ pub struct BoundStats {
     pub closed_folds: usize,
     pub monotone_roots: usize,
     pub monotone_invalidations: usize,
+    pub dominated_rows: usize,
+    pub dominated_cols: usize,
+    pub dominance_checks: usize,
+    pub avoided_cells: usize,
+    pub br_cell_picks: usize,
+    pub lower_br_picks: usize,
+    pub upper_br_picks: usize,
+    pub legacy_support_picks: usize,
+    pub fair_cell_picks: usize,
 }
 
 struct Pending {
@@ -161,6 +180,15 @@ struct Cell {
     tried_eager: bool,
 }
 
+struct StageWitness {
+    xlo: Vec<f64>,
+    ylo: Vec<f64>,
+    xhi: Vec<f64>,
+    yhi: Vec<f64>,
+    gap_lo: f64,
+    gap_hi: f64,
+}
+
 struct Node {
     /// Expansion source; dropped once the node is resolved or fully
     /// expanded (bounds then update purely from children).
@@ -172,7 +200,12 @@ struct Node {
     hi: f64,
     /// LP supports cached by the last backup (lo-matrix x/y ‖ hi-matrix
     /// x/y) — the cell selector steers by these instead of re-solving.
-    strat: Option<(Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>)>,
+    strat: Option<StageWitness>,
+    /// Pure actions removed by a permanent interval-dominance certificate.
+    active_rows: Vec<bool>,
+    active_cols: Vec<bool>,
+    select_count: usize,
+    fair_cursor: usize,
     stall_rank: Option<(OneSidedHeal, MonotoneRank)>,
 }
 
@@ -338,6 +371,10 @@ impl<'d> BoundSolver<'d> {
                     lo: v,
                     hi: v,
                     strat: None,
+                    active_rows: Vec::new(),
+                    active_cols: Vec::new(),
+                    select_count: 0,
+                    fair_cursor: 0,
                     stall_rank,
                 }
             }
@@ -349,6 +386,10 @@ impl<'d> BoundSolver<'d> {
                 lo: 0.0,
                 hi: 1.0,
                 strat: None,
+                active_rows: Vec::new(),
+                active_cols: Vec::new(),
+                select_count: 0,
+                fair_cursor: 0,
                 stall_rank,
             },
         };
@@ -395,6 +436,8 @@ impl<'d> BoundSolver<'d> {
             .collect();
         node.acts0 = a0;
         node.acts1 = a1;
+        node.active_rows = vec![true; node.acts0.len()];
+        node.active_cols = vec![true; node.acts1.len()];
     }
 
     /// One trial: descend by LP-support × uncertainty, expand one pending
@@ -483,42 +526,165 @@ impl<'d> BoundSolver<'d> {
         did_work
     }
 
-    /// Cell choice: product of the lo/hi LP supports times cell width —
-    /// spend work where the equilibria actually look.
+    /// Cell choice alternates the two certificate witnesses. For the lower
+    /// bound, cross the lower row strategy with every tied pure best-response
+    /// column. For the upper bound, cross every tied pure best-response row
+    /// with the upper column strategy. Every 32nd visit is a round-robin fair
+    /// pick, so zero-support cells cannot remain starved forever.
     fn select_cell(&mut self, key: NodeKey) -> usize {
-        let node = &self.nodes[&key];
-        let (n0, n1) = (node.acts0.len(), node.acts1.len());
-        if n0 * n1 == 1 {
-            return 0;
-        }
-        let widest = || -> usize {
-            node.cells
-                .iter()
-                .enumerate()
-                .max_by(|a, b| (a.1.hi - a.1.lo).partial_cmp(&(b.1.hi - b.1.lo)).unwrap())
-                .map(|(i, _)| i)
-                .unwrap()
-        };
-        if n0 == 1 || n1 == 1 {
-            return widest();
-        }
-        let Some((xlo, ylo, xhi, yhi)) = node.strat.as_ref() else {
-            return widest(); // no backup yet: probe the widest cell
-        };
-        let mut best = (f64::NEG_INFINITY, 0usize);
-        for i in 0..n0 {
-            for j in 0..n1 {
-                let c = &node.cells[i * n1 + j];
-                let w = xlo[i].max(xhi[i]) * ylo[j].max(yhi[j]) * (c.hi - c.lo);
-                if w > best.0 {
-                    best = (w, i * n1 + j);
+        const FAIR_PERIOD: usize = 32;
+        const EPS: f64 = 1e-12;
+
+        let support_br = self.cfg.support_br_scheduling;
+        let (selected, pick_kind) = {
+            let node = self.nodes.get_mut(&key).unwrap();
+            let (n0, n1) = (node.acts0.len(), node.acts1.len());
+            node.select_count += 1;
+            let mut active_cells = Vec::new();
+            for i in 0..n0 {
+                if !node.active_rows[i] {
+                    continue;
+                }
+                for j in 0..n1 {
+                    if node.active_cols[j] {
+                        active_cells.push(i * n1 + j);
+                    }
                 }
             }
+            let widest = || {
+                active_cells
+                    .iter()
+                    .copied()
+                    .max_by(|&a, &b| {
+                        let aw = node.cells[a].hi - node.cells[a].lo;
+                        let bw = node.cells[b].hi - node.cells[b].lo;
+                        aw.partial_cmp(&bw).unwrap()
+                    })
+                    .expect("a live matrix keeps an action per side")
+            };
+
+            if support_br && node.select_count % FAIR_PERIOD == 0 {
+                let unresolved: Vec<usize> = active_cells
+                    .iter()
+                    .copied()
+                    .filter(|&ci| node.cells[ci].hi - node.cells[ci].lo > EPS)
+                    .collect();
+                if unresolved.is_empty() {
+                    (widest(), 0u8)
+                } else {
+                    let ci = unresolved[node.fair_cursor % unresolved.len()];
+                    node.fair_cursor = node.fair_cursor.wrapping_add(1);
+                    (ci, 3u8)
+                }
+            } else if let Some(witness) = node.strat.as_ref() {
+                if !support_br {
+                    let mut best = (f64::NEG_INFINITY, widest());
+                    for &ci in &active_cells {
+                        let (i, j) = (ci / n1, ci % n1);
+                        let c = &node.cells[ci];
+                        let score = witness.xlo[i].max(witness.xhi[i])
+                            * witness.ylo[j].max(witness.yhi[j])
+                            * (c.hi - c.lo);
+                        if score > best.0 {
+                            best = (score, ci);
+                        }
+                    }
+                    (if best.0 > 0.0 { best.1 } else { widest() }, 0u8)
+                } else if node.select_count % 4 == 0 {
+                    // Keep a sparse copy of the old union-support priority.
+                    // It is redundant as a proof witness but empirically
+                    // valuable on tiny lethal fans that close immediately.
+                    let mut best = (f64::NEG_INFINITY, widest());
+                    for &ci in &active_cells {
+                        let (i, j) = (ci / n1, ci % n1);
+                        let c = &node.cells[ci];
+                        let score = witness.xlo[i].max(witness.xhi[i])
+                            * witness.ylo[j].max(witness.yhi[j])
+                            * (c.hi - c.lo);
+                        if score > best.0 {
+                            best = (score, ci);
+                        }
+                    }
+                    (if best.0 > 0.0 { best.1 } else { widest() }, 4u8)
+                } else if node.select_count % 2 == 0 {
+                    let guarantees: Vec<f64> = (0..n1)
+                        .map(|j| {
+                            (0..n0)
+                                .map(|i| witness.xlo[i] * node.cells[i * n1 + j].lo)
+                                .sum()
+                        })
+                        .collect();
+                    let best_response = guarantees
+                        .iter()
+                        .enumerate()
+                        .filter(|(j, _)| node.active_cols[*j])
+                        .map(|(_, &v)| v)
+                        .fold(f64::INFINITY, f64::min);
+                    let mut best = (f64::NEG_INFINITY, widest());
+                    for &ci in &active_cells {
+                        let (i, j) = (ci / n1, ci % n1);
+                        let c = &node.cells[ci];
+                        let support = witness.xlo[i] * witness.ylo[j];
+                        let br = if guarantees[j] <= best_response + witness.gap_lo + EPS {
+                            witness.xlo[i]
+                        } else {
+                            0.0
+                        };
+                        let score = support.max(br) * (c.hi - c.lo);
+                        if score > best.0 {
+                            best = (score, ci);
+                        }
+                    }
+                    (if best.0 > 0.0 { best.1 } else { widest() }, 1u8)
+                } else {
+                    let guarantees: Vec<f64> = (0..n0)
+                        .map(|i| {
+                            (0..n1)
+                                .map(|j| witness.yhi[j] * node.cells[i * n1 + j].hi)
+                                .sum()
+                        })
+                        .collect();
+                    let best_response = guarantees
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, _)| node.active_rows[*i])
+                        .map(|(_, &v)| v)
+                        .fold(f64::NEG_INFINITY, f64::max);
+                    let mut best = (f64::NEG_INFINITY, widest());
+                    for &ci in &active_cells {
+                        let (i, j) = (ci / n1, ci % n1);
+                        let c = &node.cells[ci];
+                        let support = witness.xhi[i] * witness.yhi[j];
+                        let br = if guarantees[i] >= best_response - witness.gap_hi - EPS {
+                            witness.yhi[j]
+                        } else {
+                            0.0
+                        };
+                        let score = support.max(br) * (c.hi - c.lo);
+                        if score > best.0 {
+                            best = (score, ci);
+                        }
+                    }
+                    (if best.0 > 0.0 { best.1 } else { widest() }, 2u8)
+                }
+            } else {
+                (widest(), 0u8)
+            }
+        };
+        match pick_kind {
+            1 => {
+                self.stats.br_cell_picks += 1;
+                self.stats.lower_br_picks += 1;
+            }
+            2 => {
+                self.stats.br_cell_picks += 1;
+                self.stats.upper_br_picks += 1;
+            }
+            3 => self.stats.fair_cell_picks += 1,
+            4 => self.stats.legacy_support_picks += 1,
+            _ => {}
         }
-        if best.0 <= 0.0 {
-            return widest();
-        }
-        best.1
+        selected
     }
 
     /// First visit of a virgin cell: attempt the eager enumerator (range
@@ -690,27 +856,53 @@ impl<'d> BoundSolver<'d> {
 
         let mlo: Vec<f64> = cell_bounds.iter().map(|b| b.0).collect();
         let mhi: Vec<f64> = cell_bounds.iter().map(|b| b.1).collect();
-        let mut strat = None;
-        let (lo, hi) = if n0 == 1 && n1 == 1 {
-            (mlo[0], mhi[0])
-        } else if n1 == 1 {
-            (
-                mlo.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
-                mhi.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
-            )
-        } else if n0 == 1 {
-            (
-                mlo.iter().cloned().fold(f64::INFINITY, f64::min),
-                mhi.iter().cloned().fold(f64::INFINITY, f64::min),
-            )
-        } else {
+        let (removed_rows, removed_cols, dominance_checks, avoided_cells) =
+            if self.cfg.certified_action_pruning {
+                let node = self.nodes.get_mut(&key).unwrap();
+                let before = node.active_rows.iter().filter(|&&v| v).count()
+                    * node.active_cols.iter().filter(|&&v| v).count();
+                let (removed_rows, removed_cols, checks) = prune_dominated_actions(
+                    &mlo,
+                    &mhi,
+                    n0,
+                    n1,
+                    &mut node.active_rows,
+                    &mut node.active_cols,
+                );
+                let after = node.active_rows.iter().filter(|&&v| v).count()
+                    * node.active_cols.iter().filter(|&&v| v).count();
+                (removed_rows, removed_cols, checks, before - after)
+            } else {
+                (0, 0, 0, 0)
+            };
+        self.stats.dominated_rows += removed_rows;
+        self.stats.dominated_cols += removed_cols;
+        self.stats.dominance_checks += dominance_checks;
+        self.stats.avoided_cells += avoided_cells;
+
+        let node = &self.nodes[&key];
+        let active_rows = node.active_rows.clone();
+        let active_cols = node.active_cols.clone();
+        let active_n0 = active_rows.iter().filter(|&&v| v).count();
+        let active_n1 = active_cols.iter().filter(|&&v| v).count();
+        if active_n0 > 1 && active_n1 > 1 {
             self.stats.lp_solves += 2;
-            let slo = solve_matrix_full(&mlo, n0, n1);
-            let shi = solve_matrix_full(&mhi, n0, n1);
-            self.stats.worst_gap = self.stats.worst_gap.max(slo.gap).max(shi.gap);
-            let (vlo, vhi) = (slo.value, shi.value);
-            strat = Some((slo.x, slo.y, shi.x, shi.y));
-            (vlo, vhi)
+        }
+        let slo = solve_restricted_game(&mlo, n0, n1, &active_rows, &active_cols);
+        let shi = solve_restricted_game(&mhi, n0, n1, &active_rows, &active_cols);
+        self.stats.worst_gap = self.stats.worst_gap.max(slo.gap).max(shi.gap);
+        // `solve_matrix_full` reports the midpoint of its own best-response
+        // bracket. Use the outward endpoints here: certificates must include
+        // numeric LP error, even though measured gaps are around 1e-15.
+        let lo = (slo.value - slo.gap * 0.5).max(0.0);
+        let hi = (shi.value + shi.gap * 0.5).min(1.0);
+        let strat = StageWitness {
+            xlo: slo.x,
+            ylo: slo.y,
+            xhi: shi.x,
+            yhi: shi.y,
+            gap_lo: slo.gap,
+            gap_hi: shi.gap,
         };
 
         let (fully_expanded, moved) = {
@@ -723,11 +915,14 @@ impl<'d> BoundSolver<'d> {
             let (plo, phi) = (node.lo, node.hi);
             node.lo = node.lo.max(lo.min(1.0));
             node.hi = node.hi.min(hi.max(0.0)).max(node.lo);
-            if strat.is_some() {
-                node.strat = strat;
-            }
+            node.strat = Some(strat);
             let moved = (node.lo - plo) > 1e-12 || (phi - node.hi) > 1e-12;
-            (node.cells.iter().all(|c| c.pending.is_empty()), moved)
+            let fully_expanded = (0..n0).filter(|&i| node.active_rows[i]).all(|i| {
+                (0..n1)
+                    .filter(|&j| node.active_cols[j])
+                    .all(|j| node.cells[i * n1 + j].pending.is_empty())
+            });
+            (fully_expanded, moved)
         };
         let node = self.nodes.get_mut(&key).unwrap();
         if node.hi - node.lo <= 1e-12 || fully_expanded {
@@ -795,6 +990,129 @@ impl<'d> BoundSolver<'d> {
     }
 }
 
+struct RestrictedSolution {
+    value: f64,
+    gap: f64,
+    x: Vec<f64>,
+    y: Vec<f64>,
+}
+
+fn solve_restricted_game(
+    matrix: &[f64],
+    rows: usize,
+    cols: usize,
+    active_rows: &[bool],
+    active_cols: &[bool],
+) -> RestrictedSolution {
+    let ri: Vec<usize> = (0..rows).filter(|&i| active_rows[i]).collect();
+    let cj: Vec<usize> = (0..cols).filter(|&j| active_cols[j]).collect();
+    assert!(!ri.is_empty() && !cj.is_empty());
+    let reduced: Vec<f64> = ri
+        .iter()
+        .flat_map(|&i| cj.iter().map(move |&j| matrix[i * cols + j]))
+        .collect();
+    let (value, gap, rx, ry) = if ri.len() == 1 && cj.len() == 1 {
+        (reduced[0], 0.0, vec![1.0], vec![1.0])
+    } else if cj.len() == 1 {
+        let best = (0..ri.len())
+            .max_by(|&a, &b| reduced[a].partial_cmp(&reduced[b]).unwrap())
+            .unwrap();
+        let mut x = vec![0.0; ri.len()];
+        x[best] = 1.0;
+        (reduced[best], 0.0, x, vec![1.0])
+    } else if ri.len() == 1 {
+        let best = (0..cj.len())
+            .min_by(|&a, &b| reduced[a].partial_cmp(&reduced[b]).unwrap())
+            .unwrap();
+        let mut y = vec![0.0; cj.len()];
+        y[best] = 1.0;
+        (reduced[best], 0.0, vec![1.0], y)
+    } else {
+        let solved = solve_matrix_full(&reduced, ri.len(), cj.len());
+        (solved.value, solved.gap, solved.x, solved.y)
+    };
+    let mut x = vec![0.0; rows];
+    let mut y = vec![0.0; cols];
+    for (&i, p) in ri.iter().zip(rx) {
+        x[i] = p;
+    }
+    for (&j, p) in cj.iter().zip(ry) {
+        y[j] = p;
+    }
+    RestrictedSolution { value, gap, x, y }
+}
+
+/// Permanently remove only actions whose current cross-bounds prove pure
+/// pointwise dominance for every still-live opposing action. Bounds tighten
+/// monotonically, so a certificate never becomes invalid. One action is
+/// removed per pass to avoid deleting mutually equivalent actions together.
+fn prune_dominated_actions(
+    lo: &[f64],
+    hi: &[f64],
+    rows: usize,
+    cols: usize,
+    active_rows: &mut [bool],
+    active_cols: &mut [bool],
+) -> (usize, usize, usize) {
+    const EPS: f64 = 1e-12;
+    let certified_le = |upper: f64, lower: f64| {
+        upper + EPS <= lower || (upper == lower && (upper == 0.0 || upper == 1.0))
+    };
+    let mut removed_rows = 0;
+    let mut removed_cols = 0;
+    let mut checks = 0;
+    loop {
+        let mut changed = false;
+        'row: for r in 0..rows {
+            if !active_rows[r] || active_rows.iter().filter(|&&v| v).count() <= 1 {
+                continue;
+            }
+            for s in 0..rows {
+                if r == s || !active_rows[s] {
+                    continue;
+                }
+                checks += 1;
+                if (0..cols)
+                    .filter(|&j| active_cols[j])
+                    .all(|j| certified_le(hi[r * cols + j], lo[s * cols + j]))
+                {
+                    active_rows[r] = false;
+                    removed_rows += 1;
+                    changed = true;
+                    break 'row;
+                }
+            }
+        }
+        if changed {
+            continue;
+        }
+        'col: for c in 0..cols {
+            if !active_cols[c] || active_cols.iter().filter(|&&v| v).count() <= 1 {
+                continue;
+            }
+            for d in 0..cols {
+                if c == d || !active_cols[d] {
+                    continue;
+                }
+                checks += 1;
+                if (0..rows)
+                    .filter(|&i| active_rows[i])
+                    .all(|i| certified_le(hi[i * cols + d], lo[i * cols + c]))
+                {
+                    active_cols[c] = false;
+                    removed_cols += 1;
+                    changed = true;
+                    break 'col;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    (removed_rows, removed_cols, checks)
+}
+
 fn outcome_value(b: &Battle) -> Option<f64> {
     b.outcome().map(|o| match o {
         Outcome::P1Win => 1.0,
@@ -812,7 +1130,10 @@ mod tests {
     use nc2000_engine::dex::MoveId;
     use nc2000_engine::state::{Attacker, Battle, PokeId};
 
-    use super::{BoundConfig, BoundSolver};
+    use super::{
+        prune_dominated_actions, solve_restricted_game, BoundConfig, BoundSolver, Cell, Node,
+        NodeKey, StageWitness,
+    };
     use crate::exact::solve_matrix;
 
     fn mon(moves: &[&str]) -> PokemonSet {
@@ -1037,6 +1358,43 @@ mod tests {
     }
 
     #[test]
+    fn pruning_and_support_br_preserve_a_closed_game_value() {
+        let dex = conformance::load_dex();
+        let mut root = battle(
+            &dex,
+            &["Quick Attack", "Splash"],
+            &["Quick Attack", "Splash"],
+        );
+        let c0 = root.legal_choices(&dex, 0)[0];
+        let c1 = root.legal_choices(&dex, 1)[0];
+        root.apply_choices(&dex, [Some(c0), Some(c1)]).unwrap();
+        root.turn = 1000;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = 1;
+        }
+        let run = |certified_action_pruning, support_br_scheduling| {
+            let mut solver = BoundSolver::new(
+                &dex,
+                BoundConfig {
+                    work_budget: 100_000,
+                    cell_cap: 100_000,
+                    eps: 0.0,
+                    certified_action_pruning,
+                    support_br_scheduling,
+                    ..BoundConfig::default()
+                },
+            );
+            solver.solve(&root, None).bounds
+        };
+        let baseline = run(false, false);
+        for candidate in [run(true, false), run(false, true), run(true, true)] {
+            assert!((candidate.lo - baseline.lo).abs() < 1e-12);
+            assert!((candidate.hi - baseline.hi).abs() < 1e-12);
+        }
+    }
+
+    #[test]
     fn closed_sweep_preserves_root_bounds_and_compacts_exact_children() {
         let dex = conformance::load_dex();
         let mut root = battle(
@@ -1072,5 +1430,127 @@ mod tests {
         assert!(solver.node_count() < before_nodes);
         assert!(solver.closed_count() > 0);
         assert!(solver.stats.closed_folds > 0);
+    }
+
+    #[test]
+    fn cross_bounds_certify_iterated_row_and_column_dominance() {
+        // Row 1 can never beat row 0. After removing it, column 0 can never
+        // improve on column 1 for the minimizer.
+        let lo = vec![0.80, 0.70, 0.20, 0.30, 0.90, 0.50];
+        let hi = vec![0.82, 0.72, 0.40, 0.50, 0.92, 0.52];
+        let mut rows = vec![true; 3];
+        let mut cols = vec![true; 2];
+        let (pr, pc, checks) = prune_dominated_actions(&lo, &hi, 3, 2, &mut rows, &mut cols);
+        assert_eq!(rows, vec![true, false, false]);
+        assert_eq!(cols, vec![false, true]);
+        assert_eq!((pr, pc), (2, 1));
+        assert!(checks > 0);
+
+        // Overlapping intervals are not a proof.
+        let mut rows = vec![true; 2];
+        let mut cols = vec![true; 2];
+        let (pr, pc, _) = prune_dominated_actions(
+            &[0.4, 0.4, 0.3, 0.3],
+            &[0.7, 0.7, 0.6, 0.6],
+            2,
+            2,
+            &mut rows,
+            &mut cols,
+        );
+        assert_eq!((pr, pc), (0, 0));
+        assert!(rows.into_iter().all(|v| v) && cols.into_iter().all(|v| v));
+
+        // Endpoint-equivalent actions may collapse, but never all of them.
+        let mut rows = vec![true; 2];
+        let mut cols = vec![true; 2];
+        prune_dominated_actions(&[1.0; 4], &[1.0; 4], 2, 2, &mut rows, &mut cols);
+        assert_eq!(rows.iter().filter(|&&v| v).count(), 1);
+        assert_eq!(cols.iter().filter(|&&v| v).count(), 1);
+
+        // Every exact corner inside a certified interval has the same value
+        // before and after removing the dominated row.
+        let lo = [0.8, 0.7, 0.2, 0.3];
+        let hi = [0.9, 0.8, 0.4, 0.5];
+        let mut active_rows = vec![true; 2];
+        let mut active_cols = vec![true; 2];
+        prune_dominated_actions(&lo, &hi, 2, 2, &mut active_rows, &mut active_cols);
+        for mask in 0..16 {
+            let matrix: Vec<f64> = (0..4)
+                .map(|i| if mask & (1 << i) == 0 { lo[i] } else { hi[i] })
+                .collect();
+            let (full, full_gap) = solve_matrix(&matrix, 2, 2);
+            let reduced = solve_restricted_game(&matrix, 2, 2, &active_rows, &active_cols);
+            assert!((full - reduced.value).abs() <= full_gap + reduced.gap + 1e-12);
+        }
+    }
+
+    #[test]
+    fn restricted_game_embeds_policies_in_original_action_space() {
+        let matrix = vec![0.8, 0.7, 0.2, 0.3, 0.9, 0.5];
+        let solved = solve_restricted_game(&matrix, 3, 2, &[true, false, true], &[false, true]);
+        assert!((solved.value - 0.7).abs() < 1e-12);
+        assert_eq!(solved.x, vec![1.0, 0.0, 0.0]);
+        assert_eq!(solved.y, vec![0.0, 1.0]);
+        assert_eq!(solved.gap, 0.0);
+    }
+
+    fn synthetic_cell(lo: f64, hi: f64) -> Cell {
+        Cell {
+            resolved: Vec::new(),
+            fixed_lo: 0.0,
+            fixed_hi: 0.0,
+            pending: Vec::new(),
+            pending_mass: 0.0,
+            lo,
+            hi,
+            tried_eager: true,
+        }
+    }
+
+    fn synthetic_node(select_count: usize, fair_cursor: usize) -> Node {
+        Node {
+            battle: None,
+            acts0: vec![None, None],
+            acts1: vec![None, None],
+            cells: vec![
+                synthetic_cell(0.2, 0.3),
+                synthetic_cell(0.2, 0.9),
+                synthetic_cell(0.0, 1.0),
+                synthetic_cell(0.0, 1.0),
+            ],
+            lo: 0.0,
+            hi: 1.0,
+            strat: Some(StageWitness {
+                xlo: vec![1.0, 0.0],
+                ylo: vec![1.0, 0.0],
+                xhi: vec![1.0, 0.0],
+                yhi: vec![1.0, 0.0],
+                gap_lo: 0.0,
+                gap_hi: 0.0,
+            }),
+            active_rows: vec![true, true],
+            active_cols: vec![true, true],
+            select_count,
+            fair_cursor,
+            stall_rank: None,
+        }
+    }
+
+    #[test]
+    fn support_br_scheduler_visits_tied_pure_response_and_fair_cursor() {
+        let dex = conformance::load_dex();
+        let key = NodeKey::Exact(7);
+        let mut solver = BoundSolver::new(&dex, BoundConfig::default());
+        // Next visit is lower-directed. Column 1 is a tied pure response to
+        // xlo but has zero ylo support; the scheduler must still select it.
+        solver.nodes.insert(key, synthetic_node(1, 0));
+        assert_eq!(solver.select_cell(key), 1);
+        assert_eq!(solver.stats.lower_br_picks, 1);
+
+        // Every 32nd visit ignores policy scores and advances a deterministic
+        // cursor over all unresolved active cells.
+        solver.nodes.insert(key, synthetic_node(31, 2));
+        assert_eq!(solver.select_cell(key), 2);
+        assert_eq!(solver.stats.fair_cell_picks, 1);
     }
 }

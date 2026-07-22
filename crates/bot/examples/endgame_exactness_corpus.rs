@@ -22,7 +22,8 @@
 //!        [--side N] [--turn N] [--hp-cap N] [--work N] [--nodes N]
 //!        [--per-battle N] [--no-dead-damage-quotient]
 //!        [--no-fold-terminal-nodes] [--no-fold-closed-nodes]
-//!        [--no-monotone-stall] [--diagnose-stall] [--out CSV]
+//!        [--no-monotone-stall] [--no-action-pruning] [--no-support-br]
+//!        [--diagnose-stall] [--out CSV]
 
 use std::collections::HashSet;
 use std::io::Write as _;
@@ -94,6 +95,8 @@ fn main() {
     let fold_terminal_nodes = !args.iter().any(|a| a == "--no-fold-terminal-nodes");
     let fold_closed_nodes = !args.iter().any(|a| a == "--no-fold-closed-nodes");
     let monotone_stall_scheduling = !args.iter().any(|a| a == "--no-monotone-stall");
+    let certified_action_pruning = !args.iter().any(|a| a == "--no-action-pruning");
+    let support_br_scheduling = !args.iter().any(|a| a == "--no-support-br");
     let diagnose_stall = args.iter().any(|a| a == "--diagnose-stall");
     let (lo, hi) = {
         let mut it = range.split('-');
@@ -115,7 +118,7 @@ fn main() {
         .filter(|(i, _)| *i >= lo && *i <= hi)
         .collect();
     println!(
-        "corpus battles {} (index {lo}-{hi}), hp-cap {hp_cap}, work {work}, nodes {node_budget}, per-battle {per_battle}, dead-damage-quotient {dead_damage_quotient}, fold-terminal {fold_terminal_nodes}, fold-closed {fold_closed_nodes}, monotone-stall {monotone_stall_scheduling}",
+        "corpus battles {} (index {lo}-{hi}), hp-cap {hp_cap}, work {work}, nodes {node_budget}, per-battle {per_battle}, dead-damage-quotient {dead_damage_quotient}, fold-terminal {fold_terminal_nodes}, fold-closed {fold_closed_nodes}, monotone-stall {monotone_stall_scheduling}, action-pruning {certified_action_pruning}, support-br {support_br_scheduling}",
         files.len()
     );
 
@@ -134,6 +137,14 @@ fn main() {
     let mut total_closed_folds = 0usize;
     let mut monotone_roots = 0usize;
     let mut monotone_invalidations = 0usize;
+    let mut dominated_rows = 0usize;
+    let mut dominated_cols = 0usize;
+    let mut dominance_checks = 0usize;
+    let mut avoided_cells = 0usize;
+    let mut lower_br_picks = 0usize;
+    let mut upper_br_picks = 0usize;
+    let mut legacy_support_picks = 0usize;
+    let mut fair_cell_picks = 0usize;
     let mut worst_gap = 0.0f64;
     for (bi, path) in &files {
         let cb = load_battle(path);
@@ -147,6 +158,8 @@ fn main() {
                 fold_terminal_nodes,
                 fold_closed_nodes,
                 monotone_stall_scheduling,
+                certified_action_pruning,
+                support_br_scheduling,
                 ..BoundConfig::default()
             },
         );
@@ -262,6 +275,14 @@ fn main() {
         total_closed_folds += solver.stats.closed_folds;
         monotone_roots += solver.stats.monotone_roots;
         monotone_invalidations += solver.stats.monotone_invalidations;
+        dominated_rows += solver.stats.dominated_rows;
+        dominated_cols += solver.stats.dominated_cols;
+        dominance_checks += solver.stats.dominance_checks;
+        avoided_cells += solver.stats.avoided_cells;
+        lower_br_picks += solver.stats.lower_br_picks;
+        upper_br_picks += solver.stats.upper_br_picks;
+        legacy_support_picks += solver.stats.legacy_support_picks;
+        fair_cell_picks += solver.stats.fair_cell_picks;
         worst_gap = worst_gap.max(solver.stats.worst_gap);
     }
 
@@ -273,7 +294,7 @@ fn main() {
         tight.len()
     );
     println!(
-        "engine runs {total_runs} expansions {total_expansions} live {total_nodes} peak {total_peak_nodes} closed {total_closed}/{total_closed_folds} monotone {monotone_roots} roots/{monotone_invalidations} invalid worst-gap {worst_gap:.2e}; wall {:.0}s",
+        "engine runs {total_runs} expansions {total_expansions} live {total_nodes} peak {total_peak_nodes} closed {total_closed}/{total_closed_folds} monotone {monotone_roots} roots/{monotone_invalidations} invalid dominance {dominated_rows}r/{dominated_cols}c/{avoided_cells} cells ({dominance_checks} checks) schedule {lower_br_picks}lo/{upper_br_picks}hi/{legacy_support_picks}legacy/{fair_cell_picks}fair worst-gap {worst_gap:.2e}; wall {:.0}s",
         t0.elapsed().as_secs_f64()
     );
 

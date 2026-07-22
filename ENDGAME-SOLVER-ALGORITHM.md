@@ -1,6 +1,8 @@
 # Certified Endgame Solver: Search-Space Reduction Proposal
 
-Status: design proposal; no implementation is included in this document.
+Status: Phases A and B plus the first Phase C step are implemented. This file
+remains the design rationale; measured follow-ups are recorded in the project
+README and `STALL-CENSUS-RESULTS.md`.
 
 Audience: AI agents working on M17e or later exact/certified endgame analysis.
 
@@ -293,6 +295,23 @@ Primary references:
 - Bosansky et al., [Using Double-Oracle Method and Serialized Alpha-Beta Search for Pruning in Simultaneous Move Games](https://www.ijcai.org/Proceedings/13/Papers/018.pdf)
 - Eisentraut, Kretinsky, and Rotar, [Stopping Criteria for Value and Strategy Iteration on Concurrent Stochastic Reachability Games](https://arxiv.org/abs/1909.08348)
 - Keller and Helmert, [Trial-Based Heuristic Tree Search for Finite Horizon MDPs](https://doi.org/10.1609/icaps.v23i1.13557)
+
+### Implemented first step (2026-07-22)
+
+`bot::bounds` now alternates two exact interval witnesses when choosing work:
+the lower row strategy against all tied pure best-response columns, and all
+tied pure best-response rows against the upper column strategy. LP support is
+therefore a deferral hint, never an exclusion proof. A periodic legacy-support
+pick preserves small lethal closures and a round-robin pick every 32 node
+visits makes the scheduler fair.
+
+Pure actions are removed only by cross-bound pointwise dominance. With true
+cell payoffs `L <= A <= U`, row `r` is removable when another row `s` has
+`U[r,j] <= L[s,j]` for every live column; column `c` is removable when another
+column `d` has `U[i,d] <= L[i,c]` for every live row. Removal is sequential and
+permanent because intervals only tighten. Strategies from the reduced matrix
+are embedded back into the original action space. Approximate damage-search
+values never enter a cell bound, closed memo, or pruning certificate.
 
 ## Optional exact state reductions
 
