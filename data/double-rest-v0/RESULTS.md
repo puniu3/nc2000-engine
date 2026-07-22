@@ -56,8 +56,12 @@ it is not a replacement for support selection. The live order is:
 ## Double-Rest duel gate
 
 The duel harness has `--pool rest` (57 frequency-weighted Rest sets) and
-`--pool rest-talk` (21 Rest+Sleep Talk sets). It reports mean, p95, and p99
-thinking time. A 12-game Rest+Sleep Talk smoke gate at H0 measured 62.6 ms per
-move for one-shot probe/refine versus 1,759.8 ms for exact; p99 was 738 ms
-versus 11,503 ms. The 5-7 result is statistically inconclusive (score 0.417,
-95% CI half-width 0.291), so the permanent gate must use more paired games.
+`--pool rest-talk` (21 Rest+Sleep Talk sets). It reports mean, p95, p99, and
+turn-cap count.
+
+A 100-game seed-paired Rest+Sleep Talk gate at H0 finished 48-48-4: score
+0.5000 with 95% CI half-width 0.0965. One-shot probe/refine averaged 420.6 ms
+per move versus 2,328.2 ms for exact (5.5x faster). Its p95 was 1,869 ms
+versus 10,782 ms and p99 was 3,313 ms versus 17,882 ms. The four ties came
+from the run immediately before separate turn-cap accounting was added; future
+gates report that count explicitly.
