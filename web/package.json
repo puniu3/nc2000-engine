@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "vite --host --port 8000",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host --port 8000"
+    "build:e2e": "tsc --noEmit && VITE_NC2000_TEST_BUDGET=300 vite build --mode test",
+    "preview": "vite preview --host --port 8000",
+    "test:e2e": "npm run build:e2e && node tests/run-e2e.mjs"
   },
   "dependencies": {
     "preact": "^10.24.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^26.1.1",
     "typescript": "^5.6.0",
     "vite": "^6.0.0"

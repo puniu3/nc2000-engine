@@ -2,7 +2,7 @@
 // party / Opponent's party. Both parties default to random-from-pool, so
 // one tap on Start begins a game; a party button opens a modal with the
 // full selection content (pool team list with rank/provenance/species,
-// the M14 custom-team import/pick for the human side). Pinned choices
+// the shared M14 custom-team import/pick for either side). Pinned choices
 // persist in localStorage by team id. The language selector is an
 // unobtrusive corner dropdown. (The device benchmark — a dev instrument
 // for the M9 think-time gate — was removed from the product UI in UI-2.)
@@ -237,14 +237,13 @@ function CustomTeamCard(props: {
 
 // ------------------------------------------------- pinned party choices
 
-type HumanChoice =
+type PartyChoice =
   | { kind: "random" }
   | { kind: "pool"; id: string }
   | { kind: "custom"; id: string };
-type BotChoice = { kind: "random" } | { kind: "pool"; id: string };
 interface Picks {
-  human: HumanChoice;
-  bot: BotChoice;
+  human: PartyChoice;
+  bot: PartyChoice;
 }
 
 const PICKS_KEY = "nc2000-start-picks";
@@ -266,7 +265,10 @@ function loadPicks(pool: MetaPool, customs: CustomTeam[]): Picks {
       picks.human = h;
     }
     const b = p.bot;
-    if (b?.kind === "pool" && pool.teams.some((t) => t.id === b.id)) {
+    if (
+      (b?.kind === "pool" && pool.teams.some((t) => t.id === b.id)) ||
+      (b?.kind === "custom" && customs.some((t) => t.id === b.id))
+    ) {
       picks.bot = b;
     }
   } catch {
@@ -283,6 +285,53 @@ function storePicks(picks: Picks): void {
   }
 }
 
+function CustomTeamSection(props: {
+  choice: PartyChoice;
+  onPick: (c: PartyChoice) => void;
+  customs: CustomTeam[];
+  onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
+}) {
+  const [importing, setImporting] = useState(false);
+  return (
+    <section class="custom-section">
+      <h3>{ui().customSection}</h3>
+      <div class="team-list">
+        {props.customs.map((t) => (
+          <CustomTeamCard
+            key={t.id}
+            team={t}
+            selected={props.choice.kind === "custom" && props.choice.id === t.id}
+            onTap={() => props.onPick({ kind: "custom", id: t.id })}
+            onDelete={() => props.onCustomsChange(deleteCustomTeam(t.id))}
+          />
+        ))}
+        {!importing && (
+          <button
+            class="team-card add-custom-card"
+            onClick={() => setImporting(true)}
+          >
+            {ui().addCustom}
+          </button>
+        )}
+      </div>
+      {importing && (
+        <CustomImport
+          onSaved={(t) => {
+            const stored = loadCustomTeams();
+            // localStorage may be unavailable/full. Keep a successfully
+            // canonicalized import playable for this session regardless.
+            const list = stored.some((x) => x.id === t.id)
+              ? stored
+              : [...props.customs, t];
+            props.onCustomsChange(list, t);
+          }}
+          onClose={() => setImporting(false)}
+        />
+      )}
+    </section>
+  );
+}
+
 // ------------------------------------------------- party picker modals
 
 /** Human party picker (modal body): random card, saved customs + import
@@ -290,13 +339,12 @@ function storePicks(picks: Picks): void {
  * customs (import/delete) keeps it open. */
 function HumanPicker(props: {
   teams: PoolTeam[];
-  choice: HumanChoice;
-  onPick: (c: HumanChoice) => void;
+  choice: PartyChoice;
+  onPick: (c: PartyChoice) => void;
   customs: CustomTeam[];
   onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
 }) {
   const { teams, choice, customs } = props;
-  const [importing, setImporting] = useState(false);
   return (
     <>
       <p class="modal-note">{ui().openSheetNote}</p>
@@ -307,34 +355,12 @@ function HumanPicker(props: {
       >
         {ui().randomCard(teams.length)}
       </button>
-      <section class="custom-section">
-        <h3>{ui().customSection}</h3>
-        <div class="team-list">
-          {customs.map((t) => (
-            <CustomTeamCard
-              key={t.id}
-              team={t}
-              selected={choice.kind === "custom" && choice.id === t.id}
-              onTap={() => props.onPick({ kind: "custom", id: t.id })}
-              onDelete={() => props.onCustomsChange(deleteCustomTeam(t.id))}
-            />
-          ))}
-          {!importing && (
-            <button
-              class="team-card add-custom-card"
-              onClick={() => setImporting(true)}
-            >
-              {ui().addCustom}
-            </button>
-          )}
-        </div>
-        {importing && (
-          <CustomImport
-            onSaved={(t) => props.onCustomsChange(loadCustomTeams(), t)}
-            onClose={() => setImporting(false)}
-          />
-        )}
-      </section>
+      <CustomTeamSection
+        choice={choice}
+        onPick={props.onPick}
+        customs={customs}
+        onCustomsChange={props.onCustomsChange}
+      />
       <h3>{ui().poolSection}</h3>
       <div class="team-list">
         {teams.map((t, i) => (
@@ -351,15 +377,19 @@ function HumanPicker(props: {
   );
 }
 
-/** Opponent party picker (modal body): random card + pool list. */
+/** Opponent party picker: the same saved custom parties are available as
+ * for the human side. Import/delete stays shared through localStorage. */
 function BotPicker(props: {
   teams: PoolTeam[];
-  choice: BotChoice;
-  onPick: (c: BotChoice) => void;
+  choice: PartyChoice;
+  onPick: (c: PartyChoice) => void;
+  customs: CustomTeam[];
+  onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
 }) {
   const { teams, choice } = props;
   return (
     <>
+      <p class="modal-note">{ui().openSheetNote}</p>
       <button
         class={`team-card random-card ${choice.kind === "random" ? "selected" : ""}`}
         aria-pressed={choice.kind === "random"}
@@ -367,6 +397,13 @@ function BotPicker(props: {
       >
         {ui().randomCard(teams.length)}
       </button>
+      <CustomTeamSection
+        choice={choice}
+        onPick={props.onPick}
+        customs={props.customs}
+        onCustomsChange={props.onCustomsChange}
+      />
+      <h3>{ui().poolSection}</h3>
       <div class="team-list">
         {teams.map((t, i) => (
           <TeamCard
@@ -388,7 +425,7 @@ export function StartScreen(props: {
   pool: MetaPool;
   locale: Locale;
   onLocale: (l: Locale) => void;
-  onStart: (human: SelectedTeam, botIdx: number | "random") => void;
+  onStart: (human: SelectedTeam, bot: SelectedTeam) => void;
 }) {
   const teams = props.pool.teams;
   const [customs, setCustoms] = useState<CustomTeam[]>(loadCustomTeams);
@@ -404,9 +441,14 @@ export function StartScreen(props: {
 
   const poolIdx = (id: string) => teams.findIndex((t) => t.id === id);
   const humanChoice = picks.human;
+  const botChoice = picks.bot;
   const pickedCustom =
     humanChoice.kind === "custom"
       ? customs.find((t) => t.id === humanChoice.id) ?? null
+      : null;
+  const pickedBotCustom =
+    botChoice.kind === "custom"
+      ? customs.find((t) => t.id === botChoice.id) ?? null
       : null;
 
   const humanValue =
@@ -416,25 +458,51 @@ export function StartScreen(props: {
         ? picks.human.id
         : (pickedCustom?.name ?? ui().randomLabel);
   const botValue =
-    picks.bot.kind === "random" ? ui().randomLabel : picks.bot.id;
+    botChoice.kind === "random"
+      ? ui().randomLabel
+      : botChoice.kind === "pool"
+        ? botChoice.id
+        : (pickedBotCustom?.name ?? ui().randomLabel);
+
+  function selectedTeam(choice: PartyChoice): SelectedTeam {
+    if (choice.kind === "custom") {
+      const custom = customs.find((t) => t.id === choice.id);
+      if (custom)
+        return { id: custom.name, sets: custom.sets, poolIdx: null };
+    }
+    // Random is resolved here, at start: a fresh roll every game unless
+    // the user pinned a pool team.
+    const pinned = choice.kind === "pool" ? poolIdx(choice.id) : -1;
+    const idx = pinned >= 0 ? pinned : randomSeed32() % teams.length;
+    return { id: teams[idx].id, sets: teams[idx].sets, poolIdx: idx };
+  }
+
+  function customsChanged(
+    side: "human" | "bot",
+    list: CustomTeam[],
+    picked?: CustomTeam,
+  ) {
+    setCustoms(list);
+    let human = picks.human;
+    let bot = picks.bot;
+    if (picked) {
+      const choice = { kind: "custom", id: picked.id } as const;
+      if (side === "human") human = choice;
+      else bot = choice;
+    }
+    // One saved team may be pinned on both sides. Deleting it invalidates
+    // both choices atomically; an in-progress Game already owns snapshots.
+    const humanCustomId = human.kind === "custom" ? human.id : null;
+    const botCustomId = bot.kind === "custom" ? bot.id : null;
+    if (humanCustomId && !list.some((t) => t.id === humanCustomId))
+      human = RANDOM;
+    if (botCustomId && !list.some((t) => t.id === botCustomId))
+      bot = RANDOM;
+    if (human !== picks.human || bot !== picks.bot) update({ human, bot });
+  }
 
   function start() {
-    let human: SelectedTeam;
-    if (picks.human.kind === "custom" && pickedCustom) {
-      human = { id: pickedCustom.name, sets: pickedCustom.sets, poolIdx: null };
-    } else {
-      // Random is resolved here, at start: a fresh roll every game unless
-      // the user pinned a team.
-      const idx =
-        picks.human.kind === "pool"
-          ? poolIdx(picks.human.id)
-          : randomSeed32() % teams.length;
-      human = { id: teams[idx].id, sets: teams[idx].sets, poolIdx: idx };
-    }
-    props.onStart(
-      human,
-      picks.bot.kind === "pool" ? poolIdx(picks.bot.id) : "random",
-    );
+    props.onStart(selectedTeam(picks.human), selectedTeam(picks.bot));
   }
 
   return (
@@ -486,17 +554,9 @@ export function StartScreen(props: {
             }}
             customs={customs}
             onCustomsChange={(list, picked) => {
-              setCustoms(list);
-              if (picked) {
-                // Freshly imported: pin it (modal stays open so the
-                // import result / applied fixes remain readable).
-                update({ ...picks, human: { kind: "custom", id: picked.id } });
-              } else if (
-                humanChoice.kind === "custom" &&
-                !list.some((t) => t.id === humanChoice.id)
-              ) {
-                update({ ...picks, human: RANDOM }); // pinned custom deleted
-              }
+              // Fresh import is pinned to the side whose modal owns the
+              // panel; the modal stays open so applied fixes remain visible.
+              customsChanged("human", list, picked);
             }}
           />
         </Modal>
@@ -510,6 +570,10 @@ export function StartScreen(props: {
               update({ ...picks, bot: c });
               setModal(null);
             }}
+            customs={customs}
+            onCustomsChange={(list, picked) =>
+              customsChanged("bot", list, picked)
+            }
           />
         </Modal>
       )}

@@ -126,7 +126,7 @@ const EN: UIStrings = {
   close: "Close",
   languageLabel: "Language",
   customBadge: "custom",
-  customSection: "Your custom teams",
+  customSection: "Saved custom teams",
   addCustom: "+ Import a custom team",
   importTitle: "Import a custom team",
   importHelp:
@@ -231,7 +231,7 @@ const JA: UIStrings = {
   close: "閉じる",
   languageLabel: "言語",
   customBadge: "カスタム",
-  customSection: "自分のカスタムチーム",
+  customSection: "保存済みカスタムチーム",
   addCustom: "+ カスタムチームを取り込む",
   importTitle: "カスタムチームの取り込み",
   importHelp:

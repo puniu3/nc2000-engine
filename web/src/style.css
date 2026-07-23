@@ -310,6 +310,9 @@ dialog.modal::backdrop {
   display: flex;
   align-items: stretch;
 }
+.team-card.custom-card.selected {
+  border-color: var(--accent);
+}
 .custom-card-body {
   flex: 1;
   display: block;

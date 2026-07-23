@@ -8,7 +8,7 @@
 // revealed) is hidden. No settings.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import { loadEngine, randomSeed32 } from "./engine";
+import { loadEngine } from "./engine";
 import { fetchDexJson, fetchI18nJa, fetchPool } from "./data";
 import { loadSetDex } from "./set-info";
 import type { MetaPool } from "./types";
@@ -16,13 +16,20 @@ import { StartScreen } from "./select";
 import { Game } from "./game";
 import { loadJaNames, locale, setLocale, ui, type Locale } from "./i18n";
 
-/** The fixed bot strength: the former "Max" tier, always on. */
-export const BUDGET = 30000;
+/** The fixed bot strength: the former "Max" tier, always on. Browser E2E
+ * builds use Vite's explicit `test` mode to exercise whole games cheaply;
+ * production mode cannot observe or honor that override. */
+const testBudget =
+  import.meta.env.MODE === "test"
+    ? Number(import.meta.env.VITE_NC2000_TEST_BUDGET)
+    : Number.NaN;
+export const BUDGET =
+  Number.isSafeInteger(testBudget) && testBudget > 0 ? testBudget : 30000;
 
-/** The human's selected team: a pool team (poolIdx set — baked pair tables
- * may apply) or a saved custom team (poolIdx null — bot preview vs it is
- * always live search). Sets are captured at start, so deleting the saved
- * custom mid-game/rematch is safe. */
+/** One side's selected team: a pool team (poolIdx set — baked pair tables
+ * may apply) or a saved custom team (poolIdx null — preview is always live
+ * search). Sets are captured at start, so deleting a saved custom during
+ * the game cannot alter the current battle or its rematches. */
 export interface SelectedTeam {
   id: string;
   sets: unknown[];
@@ -31,7 +38,7 @@ export interface SelectedTeam {
 
 interface GameSpec {
   human: SelectedTeam;
-  botIdx: number;
+  bot: SelectedTeam;
   n: number;
 }
 
@@ -94,13 +101,7 @@ export function App() {
           setLocale(l);
           setLoc(l);
         }}
-        onStart={(human, botIdx) => {
-          const bot =
-            botIdx === "random"
-              ? randomSeed32() % pool.teams.length
-              : botIdx;
-          setGame({ human, botIdx: bot, n: 1 });
-        }}
+        onStart={(human, bot) => setGame({ human, bot, n: 1 })}
       />
     );
   }
@@ -108,10 +109,9 @@ export function App() {
   return (
     <Game
       key={game.n}
-      pool={pool}
       poolJson={poolJsonRef.current}
       humanTeam={game.human}
-      botIdx={game.botIdx}
+      botTeam={game.bot}
       onRematch={() => setGame({ ...game, n: game.n + 1 })}
       onNewTeams={() => setGame(null)}
     />

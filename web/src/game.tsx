@@ -29,7 +29,6 @@ import { Narrator } from "./narrate";
 import type {
   Choice,
   LogEntry,
-  MetaPool,
   MoveChoice,
   PokeView,
   StateView,
@@ -118,10 +117,9 @@ function ThinkChip(props: { thinking: Thinking | null }) {
 }
 
 export function Game(props: {
-  pool: MetaPool;
   poolJson: string;
   humanTeam: SelectedTeam;
-  botIdx: number;
+  botTeam: SelectedTeam;
   onRematch: () => void;
   onNewTeams: () => void;
 }) {
@@ -157,7 +155,7 @@ export function Game(props: {
   const endHeadRef = useRef<HTMLHeadingElement>(null);
 
   const humanTeam = props.humanTeam;
-  const botTeam = props.pool.teams[props.botIdx];
+  const botTeam = props.botTeam;
 
   // UI-4: a new decision request — announce it politely and, if focus is
   // orphaned (the picked button unmounted), land on the decision heading
@@ -204,12 +202,12 @@ export function Game(props: {
       newBattleSeed(),
     );
     battleRef.current = battle;
-    // Baked pair tables exist only between pool teams — a custom human
-    // team (poolIdx null) always sends the bot preview to live search.
+    // Baked pair tables exist only between pool teams. If either side is
+    // custom, preview falls back to the same pinned live search.
     pairPromiseRef.current =
-      humanTeam.poolIdx === null
+      humanTeam.poolIdx === null || botTeam.poolIdx === null
         ? Promise.resolve(null)
-        : fetchPairJson(humanTeam.poolIdx, props.botIdx);
+        : fetchPairJson(humanTeam.poolIdx, botTeam.poolIdx);
     void bot
       .newBattle(
         JSON.stringify(humanTeam.sets),
