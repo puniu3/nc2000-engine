@@ -1,7 +1,7 @@
 # Threshold-preserving damage-roll experiment: results and waste audit
 
-Date: 2026-07-22  
-Branch/worktree: `exp/threshold-damage` / `/home/puniu/nc2000-threshold-exp`  
+Date: 2026-07-22
+Branch/worktree: `exp/threshold-damage` / `/home/puniu/nc2000-threshold-exp`
 Implementation commits: `17d6912`, `b7d4d2a`, `b4c99c7`, `7cfd38d`, `538e4fe`
 
 > **Provenance note (2026-07-23):** This experiment used the pre-v3 57-row anchor artifact. Its anchor counts, 38-row tight subset, interval comparisons, and derived MAE/violation figures are historical controls, not current ground truth; reconstruction drift was discovered afterward. The fail-closed M17e v3 artifact covers all 570 corpus coordinates with 72/72 rows reconstructed, 29 tight rows, 45 violations at ε=0.02, total margin 6.088, and tight MAE 0.0952. The matched exact-vs-approximate experiment numbers below are preserved as measured.
