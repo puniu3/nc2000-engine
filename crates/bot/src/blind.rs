@@ -480,6 +480,25 @@ impl BlindSearch {
             .map(|a| self.my_acts[a])
     }
 
+    /// Experimental fixed-budget best-arm rule: argmax empirical mean over
+    /// the same eligible root actions as [`Self::best`]. Allocation remains
+    /// caller-controlled (`step` for UCB, `step_forced` for a designed
+    /// schedule); M17a uses this to audit simple-regret alternatives without
+    /// changing the shipped argmax-visits policy.
+    pub fn best_mean(&self) -> Option<SearchChoice> {
+        let allowed = |a: usize| self.my_mask.as_ref().map_or(true, |m| m[a]);
+        let means = self.means();
+        (0..self.my_acts.len())
+            .filter(|&a| allowed(a) && !self.my_dominated[a])
+            .max_by(|&a, &b| means[a].total_cmp(&means[b]))
+            .or_else(|| {
+                (0..self.my_acts.len())
+                    .filter(|&a| allowed(a))
+                    .max_by(|&a, &b| means[a].total_cmp(&means[b]))
+            })
+            .map(|a| self.my_acts[a])
+    }
+
     /// Whether the root decision is a team preview.
     pub fn is_preview(&self) -> bool {
         matches!(self.my_acts.first(), Some(SearchChoice::Team(_)))

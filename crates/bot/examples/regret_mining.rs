@@ -27,6 +27,14 @@
 //!     --iters 60000 --samples 8 --threads 8 \
 //!     --out tmp/regret-confirm.jsonl
 //!
+//! Root-allocation audit over the same ranked discoveries (the input may
+//! come from an older executable, but its v3 coverage/provenance and every
+//! current reconstruction input are still checked):
+//!   cargo run --release -p nc2000-bot --example regret_mining -- \
+//!     --mode allocation-audit --input tmp/regret-screen.jsonl --top 100 \
+//!     --iters 10000 --samples 8 --threads 8 \
+//!     --out tmp/root-allocation-audit.jsonl
+//!
 //! Live decision-log v2 uses the exact submitted team, exact request, and
 //! accumulated player-visible protocol captured by `tools/ps-client.js`:
 //!   cargo run --release -p nc2000-bot --example regret_mining -- \
@@ -50,7 +58,7 @@ use nc2000_bot::corpus::{
 };
 use nc2000_bot::import::ProtocolAgent;
 use nc2000_bot::preview::{load_meta_pool, MetaPool};
-use nc2000_bot::regret::{mean, paired_regret};
+use nc2000_bot::regret::{best_action, mean, paired_regret};
 use nc2000_bot::smmcts::{RmConfig, SelRule};
 use nc2000_engine::battle::{PokemonSet, SearchChoice};
 use nc2000_engine::dex::{toid, Dex};
@@ -1564,6 +1572,7 @@ fn validate_screen_artifact(
     rows: &[(usize, serde_json::Value)],
     live: bool,
     expected_source: &str,
+    require_current_build: bool,
 ) -> serde_json::Value {
     assert!(!rows.is_empty(), "{path}: screen artifact is empty");
     let expected_mode = if live { "live-screen" } else { "screen" };
@@ -1629,11 +1638,13 @@ fn validate_screen_artifact(
         Some(expected_source),
         "screen run source fingerprint mismatch"
     );
-    assert_eq!(
-        first["build_identity"].as_str(),
-        Some(build_identity()),
-        "confirmation must use the exact screen executable"
-    );
+    if require_current_build {
+        assert_eq!(
+            first["build_identity"].as_str(),
+            Some(build_identity()),
+            "confirmation must use the exact screen executable"
+        );
+    }
     assert_eq!(
         first["coverage"]["expected_rows"].as_u64(),
         Some(rows.len() as u64),
@@ -2035,6 +2046,263 @@ fn confirm_candidate(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn allocation_audit_candidate(
+    dex: &Dex,
+    src: &SetSources,
+    pool: &MetaPool,
+    files: &[PathBuf],
+    candidate: &Candidate,
+    audit: &serde_json::Value,
+    iters: u32,
+    samples: usize,
+    base_seed: u64,
+) -> serde_json::Value {
+    let row = &candidate.row;
+    let bi = row["battle"].as_u64().unwrap() as usize;
+    let di = row["decision"].as_u64().unwrap() as usize;
+    let base = serde_json::json!({
+        "schema":"nc2000-root-allocation-audit-v1", "audit":audit,
+        "mode":"allocation-audit", "rank":candidate.rank,
+        "corpus_fingerprint":row["corpus_fingerprint"],
+        "battle":bi, "file":row["file"], "decision":di,
+        "side":row["side"], "turn":row["turn"], "human":row["human"],
+        "reference":row["reference"], "candidate":row["candidate"],
+        "reference_class":row["reference_class"], "candidate_class":row["candidate_class"],
+        "tags":row["tags"], "discovery_regret":row["regret"],
+    });
+    let Some(path) = files.get(bi) else {
+        return merge(base, serde_json::json!({"skip":"battle-missing"}));
+    };
+    let data = load_battle(path);
+    let Some(d) = data.decisions.get(di) else {
+        return merge(base, serde_json::json!({"skip":"decision-missing"}));
+    };
+
+    let mut labels = Vec::<String>::new();
+    let mut classes = Vec::<String>::new();
+    let mut seed_means = Vec::<Vec<f64>>::new();
+    let mut seed_visits = Vec::<Vec<u32>>::new();
+    let mut choices = Vec::<String>::new();
+    let mut state_keys = Vec::<String>::new();
+    for rep in 0..samples {
+        let synth_seed = job_seed(base_seed, bi, di, rep, 0xA11C_0001);
+        let Some(agent) = reconstruct_agent_with_pool(
+            dex,
+            src,
+            pool.clone(),
+            &data.lines,
+            &data.evidence,
+            d,
+            synth_seed,
+        ) else {
+            return merge(base, serde_json::json!({"skip":"reconstruct"}));
+        };
+        let battle = agent.battle().unwrap();
+        state_keys.push(state_fingerprint(battle));
+        let belief = agent.belief().unwrap();
+        let observer = agent.observer().unwrap();
+        let mut search = BlindSearch::new(
+            battle,
+            dex,
+            cfg(),
+            d.side,
+            job_seed(base_seed, bi, di, rep, 0xA11C_1001),
+        );
+        let rep_labels: Vec<String> = search
+            .actions()
+            .iter()
+            .map(|&action| choice_label(battle, dex, d.side, action))
+            .collect();
+        if rep == 0 {
+            labels = rep_labels;
+            classes = labels
+                .iter()
+                .map(|label| action_class(dex, label))
+                .collect();
+            seed_means = vec![Vec::new(); labels.len()];
+            seed_visits = vec![Vec::new(); labels.len()];
+        } else if rep_labels != labels {
+            return merge(base, serde_json::json!({"skip":"action-set-drift"}));
+        }
+        if labels.len() <= 1 {
+            return merge(base, serde_json::json!({"skip":"trivial"}));
+        }
+        if iters < labels.len() as u32 {
+            return merge(base, serde_json::json!({"skip":"budget-below-actions"}));
+        }
+
+        // Fixed total budget, balanced to within one visit per action.
+        // Rotate the extra-visit prefix across independent seeds.
+        for iteration in 0..iters as usize {
+            let index = (iteration + rep) % labels.len();
+            search.step_forced(dex, belief, observer, index);
+        }
+        let choice = search
+            .best_mean()
+            .expect("non-trivial root has a best mean");
+        choices.push(choice_label(battle, dex, d.side, choice));
+        let means = search.means();
+        for index in 0..labels.len() {
+            seed_means[index].push(means[index]);
+            seed_visits[index].push(search.visits()[index]);
+        }
+    }
+
+    let (choice, stability) = modal(&choices);
+    let marginal_index = best_action(&seed_means).unwrap();
+    let reference = row["reference"].as_str().unwrap();
+    let proposed = row["candidate"].as_str().unwrap();
+    let candidate_picks = choices
+        .iter()
+        .filter(|picked| picked.as_str() == proposed)
+        .count();
+    let reference_picks = choices
+        .iter()
+        .filter(|picked| picked.as_str() == reference)
+        .count();
+    let actions: Vec<serde_json::Value> = (0..labels.len())
+        .map(|index| {
+            serde_json::json!({
+                "action":labels[index], "class":classes[index],
+                "mean":mean(&seed_means[index]),
+                "seed_means":seed_means[index], "seed_visits":seed_visits[index],
+            })
+        })
+        .collect();
+    merge(
+        base,
+        serde_json::json!({
+            "allocation":"round-robin-all-root-actions",
+            "selection":"max-empirical-mean",
+            "choice":choice, "choice_stability":stability, "choices":choices,
+            "marginal_choice":labels[marginal_index],
+            "candidate_picks":candidate_picks, "reference_picks":reference_picks,
+            "actions":actions, "iters":iters, "samples":samples,
+            "state_keys":state_keys,
+        }),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_allocation_audit(
+    dex: &Dex,
+    root: &Path,
+    corpus: &str,
+    input: &str,
+    top: usize,
+    candidate_range: (usize, usize),
+    min_regret: f64,
+    iters: u32,
+    samples: usize,
+    threads: usize,
+    seed: u64,
+    out_path: &str,
+) {
+    validate_screen_budget(iters, iters, samples);
+    let files = corpus_files(&root.join(corpus));
+    let corpus_fingerprint = corpus_source_id(&files);
+    let text = std::fs::read_to_string(input).unwrap_or_else(|e| panic!("read {input}: {e}"));
+    let artifact: Vec<(usize, serde_json::Value)> = text
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(line_index, line)| {
+            let line_no = line_index + 1;
+            let row: serde_json::Value =
+                serde_json::from_str(line).unwrap_or_else(|e| panic!("{input}:{line_no}: {e}"));
+            assert!(row.is_object(), "{input}:{line_no}: row must be an object");
+            (line_no, row)
+        })
+        .collect();
+    let discovery = validate_screen_artifact(input, &artifact, false, &corpus_fingerprint, false);
+    let input_fingerprints = reconstruction_input_fingerprints(root);
+    assert_eq!(
+        discovery["input_fingerprints"], input_fingerprints,
+        "allocation audit reconstruction inputs differ from screen inputs"
+    );
+
+    let mut rows: Vec<serde_json::Value> = artifact
+        .into_iter()
+        .filter(|(_, row)| row.get("skip").is_none())
+        .map(|(_, row)| row)
+        .collect();
+    rows.retain(|row| {
+        row["reference"] != row["candidate"] && row["regret"].as_f64().unwrap() >= min_regret
+    });
+    rows.sort_by(|a, b| {
+        b["regret"]
+            .as_f64()
+            .unwrap()
+            .total_cmp(&a["regret"].as_f64().unwrap())
+            .then_with(|| cmp_offline_identity(a, b))
+    });
+    rows.truncate(top);
+    let mut audit = serde_json::json!({
+        "source_screen_config":discovery["config_fingerprint"],
+        "source_build_identity":discovery["build_identity"],
+        "audit_build_identity":build_identity(),
+        "reconstruction_rev":RECONSTRUCTION_REV,
+        "source_fingerprint":corpus_fingerprint,
+        "input_fingerprints":input_fingerprints,
+        "base_seed":seed, "iters":iters, "samples":samples,
+        "selection":{"top":top,"min_regret_bits":min_regret.to_bits()},
+    });
+    let audit_fingerprint = config_fingerprint(&audit);
+    audit
+        .as_object_mut()
+        .unwrap()
+        .insert("config_fingerprint".into(), audit_fingerprint.into());
+
+    let candidates: Vec<Candidate> = rows
+        .into_iter()
+        .enumerate()
+        .filter(|(rank, _)| *rank >= candidate_range.0 && *rank <= candidate_range.1)
+        .map(|(rank, row)| Candidate { rank, row })
+        .collect();
+    for candidate in &candidates {
+        bind_offline_candidate(&files, candidate);
+    }
+    let src = load_sources(dex, root);
+    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    eprintln!(
+        "allocation-audit candidates {} iters {iters} samples {samples} threads {threads}",
+        candidates.len()
+    );
+
+    let cursor = AtomicUsize::new(0);
+    let done = AtomicUsize::new(0);
+    let out = Mutex::new(Vec::new());
+    std::thread::scope(|scope| {
+        for _ in 0..threads.max(1) {
+            scope.spawn(|| loop {
+                let index = cursor.fetch_add(1, Ordering::Relaxed);
+                if index >= candidates.len() {
+                    return;
+                }
+                let row = allocation_audit_candidate(
+                    dex,
+                    &src,
+                    &pool,
+                    &files,
+                    &candidates[index],
+                    &audit,
+                    iters,
+                    samples,
+                    seed,
+                );
+                out.lock().unwrap().push(row);
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if n.is_multiple_of(10) || n == candidates.len() {
+                    eprintln!("  {n}/{} candidates", candidates.len());
+                }
+            });
+        }
+    });
+    write_rows(out_path, out.into_inner().unwrap());
+    eprintln!("done -> {out_path}");
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_confirm(
     dex: &Dex,
     root: &Path,
@@ -2065,7 +2333,7 @@ fn run_confirm(
             (line_no, row)
         })
         .collect();
-    let discovery = validate_screen_artifact(input, &artifact, false, &corpus_fingerprint);
+    let discovery = validate_screen_artifact(input, &artifact, false, &corpus_fingerprint, true);
     let mut rows: Vec<serde_json::Value> = artifact
         .into_iter()
         .filter(|(_, row)| row.get("skip").is_none())
@@ -2203,7 +2471,7 @@ fn run_live_confirm(
             (line_no, row)
         })
         .collect();
-    let discovery = validate_screen_artifact(input, &artifact, true, &source_id);
+    let discovery = validate_screen_artifact(input, &artifact, true, &source_id, true);
     let mut rows: Vec<serde_json::Value> = artifact
         .into_iter()
         .filter(|(_, row)| row.get("skip").is_none())
@@ -2334,6 +2602,7 @@ fn main() {
         match mode.as_str() {
             "screen" => "tmp/regret-screen.jsonl",
             "confirm" => "tmp/regret-confirm.jsonl",
+            "allocation-audit" => "tmp/root-allocation-audit.jsonl",
             "live-screen" => "tmp/live-regret-screen.jsonl",
             "live-confirm" => "tmp/live-regret-confirm.jsonl",
             _ => "tmp/regret.jsonl",
@@ -2368,6 +2637,20 @@ fn main() {
             seed,
             &out,
         ),
+        "allocation-audit" => run_allocation_audit(
+            &dex,
+            &root,
+            &corpus,
+            &arg_s(&args, "--input", "tmp/regret-screen.jsonl"),
+            arg(&args, "--top", 100),
+            range(&arg_s(&args, "--candidates", "0-99")),
+            arg_f(&args, "--min-regret", 0.0),
+            arg_u32(&args, "--iters", 10_000),
+            samples,
+            threads,
+            seed,
+            &out,
+        ),
         "live-screen" => run_live_screen(
             &dex,
             &root,
@@ -2392,7 +2675,10 @@ fn main() {
             seed,
             &out,
         ),
-        other => panic!("unknown --mode {other}; use screen|confirm|live-screen|live-confirm"),
+        other => panic!(
+            "unknown --mode {other}; use \
+             screen|confirm|allocation-audit|live-screen|live-confirm"
+        ),
     }
 }
 
@@ -2585,17 +2871,29 @@ mod live_tests {
         success["state_keys"] = serde_json::json!(["state128:00000000000000000000000000000001"]);
         let artifact = vec![(1, success), (2, skipped)];
         assert_eq!(
-            validate_screen_artifact("synthetic", &artifact, false, source),
+            validate_screen_artifact("synthetic", &artifact, false, source, true),
             run
         );
+        let mut foreign = artifact.clone();
+        for (_, row) in &mut foreign {
+            row["run"]["build_identity"] = "nc2000-bot@foreign;exe=fnv1a64:aaaaaaaaaaaaaaaa".into();
+            let mut body = row["run"].clone();
+            body.as_object_mut().unwrap().remove("config_fingerprint");
+            row["run"]["config_fingerprint"] = config_fingerprint(&body).into();
+        }
+        validate_screen_artifact("foreign", &foreign, false, source, false);
         assert!(std::panic::catch_unwind(|| {
-            validate_screen_artifact("synthetic", &artifact[..1], false, source)
+            validate_screen_artifact("foreign", &foreign, false, source, true)
+        })
+        .is_err());
+        assert!(std::panic::catch_unwind(|| {
+            validate_screen_artifact("synthetic", &artifact[..1], false, source, true)
         })
         .is_err());
 
         let legacy = vec![(1, screen_row())];
         assert!(std::panic::catch_unwind(|| {
-            validate_screen_artifact("synthetic", &legacy, false, "fnv1a64:test:1files")
+            validate_screen_artifact("synthetic", &legacy, false, "fnv1a64:test:1files", true)
         })
         .is_err());
     }
