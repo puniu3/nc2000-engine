@@ -27,6 +27,7 @@ else
 	cargo build --release -p nc2000-bot --example arena
 	arena=target/release/examples/arena
 fi
+export NC2000_REPO_ROOT=${NC2000_REPO_ROOT:-$PWD}
 
 case "$stage" in
 	discovery) seeds=(1700000001 1700000002 1700000003 1700000004) ;;
