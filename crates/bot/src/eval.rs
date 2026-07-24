@@ -85,9 +85,15 @@ pub struct EvalWeights {
     /// live value is always 3/24 = 1/8, but the layer count is read rather
     /// than assumed so the term stays correct if that ever changes.
     ///
-    /// Scaled like `hp`, i.e. 1.0 means "each exposed benched mon is worth
-    /// exactly its switch-in damage less" — an upper bound, since not every
-    /// benched mon switches in. 0.0 = off, pending the M16a calibration gate.
+    /// Scaled like `hp`, so the weight reads as **the expected number of
+    /// Spikes triggers per exposed benched mon**. 1.0 = each benched mon
+    /// eats the hazard exactly once. Values above 1.0 are the expected case,
+    /// not an overshoot: one Spikes pays out on *every* switch-in for the
+    /// rest of the game, and mons re-enter. `party` holds the picked three
+    /// after preview (`turn.rs` rebuilds it at the Team action), so at most
+    /// two mons are ever exposed — a weight of 2.8 is "~5.6 triggers per
+    /// game", which is unremarkable across the corpus's 21.4-turn average.
+    /// 0.0 = off, pending the M16a calibration gate.
     pub spikes: f64,
 }
 
