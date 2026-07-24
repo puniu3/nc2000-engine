@@ -18,11 +18,21 @@ case "$profile" in
 	smoke|full) ;;
 	*) echo "PROFILE must be smoke or full" >&2; exit 2 ;;
 esac
+fixed_args=()
+if [[ "$profile" == full ]]; then
+	fixed_args=(--max-turns 1000)
+fi
 for arg in "${extra_args[@]}"; do
 	case "$arg" in
 		--profile|--shard-size|--manifest-out|--job-start|--job-end|--out)
 			echo "wrapper owns $arg" >&2
 			exit 2
+			;;
+		--max-turns)
+			if [[ "$profile" == full ]]; then
+				echo "full wrapper fixes --max-turns at 1000" >&2
+				exit 2
+			fi
 			;;
 	esac
 done
@@ -65,6 +75,7 @@ trap 'exit 143' TERM
 
 "$gauntlet" \
 	--profile "$profile" \
+	"${fixed_args[@]}" \
 	"${extra_args[@]}" \
 	--shard-size "$shard_jobs" \
 	--manifest-out "$candidate"
@@ -100,6 +111,7 @@ while IFS=$'\t' read -r start end filename; do
 	current_tmp=$(mktemp "$output_dir/.$filename.tmp.XXXXXX")
 	"$gauntlet" \
 		--profile "$profile" \
+		"${fixed_args[@]}" \
 		"${extra_args[@]}" \
 		--job-start "$start" \
 		--job-end "$end" \

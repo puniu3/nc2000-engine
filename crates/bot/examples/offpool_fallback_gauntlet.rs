@@ -203,6 +203,13 @@ struct Summary {
     legacy_mean: Option<f64>,
     layered_mean: Option<f64>,
     mean_paired_delta: Option<f64>,
+    paired_orientation_blocks: usize,
+    valid_paired_orientation_blocks: usize,
+    excluded_paired_orientation_blocks: usize,
+    paired_block_delta_mean: Option<f64>,
+    paired_block_delta_ci95: Option<f64>,
+    paired_block_delta_lower95: Option<f64>,
+    paired_block_delta_upper95: Option<f64>,
     delta_positive: usize,
     delta_zero: usize,
     delta_negative: usize,
@@ -874,6 +881,46 @@ fn summarize(rows: &[PairRow]) -> Summary {
         (!valid.is_empty()).then(|| valid.iter().map(side).sum::<f64>() / valid.len() as f64)
     };
     let deltas: Vec<_> = valid.iter().map(|&(new, old)| new - old).collect();
+    let mut paired_orientation_blocks = 0;
+    let mut paired_block_deltas = Vec::new();
+    let mut index = 0;
+    while index + 1 < rows.len() {
+        let first = &rows[index];
+        let second = &rows[index + 1];
+        let is_orientation_block = first.job + 1 == second.job
+            && first.custom_id == second.custom_id
+            && first.pilot_id == second.pilot_id
+            && first.game % 2 == 0
+            && second.game == first.game + 1
+            && !first.custom_is_p1
+            && second.custom_is_p1
+            && first.battle_seed == second.battle_seed;
+        if is_orientation_block {
+            paired_orientation_blocks += 1;
+            if let (Some(first_delta), Some(second_delta)) = (
+                first.delta_layered_minus_legacy,
+                second.delta_layered_minus_legacy,
+            ) {
+                paired_block_deltas.push((first_delta + second_delta) / 2.0);
+            }
+            index += 2;
+        } else {
+            index += 1;
+        }
+    }
+    let paired_block_delta_mean = (!paired_block_deltas.is_empty())
+        .then(|| paired_block_deltas.iter().sum::<f64>() / paired_block_deltas.len() as f64);
+    let paired_block_delta_ci95 = paired_block_delta_mean.and_then(|mean| {
+        (paired_block_deltas.len() >= 2).then(|| {
+            let n = paired_block_deltas.len() as f64;
+            let variance = paired_block_deltas
+                .iter()
+                .map(|delta| (delta - mean).powi(2))
+                .sum::<f64>()
+                / (n - 1.0);
+            1.96 * (variance / n).sqrt()
+        })
+    });
     let rate = |count: usize, total: usize| {
         if total == 0 {
             0.0
@@ -935,6 +982,17 @@ fn summarize(rows: &[PairRow]) -> Summary {
         layered_mean: mean(|&(new, _)| new),
         mean_paired_delta: (!deltas.is_empty())
             .then(|| deltas.iter().sum::<f64>() / deltas.len() as f64),
+        paired_orientation_blocks,
+        valid_paired_orientation_blocks: paired_block_deltas.len(),
+        excluded_paired_orientation_blocks: paired_orientation_blocks - paired_block_deltas.len(),
+        paired_block_delta_mean,
+        paired_block_delta_ci95,
+        paired_block_delta_lower95: paired_block_delta_mean
+            .zip(paired_block_delta_ci95)
+            .map(|(mean, ci)| mean - ci),
+        paired_block_delta_upper95: paired_block_delta_mean
+            .zip(paired_block_delta_ci95)
+            .map(|(mean, ci)| mean + ci),
         delta_positive: deltas.iter().filter(|&&delta| delta > 0.0).count(),
         delta_zero: deltas.iter().filter(|&&delta| delta == 0.0).count(),
         delta_negative: deltas.iter().filter(|&&delta| delta < 0.0).count(),
@@ -974,6 +1032,11 @@ fn run_identity(cfg: &Config, prepared: &Prepared, jobs: &[Job]) -> Value {
         "baked_preview_tables": false,
         "opponent_contract": "every custom exact-off-pool and preview-fallback",
         "pairing": "same battle/evaluated-agent/reference-agent seeds per A/B arm; orientations alternate; adjacent orientations share battle seed",
+        "inference": {
+            "sample_unit": "mean A/B delta over each adjacent same-battle-seed side-swapped orientation block",
+            "estimate": "arithmetic mean of paired orientation-block deltas",
+            "ci95": "normal 1.96 * sample-standard-error across orientation blocks; null with fewer than two valid blocks",
+        },
         "strength_filter": "include only pairs where both arms reached a terminal outcome; exclude caps and invalids",
         "certification": {
             "invalid_arms": 0,
@@ -1350,7 +1413,7 @@ mod tests {
             pilot_id: "pilot".into(),
             pilot_fingerprint: "pilot-fp".into(),
             game: job,
-            custom_is_p1: false,
+            custom_is_p1: job % 2 == 1,
             battle_seed: "1,2,3,4".into(),
             evaluated_agent_seed: 1,
             reference_agent_seed: 2,
@@ -1442,11 +1505,49 @@ mod tests {
         assert_eq!(summary.valid_pairs, 1);
         assert_eq!(summary.excluded_pairs, 2);
         assert_eq!(summary.mean_paired_delta, Some(1.0));
+        assert_eq!(summary.paired_orientation_blocks, 1);
+        assert_eq!(summary.valid_paired_orientation_blocks, 0);
+        assert_eq!(summary.excluded_paired_orientation_blocks, 1);
+        assert_eq!(summary.paired_block_delta_ci95, None);
         assert_eq!(summary.legacy_only_incomplete_pairs, 1);
         assert_eq!(summary.both_incomplete_pairs, 1);
         assert_eq!(summary.asymmetric_incomplete_pairs, 1);
         assert_eq!((summary.legacy_invalid, summary.layered_invalid), (1, 1));
         assert!(!summary.certified);
         assert_eq!(summary.certification_failures.len(), 3);
+    }
+
+    #[test]
+    fn paired_ci_uses_side_swapped_battle_seed_blocks() {
+        let rows = vec![
+            row(
+                0,
+                arm(FallbackPolicy::LegacyMetaOnly.id(), "outcome", Some(0.0)),
+                arm(FallbackPolicy::Layered.id(), "outcome", Some(1.0)),
+            ),
+            row(
+                1,
+                arm(FallbackPolicy::LegacyMetaOnly.id(), "outcome", Some(0.0)),
+                arm(FallbackPolicy::Layered.id(), "outcome", Some(0.0)),
+            ),
+            row(
+                2,
+                arm(FallbackPolicy::LegacyMetaOnly.id(), "outcome", Some(1.0)),
+                arm(FallbackPolicy::Layered.id(), "outcome", Some(0.0)),
+            ),
+            row(
+                3,
+                arm(FallbackPolicy::LegacyMetaOnly.id(), "outcome", Some(0.0)),
+                arm(FallbackPolicy::Layered.id(), "outcome", Some(0.0)),
+            ),
+        ];
+        let summary = summarize(&rows);
+        assert_eq!(summary.paired_orientation_blocks, 2);
+        assert_eq!(summary.valid_paired_orientation_blocks, 2);
+        assert_eq!(summary.excluded_paired_orientation_blocks, 0);
+        assert_eq!(summary.paired_block_delta_mean, Some(0.0));
+        assert!((summary.paired_block_delta_ci95.unwrap() - 0.98).abs() < 1e-12);
+        assert_eq!(summary.paired_block_delta_lower95, Some(-0.98));
+        assert_eq!(summary.paired_block_delta_upper95, Some(0.98));
     }
 }

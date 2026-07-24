@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import math
 import os
 import tempfile
 from pathlib import Path
@@ -122,6 +123,15 @@ def validate_manifest(path: Path) -> dict[str, Any]:
         manifest["run_fingerprint"] == fingerprint("m17d-run-v1", run),
         f"{path}: semantic run fingerprint mismatch",
     )
+    require(
+        run["semantic_config"].get("inference")
+        == {
+            "sample_unit": "mean A/B delta over each adjacent same-battle-seed side-swapped orientation block",
+            "estimate": "arithmetic mean of paired orientation-block deltas",
+            "ci95": "normal 1.96 * sample-standard-error across orientation blocks; null with fewer than two valid blocks",
+        },
+        f"{path}: unrecognized inference contract",
+    )
 
     jobs = manifest["jobs"]
     total = manifest["total_jobs"]
@@ -161,6 +171,46 @@ def validate_manifest(path: Path) -> dict[str, Any]:
                 isinstance(job.get(field), int) and 0 <= job[field] <= MASK64,
                 f"{path}: job {index} has invalid {field}",
             )
+    games = run["semantic_config"].get("games_per_matchup")
+    pilots = len(run["selected_pilots"])
+    custom = len(run["selected_custom"])
+    require(
+        isinstance(games, int) and games > 0,
+        f"{path}: semantic games_per_matchup is invalid",
+    )
+    require(
+        total == custom * pilots * games,
+        f"{path}: workload size disagrees with team/matchup config",
+    )
+    for index, job in enumerate(jobs):
+        matchup, expected_game = divmod(index, games)
+        expected_custom, expected_pilot = divmod(matchup, pilots)
+        require(
+            (
+                job["custom"],
+                job["pilot"],
+                job["game"],
+                job["custom_is_p1"],
+            )
+            == (
+                expected_custom,
+                expected_pilot,
+                expected_game,
+                bool(expected_game % 2),
+            ),
+            f"{path}: job {index} violates deterministic matchup/orientation order",
+        )
+        if expected_game % 2:
+            previous = jobs[index - 1]
+            require(
+                previous["custom"] == job["custom"]
+                and previous["pilot"] == job["pilot"]
+                and previous["game"] + 1 == job["game"]
+                and previous["custom_is_p1"] is False
+                and job["custom_is_p1"] is True
+                and previous["battle_seed"] == job["battle_seed"],
+                f"{path}: job {index - 1}/{index} is not a side-swapped seed block",
+            )
 
     ranges = manifest["shards"]
     require(isinstance(ranges, list) and ranges, f"{path}: empty shard plan")
@@ -195,6 +245,30 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         if row["layered"]["score"] is not None and row["legacy"]["score"] is not None
     ]
     deltas = [new - old for new, old in valid]
+    paired_blocks = 0
+    block_deltas = []
+    index = 0
+    while index + 1 < len(rows):
+        first, second = rows[index], rows[index + 1]
+        is_block = (
+            first["job"] + 1 == second["job"]
+            and first["custom_id"] == second["custom_id"]
+            and first["pilot_id"] == second["pilot_id"]
+            and first["game"] % 2 == 0
+            and second["game"] == first["game"] + 1
+            and first["custom_is_p1"] is False
+            and second["custom_is_p1"] is True
+            and first["battle_seed"] == second["battle_seed"]
+        )
+        if is_block:
+            paired_blocks += 1
+            first_delta = first["delta_layered_minus_legacy"]
+            second_delta = second["delta_layered_minus_legacy"]
+            if first_delta is not None and second_delta is not None:
+                block_deltas.append((first_delta + second_delta) / 2)
+            index += 2
+        else:
+            index += 1
 
     def mean(values: list[float]) -> float | None:
         return sum(values) / len(values) if values else None
@@ -236,6 +310,13 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         )
     if asymmetric:
         failures.append(f"asymmetric incomplete pairs: {asymmetric}")
+    block_mean = mean(block_deltas)
+    block_ci95 = None
+    if len(block_deltas) >= 2:
+        variance = sum((delta - block_mean) ** 2 for delta in block_deltas) / (
+            len(block_deltas) - 1
+        )
+        block_ci95 = 1.96 * math.sqrt(variance / len(block_deltas))
     return {
         "pairs": len(rows),
         "valid_pairs": len(valid),
@@ -247,6 +328,17 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "legacy_mean": mean([old for _, old in valid]),
         "layered_mean": mean([new for new, _ in valid]),
         "mean_paired_delta": mean(deltas),
+        "paired_orientation_blocks": paired_blocks,
+        "valid_paired_orientation_blocks": len(block_deltas),
+        "excluded_paired_orientation_blocks": paired_blocks - len(block_deltas),
+        "paired_block_delta_mean": block_mean,
+        "paired_block_delta_ci95": block_ci95,
+        "paired_block_delta_lower95": (
+            block_mean - block_ci95 if block_ci95 is not None else None
+        ),
+        "paired_block_delta_upper95": (
+            block_mean + block_ci95 if block_ci95 is not None else None
+        ),
         "delta_positive": sum(delta > 0 for delta in deltas),
         "delta_zero": sum(delta == 0 for delta in deltas),
         "delta_negative": sum(delta < 0 for delta in deltas),
@@ -471,6 +563,17 @@ def merge_artifacts(
         and summary["certified"],
         "merged artifact contains cap/invalid/incomplete results",
     )
+    if manifest["run"]["semantic_config"]["profile"] == "full":
+        require(
+            manifest["run"]["semantic_config"]["games_per_matchup"] % 2 == 0
+            and summary["paired_orientation_blocks"]
+            == manifest["total_jobs"] // 2
+            and summary["valid_paired_orientation_blocks"]
+            == summary["paired_orientation_blocks"]
+            and summary["excluded_paired_orientation_blocks"] == 0
+            and summary["paired_block_delta_ci95"] is not None,
+            "full profile lacks complete side-swapped inference blocks",
+        )
     trailer = {
         "schema": GAUNTLET_SCHEMA,
         "kind": "summary",
@@ -483,7 +586,17 @@ def merge_artifacts(
         + "\n"
         for record in records
     )
-    atomic_write(output, text)
+    if output.exists():
+        try:
+            existing = output.read_text()
+        except (OSError, UnicodeDecodeError) as error:
+            raise ValidationError(f"{output}: unreadable existing merge: {error}") from error
+        require(
+            existing == text,
+            f"{output}: refusing to overwrite a mismatched existing merge",
+        )
+    else:
+        atomic_write(output, text)
     return summary
 
 
@@ -501,7 +614,7 @@ def self_test() -> None:
                 "pilot": 0,
                 "game": index,
                 "custom_is_p1": bool(index % 2),
-                "battle_seed": f"{index},2,3,4",
+                "battle_seed": f"{index // 2},2,3,4",
                 "evaluated_agent_seed": index + 10,
                 "reference_agent_seed": index + 20,
             }
@@ -514,11 +627,18 @@ def self_test() -> None:
             "selected_custom": [{"id": "custom", "fingerprint": custom_fp}],
             "selected_pilots": [{"id": "pilot", "fingerprint": pilot_fp}],
             "semantic_config": {
+                "profile": "smoke",
                 "seed": 1,
+                "games_per_matchup": 2,
                 "max_turns": 500,
                 "agent": {
                     "evaluated_policy_a": "legacy",
                     "evaluated_policy_b": "layered",
+                },
+                "inference": {
+                    "sample_unit": "mean A/B delta over each adjacent same-battle-seed side-swapped orientation block",
+                    "estimate": "arithmetic mean of paired orientation-block deltas",
+                    "ci95": "normal 1.96 * sample-standard-error across orientation blocks; null with fewer than two valid blocks",
                 },
             },
             "workload_fingerprint": fingerprint("m17d-workload-v1", jobs),

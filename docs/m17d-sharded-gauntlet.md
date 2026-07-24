@@ -12,6 +12,8 @@ This produces 72 half-open job ranges, `shard-START-END.jsonl`, and then
 `merged.jsonl`. Re-running the same command validates and skips completed
 shards. A changed executable, input dataset, selected team, semantic config,
 seed, shard plan, or workload refuses resume instead of mixing lineages.
+The wrapper fixes the full profile's turn cap at 1,000; the earlier 500-turn
+diagnostic capped one layered arm and was uncertified.
 
 For a staged/spot worker, copy the release example binary, `tools/`, and the
 data/fixture inputs, then set:
@@ -26,15 +28,20 @@ tools/run-m17d-shards.sh "$CX_OUT" 64 full --threads 16
 planned battle/agent seed. The merger requires exactly one row for every job,
 checks the seed and team lineage, recomputes every shard summary/fingerprint,
 and rejects any missing/duplicate/reordered row, invalid arm, turn cap, score
-inconsistency, or mismatched shard. Shard and merged writes use same-directory
-temporary files followed by atomic rename.
+inconsistency, or mismatched shard. Each adjacent, same-battle-seed
+side-swapped orientation pair is one inference block. The preregistered effect
+estimate is the mean of those block-level layered-minus-legacy deltas; its 95%
+interval is `mean ± 1.96 × sample standard error` over blocks. A full merge
+requires all 2,304 blocks and reports the block mean, half-width, and bounds.
+Shard writes use same-directory temporary files followed by no-clobber atomic
+publication; an existing merged artifact is accepted only when byte-identical.
 
 Standalone operations:
 
 ```bash
 # Plan only (no games).
 target/release/examples/offpool_fallback_gauntlet \
-  --profile full --shard-size 64 \
+  --profile full --max-turns 1000 --shard-size 64 \
   --manifest-out tmp/m17d-full/manifest.json
 
 # Validate one shard.
