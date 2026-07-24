@@ -55,15 +55,25 @@ Key checkpoints:
    `--mode open --opp-team-file F` wherever the opponent's sheet is genuinely
    available. Expect roughly 11–20 s/move (single-threaded wasm-in-node) — well
    inside the 150 s per-turn budget, but budget the wall-clock per game.
-3. **Undecided:** the "still live" strengthening tails in the M17 README entry —
-   eval features for the top corpus conditions (turn-weighted: Spikes 21.4%,
-   sleep counter 20.1%, Substitute 9.2%, confusion 8.6%), weight re-tuning on
-   the fixed eval (re-run M6's plateau conclusion, seed-paired), and the M16b
-   cluster items. Each is strengthening work, not verification, and none is
-   scheduled. Decide per item: do it under the standing seed-paired arena gate,
-   or park it explicitly. M17 cannot close while this is unrecorded.
-4. After the M17d result and the item-3 decision, update the M17 entries in
-   `README.md`, run the product regression suite, and close M17.
+3. **Strengthening tails — ALL ACCEPTED (owner), none parked.** Full status and
+   the re-derived cluster ranking are in the M17 README entry. Work order:
+   1. **Spikes eval feature** — the largest measured blind spot (21.4%
+      turn-weighted) and `eval.rs` has no term for it at all.
+   2. **Voluntary switching** — M16b's worst stratum by a wide margin
+      (`kind=switch` top-1 24.9% vs move 42.8%). Touches L2 rollout as much as
+      L1 eval, so expect it to be the biggest of the five.
+   3. **Confusion eval feature** (8.6%), the second missing term.
+   4. **Status-move valuation**, then the Curse/Body Slam, Rest, and Perish
+      Song clusters — likely overlapping causes, so re-measure M16b between
+      them rather than fixing all four blind.
+   5. **Weight re-tuning** last: it re-runs M6's SPSA plateau conclusion against
+      whatever eval the items above leave behind, so doing it earlier wastes it.
+
+   Every item takes the standing gate: seed-paired arena (`--ab` +
+   `eval_ab_duel`) vs the M16-exit bot, then ladder. Re-run
+   `tools/aggregate-human-agreement.py` after each to check the cluster moved.
+4. After the M17d result and the tails, update the M17 entries in `README.md`,
+   run the product regression suite, and close M17.
 
 Do **not** run the Web open-sheet budget gate: it is parked, and its manifest
 exists so that reopening is cheap, not as a queued task. Reopen conditions are
