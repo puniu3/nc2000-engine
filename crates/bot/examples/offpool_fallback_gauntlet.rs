@@ -21,6 +21,11 @@
 //! Determinism/self-contract check (no full run):
 //!
 //!   cargo run -p nc2000-bot --example offpool_fallback_gauntlet -- --self-test
+//!
+//! Spot-safe sharding (ranges are half-open and preserve the full workload):
+//!
+//!   --shard-size 64 --manifest-out tmp/m17d-full/manifest.json
+//!   --job-start 0 --job-end 64 --out tmp/m17d-full/shard-000000-000064.jsonl
 
 use std::collections::HashSet;
 use std::io::Write;
@@ -43,6 +48,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 const SCHEMA: &str = "nc2000-m17d-offpool-gauntlet-v1";
+const SHARD_MANIFEST_SCHEMA: &str = "nc2000-m17d-offpool-shard-manifest-v1";
 
 #[derive(Clone, Debug, Serialize)]
 struct Config {
@@ -122,6 +128,34 @@ struct Job {
     battle_seed: String,
     evaluated_agent_seed: u64,
     reference_agent_seed: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+struct ShardRange {
+    start: usize,
+    end: usize,
+    file: String,
+}
+
+#[derive(Serialize)]
+struct ShardManifestBody<'a> {
+    schema: &'static str,
+    run_fingerprint: &'a str,
+    run: &'a Value,
+    total_jobs: usize,
+    jobs: &'a [Job],
+    shards: &'a [ShardRange],
+}
+
+#[derive(Serialize)]
+struct ShardManifest<'a> {
+    schema: &'static str,
+    run_fingerprint: &'a str,
+    run: &'a Value,
+    total_jobs: usize,
+    jobs: &'a [Job],
+    shards: &'a [ShardRange],
+    manifest_fingerprint: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -257,6 +291,23 @@ fn file_fingerprint(path: &Path, tag: &str) -> String {
 
 fn canonical_fingerprint(tag: &str, value: &impl Serialize) -> String {
     fingerprint(tag, &serde_json::to_vec(value).unwrap())
+}
+
+fn atomic_write(path: &Path, bytes: &[u8]) {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    let tmp = path.with_extension(format!(
+        "{}.tmp.{}",
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("out"),
+        std::process::id(),
+    ));
+    let mut file = std::fs::File::create(&tmp).unwrap();
+    file.write_all(bytes).unwrap();
+    file.sync_all().unwrap();
+    std::fs::rename(tmp, path).unwrap();
 }
 
 fn preview_fallback_layers(
@@ -978,7 +1029,65 @@ fn semantic_run_fingerprint(identity: &Value) -> String {
     )
 }
 
-fn header(run: Value, run_fingerprint: &str, prepared: &Prepared) -> Value {
+fn semantic_run_identity(identity: &Value) -> Value {
+    json!({
+        "schema": identity["schema"],
+        "build": identity["build"],
+        "inputs": identity["inputs"],
+        "selected_custom": identity["selected_custom"],
+        "selected_pilots": identity["selected_pilots"],
+        "semantic_config": identity["semantic_config"],
+        "workload_fingerprint": identity["workload_fingerprint"],
+    })
+}
+
+fn shard_ranges(total_jobs: usize, shard_size: usize) -> Vec<ShardRange> {
+    assert!(shard_size > 0, "--shard-size must be positive");
+    let mut ranges = Vec::new();
+    let mut start = 0;
+    while start < total_jobs {
+        let end = start.saturating_add(shard_size).min(total_jobs);
+        ranges.push(ShardRange {
+            start,
+            end,
+            file: format!("shard-{start:06}-{end:06}.jsonl"),
+        });
+        start = end;
+    }
+    ranges
+}
+
+fn write_shard_manifest(
+    path: &Path,
+    identity: &Value,
+    run_fingerprint: &str,
+    jobs: &[Job],
+    shard_size: usize,
+) {
+    let run = semantic_run_identity(identity);
+    let shards = shard_ranges(jobs.len(), shard_size);
+    let body = ShardManifestBody {
+        schema: SHARD_MANIFEST_SCHEMA,
+        run_fingerprint,
+        run: &run,
+        total_jobs: jobs.len(),
+        jobs,
+        shards: &shards,
+    };
+    let manifest = ShardManifest {
+        schema: body.schema,
+        run_fingerprint: body.run_fingerprint,
+        run: body.run,
+        total_jobs: body.total_jobs,
+        jobs: body.jobs,
+        shards: body.shards,
+        manifest_fingerprint: canonical_fingerprint("m17d-shard-manifest-v1", &body),
+    };
+    let output = format!("{}\n", serde_json::to_string_pretty(&manifest).unwrap());
+    atomic_write(path, output.as_bytes());
+}
+
+fn header(run: Value, run_fingerprint: &str, prepared: &Prepared, shard: Option<Value>) -> Value {
     let custom: Vec<_> = prepared
         .custom
         .iter()
@@ -1006,14 +1115,18 @@ fn header(run: Value, run_fingerprint: &str, prepared: &Prepared) -> Value {
             })
         })
         .collect();
-    json!({
+    let mut value = json!({
         "schema": SCHEMA,
         "kind": "run",
         "run_fingerprint": run_fingerprint,
         "run": run,
         "custom_teams": custom,
         "pilot_teams": pilots,
-    })
+    });
+    if let Some(shard) = shard {
+        value["shard"] = shard;
+    }
+    value
 }
 
 fn self_test() {
@@ -1072,6 +1185,17 @@ fn self_test() {
         semantic_run_fingerprint(&run_identity(&other_threads, &prepared, &jobs)),
         "execution thread count contaminated semantic run identity"
     );
+    let ranges = shard_ranges(jobs.len(), 2);
+    assert_eq!(ranges.first().unwrap().start, 0);
+    assert_eq!(ranges.last().unwrap().end, jobs.len());
+    assert!(ranges.windows(2).all(|pair| pair[0].end == pair[1].start));
+    assert_eq!(
+        ranges
+            .iter()
+            .map(|range| range.end - range.start)
+            .sum::<usize>(),
+        jobs.len()
+    );
     eprintln!(
         "self-test passed: {} custom sources, {} seed-paired jobs; threads 1 == 3; invalid legacy/layered {}/{}; caps {}/{}",
         prepared.custom.len(),
@@ -1094,11 +1218,68 @@ fn main() {
     let jobs = plan_jobs(&cfg, &prepared);
     let identity = run_identity(&cfg, &prepared, &jobs);
     let run_fingerprint = semantic_run_fingerprint(&identity);
-    let rows = run_rows(&cfg, &prepared, &jobs, &run_fingerprint, cfg.threads);
+    if let Some(shard_size) = flag(&args, "--shard-size") {
+        let shard_size: usize = shard_size.parse().expect("--shard-size");
+        let path = flag(&args, "--manifest-out")
+            .map(PathBuf::from)
+            .expect("--shard-size requires --manifest-out");
+        write_shard_manifest(&path, &identity, &run_fingerprint, &jobs, shard_size);
+        eprintln!(
+            "wrote {}-job shard manifest to {}",
+            jobs.len(),
+            path.display()
+        );
+        return;
+    }
+    assert!(
+        flag(&args, "--manifest-out").is_none(),
+        "--manifest-out requires --shard-size"
+    );
+    let job_start = flag(&args, "--job-start").map(|value| {
+        value
+            .parse::<usize>()
+            .expect("--job-start must be an integer")
+    });
+    let job_end = flag(&args, "--job-end").map(|value| {
+        value
+            .parse::<usize>()
+            .expect("--job-end must be an integer")
+    });
+    assert_eq!(
+        job_start.is_some(),
+        job_end.is_some(),
+        "--job-start and --job-end must be supplied together"
+    );
+    let (job_start, job_end, shard) = match (job_start, job_end) {
+        (Some(start), Some(end)) => {
+            assert!(start < end, "job range must be non-empty");
+            assert!(end <= jobs.len(), "--job-end exceeds workload");
+            (
+                start,
+                end,
+                Some(json!({
+                    "job_start": start,
+                    "job_end": end,
+                    "total_jobs": jobs.len(),
+                })),
+            )
+        }
+        (None, None) => (0, jobs.len(), None),
+        _ => unreachable!(),
+    };
+    let rows = run_rows(
+        &cfg,
+        &prepared,
+        &jobs[job_start..job_end],
+        &run_fingerprint,
+        cfg.threads,
+    );
     let summary = summarize(&rows);
 
     let mut lines = Vec::with_capacity(rows.len() + 2);
-    lines.push(serde_json::to_string(&header(identity, &run_fingerprint, &prepared)).unwrap());
+    lines.push(
+        serde_json::to_string(&header(identity, &run_fingerprint, &prepared, shard)).unwrap(),
+    );
     lines.extend(rows.iter().map(|row| serde_json::to_string(row).unwrap()));
     lines.push(
         serde_json::to_string(&json!({
@@ -1112,19 +1293,7 @@ fn main() {
     let output = format!("{}\n", lines.join("\n"));
     if let Some(path) = flag(&args, "--out") {
         let path = PathBuf::from(path);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-        let tmp = path.with_extension(format!(
-            "{}.tmp",
-            path.extension()
-                .and_then(|ext| ext.to_str())
-                .unwrap_or("jsonl")
-        ));
-        let mut file = std::fs::File::create(&tmp).unwrap();
-        file.write_all(output.as_bytes()).unwrap();
-        file.sync_all().unwrap();
-        std::fs::rename(tmp, &path).unwrap();
+        atomic_write(&path, output.as_bytes());
         eprintln!("wrote {} paired rows to {}", rows.len(), path.display());
     } else {
         print!("{output}");
