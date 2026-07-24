@@ -22,7 +22,17 @@
 //! bounds it. Re-run after any eval/search change — this is a regression
 //! net beside damage_conformance.
 //!
+//! Position sources (M16a specified both; `--corpus` was added in the M17
+//! tail). `--games N` = skuct self-play, `--corpus DIR` = real-game positions
+//! synthesized from the human spectator corpus through the M15 importer. They
+//! compose: pass both for the mixed set, or `--games 0 --corpus DIR` for
+//! corpus only. Self-play alone cannot calibrate a condition the bot is blind
+//! to, because it is the blind bot that decides how often the condition
+//! appears — Spikes is a few percent of self-play positions against 21.4%
+//! turn-weighted in the corpus.
+//!
 //! Smoke:  cargo run --release -p nc2000-bot --example eval_calibration -- --smoke
+//! Corpus: ... --games 0 --corpus tmp/corpus-spectator --battles 0-60 --ab
 //! Full:   ... --games 150 --per-game 4 --playouts 32 --gt-iters 300 (cx-scale)
 
 use std::io::Write as _;
@@ -30,6 +40,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use nc2000_bot::agent::Agent;
+use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct_context_with_pool};
 use nc2000_bot::eval::{eval01, EvalWeights};
 use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::rng::SplitMix64;
@@ -128,10 +139,21 @@ fn feat_presence(b: &Battle, fs: &[Feat]) -> Vec<u8> {
 
 struct Pos {
     battle: Battle,
+    /// 0 = skuct self-play, 1 = human corpus. Also a sort key, so the two
+    /// sources cannot interleave into a nondeterministic order.
+    src: u8,
     game: usize,
     turn: u16,
     presence: Vec<u8>,
     weather: bool,
+}
+
+fn arg_s(args: &[String], key: &str, default: &str) -> String {
+    args.iter()
+        .position(|a| a == key)
+        .and_then(|i| args.get(i + 1))
+        .cloned()
+        .unwrap_or_else(|| default.to_string())
 }
 
 fn arg(args: &[String], key: &str, default: usize) -> usize {
@@ -227,13 +249,101 @@ fn main() {
                 for (battle, turn) in reservoir {
                     let presence = feat_presence(&battle, &fs);
                     let weather = battle.field.weather.is_some();
-                    out.push(Pos { battle, game: g, turn, presence, weather });
+                    out.push(Pos { battle, src: 0, game: g, turn, presence, weather });
                 }
             });
         }
     });
+
+    // ---- phase 1b: corpus positions (M16a's second arm, --corpus DIR).
+    // Self-play alone systematically under-represents exactly the conditions
+    // the eval is blind to, because it is the blind bot that generates them:
+    // `greedy_pick` scores every status move 0, so Spikes shows up in a few
+    // percent of self-play positions against 21.4% turn-weighted in the human
+    // corpus. Fitting a condition weight there fits the distribution the blind
+    // spot produced. Reconstruction alone yields the position — `on_request`
+    // populates the synthesized battle — so no search runs here.
+    let corpus_dir = arg_s(&args, "--corpus", "");
+    if !corpus_dir.is_empty() {
+        let range = arg_s(&args, "--battles", "0-569");
+        let (lo, hi) = {
+            let mut it = range.split('-');
+            let lo: usize = it.next().unwrap_or("0").parse().unwrap_or(0);
+            let hi: usize = it.next().unwrap_or("569").parse().unwrap_or(569);
+            (lo, hi)
+        };
+        let sets_src = load_sources(&dex, &root);
+        let files: Vec<(usize, std::path::PathBuf)> = corpus_files(&root.join(&corpus_dir))
+            .into_iter()
+            .enumerate()
+            .filter(|(i, _)| *i >= lo && *i <= hi)
+            .collect();
+        eprintln!("corpus: {} battles (index {lo}-{hi}), <= {per_game} positions each", files.len());
+        let ccursor = AtomicUsize::new(0);
+        std::thread::scope(|scope| {
+            for _ in 0..threads.max(1) {
+                scope.spawn(|| loop {
+                    let j = ccursor.fetch_add(1, Ordering::Relaxed);
+                    if j >= files.len() {
+                        return;
+                    }
+                    let (battle_idx, path) = &files[j];
+                    let cb = load_battle(path);
+                    let mut rng =
+                        SplitMix64::new(seed ^ (*battle_idx as u64).wrapping_mul(0xD1B5_4A32));
+                    let mut reservoir: Vec<(Battle, u16)> = Vec::new();
+                    let mut seen = 0usize;
+                    for (di, d) in cb.decisions.iter().enumerate() {
+                        let dseed = seed
+                            ^ (*battle_idx as u64).wrapping_mul(0x9E37_79B9_7F4A)
+                            ^ (di as u64).wrapping_mul(0xBF58_476D)
+                            ^ d.side as u64;
+                        let Some(rec) = reconstruct_context_with_pool(
+                            &dex,
+                            &sets_src,
+                            pool.clone(),
+                            &cb.lines,
+                            &cb.evidence,
+                            d,
+                            dseed,
+                        ) else {
+                            continue;
+                        };
+                        let Some(battle) = rec.agent.battle().cloned() else {
+                            continue;
+                        };
+                        if battle.active_id(0).is_none() || battle.active_id(1).is_none() {
+                            continue;
+                        }
+                        seen += 1;
+                        let turn = battle.turn;
+                        if reservoir.len() < per_game {
+                            reservoir.push((battle, turn));
+                        } else if rng.next_f64() < per_game as f64 / seen as f64 {
+                            let slot = rng.below(per_game);
+                            reservoir[slot] = (battle, turn);
+                        }
+                    }
+                    let mut out = positions.lock().unwrap();
+                    for (battle, turn) in reservoir {
+                        let presence = feat_presence(&battle, &fs);
+                        let weather = battle.field.weather.is_some();
+                        out.push(Pos {
+                            battle,
+                            src: 1,
+                            game: *battle_idx,
+                            turn,
+                            presence,
+                            weather,
+                        });
+                    }
+                });
+            }
+        });
+    }
+
     let mut positions = positions.into_inner().unwrap();
-    positions.sort_by_key(|p| (p.game, p.turn)); // deterministic order
+    positions.sort_by_key(|p| (p.src, p.game, p.turn)); // deterministic order
     let n = positions.len();
     eprintln!("phase 1 done: {n} positions");
 
@@ -401,6 +511,15 @@ fn main() {
         variants.push(("spikes0.75", EvalWeights { spikes: 0.75, ..EvalWeights::default() }));
         variants.push(("spikes1.0", EvalWeights { spikes: 1.0, ..EvalWeights::default() }));
         variants.push(("spikes1.5", EvalWeights { spikes: 1.5, ..EvalWeights::default() }));
+        // The corpus smoke put the oriented bias at +0.133 with a slope near
+        // -0.048 per unit of weight, so the zero-crossing sits around 2.8 —
+        // past 1.0, i.e. past the raw switch-in chip damage. That is the
+        // expected shape if Spikes costs more than its HP: it taxes switching
+        // itself, which is the move it is played to punish. The sweep has to
+        // reach the crossing or it cannot locate it.
+        variants.push(("spikes2.0", EvalWeights { spikes: 2.0, ..EvalWeights::default() }));
+        variants.push(("spikes2.5", EvalWeights { spikes: 2.5, ..EvalWeights::default() }));
+        variants.push(("spikes3.0", EvalWeights { spikes: 3.0, ..EvalWeights::default() }));
 
         let feat_idx = |name: &str| fs.iter().position(|f| f.name == name).unwrap();
         let oriented_bias = |preds: &[f64], fi: usize| -> f64 {
