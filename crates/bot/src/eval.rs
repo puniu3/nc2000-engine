@@ -72,6 +72,23 @@ pub struct EvalWeights {
     /// Search-cutoff backup around 0.5. M6 used 0.5, compressing `eval01`
     /// into (0.25, 0.75); M17c uses 1.0 to retain probability semantics.
     pub leaf_alpha: f64,
+    /// Entry-hazard term (M17 tail): Spikes on the owning side. `eval01` has
+    /// no side-condition channel at all today, and Spikes is the most common
+    /// condition in the 570-battle spectator corpus (21.4% turn-weighted), so
+    /// every position it decides currently reads as material-neutral.
+    ///
+    /// The cost is not paid by the mon already in — it is paid once by each
+    /// living BENCHED mon when it next switches in, and Flying types never
+    /// pay it. Mirrors `conditions.rs` exactly: Flying immune, damage =
+    /// `AMOUNTS[layers] / 24` of max HP with `AMOUNTS = [0, 3, 4, 6]`. This
+    /// format never stacks past one layer (a re-cast is rejected), so the
+    /// live value is always 3/24 = 1/8, but the layer count is read rather
+    /// than assumed so the term stays correct if that ever changes.
+    ///
+    /// Scaled like `hp`, i.e. 1.0 means "each exposed benched mon is worth
+    /// exactly its switch-in damage less" — an upper bound, since not every
+    /// benched mon switches in. 0.0 = off, pending the M16a calibration gate.
+    pub spikes: f64,
 }
 
 impl Default for EvalWeights {
@@ -100,6 +117,7 @@ impl Default for EvalWeights {
             substitute: 0.5,
             race: 3.0,
             leaf_alpha: 1.0,
+            spikes: 0.0,
         }
     }
 }
@@ -144,6 +162,7 @@ impl EvalWeights {
             substitute: 0.5,
             race: 3.0,
             leaf_alpha: 1.0,
+            spikes: 0.0,
         }
     }
 }
@@ -300,10 +319,17 @@ fn side_score(b: &Battle, dex: &Dex, w: &EvalWeights, s: usize) -> f64 {
     let mut score = 0.0;
     let mut pp_num = 0.0;
     let mut pp_den = 0.0;
+    // Spikes is paid on switch-IN, so only living benched non-Flying mons owe
+    // it; the mon already on the field has paid or was never charged.
+    let active_slot = b.active_id(s).map(|id| id.slot);
+    let mut spikes_exposed = 0u32;
     for &slot in side.party.iter() {
         let p = &side.roster[slot as usize];
         if p.fainted || p.hp <= 0 {
             continue;
+        }
+        if active_slot != Some(slot) && !p.has_type(dex.known_types.flying) {
+            spikes_exposed += 1;
         }
         score += w.alive + w.hp * p.hp as f64 / p.maxhp as f64;
         score -= match p.status {
@@ -331,6 +357,17 @@ fn side_score(b: &Battle, dex: &Dex, w: &EvalWeights, s: usize) -> f64 {
     }
     if pp_den > 0.0 {
         score += w.pp * pp_num / pp_den;
+    }
+    if w.spikes != 0.0 && spikes_exposed > 0 {
+        if let Some(sp) = spikes_id(dex) {
+            if let Some(st) = side.side_condition(sp) {
+                // Engine parity (`conditions.rs` "spikes"/"onEntryHazard").
+                const AMOUNTS: [f64; 4] = [0.0, 3.0, 4.0, 6.0];
+                let layers = st.get_int(nc2000_engine::state::DK::Layers).clamp(0, 3);
+                let frac = AMOUNTS[layers as usize] / 24.0;
+                score -= w.spikes * frac * spikes_exposed as f64;
+            }
+        }
     }
     if let Some(id) = b.active_id(s) {
         let p = b.poke(id);
@@ -384,6 +421,11 @@ fn hiddenpower_id(dex: &Dex) -> Option<MoveId> {
 fn substitute_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
     static ID: OnceLock<Option<nc2000_engine::dex::CondId>> = OnceLock::new();
     *ID.get_or_init(|| dex.conds_id("substitute"))
+}
+
+fn spikes_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
+    static ID: OnceLock<Option<nc2000_engine::dex::CondId>> = OnceLock::new();
+    *ID.get_or_init(|| dex.conds_id("spikes"))
 }
 
 /// Expected fraction of the defender's *current* HP removed by one use of
