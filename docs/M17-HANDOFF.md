@@ -66,9 +66,14 @@ Key checkpoints:
       corpus arm the M16a plan specified, reusing the importer path that
       `human_agreement.rs` already drives.
    1. **Spikes eval feature** — term IMPLEMENTED and shipped inert
-      (`EvalWeights::spikes`, default 0.0, gated behind `!= 0.0`). The 0.25–1.5
-      candidate sweep is committed in `eval_calibration --ab`. Only the weight
-      is outstanding, and it is blocked on item 0.
+      (`EvalWeights::spikes`, default 0.0, gated behind `!= 0.0`).
+      **Calibrated: the weight is 1.5.** Corpus run, 570 positions x 32
+      playouts, GT skuct:300, spikes slice 115 positions (105 one-sided):
+      the oriented bias crosses zero at 1.5 (+0.061 off, −0.002 at 1.5) and
+      r / Brier / MSE all optimise there too (0.580→0.588, 0.2123→0.2107,
+      0.0860→0.0844). Three independent criteria agree. Remaining: the
+      standing seed-paired arena gate vs the M16-exit bot
+      (`eval_ab_duel --spikes 1.5`), then flip the default.
    2. **Voluntary switching** — M16b's worst stratum by a wide margin
       (`kind=switch` top-1 24.9% vs move 42.8%). Touches L2 rollout as much as
       L1 eval, so expect it to be the biggest of the five.

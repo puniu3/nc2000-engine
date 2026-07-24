@@ -46,14 +46,32 @@ fn main() {
         .and_then(|i| args.get(i + 1))
         .and_then(|v| v.parse().ok())
         .unwrap_or(1.0);
+    // M17 tail: with --spikes W, A becomes the SHIPPED default (the M16-exit
+    // bot, spikes off) and B the candidate weight. Without it the historical
+    // M17c comparison stands: A = the M6 leaf squash, B = probability backup.
+    let spikes: Option<f64> = args
+        .iter()
+        .position(|a| a == "--spikes")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok());
 
     let dex = conformance::load_dex();
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
     let teams: Vec<_> = pool.teams.iter().map(|t| t.sets.clone()).collect();
 
-    let a_cfg = cfg_with(weights(0.5), iters);
-    let b_cfg = cfg_with(weights(leaf_alpha), iters);
+    let (a_cfg, b_cfg, label) = match spikes {
+        Some(w) => (
+            cfg_with(EvalWeights::default(), iters),
+            cfg_with(EvalWeights { spikes: w, ..EvalWeights::default() }, iters),
+            format!("A(shipped default) vs B(spikes {w})"),
+        ),
+        None => (
+            cfg_with(weights(0.5), iters),
+            cfg_with(weights(leaf_alpha), iters),
+            format!("A(leaf alpha 0.5) vs B(alpha {leaf_alpha})"),
+        ),
+    };
     let stats = run_duel(
         &dex,
         &teams,
@@ -62,7 +80,7 @@ fn main() {
         DuelSpec::new(games, seed),
     );
     println!(
-        "A(leaf alpha 0.5) vs B(alpha {leaf_alpha}): {}W {}L {}T  A-score {:.3} +/- {:.3}  avg turns {:.1}  think A {:.0} B {:.0} ms",
+        "{label}: {}W {}L {}T  A-score {:.3} +/- {:.3}  avg turns {:.1}  think A {:.0} B {:.0} ms",
         stats.wins, stats.losses, stats.ties, stats.score, stats.ci95, stats.avg_turns,
         stats.a_ms_per_move, stats.b_ms_per_move
     );
