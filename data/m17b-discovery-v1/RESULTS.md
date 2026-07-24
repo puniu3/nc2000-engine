@@ -47,6 +47,21 @@ c926cdf5559024f990c40923d8dd9f31c015c9928ac2ba2274fe428235be17eb  m17b-20000v100
 2017ca67df4dacfa8254b6a2be1f1d064619d221e917212339110f1b8dfbaf71  m17b-20000v10000-discovery-1700000004.jsonl
 ```
 
+## Closure (2026-07-25, owner)
+
+Closed with the conservative option below: **no resolution run, no confirmation
+seeds, nothing above reinterpreted.** The gate's evidence stands exactly as
+recorded and nominates no knee.
+
+Separately — and *not* on the strength of this artifact — the `--iters` default
+of `tools/ps-client.js` moved 10,000 → 30,000 to match the shipped Web budget
+(open sheet, 30k + ponder), so that ladder and postmortem evidence describes
+the configuration that actually ships. That 10,000 was a harness flag default
+whose origin was a seed-stability floor (battle-3623 T6), never a tuned
+operating point and never a shipped product parameter. **This is configuration
+alignment, not promotion**: nothing here measured 30k, and no reader should
+cite this artifact as evidence for it.
+
 ## Next-session rule
 
 Do not spend the confirmation seeds: discovery nominated no knee candidate.

@@ -1,6 +1,6 @@
 # M17 handoff
 
-Updated: 2026-07-25.
+Updated: 2026-07-25 (second revision — M17b closed, Web budget gate parked).
 
 ## Current state
 
@@ -12,11 +12,19 @@ clean apart from pre-existing user-owned untracked inputs.
 - M17a formal blind regret gate: complete; no root-ranking patch justified.
 - Open-sheet replay provenance: v3 private sheets and fail-closed validation
   complete.
-- M17b blind 20k-vs-10k discovery: complete but inconclusive. The full raw
-  artifact and decision are in `data/m17b-discovery-v1/RESULTS.md`; 10k remains
-  the operational native/PS budget.
+- M17b blind 20k-vs-10k discovery: complete but inconclusive, and **closed
+  conservatively (owner)** — no resolution run, confirmation seeds unspent, the
+  manifest not reinterpreted. Full raw artifact in
+  `data/m17b-discovery-v1/RESULTS.md`.
+- PS client budget: `tools/ps-client.js --iters` default moved 10,000 → 30,000
+  to match the shipped Web budget, so ladder/postmortem evidence describes the
+  shipped configuration (closes M17a's blind-10k-vs-open-30k scope caveat).
+  Configuration alignment, **not** a gate promotion. `--mode open` stays opt-in:
+  it needs the opponent's real sheet via `--opp-team-file`.
 - Web open-sheet budget gate: implementation and preregistered 15k/30k/60k
-  centered manifest complete; no CPU run has started.
+  centered manifest complete, **PARKED unrun (owner, UX grounds)** — 30k +
+  ponder is the product sweet spot; see the Parked section of `README.md` for
+  the full rationale and the reopen conditions.
 - M17d: the gauntlet is now deterministic, shardable, resume-safe, no-clobber,
   and fail-closed. Its inference unit and paired 95% interval are bound into
   the run fingerprint. No full 4,608-row run has started.
@@ -32,12 +40,7 @@ Key checkpoints:
 
 ## Next decisions and runs
 
-1. **M17b blind:** do not use confirmation seeds; discovery nominated no
-   candidate. Either retain 10k and close the milestone conservatively, or
-   first commit a separate fresh-seed inconclusive-resolution manifest and
-   combination rule. Do not add games to or reinterpret the existing
-   manifest.
-2. **M17d full profile:** launch the resumable 4,608-job run when a 16-CPU CX
+1. **M17d full profile:** launch the resumable 4,608-job run when a 16-CPU CX
    worker is available:
 
    ```bash
@@ -47,14 +50,17 @@ Key checkpoints:
    The wrapper fixes the full-profile turn cap at 1,000. Expected duration is
    roughly 12 hours on 16 CPUs. Merge is automatic and requires 2,304 complete
    side-swapped inference blocks with no cap or invalid arm.
-3. **Web open-sheet:** run 30k-vs-15k discovery using the staged arena binary
-   and `tools/run-m17b-stage.sh ... discovery open`, then apply
-   `tools/evaluate-open-centered-gate.py` with
-   `data/m17b-open-centered-tier-gate-v1.json`. Ponder is intentionally outside
-   this fixed-floor gate.
-4. After the CPU results, update the M17 entries in `README.md`, decide which
-   remaining research tails are explicitly parked, run the product regression
-   suite, and close M17.
+2. **Ladder re-exposure at the aligned budget:** the next PS batch runs on the
+   new 30k default, so its postmortems are finally about the shipped bot. Add
+   `--mode open --opp-team-file F` wherever the opponent's sheet is genuinely
+   available. Expect roughly 11–20 s/move (single-threaded wasm-in-node) — well
+   inside the 150 s per-turn budget, but budget the wall-clock per game.
+3. After the M17d result, update the M17 entries in `README.md`, run the
+   product regression suite, and close M17.
+
+Do **not** run the Web open-sheet budget gate: it is parked, and its manifest
+exists so that reopening is cheap, not as a queued task. Reopen conditions are
+in the Parked section of `README.md`.
 
 ## Last regression
 
