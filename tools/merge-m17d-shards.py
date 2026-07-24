@@ -662,10 +662,6 @@ def main() -> int:
             None,
         )
         require(expected is not None, f"manifest has no shard starting at {args.start}")
-        require(
-            args.check_shard.name == expected["file"],
-            "checked shard filename does not match manifest",
-        )
         validate_shard(args.check_shard, manifest, expected)
         print(f"valid shard {expected['start']}-{expected['end']}: {args.check_shard}")
         return 0

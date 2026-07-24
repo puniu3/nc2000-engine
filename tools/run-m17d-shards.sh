@@ -51,8 +51,12 @@ fi
 mkdir -p "$output_dir"
 manifest="$output_dir/manifest.json"
 candidate=$(mktemp "$output_dir/.manifest.candidate.XXXXXX")
+current_tmp=
 cleanup() {
 	rm -f -- "$candidate"
+	if [[ -n "$current_tmp" ]]; then
+		rm -f -- "$current_tmp"
+	fi
 }
 trap cleanup EXIT
 trap 'exit 129' HUP
@@ -93,16 +97,23 @@ while IFS=$'\t' read -r start end filename; do
 		echo "refusing to overwrite invalid or mismatched shard: $shard" >&2
 		exit 3
 	fi
+	current_tmp=$(mktemp "$output_dir/.$filename.tmp.XXXXXX")
 	"$gauntlet" \
 		--profile "$profile" \
 		"${extra_args[@]}" \
 		--job-start "$start" \
 		--job-end "$end" \
-		--out "$shard"
+		--out "$current_tmp"
 	python3 "$merger" \
 		--manifest "$manifest" \
-		--check-shard "$shard" \
+		--check-shard "$current_tmp" \
 		--start "$start" >/dev/null
+	mv -n -- "$current_tmp" "$shard"
+	if [[ -e "$current_tmp" ]]; then
+		echo "refusing concurrent shard creation: $shard" >&2
+		exit 3
+	fi
+	current_tmp=
 	echo "completed shard: $shard" >&2
 done < <(python3 "$merger" --manifest "$manifest" --list)
 
