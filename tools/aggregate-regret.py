@@ -23,7 +23,9 @@ MODE_INFO = {
 ROW_SCHEMA = "nc2000-regret-v3"
 RUN_SCHEMA = "nc2000-regret-run-v3"
 LIVE_SOURCE = "live-decision-log-v2-v3"
-LIVE_SOURCES = {"live-decision-log-v2", LIVE_SOURCE}
+LEGACY_LIVE_SOURCE = "live-decision-log-v2"
+LIVE_SOURCES = {LEGACY_LIVE_SOURCE, LIVE_SOURCE}
+INFORMATION_MODES = {"blind", "open"}
 RECONSTRUCTION_INPUTS = {
     "dex_file", "meta_pool_file", "community_rentals_file", "learnsets_file",
     "embedded_community_rentals", "embedded_learnsets",
@@ -108,7 +110,10 @@ def coordinate_fingerprint(rows):
 def family(row):
     if is_current_schema(row):
         run = row["run"]
-        return run["lineage"], run["source"], run["source_fingerprint"]
+        key = run["lineage"], run["source"], run["source_fingerprint"]
+        if run["lineage"] == "live" and run["source"] == LIVE_SOURCE:
+            return key + (run["information_mode"],)
+        return key
     lineage, _ = MODE_INFO[str(row.get("mode"))]
     default_source = "corpus" if lineage == "offline" else "missing-source"
     source = row.get("source", default_source)
@@ -338,7 +343,7 @@ def semantic_sort_key(row):
     lineage = info[0]
     fingerprint = row.get("input_fingerprint" if lineage == "live" else "corpus_fingerprint")
     values = (
-        lineage, row.get("source"), fingerprint, mode,
+        lineage, row.get("source"), fingerprint, row.get("live_mode"), mode,
         row.get("input_file", row.get("file")), row.get("input_line"), row.get("room"),
         row.get("rqid"), row.get("battle"), row.get("decision"), row.get("side"),
         row.get("turn"), row.get("reference"), row.get("candidate"), row.get("skip"),
@@ -382,6 +387,48 @@ def validate_run(row, where):
         raise SystemExit(
             f"{where}: run.source {run['source']!r} not in {sorted(expected_sources)!r}"
         )
+    if lineage == "live":
+        run_mode = run.get("information_mode")
+        row_mode = row.get("live_mode")
+        if run["source"] == LIVE_SOURCE:
+            if run_mode not in INFORMATION_MODES:
+                raise SystemExit(
+                    f"{where}: current live run.information_mode must be "
+                    f"one of {sorted(INFORMATION_MODES)!r}"
+                )
+            if row_mode not in INFORMATION_MODES:
+                raise SystemExit(
+                    f"{where}: current live row.live_mode must be "
+                    f"one of {sorted(INFORMATION_MODES)!r}"
+                )
+            if row_mode != run_mode:
+                raise SystemExit(
+                    f"{where}: row.live_mode {row_mode!r} disagrees with "
+                    f"run.information_mode {run_mode!r}"
+                )
+        else:
+            # Preserve ingestion of already-produced v3 artifacts sourced from
+            # decision-log v2. Those runs predate run-level mode attestation.
+            if run_mode is not None and run_mode not in INFORMATION_MODES:
+                raise SystemExit(
+                    f"{where}: legacy live run.information_mode must be "
+                    f"one of {sorted(INFORMATION_MODES)!r} when present"
+                )
+            if stage == "screen" and row_mode not in INFORMATION_MODES:
+                raise SystemExit(
+                    f"{where}: legacy live screen row.live_mode must be "
+                    f"one of {sorted(INFORMATION_MODES)!r}"
+                )
+            if row_mode is not None and row_mode not in INFORMATION_MODES:
+                raise SystemExit(
+                    f"{where}: legacy live row.live_mode must be "
+                    f"one of {sorted(INFORMATION_MODES)!r} when present"
+                )
+            if run_mode is not None and row_mode != run_mode:
+                raise SystemExit(
+                    f"{where}: row.live_mode {row_mode!r} disagrees with "
+                    f"run.information_mode {run_mode!r}"
+                )
     integer(run.get("base_seed"), f"{where}: run.base_seed", 0)
     run_samples = integer(run.get("samples"), f"{where}: run.samples", 1)
     if not isinstance(run.get("budget"), dict):
@@ -569,6 +616,15 @@ def validate_v3_coverage(stage_rows, allow_partial):
     screen_runs = {}
     for (key, stage), rows in stage_rows.items():
         run = rows[0]["run"]
+        if stage == "screen" and key[:2] == ("live", LEGACY_LIVE_SOURCE):
+            live_modes = {
+                row["live_mode"] for row in rows if row.get("live_mode") is not None
+            }
+            if len(live_modes) > 1:
+                raise SystemExit(
+                    f"{family_name(key)}/screen: legacy live artifact mixes "
+                    f"information modes {sorted(live_modes)!r}"
+                )
         expected = run["coverage"]["expected_rows"]
         actual_fingerprint = coordinate_fingerprint(rows)
         expected_fingerprint = run["coverage"]["coordinate_fingerprint"]
@@ -609,6 +665,10 @@ def validate_v3_coverage(stage_rows, allow_partial):
                 raise SystemExit(
                     f"{family_name(key)}/confirm: {field} differs from screen run"
                 )
+        if confirm_run.get("information_mode") != screen_run.get("information_mode"):
+            raise SystemExit(
+                f"{family_name(key)}/confirm: information_mode differs from screen run"
+            )
         discovery = confirm_run["discovery_fingerprint"]
         if discovery != screen_run["config_fingerprint"]:
             raise SystemExit(
@@ -777,7 +837,9 @@ def main(argv=None):
     return 0
 
 
-def test_screen(mode, ordinal=0, fingerprint="fnv1a64:aaaaaaaaaaaaaaaa"):
+def test_screen(
+    mode, ordinal=0, fingerprint="fnv1a64:aaaaaaaaaaaaaaaa", live_mode="blind",
+):
     live = mode == "live-screen"
     row = {
         "mode": mode, "battle": 0, "decision": 0, "side": 0, "turn": 12,
@@ -792,13 +854,16 @@ def test_screen(mode, ordinal=0, fingerprint="fnv1a64:aaaaaaaaaaaaaaaa"):
             "source": LIVE_SOURCE, "input_file": "decisions.jsonl",
             "input_fingerprint": fingerprint,
             "input_line": ordinal + 1, "room": f"battle-live-{ordinal}", "rqid": ordinal + 10,
+            "live_mode": live_mode,
         })
     else:
         row.update({"file": "offline.raw.log", "product_stability": 1.0})
     return row
 
 
-def test_confirm(mode, deltas=None, fingerprint="fnv1a64:aaaaaaaaaaaaaaaa"):
+def test_confirm(
+    mode, deltas=None, fingerprint="fnv1a64:aaaaaaaaaaaaaaaa", live_mode="blind",
+):
     live = mode == "live-confirm"
     deltas = deltas or [0.2, 0.2, 0.2, 0.2]
     row = {
@@ -816,6 +881,7 @@ def test_confirm(mode, deltas=None, fingerprint="fnv1a64:aaaaaaaaaaaaaaaa"):
             "source": LIVE_SOURCE, "input_file": "decisions.jsonl",
             "input_fingerprint": fingerprint,
             "input_line": 1, "room": "battle-live-0", "rqid": 10,
+            "live_mode": live_mode,
         })
     else:
         row["file"] = "offline.raw.log"
@@ -837,7 +903,11 @@ def v3_artifact(rows, discovery_fingerprint=None, run_overrides=None):
     rows = [json.loads(json.dumps(row)) for row in rows]
     mode = rows[0]["mode"]
     lineage, stage = MODE_INFO[mode]
-    source = "corpus" if lineage == "offline" else LIVE_SOURCE
+    source = (
+        "corpus"
+        if lineage == "offline"
+        else rows[0].get("source", LIVE_SOURCE)
+    )
     source_fingerprint = (
         rows[0].get("corpus_fingerprint", "fnv1a64:cccccccccccccccc:1files")
         if lineage == "offline" else rows[0]["input_fingerprint"]
@@ -881,6 +951,8 @@ def v3_artifact(rows, discovery_fingerprint=None, run_overrides=None):
         "base_seed": 1, "budget": budget, "samples": rows[0]["samples"],
         "coverage": coverage,
     }
+    if lineage == "live" and source == LIVE_SOURCE:
+        run["information_mode"] = rows[0]["live_mode"]
     if stage == "screen":
         run["selection"] = {"decision_lo": 0, "decision_hi": 999999,
                             "per_battle": 999999}
@@ -961,6 +1033,80 @@ class SelfTest(unittest.TestCase):
         output = self.run_v3(screens + confirms)
         self.assertIn("screen 2 / attempted 2", output)
         self.assertIn("confirm 2", output)
+
+    def test_v3_current_live_mode_is_attested_and_modes_are_separate_families(self):
+        fingerprint = "fnv1a64:abababababababab"
+        blind_screens, blind_discovery = v3_artifact([
+            test_screen("live-screen", fingerprint=fingerprint, live_mode="blind"),
+        ])
+        blind_confirms, _ = v3_artifact([
+            test_confirm("live-confirm", fingerprint=fingerprint, live_mode="blind"),
+        ], blind_discovery)
+        open_screens, open_discovery = v3_artifact([
+            test_screen("live-screen", fingerprint=fingerprint, live_mode="open"),
+        ])
+        open_confirms, _ = v3_artifact([
+            test_confirm("live-confirm", fingerprint=fingerprint, live_mode="open"),
+        ], open_discovery)
+        output = self.run_v3(
+            blind_screens + blind_confirms + open_screens + open_confirms
+        )
+        self.assertIn(f"live/{LIVE_SOURCE}/{fingerprint}/blind  screen 1", output)
+        self.assertIn(f"live/{LIVE_SOURCE}/{fingerprint}/open  screen 1", output)
+        self.assertEqual(output.count("confirmed(BH q<=0.05, positive effect) 1 / 1"), 2)
+
+        mismatched, _ = v3_artifact([
+            test_screen("live-screen", live_mode="blind"),
+        ])
+        mismatched[0]["live_mode"] = "open"
+        path = self.write_rows(mismatched)
+        with self.assertRaisesRegex(SystemExit, "disagrees with run.information_mode"):
+            main([path])
+
+        missing, _ = v3_artifact([
+            test_screen("live-screen", live_mode="blind"),
+        ])
+        del missing[0]["run"]["information_mode"]
+        path = self.write_rows(missing)
+        with self.assertRaisesRegex(SystemExit, "run.information_mode"):
+            main([path])
+
+    def test_v3_legacy_live_source_artifact_remains_accepted(self):
+        legacy_screen = test_screen("live-screen", live_mode="open")
+        legacy_screen["source"] = LEGACY_LIVE_SOURCE
+        screens, discovery = v3_artifact([legacy_screen])
+        legacy_confirm = test_confirm("live-confirm", live_mode="open")
+        legacy_confirm["source"] = LEGACY_LIVE_SOURCE
+        del legacy_confirm["live_mode"]
+        confirms, _ = v3_artifact([legacy_confirm], discovery)
+        self.assertNotIn("information_mode", screens[0]["run"])
+        self.assertNotIn("live_mode", confirms[0])
+        output = self.run_v3(screens + confirms)
+        self.assertIn(
+            f"live/{LEGACY_LIVE_SOURCE}/"
+            "fnv1a64:aaaaaaaaaaaaaaaa  screen 1",
+            output,
+        )
+        self.assertIn("confirm 1", output)
+
+    def test_v3_legacy_live_source_rejects_mixed_screen_modes(self):
+        blind = test_screen("live-screen", ordinal=0, live_mode="blind")
+        blind["source"] = LEGACY_LIVE_SOURCE
+        opened = test_screen("live-screen", ordinal=1, live_mode="open")
+        opened["source"] = LEGACY_LIVE_SOURCE
+        rows, _ = v3_artifact([blind, opened])
+        path = self.write_rows(rows)
+        with self.assertRaisesRegex(SystemExit, "mixes information modes"):
+            main([path])
+
+    def test_v3_legacy_live_source_requires_screen_mode(self):
+        legacy = test_screen("live-screen")
+        legacy["source"] = LEGACY_LIVE_SOURCE
+        del legacy["live_mode"]
+        rows, _ = v3_artifact([legacy])
+        path = self.write_rows(rows)
+        with self.assertRaisesRegex(SystemExit, "screen row.live_mode"):
+            main([path])
 
     def test_v3_skips_are_part_of_required_screen_coverage(self):
         success = test_screen("screen")

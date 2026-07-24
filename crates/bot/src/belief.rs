@@ -64,7 +64,7 @@ use nc2000_engine::dex::{toid, Dex, MoveId};
 use nc2000_engine::state::{
     ActionKind, Battle, EffId, EffectState, MoveSlot, MoveSlots, PokeId, Pokemon,
 };
-use nc2000_engine::validate::Learnsets;
+use nc2000_engine::validate::{validate_team, Learnsets};
 
 use crate::observe::{move_matches, MonObs, Observer};
 use crate::preview::MetaPool;
@@ -219,23 +219,54 @@ impl Belief {
     /// `sync` is then a no-op — the truth is consistent with every
     /// observation by construction.
     pub fn pinned(dex: &Dex, id: &str, sets: &[PokemonSet], obs: &Observer) -> Belief {
-        let refs = build_refs(dex, sets, obs.mons());
-        debug_assert!(refs.is_some(), "pinned belief: true team failed preview alignment");
-        let alive = if refs.is_some() { vec![0] } else { Vec::new() };
-        let mut b = Belief {
-            cands: vec![Candidate { id: id.to_string(), sets: sets.to_vec(), refs }],
-            alive,
+        Self::pinned_checked(dex, id, sets, obs)
+            .expect("pinned opponent team must be legal and match the public preview")
+    }
+
+    /// Checked open-sheet construction for untrusted external team JSON.
+    /// Unlike the pool-identification path, an invalid public sheet must
+    /// never degrade into a synthesized fallback belief: doing so would
+    /// silently evaluate a different information set.
+    pub fn pinned_checked(
+        dex: &Dex,
+        id: &str,
+        sets: &[PokemonSet],
+        obs: &Observer,
+    ) -> Result<Belief, String> {
+        let team_json =
+            serde_json::to_string(sets).map_err(|e| format!("serialize pinned team: {e}"))?;
+        let verdict = validate_team(dex, format_learnsets(), &team_json);
+        // The engine is generation-locked and intentionally has no
+        // nature/ability semantics or cosmetic shiny flag (the shiny DVs
+        // themselves are retained). Every other validator finding can
+        // change a public field, stats, DVs, moves, or damage.
+        let unsupported_finding = verdict["findings"].as_array().is_none_or(|findings| {
+            findings.iter().any(|finding| {
+                !matches!(
+                    finding["code"].as_str(),
+                    Some("ability-canonical" | "nature-canonical" | "dv-shiny")
+                )
+            })
+        });
+        if unsupported_finding {
+            return Err(format!(
+                "pinned opponent team is illegal or noncanonical: {verdict}"
+            ));
+        }
+        let refs = build_refs(dex, sets, obs.mons())
+            .ok_or_else(|| "pinned opponent team does not match the public preview".to_string())?;
+        Ok(Belief {
+            cands: vec![Candidate {
+                id: id.to_string(),
+                sets: sets.to_vec(),
+                refs: Some(refs),
+            }],
+            alive: vec![0],
             fallback: None,
             pinned: true,
             fallback_policy: FallbackPolicy::Layered,
             synced: Some(obs.revision()),
-        };
-        if b.alive.is_empty() {
-            // defensive only: a malformed "true" team degrades like a
-            // custom opponent under the identification path
-            b.fallback = Some(b.build_fallback(dex, obs));
-        }
-        b
+        })
     }
 
     /// Open-team-sheet belief for a caller that holds the TRUE battle (the
@@ -265,21 +296,32 @@ impl Belief {
     /// observer revision, and always for a pinned belief holding its
     /// candidate (the pinned truth passes every filter by construction).
     pub fn sync(&mut self, dex: &Dex, obs: &Observer) {
+        self.sync_checked(dex, obs)
+            .expect("pinned opponent team contradicted public observations");
+    }
+
+    /// Checked synchronization for protocol callers. Pool beliefs retain
+    /// their defensive fallback behavior; pinned sheets instead fail
+    /// closed if later public evidence contradicts the submitted sheet.
+    pub fn sync_checked(&mut self, dex: &Dex, obs: &Observer) -> Result<(), String> {
         if self.synced == Some(obs.revision()) {
-            return;
+            return Ok(());
         }
         if self.pinned && !self.alive.is_empty() {
-            debug_assert!(
-                self.cands[0]
-                    .refs
-                    .as_deref()
-                    .is_some_and(|refs| consistent(dex, refs, obs.mons())),
-                "pinned truth filtered out (observer drift)"
-            );
+            if !self.cands[0]
+                .refs
+                .as_deref()
+                .is_some_and(|refs| consistent(dex, refs, obs.mons()))
+            {
+                return Err(
+                    "pinned opponent team contradicts public battle observations".to_string()
+                );
+            }
             self.synced = Some(obs.revision());
-            return;
+            return Ok(());
         }
         self.refilter(dex, obs);
+        Ok(())
     }
 
     /// Pool indices of the consistent candidates (empty ⇔ fallback mode).
@@ -708,8 +750,8 @@ fn legal_fallback_move(dex: &Dex, mo: &MonObs) -> String {
 }
 
 /// Construct a pool team's reference mons and align them to the opponent's
-/// observed roster slots by (species, level). `None` = preview-inconsistent
-/// (species/level mismatch, item-presence mismatch, or unbuildable team).
+/// observed roster slots by (species, level, gender). `None` =
+/// preview-inconsistent (public detail mismatch or unbuildable team).
 fn build_refs(dex: &Dex, sets: &[PokemonSet], mons: &[MonObs]) -> Option<Vec<Pokemon>> {
     if sets.len() != mons.len() {
         return None;
@@ -724,9 +766,11 @@ fn build_refs(dex: &Dex, sets: &[PokemonSet], mons: &[MonObs]) -> Option<Vec<Pok
     let mut out = Vec::with_capacity(mons.len());
     for mo in mons {
         let slots = by_species.get_mut(&mo.species.0)?;
-        let k = slots
-            .iter()
-            .position(|&i| roster[i].level == mo.level && roster[i].item.is_some() == mo.preview_has_item)?;
+        let k = slots.iter().position(|&i| {
+            roster[i].level == mo.level
+                && roster[i].gender == mo.gender
+                && roster[i].item.is_some() == mo.preview_has_item
+        })?;
         out.push(roster[slots.remove(k)].clone());
     }
     Some(out)
@@ -1163,6 +1207,144 @@ mod fallback_tests {
             [nc2000_engine::battle::SearchChoice::Move(
                 dex.moves.id("struggle").unwrap()
             )]
+        );
+    }
+
+    #[test]
+    fn pinned_sheet_rejects_illegal_and_preview_mismatched_teams() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
+        let truth = &pool.teams[0].sets;
+        let battle = Battle::from_fixture(&dex, "1,2,3,4", &pool.teams[1].sets, truth).unwrap();
+        let obs = Observer::new(&battle, 0);
+
+        let mut wrong_level = truth.clone();
+        wrong_level[0].level = if wrong_level[0].level == 50 { 51 } else { 50 };
+        assert!(
+            Belief::pinned_checked(&dex, "wrong-level", &wrong_level, &obs)
+                .err()
+                .unwrap()
+                .contains("public preview")
+        );
+
+        let mut wrong_item = truth.clone();
+        let item_slot = wrong_item
+            .iter()
+            .position(|set| !set.item.is_empty())
+            .expect("fixture team should contain an item");
+        wrong_item[item_slot].item.clear();
+        assert!(
+            Belief::pinned_checked(&dex, "wrong-item", &wrong_item, &obs)
+                .err()
+                .unwrap()
+                .contains("public preview")
+        );
+
+        let mut illegal = truth.clone();
+        illegal[0].moves = vec!["Fissure".to_string()];
+        assert!(
+            Belief::pinned_checked(&dex, "illegal", &illegal, &obs)
+                .err()
+                .unwrap()
+                .contains("illegal")
+        );
+
+        let mut noncanonical = truth.clone();
+        noncanonical[0].evs = None;
+        assert!(
+            Belief::pinned_checked(&dex, "noncanonical", &noncanonical, &obs)
+                .err()
+                .unwrap()
+                .contains("noncanonical")
+        );
+
+        let mut wrong_gender = truth.clone();
+        let gender = wrong_gender[0]
+            .gender
+            .as_deref()
+            .expect("fixture set should have a canonical gender");
+        wrong_gender[0].gender = Some(if gender == "M" { "F" } else { "M" }.to_string());
+        assert!(
+            build_refs(&dex, &wrong_gender, obs.mons()).is_none(),
+            "preview-public gender mismatch must prevent pinned alignment"
+        );
+
+        let mut shiny = truth.clone();
+        let shiny_slot = shiny
+            .iter()
+            .position(|set| {
+                set.gender.as_deref() == Some("M")
+                    && set.moves.iter().all(|mv| !toid(mv).starts_with("hiddenpower"))
+            })
+            .expect("fixture team should contain a male set without Hidden Power");
+        shiny[shiny_slot].ivs = Some(
+            [
+                ("hp", 16),
+                ("atk", 31),
+                ("def", 21),
+                ("spa", 21),
+                ("spd", 21),
+                ("spe", 21),
+            ]
+            .into_iter()
+            .map(|(stat, value)| (stat.to_string(), value))
+            .collect(),
+        );
+        let shiny_result = Belief::pinned_checked(&dex, "shiny-dvs", &shiny, &obs);
+        assert!(
+            shiny_result.is_ok(),
+            "the engine retains shiny DVs even though PokemonSet omits the cosmetic shiny flag: {:?}",
+            shiny_result.err()
+        );
+    }
+
+    #[test]
+    fn pinned_sheet_rejects_a_later_move_contradiction() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
+        let signature = |sets: &[PokemonSet]| {
+            let mut values: Vec<_> =
+                sets.iter().map(|set| (toid(&set.species), set.level)).collect();
+            values.sort();
+            values
+        };
+        let (truth, sheet) = pool
+            .teams
+            .iter()
+            .enumerate()
+            .find_map(|(i, left)| {
+                pool.teams[i + 1..]
+                    .iter()
+                    .find(|right| signature(&left.sets) == signature(&right.sets))
+                    .map(|right| (&left.sets, &right.sets))
+            })
+            .expect("meta pool should retain the documented preview collision");
+        let battle =
+            Battle::from_fixture(&dex, "1,2,3,4", &pool.teams[0].sets, truth).unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        let mut belief = Belief::pinned_checked(&dex, "collision-sheet", sheet, &obs).unwrap();
+
+        let (true_set, revealed) = truth
+            .iter()
+            .find_map(|true_set| {
+                let sheet_set = sheet
+                    .iter()
+                    .find(|set| toid(&set.species) == toid(&true_set.species))?;
+                true_set.moves.iter().find_map(|mv| {
+                    (!sheet_set.moves.iter().any(|other| toid(other) == toid(mv)))
+                        .then_some((true_set, mv))
+                })
+            })
+            .expect("collision teams should differ by at least one move");
+        obs.ingest_line(
+            &format!("|move|p2a: {}|{}|p1a: Target", true_set.name, revealed),
+            &dex,
+        );
+        assert!(
+            belief
+                .sync_checked(&dex, &obs)
+                .unwrap_err()
+                .contains("contradicts public battle observations")
         );
     }
 

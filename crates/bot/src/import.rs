@@ -1968,7 +1968,7 @@ impl ProtocolAgent {
                 obs.ingest_line(&line, dex);
             }
             let belief = match &self.pinned_sets {
-                Some(sets) => Belief::pinned(dex, "opponent", sets, &obs),
+                Some(sets) => Belief::pinned_checked(dex, "opponent", sets, &obs)?,
                 None => Belief::new(dex, &self.pool, &obs),
             };
             self.observer = Some(obs);
@@ -1976,7 +1976,7 @@ impl ProtocolAgent {
         }
         let obs = self.observer.as_ref().unwrap();
         let belief = self.belief.as_mut().unwrap();
-        belief.sync(dex, obs);
+        belief.sync_checked(dex, obs)?;
 
         // synthesize
         let pick = belief.alive().first().copied();

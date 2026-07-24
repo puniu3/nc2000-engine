@@ -547,6 +547,7 @@ struct LiveRoom {
 
 struct LiveLog {
     source_id: String,
+    information_mode: String,
     rooms: Vec<LiveRoom>,
 }
 
@@ -573,8 +574,8 @@ fn validate_live_row(path: &str, line_no: usize, row: &LiveLogRow) {
     if row.own_team.is_empty() {
         bad("ownTeam is empty");
     }
-    if row.version == 2 && row.opponent_team.is_some() {
-        bad("version 2 must not contain opponentTeam");
+    if row.opponent_team.is_some() && !(row.version == 3 && row.mode == "open") {
+        bad("opponentTeam is only permitted in version 3 open mode");
     }
     if row.version == 3
         && row.mode == "open"
@@ -610,6 +611,7 @@ fn parse_live_rooms(path: &str, text: &str) -> Vec<LiveRoom> {
     let mut rooms = Vec::<LiveRoom>::new();
     let mut room_indexes = HashMap::<String, usize>::new();
     let mut seen = HashMap::<(String, u64), String>::new();
+    let mut information_mode = None::<String>;
     let mut duplicates = 0usize;
     for (line_index, line) in text.lines().enumerate() {
         if line.trim().is_empty() {
@@ -620,6 +622,13 @@ fn parse_live_rooms(path: &str, text: &str) -> Vec<LiveRoom> {
             serde_json::from_str(line).unwrap_or_else(|e| panic!("{path}:{line_no}: {e}"));
         row.input_line = line_no;
         validate_live_row(path, line_no, &row);
+        match &information_mode {
+            Some(mode) => assert_eq!(
+                mode, &row.mode,
+                "{path}:{line_no}: mixed blind/open decision log is not one estimand"
+            ),
+            None => information_mode = Some(row.mode.clone()),
+        }
         let dedupe_key = (row.room.clone(), row.rqid);
         if let Some(first) = seen.get(&dedupe_key) {
             assert!(
@@ -653,7 +662,13 @@ fn load_live_log(path: &str) -> LiveLog {
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
     let source_id = format!("fnv1a64:{:016x}", fnv1a64(text.as_bytes()));
     let rooms = parse_live_rooms(path, &text);
-    LiveLog { source_id, rooms }
+    let information_mode = rooms
+        .iter()
+        .flat_map(|room| room.rows.iter())
+        .next()
+        .map(|row| row.mode.clone())
+        .unwrap_or_else(|| panic!("{path}: decision log is empty"));
+    LiveLog { source_id, information_mode, rooms }
 }
 
 fn request_is_preview(request: &serde_json::Value) -> bool {
@@ -727,7 +742,11 @@ fn reconstruct_live_agent(
 ) -> Result<ProtocolAgent, String> {
     let mut agent = ProtocolAgent::new(dex, row.side, pool.clone(), cfg(), seed);
     agent.set_own_team(row.own_team.clone());
-    if let Some(opponent) = &row.opponent_team {
+    if row.mode == "open" {
+        let opponent = row
+            .opponent_team
+            .as_ref()
+            .ok_or_else(|| "open opponent team unavailable".to_string())?;
         agent.pin_opponent(opponent.clone());
     }
     for line in protocol {
@@ -1098,6 +1117,7 @@ fn run_live_screen(
     let pool = load_meta_pool(&pool_path);
     let live_log = load_live_log(input);
     let source_id = live_log.source_id;
+    let information_mode = live_log.information_mode;
     let rooms = live_log.rooms;
     let decisions: usize = rooms.iter().map(|room| room.rows.len()).sum();
     let coverage_fingerprint = coordinate_fingerprint(
@@ -1108,6 +1128,7 @@ fn run_live_screen(
     );
     let run = run_meta(serde_json::json!({
         "lineage":"live", "stage":"screen", "source":LIVE_SOURCE,
+        "information_mode":information_mode,
         "source_fingerprint":source_id, "pool_fingerprint":pool_fingerprint,
         "input_fingerprints":input_fingerprints,
         "base_seed":seed, "budget":{"oracle_iters":iters}, "samples":samples,
@@ -1740,7 +1761,7 @@ fn live_confirm_base(candidate: &Candidate, run: Option<&serde_json::Value>) -> 
         "input_fingerprint":row["input_fingerprint"],
         "input_line":row["input_line"], "room":row["room"], "rqid":row["rqid"],
         "battle":row["battle"], "decision":row["decision"],
-        "side":row["side"], "turn":row["turn"],
+        "side":row["side"], "turn":row["turn"], "live_mode":row["live_mode"],
     });
     if let Some(run) = run {
         base["schema"] = ROW_SCHEMA.into();
@@ -1757,14 +1778,18 @@ fn validate_live_screen_row(path: &str, line_no: usize, row: &serde_json::Value)
         if run["lineage"] != "live"
             || run["source"] != LIVE_SOURCE
             || run["source_fingerprint"] != row["input_fingerprint"]
+            || run["information_mode"] != row["live_mode"]
         {
-            bad("row source disagrees with run metadata");
+            bad("row source/information mode disagrees with run metadata");
         }
     } else if row.get("schema").is_some() {
         bad("unknown row schema");
     }
     if row["input_file"].as_str().is_none() {
         bad("input_file missing");
+    }
+    if !matches!(row["live_mode"].as_str(), Some("blind" | "open")) {
+        bad("live_mode must be blind or open");
     }
     if row["input_fingerprint"].as_str().is_none() {
         bad("input_fingerprint missing");
@@ -1847,6 +1872,7 @@ fn confirm_live_candidate(
     if screen["input_fingerprint"].as_str() != Some(source_id)
         || screen["room"].as_str() != Some(&live.room)
         || screen["rqid"].as_u64() != Some(live.rqid)
+        || screen["live_mode"].as_str() != Some(live.mode.as_str())
     {
         return merge(base, serde_json::json!({"skip":"source-mismatch"}));
     }
@@ -2473,6 +2499,7 @@ fn run_live_confirm(
     validate_confirmation_budget("live confirmation", iters, samples);
     let loaded_live_log = load_live_log(live_log);
     let source_id = loaded_live_log.source_id;
+    let information_mode = loaded_live_log.information_mode;
     let text = std::fs::read_to_string(input).unwrap_or_else(|e| panic!("read {input}: {e}"));
     let artifact: Vec<(usize, serde_json::Value)> = text
         .lines()
@@ -2487,6 +2514,11 @@ fn run_live_confirm(
         })
         .collect();
     let discovery = validate_screen_artifact(input, &artifact, true, &source_id, true);
+    assert_eq!(
+        discovery["information_mode"].as_str(),
+        Some(information_mode.as_str()),
+        "live confirmation information mode differs from screen log"
+    );
     let mut rows: Vec<serde_json::Value> = artifact
         .into_iter()
         .filter(|(_, row)| row.get("skip").is_none())
@@ -2537,6 +2569,7 @@ fn run_live_confirm(
     );
     let confirm_run = run_meta(serde_json::json!({
         "lineage":"live", "stage":"confirm", "source":LIVE_SOURCE,
+        "information_mode":information_mode,
         "source_fingerprint":source_id, "pool_fingerprint":pool_fingerprint,
         "input_fingerprints":input_fingerprints,
         "base_seed":seed, "budget":{"iters_per_action":iters}, "samples":samples,
@@ -2993,6 +3026,13 @@ mod live_tests {
             std::panic::catch_unwind(|| validate_live_row("synthetic", 1, &parsed)).is_err()
         );
 
+        let mut blind_with_sheet = open.clone();
+        blind_with_sheet["mode"] = "blind".into();
+        let parsed: LiveLogRow = serde_json::from_value(blind_with_sheet).unwrap();
+        assert!(
+            std::panic::catch_unwind(|| validate_live_row("synthetic", 1, &parsed)).is_err()
+        );
+
         let mut spoofed_v2 = open;
         spoofed_v2["version"] = 2.into();
         let parsed: LiveLogRow = serde_json::from_value(spoofed_v2).unwrap();
@@ -3035,6 +3075,15 @@ mod live_tests {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n");
+        assert!(std::panic::catch_unwind(|| parse_live_rooms("synthetic", &text)).is_err());
+    }
+
+    #[test]
+    fn parser_rejects_mixed_information_modes() {
+        let blind = v2_row("battle-blind-1", 1, false, &["|turn|1"]);
+        let mut open = v2_row("battle-open-1", 1, false, &["|turn|1"]);
+        open["mode"] = "open".into();
+        let text = format!("{blind}\n{open}\n");
         assert!(std::panic::catch_unwind(|| parse_live_rooms("synthetic", &text)).is_err());
     }
 

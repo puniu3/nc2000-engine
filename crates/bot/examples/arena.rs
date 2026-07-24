@@ -364,8 +364,8 @@ fn pool_fingerprint(
     teams: &[Vec<PokemonSet>],
     meta_path: Option<&Path>,
 ) -> String {
-    // PokemonSet is intentionally Deserialize-only; its derived Debug form is
-    // deterministic (the only maps are BTreeMaps) and binds every field.
+    // The derived Debug form is deterministic (the only maps are BTreeMaps)
+    // and binds every field without changing the established fingerprint.
     let mut teams_bytes = Vec::new();
     for team in teams {
         for set in team {
@@ -412,10 +412,70 @@ fn tables_fingerprint(dir: Option<&Path>) -> String {
     content_fingerprint("arena-tables-v1", owned.iter().map(Vec::as_slice))
 }
 
+fn validate_arena_artifact_text(text: &str) -> Result<(), String> {
+    let mut lines = text.lines().filter(|line| !line.trim().is_empty());
+    let line = lines.next().ok_or_else(|| "artifact is empty".to_string())?;
+    if lines.next().is_some() {
+        return Err("artifact must contain exactly one JSON row".to_string());
+    }
+    let row: serde_json::Value =
+        serde_json::from_str(line).map_err(|e| format!("invalid JSON: {e}"))?;
+    if row["schema"] != "nc2000-arena-v1"
+        || row["agent_a"].as_str().is_none()
+        || row["agent_b"].as_str().is_none()
+        || row["config"].as_object().is_none()
+        || row["result"].as_object().is_none()
+        || row["timing"].as_object().is_none()
+    {
+        return Err("arena schema or top-level fields are invalid".to_string());
+    }
+    for field in ["requested_games", "base_seed", "threads", "max_turns"] {
+        if row["config"][field].as_u64().is_none() {
+            return Err(format!("config.{field} is missing or invalid"));
+        }
+    }
+    if row["config"]["pool"].as_str().is_none()
+        || row["result"]["games"].as_u64().is_none()
+        || row["result"]["pairs"].as_u64().is_none()
+        || row["result"]["wins"].as_u64().is_none()
+        || row["result"]["losses"].as_u64().is_none()
+        || row["result"]["ties"].as_u64().is_none()
+        || row["result"]["invalid_games"].as_u64().is_none()
+        || row["result"]["pair_scores"].as_array().is_none()
+    {
+        return Err("arena config/result fields are missing or invalid".to_string());
+    }
+    let fingerprints = row["fingerprints"]
+        .as_object()
+        .ok_or_else(|| "fingerprints object is missing".to_string())?;
+    for field in ["build", "dex", "pool", "tables"] {
+        if fingerprints
+            .get(field)
+            .and_then(|value| value.as_str())
+            .is_none_or(|value| !value.starts_with("fnv1a64:"))
+        {
+            return Err(format!("fingerprints.{field} is missing or invalid"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_arena_artifact(path: &str) -> Result<(), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("read {path}: {e}"))?;
+    validate_arena_artifact_text(&text)
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(path) = flag(&args, "--validate-jsonl") {
+        if let Err(error) = validate_arena_artifact(&path) {
+            eprintln!("{path}: {error}");
+            std::process::exit(2);
+        }
+        return;
+    }
     if args.len() < 2 {
-        eprintln!("usage: arena <agentA> <agentB> [--games N] [--seed S] [--threads T] [--max-turns M] [--jsonl FILE]");
+        eprintln!("usage: arena <agentA> <agentB> [--games N] [--seed S] [--threads T] [--max-turns M] [--jsonl FILE]\n       arena --validate-jsonl FILE");
         std::process::exit(2);
     }
     let spec_a = AgentSpec::parse(&args[0]).unwrap();
@@ -578,4 +638,36 @@ fn load_team_pool() -> Vec<Vec<PokemonSet>> {
         }
     }
     teams
+}
+
+#[cfg(test)]
+mod artifact_tests {
+    use super::*;
+
+    fn row() -> serde_json::Value {
+        serde_json::json!({
+            "schema":"nc2000-arena-v1",
+            "agent_a":"blind:20:1:16", "agent_b":"blind:10:1:16",
+            "config":{"requested_games":2,"base_seed":1,"threads":2,
+                      "max_turns":500,"pool":"meta"},
+            "result":{"games":2,"pairs":1,"wins":1,"losses":1,"ties":0,
+                      "invalid_games":0,"pair_scores":[0.5]},
+            "timing":{},
+            "fingerprints":{
+                "build":"fnv1a64:1","dex":"fnv1a64:2",
+                "pool":"fnv1a64:3","tables":"fnv1a64:4"
+            }
+        })
+    }
+
+    #[test]
+    fn artifact_validator_rejects_partial_and_multiple_rows() {
+        let valid = row().to_string();
+        assert!(validate_arena_artifact_text(&valid).is_ok());
+        assert!(validate_arena_artifact_text(&valid[..valid.len() - 1]).is_err());
+        assert!(validate_arena_artifact_text(&format!("{valid}\n{valid}\n")).is_err());
+        let mut missing = row();
+        missing["fingerprints"]["build"] = serde_json::Value::Null;
+        assert!(validate_arena_artifact_text(&missing.to_string()).is_err());
+    }
 }

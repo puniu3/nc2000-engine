@@ -420,7 +420,8 @@ impl WasmBlindSearcher {
     #[wasm_bindgen(js_name = pinOpponent)]
     pub fn pin_opponent(&mut self, team_json: &str) -> Result<(), JsError> {
         let sets: Vec<PokemonSet> = serde_json::from_str(team_json).map_err(js_err)?;
-        self.belief = Belief::pinned(&self.dex, "opponent", &sets, &self.observer);
+        self.belief =
+            Belief::pinned_checked(&self.dex, "opponent", &sets, &self.observer).map_err(js_err)?;
         self.pinned = true;
         Ok(())
     }
@@ -438,9 +439,11 @@ impl WasmBlindSearcher {
     /// preview where the belief is a singleton and the pair is baked, the
     /// M8 mixed table plays instead: `bakedPreview()`/`best()` return the
     /// table pick immediately and `step` is a no-op.
-    pub fn observe(&mut self, battle: &WasmBattle) {
+    pub fn observe(&mut self, battle: &WasmBattle) -> Result<(), JsError> {
         self.observer.observe(&battle.battle, &self.dex);
-        self.belief.sync(&self.dex, &self.observer);
+        self.belief
+            .sync_checked(&self.dex, &self.observer)
+            .map_err(js_err)?;
         self.baked = None;
         let seed = self.rng.next();
         let search =
@@ -467,6 +470,7 @@ impl WasmBlindSearcher {
             }
         }
         self.search = Some(search);
+        Ok(())
     }
 
     /// The baked-table preview pick when it applies at the current decision
@@ -1105,7 +1109,7 @@ mod tests {
 
         // preview: the opponent (side 0 = pool team 0) identifies publicly
         // and the pair is baked -> table pick, no stepping needed
-        bs.observe(&b);
+        bs.observe(&b).unwrap();
         let info: serde_json::Value = serde_json::from_str(&bs.belief_info()).unwrap();
         assert_eq!(info["count"], 1);
         assert_eq!(info["fallback"], false);
@@ -1122,7 +1126,7 @@ mod tests {
         // (team 0 is 52/52/52/51/51/51 — slots 1,2,4 sum 155 = Max Total Level)
         b.apply_choice(0, "team 1, 2, 4").map_err(|_| "apply").unwrap();
         b.apply_choice(1, &baked).map_err(|_| "apply").unwrap();
-        bs.observe(&b);
+        bs.observe(&b).unwrap();
         assert!(bs.baked_preview().is_none());
         let done = bs.step(40).map_err(|_| "step").unwrap();
         assert_eq!(done, 40);
@@ -1140,7 +1144,7 @@ mod tests {
         let mut bfs = WasmBlindSearcher::new(&fb, 1, &pool_json, 9, None, None)
             .map_err(|_| "blind searcher")
             .unwrap();
-        bfs.observe(&fb);
+        bfs.observe(&fb).unwrap();
         let info: serde_json::Value = serde_json::from_str(&bfs.belief_info()).unwrap();
         assert_eq!(info["fallback"], true);
         assert_eq!(info["count"], 0);
@@ -1177,7 +1181,7 @@ mod tests {
         )
         .unwrap();
         bs.add_pair(&pair_json).map_err(|_| "pair").unwrap();
-        bs.observe(&b);
+        bs.observe(&b).unwrap();
         let info: serde_json::Value = serde_json::from_str(&bs.belief_info()).unwrap();
         assert_eq!(info["count"], 1);
         assert_eq!(info["fallback"], false);
@@ -1190,7 +1194,7 @@ mod tests {
         // (team 0 is 52/52/52/51/51/51 — slots 1,2,4 sum 155 = Max Total Level)
         b.apply_choice(0, "team 1, 2, 4").map_err(|_| "apply").unwrap();
         b.apply_choice(1, &baked).map_err(|_| "apply").unwrap();
-        bs.observe(&b);
+        bs.observe(&b).unwrap();
         assert!(bs.baked_preview().is_none());
         bs.step(40).map_err(|_| "step").unwrap();
         let best = bs.best().expect("in-battle best");
@@ -1209,7 +1213,7 @@ mod tests {
             .map_err(|_| "blind searcher")
             .unwrap();
         bfs.pin_opponent(&p1).map_err(|_| "pin").unwrap();
-        bfs.observe(&fb);
+        bfs.observe(&fb).unwrap();
         let info: serde_json::Value = serde_json::from_str(&bfs.belief_info()).unwrap();
         assert_eq!(info["fallback"], false);
         assert_eq!(info["count"], 1);
