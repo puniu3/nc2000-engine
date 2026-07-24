@@ -93,7 +93,16 @@ pub struct EvalWeights {
     /// after preview (`turn.rs` rebuilds it at the Team action), so at most
     /// two mons are ever exposed — a weight of 2.8 is "~5.6 triggers per
     /// game", which is unremarkable across the corpus's 21.4-turn average.
-    /// 0.0 = off, pending the M16a calibration gate.
+    /// Shipped at **1.5** (2026-07-25). The corpus calibration put the bias
+    /// zero-crossing there and r/Brier/MSE optimise at the same weight, and
+    /// the seed-paired arena gate came back parity — 0.530±0.046 at 300
+    /// iters, 0.498±0.047 at 1000, i.e. the 300-iter edge did not replicate,
+    /// at identical think time. It ships on the Rev-1 bar (better calibration
+    /// + strength parity + no cost) plus an explicit product judgement: at
+    /// equal strength, a bot that visibly understands the hazard reads as
+    /// competent to the human across the board, and behaving the way a human
+    /// expects is worth more to this product than a strength delta it cannot
+    /// measure.
     pub spikes: f64,
 }
 
@@ -123,7 +132,7 @@ impl Default for EvalWeights {
             substitute: 0.5,
             race: 3.0,
             leaf_alpha: 1.0,
-            spikes: 0.0,
+            spikes: 1.5,
         }
     }
 }
@@ -168,7 +177,7 @@ impl EvalWeights {
             substitute: 0.5,
             race: 3.0,
             leaf_alpha: 1.0,
-            spikes: 0.0,
+            spikes: 1.5,
         }
     }
 }

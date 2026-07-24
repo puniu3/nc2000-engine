@@ -71,9 +71,21 @@ Key checkpoints:
       playouts, GT skuct:300, spikes slice 115 positions (105 one-sided):
       the oriented bias crosses zero at 1.5 (+0.061 off, −0.002 at 1.5) and
       r / Brier / MSE all optimise there too (0.580→0.588, 0.2123→0.2107,
-      0.0860→0.0844). Three independent criteria agree. Remaining: the
-      standing seed-paired arena gate vs the M16-exit bot
-      (`eval_ab_duel --spikes 1.5`), then flip the default.
+      0.0860→0.0844). Three independent criteria agree. **Gate: parity.**
+      Seed-paired, 400 games each: 0.530±0.046 at 300 iters, 0.498±0.047 at
+      1000 — the 300-iter edge did not replicate, so read the pair as no
+      measurable strength change, at identical think time (280 vs 280 ms).
+      **DONE — default flipped to 1.5** on the Rev-1 bar (better calibration
+      + parity + no cost) plus the owner's product call: at equal strength,
+      behaving the way a human expects is worth more here than a strength
+      delta too small to measure.
+
+      Not yet measured, and the natural next check: whether the term moves
+      M16b top-1 agreement, especially the switching cluster. Spikes is a
+      switching tax, so it should show up exactly there. `human_agreement`
+      picks up `EvalWeights::default()` through `corpus::cfg()`, so a
+      before/after needs a weight override plumbed into `reconstruct_*` —
+      do it as part of the M16b cluster item rather than as a one-off.
    2. **Voluntary switching** — M16b's worst stratum by a wide margin
       (`kind=switch` top-1 24.9% vs move 42.8%). Touches L2 rollout as much as
       L1 eval, so expect it to be the biggest of the five.
