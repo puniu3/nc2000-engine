@@ -218,6 +218,10 @@ if (MODE === 'open') {
 	}
 	const raw = JSON.parse(fs.readFileSync(String(f), 'utf8'));
 	oppTeamSets = Array.isArray(raw) ? raw : raw.sets;
+	if (!Array.isArray(oppTeamSets) || !oppTeamSets.length) {
+		console.error('--opp-team-file must contain a non-empty sets array');
+		process.exit(2);
+	}
 	oppTeamJson = JSON.stringify(oppTeamSets);
 }
 
