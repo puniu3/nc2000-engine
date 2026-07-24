@@ -55,8 +55,15 @@ Key checkpoints:
    `--mode open --opp-team-file F` wherever the opponent's sheet is genuinely
    available. Expect roughly 11–20 s/move (single-threaded wasm-in-node) — well
    inside the 150 s per-turn budget, but budget the wall-clock per game.
-3. After the M17d result, update the M17 entries in `README.md`, run the
-   product regression suite, and close M17.
+3. **Undecided:** the "still live" strengthening tails in the M17 README entry —
+   eval features for the top corpus conditions (turn-weighted: Spikes 21.4%,
+   sleep counter 20.1%, Substitute 9.2%, confusion 8.6%), weight re-tuning on
+   the fixed eval (re-run M6's plateau conclusion, seed-paired), and the M16b
+   cluster items. Each is strengthening work, not verification, and none is
+   scheduled. Decide per item: do it under the standing seed-paired arena gate,
+   or park it explicitly. M17 cannot close while this is unrecorded.
+4. After the M17d result and the item-3 decision, update the M17 entries in
+   `README.md`, run the product regression suite, and close M17.
 
 Do **not** run the Web open-sheet budget gate: it is parked, and its manifest
 exists so that reopening is cheap, not as a queued task. Reopen conditions are
