@@ -164,12 +164,61 @@ else in the repo, so a human copying a move name off a replay gets it right.
 Values are marginal probabilities: "this fraction of Snorlax carry this move".
 `items` and `lead` are optional; a species may give `moves` alone.
 
-**The editing invariant, and it is the one worth telling a human: a species'
-move probabilities should sum to about 4.0**, because every set has four
-moves. A counter derived from replays produces that automatically, and a
-hand-edit that pushes the sum to 6 is telling the bot that Snorlax has six
-moves. The interpreter does **not** enforce it — enforcement would violate
-totality — but the reference counter reports it and a `--check` mode warns.
+**The quantity is P(species *carries* move), not P(species *reveals* move.)**
+This matters more than it looks, and it corrects an earlier line in this doc
+("move marginals come straight from observed usage, so reveal-only spectator
+logs suffice"). Reveal-only counting estimates
+`P(carries) × P(uses | carries)`, and the second factor is strongly
+move-dependent: Rest is used almost whenever it is carried, a situational
+coverage move often is not. So spectator reveals are a **systematically
+biased, per-move-varying** estimator of the quantity the sampler consumes —
+not merely a noisy one, and rescaling cannot fix it, because rescaling
+preserves the biased ratios.
+
+Consequences, all of which keep the split intact:
+
+- **Full-set sources give carry-marginals directly** (`data/community-rentals-v0`
+  and the meta pool are complete 4-move sets, already aggregated by species by
+  `load_sources`). Small sample, unbiased.
+- **Spectator reveals give a large sample of the biased quantity.** Useful for
+  detecting drift and for ranking, not as carry-marginals on their own.
+- **The reference counter emits both and labels them.** It does not attempt a
+  reveal-rate correction: inferring `P(uses | carries)` per move is exactly
+  the kind of modelling this scope excludes, and choosing how to combine the
+  two sources is a weighting judgement, which the doc already assigns to the
+  community rather than the developer.
+
+**Measured (2026-07-25, `count_belief_prior`).** Complete sets: 42 species,
+192 sets, per-species probability sum **4.00** exactly — the invariant holds
+by construction. Spectator reveals over all 570 battles: 128 species, 3,083
+mon-appearances, mean sum **2.45**, i.e. a mon shows about 2.45 of its 4
+moves per game.
+
+The spread is what settles the method. Over the 124 `(species, move)` pairs
+present in both tables at carry ≥ 0.3, the **reveal/carry ratio runs 0.06 to
+1.70, median 0.41** — a 28x spread, so the under-count is emphatically not a
+constant factor and no rescaling can undo it. Jolteon's Rest is carried in
+every sampled set and revealed in 7% of games; Exeggutor's Sleep Powder is
+carried 64% and revealed 60%. A move you only click when you need it stays
+invisible; a move that is the reason you brought the mon shows every game.
+
+Ratios **above 1.0** (Skarmory Toxic 1.70, Tauros Double-Edge 1.50) are the
+more interesting signal: they are impossible if both sources describe the
+same population, so they are evidence that the curated rental/meta-pool sets
+and whoever plays in the spectator corpus are **different populations**.
+Combining the two sources is therefore not a bias-correction problem with a
+right answer — it is a choice about whose metagame the bot should expect.
+That is precisely the judgement this design refuses to make on the owner's
+behalf.
+
+**The editing invariant, for a human: a species' *carry* probabilities should
+sum to about 4.0**, because every set has four moves. Full-set counting
+produces that automatically. A hand-edit that pushes the sum to 6 is telling
+the bot Snorlax has six moves; a reveal-derived table summing to ~2.5 is
+telling it Snorlax has two and a half. The interpreter does **not** enforce
+the sum — enforcement would violate totality — but the counter reports it per
+species, so the number doubles as the coverage diagnostic that reveals
+whether a table was built from complete sets or from reveals.
 
 **Sampling k unrevealed slots.** The doc said "sample the filler moves from
 the marginals" without saying how, and independent Bernoulli draws are wrong
@@ -231,9 +280,11 @@ obligation the developer inherited.
 
 1. **Data format + counting tool.** Per-`(species, move)` marginal probability
    table (declarative JSON), plus a reference tool that counts it from replay
-   corpora (`nc2000stadium2_spectator_logs.zip` at repo root is the seed
-   source; move marginals come straight from observed usage, so reveal-only
-   spectator logs suffice — no hidden sheets needed). **The content, and its
+   corpora. *(Superseded by "The data format" above: reveal-only spectator
+   logs do NOT suffice on their own — they estimate P(reveals), a per-move
+   biased proxy for the P(carries) the sampler needs. The counter reads
+   full-set sources for carry-marginals and the spectator corpus for the
+   reveal-side view, and labels which is which.)* **The content, and its
    weighting/sourcing (whose games count — noisy ladder vs top free-play), is a
    downstream/community concern and is explicitly out of dev scope.** Dev owns
    only the *format* and a *reference* counter; the weighting is a value

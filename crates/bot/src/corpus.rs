@@ -52,6 +52,25 @@ impl SetEvidence {
         let name = self.resolved_name(side, name, species);
         self.items.get(&(side, name.to_string()))
     }
+
+    /// Every (species, revealed moves) pair the full log evidences, for
+    /// tools that count usage rather than reconstruct a decision. Note the
+    /// quantity: these are moves a mon was *seen using*, so counting them
+    /// estimates P(reveals), not the P(carries) a belief prior wants — see
+    /// `docs/community-belief-prior-design.md`.
+    pub fn revealed_by_species(&self) -> Vec<(&str, &[String])> {
+        self.moves
+            .iter()
+            .map(|((side, name), moves)| {
+                let species = self
+                    .species_names
+                    .get(&(*side, name.clone()))
+                    .map(String::as_str)
+                    .unwrap_or(name.as_str());
+                (species, moves.as_slice())
+            })
+            .collect()
+    }
 }
 
 /// One loaded corpus battle: filtered protocol lines, full-log own-set
