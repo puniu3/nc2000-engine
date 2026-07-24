@@ -122,10 +122,12 @@ const MODE = String(args.mode || 'blind');
 // an operating point: 1000 iters left flat roots as a visit-count lottery
 // (battle-3623 T6: argmax split 23/16/7/4 over 50 seeds; unanimous at 10000 —
 // replay_postmortem_3623). That floor still holds; 30000 sits above it.
-// Latency: this client's searcher is single-threaded wasm-in-node, so the
-// .wslconfig core cap (processors=12 of 16) does not touch per-move time —
-// measured blind:1000 was 367-395 ms avg / 603-653 ms max (M15b gates a+c),
-// i.e. 30k lands around 11-20 s/move, still ~8x inside PS's 150 s per turn.
+// Latency: the searcher is single-threaded wasm-in-node, so the .wslconfig core
+// cap (processors=12 of 16, set for host responsiveness) does not touch per-move
+// time. The host's processor-performance state does, and this box runs capped
+// (~70-80% of base clock). The figures below were measured under that cap and
+// already include it: blind:1000 was 367-395 ms avg / 603-653 ms max (M15b gates
+// a+c), so 30k lands around 11-20 s/move, still ~8x inside PS's 150 s per turn.
 const ITERS = parseInt(args.iters || '30000', 10);
 const SEED = parseInt(args.seed || '1', 10);
 const RANDOM = !!args.random;
