@@ -20,7 +20,17 @@ case "$profile" in
 esac
 fixed_args=()
 if [[ "$profile" == full ]]; then
-	fixed_args=(--max-turns 1000)
+	# Must sit ABOVE the engine's own terminal boundary, not on it. The engine
+	# auto-ties at `turn > 1000` (crates/engine/src/battle/turn.rs, the ported
+	# PS turn limit), so a game that goes the distance ends legitimately on
+	# turn 1001. The cap was previously 1000, one turn short of that, which
+	# recorded those ties as `capped` and made the fail-closed merger reject
+	# the shard -- exactly what killed job 597 at full scale after the
+	# 144-pair pilot happened never to reach turn 1000. With the cap above
+	# 1001 the engine's limit binds first, so this cap can no longer fire at
+	# all, and turn-limit ties enter the estimate as the 0.5 they are instead
+	# of being selected out on a length-correlated variable.
+	fixed_args=(--max-turns 1100)
 fi
 for arg in "${extra_args[@]}"; do
 	case "$arg" in

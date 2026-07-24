@@ -12,7 +12,13 @@ This produces 72 half-open job ranges, `shard-START-END.jsonl`, and then
 `merged.jsonl`. Re-running the same command validates and skips completed
 shards. A changed executable, input dataset, selected team, semantic config,
 seed, shard plan, or workload refuses resume instead of mixing lineages.
-The wrapper fixes the full profile's turn cap at 1,000; the earlier 500-turn
+The wrapper fixes the full profile's turn cap at **1,100**, deliberately above
+the engine's own auto-tie at `turn > 1000` so the engine's limit binds first
+and this cap can never fire. It was 1,000 — sitting exactly on that boundary,
+one turn under the 1,001 a full-length game ends on — which recorded legitimate
+turn-limit ties as `capped` and made the merger reject the shard. The 144-pair
+pilot never reached turn 1000, so the fault only appeared at full scale (job
+597, 2026-07-25). The earlier 500-turn
 diagnostic capped one layered arm and was uncertified.
 
 For a staged/spot worker, copy the release example binary, `tools/`, and the
