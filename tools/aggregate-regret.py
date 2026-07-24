@@ -22,6 +22,8 @@ MODE_INFO = {
 
 ROW_SCHEMA = "nc2000-regret-v3"
 RUN_SCHEMA = "nc2000-regret-run-v3"
+LIVE_SOURCE = "live-decision-log-v2-v3"
+LIVE_SOURCES = {"live-decision-log-v2", LIVE_SOURCE}
 RECONSTRUCTION_INPUTS = {
     "dex_file", "meta_pool_file", "community_rentals_file", "learnsets_file",
     "embedded_community_rentals", "embedded_learnsets",
@@ -375,10 +377,10 @@ def validate_run(row, where):
             f"{where}: run lineage/stage {run['lineage']}/{run['stage']} "
             f"does not match mode {mode}"
         )
-    expected_source = "corpus" if lineage == "offline" else "live-decision-log-v2"
-    if run["source"] != expected_source:
+    expected_sources = {"corpus"} if lineage == "offline" else LIVE_SOURCES
+    if run["source"] not in expected_sources:
         raise SystemExit(
-            f"{where}: run.source {run['source']!r} != {expected_source!r}"
+            f"{where}: run.source {run['source']!r} not in {sorted(expected_sources)!r}"
         )
     integer(run.get("base_seed"), f"{where}: run.base_seed", 0)
     run_samples = integer(run.get("samples"), f"{where}: run.samples", 1)
@@ -787,7 +789,7 @@ def test_screen(mode, ordinal=0, fingerprint="fnv1a64:aaaaaaaaaaaaaaaa"):
     }
     if live:
         row.update({
-            "source": "live-decision-log-v2", "input_file": "decisions.jsonl",
+            "source": LIVE_SOURCE, "input_file": "decisions.jsonl",
             "input_fingerprint": fingerprint,
             "input_line": ordinal + 1, "room": f"battle-live-{ordinal}", "rqid": ordinal + 10,
         })
@@ -811,7 +813,7 @@ def test_confirm(mode, deltas=None, fingerprint="fnv1a64:aaaaaaaaaaaaaaaa"):
                 "lower95": stat["lower95"], "samples": len(deltas)})
     if live:
         row.update({
-            "source": "live-decision-log-v2", "input_file": "decisions.jsonl",
+            "source": LIVE_SOURCE, "input_file": "decisions.jsonl",
             "input_fingerprint": fingerprint,
             "input_line": 1, "room": "battle-live-0", "rqid": 10,
         })
@@ -835,7 +837,7 @@ def v3_artifact(rows, discovery_fingerprint=None, run_overrides=None):
     rows = [json.loads(json.dumps(row)) for row in rows]
     mode = rows[0]["mode"]
     lineage, stage = MODE_INFO[mode]
-    source = "corpus" if lineage == "offline" else "live-decision-log-v2"
+    source = "corpus" if lineage == "offline" else LIVE_SOURCE
     source_fingerprint = (
         rows[0].get("corpus_fingerprint", "fnv1a64:cccccccccccccccc:1files")
         if lineage == "offline" else rows[0]["input_fingerprint"]
@@ -1092,12 +1094,12 @@ class SelfTest(unittest.TestCase):
         output = self.run_main(rows)
         self.assertIn("offline/corpus  screen 1 / attempted 1", output)
         self.assertIn(
-            "live/live-decision-log-v2/fnv1a64:aaaaaaaaaaaaaaaa  screen 2 / attempted 3",
+            f"live/{LIVE_SOURCE}/fnv1a64:aaaaaaaaaaaaaaaa  screen 2 / attempted 3",
             output,
         )
         self.assertIn("== confirm [offline/corpus]", output)
         self.assertIn(
-            "== confirm [live/live-decision-log-v2/fnv1a64:aaaaaaaaaaaaaaaa]", output
+            f"== confirm [live/{LIVE_SOURCE}/fnv1a64:aaaaaaaaaaaaaaaa]", output
         )
         self.assertEqual(output.count("n    1  lower95"), 2)
         self.assertNotIn("n    2  lower95", output)
@@ -1112,7 +1114,7 @@ class SelfTest(unittest.TestCase):
         with contextlib.redirect_stdout(sink):
             print_family_report(("offline", "corpus", None),
                                 {"screen": [], "confirm": [offline]}, 10, True)
-            print_family_report(("live", "live-decision-log-v2",
+            print_family_report(("live", LIVE_SOURCE,
                                  "fnv1a64:aaaaaaaaaaaaaaaa"),
                                 {"screen": [], "confirm": [live]}, 10, True)
         self.assertLessEqual(offline["bh_q_value"], 0.05)
@@ -1135,8 +1137,8 @@ class SelfTest(unittest.TestCase):
             test_screen("live-screen", fingerprint=second),
             test_confirm("live-confirm", fingerprint=second),
         ])
-        self.assertIn(f"live/live-decision-log-v2/{first}  screen 1", output)
-        self.assertIn(f"live/live-decision-log-v2/{second}  screen 1", output)
+        self.assertIn(f"live/{LIVE_SOURCE}/{first}  screen 1", output)
+        self.assertIn(f"live/{LIVE_SOURCE}/{second}  screen 1", output)
         self.assertEqual(output.count("confirmed(BH q<=0.05, positive effect) 1 / 1"), 2)
 
     def test_rank_only_difference_is_one_duplicate(self):
