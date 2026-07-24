@@ -387,12 +387,20 @@ fn main() {
     }
     // ---- --ab: paired eval-variant comparison on the SAME positions + GT
     if args.iter().any(|a| a == "--ab") {
-        // M17c candidates: KO-race weight (rev-1 winners are the defaults now)
+        // M17 tail candidates: the Spikes weight. `spikes` is a per-exposed-
+        // benched-mon multiplier on the engine's own switch-in damage
+        // fraction (1/8 at this format's single layer), so 1.0 means "each
+        // benched mon is worth exactly its entry damage less" — the upper
+        // bound, since not every benched mon actually switches in. The sweep
+        // brackets it. Superseded variant sets stay in git history; the M17c
+        // race sweep settled at race=3.0, which is the default here.
         let mut variants: Vec<(&str, EvalWeights)> = Vec::new();
-        variants.push(("default", EvalWeights::default()));
-        variants.push(("race2", EvalWeights { race: 2.0, ..EvalWeights::default() }));
-        variants.push(("race3", EvalWeights { race: 3.0, ..EvalWeights::default() }));
-        variants.push(("race4", EvalWeights { race: 4.0, ..EvalWeights::default() }));
+        variants.push(("default (spikes off)", EvalWeights::default()));
+        variants.push(("spikes0.25", EvalWeights { spikes: 0.25, ..EvalWeights::default() }));
+        variants.push(("spikes0.5", EvalWeights { spikes: 0.5, ..EvalWeights::default() }));
+        variants.push(("spikes0.75", EvalWeights { spikes: 0.75, ..EvalWeights::default() }));
+        variants.push(("spikes1.0", EvalWeights { spikes: 1.0, ..EvalWeights::default() }));
+        variants.push(("spikes1.5", EvalWeights { spikes: 1.5, ..EvalWeights::default() }));
 
         let feat_idx = |name: &str| fs.iter().position(|f| f.name == name).unwrap();
         let oriented_bias = |preds: &[f64], fi: usize| -> f64 {
@@ -419,7 +427,7 @@ fn main() {
         println!("\n== --ab paired comparison (same positions, same GT; GT policy = default eval) ==");
         println!(
             "  {:<24} {:>6} {:>7} {:>7}  {:>8} {:>8} {:>8} {:>8}",
-            "variant", "r", "brier", "MSE", "slp", "sub", "frz", "tox"
+            "variant", "r", "brier", "MSE", "spikes", "slp", "sub", "tox"
         );
         for (name, vw) in &variants {
             let vp: Vec<f64> = positions.iter().map(|p| eval01(&p.battle, &dex, vw)).collect();
@@ -439,9 +447,9 @@ fn main() {
                 pearson(&vp, &emps),
                 vbrier / f64::max(vcnt, 1.0),
                 vmse,
+                oriented_bias(&vp, feat_idx("spikes")),
                 oriented_bias(&vp, feat_idx("slp")),
                 oriented_bias(&vp, feat_idx("substitute")),
-                oriented_bias(&vp, feat_idx("frz")),
                 oriented_bias(&vp, feat_idx("tox")),
             );
         }

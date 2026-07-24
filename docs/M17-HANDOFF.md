@@ -57,8 +57,18 @@ Key checkpoints:
    inside the 150 s per-turn budget, but budget the wall-clock per game.
 3. **Strengthening tails — ALL ACCEPTED (owner), none parked.** Full status and
    the re-derived cluster ranking are in the M17 README entry. Work order:
-   1. **Spikes eval feature** — the largest measured blind spot (21.4%
-      turn-weighted) and `eval.rs` has no term for it at all.
+   0. **Corpus position source for `eval_calibration`** — now a prerequisite,
+      not an optional extra. The harness generates positions by skuct
+      self-play only, so conditions the bot under-uses are almost absent from
+      it (Spikes: 2 of 36 in a smoke run vs 21.4% turn-weighted in the
+      corpus). Any condition-feature weight calibrated on that distribution is
+      calibrated on a distribution the blind spot itself produced. Build the
+      corpus arm the M16a plan specified, reusing the importer path that
+      `human_agreement.rs` already drives.
+   1. **Spikes eval feature** — term IMPLEMENTED and shipped inert
+      (`EvalWeights::spikes`, default 0.0, gated behind `!= 0.0`). The 0.25–1.5
+      candidate sweep is committed in `eval_calibration --ab`. Only the weight
+      is outstanding, and it is blocked on item 0.
    2. **Voluntary switching** — M16b's worst stratum by a wide margin
       (`kind=switch` top-1 24.9% vs move 42.8%). Touches L2 rollout as much as
       L1 eval, so expect it to be the biggest of the five.
