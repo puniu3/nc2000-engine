@@ -35,8 +35,9 @@
 //!     --iters 10000 --samples 8 --threads 8 \
 //!     --out tmp/root-allocation-audit.jsonl
 //!
-//! Live decision-log v2 uses the exact submitted team, exact request, and
-//! accumulated player-visible protocol captured by `tools/ps-client.js`:
+//! Live decision-log v2/v3 uses the exact submitted team, exact request, and
+//! accumulated player-visible protocol captured by `tools/ps-client.js`;
+//! v3 additionally binds the pinned opponent sheet in open mode:
 //!   cargo run --release -p nc2000-bot --example regret_mining -- \
 //!     --mode live-screen --input tmp/decisions.jsonl \
 //!     --iters 60000 --samples 3 --out tmp/live-regret-screen.jsonl
@@ -66,10 +67,11 @@ use nc2000_engine::state::{Battle, Status};
 
 const ROW_SCHEMA: &str = "nc2000-regret-v3";
 const RUN_SCHEMA: &str = "nc2000-regret-run-v3";
+const LIVE_SOURCE: &str = "live-decision-log-v2-v3";
 /// Bump whenever corpus/live synthesis semantics change.  Corpus bytes do
 /// not capture importer/fabrication changes, so artifacts bind this value
 /// independently of their source fingerprint.
-const RECONSTRUCTION_REV: &str = "m17a-reconstruct-2026-07-23-v4";
+const RECONSTRUCTION_REV: &str = "m17a-reconstruct-2026-07-24-v5";
 
 fn arg(args: &[String], key: &str, default: usize) -> usize {
     match args.iter().position(|a| a == key) {
@@ -527,6 +529,7 @@ struct LiveLogRow {
     seed: i64,
     team_label: String,
     own_team: Vec<PokemonSet>,
+    opponent_team: Option<Vec<PokemonSet>>,
     request: serde_json::Value,
     protocol_reset: bool,
     protocol_delta: Vec<String>,
@@ -548,9 +551,9 @@ struct LiveLog {
 }
 
 fn validate_live_row(path: &str, line_no: usize, row: &LiveLogRow) {
-    let bad = |why: &str| panic!("{path}:{line_no}: invalid decision-log v2 row: {why}");
-    if row.version != 2 || row.kind != "decision" {
-        bad("expected version=2 type=decision");
+    let bad = |why: &str| panic!("{path}:{line_no}: invalid decision-log v2/v3 row: {why}");
+    if !matches!(row.version, 2 | 3) || row.kind != "decision" {
+        bad("expected version=2|3 type=decision");
     }
     if row.room.is_empty() {
         bad("room is empty");
@@ -569,6 +572,15 @@ fn validate_live_row(path: &str, line_no: usize, row: &LiveLogRow) {
     }
     if row.own_team.is_empty() {
         bad("ownTeam is empty");
+    }
+    if row.version == 2 && row.opponent_team.is_some() {
+        bad("version 2 must not contain opponentTeam");
+    }
+    if row.version == 3
+        && row.mode == "open"
+        && row.opponent_team.as_ref().is_none_or(Vec::is_empty)
+    {
+        bad("version 3 open mode needs a non-empty opponentTeam");
     }
     if !row.request.is_object() {
         bad("request must be an object");
@@ -715,6 +727,9 @@ fn reconstruct_live_agent(
 ) -> Result<ProtocolAgent, String> {
     let mut agent = ProtocolAgent::new(dex, row.side, pool.clone(), cfg(), seed);
     agent.set_own_team(row.own_team.clone());
+    if let Some(opponent) = &row.opponent_team {
+        agent.pin_opponent(opponent.clone());
+    }
     for line in protocol {
         agent.push_line(dex, line);
     }
@@ -868,7 +883,7 @@ fn live_base(
 ) -> serde_json::Value {
     serde_json::json!({
         "schema":ROW_SCHEMA, "run":run,
-        "mode":"live-screen", "source":"live-decision-log-v2",
+        "mode":"live-screen", "source":LIVE_SOURCE,
         "input_file":file_key(Path::new(input)), "input_fingerprint":source_id,
         "input_line":row.input_line,
         "room":row.room, "rqid":row.rqid, "battle":row.battle,
@@ -895,10 +910,10 @@ fn live_screen_decision(
     if row.driver == "random" {
         return merge(base, serde_json::json!({"skip":"random"}));
     }
-    if row.mode == "open" {
-        // v2 records only ownTeam. Replaying an open-sheet product action
-        // without its pinned opponent team would silently compare policies
-        // from different information sets.
+    if row.mode == "open" && row.opponent_team.is_none() {
+        // Legacy v2 records only ownTeam. Replaying an open-sheet product
+        // action without its pinned opponent team would silently compare
+        // policies from different information sets.
         return merge(
             base,
             serde_json::json!({"skip":"open-opponent-team-unavailable"}),
@@ -1092,7 +1107,7 @@ fn run_live_screen(
             .collect(),
     );
     let run = run_meta(serde_json::json!({
-        "lineage":"live", "stage":"screen", "source":"live-decision-log-v2",
+        "lineage":"live", "stage":"screen", "source":LIVE_SOURCE,
         "source_fingerprint":source_id, "pool_fingerprint":pool_fingerprint,
         "input_fingerprints":input_fingerprints,
         "base_seed":seed, "budget":{"oracle_iters":iters}, "samples":samples,
@@ -1721,7 +1736,7 @@ fn live_confirm_base(candidate: &Candidate, run: Option<&serde_json::Value>) -> 
     let row = &candidate.row;
     let mut base = serde_json::json!({
         "mode":"live-confirm", "rank":candidate.rank,
-        "source":"live-decision-log-v2", "input_file":row["input_file"],
+        "source":LIVE_SOURCE, "input_file":row["input_file"],
         "input_fingerprint":row["input_fingerprint"],
         "input_line":row["input_line"], "room":row["room"], "rqid":row["rqid"],
         "battle":row["battle"], "decision":row["decision"],
@@ -1740,7 +1755,7 @@ fn validate_live_screen_row(path: &str, line_no: usize, row: &serde_json::Value)
         validate_run(path, line_no, row, "screen");
         let run = &row["run"];
         if run["lineage"] != "live"
-            || run["source"] != "live-decision-log-v2"
+            || run["source"] != LIVE_SOURCE
             || run["source_fingerprint"] != row["input_fingerprint"]
         {
             bad("row source disagrees with run metadata");
@@ -2521,7 +2536,7 @@ fn run_live_confirm(
             .collect(),
     );
     let confirm_run = run_meta(serde_json::json!({
-        "lineage":"live", "stage":"confirm", "source":"live-decision-log-v2",
+        "lineage":"live", "stage":"confirm", "source":LIVE_SOURCE,
         "source_fingerprint":source_id, "pool_fingerprint":pool_fingerprint,
         "input_fingerprints":input_fingerprints,
         "base_seed":seed, "budget":{"iters_per_action":iters}, "samples":samples,
@@ -2702,6 +2717,17 @@ mod live_tests {
             "submitted":"move splash", "rootPolicy":null,
             "stateViewKind":"diagnostic-imputed", "stateView":null,
         })
+    }
+
+    fn v3_open_row() -> serde_json::Value {
+        let mut row = v2_row("battle-open-1", 1, false, &["|turn|1"]);
+        row["version"] = 3.into();
+        row["mode"] = "open".into();
+        row["opponentTeam"] = serde_json::json!([{
+            "name":"Raichu", "species":"Raichu",
+            "moves":["Encore"], "level":50
+        }]);
+        row
     }
 
     fn screen_row() -> serde_json::Value {
@@ -2947,7 +2973,7 @@ mod live_tests {
     }
 
     #[test]
-    fn v2_schema_matches_logger_and_rejects_unknown_fields() {
+    fn v2_v3_schema_matches_logger_and_rejects_unknown_fields() {
         let row = v2_row("battle-test-1", 1, false, &["|turn|1"]);
         let parsed: LiveLogRow = serde_json::from_value(row.clone()).unwrap();
         validate_live_row("synthetic", 1, &parsed);
@@ -2955,6 +2981,24 @@ mod live_tests {
         let mut extra = row;
         extra["unexpected"] = serde_json::json!(true);
         assert!(serde_json::from_value::<LiveLogRow>(extra).is_err());
+
+        let open = v3_open_row();
+        let parsed: LiveLogRow = serde_json::from_value(open.clone()).unwrap();
+        validate_live_row("synthetic", 1, &parsed);
+
+        let mut missing = open.clone();
+        missing.as_object_mut().unwrap().remove("opponentTeam");
+        let parsed: LiveLogRow = serde_json::from_value(missing).unwrap();
+        assert!(
+            std::panic::catch_unwind(|| validate_live_row("synthetic", 1, &parsed)).is_err()
+        );
+
+        let mut spoofed_v2 = open;
+        spoofed_v2["version"] = 2.into();
+        let parsed: LiveLogRow = serde_json::from_value(spoofed_v2).unwrap();
+        assert!(
+            std::panic::catch_unwind(|| validate_live_row("synthetic", 1, &parsed)).is_err()
+        );
     }
 
     #[test]

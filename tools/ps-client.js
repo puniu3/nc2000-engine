@@ -92,7 +92,8 @@ if (args.help || args.h) {
                     points (see header comment)
   --decision-log F  append private (mode 0600) JSONL for regret replay:
                     request, incremental visible protocol, exact own team,
-                    submitted action, diagnostic state, root policy/config
+                    pinned opponent team in open mode, submitted action,
+                    diagnostic state, root policy/config
   --quiet           per-game lines only`);
 	process.exit(0);
 }
@@ -208,6 +209,7 @@ if (!RANDOM) {
 	}
 }
 let oppTeamJson = '';
+let oppTeamSets = null;
 if (MODE === 'open') {
 	const f = args['opp-team-file'];
 	if (!f || f === true) {
@@ -215,7 +217,8 @@ if (MODE === 'open') {
 		process.exit(2);
 	}
 	const raw = JSON.parse(fs.readFileSync(String(f), 'utf8'));
-	oppTeamJson = JSON.stringify(Array.isArray(raw) ? raw : raw.sets);
+	oppTeamSets = Array.isArray(raw) ? raw : raw.sets;
+	oppTeamJson = JSON.stringify(oppTeamSets);
 }
 
 // ------------------------------------------------------------- drop specs
@@ -568,7 +571,7 @@ class BattleDriver {
 		const protocolDelta = this.visibleLines.slice(this.loggedLineCount);
 		this.loggedLineCount = this.visibleLines.length;
 		appendDecision({
-			version: 2,
+			version: 3,
 			type: 'decision',
 			room: this.room,
 			battle: this.battleIdx,
@@ -585,6 +588,7 @@ class BattleDriver {
 			teamLabel: this.client.currentTeam.label.startsWith('pool:') ?
 				this.client.currentTeam.label : path.basename(this.client.currentTeam.label),
 			ownTeam: this.client.currentTeam.sets,
+			opponentTeam: MODE === 'open' ? oppTeamSets : null,
 			request: req,
 			protocolReset: this.protocolReset,
 			protocolDelta,
