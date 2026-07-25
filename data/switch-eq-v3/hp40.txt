@@ -1,0 +1,20 @@
+pure attack/switch 2v2 positions at 40% HP; bot skuct:30000 seed 1; solver budget 4000000 work 400000000
+
+  scenario                             value certwidth  entrygap    eq_sw   bot_sw   delta
+solving: fire/water vs grass/water
+  fire/water vs grass/water           0.6181    0.7524    0.7655    0.380    0.007  -0.372   (2 root actions)
+                                    UNUSABLE: payoff matrix still bracketed
+solving: electric/ground vs water/grass
+  electric/ground vs water/grass      0.0000    0.0000    0.0500    0.000    0.316  +0.316   (2 root actions)
+                                    UNUSABLE: payoff matrix still bracketed
+solving: ice/fighting vs dragon/psychic
+  ice/fighting vs dragon/psychic      0.3158    0.1297    0.1734    0.840    0.222  -0.618   (2 root actions)
+                                    UNUSABLE: payoff matrix still bracketed
+
+Read only rows with certwidth and entrygap ~0: a mixture solved off a
+bracketed payoff matrix is not an equilibrium of anything. delta < 0 means
+the bot switches LESS than equilibrium (its disagreement with humans would
+then be the bot's error); delta ~ 0 means the bot is right and the human
+switch rate is the thing that needs explaining. Rows flagged UNUSABLE say
+nothing either way — a decided position makes every strategy optimal, so its
+equilibrium switch rate is an artifact of which vertex the LP happened to pick.

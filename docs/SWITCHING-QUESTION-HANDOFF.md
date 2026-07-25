@@ -103,13 +103,62 @@ The OOM lever is **`--leaf-cap`**, not the state budget: `enumerate_step` holds
 a full `Battle` clone per chance leaf, so the old 100k default is gigabytes.
 Default is now 20k.
 
-## IN FLIGHT — pick this up first
+## RESULT of the first real sweep — it ran, and it answered nothing
 
 ```
-CX task 20260725-221714   name switch-eq-v3   16 vCPU / 32 GB   -T 21600 (6h)
+CX task 20260725-221714   switch-eq-v3   16 vCPU / 32 GB   exit 0, 9818s
+results in ~/cx/results/20260725-221714/out/hp{20,30,40}.txt
 ```
 
-**Two dead submissions precede it; both died in under 20 s, neither is a
+All **9 rows UNUSABLE** (`entry_gap` 0.05–0.97, none near 0). But the run
+reclassifies the constraint, which is the value in it:
+
+- **RAM was not binding.** 32 GB held at `--leaf-cap 20000`; no OOM, no FAIL.
+- **Wall clock was not binding.** 9818 s of a 21600 s cap.
+- **The `--budget`/`--work` caps were.** Every arm terminated at its cap with
+  the matrix still bracketed. So "throw a bigger box at it" is already spent as
+  a move; the handoff's own advice against blindly raising budgets stands.
+
+**The real structure: tractability and undecidedness are anti-correlated across
+SCENARIOS, not along HP.**
+
+| scenario | gap @20/30/40 | value |
+|---|---|---|
+| electric/ground vs water/grass | 0.336 / 0.335 / **0.050** | **0.0000 at all three** — decided |
+| ice/fighting vs dragon/psychic | 0.289 / 0.239 / 0.173 | 0.29 / 0.94 / **0.32** |
+| fire/water vs grass/water | 0.725 / 0.968 / 0.766 | 0.94 / 1.00 / 0.62 |
+
+The one position that nearly solves is a certain loss for p1, so its mixture is
+LP degeneracy; the positions that are genuinely undecided are the intractable
+ones. The two conditions fight each other along the axes now exposed — HP scale
+is not the lever, and neither is compute.
+
+Closest to admissible, and worth stating precisely because it is NOT an answer:
+`ice/fighting vs dragon/psychic` at 40% HP — value 0.3158 (undecided),
+`entry_gap` 0.1734, `eq_sw` 0.840 vs `bot_sw` 0.222, **delta −0.618**. Both
+undecided rows in the sweep have delta < 0 (−0.372, −0.618) and every positive
+delta sits in a decided row. That is a hint toward reading 1, on a bracketed
+matrix, at n=2 — do not record it as evidence.
+
+Side observation: at 20/30% HP the bot puts 0.36–0.46 root mass on switch in
+positions certified 0.0000. Every strategy is optimal there so it is not an
+error, but the bot plainly does not know it is lost.
+
+### Next lever (proposed, not run)
+
+Keep the scenario that nearly solves and remove the reason it is degenerate.
+`scale_hp` scales BOTH sides uniformly, so p1 losing 0-100 cannot be corrected
+by `--hp`. Add a per-side scale (`--hp1`/`--hp2`, ~10 lines in `scale_hp` and
+the arg block) and hand p1 enough HP to pull `electric/ground vs water/grass`
+off the 0.0 boundary into mid-range, at the 40% setting where its gap was 0.050.
+That buys an undecided position with the coarse damage lattice that made it
+tractable — the handoff's "shrink along an axis that is not HP", at no extra
+compute. Lower levels (less absolute HP, fewer roll-distinct outcomes) are the
+second candidate.
+
+### Submission postmortem — cx hygiene, read before submitting anything
+
+**Two dead submissions precede v3; both died in under 20 s, neither is a
 result.** Ignore `20260725-211409` and `20260725-212400`.
 
 - `-211409` is a **false success** — `exit 0` after 15 s having run nothing. The
@@ -130,8 +179,8 @@ Lesson for any future `cx` submission from this repo: pass `-d` explicitly and
 make the command fail loudly on its own preconditions. Three of the last four
 failures were 30-second environment deaths, not experiments.
 
-Runs `switch_equilibrium` at `--hp 20 30 40`, `--budget 4000000`,
-`--work 400000000`, `--leaf-cap 20000`, `--iters 30000`.
+v3's arms were `--hp 20 30 40`, `--budget 4000000`, `--work 400000000`,
+`--leaf-cap 20000`, `--iters 30000`; the results are read above.
 
 ```bash
 ~/cx/cx status                       # DONE / FAIL / still RUN?
@@ -139,21 +188,11 @@ Runs `switch_equilibrium` at `--hp 20 30 40`, `--budget 4000000`,
 ls ~/cx/results/20260725-221714/out/ # hp20.txt hp30.txt hp40.txt (+ FAILURES if any arm died)
 ```
 
-Read each row against the two conditions above. Expected outcomes and what to
-do with each:
-
-- **A row with `entry_gap ≈ 0` and `0 < value < 1`** — the experiment worked.
-  Read `delta` and settle the question. Add more scenarios at that HP setting
-  for a second and third data point before concluding.
-- **All rows still bracketed** — 32 GB was not the binding constraint either.
-  Do not keep raising budgets blindly; instead shrink the position further
-  along an axis that is not HP. Candidates not yet tried: lower levels (less
-  HP in absolute terms, so fewer damage-roll-distinct outcomes), a move pair
-  with no type resistance so the damage lattice is coarser, or accepting a
-  small `entry_gap` ε and reporting the mixture as approximate with the ε
-  stated.
-- **OOM / FAIL again** — drop `--leaf-cap` to 5000 and run one HP value per
-  task so a single position's peak memory is the whole budget.
+Still-untried axes beyond the per-side HP scale proposed above: a move pair with
+no type resistance, so the damage lattice is coarser; or accepting a small
+`entry_gap` ε and reporting the mixture as approximate with the ε stated. If a
+future arm OOMs rather than exhausting budget, drop `--leaf-cap` to 5000 and run
+one HP value per task so one position's peak memory is the whole box.
 
 ## Repo state
 
