@@ -144,17 +144,49 @@ Side observation: at 20/30% HP the bot puts 0.36–0.46 root mass on switch in
 positions certified 0.0000. Every strategy is optimal there so it is not an
 error, but the bot plainly does not know it is lost.
 
-### Next lever (proposed, not run)
+## IN FLIGHT — the HP-skew sweep
 
-Keep the scenario that nearly solves and remove the reason it is degenerate.
-`scale_hp` scales BOTH sides uniformly, so p1 losing 0-100 cannot be corrected
-by `--hp`. Add a per-side scale (`--hp1`/`--hp2`, ~10 lines in `scale_hp` and
-the arg block) and hand p1 enough HP to pull `electric/ground vs water/grass`
-off the 0.0 boundary into mid-range, at the 40% setting where its gap was 0.050.
-That buys an undecided position with the coarse damage lattice that made it
-tractable — the handoff's "shrink along an axis that is not HP", at no extra
-compute. Lower levels (less absolute HP, fewer roll-distinct outcomes) are the
-second candidate.
+```
+CX task 20260726-011409   switch-eq-v4-skew   16 vCPU / 32 GB   -T 21600 (6h)
+results will land in ~/cx/results/20260726-011409/out/p<h1>_<h2>.txt
+```
+
+The lever: keep the scenario that nearly solves and remove the reason it is
+degenerate. `scale_hp` scaled BOTH sides uniformly, so "p1 is simply losing"
+was unreachable by `--hp`. `ecffb96` adds `--hp1`/`--hp2` and a `--scenario`
+filter, so an arm spends its whole budget on one position instead of another
+uniform pass over three.
+
+Six arms, sequentially, all on `electric/ground vs water/grass`, everything else
+identical to v3 (`--iters 30000 --budget 4000000 --work 400000000 --leaf-cap
+20000`, seed 1):
+
+| arm | p1 % | p2 % | what it tests |
+|---|---|---|---|
+| `p40_40` | 40 | 40 | baseline repro — must reproduce v3's `gap 0.0500 / value 0.0000` |
+| `p40_36` / `p40_32` / `p40_28` | 40 | 36 / 32 / 28 | weaken p2: value rises off 0 AND the tree shrinks |
+| `p48_40` / `p56_40` | 48 / 56 | 40 | strengthen p1: value rises, tree grows |
+
+Both ladders raise p1's value, so the crossing into `0 < value < 1` should be
+bracketed from two directions; lowering p2 is the preferred direction because it
+also shortens the game. Each arm is wrapped in `/usr/bin/time -v`, so the arm
+files carry peak RSS — v3 never measured it, and knowing it is what decides
+whether future arms can run concurrently (the solver is single-threaded, so 16
+vCPU is otherwise idle; RAM is the only reason not to).
+
+Why the position is degenerate in the first place, worth knowing before reading
+the rows: p1 is Electabuzz(Thunderbolt)/Sandslash(Earthquake) against
+Quagsire(Surf)/Victreebel(Giga Drain). Thunderbolt is a **0x** immunity into
+Quagsire's Ground, and both foes hit Sandslash for 2x. That one-sidedness is
+also why it solves — the branching is small precisely because half of p1's
+options do nothing.
+
+Reading order when it lands: `p40_40` first (if the baseline does not reproduce,
+the refactor moved the position and nothing else in the file is comparable), then
+the ladder for the first row with `entry_gap ≈ 0` and `0 < value < 1`.
+
+Second candidate axis if the skew does not produce a usable row: lower levels
+(less absolute HP, so fewer roll-distinct outcomes).
 
 ### Submission postmortem — cx hygiene, read before submitting anything
 
