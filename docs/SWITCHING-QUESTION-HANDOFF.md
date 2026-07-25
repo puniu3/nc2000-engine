@@ -106,16 +106,26 @@ Default is now 20k.
 ## IN FLIGHT — pick this up first
 
 ```
-CX task 20260725-211409   name switch-eq   16 vCPU / 32 GB   -T 21600 (6h)
+CX task 20260725-212400   name switch-eq-v2   16 vCPU / 32 GB   -T 21600 (6h)
 ```
+
+The first submission (`20260725-211409`) is a **false success** — ignore it. It
+reported `exit 0` after 15 s having run nothing: the command was written
+`PATH=... mkdir -p ... && for h in ...; do cargo ...`, and a variable-assignment
+prefix applies to that ONE command, so `cargo` ran without it and died 127 each
+iteration while the trailing `cp` succeeded and set the task's exit code. Two
+lessons, both now in the resubmission: `export PATH=...;` rather than a prefix,
+and make per-iteration failures set the task's exit code instead of letting the
+last command decide it. `~/cx/README.md` already warns that cargo is not on a
+non-interactive PATH; the prefix form defeats the fix.
 
 Runs `switch_equilibrium` at `--hp 20 30 40`, `--budget 4000000`,
 `--work 400000000`, `--leaf-cap 20000`, `--iters 30000`.
 
 ```bash
 ~/cx/cx status                       # DONE / FAIL / still RUN?
-~/cx/cx logs 20260725-211409         # stdout+stderr
-ls ~/cx/results/20260725-211409/out/ # hp20.txt hp30.txt hp40.txt
+~/cx/cx logs 20260725-212400         # stdout+stderr
+ls ~/cx/results/20260725-212400/out/ # hp20.txt hp30.txt hp40.txt (+ FAILURES if any arm died)
 ```
 
 Read each row against the two conditions above. Expected outcomes and what to
