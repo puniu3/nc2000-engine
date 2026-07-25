@@ -106,26 +106,37 @@ Default is now 20k.
 ## IN FLIGHT — pick this up first
 
 ```
-CX task 20260725-212400   name switch-eq-v2   16 vCPU / 32 GB   -T 21600 (6h)
+CX task 20260725-221714   name switch-eq-v3   16 vCPU / 32 GB   -T 21600 (6h)
 ```
 
-The first submission (`20260725-211409`) is a **false success** — ignore it. It
-reported `exit 0` after 15 s having run nothing: the command was written
-`PATH=... mkdir -p ... && for h in ...; do cargo ...`, and a variable-assignment
-prefix applies to that ONE command, so `cargo` ran without it and died 127 each
-iteration while the trailing `cp` succeeded and set the task's exit code. Two
-lessons, both now in the resubmission: `export PATH=...;` rather than a prefix,
-and make per-iteration failures set the task's exit code instead of letting the
-last command decide it. `~/cx/README.md` already warns that cargo is not on a
-non-interactive PATH; the prefix form defeats the fix.
+**Two dead submissions precede it; both died in under 20 s, neither is a
+result.** Ignore `20260725-211409` and `20260725-212400`.
+
+- `-211409` is a **false success** — `exit 0` after 15 s having run nothing. The
+  command was `PATH=... mkdir -p ... && for h in ...; do cargo ...`, and a
+  variable-assignment prefix applies to that ONE command, so `cargo` ran without
+  it and died 127 each iteration while the trailing `cp` succeeded and set the
+  task's exit code. Fixed by `export PATH=...;` rather than a prefix, plus an
+  `rc=1` per failing iteration so the task's exit code is not decided by its
+  last command.
+- `-212400` died `exit 1`, all three arms `exit 101`:
+  `could not find Cargo.toml in ~/ws/a1a35629b92a`. The PATH fix worked; the
+  submission was simply made from the wrong cwd, and `cx` takes the **source dir
+  from cwd** — so it synced `~/agents`, which has no crate. v3 passes
+  `-d /home/puniu/nc2000-engine` explicitly and asserts `test -f Cargo.toml`
+  (exit 66) before the loop.
+
+Lesson for any future `cx` submission from this repo: pass `-d` explicitly and
+make the command fail loudly on its own preconditions. Three of the last four
+failures were 30-second environment deaths, not experiments.
 
 Runs `switch_equilibrium` at `--hp 20 30 40`, `--budget 4000000`,
 `--work 400000000`, `--leaf-cap 20000`, `--iters 30000`.
 
 ```bash
 ~/cx/cx status                       # DONE / FAIL / still RUN?
-~/cx/cx logs 20260725-212400         # stdout+stderr
-ls ~/cx/results/20260725-212400/out/ # hp20.txt hp30.txt hp40.txt (+ FAILURES if any arm died)
+~/cx/cx logs 20260725-221714         # stdout+stderr
+ls ~/cx/results/20260725-221714/out/ # hp20.txt hp30.txt hp40.txt (+ FAILURES if any arm died)
 ```
 
 Read each row against the two conditions above. Expected outcomes and what to
@@ -154,6 +165,9 @@ Committed on `master`, **not pushed** (owner: push not needed).
   re-walk re-entered unfinished territory; symptom was a tight
   `certified.width()` beside an `entry_gap` near 1.0, which cannot be true).
 - `36807d1` — `--leaf-cap`.
+- `de193dc` — `reconstruct_context_with_cfg` + `human_agreement --spikes`, the
+  instrument behind the L1 A/B above. It was still uncommitted when the previous
+  session exited.
 
 Everything else from this session is pushed and deployed; see
 `docs/M17-HANDOFF.md`.
