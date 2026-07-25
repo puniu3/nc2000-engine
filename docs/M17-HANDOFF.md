@@ -84,7 +84,13 @@ Key checkpoints:
       picks up `EvalWeights::default()` through `corpus::cfg()`, so a
       before/after needs a weight override plumbed into `reconstruct_*` —
       do it as part of the M16b cluster item rather than as a one-off.
-   2. **Voluntary switching — do NOT re-attack this at the rollout layer.**
+   2. **Voluntary switching — read `docs/SWITCHING-QUESTION-HANDOFF.md` FIRST.**
+      It supersedes the notes below: both obvious fixes are now done and null,
+      the two cheap instruments cannot answer the question, and **a CX job is
+      in flight (`20260725-211409`) whose result is the next step.** Do not
+      start switching work without reading it.
+
+      **Do NOT re-attack this at the rollout layer.**
       It is M16b's worst stratum (`kind=switch` top-1 24.9% vs move 42.8%),
       and the obvious L2 fix is already built, already measured, and already
       parked: `RmConfig::rollout_m16c` (default **false**) carries
