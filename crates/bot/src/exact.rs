@@ -143,6 +143,99 @@ impl<'d> ExactSolver<'d> {
         best
     }
 
+    /// The root's equilibrium MIXTURE, not just its value.
+    ///
+    /// `solve` answers "what is this position worth"; this answers "what does
+    /// equilibrium play actually do here", which is the only way to get a
+    /// ground-truth *action rate* to hold a policy against. Built for the
+    /// switching question: measuring whether the bot switches too little needs
+    /// a number that is right by construction, and neither human replays (skill
+    /// is a proxy, outcome is a confound) nor a perturbed-bot duel (a strength
+    /// change cannot separate "switching is bad" from "this bot switches badly")
+    /// supplies one.
+    ///
+    /// Trust the mixture only when `gap` is ~0: a truncated horizon leaves the
+    /// payoff matrix bracketed, and a mixture read off the midpoint of a wide
+    /// bracket is not an equilibrium of anything. Use small positions.
+    pub fn solve_root(&mut self, b: &Battle) -> Option<RootEquilibrium> {
+        // Resolve the tree first so the root children are memoised, then read
+        // the root layer back out. Cheaper than duplicating the recursion and
+        // it inherits `solve`'s iterative deepening and budgets exactly.
+        let certified = self.solve(b)?;
+        if b.outcome().is_some() {
+            return None;
+        }
+        // Re-walk at the horizon that actually certified the value, not at
+        // whatever `t_max` was left over. `solve` breaks out of its deepening
+        // loop when a horizon exhausts the budget, so `t_max` can point past
+        // the deepest horizon that finished while `certified` came from a
+        // shallower one. Re-walking at the leftover `t_max` then re-enters the
+        // unfinished region and every root entry comes back as [0, 1] — which
+        // showed up as a tight `certified.width()` sitting next to an
+        // `entry_gap` near 1.0, a combination that cannot be true.
+        self.t_max = b.turn.saturating_add(certified.horizon);
+        self.ival_memo.clear();
+        self.limit = self.exact_memo.len() + self.cfg.state_budget;
+        self.work_limit = self.stats.chance_runs + self.cfg.work_budget;
+        let needs = b.needs_choice();
+        let mut probe = b.clone();
+        let a0: Vec<Option<SearchChoice>> = if needs[0] {
+            probe.legal_choices(self.dex, 0).into_iter().map(Some).collect()
+        } else {
+            vec![None]
+        };
+        let a1: Vec<Option<SearchChoice>> = if needs[1] {
+            probe.legal_choices(self.dex, 1).into_iter().map(Some).collect()
+        } else {
+            vec![None]
+        };
+        let (n0, n1) = (a0.len(), a1.len());
+        if n0 == 0 || n1 == 0 {
+            return None;
+        }
+        let mut mid = vec![0.0f64; n0 * n1];
+        let mut worst = 0.0f64;
+        for (i, &c0) in a0.iter().enumerate() {
+            for (j, &c1) in a1.iter().enumerate() {
+                let step = enumerate_step(self.dex, b, [c0, c1], self.cfg.leaf_cap)?;
+                let mut agg: HashMap<u128, (f64, usize)> = HashMap::new();
+                for (idx, l) in step.leaves.iter().enumerate() {
+                    let e = agg.entry(l.battle.state_key128()).or_insert((0.0, idx));
+                    e.0 += l.prob;
+                }
+                let (mut elo, mut ehi) = (0.0, 0.0);
+                for (p, idx) in agg.values() {
+                    let (lo, hi) = self.ival(&step.leaves[*idx].battle)?;
+                    elo += p * lo;
+                    ehi += p * hi;
+                }
+                worst = worst.max(ehi - elo);
+                mid[i * n1 + j] = (elo + ehi) * 0.5;
+            }
+        }
+        let sol = if n0 > 1 && n1 > 1 {
+            solve_matrix_full(&mid, n0, n1)
+        } else {
+            // A degenerate side has one action; its mixture is that action.
+            MatrixSolution {
+                value: mid.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+                gap: 0.0,
+                x: vec![1.0; n0],
+                y: vec![1.0; n1],
+            }
+        };
+        Some(RootEquilibrium {
+            value: sol.value,
+            entry_gap: worst,
+            certified,
+            actions: [
+                a0.iter().map(|c| c.map(|c| c.to_input(self.dex))).collect(),
+                a1.iter().map(|c| c.map(|c| c.to_input(self.dex))).collect(),
+            ],
+            mix: [sol.x, sol.y],
+        })
+    }
+
     fn ival(&mut self, b: &Battle) -> Option<(f64, f64)> {
         if let Some(o) = b.outcome() {
             let v = match o {
@@ -230,6 +323,34 @@ impl<'d> ExactSolver<'d> {
         }
         self.ival_memo.insert(key, (lo, hi));
         Some((lo, hi))
+    }
+}
+
+/// The root equilibrium: value, both sides' mixtures, and the evidence needed
+/// to decide whether to believe the mixtures.
+pub struct RootEquilibrium {
+    pub value: f64,
+    /// Widest lo/hi spread over the root payoff entries. ~0 means the matrix
+    /// the mixtures were solved from is exact; anything appreciable means the
+    /// mixtures came off a guessed midpoint and are not equilibrium play.
+    pub entry_gap: f64,
+    /// The root value bracket `solve` certified, for cross-checking `value`.
+    pub certified: Certified,
+    /// PS-canonical action strings per side (`None` = the side owes no choice).
+    pub actions: [Vec<Option<String>>; 2],
+    /// Equilibrium mixture per side, aligned with `actions`.
+    pub mix: [Vec<f64>; 2],
+}
+
+impl RootEquilibrium {
+    /// Equilibrium probability mass this side puts on switching.
+    pub fn switch_mass(&self, side: usize) -> f64 {
+        self.actions[side]
+            .iter()
+            .zip(&self.mix[side])
+            .filter(|(a, _)| a.as_deref().is_some_and(|s| s.starts_with("switch")))
+            .map(|(_, p)| *p)
+            .sum()
     }
 }
 
