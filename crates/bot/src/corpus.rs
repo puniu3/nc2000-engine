@@ -690,6 +690,26 @@ pub fn reconstruct_agent_with_pool(
         .map(|reconstructed| reconstructed.agent)
 }
 
+/// [`reconstruct_context_with_pool`] with a caller-supplied agent config.
+///
+/// Exists so a harness can vary the eval weights across arms. Everything
+/// downstream of `cfg()` is reached only through here, so without this the
+/// weights are silently whatever `EvalWeights::default()` happens to be —
+/// which makes an A/B over an eval feature impossible to express, and hid
+/// that fact behind a plausible-looking call.
+pub fn reconstruct_context_with_cfg(
+    dex: &Dex,
+    src: &SetSources,
+    pool: MetaPool,
+    lines: &[String],
+    evidence: &SetEvidence,
+    d: &Decision,
+    seed: u64,
+    agent_cfg: RmConfig,
+) -> Option<ReconstructedDecision> {
+    reconstruct_context_inner(dex, src, pool, lines, evidence, d, seed, agent_cfg)
+}
+
 /// [`reconstruct_agent_with_pool`] retaining fabrication metadata.
 pub fn reconstruct_context_with_pool(
     dex: &Dex,
@@ -699,6 +719,20 @@ pub fn reconstruct_context_with_pool(
     evidence: &SetEvidence,
     d: &Decision,
     seed: u64,
+) -> Option<ReconstructedDecision> {
+    reconstruct_context_inner(dex, src, pool, lines, evidence, d, seed, cfg())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn reconstruct_context_inner(
+    dex: &Dex,
+    src: &SetSources,
+    pool: MetaPool,
+    lines: &[String],
+    evidence: &SetEvidence,
+    d: &Decision,
+    seed: u64,
+    agent_cfg: RmConfig,
 ) -> Option<ReconstructedDecision> {
     let mut tr = ProtocolTracker::new(d.side);
     for ln in &lines[..=d.cut] {
@@ -844,7 +878,7 @@ pub fn reconstruct_context_with_pool(
     })
     .to_string();
 
-    let mut agent = ProtocolAgent::new(dex, d.side, pool, cfg(), seed);
+    let mut agent = ProtocolAgent::new(dex, d.side, pool, agent_cfg, seed);
     agent.set_own_team(own_sets);
     for ln in &lines[..=d.cut] {
         agent.push_line(dex, ln);

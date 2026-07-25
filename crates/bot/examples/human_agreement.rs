@@ -27,7 +27,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use nc2000_bot::corpus::{
-    corpus_files, load_battle, load_sources, plain, reconstruct_context_with_pool, HumanAction,
+    cfg, corpus_files, load_battle, load_sources, plain, reconstruct_context_with_cfg, HumanAction,
     ReconstructedDecision, SetSources,
 };
 use nc2000_bot::preview::MetaPool;
@@ -46,6 +46,7 @@ fn process_battle(
     battle_idx: usize,
     iters: u32,
     base_seed: u64,
+    agent_cfg: &nc2000_bot::smmcts::RmConfig,
 ) -> BattleReport {
     let corpus_battle = load_battle(battle_file);
     let mut out = Vec::new();
@@ -55,7 +56,7 @@ fn process_battle(
             ^ (battle_idx as u64).wrapping_mul(0x9E37_79B9_7F4A)
             ^ (di as u64).wrapping_mul(0xBF58_476D)
             ^ d.side as u64;
-        let Some(reconstructed) = reconstruct_context_with_pool(
+        let Some(reconstructed) = reconstruct_context_with_cfg(
             dex,
             src,
             pool.clone(),
@@ -63,6 +64,7 @@ fn process_battle(
             &corpus_battle.evidence,
             d,
             seed,
+            agent_cfg.clone(),
         ) else {
             out.push(
                 serde_json::json!({"battle": battle_idx, "side": d.side, "turn": d.turn,
@@ -192,6 +194,22 @@ fn main() {
             .unwrap_or(4),
     );
     let out_path = arg_s(&args, "--out", "tmp/human-agreement.jsonl");
+    // M17 tail: override the Spikes eval weight for this arm. Without it the
+    // harness silently takes EvalWeights::default(), so an A/B over an eval
+    // feature cannot be expressed at all — which is how the M16c null result
+    // ended up being the only switching evidence on record.
+    let spikes: Option<f64> = args
+        .iter()
+        .position(|a| a == "--spikes")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok());
+    let mut agent_cfg = cfg();
+    if let Some(w) = spikes {
+        if let nc2000_bot::mcts::Playout::Heavy { weights, .. } = &mut agent_cfg.playout {
+            weights.spikes = w;
+        }
+        eprintln!("eval override: spikes = {w}");
+    }
 
     let (lo, hi) = {
         let mut it = range.split('-');
@@ -226,7 +244,8 @@ fn main() {
                     return;
                 }
                 let (battle_idx, path) = &files[j];
-                let report = process_battle(&dex, &src, &pool, path, *battle_idx, iters, seed);
+                let report =
+                    process_battle(&dex, &src, &pool, path, *battle_idx, iters, seed, &agent_cfg);
                 reports.lock().unwrap().push((*battle_idx, report));
                 let completed = done.fetch_add(1, Ordering::Relaxed) + 1;
                 if completed.is_multiple_of(10) {
