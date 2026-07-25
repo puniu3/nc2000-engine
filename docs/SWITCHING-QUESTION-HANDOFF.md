@@ -1,6 +1,6 @@
 # Switching question — handoff
 
-Updated: 2026-07-25. Written to survive a session exit: there is a CX job in
+Updated: 2026-07-26. Written to survive a session exit: there is a CX job in
 flight whose result is the whole point.
 
 ## The question
@@ -144,12 +144,41 @@ Side observation: at 20/30% HP the bot puts 0.36–0.46 root mass on switch in
 positions certified 0.0000. Every strategy is optimal there so it is not an
 error, but the bot plainly does not know it is lost.
 
-## IN FLIGHT — the HP-skew sweep
+## IN FLIGHT — the HP-skew ladder
 
 ```
-CX task 20260726-011409   switch-eq-v4-skew   16 vCPU / 32 GB   -T 21600 (6h)
-results will land in ~/cx/results/20260726-011409/out/p<h1>_<h2>.txt
+CX task 20260726-051101   switch-eq-v5-ladder   16 vCPU / 32 GB   -T 21600 (6h)
+results land in ~/cx/results/20260726-051101/out/p<h1>_<h2>.txt
 ```
+
+### v4 was preempted, and its timings redesigned the ladder
+
+`20260726-011409` (same six arms) got Spot-preempted 3.5 h into its last arm and
+returned **no rows** — `cp` into `$CX_OUT` only ran after the loop. Its per-arm
+start markers survive in `~/cx/results/20260726-011409/stdout` and are worth more
+than the rows would have been:
+
+| arm | wall | |
+|---|---|---|
+| `p40_40` | 3 m 48 s | |
+| `p40_36` | 2 m 14 s | weakening p2 shrinks the tree, monotonically |
+| `p40_32` | 1 m 18 s | |
+| `p40_28` | 36 s | |
+| `p48_40` | 16 m 00 s | strengthening p1 grows it |
+| `p56_40` | **> 3 h 30 m, unfinished** | and then explodes |
+
+So the two directions are not symmetric in cost, and the v3 estimate of ~18 min
+per position was wrong in both directions. Three changes follow, all in v5:
+
+- **Each arm is wrapped in `timeout 1800`**, so one deep position cannot eat the
+  task's 6 h — that is exactly how v4 died.
+- **`cp` into `$CX_OUT` after every arm**, not once at the end, so a preemption
+  costs one arm instead of all of them.
+- **The p2 ladder is refined to steps of 2** (40:40 → 40:24) since those arms
+  cost 1-4 minutes each, and the p1 direction is cut back to 44 and 48. The
+  worry the timings raise: the fast arms may be fast because the position went
+  *decided the other way* (a certified 1.0 for p1), skipping over the undecided
+  band — a fine ladder is what catches the crossing if it is narrow.
 
 The lever: keep the scenario that nearly solves and remove the reason it is
 degenerate. `scale_hp` scaled BOTH sides uniformly, so "p1 is simply losing"
@@ -157,15 +186,15 @@ was unreachable by `--hp`. `ecffb96` adds `--hp1`/`--hp2` and a `--scenario`
 filter, so an arm spends its whole budget on one position instead of another
 uniform pass over three.
 
-Six arms, sequentially, all on `electric/ground vs water/grass`, everything else
-identical to v3 (`--iters 30000 --budget 4000000 --work 400000000 --leaf-cap
-20000`, seed 1):
+Eleven arms, sequentially, all on `electric/ground vs water/grass`, everything
+else identical to v3 (`--iters 30000 --budget 4000000 --work 400000000
+--leaf-cap 20000`, seed 1):
 
 | arm | p1 % | p2 % | what it tests |
 |---|---|---|---|
 | `p40_40` | 40 | 40 | baseline repro — must reproduce v3's `gap 0.0500 / value 0.0000` |
-| `p40_36` / `p40_32` / `p40_28` | 40 | 36 / 32 / 28 | weaken p2: value rises off 0 AND the tree shrinks |
-| `p48_40` / `p56_40` | 48 / 56 | 40 | strengthen p1: value rises, tree grows |
+| `p40_38` … `p40_24` | 40 | 38, 36, 34, 32, 30, 28, 26, 24 | weaken p2: value rises off 0 AND the tree shrinks |
+| `p44_40` / `p48_40` | 44 / 48 | 40 | strengthen p1: value rises, tree grows |
 
 Both ladders raise p1's value, so the crossing into `0 < value < 1` should be
 bracketed from two directions; lowering p2 is the preferred direction because it
