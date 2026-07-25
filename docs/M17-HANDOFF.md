@@ -40,21 +40,19 @@ Key checkpoints:
 
 ## Next decisions and runs
 
-1. **M17d full profile:** launch the resumable 4,608-job run when a 16-CPU CX
-   worker is available:
-
-   ```bash
-   tools/run-m17d-shards.sh "$CX_OUT" 64 full --threads 16
-   ```
-
-   The wrapper fixes the full-profile turn cap at 1,000. Expected duration is
-   roughly 12 hours on 16 CPUs. Merge is automatic and requires 2,304 complete
-   side-swapped inference blocks with no cap or invalid arm.
-2. **Ladder re-exposure at the aligned budget:** the next PS batch runs on the
-   new 30k default, so its postmortems are finally about the shipped bot. Add
-   `--mode open --opp-team-file F` wherever the opponent's sheet is genuinely
-   available. Expect roughly 11–20 s/move (single-threaded wasm-in-node) — well
-   inside the 150 s per-turn budget, but budget the wall-clock per game.
+1. **M17d full profile: DONE (2026-07-25).** 4,608/4,608 pairs, 2,304/2,304
+   blocks, zero caps/invalids/exclusions, certified. Paired delta **+0.0087,
+   95% [−0.0063, +0.0237]** — no regression, no established gain. Took 2.6 h on
+   16 CPUs, not the 12 h this doc estimated. Artifact:
+   `~/cx/results/20260725-084811/m17d-full-v2/merged.jsonl`. The first attempt
+   died on the turn-cap boundary bug; see the M17d README entry.
+2. **Ladder re-exposure: budget SPEC-FIXED at 30k (owner, 2026-07-25), not a
+   pending validation.** The web product runs 30k, so 30k is the spec; the PS
+   client default already matches. Running games is human-in-the-loop — it needs
+   an opponent on a reachable server, and main-ladder botting needs PS staff
+   permission — so this is not a dev task that blocks M17. Do it when the
+   opportunity arises, with `--mode open --opp-team-file F` wherever the
+   opponent's sheet is genuinely available. Expect 11–20 s/move.
 3. **Strengthening tails — ALL ACCEPTED (owner), none parked.** Full status and
    the re-derived cluster ranking are in the M17 README entry. Work order:
    0. **Corpus position source for `eval_calibration`** — now a prerequisite,
@@ -86,9 +84,28 @@ Key checkpoints:
       picks up `EvalWeights::default()` through `corpus::cfg()`, so a
       before/after needs a weight override plumbed into `reconstruct_*` —
       do it as part of the M16b cluster item rather than as a one-off.
-   2. **Voluntary switching** — M16b's worst stratum by a wide margin
-      (`kind=switch` top-1 24.9% vs move 42.8%). Touches L2 rollout as much as
-      L1 eval, so expect it to be the biggest of the five.
+   2. **Voluntary switching — do NOT re-attack this at the rollout layer.**
+      It is M16b's worst stratum (`kind=switch` top-1 24.9% vs move 42.8%),
+      and the obvious L2 fix is already built, already measured, and already
+      parked: `RmConfig::rollout_m16c` (default **false**) carries
+      bad-matchup voluntary switching plus `status_pseudo_score`, and the
+      2026-07-21 measurement was null — corpus agreement 39.3%→38.7% overall
+      and **switches 25.0%→23.8%**, i.e. slightly worse, at self-play parity.
+      The recorded diagnosis is that at product budgets the tree, not the
+      rollout tail, owns the root values. An earlier revision of this work
+      order listed "voluntary switching" as a fresh item; that was written
+      without checking, the same staleness that hid two already-shipped eval
+      features.
+
+      The one lever that postdates that null result is the **Spikes term
+      shipped 2026-07-25**, which is a switching tax by construction and
+      should move switch valuation if anything does. So the first step here is
+      a measurement, not a fix: re-run M16b with the term on and off and see
+      whether the switch stratum moves. That also tests the product rationale
+      the term shipped on. Needs the weight override plumbed into
+      `corpus::reconstruct_*` (today `corpus::cfg()` silently takes
+      `EvalWeights::default()`), which is why the plumbing is worth building
+      properly rather than hacking.
    3. **Confusion eval feature** (8.6%), the second missing term.
    4. **Status-move valuation**, then the Curse/Body Slam, Rest, and Perish
       Song clusters — likely overlapping causes, so re-measure M16b between
