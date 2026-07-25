@@ -201,6 +201,10 @@ fn main() {
     let budget = num("--budget", 400_000);
     let work = num("--work", 20_000_000);
     let hp_pct = num("--hp", 60) as u32;
+    // The OOM lever. Each enumerated chance leaf holds a full Battle clone, so
+    // the default 100k cap is gigabytes if any step genuinely fans out that
+    // wide -- that, not the state memo, is what killed the 8 GB box at 40% HP.
+    let leaf_cap = num("--leaf-cap", 20_000);
 
     let dex = load_dex();
     let _ = Path::new(".");
@@ -223,6 +227,7 @@ fn main() {
         let cfg = ExactConfig {
             state_budget: budget,
             work_budget: work,
+            leaf_cap,
             eps: 0.0,
             stall_gain: 0.0,
             horizons: &[2, 4, 8, 12, 20, 32],
