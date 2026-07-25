@@ -23,9 +23,18 @@
 //! target" and "maybe it picks the wrong move" alternatives — with one move
 //! and one bench mon there is no such freedom, only the rate.
 //!
-//! STATUS (2026-07-25): the harness is built and identifying, but no usable row
+//! STATUS (2026-07-26): the harness is built and identifying, but no usable row
 //! has been produced yet, and the obstruction is worth recording because it is
 //! structural rather than a matter of tuning.
+//!
+//! The first full CX sweep (16 vCPU / 32 GB, `data/switch-eq-v3/`) came back with
+//! all nine rows bracketed, and reclassified the constraint: RAM held and it
+//! finished in 9818 s of a 21600 s cap, so every arm stopped on `--budget` /
+//! `--work`, not on the box. What it did expose is that solvability and
+//! undecidedness are anti-correlated across SCENARIOS rather than along HP — the
+//! position that nearly solves (`entry_gap` 0.050) is a certified 0.0 for p1,
+//! and the undecided ones sit at 0.17-0.77. Hence `--hp1`/`--hp2`: skew the HP
+//! so a solvable position stops being decided. See `scale_hp`.
 //!
 //! `--hp` sets every live mon's HP, and the two ends of that knob fail for
 //! opposite reasons:
@@ -50,7 +59,8 @@
 //! Moves are all 100% accuracy so the miss branch, at least, is gone.
 //!
 //! Usage: cargo run --release -p nc2000-bot --example switch_equilibrium -- \
-//!          [--iters 30000] [--seed 1] [--budget 400000] [--work 20000000]
+//!          [--iters 30000] [--seed 1] [--budget 400000] [--work 20000000] \
+//!          [--hp 60 | --hp1 40 --hp2 32] [--leaf-cap 20000] [--scenario SUBSTR]
 
 use std::io::Write as _;
 use std::path::Path;
@@ -93,7 +103,15 @@ fn retire_third(b: &mut Battle) {
     }
 }
 
-/// Scale every live mon's HP to `pct`% of max.
+/// Scale every live mon's HP to `pct[side]`% of max.
+///
+/// The two sides scale independently because the uniform knob cannot reach the
+/// region the experiment needs. Measured on CX (`data/switch-eq-v3/`): the one
+/// position that nearly solves, `electric/ground vs water/grass`, is a certified
+/// 0.0000 for p1 at every uniform setting — Thunderbolt cannot touch Quagsire at
+/// all, which is also *why* it is tractable — so its mixture stays LP
+/// degeneracy. Handing one side HP is what pulls such a position off the decided
+/// boundary while keeping the coarse damage lattice that made it solvable.
 ///
 /// This knob decides whether the position has any strategic content, and the
 /// first attempt got it wrong in the interesting direction. At 1 HP every
@@ -107,13 +125,13 @@ fn retire_third(b: &mut Battle) {
 /// "retreat to the resist and pay one hit" trades against "stay and swing".
 /// Sitting HP well above one hit's damage but under two keeps chance collapsed
 /// (one hit never KOs, two always do) while leaving the trade-off real.
-fn scale_hp(b: &mut Battle, pct: u32) {
+fn scale_hp(b: &mut Battle, pct: [u32; 2]) {
     for s in 0..2 {
         for idx in 0..2 {
             let slot = b.sides[s].party[idx] as usize;
             let p = &mut b.sides[s].roster[slot];
             if !p.fainted {
-                p.hp = ((p.maxhp as u32 * pct).div_ceil(100)).max(1) as i32;
+                p.hp = ((p.maxhp as u32 * pct[s]).div_ceil(100)).max(1) as i32;
             }
         }
     }
@@ -149,7 +167,7 @@ fn scenarios() -> Vec<Scenario> {
     ]
 }
 
-fn build(dex: &Dex, sc: &Scenario, hp_pct: u32) -> Option<Battle> {
+fn build(dex: &Dex, sc: &Scenario, hp_pct: [u32; 2]) -> Option<Battle> {
     let mut b = Battle::from_fixture(dex, "1,2,3,4", &sc.p1, &sc.p2).ok()?;
     b.set_log_enabled(false);
     b.choose(dex, 0, "team 1,2,3").ok()?;
@@ -200,7 +218,22 @@ fn main() {
     let seed = num("--seed", 1) as u64;
     let budget = num("--budget", 400_000);
     let work = num("--work", 20_000_000);
-    let hp_pct = num("--hp", 60) as u32;
+    // `--hp` sets both sides; `--hp1`/`--hp2` override one side each, which is
+    // the only knob that reaches an undecided-but-tractable position (see
+    // `scale_hp`).
+    let hp_both = num("--hp", 60) as u32;
+    let hp_pct = [
+        num("--hp1", hp_both as usize) as u32,
+        num("--hp2", hp_both as usize) as u32,
+    ];
+    // Spend a whole arm on one position. The scenarios differ by orders of
+    // magnitude in how solvable they are, so a sweep over the tractable one is
+    // worth more than another uniform pass over all three.
+    let only: Option<String> = args
+        .iter()
+        .position(|a| a == "--scenario")
+        .and_then(|i| args.get(i + 1))
+        .map(|v| v.to_lowercase());
     // The OOM lever. Each enumerated chance leaf holds a full Battle clone, so
     // the default 100k cap is gigabytes if any step genuinely fans out that
     // wide -- that, not the state memo, is what killed the 8 GB box at 40% HP.
@@ -209,8 +242,9 @@ fn main() {
     let dex = load_dex();
     let _ = Path::new(".");
     println!(
-        "pure attack/switch 2v2 positions at {hp_pct}% HP; bot skuct:{iters} seed {seed}; \
-         solver budget {budget} work {work}\n"
+        "pure attack/switch 2v2 positions at p1 {}% / p2 {}% HP; bot skuct:{iters} seed {seed}; \
+         solver budget {budget} work {work}\n",
+        hp_pct[0], hp_pct[1]
     );
     println!(
         "  {:<32} {:>9} {:>9} {:>9} {:>8} {:>8} {:>7}",
@@ -218,7 +252,14 @@ fn main() {
     );
 
     let mut rows = 0;
+    let mut matched = 0;
     for sc in scenarios() {
+        if let Some(pat) = &only {
+            if !sc.name.to_lowercase().contains(pat.as_str()) {
+                continue;
+            }
+        }
+        matched += 1;
         eprintln!("solving: {}", sc.name);
         let Some(b) = build(&dex, &sc, hp_pct) else {
             println!("  {:<32} BUILD FAILED (illegal set or pick)", sc.name);
@@ -271,6 +312,17 @@ fn main() {
         let _ = std::io::stdout().flush();
     }
 
+    // A typo'd filter must fail loudly rather than read as "nothing solved":
+    // the last two CX submissions were lost to silent environment errors that
+    // looked like results.
+    if matched == 0 {
+        eprintln!(
+            "--scenario {:?} matched none of {:?}",
+            only.unwrap_or_default(),
+            scenarios().iter().map(|s| s.name).collect::<Vec<_>>()
+        );
+        std::process::exit(64);
+    }
     if rows == 0 {
         println!("\nno position solved — the comparison says nothing yet.");
         return;
