@@ -274,7 +274,7 @@ phase 1 done: 1710 positions
   gt 54200/54720
   gt 54400/54720
   gt 54600/54720
-csv -> /home/puniu3/ws/21be767267a3/crates/bot/../../tmp/eval-calibration.csv
+csv -> <repo>/tmp/eval-calibration.csv
 
 == M16a eval01 calibration ==
 positions 1710  playouts/pos 32  gen skuct:300  gt skuct:300  seed 1
