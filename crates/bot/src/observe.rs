@@ -158,10 +158,17 @@ pub struct Observer {
     /// only its (publicly-announced) transitions produce knowledge.
     prev_item: Vec<Option<ItemId>>,
     log_pos: usize,
-    /// Per-mon log-channel suppression: while a Transform copy or Mimic
-    /// overlay is active (tracked from the log lines themselves, in order),
-    /// plain `|move|` lines may name moves that are not the mon's own.
+    /// Per-mon log-channel suppression: while a Transform copy is active
+    /// (tracked from the log lines themselves, in order), `|move|` lines may
+    /// name any move of the copied set, so none of them is evidence.
     log_suppress: Vec<bool>,
+    /// Per-mon: the single move Mimic overwrote its own slot with. Mimic
+    /// replaces exactly one slot, and PS names the copied move on the
+    /// `|-activate|<mon>|move: Mimic|<Move>` line, so only that move has to
+    /// be dropped — the mon's other three slots are still its own and every
+    /// use of them is a genuine reveal. Cleared with the mon's stay, because
+    /// `clearVolatile` restores `baseMoveSlots` on switch-out.
+    mimic_overlay: Vec<Option<MoveId>>,
     /// Per-mon: a two-turn move a CALLER (Metronome / Mirror Move) put into
     /// its charge turn. The release line is a plain `|move|` with no `[from]`,
     /// so without this the caller's victim move is credited to the mon's own
@@ -193,6 +200,7 @@ impl Observer {
             prev_item: vec![None; n],
             log_pos: 0,
             log_suppress: vec![false; n],
+            mimic_overlay: vec![None; n],
             called_charging: vec![None; n],
             pending_call: None,
             revision: 0,
@@ -242,6 +250,7 @@ impl Observer {
             prev_item,
             log_pos: 0,
             log_suppress: vec![false; n],
+            mimic_overlay: vec![None; n],
             called_charging: vec![None; n],
             pending_call: None,
             revision: 0,
@@ -355,6 +364,8 @@ impl Observer {
                 // suppression for the side (only actives carry overlays).
                 if self.subject_is_opp_side(parts.get(1).copied().unwrap_or("")) {
                     self.log_suppress.iter_mut().for_each(|s| *s = false);
+                    // Mimic's overwritten slot goes back to Mimic on exit
+                    self.mimic_overlay.iter_mut().for_each(|o| *o = None);
                     // a charge dies with the mon that was holding it
                     self.called_charging.iter_mut().for_each(|c| *c = None);
                 }
@@ -372,7 +383,16 @@ impl Observer {
                 };
                 let what = parts.get(2).copied().unwrap_or("");
                 if what == "move: Mimic" {
-                    self.log_suppress[m] = true;
+                    // PS names the copied move on this line, so exactly one
+                    // slot becomes foreign. Suppressing the whole mon instead
+                    // would drop every later use of its other three slots --
+                    // the design's class-A example, "ignoring an already-
+                    // revealed move". Fall back to whole-mon suppression only
+                    // if the name does not resolve.
+                    match parts.get(3).and_then(|n| dex.moves.id(&toid(n))) {
+                        Some(copied) => self.mimic_overlay[m] = Some(copied),
+                        None => self.log_suppress[m] = true,
+                    }
                     return false;
                 }
                 if let Some(item_name) = what.strip_prefix("item: ") {
@@ -432,16 +452,22 @@ impl Observer {
             return false;
         };
         if self.log_suppress[m] {
-            // Transform copy / Mimic overlay active: plain |move| lines (and
-            // even Sleep Talk calls) may name moves outside the mon's set.
+            // Transform copy active: plain |move| lines (and even Sleep Talk
+            // calls) may name any move of the copied set.
+            return false;
+        }
+        let named = parts.get(2).copied().unwrap_or("");
+        let Some(id) = dex.moves.id(&toid(named)) else { return false };
+        if self.mimic_overlay[m] == Some(id) {
+            // the one slot Mimic overwrote. Sleep Talk selects from the
+            // CURRENT slots, so this must be checked before the `[from]`
+            // rules, not only for plain lines.
             return false;
         }
         let from = parts
             .iter()
             .find_map(|p| p.strip_prefix("[from] "))
             .map(|f| f.strip_prefix("move: ").unwrap_or(f));
-        let named = parts.get(2).copied().unwrap_or("");
-        let Some(id) = dex.moves.id(&toid(named)) else { return false };
         if let Some(from) = from {
             let from_id = dex.moves.id(&toid(from));
             // `[from]` naming the executing move itself is not a call at all:
@@ -584,6 +610,73 @@ mod tests {
             obs.ingest_line(line, &dex);
         }
         assert_eq!(revealed(&obs, &dex), vec!["razorwind".to_string()]);
+    }
+
+    /// Mimic overwrites exactly ONE slot, and PS names the copied move on
+    /// the `-activate` line. Suppressing the whole mon instead loses every
+    /// later use of its other three slots — an under-reveal of moves the bot
+    /// publicly watched land. The copied move itself stays uncredited, and so
+    /// does a Sleep Talk call that selects it (Sleep Talk picks from the
+    /// CURRENT slots, which include the overwritten one).
+    #[test]
+    fn mimic_suppresses_only_the_copied_slot() {
+        let dex = load_dex();
+        let mut obs = one_mon_observer(&dex, "Zapdos", "Zapdos");
+        for line in [
+            "|move|p2a: Zapdos|Mimic|p1a: Snorlax",
+            "|-activate|p2a: Zapdos|move: Mimic|Body Slam",
+            // the copied slot: not the mon's own, by either route
+            "|move|p2a: Zapdos|Body Slam|p1a: Snorlax",
+            "|move|p2a: Zapdos|Body Slam|p1a: Snorlax|[from] Sleep Talk",
+            // its own remaining slots stay reveals
+            "|move|p2a: Zapdos|Thunder|p1a: Snorlax",
+            "|move|p2a: Zapdos|Rest|p2a: Zapdos",
+        ] {
+            obs.ingest_line(line, &dex);
+        }
+        assert_eq!(
+            revealed(&obs, &dex),
+            vec!["mimic".to_string(), "thunder".to_string(), "rest".to_string()]
+        );
+    }
+
+    /// `clearVolatile` puts the Mimic slot back on switch-out, so the copied
+    /// move must stop being suppressed — otherwise a genuine later use by a
+    /// DIFFERENT mon of the same name, or by this one after it really learns
+    /// it, would be dropped forever.
+    #[test]
+    fn a_mimic_overlay_dies_with_the_mons_stay() {
+        let dex = load_dex();
+        let mut obs = one_mon_observer(&dex, "Zapdos", "Zapdos");
+        for line in [
+            "|move|p2a: Zapdos|Mimic|p1a: Snorlax",
+            "|-activate|p2a: Zapdos|move: Mimic|Body Slam",
+            "|switch|p2a: Zapdos|Zapdos, L50|100/100",
+            "|move|p2a: Zapdos|Body Slam|p1a: Snorlax",
+        ] {
+            obs.ingest_line(line, &dex);
+        }
+        assert_eq!(
+            revealed(&obs, &dex),
+            vec!["mimic".to_string(), "bodyslam".to_string()]
+        );
+    }
+
+    /// Transform stays whole-mon suppression: the copy replaces all four
+    /// slots, so no `|move|` line from it is evidence about the base set.
+    #[test]
+    fn transform_still_suppresses_every_slot() {
+        let dex = load_dex();
+        let mut obs = one_mon_observer(&dex, "Ditto", "Ditto");
+        for line in [
+            "|move|p2a: Ditto|Transform|p1a: Snorlax",
+            "|-transform|p2a: Ditto|p1a: Snorlax",
+            "|move|p2a: Ditto|Body Slam|p1a: Snorlax",
+            "|move|p2a: Ditto|Rest|p2a: Ditto",
+        ] {
+            obs.ingest_line(line, &dex);
+        }
+        assert_eq!(revealed(&obs, &dex), vec!["transform".to_string()]);
     }
 
     /// An interrupted charge releases the tracking, so a later genuine use of
