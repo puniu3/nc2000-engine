@@ -1,0 +1,47 @@
+Exchange term (eval::exchange_margin) — full verdict, 2026-07-27
+================================================================
+
+Calibration (570 corpus positions, 32 playouts, GT skuct:300 — data/exchange-calib-sweep.txt)
+  default      r 0.585  Brier 0.2116  MSE 0.0848   tox oriented bias -0.094
+  exchange 0.5 r 0.638  Brier 0.2047  MSE 0.0779   tox bias -0.067
+  exchange0.75 r 0.644  Brier 0.2060  MSE 0.0792   tox bias -0.054
+  Largest calibration gain measured on corpus positions. Criteria disagree on
+  the weight: r peaks at 0.75, Brier/MSE at 0.5.
+
+Strength (seed-paired duel, A = shipped default; 800 games per arm)
+  exchange 0.5  @3000   A 0.494 +/- 0.033      think A 278 B 280 ms
+  exchange 0.5  @10000  A 0.485 +/- 0.032      think A 998 B 1004 ms
+  exchange 0.75 @3000   A 0.504 +/- 0.031      think A 284 B 286 ms
+  exchange 0.75 @10000  A 0.490 +/- 0.032      think A 1015 B 1025 ms
+  All four straddle 0.5. Pooled 3,200 games: +0.007 +/- 0.016 toward exchange.
+
+Perceived sensibility (corpus agreement, 30k, 1,984 paired decisions)
+  arm     agree  mass-on-human  top1 | status agree | switch mass  status mass
+  base    0.408  0.314          0.526|  0.369       | 0.194        0.341
+  w0.5    0.402  0.313          0.521|  0.373       | 0.195        0.343
+  w0.75   0.412  0.312          0.521|  0.364       | 0.196        0.344
+  Tails (what a watcher would call broken), base / 0.5 / 0.75:
+    human action ranked LAST   0.069 / 0.070 / 0.067
+    human action bottom half   0.275 / 0.270 / 0.265
+    policy mass on human <5%   0.120 / 0.123 / 0.122
+  Moves the term was built to reprice (n = 32-50, so +/-0.14):
+    curse       0.191 / 0.191 / 0.128
+    toxic       0.333 / 0.396 / 0.354
+    thunderwave 0.344 / 0.312 / 0.250
+    substitute  0.260 / 0.260 / 0.280
+
+Why every behavioural instrument is flat
+  The term changes the bot's top-1 on 13.8% of decisions (action class on 8.5%).
+  The SEED ALONE changes it on 15.5% at the same budget. The behavioural
+  footprint is smaller than the search's own noise, so no downstream instrument
+  can resolve it, and the duel reads parity by construction.
+
+Verdict: NOT SHIPPED. Default stays exchange = 0.0. The only demonstrated
+effect is on an offline fit statistic, and eval01 is never displayed to the
+user (grep of web/src: no win-probability surface), so better calibration has
+no user-visible channel except through decisions that do not measurably change.
+Resolving the pooled +0.007 would need ~20,000 games, about 12 hours of VM.
+
+Kept as a gated asset: `EvalWeights::exchange`, `eval::pair_margin` /
+`exchange_margin`, `eval_ab_duel --exchange W`, `human_agreement --exchange W`,
+`eval_calibration --ab --exchange-sweep`.
