@@ -1,0 +1,647 @@
+{
+  "format": "nc2000-belief-prior",
+  "version": 1,
+  "note": "reference count, source=sets. `n` is the observation count behind each species and is informational. A species' move probabilities should sum to ~4.0 when counted from complete sets; a sum well under 4 means the table was built from reveals, which under-counts moves that are carried but not used.",
+  "species": {
+    "alakazam": {
+      "moves": {
+        "encore": 0.667,
+        "firepunch": 0.333,
+        "icepunch": 0.333,
+        "psychic": 1.0,
+        "recover": 1.0,
+        "seismictoss": 0.333,
+        "thunderwave": 0.333
+      },
+      "items": {
+        "miracleberry": 0.333,
+        "przcureberry": 0.667
+      },
+      "n": 3
+    },
+    "ampharos": {
+      "moves": {
+        "dynamicpunch": 1.0,
+        "firepunch": 1.0,
+        "thunderbolt": 1.0,
+        "thunderwave": 1.0
+      },
+      "items": {
+        "miracleberry": 1.0
+      },
+      "n": 1
+    },
+    "blissey": {
+      "moves": {
+        "counter": 0.333,
+        "flamethrower": 0.333,
+        "healbell": 0.667,
+        "icebeam": 1.0,
+        "softboiled": 1.0,
+        "thunder": 0.667
+      },
+      "items": {
+        "miracleberry": 0.333,
+        "quickclaw": 0.667
+      },
+      "n": 3
+    },
+    "charizard": {
+      "moves": {
+        "bellydrum": 1.0,
+        "earthquake": 1.0,
+        "fireblast": 1.0,
+        "hyperbeam": 1.0
+      },
+      "items": {
+        "quickclaw": 1.0
+      },
+      "n": 1
+    },
+    "clefable": {
+      "moves": {
+        "bellydrum": 1.0,
+        "encore": 1.0,
+        "moonlight": 1.0,
+        "return": 1.0
+      },
+      "items": {
+        "leftovers": 1.0
+      },
+      "n": 1
+    },
+    "cloyster": {
+      "moves": {
+        "curse": 0.4,
+        "explosion": 1.0,
+        "icebeam": 0.9,
+        "reflect": 0.3,
+        "spikes": 1.0,
+        "surf": 0.4
+      },
+      "items": {
+        "goldberry": 0.6,
+        "miracleberry": 0.2,
+        "pinkbow": 0.1,
+        "przcureberry": 0.1
+      },
+      "n": 10
+    },
+    "dragonite": {
+      "moves": {
+        "doubleedge": 1.0,
+        "dynamicpunch": 1.0,
+        "icebeam": 1.0,
+        "thunder": 1.0
+      },
+      "items": {
+        "miracleberry": 1.0
+      },
+      "n": 1
+    },
+    "electrode": {
+      "moves": {
+        "explosion": 1.0,
+        "lightscreen": 0.667,
+        "reflect": 0.333,
+        "thunderbolt": 1.0,
+        "thunderwave": 1.0
+      },
+      "items": {
+        "miracleberry": 1.0
+      },
+      "n": 3
+    },
+    "entei": {
+      "moves": {
+        "fireblast": 1.0,
+        "hiddenpower": 1.0,
+        "solarbeam": 1.0,
+        "sunnyday": 1.0
+      },
+      "items": {
+        "miracleberry": 1.0
+      },
+      "n": 1
+    },
+    "exeggutor": {
+      "moves": {
+        "explosion": 0.714,
+        "gigadrain": 0.071,
+        "hiddenpower": 0.643,
+        "leechseed": 0.714,
+        "moonlight": 0.071,
+        "psychic": 0.786,
+        "reflect": 0.143,
+        "sleeppowder": 0.643,
+        "stunspore": 0.071,
+        "sunnyday": 0.143
+      },
+      "items": {
+        "goldberry": 0.429,
+        "mintberry": 0.071,
+        "miracleberry": 0.143,
+        "przcureberry": 0.071,
+        "quickclaw": 0.286
+      },
+      "n": 14
+    },
+    "forretress": {
+      "moves": {
+        "curse": 1.0,
+        "explosion": 0.5,
+        "hiddenpower": 0.5,
+        "rest": 1.0,
+        "spikes": 1.0
+      },
+      "items": {
+        "polkadotbow": 0.5,
+        "scopelens": 0.5
+      },
+      "n": 2
+    },
+    "gengar": {
+      "moves": {
+        "destinybond": 0.818,
+        "explosion": 0.273,
+        "firepunch": 0.727,
+        "icepunch": 0.364,
+        "meanlook": 0.545,
+        "perishsong": 0.545,
+        "shadowball": 0.091,
+        "sunnyday": 0.182,
+        "thunder": 0.091,
+        "thunderbolt": 0.273,
+        "zapcannon": 0.091
+      },
+      "items": {
+        "berryjuice": 0.091,
+        "goldberry": 0.091,
+        "miracleberry": 0.091,
+        "polkadotbow": 0.273,
+        "przcureberry": 0.364,
+        "scopelens": 0.091
+      },
+      "n": 11
+    },
+    "gligar": {
+      "moves": {
+        "earthquake": 1.0,
+        "hiddenpower": 1.0,
+        "rest": 1.0,
+        "thief": 1.0
+      },
+      "items": {
+        "miracleberry": 1.0
+      },
+      "n": 1
+    },
+    "golem": {
+      "moves": {
+        "curse": 0.667,
+        "earthquake": 0.667,
+        "explosion": 1.0,
+        "fireblast": 0.667,
+        "roar": 0.333,
+        "rockslide": 0.667
+      },
+      "items": {
+        "goldberry": 0.333,
+        "przcureberry": 0.333,
+        "softsand": 0.333
+      },
+      "n": 3
+    },
+    "heracross": {
+      "moves": {
+        "curse": 0.5,
+        "hiddenpower": 1.0,
+        "megahorn": 1.0,
+        "rest": 1.0,
+        "sleeptalk": 0.5
+      },
+      "items": {
+        "mintberry": 0.5,
+        "scopelens": 0.5
+      },
+      "n": 2
+    },
+    "houndoom": {
+      "moves": {
+        "crunch": 1.0,
+        "fireblast": 1.0,
+        "pursuit": 1.0,
+        "roar": 1.0
+      },
+      "items": {
+        "berryjuice": 0.5,
+        "miracleberry": 0.5
+      },
+      "n": 2
+    },
+    "jolteon": {
+      "moves": {
+        "charm": 1.0,
+        "rest": 1.0,
+        "sleeptalk": 1.0,
+        "thunder": 1.0
+      },
+      "items": {
+        "scopelens": 1.0
+      },
+      "n": 1
+    },
+    "jynx": {
+      "moves": {
+        "icebeam": 1.0,
+        "lovelykiss": 1.0,
+        "psychic": 1.0,
+        "thief": 1.0
+      },
+      "n": 1
+    },
+    "kangaskhan": {
+      "moves": {
+        "bodyslam": 1.0,
+        "curse": 1.0,
+        "earthquake": 1.0,
+        "roar": 1.0
+      },
+      "items": {
+        "leftovers": 1.0
+      },
+      "n": 1
+    },
+    "kingdra": {
+      "moves": {
+        "curse": 1.0,
+        "doubleedge": 1.0,
+        "hydropump": 1.0,
+        "rest": 1.0
+      },
+      "items": {
+        "leftovers": 1.0
+      },
+      "n": 1
+    },
+    "machamp": {
+      "moves": {
+        "bodyslam": 0.167,
+        "crosschop": 1.0,
+        "earthquake": 0.833,
+        "flamethrower": 0.167,
+        "hiddenpower": 0.667,
+        "rest": 0.333,
+        "rockslide": 0.667,
+        "sleeptalk": 0.167
+      },
+      "items": {
+        "goldberry": 0.5,
+        "mintberry": 0.167,
+        "scopelens": 0.333
+      },
+      "n": 6
+    },
+    "marowak": {
+      "moves": {
+        "bellydrum": 0.111,
+        "bonemerang": 0.111,
+        "earthquake": 0.889,
+        "fireblast": 0.111,
+        "flamethrower": 0.111,
+        "hiddenpower": 0.667,
+        "rest": 0.111,
+        "rockslide": 1.0,
+        "sleeptalk": 0.111,
+        "swordsdance": 0.778
+      },
+      "items": {
+        "thickclub": 1.0
+      },
+      "n": 9
+    },
+    "miltank": {
+      "moves": {
+        "curse": 1.0,
+        "doubleteam": 0.4,
+        "dynamicpunch": 0.4,
+        "milkdrink": 1.0,
+        "return": 1.0,
+        "zapcannon": 0.2
+      },
+      "items": {
+        "brightpowder": 0.4,
+        "polkadotbow": 0.4,
+        "scopelens": 0.2
+      },
+      "n": 5
+    },
+    "misdreavus": {
+      "moves": {
+        "confuseray": 0.125,
+        "destinybond": 0.625,
+        "hiddenpower": 0.125,
+        "meanlook": 1.0,
+        "perishsong": 1.0,
+        "protect": 0.5,
+        "rest": 0.125,
+        "shadowball": 0.125,
+        "thunder": 0.125,
+        "thunderbolt": 0.125,
+        "zapcannon": 0.125
+      },
+      "items": {
+        "goldberry": 0.5,
+        "leftovers": 0.25,
+        "mintberry": 0.125,
+        "przcureberry": 0.125
+      },
+      "n": 8
+    },
+    "moltres": {
+      "moves": {
+        "fireblast": 1.0,
+        "hiddenpower": 0.5,
+        "reflect": 0.5,
+        "rest": 1.0,
+        "sunnyday": 1.0
+      },
+      "items": {
+        "mintberry": 1.0
+      },
+      "n": 2
+    },
+    "nidoking": {
+      "moves": {
+        "earthquake": 1.0,
+        "fireblast": 1.0,
+        "icebeam": 1.0,
+        "thunderbolt": 1.0
+      },
+      "items": {
+        "mintberry": 1.0
+      },
+      "n": 1
+    },
+    "poliwrath": {
+      "moves": {
+        "bellydrum": 1.0,
+        "hydropump": 1.0,
+        "return": 1.0,
+        "submission": 1.0
+      },
+      "items": {
+        "blackbelt": 1.0
+      },
+      "n": 1
+    },
+    "porygon2": {
+      "moves": {
+        "curse": 1.0,
+        "icebeam": 1.0,
+        "recover": 1.0,
+        "return": 1.0
+      },
+      "items": {
+        "leftovers": 0.333,
+        "miracleberry": 0.333,
+        "przcureberry": 0.333
+      },
+      "n": 3
+    },
+    "raikou": {
+      "moves": {
+        "hiddenpower": 1.0,
+        "reflect": 0.25,
+        "rest": 0.75,
+        "roar": 0.25,
+        "sleeptalk": 0.75,
+        "thunder": 0.25,
+        "thunderbolt": 0.75
+      },
+      "items": {
+        "leftovers": 0.25,
+        "magnet": 0.25,
+        "miracleberry": 0.25,
+        "przcureberry": 0.25
+      },
+      "n": 4
+    },
+    "rhydon": {
+      "moves": {
+        "earthquake": 1.0,
+        "rest": 1.0,
+        "rockslide": 1.0,
+        "sleeptalk": 1.0
+      },
+      "items": {
+        "quickclaw": 1.0
+      },
+      "n": 1
+    },
+    "skarmory": {
+      "moves": {
+        "curse": 0.833,
+        "drillpeck": 1.0,
+        "rest": 0.833,
+        "thief": 0.167,
+        "toxic": 0.333,
+        "whirlwind": 0.833
+      },
+      "items": {
+        "goldberry": 0.167,
+        "mintberry": 0.5,
+        "miracleberry": 0.333
+      },
+      "n": 6
+    },
+    "smeargle": {
+      "moves": {
+        "agility": 1.0,
+        "batonpass": 1.0,
+        "encore": 1.0,
+        "spore": 1.0
+      },
+      "items": {
+        "przcureberry": 1.0
+      },
+      "n": 1
+    },
+    "snorlax": {
+      "moves": {
+        "bellydrum": 0.036,
+        "bodyslam": 0.571,
+        "curse": 0.679,
+        "doubleedge": 0.357,
+        "dynamicpunch": 0.107,
+        "earthquake": 0.607,
+        "fireblast": 0.071,
+        "flamethrower": 0.107,
+        "rest": 0.643,
+        "return": 0.071,
+        "selfdestruct": 0.5,
+        "sleeptalk": 0.179,
+        "thunder": 0.036,
+        "thunderbolt": 0.036
+      },
+      "items": {
+        "brightpowder": 0.036,
+        "leftovers": 0.5,
+        "mintberry": 0.393,
+        "polkadotbow": 0.036,
+        "quickclaw": 0.036
+      },
+      "n": 28
+    },
+    "starmie": {
+      "moves": {
+        "confuseray": 0.267,
+        "hydropump": 0.267,
+        "lightscreen": 0.067,
+        "psychic": 0.667,
+        "rapidspin": 0.067,
+        "recover": 0.733,
+        "reflect": 0.2,
+        "substitute": 0.267,
+        "surf": 0.733,
+        "thunderwave": 0.733
+      },
+      "items": {
+        "leftovers": 0.333,
+        "miracleberry": 0.4,
+        "mysteryberry": 0.067,
+        "przcureberry": 0.133,
+        "scopelens": 0.067
+      },
+      "n": 15
+    },
+    "steelix": {
+      "moves": {
+        "curse": 0.167,
+        "earthquake": 1.0,
+        "explosion": 0.833,
+        "roar": 1.0,
+        "rockslide": 0.167,
+        "toxic": 0.833
+      },
+      "items": {
+        "leftovers": 0.333,
+        "polkadotbow": 0.5,
+        "quickclaw": 0.167
+      },
+      "n": 6
+    },
+    "suicune": {
+      "moves": {
+        "icebeam": 1.0,
+        "rest": 1.0,
+        "roar": 0.2,
+        "sleeptalk": 0.8,
+        "surf": 1.0
+      },
+      "items": {
+        "brightpowder": 0.2,
+        "mintberry": 0.2,
+        "przcureberry": 0.2,
+        "scopelens": 0.4
+      },
+      "n": 5
+    },
+    "tauros": {
+      "moves": {
+        "bodyslam": 0.5,
+        "curse": 0.5,
+        "doubleedge": 0.5,
+        "earthquake": 1.0,
+        "fireblast": 0.5,
+        "hyperbeam": 0.5,
+        "rest": 0.5
+      },
+      "items": {
+        "berserkgene": 0.5,
+        "miracleberry": 0.5
+      },
+      "n": 2
+    },
+    "tyranitar": {
+      "moves": {
+        "crunch": 1.0,
+        "dynamicpunch": 0.667,
+        "earthquake": 0.333,
+        "fireblast": 0.333,
+        "flamethrower": 0.333,
+        "icebeam": 0.333,
+        "rockslide": 1.0
+      },
+      "items": {
+        "leftovers": 0.667,
+        "miracleberry": 0.333
+      },
+      "n": 3
+    },
+    "umbreon": {
+      "moves": {
+        "batonpass": 0.167,
+        "charm": 1.0,
+        "meanlook": 0.167,
+        "moonlight": 0.5,
+        "pursuit": 0.833,
+        "rest": 0.5,
+        "toxic": 0.833
+      },
+      "items": {
+        "blackglasses": 0.167,
+        "mintberry": 0.333,
+        "miracleberry": 0.5
+      },
+      "n": 6
+    },
+    "venusaur": {
+      "moves": {
+        "leechseed": 1.0,
+        "razorleaf": 1.0,
+        "sleeppowder": 1.0,
+        "synthesis": 1.0
+      },
+      "items": {
+        "przcureberry": 1.0
+      },
+      "n": 5
+    },
+    "victreebel": {
+      "moves": {
+        "encore": 1.0,
+        "hiddenpower": 1.0,
+        "sludgebomb": 1.0,
+        "synthesis": 1.0
+      },
+      "items": {
+        "goldberry": 1.0
+      },
+      "n": 1
+    },
+    "zapdos": {
+      "moves": {
+        "hiddenpower": 0.909,
+        "reflect": 0.091,
+        "rest": 0.727,
+        "sleeptalk": 0.364,
+        "substitute": 0.091,
+        "swagger": 0.182,
+        "thunder": 0.273,
+        "thunderbolt": 0.818,
+        "thunderwave": 0.182,
+        "whirlwind": 0.364
+      },
+      "items": {
+        "leftovers": 0.182,
+        "magnet": 0.091,
+        "mintberry": 0.364,
+        "miracleberry": 0.091,
+        "przcureberry": 0.091,
+        "scopelens": 0.182
+      },
+      "n": 11
+    }
+  }
+}
