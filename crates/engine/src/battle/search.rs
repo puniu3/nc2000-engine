@@ -197,6 +197,16 @@ impl Battle {
         self.state_key_with(Some(buckets), false)
     }
 
+    /// `state_key_bucketed` that additionally drops damage-history fields
+    /// (`last_damage`, `hurt_this_turn`, `attacked_by` magnitudes). Callers
+    /// MUST first establish `!damage_bookkeeping_observable(dex)` — only
+    /// Counter/Mirror Coat read them. Without this, every damage roll leaves
+    /// its own fingerprint in the key even after HP is bucketed, and a search
+    /// tree keyed on it can never revisit a state.
+    pub fn state_key_bucketed_no_damage(&self, buckets: i64) -> u64 {
+        self.state_key_with(Some(buckets), true)
+    }
+
     fn state_key_with(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
         use std::hash::Hasher;
         let mut h = FxHasher::default();

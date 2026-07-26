@@ -266,6 +266,7 @@ fn process_battle(
                 "belief": agent.belief_info(),
                 "iters": iters,
                 "top1": top1,
+                "nodes": search.node_count(),
                 "human_share": human_share,
                 "n_switch": n_switch,
                 "best_switch": best_switch,
@@ -338,6 +339,11 @@ fn main() {
     }
     // M16c rollout arm: status pseudo-scoring + bad-matchup voluntary switching
     // in `greedy_pick`. Off by default, as shipped.
+    // M17 cluster-2 probe: threshold-preserving node key.
+    if args.iter().any(|a| a == "--threshold-key") {
+        agent_cfg.threshold_key = true;
+        eprintln!("key override: threshold_key = true");
+    }
     if args.iter().any(|a| a == "--m16c") {
         agent_cfg.rollout_m16c = true;
         eprintln!("rollout override: m16c = true");

@@ -287,10 +287,13 @@ impl BlindSearch {
     fn with_rng(
         battle: &Battle,
         dex: &Dex,
-        cfg: RmConfig,
+        mut cfg: RmConfig,
         side: usize,
         rng: SplitMix64,
     ) -> BlindSearch {
+        if cfg.key_no_damage && battle.damage_bookkeeping_observable(dex) {
+            cfg.key_no_damage = false;
+        }
         let mut base = battle.clone();
         base.set_log_enabled(false);
         let turn_cap = base.turn.saturating_add(cfg.horizon);
@@ -323,7 +326,7 @@ impl BlindSearch {
     /// forced into the shared `run_iteration`. Returns the side-0 reward.
     pub fn step_one(&mut self, dex: &Dex, belief: &Belief, obs: &Observer) -> f64 {
         let mut sim = belief.determinize(dex, &self.base, obs, &mut self.rng);
-        let key = key_of(&self.cfg, &sim);
+        let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
             None => {
@@ -358,6 +361,7 @@ impl BlindSearch {
             root,
             force,
             &mut joint,
+            &mut 0,
         );
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
@@ -382,7 +386,7 @@ impl BlindSearch {
             "forced root action is masked"
         );
         let mut sim = belief.determinize(dex, &self.base, obs, &mut self.rng);
-        let key = key_of(&self.cfg, &sim);
+        let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
             None => {
@@ -411,6 +415,7 @@ impl BlindSearch {
             root,
             force,
             &mut joint,
+            &mut 0,
         );
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
@@ -423,6 +428,11 @@ impl BlindSearch {
             self.step_one(dex, belief, obs);
         }
         self.done
+    }
+
+    /// Distinct states in the determinized tree (see `SkuctSearch::node_count`).
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
     }
 
     pub fn iterations(&self) -> u32 {

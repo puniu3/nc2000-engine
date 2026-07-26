@@ -66,7 +66,7 @@ use std::collections::HashMap;
 
 use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::dex::Dex;
-use nc2000_engine::state::Battle;
+use nc2000_engine::state::{Battle, PokeId};
 
 use crate::agent::Agent;
 use crate::mcts::{outcome_reward, playout_value, Playout};
@@ -120,6 +120,13 @@ pub struct RmConfig {
     /// tail, owns the root values. Machinery retained for research: arena
     /// spec `skuctm16c` turns it on; `false` = shipped rollout.
     pub rollout_m16c: bool,
+    /// M17 cluster-2 probe: replace the uniform HP grid in the node key with
+    /// a threshold-preserving class for the two ACTIVE mons. See `hp_class`.
+    pub threshold_key: bool,
+    /// Drop damage-history fields from the node key. Sound only when no mon
+    /// can read them (Counter/Mirror Coat); the search checks that once at
+    /// construction and clears this flag if it cannot.
+    pub key_no_damage: bool,
 }
 
 impl Default for RmConfig {
@@ -136,6 +143,8 @@ impl Default for RmConfig {
             hp_buckets: 16,
             solve_sweeps: 2000,
             rollout_m16c: false,
+            threshold_key: false,
+            key_no_damage: false,
         }
     }
 }
@@ -201,12 +210,90 @@ impl ProbeStats {
 // `RmAgent` methods; bodies unchanged so agent behavior stays bit-identical
 // (verified by the arena sanity run in M9a).
 
-pub(crate) fn key_of(cfg: &RmConfig, b: &Battle) -> u64 {
-    if cfg.hp_buckets > 0 {
-        b.state_key_bucketed(cfg.hp_buckets)
-    } else {
-        b.state_key()
+/// Number of threshold classes an active mon's HP collapses to. Kept at or
+/// below the uniform bucket count so each class lands in its own bucket when
+/// the canonical representative is hashed.
+pub(crate) const HP_CLASSES: i64 = 12;
+
+/// Which HP class an active mon is in, against the mon actually in front of it.
+///
+/// The uniform grid aliases by an arbitrary band of maxhp; what a decision
+/// turns on is **how many more hits this mon survives**. Two damage rolls that
+/// leave the same hits-to-KO are the same decision and should share a node;
+/// two HP values inside one uniform band can differ on it and must not. The
+/// second bit is whether Substitute is still affordable (a 25% cliff no
+/// uniform grid is aligned to).
+///
+/// `expected_hit_fraction` is already normalised by the defender's CURRENT hp,
+/// so its reciprocal is hits-to-KO from here.
+pub(crate) fn hp_class(b: &Battle, dex: &Dex, def: PokeId, att: Option<PokeId>) -> i64 {
+    let hits = match att {
+        Some(att) => {
+            let best = b
+                .poke(att)
+                .move_slots
+                .iter()
+                .filter(|m| m.pp > 0 && !m.disabled)
+                .map(|m| crate::eval::expected_hit_fraction(b, dex, att, def, m.id, true))
+                .fold(0.0_f64, f64::max);
+            if best <= 0.0 {
+                6
+            } else {
+                ((1.0 / best).ceil() as i64).clamp(1, 6)
+            }
+        }
+        None => 6,
+    };
+    let d = b.poke(def);
+    let can_sub = i64::from(d.hp as i64 * 4 > d.maxhp as i64);
+    (hits - 1) * 2 + can_sub
+}
+
+/// Public shim so the `key_shape` probe can hash a state the way the search
+/// does without exposing the descent internals.
+pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
+    key_of(cfg, dex, b)
+}
+
+/// Node key. With `threshold_key`, each active's HP is first canonicalised to
+/// its class representative, so the existing uniform hashing lands exactly one
+/// class per bucket; bench mons keep the uniform grid, since they are not the
+/// ones being hit and a damage estimate per bench mon would be paid on every
+/// descent step. The battle is restored before returning.
+pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
+    if cfg.hp_buckets <= 0 {
+        return b.state_key();
     }
+    if !cfg.threshold_key {
+        return if cfg.key_no_damage {
+            b.state_key_bucketed_no_damage(cfg.hp_buckets)
+        } else {
+            b.state_key_bucketed(cfg.hp_buckets)
+        };
+    }
+    // Both classes are read before either mon is edited: Flail/Reversal make
+    // the attacker's own HP an input to its damage.
+    let ids = [0usize, 1].map(|s| b.active_id(s));
+    let classes = [0usize, 1].map(|s| ids[s].map(|id| hp_class(b, dex, id, ids[1 - s])));
+    let mut saved = [None, None];
+    for s in 0..2 {
+        if let (Some(id), Some(c)) = (ids[s], classes[s]) {
+            let slot = id.slot as usize;
+            let p = &mut b.sides[id.side as usize].roster[slot];
+            saved[s] = Some((id, p.hp));
+            p.hp = ((p.maxhp as i64 * (2 * c + 1) / (2 * HP_CLASSES)).max(1)) as i32;
+        }
+    }
+    let key = if cfg.key_no_damage {
+        b.state_key_bucketed_no_damage(cfg.hp_buckets)
+    } else {
+        b.state_key_bucketed(cfg.hp_buckets)
+    };
+    for entry in saved.into_iter().flatten() {
+        let (id, hp) = entry;
+        b.sides[id.side as usize].roster[id.slot as usize].hp = hp;
+    }
+    key
 }
 
 /// UCB1 (untried-first, then mean + c·sqrt(ln N / n)).
@@ -260,6 +347,7 @@ pub(crate) fn run_iteration(
     start: usize,
     force_root: [Option<usize>; 2],
     root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
 ) -> f64 {
     let mut path: Vec<(usize, usize, usize)> = Vec::new(); // (node, side, act)
     let mut node_idx = start;
@@ -305,9 +393,12 @@ pub(crate) fn run_iteration(
         if sim.turn > turn_cap {
             break leaf_eval(cfg, sim, dex);
         }
-        let key = key_of(cfg, sim);
+        let key = key_of(cfg, dex, sim);
         match table.get(&key) {
-            Some(&child) => node_idx = child,
+            Some(&child) => {
+                *depth_out += 1;
+                node_idx = child;
+            }
             None => {
                 // expand exactly one node per iteration, then roll out
                 let child = nodes.len();
@@ -352,6 +443,7 @@ pub struct SkuctSearch {
     nodes: Vec<Node>,
     table: HashMap<u64, usize>,
     done: u32,
+    depth_sum: u64,
     /// Per-side mask over the root action lists: `true` = the action is
     /// dominated — a certain immediate self-loss ([`certain_self_loss`]) or
     /// a provable no-op ([`certain_noop`]); `best()` never argmaxes these
@@ -430,20 +522,23 @@ impl SkuctSearch {
         Self::with_rng(battle, dex, cfg, SplitMix64::new(seed))
     }
 
-    fn with_rng(battle: &Battle, dex: &Dex, cfg: RmConfig, rng: SplitMix64) -> SkuctSearch {
+    fn with_rng(battle: &Battle, dex: &Dex, mut cfg: RmConfig, rng: SplitMix64) -> SkuctSearch {
+        if cfg.key_no_damage && battle.damage_bookkeeping_observable(dex) {
+            cfg.key_no_damage = false;
+        }
         let mut root = battle.clone();
         root.set_log_enabled(false);
         let turn_cap = root.turn.saturating_add(cfg.horizon);
         let nodes = vec![Node::at(&mut root, dex)];
         let mut table = HashMap::new();
-        table.insert(key_of(&cfg, &root), 0usize);
+        table.insert(key_of(&cfg, dex, &mut root), 0usize);
         let root_dominated = [0usize, 1].map(|s| {
             nodes[0].acts[s]
                 .iter()
                 .map(|&c| certain_self_loss(&root, dex, s, c) || certain_noop(&root, dex, s, c))
                 .collect::<Vec<bool>>()
         });
-        SkuctSearch { cfg, rng, root, turn_cap, nodes, table, done: 0, root_dominated }
+        SkuctSearch { cfg, rng, root, turn_cap, nodes, table, done: 0, depth_sum: 0, root_dominated }
     }
 
     /// One UCB iteration (clone root, fresh chance seed, select/expand/
@@ -453,6 +548,7 @@ impl SkuctSearch {
         let mut sim = self.root.clone();
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
+        let mut depth = 0u32;
         let r = run_iteration(
             &self.cfg,
             &mut self.rng,
@@ -464,7 +560,9 @@ impl SkuctSearch {
             0,
             [None, None],
             &mut joint,
+            &mut depth,
         );
+        self.depth_sum += depth as u64;
         self.done += 1;
         (r, joint)
     }
@@ -475,6 +573,7 @@ impl SkuctSearch {
         let mut sim = self.root.clone();
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
+        let mut depth = 0u32;
         let r = run_iteration(
             &self.cfg,
             &mut self.rng,
@@ -486,7 +585,9 @@ impl SkuctSearch {
             0,
             [Some(force[0]), Some(force[1])],
             &mut joint,
+            &mut depth,
         );
+        self.depth_sum += depth as u64;
         self.done += 1;
         r
     }
@@ -497,6 +598,24 @@ impl SkuctSearch {
             self.step_one(dex);
         }
         self.done
+    }
+
+    /// Distinct states in the per-decision transposition table. With a fixed
+    /// iteration budget this is the tree-shape number the node key controls:
+    /// fewer nodes = more visits per node = deeper effective search.
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Mean number of transposition hits an iteration walks through before it
+    /// has to expand. This, not `node_count` (which the one-expansion-per-
+    /// iteration rule pins to the budget), is the depth the node key buys.
+    pub fn mean_depth(&self) -> f64 {
+        if self.done == 0 {
+            0.0
+        } else {
+            self.depth_sum as f64 / self.done as f64
+        }
     }
 
     pub fn iterations(&self) -> u32 {
