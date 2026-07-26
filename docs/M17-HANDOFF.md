@@ -1,5 +1,40 @@
 # M17 handoff
 
+Updated: 2026-07-27 (third revision — the exchange term's verdict closed the
+additive-term route; Phase B and the confusion term are in, inert, and waiting
+on the screen).
+
+## 2026-07-27 in one page
+
+- **The additive-term route is measurement-bound, and that is now a rule.** The
+  exchange bonus posted the largest corpus calibration gain on record
+  (r 0.585→0.644) and did not ship: four duel arms parity, every
+  perceptibility instrument flat, because it changes the bot's top-1 on 13.8%
+  of decisions while the *seed alone* changes it on 15.5%.
+  `data/exchange-term-verdict.txt` is the record. **New standing step:
+  `tools/eval-candidate-screen.py` before any duel** — it reads two
+  `human_agreement` artifacts, reports the candidate's top-1 change rate
+  against the seed-flip floor, and refuses a verdict without a floor. Its
+  exit code is the gate (0 measurable / 1 inconclusive / 2 unmeasurable / 3 no
+  floor). First applications: the exchange term 0.89x the floor, the M16c
+  rollout arm 1.10x — both unresolvable by any duel.
+- **Confusion term + Phase B exchange scheme implemented, shipped inert**
+  (`4443548`): `EvalWeights::confusion`, `EvalWeights::exchange_v2`,
+  `EvalWeights::exchange_scheme(w, damp)`, `eval::exchange_matrix` as the
+  diagnostic surface, harness arms on all three instruments, 10 new tests in
+  `crates/bot/tests/exchange.rs`. Details and the smoke numbers are in the M17
+  README entry; the gate is open, not passed.
+- **The belief prior reaches blind play** (`2606e8d`, `4c6dc59`): a wasm
+  `setBeliefPrior(json)` on `ProtocolSearcher` that refuses (out loud, without
+  throwing) on an empty/unparseable table, after the first request, or in
+  pinned mode, plus `tools/ps-client.js --belief-prior FILE`. `BlindSearcher`
+  deliberately did **not** get the setter: the plan named it, but its
+  `BlindSearch` has no such method (the setter belongs to `BlindAgent`, which
+  the bridge does not hold), it has no blind consumer, and it is the class the
+  shipped open-sheet Web app drives — a contamination surface with nothing on
+  the far end. What is still unverified is the owner's step: a local-clone game
+  in `--mode blind` with and without a table.
+
 Updated: 2026-07-25 (second revision — M17b closed, Web budget gate parked).
 
 ## Current state
@@ -112,7 +147,38 @@ Key checkpoints:
       `corpus::reconstruct_*` (today `corpus::cfg()` silently takes
       `EvalWeights::default()`), which is why the plumbing is worth building
       properly rather than hacking.
-   3. **Confusion eval feature** (8.6%), the second missing term.
+   3. **Confusion eval feature** (8.6%), the second missing term — **built,
+      inert, gate open.** `EvalWeights::confusion` default 0.0, priced per
+      expected lost turn off the engine's confusion clock. Smoke (30 battles /
+      90 positions / 8 playouts / GT 150) improves monotonically to 1.5
+      (r 0.596→0.607, Brier 0.2060→0.2042); that scale's last prediction was
+      noise, so it decides nothing.
+
+      **The Phase B exchange scheme is the same gate and should be run in the
+      same batch** (`EvalWeights::exchange_scheme(w, damp)`, `exchange_v2`).
+      Smoke peaks at exchange **0.5 with damp 1.0** (r 0.596→0.640, Brier
+      0.2060→0.1984) — i.e. the matrix pays as an *addition*, and moving the
+      status/Substitute/Spikes weights out of the additive sum makes
+      calibration worse at every weight. Order, and do not skip a step:
+
+      ```
+      # 1. full corpus calibration (the CX-scale run; ~80 min at this shape)
+      eval_calibration --corpus tmp/corpus-spectator --battles 0-569 \
+          --playouts 32 --gt-iters 300 --ab --confusion-sweep --scheme-sweep
+      # 2. footprint screen at PRODUCT budget, against the seed floor
+      human_agreement --corpus tmp/corpus-spectator --battles 0-59 \
+          --iters 30000 --seed 1 [--scheme W --scheme-damp D | --confusion W]
+      tools/eval-candidate-screen.py BASE CAND BASE-OTHER-SEED
+      # 3. seed-paired duel ONLY if the screen clears the floor
+      eval_ab_duel --games 800 --iters 3000  --scheme W --scheme-damp D
+      ```
+
+      A baseline must be re-measured through today's code rather than reused:
+      `tmp/ha-30k-base2.jsonl` predates the 2026-07-27 reveal-channel fixes
+      (`db7d7cb`, `a5495f9`, `3d34eaf`), which move belief imputation and hence
+      the rows. The seed floor from `ha-30k-s1`/`s2` (0.1547) is a property of
+      search noise and is expected to carry, but it is cheap to re-derive in
+      the same batch.
    4. **Status-move valuation**, then the Curse/Body Slam, Rest, and Perish
       Song clusters — likely overlapping causes, so re-measure M16b between
       them rather than fixing all four blind.
