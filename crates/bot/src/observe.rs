@@ -162,6 +162,18 @@ pub struct Observer {
     /// overlay is active (tracked from the log lines themselves, in order),
     /// plain `|move|` lines may name moves that are not the mon's own.
     log_suppress: Vec<bool>,
+    /// Per-mon: a two-turn move a CALLER (Metronome / Mirror Move) put into
+    /// its charge turn. The release line is a plain `|move|` with no `[from]`,
+    /// so without this the caller's victim move is credited to the mon's own
+    /// set — an over-reveal, which is worse than a miss: five "revealed" moves
+    /// for four slots is unsatisfiable and makes `Belief::sync_checked` fail
+    /// closed on the pinned/open-sheet path. `corpus.rs::collect_set_evidence`
+    /// has carried this rule offline since the corpus harness was built; this
+    /// is the same rule on the live channel.
+    called_charging: Vec<Option<MoveId>>,
+    /// The last line was a called move announcing its charge (`[from]` +
+    /// `[still]`), awaiting the `-prepare` that confirms which move it is.
+    pending_call: Option<(usize, MoveId)>,
     revision: u64,
 }
 
@@ -181,6 +193,8 @@ impl Observer {
             prev_item: vec![None; n],
             log_pos: 0,
             log_suppress: vec![false; n],
+            called_charging: vec![None; n],
+            pending_call: None,
             revision: 0,
         }
     }
@@ -222,7 +236,16 @@ impl Observer {
             .collect::<Vec<_>>();
         let prev_item = battle.sides[opp].roster.iter().map(|p| p.item).collect();
         let n = mons.len();
-        Observer { side, mons, prev_item, log_pos: 0, log_suppress: vec![false; n], revision: 0 }
+        Observer {
+            side,
+            mons,
+            prev_item,
+            log_pos: 0,
+            log_suppress: vec![false; n],
+            called_charging: vec![None; n],
+            pending_call: None,
+            revision: 0,
+        }
     }
 
     pub fn side(&self) -> usize {
@@ -304,7 +327,27 @@ impl Observer {
         let Some(body) = line.strip_prefix('|') else { return false };
         let parts: Vec<&str> = body.split('|').collect();
         let cmd = parts.first().copied().unwrap_or("");
+        // The charge announcement and its `-prepare` are adjacent; anything
+        // in between means this was not a charging call after all.
+        let pending = self.pending_call.take();
         match cmd {
+            "-prepare" => {
+                let subject = parts.get(1).copied().unwrap_or("");
+                let named = parts.get(2).copied().unwrap_or("");
+                if let (Some(m), Some(id)) = (self.opp_subject(subject), dex.moves.id(&toid(named)))
+                {
+                    if pending == Some((m, id)) {
+                        self.called_charging[m] = Some(id);
+                    }
+                }
+                false
+            }
+            "cant" | "-anim" => {
+                if let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) {
+                    self.called_charging[m] = None;
+                }
+                false
+            }
             "move" => self.scan_move(&parts, dex),
             "switch" | "drag" | "faint" => {
                 // clear_volatile drops Transform/Mimic overlays on exit; a
@@ -312,6 +355,8 @@ impl Observer {
                 // suppression for the side (only actives carry overlays).
                 if self.subject_is_opp_side(parts.get(1).copied().unwrap_or("")) {
                     self.log_suppress.iter_mut().for_each(|s| *s = false);
+                    // a charge dies with the mon that was holding it
+                    self.called_charging.iter_mut().for_each(|c| *c = None);
                 }
                 false
             }
@@ -396,10 +441,25 @@ impl Observer {
             // called moves: only Sleep Talk selects from the user's own set
             // (Metronome / Mirror Move call foreign moves)
             Some("Sleep Talk") => parts.get(2).copied().unwrap_or(""),
-            Some(_) => return false,
+            Some(_) => {
+                // A called TWO-TURN move announces its charge here and then
+                // releases on a plain `|move|` line that carries no `[from]`.
+                // Remember it so the release is not read as the mon's own.
+                if parts.iter().any(|p| *p == "[still]") {
+                    if let Some(id) = dex.moves.id(&toid(parts.get(2).copied().unwrap_or(""))) {
+                        self.pending_call = Some((m, id));
+                    }
+                }
+                return false;
+            }
             None => parts.get(2).copied().unwrap_or(""),
         };
         let Some(id) = dex.moves.id(&toid(named)) else { return false };
+        if from.is_none() && self.called_charging[m] == Some(id) {
+            // the release of the charge a caller started: not a submitted slot
+            self.called_charging[m] = None;
+            return false;
+        }
         // synthetic non-set moves
         if matches!(dex.moves.key(id), "struggle" | "recharge") {
             return false;
@@ -437,5 +497,89 @@ impl Observer {
     fn subject_is_opp_side(&self, s: &str) -> bool {
         let b = s.as_bytes();
         b.len() >= 4 && b[0] == b'p' && b[1] == b'1' + self.opp() as u8
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use conformance::load_dex;
+
+    fn one_mon_observer(dex: &Dex, species: &str, name: &str) -> Observer {
+        let mons = vec![MonObs {
+            species: dex.species.id(&toid(species)).expect("species"),
+            level: 50,
+            gender: Gender::N,
+            name: name.to_string(),
+            preview_has_item: false,
+            revealed_moves: Vec::new(),
+            item: Default::default(),
+            appeared: true,
+        }];
+        // side 0 observes side 1 (`p2a:` subjects).
+        Observer::from_mons(0, mons)
+    }
+
+    fn revealed(obs: &Observer, dex: &Dex) -> Vec<String> {
+        obs.mons[0]
+            .revealed_moves
+            .iter()
+            .map(|&id| dex.moves.key(id).to_string())
+            .collect()
+    }
+
+    /// A caller charging a two-turn move must not credit the victim move to
+    /// the mon's own set. Corpus battle 215 is the observed case: p1 Snorlax
+    /// ended with FIVE revealed moves for four slots (substitute, doubleteam,
+    /// attract, metronome, razorwind) because Metronome's Razor Wind released
+    /// on a plain `|move|` line. Five facts for four slots is unsatisfiable,
+    /// so `Belief::sync_checked` fails closed on the pinned/open-sheet path —
+    /// the shipped product's own configuration.
+    #[test]
+    fn called_two_turn_release_is_not_a_reveal() {
+        let dex = load_dex();
+        let mut obs = one_mon_observer(&dex, "Snorlax", "Snorlax");
+        for line in [
+            "|move|p2a: Snorlax|Metronome|p2a: Snorlax",
+            "|move|p2a: Snorlax|Razor Wind||[from] Metronome|[still]",
+            "|-prepare|p2a: Snorlax|Razor Wind",
+            "|move|p2a: Snorlax|Razor Wind|p1a: Target",
+        ] {
+            obs.ingest_line(line, &dex);
+        }
+        assert_eq!(revealed(&obs, &dex), vec!["metronome".to_string()]);
+    }
+
+    /// The rule must not eat a genuine reveal: the same move used normally on
+    /// a later turn is the mon's own.
+    #[test]
+    fn an_uncalled_two_turn_move_still_reveals() {
+        let dex = load_dex();
+        let mut obs = one_mon_observer(&dex, "Snorlax", "Snorlax");
+        for line in [
+            "|move|p2a: Snorlax|Razor Wind||[still]",
+            "|-prepare|p2a: Snorlax|Razor Wind",
+            "|move|p2a: Snorlax|Razor Wind|p1a: Target",
+        ] {
+            obs.ingest_line(line, &dex);
+        }
+        assert_eq!(revealed(&obs, &dex), vec!["razorwind".to_string()]);
+    }
+
+    /// An interrupted charge releases the tracking, so a later genuine use of
+    /// the same move is still credited.
+    #[test]
+    fn an_interrupted_charge_does_not_suppress_forever() {
+        let dex = load_dex();
+        let mut obs = one_mon_observer(&dex, "Snorlax", "Snorlax");
+        for line in [
+            "|move|p2a: Snorlax|Razor Wind||[from] Metronome|[still]",
+            "|-prepare|p2a: Snorlax|Razor Wind",
+            "|cant|p2a: Snorlax|par",
+            "|move|p2a: Snorlax|Razor Wind|p1a: Target",
+        ] {
+            obs.ingest_line(line, &dex);
+        }
+        assert_eq!(revealed(&obs, &dex), vec!["razorwind".to_string()]);
     }
 }
