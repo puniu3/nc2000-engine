@@ -64,7 +64,7 @@ use nc2000_engine::state::{Battle, Gender};
 /// carry the type) matches any typed hidden power. M10's own channels only
 /// ever reveal this engine's typed ids, so the lenient arm never fires
 /// there — existing behavior is bit-identical.
-pub(crate) fn move_matches(dex: &Dex, slot: MoveId, revealed: MoveId) -> bool {
+pub fn move_matches(dex: &Dex, slot: MoveId, revealed: MoveId) -> bool {
     slot == revealed
         || (dex.moves.key(revealed) == "hiddenpower"
             && dex.moves.key(slot).starts_with("hiddenpower"))

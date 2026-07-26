@@ -186,6 +186,13 @@ pub struct MonSnapshot {
     pub fainted: bool,
     /// Announced HP as a fraction of max (percentage-granular under HP% Mod).
     pub hp_frac: f64,
+    /// The announced HP exactly as the protocol printed it: numerator over
+    /// `hp_den` (100 under HP Percentage Mod, 48 on a legacy pixel-bar
+    /// stream). Kept unrounded so a checker can re-announce an imputed HP
+    /// amount and prove the rounding rule matches the one the stream used —
+    /// the M18 class-A `%`-HP invariant.
+    pub hp_num: i32,
+    pub hp_den: i32,
     pub status: Status,
     /// Sleep came from Rest (public 2-turn clock).
     pub rest: bool,
@@ -304,6 +311,8 @@ impl ProtocolTracker {
                 active: m.active,
                 fainted: m.fainted,
                 hp_frac: (m.pixels as f64 / m.hp_den.max(1) as f64).clamp(0.0, 1.0),
+                hp_num: m.pixels,
+                hp_den: m.hp_den.max(1),
                 status: m.status,
                 rest: m.rest,
                 boosts: m.boosts,
@@ -1801,7 +1810,7 @@ fn set_item_raw(b: &mut Battle, id: PokeId, item: Option<nc2000_engine::dex::Ite
 /// (den = 100) announces `ceil(100*hp/maxhp)` with a not-quite-full 100
 /// knocked down to 99; the legacy pixel bar (den = 48) announces
 /// `floor(48*hp/maxhp)` clamped to >= 1.
-fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
+pub fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
     let den = if den > 0 { den } else { 48 };
     if cur <= 0 {
         return 0;
@@ -1820,6 +1829,32 @@ fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
     };
     let hi = hi.min(maxhp - 1).max(lo);
     ((lo + hi + 1) / 2).clamp(1, maxhp)
+}
+
+/// Re-announce an HP amount the way the stream that produced `den` would —
+/// the forward direction [`impute_hp`] inverts. HP Percentage Mod (den = 100)
+/// prints `ceil(100*hp/maxhp)` with a not-quite-full value knocked down to 99;
+/// the legacy pixel bar (den = 48) prints `floor(48*hp/maxhp)` floored to 1
+/// while alive.
+///
+/// Exists so the `%`-HP invariant is checkable rather than argued: for every
+/// announced `cur`, `announce_hp(impute_hp(cur, den, maxhp), maxhp, den)` must
+/// be `cur` again. That round trip is exactly what the 2026-07-21 bug broke —
+/// the importer assumed a /48 pixel bar on a /100 stream, inflating every foe
+/// HP by ~2.08x — and it is the M18 class-A gate's second assertion.
+pub fn announce_hp(hp: i32, maxhp: i32, den: i32) -> i32 {
+    let den = if den > 0 { den } else { 48 };
+    if hp <= 0 {
+        return 0;
+    }
+    if maxhp <= 0 || hp >= maxhp {
+        return den;
+    }
+    if den == 100 {
+        ((100 * hp + maxhp - 1) / maxhp).clamp(1, 99)
+    } else {
+        (den * hp / maxhp).clamp(1, den - 1)
+    }
 }
 
 fn safe_name(name: &str) -> PokeName {
@@ -2309,4 +2344,40 @@ mod m17a_tests {
         assert_eq!(uses, ["transform"]);
     }
 
+    /// The M18 class-A `%`-HP invariant, as a pure property: whatever the
+    /// stream announced, the imputed amount re-announces to the same string.
+    /// This is the check the 2026-07-21 /48-on-a-/100-stream bug fails -- it
+    /// inflated every foe HP by ~2.08x, and the bot then refused kills it had.
+    #[test]
+    fn imputed_hp_re_announces_to_the_number_the_stream_printed() {
+        let mut checked = 0u32;
+        for &den in &[48, 100] {
+            for maxhp in [3, 17, 63, 100, 141, 189, 214, 363, 714] {
+                for cur in 1..den {
+                    let hp = impute_hp(cur, den, maxhp);
+                    assert!(
+                        (1..=maxhp).contains(&hp),
+                        "den {den} maxhp {maxhp} cur {cur}: imputed {hp} out of range"
+                    );
+                    // Buckets can be empty when maxhp < den (a 63-HP mon has
+                    // no HP at all for most of the 100 percentages); those
+                    // announce as the nearest reachable value instead.
+                    if maxhp >= den {
+                        assert_eq!(
+                            announce_hp(hp, maxhp, den),
+                            cur,
+                            "den {den} maxhp {maxhp}: {cur} -> {hp} -> {}",
+                            announce_hp(hp, maxhp, den)
+                        );
+                        checked += 1;
+                    }
+                }
+                assert_eq!(impute_hp(0, den, maxhp), 0);
+                assert_eq!(impute_hp(den, den, maxhp), maxhp);
+                assert_eq!(announce_hp(maxhp, maxhp, den), den);
+                assert_eq!(announce_hp(0, maxhp, den), 0);
+            }
+        }
+        assert!(checked > 900, "only {checked} buckets exercised");
+    }
 }

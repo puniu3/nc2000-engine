@@ -707,7 +707,26 @@ pub fn reconstruct_context_with_cfg(
     seed: u64,
     agent_cfg: RmConfig,
 ) -> Option<ReconstructedDecision> {
-    reconstruct_context_inner(dex, src, pool, lines, evidence, d, seed, agent_cfg)
+    reconstruct_context_inner(dex, src, pool, lines, evidence, d, seed, agent_cfg, None)
+}
+
+/// [`reconstruct_context_with_pool`] with an M18 community belief prior
+/// installed on the agent before its first request, which is the only moment
+/// the belief is constructed. Exists for the class-A gate: certifying the
+/// marginal sampler requires replaying the corpus with it switched ON, and
+/// there is no other way to reach a `ProtocolAgent`'s belief in time.
+#[allow(clippy::too_many_arguments)]
+pub fn reconstruct_context_with_prior(
+    dex: &Dex,
+    src: &SetSources,
+    pool: MetaPool,
+    lines: &[String],
+    evidence: &SetEvidence,
+    d: &Decision,
+    seed: u64,
+    prior: Option<std::sync::Arc<crate::prior::BeliefPrior>>,
+) -> Option<ReconstructedDecision> {
+    reconstruct_context_inner(dex, src, pool, lines, evidence, d, seed, cfg(), prior)
 }
 
 /// [`reconstruct_agent_with_pool`] retaining fabrication metadata.
@@ -720,7 +739,7 @@ pub fn reconstruct_context_with_pool(
     d: &Decision,
     seed: u64,
 ) -> Option<ReconstructedDecision> {
-    reconstruct_context_inner(dex, src, pool, lines, evidence, d, seed, cfg())
+    reconstruct_context_inner(dex, src, pool, lines, evidence, d, seed, cfg(), None)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -733,6 +752,7 @@ fn reconstruct_context_inner(
     d: &Decision,
     seed: u64,
     agent_cfg: RmConfig,
+    prior: Option<std::sync::Arc<crate::prior::BeliefPrior>>,
 ) -> Option<ReconstructedDecision> {
     let mut tr = ProtocolTracker::new(d.side);
     for ln in &lines[..=d.cut] {
@@ -889,6 +909,9 @@ fn reconstruct_context_inner(
 
     let mut agent = ProtocolAgent::new(dex, d.side, pool, agent_cfg, seed);
     agent.set_own_team(own_sets);
+    if let Some(prior) = prior {
+        agent.set_belief_prior(prior);
+    }
     for ln in &lines[..=d.cut] {
         agent.push_line(dex, ln);
     }
@@ -1065,6 +1088,8 @@ mod tests {
             active: true,
             fainted: false,
             hp_frac: 1.0,
+            hp_num: 100,
+            hp_den: 100,
             status: Status::None,
             rest: false,
             boosts: [0; 7],

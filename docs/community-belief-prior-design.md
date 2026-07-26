@@ -338,3 +338,77 @@ specialize on the meta pool": this generalizes the *prior data source*
 It converts the one un-completable part of a hidden-info bot — tracking a
 drifting metagame — from an owner maintenance treadmill into an externalized,
 community-owned data artifact, so the shipped code stays finite and certifiable.
+
+## Implementation status (2026-07-26)
+
+Items 1-4 are in tree. The remaining work is content and reach, not mechanism.
+
+**Shipped.**
+
+- **Item 1** (86bb08b) — the format and `examples/count_belief_prior.rs`.
+- **Item 3** (`crates/bot/src/prior.rs`) — the interpreter. Total by
+  construction: any bytes yield a table, and bytes that make no sense yield
+  the empty one, which the sampler reads as "no prior loaded". Probabilities
+  are clamped to `[0, 1]` and deliberately not renormalised (marginals over
+  four slots sum to ~4.0, and the weighted draw needs no normalisation);
+  quoted numbers and a trailing `%` are accepted; non-finite, negative and
+  non-numeric values are dropped with a warning rather than an error; unknown
+  keys are ignored, which the counter's own per-species `n` is the first test
+  of. `overlay` implements the Precedence section literally — per species,
+  wholesale within one.
+- **Item 2** (`belief.rs`, the `MoveDraw` region) — the sampler. The
+  unrevealed slots are drawn per determinization by weighted draw without
+  replacement, on `determinize`'s existing rng. Revealed slots are a separate
+  prefix copied in first, and the pool has them subtracted, so
+  reveal-dominance is structural rather than checked. The prefix is read from
+  the observation, not from the built roster mon, which repairs the case where
+  the roster's defensive second stage drops the reveals. Legality is still
+  code: an entry the format bans or the level forbids is never drawn.
+- **Item 4** (`examples/reveal_dominance_gate.rs`) — the class-A gate.
+
+**Measured (2026-07-26, `reveal_dominance_gate`, 570 battles x 8
+determinizations per decision).** 20,765 decisions, 20,700 of them in fallback
+mode (99.7% — the corpus is human custom teams, so the M18 surface is
+essentially the whole corpus). **4,316,214 assertions, 0 violations** in all
+three arms: the shipped sample table (42 species from complete sets, 102,533
+prior-governed roster slots), a reveal-derived table (128 species, 116,990
+slots), and `--no-prior`. `det_hp_pct_drift` is 0 — imputing a candidate's max
+HP never moved an announced percentage anywhere in the corpus.
+
+The gate is falsifiable, not decorative: deleting the revealed prefix from the
+draw makes it report 400 violations over two battles, with coordinates.
+
+**The one finding, and it is upstream of M18.** Exactly one mon in 570 battles
+has an unsatisfiable reveal set — battle 215 p1 Snorlax, credited with five
+distinct moves for four slots. Cause: `Observer::scan_move` counts the plain
+`|move|` *release* of a two-turn move that Metronome charged, because the
+release line carries no `[from]`. `corpus.rs::collect_set_evidence` already
+fixes exactly this for the offline evidence path by anchoring on `-prepare`,
+with a test citing this battle; the live `Observer` does not have that rule.
+Identical with and without a prior, so it predates M18 and is not the
+sampler's. Two consequences worth recording:
+
+- on the fallback path it is harmless — the `<=4` clamp drops the false
+  reveal, and the imputed set is the true one;
+- on the **pinned / open-sheet** path the same over-reveal would make
+  `sync_checked` fail closed ("pinned opponent team contradicts public battle
+  observations"), which is a live failure mode of the shipped product.
+
+Left unfixed here deliberately: it is outside items 2-4 and the fix lands on
+`observe.rs`, which the certified open-sheet product depends on.
+
+**Not done.**
+
+- `--belief-prior FILE` is wired on `examples/play.rs` (plus the conventional
+  `data/belief-prior-v0.json` when present). The arena spec and the PS client
+  are not wired.
+- Item marginals and `lead` are parsed and exposed but unconsumed: item
+  identity is already reveal-dominated and pick identity is resampled
+  uniformly by the determinizer.
+- No table ships at the auto-pickup path. The reference table sits beside it
+  at `data/belief-prior-v0.sample.json`, and a test asserts
+  `data/belief-prior-v0.json` stays absent, because with no file loaded the
+  bot must behave exactly as it does today — verified as the stronger property
+  that the no-prior path consumes no rng, so the determinization is
+  bit-identical rather than merely equivalent.
+- Prior *content* remains out of dev scope, unchanged from item 1.
