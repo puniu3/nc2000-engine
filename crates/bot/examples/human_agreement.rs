@@ -144,6 +144,48 @@ fn process_battle(
             .filter(|(a, _)| a.starts_with("switch"))
             .map(|(_, v)| *v)
             .sum();
+        // Argmax hides two different failures. `human_share` is the policy mass
+        // the bot actually put on what the human played — the metric that does
+        // not care how many actions happen to be moves. `best_switch` separates
+        // "when to retreat" from "which mon to bring in": the first is a
+        // property of the switch mass, the second of the ordering inside it.
+        let human_share = actions
+            .iter()
+            .zip(visits)
+            .find(|(a, _)| *a == &human)
+            .map(|(_, v)| *v as f64 / total_visits as f64);
+        let n_switch = actions.iter().filter(|a| a.starts_with("switch")).count();
+        // Cause (a) vs (b)/(c) for a flat root: UCB spreads visits when values
+        // are close, so `visits` argmax can be a coin flip while the value
+        // estimates still separate. Record the mean-based decision and the
+        // spread of the values themselves — if the spread is tiny the eval
+        // genuinely cannot tell the actions apart, which is a different defect
+        // from a noisy decision rule.
+        let means = search.means();
+        let visited: Vec<f64> = (0..actions.len())
+            .filter(|&i| visits[i] > 0)
+            .map(|i| means[i])
+            .collect();
+        let q_spread = match (
+            visited.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+            visited.iter().cloned().fold(f64::INFINITY, f64::min),
+        ) {
+            (hi, lo) if hi.is_finite() && lo.is_finite() => Some(hi - lo),
+            _ => None,
+        };
+        let mut mean_order: Vec<usize> = (0..actions.len()).collect();
+        mean_order.sort_by(|&a, &z| means[z].total_cmp(&means[a]));
+        let bot_mean = mean_order.first().map(|&i| actions[i].clone());
+        let human_mean_rank = mean_order
+            .iter()
+            .position(|&i| actions[i] == human)
+            .map(|r| r + 1);
+        let best_switch = actions
+            .iter()
+            .zip(visits)
+            .filter(|(a, _)| a.starts_with("switch"))
+            .max_by_key(|(_, v)| *v)
+            .map(|(a, _)| a.clone());
         let foe_side = 1 - d.side;
         let vols = |side: usize, slot: usize| -> Vec<String> {
             battle.sides[side].roster[slot]
@@ -212,6 +254,13 @@ fn process_battle(
                 "belief": agent.belief_info(),
                 "iters": iters,
                 "top1": top1,
+                "human_share": human_share,
+                "n_switch": n_switch,
+                "best_switch": best_switch,
+                "q_spread": q_spread,
+                "bot_mean": bot_mean,
+                "human_mean_rank": human_mean_rank,
+                "seed": seed,
                 "switch_mass": switch_mass as f64 / total_visits as f64,
                 "self_hp": hp_pct(d.side, active_slot),
                 "self_status": battle.sides[d.side].roster[active_slot].status.as_str(),

@@ -41,6 +41,60 @@ M16b's `kind=switch` top-1 24.9% mostly measures that.
   of local corpus work. Keep `solve_root`/`bounds.rs` as assets, but nothing
   here is blocked on them.
 
+### Follow-up: what is left, and why it is not a switching problem
+
+The residual after the answer above was "a quarter of roots are flat, and
+agreement collapses there". Three causes were separated (`tools/switch-diagnosis.py`,
+`tmp/ha-s{1,2}.jsonl` at 3k, `tmp/ha-30k-s{1,2}.jsonl` at the shipped budget).
+
+**(a) the read-out rule is not the problem — refuted.** `argmax(visits)` and
+`argmax(mean value)` differ on **1.8%** of roots, and deciding by value instead
+of visits moves agreement by **−0.000**. Both come from the same samples.
+
+**The output is unstable, though, and the corpus harness ran at 1/10 of product
+think.** `web/src/app.tsx` ships `BUDGET = 30000` (plus up to 10x ponder);
+M16b runs at 3000. Same 1,984 decisions, seeds 1 vs 2:
+
+| | 3k | 30k (shipped) |
+|---|---:|---:|
+| flat roots (top-1 < 1.5x uniform) | 29.0% | **14.3%** |
+| top-1 flips on seed alone | 29.5% | **15.5%** |
+| ... within flat roots | 46.9% | 31.3% |
+| agreement | 0.390 | 0.407 |
+| agreement with either of two seeds | 0.471 | 0.454 |
+| median root value spread, flat roots | 0.031 | **0.008** |
+| roots whose whole action set fits in 0.05 | 21.9% | **30.2%** |
+
+So **half the flatness measured at 3k is search noise that the product does not
+have**, and any agreement delta smaller than ~0.05 is inside the seed's own
+spread — which retroactively explains why the Spikes A/B (+0.4pp) was
+unreadable.
+
+**(b)/(c) what survives is genuine value ties, and they are not a defect.** At
+30k, 29.7% of roots have every action inside 0.05 of value. Classified that
+way, agreement is **0.405 in tied roots vs 0.408 in separated ones** — the same
+— against coin-flip baselines of 0.200 and 0.183. Tied roots are not a special
+class by tags either; they look like the corpus. The bot's ordering tracks
+humans just as well inside a tie as outside it, so there is nothing localized
+to fix.
+
+**Ten times the compute buys +0.017 agreement.** The ceiling is not search
+budget, and it is not the switch cluster. What remains is a global difference
+between this bot and a mixed-skill human pool, which agreement cannot separate
+from "plays differently but no worse".
+
+**Switch targeting, for the record:** where the human had a real choice of entry
+(n=2,564), the bot's favourite switch is the human's **60.1%** against a 50.0%
+chance baseline — weak but real signal, present in every confidence band.
+
+**Practical rules that follow.**
+
+- Run any future agreement measurement at **30k**, or state that it is a
+  noisier bot than the shipped one.
+- Treat anything under ~0.05 agreement as unmeasurable at one seed.
+- Do not spend further eval work on the switching cluster. If strength is the
+  goal, the sovereign instrument is a CRN-paired duel, not this metric.
+
 ### Bug found on the way (fixed, `c6dbbf2`)
 
 `corpus.rs` derived the synthetic request's `trapped` flag by looking for a
