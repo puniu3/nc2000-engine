@@ -25,6 +25,19 @@
 //! Marked by `is_fallback()`. The construction is defensive at every step —
 //! a filter dead-end mid-game degrades, never panics.
 //!
+//! **M18 — community marginal prior** (`set_prior`, opt-in). With a
+//! `prior::BeliefPrior` installed, the fallback's fixed nearest-set filler is
+//! replaced by a *weighted draw without replacement* over the species'
+//! per-move carry-marginals, redrawn on `determinize`'s per-iteration rng —
+//! so ISMCTS averages over the belief instead of over-committing to one MAP
+//! set. Revealed moves still lead and are never resampled, legality is still
+//! checked against the format learnsets, and the `≤ 4` clamp still holds:
+//! the data can only choose among moves the code already permits. A species
+//! the table does not mention, an empty table, and no table at all are all
+//! the unchanged path, rng consumption included. The sampler is reachable
+//! from exactly one branch of `determinize_with` (`pick == None`), so the
+//! pinned / open-sheet product cannot be touched by it.
+//!
 //! # Determinizer — the hidden-field contract
 //!
 //! `determinize` clones the true battle and rewrites *everything the
@@ -57,7 +70,7 @@
 //! shared per-turn coin — non-goal), and the whole observing side.
 
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use nc2000_engine::battle::{tr, PokemonSet};
 use nc2000_engine::dex::{toid, Dex, MoveId};
@@ -68,6 +81,7 @@ use nc2000_engine::validate::{validate_team, Learnsets};
 
 use crate::observe::{move_matches, MonObs, Observer};
 use crate::preview::MetaPool;
+use crate::prior::BeliefPrior;
 use crate::rng::SplitMix64;
 
 /// Canonicalized no-OHKO community rentals, baked into the bot so the live
@@ -159,6 +173,62 @@ impl FallbackSource {
     }
 }
 
+/// M18 item 2: one fallback-roster slot's per-determinization move draw.
+///
+/// Rebuilt with the fallback roster at every re-filter, so `revealed` tracks
+/// the reveals as they accumulate and `pool` shrinks to match. Splitting the
+/// two is what makes reveal-dominance structural rather than checked: the
+/// revealed slots are copied in first and unconditionally, and the pool it
+/// draws the remainder from cannot contain them.
+#[derive(Clone, Debug)]
+struct MoveDraw {
+    /// Slots the reveals pin. Always kept, always first, never resampled.
+    revealed: Vec<MoveSlot>,
+    /// `(fresh slot, marginal weight)` over the species' prior moves that are
+    /// format-legal at the observed level and not already revealed. Ordered
+    /// by the prior table's (sorted) move ids, so the draw never depends on
+    /// JSON key order.
+    pool: Vec<(MoveSlot, f64)>,
+}
+
+impl MoveDraw {
+    /// Revealed slots, then a **weighted draw without replacement** for the
+    /// `k` still-open ones, on the caller's (per-iteration) rng — the rule
+    /// the design doc specifies. Independent Bernoulli draws are wrong here:
+    /// they do not yield exactly the k slots that are actually open. Drawing
+    /// without replacement distorts the marginals, which is accepted: the
+    /// distortion lives entirely in the guess about unrevealed slots, i.e.
+    /// inside class B.
+    fn draw(&self, rng: &mut SplitMix64) -> MoveSlots {
+        let mut out = MoveSlots::default();
+        for slot in self.revealed.iter().take(4) {
+            out.push(*slot);
+        }
+        let mut pool = self.pool.clone();
+        while out.len() < 4 && !pool.is_empty() {
+            let total: f64 = pool.iter().map(|(_, w)| *w).sum();
+            let pick = if total > 0.0 {
+                let mut u = rng.next_f64() * total;
+                let mut pick = pool.len() - 1;
+                for (i, (_, w)) in pool.iter().enumerate() {
+                    u -= *w;
+                    if u < 0.0 {
+                        pick = i;
+                        break;
+                    }
+                }
+                pick
+            } else {
+                // Unreachable through the interpreter (it drops non-positive
+                // weights); total-by-construction rather than by argument.
+                rng.below(pool.len())
+            };
+            out.push(pool.swap_remove(pick).0);
+        }
+        out
+    }
+}
+
 pub struct Belief {
     cands: Vec<Candidate>,
     /// Pool indices of the candidates consistent with all observations so
@@ -171,6 +241,13 @@ pub struct Belief {
     /// bug from silently dropping the truth to fallback).
     pinned: bool,
     fallback_policy: FallbackPolicy,
+    /// M18: the community belief prior, when the owner loaded one.
+    prior: Option<Arc<BeliefPrior>>,
+    /// M18: per-fallback-slot draw plans, rebuilt alongside `fallback`.
+    /// `None` whenever no prior governs any slot — which is the shipped
+    /// default and keeps `determinize` bit-identical to pre-M18, rng draws
+    /// included.
+    draws: Option<Vec<Option<MoveDraw>>>,
     synced: Option<u64>,
 }
 
@@ -203,6 +280,8 @@ impl Belief {
             fallback: None,
             pinned: false,
             fallback_policy,
+            prior: None,
+            draws: None,
             synced: None,
         };
         b.refilter(dex, obs);
@@ -265,6 +344,8 @@ impl Belief {
             fallback: None,
             pinned: true,
             fallback_policy: FallbackPolicy::Layered,
+            prior: None,
+            draws: None,
             synced: Some(obs.revision()),
         })
     }
@@ -288,6 +369,8 @@ impl Belief {
             fallback: None,
             pinned: true,
             fallback_policy: FallbackPolicy::Layered,
+            prior: None,
+            draws: None,
             synced: Some(obs.revision()),
         }
     }
@@ -339,6 +422,39 @@ impl Belief {
 
     pub fn fallback_policy(&self) -> FallbackPolicy {
         self.fallback_policy
+    }
+
+    /// M18: install the community belief prior. It governs **only** the
+    /// fallback (hidden custom team) imputation:
+    ///
+    /// - the sampler is reachable from exactly one branch of
+    ///   `determinize_with` — `pick == None`, i.e. no pool candidate survived
+    ///   — and a `pinned` / open-sheet belief always holds its single
+    ///   candidate, so the shipped open-sheet product cannot be reached from
+    ///   here even if a caller installs a prior on a pinned belief;
+    /// - a species the table does not mention keeps today's deterministic
+    ///   filler, per the design doc's precedence.
+    ///
+    /// Takes effect at the next `sync` (the draw plans are built with the
+    /// fallback roster, which is the only place the reveals are known).
+    pub fn set_prior(&mut self, prior: Arc<BeliefPrior>) {
+        self.prior = Some(prior);
+        self.draws = None;
+        self.synced = None;
+    }
+
+    pub fn has_prior(&self) -> bool {
+        self.prior.as_deref().is_some_and(|p| !p.is_empty())
+    }
+
+    /// Which fallback roster slots the installed prior currently governs, in
+    /// observer roster order (`false` = today's deterministic filler). Empty
+    /// when nothing is governed. A coverage surface for the M18 gate.
+    pub fn prior_governed(&self) -> Vec<bool> {
+        self.draws
+            .as_deref()
+            .map(|d| d.iter().map(Option::is_some).collect())
+            .unwrap_or_default()
     }
 
     /// Per-mon synthesis sources in observer roster order. Meaningful when
@@ -402,12 +518,19 @@ impl Belief {
         pick: Option<usize>,
         rng: &mut SplitMix64,
     ) -> Battle {
-        let refs: &[Pokemon] = match pick {
-            Some(i) => self.cands[i]
+        // M18: with a prior installed, the fallback roster's *unrevealed*
+        // slots are resampled per determinization instead of being the one
+        // fixed nearest-set filler. `None` on every other path — including
+        // every pinned/open-sheet call — and `None` consumes no rng, so the
+        // no-prior default stays bit-identical.
+        let sampled = self.sample_fallback_refs(pick, rng);
+        let refs: &[Pokemon] = match (sampled.as_deref(), pick) {
+            (Some(r), _) => r,
+            (None, Some(i)) => self.cands[i]
                 .refs
                 .as_deref()
                 .expect("determinize_with: candidate is preview-inconsistent"),
-            None => self
+            (None, None) => self
                 .fallback
                 .as_deref()
                 .expect("determinize_with: fallback roster not built (call sync first)"),
@@ -560,9 +683,130 @@ impl Belief {
             })
             .collect();
         if self.alive.is_empty() {
-            self.fallback = Some(self.build_fallback(dex, obs));
+            let roster = self.build_fallback(dex, obs);
+            self.draws = self.build_draws(dex, obs, &roster);
+            self.fallback = Some(roster);
+        } else {
+            self.draws = None;
         }
         self.synced = Some(obs.revision());
+    }
+
+    // ------------------------------------------------- M18 marginal sampling
+
+    /// Build the per-slot draw plans against the freshly-rebuilt fallback
+    /// roster. `None` (the shipped default) when no prior is installed, the
+    /// table is empty, or it says nothing about any species on this roster —
+    /// in which case `determinize_with` never enters the sampling branch at
+    /// all.
+    fn build_draws(
+        &self,
+        dex: &Dex,
+        obs: &Observer,
+        roster: &[Pokemon],
+    ) -> Option<Vec<Option<MoveDraw>>> {
+        let prior = self.prior.as_deref()?;
+        if prior.is_empty() || self.pinned {
+            return None;
+        }
+        let mut governed = false;
+        let draws: Vec<Option<MoveDraw>> = obs
+            .mons()
+            .iter()
+            .zip(roster)
+            .map(|(mo, mon)| {
+                let draw = self.move_draw(dex, prior, mo, mon)?;
+                governed = true;
+                Some(draw)
+            })
+            .collect();
+        governed.then_some(draws)
+    }
+
+    /// One roster slot's plan, or `None` to keep today's filler for it.
+    ///
+    /// The revealed prefix is taken from `mo.revealed_moves` rather than from
+    /// the built roster mon: the roster's *defensive* second stage (an
+    /// unconstructible set) drops the reveals, and reading the observation
+    /// directly means the sampler restores reveal-dominance there instead of
+    /// inheriting the hole. Existing slots are reused when present so the
+    /// live PP marks survive.
+    fn move_draw(
+        &self,
+        dex: &Dex,
+        prior: &BeliefPrior,
+        mo: &MonObs,
+        mon: &Pokemon,
+    ) -> Option<MoveDraw> {
+        let species = dex.species.key(mo.species);
+        let sp = prior.species(species)?;
+        let mut revealed: Vec<MoveSlot> = Vec::new();
+        for &m in &mo.revealed_moves {
+            if revealed.len() >= 4 {
+                break; // the <=4 clamp, same truncation as `fallback_set`
+            }
+            if revealed.iter().any(|s| move_matches(dex, s.id, m)) {
+                continue;
+            }
+            revealed.push(
+                mon.base_move_slots
+                    .iter()
+                    .find(|s| move_matches(dex, s.id, m))
+                    .copied()
+                    .unwrap_or_else(|| fresh_move_slot(dex, m)),
+            );
+        }
+        if revealed.len() >= 4 {
+            return None; // fully revealed: nothing left to sample
+        }
+        let mut pool: Vec<(MoveSlot, f64)> = Vec::new();
+        for (key, weight) in &sp.moves {
+            let Some(id) = dex.moves.id(key) else { continue };
+            // Legality is code and outranks the data: an off-format or
+            // level-illegal entry in a community table is simply not drawn.
+            if !format_move_legal_at_level(species, dex.moves.key(id), mo.level) {
+                continue;
+            }
+            if revealed.iter().any(|s| move_matches(dex, s.id, id))
+                || mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
+                || pool.iter().any(|(s, _)| s.id == id)
+            {
+                continue;
+            }
+            pool.push((fresh_move_slot(dex, id), *weight));
+        }
+        if pool.is_empty() {
+            // Nothing legal to offer. Falling through to today's filler is
+            // strictly better than emitting a short set, and is what the
+            // "species in neither file" rule prescribes anyway.
+            return None;
+        }
+        Some(MoveDraw { revealed, pool })
+    }
+
+    /// The per-determinization fallback roster, or `None` to use the stored
+    /// one unchanged. Consumes rng **only** when it actually samples.
+    fn sample_fallback_refs(
+        &self,
+        pick: Option<usize>,
+        rng: &mut SplitMix64,
+    ) -> Option<Vec<Pokemon>> {
+        if pick.is_some() || self.pinned {
+            return None;
+        }
+        let draws = self.draws.as_deref()?;
+        let base = self.fallback.as_deref()?;
+        let mut roster = base.to_vec();
+        for (mon, draw) in roster.iter_mut().zip(draws) {
+            let Some(draw) = draw else { continue };
+            let slots = draw.draw(rng);
+            if slots.is_empty() {
+                continue; // never regress to the empty-set/implicit-Struggle
+            }
+            mon.base_move_slots = slots;
+            mon.move_slots = slots;
+        }
+        Some(roster)
     }
 
     // ----------------------------------------------------------- fallback
@@ -718,6 +962,21 @@ fn base_set(dex: &Dex, mo: &MonObs) -> PokemonSet {
             g => g.to_string(),
         }),
     }
+}
+
+/// A full-PP move slot, matching what `Battle::from_fixture` builds for a
+/// set's move (PS `calculatePP`: `pp * (5 + ppUps) / 5`, and gen ≤ 2 subtracts
+/// the ups again at base 40). M18 sampling swaps slots after construction, so
+/// this has to agree with the constructor exactly or an imputed set would
+/// carry different PP than the same set built from JSON.
+fn fresh_move_slot(dex: &Dex, id: MoveId) -> MoveSlot {
+    let ms = dex.move_static(id);
+    let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
+    let mut pp = ms.pp * (5 + pp_ups) / 5;
+    if ms.pp == 40 {
+        pp -= pp_ups;
+    }
+    MoveSlot { id, pp, maxpp: pp, disabled: false, used: false, shared: true }
 }
 
 /// Empirical priors predate the no-OHKO format lens and can contain a move
@@ -1043,6 +1302,8 @@ mod fallback_tests {
             fallback: None,
             pinned: false,
             fallback_policy: FallbackPolicy::Layered,
+            prior: None,
+            draws: None,
             synced: None,
         }
     }
@@ -1400,5 +1661,217 @@ mod fallback_tests {
         for job in jobs {
             assert_eq!(expected, job.join().unwrap());
         }
+    }
+
+    // ------------------------------------------------- M18 marginal sampling
+
+    /// A custom (off-pool) opponent, so the belief lands in fallback mode.
+    /// Bulbasaur reveals `tackle`; every other slot is untouched.
+    fn m18_fixture(reveal: bool) -> (Dex, MetaPool, Battle, Observer) {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
+        let custom: Vec<PokemonSet> = [
+            "Bulbasaur", "Ivysaur", "Venusaur", "Charmander", "Charmeleon", "Charizard",
+        ]
+        .into_iter()
+        .map(plain_set)
+        .collect();
+        let battle =
+            Battle::from_fixture(&dex, "1,2,3,4", &pool.teams[0].sets, &custom).unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        if reveal {
+            obs.ingest_line("|move|p2a: Bulbasaur|Tackle|p1a: Target", &dex);
+        }
+        (dex, pool, battle, obs)
+    }
+
+    /// Bulbasaur is in neither empirical source, so the shipped filler gives
+    /// it exactly one deterministic move — a clean baseline to sample against.
+    const M18_PRIOR: &str = r#"{
+        "format": "nc2000-belief-prior", "version": 1,
+        "species": {"bulbasaur": {"moves": {
+            "razorleaf": 0.9, "sleeppowder": 0.7, "swordsdance": 0.5,
+            "bodyslam": 0.4, "synthesis": 0.3, "fissure": 1.0}}}}"#;
+
+    fn m18_belief(dex: &Dex, pool: &MetaPool, obs: &Observer) -> Belief {
+        let mut belief = Belief::new(dex, pool, obs);
+        assert!(belief.is_fallback());
+        belief.set_prior(Arc::new(BeliefPrior::from_json(M18_PRIOR)));
+        belief.sync(dex, obs);
+        belief
+    }
+
+    /// Bulbasaur's imputed move ids over `n` determinizations.
+    fn m18_draws(
+        dex: &Dex,
+        belief: &Belief,
+        battle: &Battle,
+        obs: &Observer,
+        n: u64,
+    ) -> Vec<Vec<String>> {
+        (0..n)
+            .map(|seed| {
+                let det =
+                    belief.determinize(dex, battle, obs, &mut SplitMix64::new(seed * 7 + 1));
+                det.sides[1].roster[0]
+                    .base_move_slots
+                    .iter()
+                    .map(|s| dex.moves.key(s.id).to_string())
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_prior_samples_only_legal_unrevealed_moves_and_reveals_always_survive() {
+        let (dex, pool, battle, obs) = m18_fixture(true);
+        let belief = m18_belief(&dex, &pool, &obs);
+        assert_eq!(
+            belief.prior_governed(),
+            [true, false, false, false, false, false],
+            "only the species named by the table is governed"
+        );
+
+        let mut distinct = std::collections::HashSet::new();
+        for moves in m18_draws(&dex, &belief, &battle, &obs, 200) {
+            assert_eq!(moves[0], "tackle", "the revealed move leads, always");
+            assert_eq!(moves.len(), 4, "exactly the four open slots are filled");
+            let unique: std::collections::HashSet<&String> = moves.iter().collect();
+            assert_eq!(unique.len(), 4, "without replacement: {moves:?}");
+            for mv in &moves[1..] {
+                assert!(
+                    ["razorleaf", "sleeppowder", "swordsdance", "bodyslam", "synthesis"]
+                        .contains(&mv.as_str()),
+                    "sampled {mv} outside the prior's legal support"
+                );
+            }
+            distinct.insert(moves.clone());
+        }
+        // Fissure is in the table at p=1.0 and is banned by the no-OHKO
+        // format: legality is code and outranks the data.
+        assert!(distinct.len() > 1, "the draw is deterministic, not sampled");
+    }
+
+    #[test]
+    fn heavier_marginals_are_drawn_more_often() {
+        let (dex, pool, battle, obs) = m18_fixture(false);
+        let belief = m18_belief(&dex, &pool, &obs);
+        let draws = m18_draws(&dex, &belief, &battle, &obs, 2000);
+        let rate = |key: &str| {
+            draws.iter().filter(|m| m.iter().any(|x| x == key)).count() as f64
+                / draws.len() as f64
+        };
+        // 4 of the 5 legal candidates are taken every time, so the question
+        // is only which one is left out — and that must track the weights.
+        assert!(
+            rate("razorleaf") > rate("synthesis") + 0.05,
+            "0.9 drawn {:.3}, 0.3 drawn {:.3}",
+            rate("razorleaf"),
+            rate("synthesis")
+        );
+    }
+
+    #[test]
+    fn without_a_prior_the_determinization_is_bit_identical() {
+        let (dex, pool, battle, obs) = m18_fixture(true);
+        let plain = Belief::new(&dex, &pool, &obs);
+        // An empty / unparseable table must be indistinguishable from no file
+        // at all: same imputed sets AND the same rng consumption.
+        for text in ["", M18_PRIOR] {
+            let mut belief = Belief::new(&dex, &pool, &obs);
+            if text.is_empty() {
+                belief.set_prior(Arc::new(BeliefPrior::from_json(text)));
+                belief.sync(&dex, &obs);
+            }
+            let mut a = SplitMix64::new(9);
+            let mut b = SplitMix64::new(9);
+            let want = plain.determinize(&dex, &battle, &obs, &mut a);
+            let got = belief.determinize(&dex, &battle, &obs, &mut b);
+            let sets = |x: &Battle| -> Vec<Vec<u16>> {
+                x.sides[1]
+                    .roster
+                    .iter()
+                    .map(|p| p.base_move_slots.iter().map(|m| m.id.0).collect())
+                    .collect()
+            };
+            if text.is_empty() {
+                assert_eq!(sets(&want), sets(&got));
+                assert_eq!(a.0, b.0, "an empty table must consume no rng");
+            } else {
+                // Sanity that the comparison above can fail at all.
+                let mut c = SplitMix64::new(9);
+                let live = m18_belief(&dex, &pool, &obs).determinize(&dex, &battle, &obs, &mut c);
+                assert_ne!(sets(&want)[0], sets(&live)[0]);
+            }
+        }
+    }
+
+    #[test]
+    fn a_pinned_open_sheet_belief_never_samples() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
+        let truth = &pool.teams[0].sets;
+        let battle =
+            Battle::from_fixture(&dex, "1,2,3,4", &pool.teams[1].sets, truth).unwrap();
+        let obs = Observer::new(&battle, 0);
+        let mut pinned = Belief::pinned_from_battle(&battle, &obs);
+        let mut a = SplitMix64::new(5);
+        let want = pinned.determinize(&dex, &battle, &obs, &mut a);
+
+        // A table naming every species on the sheet, installed on the shipped
+        // product's belief. It must be inert: `pick` is never `None` here.
+        let sheet: String = truth
+            .iter()
+            .map(|s| format!("\"{}\":{{\"moves\":{{\"splash\":1.0}}}}", toid(&s.species)))
+            .collect::<Vec<_>>()
+            .join(",");
+        pinned.set_prior(Arc::new(BeliefPrior::from_json(&format!(
+            "{{\"species\":{{{sheet}}}}}"
+        ))));
+        pinned.sync(&dex, &obs);
+        assert!(pinned.prior_governed().is_empty());
+        let mut b = SplitMix64::new(5);
+        let got = pinned.determinize(&dex, &battle, &obs, &mut b);
+        for slot in 0..truth.len() {
+            assert_eq!(
+                want.sides[1].roster[slot].base_move_slots,
+                got.sides[1].roster[slot].base_move_slots
+            );
+        }
+        assert_eq!(a.0, b.0, "the pinned path must consume no extra rng");
+    }
+
+    #[test]
+    fn a_fully_revealed_mon_is_left_alone() {
+        let (dex, pool, battle, mut obs) = m18_fixture(true);
+        for mv in ["Vine Whip", "Growl", "Leech Seed"] {
+            obs.ingest_line(&format!("|move|p2a: Bulbasaur|{mv}|p1a: Target"), &dex);
+        }
+        let belief = m18_belief(&dex, &pool, &obs);
+        assert!(
+            belief.prior_governed().is_empty(),
+            "four reveals leave no slot to sample, so the sampler is skipped whole"
+        );
+        for moves in m18_draws(&dex, &belief, &battle, &obs, 8) {
+            assert_eq!(moves.len(), 4);
+            for mv in ["tackle", "vinewhip", "growl", "leechseed"] {
+                assert!(moves.iter().any(|m| m == mv), "{mv} lost from {moves:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn sampled_slots_carry_the_same_pp_as_a_set_built_from_json() {
+        let (dex, pool, battle, obs) = m18_fixture(false);
+        let belief = m18_belief(&dex, &pool, &obs);
+        let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(3));
+        let sampled = det.sides[1].roster[0].base_move_slots;
+        let names: Vec<String> =
+            sampled.iter().map(|s| dex.moves.key(s.id).to_string()).collect();
+        let mut set = plain_set("Bulbasaur");
+        set.moves = names;
+        let team = vec![set; 6];
+        let built = Battle::from_fixture(&dex, "1,2,3,4", &team, &team).unwrap();
+        assert_eq!(built.sides[0].roster[0].base_move_slots, sampled);
     }
 }

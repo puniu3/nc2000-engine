@@ -1847,6 +1847,9 @@ pub struct ProtocolAgent {
     tables: TableSet,
     own_sets: Vec<PokemonSet>,
     pinned_sets: Option<Vec<PokemonSet>>,
+    /// M18 community belief prior for the hidden-team fallback imputation.
+    /// `None` (the default) leaves it exactly as shipped.
+    prior: Option<std::sync::Arc<crate::prior::BeliefPrior>>,
     tracker: ProtocolTracker,
     history: Vec<String>,
     observer: Option<Observer>,
@@ -1881,6 +1884,7 @@ impl ProtocolAgent {
             tables,
             own_sets: Vec::new(),
             pinned_sets: None,
+            prior: None,
             tracker: ProtocolTracker::new(side),
             history: Vec::new(),
             observer: None,
@@ -1903,6 +1907,12 @@ impl ProtocolAgent {
     /// Open-team-sheet mode: the opponent's true sets are public.
     pub fn pin_opponent(&mut self, sets: Vec<PokemonSet>) {
         self.pinned_sets = Some(sets);
+    }
+
+    /// M18: consume a community belief prior. Governs only the hidden-team
+    /// fallback imputation; a pinned (open-sheet) belief ignores it.
+    pub fn set_belief_prior(&mut self, prior: std::sync::Arc<crate::prior::BeliefPrior>) {
+        self.prior = Some(prior);
     }
 
     pub fn add_pair_json(&mut self, json: &str) -> Result<(), String> {
@@ -1967,10 +1977,13 @@ impl ProtocolAgent {
             for line in std::mem::take(&mut self.history) {
                 obs.ingest_line(&line, dex);
             }
-            let belief = match &self.pinned_sets {
+            let mut belief = match &self.pinned_sets {
                 Some(sets) => Belief::pinned_checked(dex, "opponent", sets, &obs)?,
                 None => Belief::new(dex, &self.pool, &obs),
             };
+            if let (Some(prior), None) = (self.prior.clone(), &self.pinned_sets) {
+                belief.set_prior(prior);
+            }
             self.observer = Some(obs);
             self.belief = Some(belief);
         }
@@ -2295,4 +2308,5 @@ mod m17a_tests {
             .collect();
         assert_eq!(uses, ["transform"]);
     }
+
 }

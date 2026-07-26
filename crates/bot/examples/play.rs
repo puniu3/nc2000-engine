@@ -470,7 +470,12 @@ impl Spec {
         }
     }
 
-    fn build(&self, seed: u64, dex: &Dex) -> Box<dyn Agent> {
+    fn build(
+        &self,
+        seed: u64,
+        dex: &Dex,
+        prior: Option<&Arc<nc2000_bot::BeliefPrior>>,
+    ) -> Box<dyn Agent> {
         match self {
             Spec::Human => Box::new(HumanAgent),
             Spec::Random => Box::new(RandomAgent::new(seed)),
@@ -493,12 +498,17 @@ impl Spec {
                 ));
                 let tables =
                     TableSet::load(dex, &pool, &repo_root().join("data/preview-tables-v0"));
-                Box::new(BlindAgent::new(
+                let mut agent = BlindAgent::new(
                     RmConfig { iterations: *iterations, ..Default::default() },
                     pool,
                     Some(tables),
                     seed,
-                ))
+                );
+                // M18: only `blind` has a hidden opponent to guess at.
+                if let Some(prior) = prior {
+                    agent.set_belief_prior(prior.clone());
+                }
+                Box::new(agent)
             }
         }
     }
@@ -515,7 +525,7 @@ fn flag(args: &[String], name: &str) -> Option<String> {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.len() < 2 {
-        eprintln!("usage: play <p1: human|random|maxdamage|mcts[:it[:c]]|rm[:it]> <p2: ...> [--seed S] [--team N] [--foe-team N] [--max-turns M]");
+        eprintln!("usage: play <p1: human|random|maxdamage|mcts[:it[:c]]|rm[:it]> <p2: ...> [--seed S] [--team N] [--foe-team N] [--max-turns M] [--belief-prior FILE]");
         std::process::exit(2);
     }
     let specs = [Spec::parse(&args[0]), Spec::parse(&args[1])];
@@ -523,6 +533,24 @@ fn main() {
     let max_turns: u16 = flag(&args, "--max-turns").map(|v| v.parse().unwrap()).unwrap_or(500);
 
     let dex = load_dex();
+    // M18 community belief prior: `--belief-prior FILE`, else the
+    // conventional data/belief-prior-v0.json when the owner put one there.
+    // Absent (the shipped state) => the fallback imputation is unchanged.
+    let prior = match flag(&args, "--belief-prior") {
+        Some(path) => nc2000_bot::BeliefPrior::load(std::path::Path::new(&path)),
+        None => nc2000_bot::BeliefPrior::load_conventional(&repo_root()),
+    };
+    for w in prior.warnings() {
+        eprintln!("belief prior: {w}");
+    }
+    let prior = (!prior.is_empty()).then(|| {
+        eprintln!(
+            "belief prior: {} species, mean move-probability sum {:.2}",
+            prior.len(),
+            prior.mean_move_sum()
+        );
+        Arc::new(prior)
+    });
     let teams = load_team_pool();
     let mut rng = SplitMix64::new(seed);
     let t1 = flag(&args, "--team")
@@ -538,7 +566,7 @@ fn main() {
     let mut agents: Vec<Box<dyn Agent>> = specs
         .iter()
         .enumerate()
-        .map(|(i, s)| s.build(seed ^ (i as u64 + 0xB07), &dex))
+        .map(|(i, s)| s.build(seed ^ (i as u64 + 0xB07), &dex, prior.as_ref()))
         .collect();
 
     // viewer: the human side if exactly one human plays, else spectator view

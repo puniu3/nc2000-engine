@@ -70,6 +70,7 @@ use crate::agent::Agent;
 use crate::belief::{Belief, FallbackPolicy};
 use crate::observe::Observer;
 use crate::preview::{MetaPool, TableSet};
+use crate::prior::BeliefPrior;
 use crate::rng::SplitMix64;
 use crate::smmcts::{key_of, run_iteration, Node, RmConfig};
 
@@ -86,6 +87,9 @@ pub struct BlindAgent {
     pool: Arc<MetaPool>,
     tables: Option<Arc<TableSet>>,
     fallback_policy: FallbackPolicy,
+    /// M18 community belief prior. `None` (the default) leaves the fallback
+    /// imputation exactly as shipped.
+    prior: Option<Arc<BeliefPrior>>,
     game: Option<GameState>,
 }
 
@@ -123,7 +127,18 @@ impl BlindAgent {
             pool,
             tables,
             fallback_policy,
+            prior: None,
             game: None,
+        }
+    }
+
+    /// M18: consume a community belief prior for the hidden-team fallback
+    /// imputation. Takes effect from the next game/preview onward, and is
+    /// inert on the open-sheet path (`OpenAgent` pins its belief).
+    pub fn set_belief_prior(&mut self, prior: Arc<BeliefPrior>) {
+        self.prior = Some(prior);
+        if let Some(g) = self.game.as_mut() {
+            g.belief.set_prior(self.prior.clone().unwrap());
         }
     }
 
@@ -660,12 +675,15 @@ impl Agent for BlindAgent {
         };
         if stale {
             let observer = Observer::new(battle, side);
-            let belief = Belief::with_fallback_policy(
+            let mut belief = Belief::with_fallback_policy(
                 dex,
                 &self.pool,
                 &observer,
                 self.fallback_policy,
             );
+            if let Some(prior) = self.prior.clone() {
+                belief.set_prior(prior);
+            }
             self.game = Some(GameState { side, last_turn: battle.turn, observer, belief });
         }
         {
