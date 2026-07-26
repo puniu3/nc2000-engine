@@ -505,7 +505,28 @@ fn main() {
         // brackets it. Superseded variant sets stay in git history; the M17c
         // race sweep settled at race=3.0, which is the default here.
         let mut variants: Vec<(&str, EvalWeights)> = Vec::new();
-        variants.push(("default (spikes off)", EvalWeights::default()));
+        variants.push(("default", EvalWeights::default()));
+        // Phase A of the exchange eval: `exchange_margin` over every living
+        // pair, i.e. the same trade computation the race term already runs in
+        // the 1v1 endgame, generalised to the matchup matrix. Swept from off,
+        // because it can double-count with `race` in last-mon states and the
+        // crossing has never been located.
+        if args.iter().any(|a| a == "--exchange-sweep") {
+            for x in [0.25f64, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0] {
+                let name: &'static str = Box::leak(format!("exchange{x}").into_boxed_str());
+                variants.push((name, EvalWeights { exchange: x, ..EvalWeights::default() }));
+            }
+            // The same sweep with the 1v1 race term off, so the two terms are
+            // not both paid in the endgame the race term was fitted on.
+            for x in [1.0f64, 2.0] {
+                let name: &'static str =
+                    Box::leak(format!("exchange{x}/race0").into_boxed_str());
+                variants
+                    .push((name, EvalWeights { exchange: x, race: 0.0, ..EvalWeights::default() }));
+            }
+        }
+        let spikes_sweep = args.iter().any(|a| a == "--spikes-sweep");
+        if spikes_sweep {
         variants.push(("spikes0.25", EvalWeights { spikes: 0.25, ..EvalWeights::default() }));
         variants.push(("spikes0.5", EvalWeights { spikes: 0.5, ..EvalWeights::default() }));
         variants.push(("spikes0.75", EvalWeights { spikes: 0.75, ..EvalWeights::default() }));
@@ -520,6 +541,7 @@ fn main() {
         variants.push(("spikes2.0", EvalWeights { spikes: 2.0, ..EvalWeights::default() }));
         variants.push(("spikes2.5", EvalWeights { spikes: 2.5, ..EvalWeights::default() }));
         variants.push(("spikes3.0", EvalWeights { spikes: 3.0, ..EvalWeights::default() }));
+        }
 
         let feat_idx = |name: &str| fs.iter().position(|f| f.name == name).unwrap();
         let oriented_bias = |preds: &[f64], fi: usize| -> f64 {

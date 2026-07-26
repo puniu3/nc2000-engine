@@ -72,6 +72,9 @@ pub struct EvalWeights {
     /// Search-cutoff backup around 0.5. M6 used 0.5, compressing `eval01`
     /// into (0.25, 0.75); M17c uses 1.0 to retain probability semantics.
     pub leaf_alpha: f64,
+    /// Phase A exchange term: `exchange_margin` over all living pairs. 0.0 =
+    /// off (shipped default until it is calibrated and duelled).
+    pub exchange: f64,
     /// Entry-hazard term (M17 tail): Spikes on the owning side. `eval01` has
     /// no side-condition channel at all today, and Spikes is the most common
     /// condition in the 570-battle spectator corpus (21.4% turn-weighted), so
@@ -133,6 +136,7 @@ impl Default for EvalWeights {
             race: 3.0,
             leaf_alpha: 1.0,
             spikes: 1.5,
+            exchange: 0.0,
         }
     }
 }
@@ -178,6 +182,7 @@ impl EvalWeights {
             race: 3.0,
             leaf_alpha: 1.0,
             spikes: 1.5,
+            exchange: 0.0,
         }
     }
 }
@@ -187,6 +192,9 @@ pub fn eval01(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
     let mut diff = side_score(b, dex, w, 0) - side_score(b, dex, w, 1);
     if w.race != 0.0 {
         diff += w.race * race_margin(b, dex, w);
+    }
+    if w.exchange != 0.0 {
+        diff += w.exchange * exchange_margin(b, dex, w);
     }
     1.0 / (1.0 + (-w.scale * diff).exp())
 }
@@ -220,6 +228,19 @@ pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
     let (Some(id0), Some(id1)) = (b.active_id(0), b.active_id(1)) else {
         return 0.0;
     };
+    pair_margin(b, dex, w, id0, id1)
+}
+
+/// The exchange between ONE pair of mons, from `id0`'s perspective, in
+/// [-1, 1]: who wins the straight trade and by how much, through the visible
+/// mechanics (heal cycles, Substitute, recharge, sleep/freeze downtime,
+/// residual self-death clocks, speed order). Returns 0 — "no claim" — when the
+/// race runs past three turns, which is stall/heal territory where a
+/// turns-to-KO estimate lies.
+///
+/// Split out of `race_margin` so the same exchange can be read for pairs that
+/// are not both on the field: that is what `exchange_margin` needs.
+pub fn pair_margin(b: &Battle, dex: &Dex, w: &EvalWeights, id0: PokeId, id1: PokeId) -> f64 {
     let (p0, p1) = (b.poke(id0), b.poke(id1));
     if p0.fainted || p0.hp <= 0 || p1.fainted || p1.hp <= 0 {
         return 0.0;
@@ -320,6 +341,54 @@ pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
         }
     };
     diff.clamp(-1.0, 1.0)
+}
+
+/// Phase A of the exchange eval: the same trade computation as `race_margin`,
+/// read over EVERY living pair instead of only a last-mon-vs-last-mon race.
+///
+/// The additive material terms cannot see a matchup at all — which is why the
+/// eval has no opinion about switching (measured: the bot's root switch mass
+/// is at or below uniform, and its agreement on switch decisions matches
+/// winners and losers equally). A matchup is not a property of either mon; it
+/// is a property of the pair, and the position's value is what the two sides
+/// can force in the matrix of pairs.
+///
+/// Aggregation here is deliberately the cheap proxy: the mean of maximin and
+/// minimax, which is exact when the matrix has a saddle point and errs toward
+/// the committed side otherwise. Solving the matrix properly (`solve_rm_plus`
+/// is already in the tree) is Phase B — worth doing only if this earns it.
+///
+/// Pairs whose race is undecidable return 0 from `pair_margin`, so a position
+/// full of stall matchups scores neutral rather than inventing a claim.
+pub fn exchange_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
+    let living = |s: usize| -> Vec<PokeId> {
+        b.sides[s]
+            .party
+            .iter()
+            .filter_map(|&sl| {
+                let p = &b.sides[s].roster[sl as usize];
+                (!p.fainted && p.hp > 0).then_some(PokeId { side: s as u8, slot: sl })
+            })
+            .collect()
+    };
+    let (mine, theirs) = (living(0), living(1));
+    if mine.is_empty() || theirs.is_empty() {
+        return 0.0;
+    }
+    let mut rows: Vec<Vec<f64>> = Vec::with_capacity(mine.len());
+    for &a in mine.iter() {
+        rows.push(theirs.iter().map(|&d| pair_margin(b, dex, w, a, d)).collect());
+    }
+    // maximin: what side 0 can guarantee by picking first.
+    let maximin = rows
+        .iter()
+        .map(|r| r.iter().cloned().fold(f64::INFINITY, f64::min))
+        .fold(f64::NEG_INFINITY, f64::max);
+    // minimax: what side 1 can hold it to.
+    let minimax = (0..theirs.len())
+        .map(|j| rows.iter().map(|r| r[j]).fold(f64::NEG_INFINITY, f64::max))
+        .fold(f64::INFINITY, f64::min);
+    0.5 * (maximin + minimax)
 }
 
 /// Leaf value for search cutoffs. The calibrated probability is backed up
