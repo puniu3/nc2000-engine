@@ -20,10 +20,15 @@ CORPUS=tmp/corpus-spectator
 if [ ! -d "$CORPUS" ] || [ -z "$(ls -A "$CORPUS" 2>/dev/null)" ]; then
   test -f data/corpus-spectator-logs.zip || { echo "NO CORPUS ARCHIVE"; exit 67; }
   mkdir -p "$CORPUS"
-  unzip -q -o data/corpus-spectator-logs.zip -d "$CORPUS" || { echo "UNZIP FAILED"; exit 68; }
+  # The cx image has python3 but no unzip (measured: exit 68, "unzip: command
+  # not found"), so unpack through the stdlib rather than adding a dependency.
+  python3 -m zipfile -e data/corpus-spectator-logs.zip "$CORPUS" || {
+    echo "UNZIP FAILED"
+    exit 68
+  }
   # the archive may carry a top directory; flatten if so
   if [ -z "$(ls "$CORPUS"/*.raw.log 2>/dev/null)" ]; then
-    inner=$(find "$CORPUS" -name '*.raw.log' -printf '%h\n' 2>/dev/null | head -1)
+    inner=$(find "$CORPUS" -name '*.raw.log' -exec dirname {} \; 2>/dev/null | head -1)
     [ -n "$inner" ] && mv "$inner"/*.raw.log "$CORPUS"/
   fi
 fi
