@@ -436,25 +436,32 @@ impl Observer {
             // even Sleep Talk calls) may name moves outside the mon's set.
             return false;
         }
-        let from = parts.iter().find_map(|p| p.strip_prefix("[from] "));
-        let named = match from {
-            // called moves: only Sleep Talk selects from the user's own set
-            // (Metronome / Mirror Move call foreign moves)
-            Some("Sleep Talk") => parts.get(2).copied().unwrap_or(""),
-            Some(_) => {
+        let from = parts
+            .iter()
+            .find_map(|p| p.strip_prefix("[from] "))
+            .map(|f| f.strip_prefix("move: ").unwrap_or(f));
+        let named = parts.get(2).copied().unwrap_or("");
+        let Some(id) = dex.moves.id(&toid(named)) else { return false };
+        if let Some(from) = from {
+            let from_id = dex.moves.id(&toid(from));
+            // `[from]` naming the executing move itself is not a call at all:
+            // Pursuit's interception of a switching target logs
+            // `|move|p2a: X|Pursuit|p1a: Y|[from] Pursuit`, and that is the mon
+            // publicly using its own slot. Sleep Talk is the other exception —
+            // it selects from the user's own set. Everything else (Metronome,
+            // Mirror Move) executes a FOREIGN move.
+            let self_named = from_id.is_some_and(|f| move_matches(dex, id, f));
+            let sleep_talk = toid(from) == "sleeptalk";
+            if !self_named && !sleep_talk {
                 // A called TWO-TURN move announces its charge here and then
                 // releases on a plain `|move|` line that carries no `[from]`.
                 // Remember it so the release is not read as the mon's own.
                 if parts.iter().any(|p| *p == "[still]") {
-                    if let Some(id) = dex.moves.id(&toid(parts.get(2).copied().unwrap_or(""))) {
-                        self.pending_call = Some((m, id));
-                    }
+                    self.pending_call = Some((m, id));
                 }
                 return false;
             }
-            None => parts.get(2).copied().unwrap_or(""),
-        };
-        let Some(id) = dex.moves.id(&toid(named)) else { return false };
+        }
         if from.is_none() && self.called_charging[m] == Some(id) {
             // the release of the charge a caller started: not a submitted slot
             self.called_charging[m] = None;
@@ -548,6 +555,19 @@ mod tests {
             obs.ingest_line(line, &dex);
         }
         assert_eq!(revealed(&obs, &dex), vec!["metronome".to_string()]);
+    }
+
+    /// `[from]` naming the executing move itself is a genuine reveal, not a
+    /// call. Pursuit's interception of a switching target is the case that
+    /// occurs in the corpus (4 lines, all Umbreon): dropping it means the bot
+    /// never learns a move it publicly watched land, which is the design's own
+    /// class-A example — "ignoring an already-revealed move".
+    #[test]
+    fn a_self_named_from_tag_is_a_reveal() {
+        let dex = load_dex();
+        let mut obs = one_mon_observer(&dex, "Umbreon", "Umbreon");
+        obs.ingest_line("|move|p2a: Umbreon|Pursuit|p1a: Rapidash|[from] Pursuit", &dex);
+        assert_eq!(revealed(&obs, &dex), vec!["pursuit".to_string()]);
     }
 
     /// The rule must not eat a genuine reveal: the same move used normally on
