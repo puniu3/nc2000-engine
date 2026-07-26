@@ -459,3 +459,72 @@ offline reconstruction only. It is deferred rather than fixed because
 invalidates every proof artifact in the repo. **Trigger: fix it in the same
 change that next regenerates the corpus artifacts**, where the invalidation is
 being paid anyway. Owner-accepted 2026-07-27.
+
+## Next session: wire the prior to blind play (the last M18 gap)
+
+Items 2-4 shipped, and the prior is live **only in `examples/play.rs`** — via
+`--belief-prior FILE`, or `data/belief-prior-v0.json` when the owner puts one
+there. Traced 2026-07-27, the consumer that M18 exists for is not connected:
+
+| consumer | reads the prior? | why |
+|---|---|---|
+| `examples/play.rs` | yes | `set_belief_prior` on the agent; auto-pickup at `prior::DEFAULT_PATH` |
+| `tools/ps-client.js` (blind ladder) | **no** | no client flag, and more fundamentally **no wasm binding** — the file has no route to the searcher the client drives |
+| the Web app | n/a by design | open-sheet pins the sets, and the prior only ever touches the fallback path |
+
+So "drop a file in and the bot uses it" is true for the local CLI and false for
+hidden-team play, which is the whole point. Two pieces close it.
+
+**Piece 1 — wasm binding.** `crates/wasm/src/lib.rs` exposes
+`WasmProtocolSearcher` (`js_class = ProtocolSearcher`, holding a
+`ProtocolAgent`) and `WasmBlindSearcher`. Add a setter mirroring
+`ProtocolAgent::set_belief_prior` / `BlindSearch::set_belief_prior`, taking the
+file's **JSON text** rather than a path — wasm has no filesystem, and
+`prior::BeliefPrior` already parses totally from text with warnings instead of
+errors, so a typo degrades rather than throws. Suggested shape:
+
+```rust
+/// `setBeliefPrior(json)` — returns the interpreter's warnings as JSON so the
+/// caller can surface a malformed table instead of silently ignoring it.
+pub fn setBeliefPrior(&mut self, json: &str) -> String
+```
+
+Call it before the first `observe`; an empty or unparseable table must leave
+today's fallback imputation exactly as it is.
+
+**Piece 2 — client flag.** `tools/ps-client.js` already defaults to
+`--mode blind` and constructs `new wasm.ProtocolSearcher(...)` at
+`ps-client.js:508`, right beside its existing `setOwnTeam` call. Add
+`--belief-prior FILE`: read once at startup, pass the text through the new
+setter at construction, print the returned warnings. No other change — do not
+touch mode semantics.
+
+**Constraints that must survive.**
+
+- Default off: no flag and no file at `DEFAULT_PATH` ⇒ byte-identical play. The
+  existing test asserting `data/belief-prior-v0.json` stays absent is the guard;
+  keep it.
+- The prior must never reach the `pinned` path. `--mode open` pins the
+  opponent's sets, and sampling there would contaminate the certified
+  open-sheet configuration.
+- Main-ladder botting needs PS staff permission (README M15b POLICY). The
+  client has no default `--server`; this work targets the local clone or an
+  explicitly configured self-hosted server.
+
+**Verification.** The class-A gate cannot see this — it replays the corpus
+through the offline path, not the websocket. What can:
+
+1. `cargo test --release` green, plus a wasm-side unit test that a malformed
+   table yields warnings and an unchanged determinization.
+2. A local-clone game (`node pokemon-showdown start --skip-build --no-security
+   8123`) in `--mode blind` with and without a table, checking the client logs
+   the species count and that games complete with 0 choice rejections — the
+   same gate-a shape M15b used.
+3. Optional strength read: the M15b harness plays the client against its
+   `--random` driver; a prior that helps should not be *needed* to show up
+   there, and the design already accepts class-B exploitability, so treat a
+   null as expected rather than as a failure.
+
+**Not in scope** (unchanged from the original list): arena spec wiring, item
+marginals and `lead` (parsed, exposed, unconsumed), and prior *content*, which
+stays a community concern.
