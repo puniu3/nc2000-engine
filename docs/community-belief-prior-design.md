@@ -412,3 +412,50 @@ Left unfixed here deliberately: it is outside items 2-4 and the fix lands on
   that the no-prior path consumes no rng, so the determinization is
   bit-identical rather than merely equivalent.
 - Prior *content* remains out of dev scope, unchanged from item 1.
+
+## Reveal-channel audit (2026-07-27) — outcome and two accepted debts
+
+The class-A gate above found one over-reveal, and the audit it triggered turned
+into a full comparison of the project's two answers to "what did the opponent
+publicly reveal": offline `corpus.rs::collect_set_evidence` versus the live
+`Observer` that the shipped product runs. Method was a **prefix-wise differ** —
+for every protocol prefix of every corpus battle, feed both channels the same
+prefix and diff their per-slot revealed-move sets. 475,821 prefix-slot
+comparisons; 0 divergences remain. The granularity mattered: a full-log-only
+diff catches the Metronome over-reveal but misses the Pursuit under-reveal,
+which self-heals later in the same log.
+
+Fixed on the live channel: `db7d7cb` (the plain release of a caller-charged
+two-turn move was credited as the mon's own — over-reveal, unsatisfiable, fails
+`sync_checked` closed on the pinned/open-sheet path), `a5495f9` (a `[from]` tag
+naming the executing move itself — Pursuit's intercept — was dropped, an
+under-reveal of exactly the class-A shape), `3d34eaf` (Mimic suppressed the
+whole mon instead of the one slot it overwrote — under-reveal for as long as
+the mon stayed in).
+
+Of 21 rules compared the rest resolved as: 2 offline-only rules that are dead
+in gen 2 (`|replace|`, `|-end| Transform`), 4 legitimate asymmetries that must
+NOT be equalised (offline's `-enditem` map is own-set fabrication input rather
+than a knowledge channel; `species_names` exists only because offline keys by
+nickname; live returning `None` on an ambiguous subject loses reveals on
+purpose, and matching offline there would be an over-reveal), and 3 edges with
+zero corpus occurrences (duplicate nicknames — all 570 battles use species
+names verbatim; nicknames containing `:`; `[still]` substring vs exact match).
+
+**Accepted debt 1 — the Mimic fix ships without gate coverage.** Mimic occurs
+once in 570 battles and that use failed, so no counter in the gate moves. Unit
+tests stand in. What would actually validate it is a PS-hosted game against a
+Mimic user via `tools/ps-client.js`; until then the fix rests on the protocol
+reading (PS names the copied move on the `-activate` line, and `import.rs`
+already parses that field) rather than on measurement. Owner-accepted
+2026-07-27 on the reasoning that the change only ever *narrows* suppression, so
+it cannot introduce an over-reveal.
+
+**Accepted debt 2 — offline has the mirror-image Mimic defect, deferred.**
+`collect_set_evidence` credits a mimicked move to the submitted set, so a
+reconstructed human team can carry a move its owner never had. It reaches
+offline reconstruction only. It is deferred rather than fixed because
+`corpus.rs`'s bytes feed `reconstruction_schema_fingerprint()`, so any edit
+invalidates every proof artifact in the repo. **Trigger: fix it in the same
+change that next regenerates the corpus artifacts**, where the invalidation is
+being paid anyway. Owner-accepted 2026-07-27.
