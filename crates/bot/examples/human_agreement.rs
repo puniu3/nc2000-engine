@@ -337,6 +337,21 @@ fn main() {
         }
         eprintln!("eval override: spikes = {w}");
     }
+    // M17 exchange term. Agreement is the wrong instrument for "is the eval
+    // right" — the whole switch cluster turned out to be an argmax artifact —
+    // but it is the right one for "would a human watching agree", which is the
+    // shipping criterion once strength is parity.
+    let exchange: Option<f64> = args
+        .iter()
+        .position(|a| a == "--exchange")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok());
+    if let Some(w) = exchange {
+        if let nc2000_bot::mcts::Playout::Heavy { weights, .. } = &mut agent_cfg.playout {
+            weights.exchange = w;
+        }
+        eprintln!("eval override: exchange = {w}");
+    }
     // M16c rollout arm: status pseudo-scoring + bad-matchup voluntary switching
     // in `greedy_pick`. Off by default, as shipped.
     // M17 cluster-2 probe: threshold-preserving node key.
