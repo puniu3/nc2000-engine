@@ -23,7 +23,7 @@
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
 //     [--games N] [--iters 30000] [--seed 1] [--mode blind|open] \
 //     [--opp-team-file FILE.json] [--random] [--timer] [--no-tables] \
-//     [--decision-log FILE.jsonl] \
+//     [--decision-log FILE.jsonl] [--belief-prior FILE.json] \
 //     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
 //     [--drop SPEC] [--quiet]
 //
@@ -89,6 +89,13 @@ if (args.help || args.h) {
   --random          random driver mode (no searcher; uniform legal choice)
   --timer           turn the battle timer on in every game
   --no-tables       skip loading baked preview tables
+  --belief-prior F  M18 community belief prior (a table in the
+                    data/belief-prior-v0.sample.json shape). Read once at
+                    startup and handed to each game's searcher as JSON text;
+                    it governs ONLY the hidden-team fallback imputation, so
+                    it needs --mode blind. Without the flag the fallback
+                    imputation is exactly today's. A malformed table warns
+                    and degrades rather than failing the run
   --drop SPEC       verification hook: socket kills at chosen decision
                     points (see header comment)
   --decision-log F  append private (mode 0600) JSONL for regret replay:
@@ -135,6 +142,8 @@ const TIMER = !!args.timer;
 const QUIET = !!args.quiet;
 const DECISION_LOG = args['decision-log'] && args['decision-log'] !== true ?
 	path.resolve(String(args['decision-log'])) : '';
+const BELIEF_PRIOR_FILE = args['belief-prior'] && args['belief-prior'] !== true ?
+	path.resolve(String(args['belief-prior'])) : '';
 const DEBOUNCE_MS = 100; // network analogue of the M15a stream-quiescence wait
 const RECONNECT_MS = 500;
 
@@ -233,6 +242,52 @@ if (MODE === 'open') {
 		process.exit(2);
 	}
 	oppTeamJson = JSON.stringify(oppTeamSets);
+}
+
+// ------------------------------------------------------- M18 belief prior
+// wasm has no filesystem, so the table crosses the boundary as JSON TEXT and
+// the reading happens here, once. The interpreter is total: a malformed table
+// degrades into warnings and play continues exactly as it does with no prior
+// at all — so the only hard failure is a file we cannot read, which is a typo
+// in the flag rather than a statement about the table.
+function reportPrior(reportJson, log) {
+	let r = null;
+	try {
+		r = JSON.parse(reportJson);
+	} catch { /* fall through to the unreadable-report line */ }
+	if (!r) {
+		log('belief prior: setBeliefPrior returned no readable report');
+		return;
+	}
+	for (const w of r.warnings || []) log(`belief prior: ${w}`);
+	log(`belief prior: ${r.species} species, mean move-probability sum ` +
+		`${Number(r.meanMoveSum).toFixed(2)}, ${r.skipped} entries skipped — ` +
+		`${r.applied ? 'applied' : 'NOT applied'}`);
+}
+
+let priorText = '';
+if (BELIEF_PRIOR_FILE) {
+	if (RANDOM) {
+		console.error('--belief-prior has nothing to act on in --random mode (no searcher)');
+		process.exit(2);
+	}
+	if (MODE !== 'blind') {
+		console.error(`--belief-prior needs --mode blind: --mode ${MODE} pins the opponent's ` +
+			'true sets, and the prior must never reach the open-sheet path');
+		process.exit(2);
+	}
+	try {
+		priorText = fs.readFileSync(BELIEF_PRIOR_FILE, 'utf8');
+	} catch (e) {
+		console.error(`--belief-prior: cannot read ${BELIEF_PRIOR_FILE}: ${e.message}`);
+		process.exit(2);
+	}
+	// Probe once up front so a typo in the TABLE is visible before the first
+	// challenge instead of one line per game; each game's searcher gets its
+	// own install below (the prior lives on the searcher, one per battle).
+	const probe = new wasm.ProtocolSearcher(dex, 0, poolJson, 0);
+	reportPrior(probe.setBeliefPrior(priorText), m => console.log(`[${NAME}] ${m}`));
+	if (typeof probe.free === 'function') probe.free();
 }
 
 // ------------------------------------------------------------- drop specs
@@ -508,6 +563,9 @@ class BattleDriver {
 			this.searcher = new wasm.ProtocolSearcher(dex, this.side, poolJson, SEED * 1000 + this.battleIdx);
 			this.searcher.setOwnTeam(JSON.stringify(this.client.currentTeam.sets));
 			if (MODE === 'open') this.searcher.pinOpponent(oppTeamJson);
+			// after pinOpponent on purpose: if the two ever coexist the binding
+			// refuses out loud rather than contaminating the open-sheet belief
+			if (priorText) reportPrior(this.searcher.setBeliefPrior(priorText), m => this.log(m));
 			for (const pj of pairJsons) {
 				try {
 					this.searcher.addPair(pj);

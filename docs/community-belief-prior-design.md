@@ -528,3 +528,67 @@ through the offline path, not the websocket. What can:
 **Not in scope** (unchanged from the original list): arena spec wiring, item
 marginals and `lead` (parsed, exposed, unconsumed), and prior *content*, which
 stays a community concern.
+
+## Wired to blind play (2026-07-27) — one gap left, and it needs a server
+
+Both pieces above shipped.
+
+**`crates/wasm/src/lib.rs`.** `ProtocolSearcher.setBeliefPrior(json)` takes the
+table's JSON **text** (wasm has no filesystem) and returns a report
+`{applied, species, meanMoveSum, skipped, warnings}` instead of throwing — the
+interpreter is total, so the caller surfaces a malformed table rather than
+silently playing without one. `applied: false`, with the reason in `warnings`,
+for the three cases that must change nothing: `pinOpponent` was called, the
+table yielded no usable species, or the belief already exists (the call came
+after the first `onRequest`, where a prior can no longer take effect). New
+`beliefPriorInfo()` reads `{installed, governed}` back off the live belief — the
+M18 coverage surface for a game in flight.
+
+`pinOpponent` additionally overwrites any prior installed *before* it with the
+empty table. `ProtocolAgent::on_request` already refuses to install one onto a
+pinned belief, so this is belt and braces — but the certified open-sheet
+configuration is the one thing that must not be contaminated, and that should
+not depend on reading that far into the bot crate.
+
+**Deliberately not added to `BlindSearcher`.** The plan above named it, but
+`BlindSearch` exposes no such setter (it is `BlindAgent` that does, and the wasm
+bridge holds neither), and `BlindSearcher` is the class the shipped
+**open-sheet** Web app drives — `web/src/bot-worker.ts` constructs it and
+immediately calls `pinOpponent`. It has no blind consumer, so a setter there
+would be a contamination surface with nothing on the far end of it.
+`ProtocolSearcher` is the ladder client's class and the only one that needed
+wiring.
+
+**`tools/ps-client.js`.** `--belief-prior FILE`: read once at startup and probed
+once through a throwaway searcher, so a typo in the *table* shows up before the
+first challenge instead of once per game; then installed on each game's searcher
+(the prior lives on the searcher, and there is one per battle). `--belief-prior`
+with `--mode open` or with `--random` exits 2 — contradictory requests, refused
+at the flag rather than deep in the binding. An unreadable file exits 2; a
+malformed table only warns. Nothing else moved: mode semantics, budgets and the
+choice path are untouched.
+
+**Verified.** `cargo test --release`: 172 passed / 0 failed over 20 test
+binaries, including the guard that `data/belief-prior-v0.json` stays absent (no
+table was created). The new `crates/wasm` test `belief_prior_binding` drives a
+real ProtocolSearcher decision point against an off-pool opponent and pins three
+things: seven malformed or empty tables each warn *and* leave `rootPolicy()`
+byte-identical to the no-prior baseline; the shipped sample table is genuinely
+consumed (42 species, governs 6 roster slots, moves the determinization), so the
+binding cannot be a silent no-op; and the prior reaches the pinned belief in
+**neither** call order, with the pinned root policy byte-identical to its own
+no-prior baseline. The nodejs wasm build plus `tests-node/{smoke,parity,
+determinism}` are green on the rebuilt package. Client flag paths exercised
+without a server: `--help`, missing file (exit 2), `--mode open` (exit 2),
+`--random` (exit 2), the sample table (`42 species, mean move-probability sum
+4.00, 0 entries skipped — applied`), a deliberately broken table (five warnings,
+`NOT applied`), and no flag at all (no prior line printed, no behaviour touched).
+
+**Still unverified — the owner's step.** Verification item 2 above: a
+local-clone game (`node pokemon-showdown start --skip-build --no-security 8123`)
+in `--mode blind` with and without a table, checking the species-count line and
+that games complete with 0 choice rejections. No server was started here. The
+startup probe proves the table parses and that the binding accepts it; it does
+not prove a full game plays through with the prior live. Item 3 (the strength
+read against the `--random` driver) is likewise untouched, and a null there
+remains the expected outcome.
