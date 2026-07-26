@@ -47,6 +47,9 @@ fn validate_args(args: &[String]) {
         "--race",
         "--leaf-alpha",
         "--metric",
+        "--scheme",
+        "--scheme-damp",
+        "--confusion",
     ];
     const FLAGS: &[&str] = &["--list", "--moves", "--help"];
     let mut index = 1;
@@ -83,6 +86,7 @@ fn main() {
     validate_args(&args);
     if args.iter().any(|arg| arg == "--help") {
         println!("anchor_gate --artifact tmp/m17e-merged-v3.json [--corpus DIR] [--metric raw|leaf] [--eps F]");
+        println!("            [--race F] [--leaf-alpha F] [--scheme W [--scheme-damp D]] [--confusion W] [--list] [--moves]");
         return;
     }
     let artifact_path = arg_s(&args, "--artifact", "tmp/m17e-merged-v3.json");
@@ -102,10 +106,41 @@ fn main() {
     );
     let list = args.iter().any(|a| a == "--list");
 
-    let weights = EvalWeights {
-        race,
-        leaf_alpha,
-        ..EvalWeights::default()
+    // M17 Phase B: the exchange scheme as a candidate, gated here first
+    // because this is the only zero-noise instrument the project has. The
+    // certified anchors are endgame positions, which is exactly where the
+    // scheme claims to replace the race term — and `--race` above stays
+    // available, so "scheme vs race" is a direct comparison on proven bounds.
+    let scheme: Option<f64> = args
+        .iter()
+        .position(|a| a == "--scheme")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok());
+    let scheme_damp: f64 = args
+        .iter()
+        .position(|a| a == "--scheme-damp")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0.0);
+    let confusion: f64 = args
+        .iter()
+        .position(|a| a == "--confusion")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(EvalWeights::default().confusion);
+
+    let weights = match scheme {
+        Some(x) => EvalWeights {
+            leaf_alpha,
+            confusion,
+            ..EvalWeights::exchange_scheme(x, scheme_damp)
+        },
+        None => EvalWeights {
+            race,
+            leaf_alpha,
+            confusion,
+            ..EvalWeights::default()
+        },
     };
 
     let text = std::fs::read_to_string(&artifact_path)
