@@ -60,6 +60,35 @@ fn main() {
     let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
     let teams: Vec<_> = pool.teams.iter().map(|t| t.sets.clone()).collect();
 
+    // M17 exchange term: A = shipped default, B = the candidate weight. The
+    // corpus sweep put r at 0.585 -> 0.644 and Brier at 0.2116 -> 0.2047, but
+    // the three criteria do NOT agree on one weight (r peaks at 0.75-1.0,
+    // Brier/MSE at 0.5), and calibration is necessary-not-sufficient anyway --
+    // M17c's heal-blind variant fit anchors twice as well and lost the duel at
+    // 0.39. This is the sovereign reading.
+    let exchange: Option<f64> = args
+        .iter()
+        .position(|a| a == "--exchange")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok());
+    if let Some(w) = exchange {
+        let a_cfg = cfg_with(EvalWeights::default(), iters);
+        let b_cfg =
+            cfg_with(EvalWeights { exchange: w, ..EvalWeights::default() }, iters);
+        let stats = run_duel(
+            &dex,
+            &teams,
+            &|s| Box::new(RmAgent::new(a_cfg.clone(), s)),
+            &|s| Box::new(RmAgent::new(b_cfg.clone(), s)),
+            DuelSpec::new(games, seed),
+        );
+        println!(
+            "A(shipped default) vs B(exchange {w}) @{iters}: {}W {}L {}T  A-score {:.3} +/- {:.3}  avg turns {:.1}  think A {:.0} B {:.0} ms",
+            stats.wins, stats.losses, stats.ties, stats.score, stats.ci95, stats.avg_turns,
+            stats.a_ms_per_move, stats.b_ms_per_move
+        );
+        return;
+    }
     let (a_cfg, b_cfg, label) = match spikes {
         Some(w) => (
             cfg_with(EvalWeights::default(), iters),
