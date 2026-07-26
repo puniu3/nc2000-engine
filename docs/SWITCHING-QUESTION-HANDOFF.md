@@ -1,7 +1,77 @@
 # Switching question — handoff
 
-Updated: 2026-07-26. Written to survive a session exit: there is a CX job in
-flight whose result is the whole point.
+Updated: 2026-07-26. **RESOLVED, and not the way the whole file assumed.** The
+sections below are kept because the reasoning that led here is worth reading,
+but read this first.
+
+## ANSWER: the bot's switch RATE was never wrong; the metric was
+
+Measured over all 570 corpus battles, 19,768 scorable decisions, 3000 iters
+(`tmp/ha-tagged2.jsonl`, `tools/agreement-by-confidence.py`, harness
+`human_agreement` + `switch_cases`):
+
+- **Human switch rate 18.2% vs the bot's mean root switch mass 19.5%.** The
+  aggregate propensity matches. The bot is not a mon that refuses to retreat.
+- **The bot discriminates.** Switch mass is 0.320 where the human switched and
+  0.167 where the human attacked — AUC **0.739** against 0.5 for no signal, and
+  it climbs with confidence (0.886 in the top-1 >= 0.9 band).
+- **The M16b gap lives entirely in the low-confidence region.** Agreement by
+  top-1 visit share: at 0.70-0.90 the move/switch gap is **+0.004** (0.564 vs
+  0.559) and at >= 0.90 it is +0.057; it then grows monotonically to +0.209 in
+  the 0.00-0.25 band. When the bot has an opinion, it agrees about switching
+  exactly as often as it agrees about moves.
+
+The mechanism is a structural bias in the metric, not in the policy: a typical
+root has ~4 moves and ~2 switches, so the argmax of a near-uniform policy is a
+move about 2/3 of the time by construction, and no human switch can match it.
+M16b's `kind=switch` top-1 24.9% mostly measures that.
+
+**Consequences.**
+
+- Both null results now make sense. L2 rollout switching and the L1 Spikes tax
+  are interventions on the switch *rate*, and the rate was already calibrated.
+- **Do not optimise M16b switch top-1.** Use switch-mass calibration (18.2% vs
+  19.5%) and the AUC (0.739) instead.
+- The real defect the data does show is **resolution**: 19% of switch roots and
+  14% of move roots sit below 0.25 top-1 share, i.e. the search cannot separate
+  the candidate actions at all. That is an eval/search question, not a switching
+  question, and it is the same direction the M17c KO-race term helped.
+- **The exact-equilibrium instrument is no longer needed for this question.**
+  Four CX submissions produced no admissible row; the answer came from 5 minutes
+  of local corpus work. Keep `solve_root`/`bounds.rs` as assets, but nothing
+  here is blocked on them.
+
+### Bug found on the way (fixed, `c6dbbf2`)
+
+`corpus.rs` derived the synthetic request's `trapped` flag by looking for a
+`meanlook` volatile. PS names the volatile on the trapped side **`trapped`**
+(`meanlook` is the move; the linked status sits on the trapper), so the check
+never fired: 290 decisions where the acting mon is Mean Looked were handed a
+legal-switch list, 45% of root visits went to actions that cannot be played,
+and in battle 6 turns 6-9 the bot's top-1 was an illegal switch. After the fix
+those roots go 6 actions -> 4, switch mass -> 0, and that tag's agreement rises
+0.176 -> 0.386. **Live play was never affected** — `import.rs` reads `trapped`
+straight from the server's request JSON.
+
+### What the tags say (and what the eyeball got wrong)
+
+| tag | n | agree | human switched | bot switch mass |
+|---|---:|---:|---:|---:|
+| ALL | 19768 | 0.395 | 18.2% | 0.195 |
+| foe set up (+2 or more) | 1900 | 0.418 | **4.8%** | 0.131 |
+| self below 25% hp | 1184 | 0.459 | 20.7% | 0.153 |
+| self confused | 612 | 0.369 | 33.7% | 0.292 |
+| perish song up | 575 | 0.348 | 21.0% | 0.235 |
+| self seeded | 390 | 0.367 | 34.1% | 0.292 |
+| self encored | 145 | **0.648** | 20.7% | 0.383 |
+| self trapped | 290 | 0.386 | 0.0% | 0.000 |
+
+Reading a dozen positions by eye suggested the bot was blind to setup sweepers
+and Encore locks. At corpus scale that is false: humans switch away from a
+boosted foe only **4.8%** of the time, and those positions have *above*-average
+agreement. Eyeballing found the trapped bug; it also produced two confident
+hypotheses that the aggregate killed. Both outcomes are why the cheap
+instrument should have run first.
 
 ## The question
 
