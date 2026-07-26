@@ -239,6 +239,18 @@ fn process_battle(
             }
         };
 
+        // Same calibration test that settled the switching question, applied to
+        // the next cluster: does the bot's policy mass on status moves match how
+        // often humans play them? The rollout scores every status move 0
+        // (`greedy_pick` ranks by expected hit fraction), so if that bias
+        // reaches the root, this mass is where it shows.
+        let status_mass: u32 = actions
+            .iter()
+            .zip(visits)
+            .filter(|(a, _)| class_of(a) == "Status")
+            .map(|(_, v)| *v)
+            .sum();
+
         out.push(
             serde_json::json!({
                 "battle": battle_idx, "side": d.side, "turn": d.turn,
@@ -262,6 +274,7 @@ fn process_battle(
                 "human_mean_rank": human_mean_rank,
                 "seed": seed,
                 "switch_mass": switch_mass as f64 / total_visits as f64,
+                "status_mass": status_mass as f64 / total_visits as f64,
                 "self_hp": hp_pct(d.side, active_slot),
                 "self_status": battle.sides[d.side].roster[active_slot].status.as_str(),
                 "self_boost": boost_sum(d.side, active_slot),
@@ -322,6 +335,12 @@ fn main() {
             weights.spikes = w;
         }
         eprintln!("eval override: spikes = {w}");
+    }
+    // M16c rollout arm: status pseudo-scoring + bad-matchup voluntary switching
+    // in `greedy_pick`. Off by default, as shipped.
+    if args.iter().any(|a| a == "--m16c") {
+        agent_cfg.rollout_m16c = true;
+        eprintln!("rollout override: m16c = true");
     }
 
     let (lo, hi) = {
