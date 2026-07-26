@@ -96,6 +96,7 @@ fn scan_battle(
     base_seed: u64,
     per_battle: usize,
     agent_cfg: &nc2000_bot::smmcts::RmConfig,
+    mode: &str,
 ) -> Vec<Case> {
     let corpus_battle = load_battle(battle_file);
     let mut cases = Vec::new();
@@ -104,8 +105,22 @@ fn scan_battle(
         if cases.len() >= per_battle {
             break;
         }
-        let HumanAction::Switch(target) = &d.action else {
-            continue;
+        let want_status = mode == "status";
+        let human_label = match (&d.action, want_status) {
+            (HumanAction::Switch(t), false) => format!("switch {t}"),
+            (HumanAction::Move(k), true) => {
+                // Cluster 2: the human set something up, the bot swung.
+                let cat = dex
+                    .moves
+                    .id(&plain(k))
+                    .map(|id| dex.moves.get(id).category.clone())
+                    .unwrap_or_default();
+                if cat != "Status" {
+                    continue;
+                }
+                format!("move {k}")
+            }
+            _ => continue,
         };
         let seed = base_seed
             ^ (battle_idx as u64).wrapping_mul(0x9E37_79B9_7F4A)
@@ -156,12 +171,21 @@ fn scan_battle(
         if total == 0 || actions.is_empty() {
             continue;
         }
-        let human = format!("switch {target}");
+        let human = human_label.clone();
         let mut order: Vec<usize> = (0..actions.len()).collect();
         order.sort_by(|&a, &z| visits[z].cmp(&visits[a]));
         let best = order[0];
-        // The case we are after: human retreated, bot's top visit stays in.
-        if actions[best].starts_with("switch") {
+        // The case we are after: the human played the plan, the bot did not.
+        let best_is_damage = actions[best]
+            .strip_prefix("move ")
+            .and_then(|k| dex.moves.id(k))
+            .map(|id| dex.moves.get(id).category != "Status")
+            .unwrap_or(false);
+        if want_status {
+            if !best_is_damage {
+                continue;
+            }
+        } else if actions[best].starts_with("switch") {
             continue;
         }
         // Only score it if the human's bench mon actually exists in the bot's
@@ -276,6 +300,9 @@ fn main() {
     let per_battle = arg(&args, "--per-battle", 2);
     let threads = arg(&args, "--threads", 4);
     let out_path = arg_s(&args, "--out", "tmp/switch-cases.jsonl");
+    // "switch" (default): human retreated, bot stayed. "status": human played a
+    // status move, bot played a damaging one -- M16b cluster 2.
+    let mode = arg_s(&args, "--human-class", "switch");
 
     let (lo, hi) = {
         let mut it = range.split('-');
@@ -319,6 +346,7 @@ fn main() {
                     seed,
                     per_battle,
                     &agent_cfg,
+                    &mode,
                 );
                 if !cases.is_empty() {
                     found.lock().unwrap().extend(cases);
