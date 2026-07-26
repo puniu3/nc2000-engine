@@ -811,10 +811,19 @@ fn reconstruct_context_inner(
         .iter()
         .find(|(k, _)| k == "disable")
         .and_then(|(_, m)| *m);
+    // PS names the volatile on the TRAPPED side `trapped`; `meanlook` is the
+    // move, and the linked status lives on the trapper. Checking for
+    // `meanlook` here therefore never fired, the synthetic request said
+    // "not trapped", and `legal_move_choices` offered switches that are
+    // illegal — measured on the 570-battle corpus: 290 decisions where the
+    // acting mon is Mean Looked, every one of them with switch actions in the
+    // set, 45% of root visits spent on them, and the bot's top-1 an illegal
+    // switch in the worst cases. Live play is unaffected: `import.rs` takes
+    // `trapped` straight from the server's request JSON.
     let trapped = act
         .vols
         .iter()
-        .any(|(k, _)| k == "meanlook" || k == "partiallytrapped");
+        .any(|(k, _)| k == "trapped" || k == "meanlook" || k == "partiallytrapped");
     let uses_of = |key: &str| -> i32 {
         act.uses
             .iter()
