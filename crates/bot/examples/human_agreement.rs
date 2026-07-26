@@ -352,6 +352,37 @@ fn main() {
         }
         eprintln!("eval override: exchange = {w}");
     }
+    // Confusion term (priced per expected lost turn) and the Phase B exchange
+    // scheme, so the perceptibility reading covers the same arms the duel and
+    // the calibration sweep do.
+    let confusion: Option<f64> = args
+        .iter()
+        .position(|a| a == "--confusion")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok());
+    if let Some(w) = confusion {
+        if let nc2000_bot::mcts::Playout::Heavy { weights, .. } = &mut agent_cfg.playout {
+            weights.confusion = w;
+        }
+        eprintln!("eval override: confusion = {w}");
+    }
+    let scheme: Option<f64> = args
+        .iter()
+        .position(|a| a == "--scheme")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok());
+    let scheme_damp: f64 = args
+        .iter()
+        .position(|a| a == "--scheme-damp")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0.0);
+    if let Some(x) = scheme {
+        if let nc2000_bot::mcts::Playout::Heavy { weights, .. } = &mut agent_cfg.playout {
+            *weights = nc2000_bot::EvalWeights::exchange_scheme(x, scheme_damp);
+        }
+        eprintln!("eval override: exchange scheme = {x}, damp = {scheme_damp}");
+    }
     // M16c rollout arm: status pseudo-scoring + bad-matchup voluntary switching
     // in `greedy_pick`. Off by default, as shipped.
     // M17 cluster-2 probe: threshold-preserving node key.

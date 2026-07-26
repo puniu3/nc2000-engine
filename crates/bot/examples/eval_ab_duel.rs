@@ -71,6 +71,56 @@ fn main() {
         .position(|a| a == "--exchange")
         .and_then(|i| args.get(i + 1))
         .and_then(|v| v.parse().ok());
+    // M17 Phase B: the whole exchange scheme as one arm (matrix game value +
+    // entry costs + engine-accurate residual clocks + confusion as lost
+    // offense), with the additive terms it absorbs damped by --scheme-damp.
+    // A = shipped default, B = the scheme. This is the arm that is *supposed*
+    // to have a footprint: the exchange term as a bonus changed the bot's top-1
+    // on 13.8% of corpus decisions against a 15.5% seed-flip floor, which is
+    // why it could only ever read parity. Screen with
+    // `tools/eval-candidate-screen.py` before spending a duel on it.
+    let scheme: Option<f64> = args
+        .iter()
+        .position(|a| a == "--scheme")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok());
+    let scheme_damp: f64 = args
+        .iter()
+        .position(|a| a == "--scheme-damp")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0.0);
+    // Confusion term, priced per expected lost turn.
+    let confusion: Option<f64> = args
+        .iter()
+        .position(|a| a == "--confusion")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok());
+    if let Some(w) = scheme.or(confusion) {
+        let (b_weights, label) = if let Some(x) = scheme {
+            (EvalWeights::exchange_scheme(x, scheme_damp), format!("scheme {x}/damp {scheme_damp}"))
+        } else {
+            (
+                EvalWeights { confusion: w, ..EvalWeights::default() },
+                format!("confusion {w}"),
+            )
+        };
+        let a_cfg = cfg_with(EvalWeights::default(), iters);
+        let b_cfg = cfg_with(b_weights, iters);
+        let stats = run_duel(
+            &dex,
+            &teams,
+            &|s| Box::new(RmAgent::new(a_cfg.clone(), s)),
+            &|s| Box::new(RmAgent::new(b_cfg.clone(), s)),
+            DuelSpec::new(games, seed),
+        );
+        println!(
+            "A(shipped default) vs B({label}) @{iters}: {}W {}L {}T  A-score {:.3} +/- {:.3}  avg turns {:.1}  think A {:.0} B {:.0} ms",
+            stats.wins, stats.losses, stats.ties, stats.score, stats.ci95, stats.avg_turns,
+            stats.a_ms_per_move, stats.b_ms_per_move
+        );
+        return;
+    }
     if let Some(w) = exchange {
         let a_cfg = cfg_with(EvalWeights::default(), iters);
         let b_cfg =

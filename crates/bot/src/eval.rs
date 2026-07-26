@@ -107,6 +107,55 @@ pub struct EvalWeights {
     /// expects is worth more to this product than a strength delta it cannot
     /// measure.
     pub spikes: f64,
+    /// Confusion (M17 tail): the second condition the corpus named and the
+    /// eval had no channel for at all (8.6% turn-weighted, behind Spikes at
+    /// 21.4% which now has one). Active-only, because the volatile dies on
+    /// switch-out.
+    ///
+    /// Mechanically (`conditions.rs` "confusion"): the clock is drawn
+    /// `random_range(2, 6)` and decremented *before* each move attempt; when
+    /// it reaches 0 the volatile is removed and that move goes through
+    /// unhindered. So a stored clock of `t` buys the foe `t - 1` more
+    /// hindered attempts, each a 1-in-2 coin for a 40-BP typeless self-hit
+    /// instead of the move. The penalty is therefore
+    /// `confusion × 0.5 × (t - 1)` and the weight reads as **the cost of one
+    /// expected lost turn** — at onset (t ∈ 2..=5, mean 3.5) that is
+    /// `1.25 × confusion`. Deliberately not a flat constant: the flat status
+    /// penalties are exactly what the corpus calibration measured as
+    /// mispriced. 0.0 = off (shipped default until calibrated and duelled).
+    pub confusion: f64,
+    /// **Phase B of the exchange eval — "the new scheme".** Off by default;
+    /// `true` re-reads the whole exchange with the mechanics the additive
+    /// terms flatten, and takes the *game value* of the pair matrix instead
+    /// of Phase A's maximin/minimax midpoint:
+    ///
+    /// - the matrix is solved with `smmcts::solve_rm_plus` (already in the
+    ///   tree, microseconds at 3×3) rather than proxied, so a matchup that
+    ///   only pays off under a mixed choice is priced instead of being
+    ///   rounded to the committed side;
+    /// - **entry costs enter the matrix**: a pair using a *benched* mon is
+    ///   charged the switch turn and its Spikes entry damage, so an
+    ///   off-diagonal cell is worth what the switch actually costs, and a mon
+    ///   that cannot survive its own entry loses the pairing outright. This
+    ///   is the first channel through which switching reaches `eval01` at
+    ///   all;
+    /// - **residual clocks follow the engine**: `conditions.rs::residualdmg`
+    ///   ticks `floor(maxhp/16) × counter` with the counter incrementing every
+    ///   turn once the toxic volatile is on the mon (gen 2 keeps it for
+    ///   psn/brn too), not the flat `maxhp/8` Phase A assumed. Toxic's value
+    ///   then grows with its counter by construction — the corpus
+    ///   calibration measured the flat `tox` weight as the eval's largest
+    ///   oriented bias (−0.094);
+    /// - **confusion enters as lost offense**: a confused attacker's expected
+    ///   damage per turn halves, so it needs about twice as many turns to
+    ///   close the same race.
+    ///
+    /// Because `race_margin` is the 1×1 case of the same function, this flag
+    /// changes the shipped race term too even when `exchange` is 0.0 — which
+    /// is why it defaults to `false` and ships inert until the standard gate
+    /// (`eval_calibration --corpus` → candidate screen → seed-paired duel)
+    /// clears it. `EvalWeights::exchange_scheme` assembles the full candidate.
+    pub exchange_v2: bool,
 }
 
 impl Default for EvalWeights {
@@ -137,6 +186,8 @@ impl Default for EvalWeights {
             leaf_alpha: 1.0,
             spikes: 1.5,
             exchange: 0.0,
+            confusion: 0.0,
+            exchange_v2: false,
         }
     }
 }
@@ -183,6 +234,38 @@ impl EvalWeights {
             leaf_alpha: 1.0,
             spikes: 1.5,
             exchange: 0.0,
+            confusion: 0.0,
+            exchange_v2: false,
+        }
+    }
+
+    /// The Phase B candidate as one object, so every harness arm means the
+    /// same thing. `exchange` is the weight on the matrix game value; `damp`
+    /// scales the additive terms the exchange now carries itself (the status
+    /// penalties, Substitute, Spikes) — `0.0` moves them out entirely, `1.0`
+    /// leaves them double-counted, and the sweep looks for the middle.
+    ///
+    /// `race` is set to 0.0 unconditionally: the exchange matrix is a strict
+    /// generalization of the race term (identical at 1×1), so keeping both
+    /// pays for the same last-mon race twice. The material terms (`hp`,
+    /// `alive`, `pp`, `boost`, `threat`) stay: the exchange returns 0 — "no
+    /// claim" — on stall/heal positions, and they are what is left when it
+    /// does.
+    pub fn exchange_scheme(exchange: f64, damp: f64) -> Self {
+        let d = EvalWeights::default();
+        EvalWeights {
+            exchange,
+            exchange_v2: true,
+            race: 0.0,
+            brn: d.brn * damp,
+            par: d.par * damp,
+            slp: d.slp * damp,
+            frz: d.frz * damp,
+            psn: d.psn * damp,
+            tox: d.tox * damp,
+            substitute: d.substitute * damp,
+            spikes: d.spikes * damp,
+            ..d
         }
     }
 }
@@ -241,9 +324,37 @@ pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
 /// Split out of `race_margin` so the same exchange can be read for pairs that
 /// are not both on the field: that is what `exchange_margin` needs.
 pub fn pair_margin(b: &Battle, dex: &Dex, w: &EvalWeights, id0: PokeId, id1: PokeId) -> f64 {
+    pair_margin_ctx(b, dex, w, id0, id1, [1.0, 1.0], [0.0, 0.0])
+}
+
+/// `pair_margin` for a pair that may not be on the field yet.
+///
+/// `hp_left[i]` is the fraction of its *current* HP that mon `i` brings to the
+/// exchange (1.0 on the field; less for a benched mon that owes entry damage),
+/// and `extra[i]` is the turns it spends getting there (1.0 for the switch).
+/// Both default to the on-field values through `pair_margin`, and at those
+/// values every expression below reduces to the original arithmetic — the
+/// Phase A / race term is unchanged bit-for-bit unless `exchange_v2` is set.
+fn pair_margin_ctx(
+    b: &Battle,
+    dex: &Dex,
+    w: &EvalWeights,
+    id0: PokeId,
+    id1: PokeId,
+    hp_left: [f64; 2],
+    extra: [f64; 2],
+) -> f64 {
     let (p0, p1) = (b.poke(id0), b.poke(id1));
     if p0.fainted || p0.hp <= 0 || p1.fainted || p1.hp <= 0 {
         return 0.0;
+    }
+    // A mon that cannot survive its own entry has lost the pairing before it
+    // gets a turn; both dying is no claim either way.
+    match (hp_left[0] <= 0.0, hp_left[1] <= 0.0) {
+        (true, true) => return 0.0,
+        (true, false) => return -1.0,
+        (false, true) => return 1.0,
+        _ => {}
     }
 
     let recharge = dex.conds_id("mustrecharge");
@@ -255,8 +366,14 @@ pub fn pair_margin(b: &Battle, dex: &Dex, w: &EvalWeights, id0: PokeId, id1: Pok
     let spd0 = b.get_pokemon_action_speed(dex, id0);
     let spd1 = b.get_pokemon_action_speed(dex, id1);
     // expected turns for `att` to KO `def` through the visible mechanics
-    let turns = |att: PokeId, def: PokeId, att_faster: bool| -> f64 {
-        let e = best_hit_fraction(b, dex, att, def, w.couple_evasion);
+    let turns = |att: PokeId, def: PokeId, att_faster: bool, def_left: f64, att_extra: f64| -> f64 {
+        let mut e = best_hit_fraction(b, dex, att, def, w.couple_evasion);
+        // A confused attacker spends half its turns hitting itself, so the same
+        // race takes about twice as long (`conditions.rs`: the clock is
+        // decremented before the move and the self-hit is a 1-in-2 coin).
+        if w.exchange_v2 && confusion_attempts(b, dex, att) > 0.0 {
+            e *= 0.5;
+        }
         if e <= 1e-9 {
             return f64::INFINITY;
         }
@@ -269,13 +386,21 @@ pub fn pair_margin(b: &Battle, dex: &Dex, w: &EvalWeights, id0: PokeId, id1: Pok
         // the un-exempted rule voiding Kadabra-vs-3HP-Articuno).
         let d = b.poke(def);
         if d.move_slots.iter().any(|m| m.pp > 0 && !m.disabled && heal_ids.contains(&m.id)) {
+            // Per-hit damage as a fraction of MAX hp, i.e. what the heal cycle
+            // is being out-raced. Deliberately NOT scaled by `def_left`: entry
+            // damage takes HP off the defender, it does not weaken the
+            // attacker, and scaling here made the term non-monotone (a Spikes
+            // tick could push the attacker under the heal threshold and hand it
+            // an INFINITY, so hazards read as *good* for the side that owns
+            // them — caught by `spikes_charges_the_bench_in_phase_b_only`).
             let dmg_frac_max = e * d.hp as f64 / d.maxhp as f64;
-            let kill_now = e >= 1.0 && att_faster;
+            // One-shot means the hit covers what is left after entry damage.
+            let kill_now = e >= def_left && att_faster;
             if dmg_frac_max < 0.5 && !kill_now {
                 return f64::INFINITY;
             }
         }
-        let mut t = (1.0 / e).ceil();
+        let mut t = (def_left / e).ceil() + att_extra;
         let a = b.poke(att);
         // a standing Substitute eats one hit
         if let Some(sub) = substitute_id(dex) {
@@ -305,21 +430,50 @@ pub fn pair_margin(b: &Battle, dex: &Dex, w: &EvalWeights, id0: PokeId, id1: Pok
         t
     };
     // residual (psn/tox/brn) self-death clock: 1/8 maxhp per turn (tox floor)
-    let surv = |x: PokeId| -> f64 {
+    let surv = |x: PokeId, left: f64| -> f64 {
         let p = b.poke(x);
-        if matches!(p.status, Status::Psn | Status::Tox | Status::Brn) {
+        if !matches!(p.status, Status::Psn | Status::Tox | Status::Brn) {
+            return f64::INFINITY;
+        }
+        let hp = p.hp as f64 * left;
+        if !w.exchange_v2 {
             let tick = (p.maxhp as f64 / 8.0).max(1.0);
-            (p.hp as f64 / tick).ceil()
-        } else {
-            f64::INFINITY
+            return (hp / tick).ceil();
+        }
+        // Engine parity (`conditions.rs::residualdmg`): once the toxic
+        // volatile is on the mon the tick is `floor(maxhp/16) × counter` with
+        // the counter incrementing every turn — and gen 2 keeps that counter
+        // for psn/brn too. So the clock ACCELERATES, which is the whole
+        // difference between "Toxic just landed" and "Toxic is on turn six"
+        // that the flat `tox` weight cannot express. Without the volatile it
+        // is the flat `floor(maxhp/8)` tick.
+        match residual_counter(b, dex, x) {
+            Some(c) => {
+                let unit = (p.maxhp as f64 / 16.0).floor().max(1.0);
+                let mut acc = 0.0;
+                for k in 1..=8u32 {
+                    acc += unit * (c + k as i64) as f64;
+                    if acc >= hp {
+                        return k as f64;
+                    }
+                }
+                f64::INFINITY // past the horizon this term is allowed to claim
+            }
+            None => {
+                let tick = (p.maxhp as f64 / 8.0).floor().max(1.0);
+                (hp / tick).ceil()
+            }
         }
     };
     // A side's effective "foe down" time: its own kill plan — void if its
     // residual kills it first (the b293 case: a toxed racer that dies on
     // its own clock never finishes a 2-turn plan) — or the foe rotting on
     // the foe's residual with no hit needed at all.
-    let (k0, k1) = (turns(id0, id1, spd0 > spd1), turns(id1, id0, spd1 > spd0));
-    let (v0, v1) = (surv(id0), surv(id1));
+    let (k0, k1) = (
+        turns(id0, id1, spd0 > spd1, hp_left[1], extra[0]),
+        turns(id1, id0, spd1 > spd0, hp_left[0], extra[1]),
+    );
+    let (v0, v1) = (surv(id0, hp_left[0]), surv(id1, hp_left[1]));
     let k0 = if k0 <= v0 { k0 } else { f64::INFINITY };
     let k1 = if k1 <= v1 { k1 } else { f64::INFINITY };
     let t0 = k0.min(v1);
@@ -353,14 +507,52 @@ pub fn pair_margin(b: &Battle, dex: &Dex, w: &EvalWeights, id0: PokeId, id1: Pok
 /// is a property of the pair, and the position's value is what the two sides
 /// can force in the matrix of pairs.
 ///
-/// Aggregation here is deliberately the cheap proxy: the mean of maximin and
-/// minimax, which is exact when the matrix has a saddle point and errs toward
-/// the committed side otherwise. Solving the matrix properly (`solve_rm_plus`
-/// is already in the tree) is Phase B — worth doing only if this earns it.
+/// Aggregation depends on `exchange_v2`. Phase A (default) takes the cheap
+/// proxy: the mean of maximin and minimax, exact when the matrix has a saddle
+/// point and erring toward the committed side otherwise. Phase B takes the
+/// matrix's real game value and charges entry costs — see `exchange_matrix`
+/// and `matrix_game_value`.
 ///
 /// Pairs whose race is undecidable return 0 from `pair_margin`, so a position
 /// full of stall matchups scores neutral rather than inventing a claim.
 pub fn exchange_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
+    let Some((mine, theirs, cells)) = exchange_matrix(b, dex, w) else {
+        return 0.0;
+    };
+    let (k0, k1) = (mine.len(), theirs.len());
+    let row = |i: usize| &cells[i * k1..(i + 1) * k1];
+    if w.exchange_v2 {
+        // Phase B: the actual game value.
+        return matrix_game_value(&cells, [k0, k1]);
+    }
+    // Phase A: maximin/minimax midpoint.
+    let maximin = (0..k0)
+        .map(|i| row(i).iter().cloned().fold(f64::INFINITY, f64::min))
+        .fold(f64::NEG_INFINITY, f64::max);
+    let minimax = (0..k1)
+        .map(|j| (0..k0).map(|i| cells[i * k1 + j]).fold(f64::NEG_INFINITY, f64::max))
+        .fold(f64::INFINITY, f64::min);
+    0.5 * (maximin + minimax)
+}
+
+/// The exchange matrix behind `exchange_margin`: side 0's living mons as rows,
+/// side 1's as columns, cells row-major in margin space [-1, 1]. `None` when
+/// either side has nothing living.
+///
+/// Under `exchange_v2` a cell for a mon that is not already on the field is
+/// charged what getting there costs — the switch turn, and the Spikes it eats
+/// on arrival — so an off-diagonal cell states the value of a switch rather
+/// than of a free rearrangement. That charge is the first channel through which
+/// switching reaches `eval01` at all.
+///
+/// Public because it is the term's diagnostic surface: a single number cannot
+/// be argued with, and the calibration work needs to see which pairing the eval
+/// thinks it is being paid for.
+pub fn exchange_matrix(
+    b: &Battle,
+    dex: &Dex,
+    w: &EvalWeights,
+) -> Option<(Vec<PokeId>, Vec<PokeId>, Vec<f64>)> {
     let living = |s: usize| -> Vec<PokeId> {
         b.sides[s]
             .party
@@ -373,22 +565,86 @@ pub fn exchange_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
     };
     let (mine, theirs) = (living(0), living(1));
     if mine.is_empty() || theirs.is_empty() {
+        return None;
+    }
+    let active = [b.active_id(0).map(|i| i.slot), b.active_id(1).map(|i| i.slot)];
+    let on_field = |id: PokeId| active[id.side as usize] == Some(id.slot);
+    // Phase A read every pair as if it were already the matchup on the field.
+    let left = |id: PokeId| {
+        if !w.exchange_v2 || on_field(id) {
+            1.0
+        } else {
+            1.0 - entry_loss(b, dex, id)
+        }
+    };
+    let extra = |id: PokeId| if w.exchange_v2 && !on_field(id) { 1.0 } else { 0.0 };
+    let mut cells = Vec::with_capacity(mine.len() * theirs.len());
+    for &a in mine.iter() {
+        for &d in theirs.iter() {
+            cells.push(pair_margin_ctx(b, dex, w, a, d, [left(a), left(d)], [extra(a), extra(d)]));
+        }
+    }
+    Some((mine, theirs, cells))
+}
+
+/// RM+ sweeps for the exchange matrix. It is at most 3×3 and the payoffs are
+/// bounded in [0, 1], where RM+ converges in tens of iterations; the search
+/// spends orders of magnitude more per leaf inside `best_hit_fraction`, and the
+/// Phase A duel measured the 9-pair read at identical think time to the
+/// 1-pair one (278 vs 280 ms/move), so this is not the term's cost centre.
+const EXCHANGE_SWEEPS: u32 = 128;
+
+/// Phase B's aggregation: the zero-sum **game value** of the pair matrix,
+/// instead of Phase A's maximin/minimax midpoint. Identical to the midpoint
+/// wherever the matrix has a saddle point (and to the single cell at 1×1);
+/// where it does not, the midpoint splits the difference between two pure
+/// commitments that neither side has to make, while the value is what the
+/// position is actually worth under mixing.
+///
+/// `solve_rm_plus` wants side-0 payoffs in [0, 1] (it reads side 1's payoff as
+/// `1 − u`), so margins are mapped in and the equilibrium value mapped back.
+fn matrix_game_value(cells: &[f64], k: [usize; 2]) -> f64 {
+    let m: Vec<f64> = cells.iter().map(|v| 0.5 * (v + 1.0)).collect();
+    let (s0, s1) = crate::smmcts::solve_rm_plus(&m, k, EXCHANGE_SWEEPS);
+    let mut u = 0.0;
+    for i in 0..k[0] {
+        for j in 0..k[1] {
+            u += s0[i] * s1[j] * m[i * k[1] + j];
+        }
+    }
+    2.0 * u - 1.0
+}
+
+/// Fraction of a benched mon's *current* HP that switching in costs it: the
+/// Spikes tick on its own side, mirroring `conditions.rs` exactly (Flying
+/// immune, `AMOUNTS[layers]/24` of max HP). >= 1.0 means it faints on entry.
+fn entry_loss(b: &Battle, dex: &Dex, id: PokeId) -> f64 {
+    let p = b.poke(id);
+    if p.has_type(dex.known_types.flying) {
         return 0.0;
     }
-    let mut rows: Vec<Vec<f64>> = Vec::with_capacity(mine.len());
-    for &a in mine.iter() {
-        rows.push(theirs.iter().map(|&d| pair_margin(b, dex, w, a, d)).collect());
-    }
-    // maximin: what side 0 can guarantee by picking first.
-    let maximin = rows
-        .iter()
-        .map(|r| r.iter().cloned().fold(f64::INFINITY, f64::min))
-        .fold(f64::NEG_INFINITY, f64::max);
-    // minimax: what side 1 can hold it to.
-    let minimax = (0..theirs.len())
-        .map(|j| rows.iter().map(|r| r[j]).fold(f64::NEG_INFINITY, f64::max))
-        .fold(f64::INFINITY, f64::min);
-    0.5 * (maximin + minimax)
+    let Some(sp) = spikes_id(dex) else { return 0.0 };
+    let Some(st) = b.sides[id.side as usize].side_condition(sp) else { return 0.0 };
+    const AMOUNTS: [f64; 4] = [0.0, 3.0, 4.0, 6.0];
+    let layers = st.get_int(nc2000_engine::state::DK::Layers).clamp(0, 3) as usize;
+    let dmg = (AMOUNTS[layers] * p.maxhp as f64 / 24.0).floor().max(1.0);
+    dmg / p.hp.max(1) as f64
+}
+
+/// Remaining *hindered* move attempts for a confused mon (0.0 when it is not
+/// confused, or when the clock runs out on its next move — `conditions.rs`
+/// decrements before the move and lets that move through at 0).
+fn confusion_attempts(b: &Battle, dex: &Dex, id: PokeId) -> f64 {
+    let Some(cf) = confusion_id(dex) else { return 0.0 };
+    let Some(vs) = b.poke(id).volatile(cf) else { return 0.0 };
+    (vs.get_int(nc2000_engine::state::DK::Time).clamp(0, 5) as f64 - 1.0).max(0.0)
+}
+
+/// The gen-2 toxic counter, when this mon carries the `residualdmg` volatile
+/// that makes its psn/brn/tox tick accelerate.
+fn residual_counter(b: &Battle, dex: &Dex, id: PokeId) -> Option<i64> {
+    let rd = residualdmg_id(dex)?;
+    b.poke(id).volatile(rd).map(|vs| vs.get_int(nc2000_engine::state::DK::Counter))
 }
 
 /// Leaf value for search cutoffs. The calibrated probability is backed up
@@ -466,6 +722,12 @@ fn side_score(b: &Battle, dex: &Dex, w: &EvalWeights, s: usize) -> f64 {
                     }
                 }
             }
+            // Confusion: the clock is what costs, not the label. See the
+            // `confusion` weight — `0.5 × remaining hindered attempts` is the
+            // expected number of turns the mon loses.
+            if w.confusion != 0.0 {
+                score -= w.confusion * 0.5 * confusion_attempts(b, dex, id);
+            }
             if let Some(foe) = b.active_id(1 - s) {
                 if !b.poke(foe).fainted && b.poke(foe).hp > 0 {
                     score +=
@@ -510,6 +772,16 @@ fn substitute_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
 fn spikes_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
     static ID: OnceLock<Option<nc2000_engine::dex::CondId>> = OnceLock::new();
     *ID.get_or_init(|| dex.conds_id("spikes"))
+}
+
+fn confusion_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
+    static ID: OnceLock<Option<nc2000_engine::dex::CondId>> = OnceLock::new();
+    *ID.get_or_init(|| dex.conds_id("confusion"))
+}
+
+fn residualdmg_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
+    static ID: OnceLock<Option<nc2000_engine::dex::CondId>> = OnceLock::new();
+    *ID.get_or_init(|| dex.conds_id("residualdmg"))
 }
 
 /// Expected fraction of the defender's *current* HP removed by one use of

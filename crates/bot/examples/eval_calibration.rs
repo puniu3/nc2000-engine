@@ -525,6 +525,35 @@ fn main() {
                     .push((name, EvalWeights { exchange: x, race: 0.0, ..EvalWeights::default() }));
             }
         }
+        // Confusion (8.6% turn-weighted, the second condition the corpus named
+        // and the eval had no channel for). The weight is priced per EXPECTED
+        // LOST TURN — `0.5 × remaining hindered attempts` — so 1.0 means "a
+        // turn lost to confusion costs what a turn is worth", and the sweep
+        // brackets that both ways. Flat-constant status weights are exactly
+        // what this run keeps measuring as mispriced, hence the clock shape.
+        if args.iter().any(|a| a == "--confusion-sweep") {
+            for x in [0.25f64, 0.5, 0.75, 1.0, 1.5] {
+                let name: &'static str = Box::leak(format!("confusion{x}").into_boxed_str());
+                variants.push((name, EvalWeights { confusion: x, ..EvalWeights::default() }));
+            }
+        }
+        // Phase B — the exchange SCHEME rather than another additive term: the
+        // pair matrix is solved for its game value, switch entry costs are
+        // charged, residual clocks follow the engine's accelerating toxic
+        // counter, and confusion is read as lost offense. `damp` scales the
+        // additive terms the exchange now carries itself (status, Substitute,
+        // Spikes): 0.0 moves them out, 1.0 double-counts them, and the point of
+        // sweeping it is that "which representation owns a condition" is an
+        // empirical question, not a design preference.
+        if args.iter().any(|a| a == "--scheme-sweep") {
+            for x in [0.5f64, 0.75, 1.0, 1.5] {
+                for damp in [0.0f64, 0.5, 1.0] {
+                    let name: &'static str =
+                        Box::leak(format!("scheme{x}/damp{damp}").into_boxed_str());
+                    variants.push((name, EvalWeights::exchange_scheme(x, damp)));
+                }
+            }
+        }
         let spikes_sweep = args.iter().any(|a| a == "--spikes-sweep");
         if spikes_sweep {
         variants.push(("spikes0.25", EvalWeights { spikes: 0.25, ..EvalWeights::default() }));
