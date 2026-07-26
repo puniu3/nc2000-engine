@@ -32,13 +32,14 @@
 //! the dex only at construction time.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use wasm_bindgen::prelude::*;
 
 use nc2000_bot::preview::{MetaPool, TableSet};
 use nc2000_bot::{
-    baked_preview_pick, open_preview_pick, Belief, BlindSearch, Observer, ProtocolAgent,
-    RmConfig, SkuctSearch, SplitMix64,
+    baked_preview_pick, open_preview_pick, BeliefPrior, Belief, BlindSearch, Observer,
+    ProtocolAgent, RmConfig, SkuctSearch, SplitMix64,
 };
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Category, Dex};
@@ -576,6 +577,29 @@ impl WasmBlindSearcher {
 pub struct WasmProtocolSearcher {
     dex: Rc<Dex>,
     agent: ProtocolAgent,
+    /// Open-team-sheet mode (`pinOpponent`). Tracked here only so
+    /// `setBeliefPrior` can refuse out loud instead of relying on the agent's
+    /// internal "never onto a pinned belief" guard.
+    pinned: bool,
+}
+
+/// M18 `setBeliefPrior` report: `{applied, species, meanMoveSum, skipped,
+/// warnings}`. The table interpreter is total — a malformed table degrades to
+/// warnings rather than an error — so the binding never throws, and this is
+/// how the caller learns whether the file it handed over was understood.
+/// `applied: false` means the table did NOT reach the belief; `warnings` says
+/// why.
+fn belief_prior_report(prior: &BeliefPrior, applied: bool, refusals: &[String]) -> String {
+    let mut warnings: Vec<&str> = refusals.iter().map(String::as_str).collect();
+    warnings.extend(prior.warnings().iter().map(String::as_str));
+    serde_json::json!({
+        "applied": applied,
+        "species": prior.len(),
+        "meanMoveSum": prior.mean_move_sum(),
+        "skipped": prior.skipped(),
+        "warnings": warnings,
+    })
+    .to_string()
 }
 
 #[wasm_bindgen(js_class = ProtocolSearcher)]
@@ -595,7 +619,7 @@ impl WasmProtocolSearcher {
         let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
         let cfg = skuct_config(c, hp_buckets);
         let agent = ProtocolAgent::new(&dex.dex, side, pool, cfg, seed as u64);
-        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent })
+        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: false })
     }
 
     /// Our exact team, as submitted to PS (same JSON array shape as the
@@ -615,7 +639,81 @@ impl WasmProtocolSearcher {
     pub fn pin_opponent(&mut self, team_json: &str) -> Result<(), JsError> {
         let sets: Vec<PokemonSet> = serde_json::from_str(team_json).map_err(js_err)?;
         self.agent.pin_opponent(sets);
+        self.pinned = true;
+        // M18, belt and braces for the one unacceptable outcome: a prior
+        // installed BEFORE the pin is dropped here rather than trusting the
+        // agent to skip it (it does — `on_request` only installs a prior when
+        // `pinned_sets` is `None` — but the certified open-sheet configuration
+        // should not have to depend on reading that far).
+        self.agent.set_belief_prior(Arc::new(BeliefPrior::empty()));
         Ok(())
+    }
+
+    /// M18: install the community belief prior from the table's JSON TEXT
+    /// (the contents of `data/belief-prior-v0.json`, or of whatever file the
+    /// caller was pointed at — wasm has no filesystem, so the caller reads).
+    /// Returns the `belief_prior_report` JSON rather than throwing: the
+    /// interpreter is total, so a typo degrades into `warnings` the caller can
+    /// surface instead of silently playing with no prior.
+    ///
+    /// Governs **only** the hidden-team fallback imputation. Call before the
+    /// first `onRequest` — that is where the belief is built, once per game.
+    /// Three refusals return `applied: false` and change nothing:
+    ///
+    /// - `pinOpponent` was called: open-team-sheet play pins the opponent's
+    ///   sets, so sampling would contaminate the certified open-sheet
+    ///   configuration. The prior must never reach that path;
+    /// - the table yielded no usable species: not installing it keeps the
+    ///   no-prior determinization *bit*-identical rather than merely
+    ///   equivalent (an empty prior is inert inside the belief too, but the
+    ///   guarantee is worth having structurally, at this boundary);
+    /// - the belief already exists, i.e. this came after the first
+    ///   `onRequest`, where it could no longer take effect.
+    #[wasm_bindgen(js_name = setBeliefPrior)]
+    pub fn set_belief_prior(&mut self, json: &str) -> String {
+        let prior = BeliefPrior::from_json(json);
+        let mut refusals: Vec<String> = Vec::new();
+        if self.pinned {
+            refusals.push(
+                "open-team-sheet mode (pinOpponent): the belief is pinned to the opponent's \
+                 true sets, so a prior must never be consulted; table ignored"
+                    .to_string(),
+            );
+        }
+        if prior.is_empty() {
+            refusals.push(
+                "no usable species in the table; today's fallback imputation is unchanged"
+                    .to_string(),
+            );
+        }
+        if self.agent.belief().is_some() {
+            refusals.push(
+                "called after the first onRequest, where the belief is already built; \
+                 set the prior at construction time"
+                    .to_string(),
+            );
+        }
+        let applied = refusals.is_empty();
+        let report = belief_prior_report(&prior, applied, &refusals);
+        if applied {
+            self.agent.set_belief_prior(Arc::new(prior));
+        }
+        report
+    }
+
+    /// JSON `{installed, governed}` — whether a non-empty prior actually
+    /// reached the live belief, and which opponent roster slots it currently
+    /// drives (`governed` in `|poke|` order; empty before the first
+    /// `onRequest`, on a pool-identified or pinned opponent, and whenever the
+    /// table says nothing usable about this roster). The M18 coverage read for
+    /// a live game.
+    #[wasm_bindgen(js_name = beliefPriorInfo)]
+    pub fn belief_prior_info(&self) -> String {
+        let (installed, governed) = match self.agent.belief() {
+            Some(b) => (b.has_prior(), b.prior_governed()),
+            None => (false, Vec::new()),
+        };
+        serde_json::json!({ "installed": installed, "governed": governed }).to_string()
     }
 
     /// Feed one baked pair table for table-answered previews.
@@ -1223,5 +1321,208 @@ mod tests {
         let legal: Vec<serde_json::Value> =
             serde_json::from_str(&fb.legal_choices(1)).unwrap();
         assert!(legal.iter().any(|c| c["input"] == best.as_str()));
+    }
+
+    // ------------------------------------------------- M18 belief prior
+
+    /// PS `details` for a set — the only field a team-preview synthesis reads.
+    fn set_details(set: &serde_json::Value) -> String {
+        let species = set["species"]
+            .as_str()
+            .or_else(|| set["name"].as_str())
+            .unwrap();
+        let level = set["level"].as_i64().unwrap_or(100);
+        let gender = set["gender"].as_str().unwrap_or("");
+        let mut out = format!("{species}, L{level}");
+        if !gender.is_empty() {
+            out.push_str(&format!(", {gender}"));
+        }
+        out
+    }
+
+    /// The player-visible preview stream + our team-preview request, for a bot
+    /// playing p2. This is the smallest real ProtocolSearcher decision point:
+    /// `synthesize` returns the `from_fixture` preview state, so only `|poke|`
+    /// and the request's `details` are consulted.
+    fn preview_stream(p1: &serde_json::Value, p2: &serde_json::Value) -> (String, String) {
+        let mut lines: Vec<String> = Vec::new();
+        for (tag, team) in [("p1", p1), ("p2", p2)] {
+            for set in team.as_array().unwrap() {
+                lines.push(format!("|poke|{tag}|{}|item", set_details(set)));
+            }
+        }
+        lines.push("|teampreview".to_string());
+        let pokemon: Vec<serde_json::Value> = p2
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|set| {
+                serde_json::json!({
+                    "ident": format!("p2: {}", set["name"].as_str().unwrap()),
+                    "details": set_details(set),
+                    "condition": "100/100",
+                    "active": false,
+                    "item": set["item"].as_str().unwrap_or(""),
+                })
+            })
+            .collect();
+        let request = serde_json::json!({
+            "rqid": 1,
+            "teamPreview": true,
+            "maxTeamSize": 3,
+            "side": { "name": "bot", "id": "p2", "pokemon": pokemon },
+        });
+        (serde_json::to_string(&lines).unwrap(), request.to_string())
+    }
+
+    /// M18 wasm binding (`setBeliefPrior`, the ladder client's only route to a
+    /// belief-prior file — wasm has no filesystem, so the table crosses as
+    /// JSON text). Driven against an OFF-POOL opponent, the only belief a
+    /// prior can touch, and pinning the properties the design requires:
+    ///
+    /// - a malformed / empty table yields warnings AND leaves the
+    ///   determinization byte-identical to the no-prior default;
+    /// - a real table is genuinely consumed (it governs roster slots and it
+    ///   moves the search), so the binding cannot be a silent no-op;
+    /// - the prior never reaches the pinned (open-team-sheet) path, in EITHER
+    ///   call order — that is the one unacceptable outcome.
+    #[test]
+    fn belief_prior_binding() {
+        let root = conformance::fixture::repo_root();
+        let pool_json =
+            std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+        let pool: serde_json::Value = serde_json::from_str(&pool_json).unwrap();
+        let dex = WasmDex::new().map_err(|_| "dex").unwrap();
+        // opponent = the off-pool fixture team (=> fallback belief, the only
+        // one the prior governs); ours = a pool team.
+        let (opp_json, _) = fixture_teams();
+        let opp: serde_json::Value = serde_json::from_str(&opp_json).unwrap();
+        let own = pool["teams"][1]["sets"].clone();
+        let own_json = own.to_string();
+        let (lines_json, request_json) = preview_stream(&opp, &own);
+
+        /// One full decision point. `prior` = the table text to install (in
+        /// `pin` order when pinning); returns `(report, rootPolicy, priorInfo)`.
+        struct Run {
+            report: Option<String>,
+            policy: String,
+            info: serde_json::Value,
+        }
+        let run = |prior: Option<&str>, pin: Option<&str>, pin_first: bool| -> Run {
+            let mut ps = WasmProtocolSearcher::new(&dex, 1, &pool_json, 7, None, None)
+                .map_err(|_| "protocol searcher")
+                .unwrap();
+            ps.set_own_team(&own_json).map_err(|_| "own team").unwrap();
+            let mut report = None;
+            let mut set_prior = |ps: &mut WasmProtocolSearcher| {
+                if let Some(text) = prior {
+                    report = Some(ps.set_belief_prior(text));
+                }
+            };
+            if pin_first {
+                if let Some(t) = pin {
+                    ps.pin_opponent(t).map_err(|_| "pin").unwrap();
+                }
+                set_prior(&mut ps);
+            } else {
+                set_prior(&mut ps);
+                if let Some(t) = pin {
+                    ps.pin_opponent(t).map_err(|_| "pin").unwrap();
+                }
+            }
+            ps.push_lines(&lines_json).map_err(|_| "lines").unwrap();
+            assert!(
+                ps.on_request(&request_json).map_err(|_| "request").unwrap(),
+                "the team-preview request owes a choice"
+            );
+            assert!(ps.baked_preview().is_none(), "no pair tables were fed");
+            ps.step(120).map_err(|_| "step").unwrap();
+            Run {
+                report,
+                policy: ps.root_policy(),
+                info: serde_json::from_str(&ps.belief_prior_info()).unwrap(),
+            }
+        };
+
+        // ---- baseline: no prior at all (today's shipped behaviour)
+        let base = run(None, None, false);
+        assert_eq!(base.info["installed"], false);
+        assert_eq!(base.info["governed"].as_array().unwrap().len(), 0);
+
+        // ---- malformed / empty tables: warnings, and NOTHING changes
+        for bad in [
+            "{ this is not json",
+            "[1, 2, 3]",
+            r#""a string""#,
+            r#"{"format":"nc2000-belief-prior","version":1}"#,
+            r#"{"format":"nc2000-belief-prior","version":1,"species":{}}"#,
+            r#"{"species":{"Snorlax":{"moves":{"Body Slam":"very likely"}}}}"#,
+            "",
+        ] {
+            let r = run(Some(bad), None, false);
+            let rep: serde_json::Value = serde_json::from_str(r.report.as_ref().unwrap()).unwrap();
+            assert_eq!(rep["applied"], false, "{bad}: {rep}");
+            assert_eq!(rep["species"], 0, "{bad}: {rep}");
+            assert!(
+                !rep["warnings"].as_array().unwrap().is_empty(),
+                "{bad}: a malformed table must warn, got {rep}"
+            );
+            assert_eq!(r.info["installed"], false, "{bad}");
+            assert_eq!(
+                r.policy, base.policy,
+                "{bad}: a malformed table changed the determinization"
+            );
+        }
+
+        // ---- the shipped reference table: actually consumed
+        let sample_text =
+            std::fs::read_to_string(root.join("data/belief-prior-v0.sample.json")).unwrap();
+        let sample: serde_json::Value = serde_json::from_str(&sample_text).unwrap();
+        let sample_species = sample["species"].as_object().unwrap().len();
+        let good = run(Some(&sample_text), None, false);
+        let rep: serde_json::Value = serde_json::from_str(good.report.as_ref().unwrap()).unwrap();
+        assert_eq!(rep["applied"], true, "{rep}");
+        assert_eq!(rep["species"], sample_species, "{rep}");
+        assert_eq!(rep["skipped"], 0, "{rep}");
+        assert!(rep["warnings"].as_array().unwrap().is_empty(), "{rep}");
+        assert!(rep["meanMoveSum"].as_f64().unwrap() > 0.0, "{rep}");
+        assert_eq!(good.info["installed"], true);
+        let governed = good.info["governed"].as_array().unwrap();
+        assert_eq!(governed.len(), 6, "one flag per |poke| slot: {governed:?}");
+        assert!(
+            governed.iter().any(|g| g == true),
+            "the sample table covers Gengar, which is on the fixture team: {governed:?}"
+        );
+        assert_ne!(
+            good.policy, base.policy,
+            "an applied prior must move the determinization"
+        );
+
+        // ---- the pinned (open-team-sheet) path: unreachable in BOTH orders
+        let pinned_base = run(None, Some(&opp_json), true);
+        assert_eq!(pinned_base.info["installed"], false);
+        for pin_first in [true, false] {
+            let r = run(Some(&sample_text), Some(&opp_json), pin_first);
+            let rep: serde_json::Value = serde_json::from_str(r.report.as_ref().unwrap()).unwrap();
+            if pin_first {
+                assert_eq!(rep["applied"], false, "pinned first: {rep}");
+                assert!(
+                    rep["warnings"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|w| w.as_str().unwrap().contains("pinOpponent")),
+                    "the refusal must name the reason: {rep}"
+                );
+            }
+            assert_eq!(
+                r.info["installed"], false,
+                "pin_first={pin_first}: a prior reached the open-sheet belief"
+            );
+            assert_eq!(
+                r.policy, pinned_base.policy,
+                "pin_first={pin_first}: the open-sheet configuration changed"
+            );
+        }
     }
 }
