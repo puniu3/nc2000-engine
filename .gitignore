@@ -10,4 +10,8 @@ node_modules
 spectator/
 # saved Showdown replays (filenames and bodies carry both players' handles)
 *battle-gen2nintendocup2000*.html
+# ...and the exported form, whose filename is the format + both handles
+Gen2NintendoCup2000*.html
+# the spectator corpus itself: 570 real games, both handles in every log
+/data/corpus-spectator-logs.zip
 .playwright-mcp/
