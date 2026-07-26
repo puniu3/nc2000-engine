@@ -127,6 +127,60 @@ fn process_battle(
             .iter()
             .position(|&i| actions[i] == human)
             .map(|rank| rank + 1);
+        // M17 switching probe. Two things the agreement number alone cannot
+        // distinguish, both visible here for free:
+        //   * `top1` — the bot's confidence. A 6-action root whose best action
+        //     holds 1/6 of the visits has no opinion, and comparing its argmax
+        //     to a human's choice measures a coin flip, not a disagreement.
+        //   * the tags — the structural threats a per-mon eval cannot see
+        //     (Encore lock, Mean Look trap, a Belly Drum/Curse sweeper), read
+        //     off engine volatiles and boosts rather than imputed movesets, so
+        //     nothing here depends on fabrication.
+        let total_visits: u32 = visits.iter().sum::<u32>().max(1);
+        let top1 = visits.iter().copied().max().unwrap_or(0) as f64 / total_visits as f64;
+        let switch_mass: u32 = actions
+            .iter()
+            .zip(visits)
+            .filter(|(a, _)| a.starts_with("switch"))
+            .map(|(_, v)| *v)
+            .sum();
+        let foe_side = 1 - d.side;
+        let vols = |side: usize, slot: usize| -> Vec<String> {
+            battle.sides[side].roster[slot]
+                .volatiles
+                .iter()
+                .map(|(id, _)| dex.conds_key(*id).to_string())
+                .filter(|k| {
+                    matches!(
+                        k.as_str(),
+                        "encore"
+                            | "trapped"
+                            | "partiallytrapped"
+                            | "perishsong"
+                            | "confusion"
+                            | "leechseed"
+                            | "substitute"
+                            | "lockedmove"
+                    )
+                })
+                .collect()
+        };
+        let boost_sum = |side: usize, slot: usize| -> i32 {
+            battle.sides[side].roster[slot].boosts[..5]
+                .iter()
+                .map(|&b| b as i32)
+                .sum()
+        };
+        let hp_pct = |side: usize, slot: usize| -> i32 {
+            let p = &battle.sides[side].roster[slot];
+            if p.maxhp > 0 {
+                p.hp * 100 / p.maxhp
+            } else {
+                0
+            }
+        };
+        let foe_slot = battle.sides[foe_side].active.map(|s| s as usize);
+
         let class_of = |action: &str| -> &'static str {
             if action.starts_with("switch") {
                 "switch"
@@ -157,6 +211,16 @@ fn process_battle(
                 "imputed_pick": imputed_pick,
                 "belief": agent.belief_info(),
                 "iters": iters,
+                "top1": top1,
+                "switch_mass": switch_mass as f64 / total_visits as f64,
+                "self_hp": hp_pct(d.side, active_slot),
+                "self_status": battle.sides[d.side].roster[active_slot].status.as_str(),
+                "self_boost": boost_sum(d.side, active_slot),
+                "self_vols": vols(d.side, active_slot),
+                "foe_hp": foe_slot.map(|s| hp_pct(foe_side, s)),
+                "foe_status": foe_slot.map(|s| battle.sides[foe_side].roster[s].status.as_str()),
+                "foe_boost": foe_slot.map(|s| boost_sum(foe_side, s)),
+                "foe_vols": foe_slot.map(|s| vols(foe_side, s)),
             })
             .to_string(),
         );
