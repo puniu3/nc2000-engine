@@ -495,6 +495,23 @@ pub fn dominated_actions(b: &Battle, dex: &Dex, side: usize) -> Vec<(SearchChoic
         .collect()
 }
 
+/// Whether the foe can leave before the move lands. **Switches resolve before
+/// moves**, so every rule that reads the CURRENT foe — its types, its status,
+/// its volatiles, its Substitute — is only a proof when this is false.
+/// Otherwise the move is a legitimate switch read: Toxic into an already-
+/// poisoned mon poisons whatever comes in, and Earthquake into a Levitating
+/// foe is aimed at its replacement. Mirrors `search.rs::legal_move_choices`:
+/// a trapped mon cannot switch, and neither can one with no living bench.
+fn foe_can_switch(b: &Battle, side: usize) -> bool {
+    let opp = 1 - side;
+    let Some(active) = b.active_id(opp) else { return false };
+    if b.poke(active).trapped {
+        return false;
+    }
+    let s = &b.sides[opp];
+    s.party.iter().skip(1).any(|&slot| !s.roster[slot as usize].fainted)
+}
+
 /// Whether `side`'s active moves first on speed alone (no tie, no priority
 /// read — the foe's move is unknown in blind play). Used by the rules that
 /// depend on the user's own state surviving until its move resolves.
@@ -544,16 +561,27 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
         verdict!(full_hp && faster_than_foe(b, dex, side), "healing at full HP, and faster");
     }
     if let Some(sc) = ms.side_condition.as_deref() {
-        let target_side = if ms.target == "foeSide" { 1 - side } else { side };
+        let on_foe = ms.target == "foeSide";
+        let target_side = if on_foe { 1 - side } else { side };
+        let up = dex.conds_id(sc).is_some_and(|cid| b.sides[target_side].has_side_condition(cid));
+        // Our own screens cannot be removed in gen 2 and expire at upkeep,
+        // after moves. Hazards on the FOE's side can be spun away first, so
+        // that half needs us to move first.
         verdict!(
-            dex.conds_id(sc).is_some_and(|cid| b.sides[target_side].has_side_condition(cid)),
+            up && (!on_foe || faster_than_foe(b, dex, side)),
             "that side condition is already up"
         );
     }
-    let foe = b.active_id(1 - side).filter(|&d| {
-        let p = b.poke(d);
-        !p.fainted && p.hp > 0
-    });
+    // Every rule below that reads the foe is conditioned on the foe being
+    // stuck with the mon it has: otherwise the move is aimed at whatever
+    // switches in, and refusing it would delete a real option.
+    let foe = b
+        .active_id(1 - side)
+        .filter(|&d| {
+            let p = b.poke(d);
+            !p.fainted && p.hp > 0
+        })
+        .filter(|_| !foe_can_switch(b, side));
     // In singles every "adjacent" target resolves to the one foe, so
     // Earthquake and Poison Gas are as foe-directed as Body Slam.
     let foe_targeted = matches!(ms.target, "normal" | "allAdjacentFoes" | "allAdjacent");
@@ -566,17 +594,23 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
     // one type the engine resolves by groundedness rather than the chart.
     // A self-KO move is never a no-op even when the foe is immune: the user
     // faints on use regardless, which is `certain_self_loss`'s business.
+    // Hidden Power's dex entry says Normal; its real type comes from the
+    // user's DVs (`moveexec.rs:340`). Reading the static field refused Hidden
+    // Power into every Ghost — caught by `noop_census`, 7 refusals that the
+    // engine damaged straight through.
+    let move_type =
+        if key == "hiddenpower" { b.poke(att).hp_type } else { ms.move_type };
     if foe_targeted
         && !ms.ignore_immunity
         && !ms.selfdestruct
-        && ms.move_type != dex.known_types.unknown
+        && move_type != dex.known_types.unknown
     {
         if let Some(def) = foe {
             let d = b.poke(def);
-            let immune = if ms.move_type == dex.known_types.ground {
+            let immune = if move_type == dex.known_types.ground {
                 d.has_type(dex.known_types.flying)
             } else {
-                d.types.iter().any(|t| dex.type_immune(ms.move_type, t))
+                d.types.iter().any(|t| dex.type_immune(move_type, t))
             };
             if immune {
                 yes!("the target is immune to the move's type");
@@ -606,21 +640,23 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
         .is_some_and(|cid| b.sides[1 - side].has_side_condition(cid));
 
     if ms.status.is_some() && foe_targeted {
+        // Safeguard is a SIDE condition: it survives a switch, so it blocks
+        // the replacement too and needs no switch gate.
+        if safeguard {
+            yes!("Safeguard blocks foe-inflicted status");
+        }
         if let Some(def) = foe {
             let d = b.poke(def);
-            // one major status at a time (`pokemon.rs::set_status`)
-            if d.status != Status::None {
+            // One major status at a time (`pokemon.rs::set_status`) — but a
+            // foe that moves first can Rest, eat a berry or wake up, and the
+            // census caught exactly that. Only a proof when we act first.
+            if d.status != Status::None && faster_than_foe(b, dex, side) {
                 yes!("the target already carries a major status");
             }
             // a Substitute blocks every foe-inflicted status
             // (`conditions.rs` substitute/onTryPrimaryHit)
             if sub_up {
                 yes!("a Substitute blocks foe-inflicted status");
-            }
-            // Safeguard blocks foe-inflicted status outright
-            // (`conditions.rs` safeguard/onSetStatus)
-            if safeguard {
-                yes!("Safeguard blocks foe-inflicted status");
             }
             // type-based status immunity (`pokemon.rs::run_status_immunity`,
             // built from the typechart's non-type `damageTaken` keys — in
@@ -640,13 +676,21 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
     if key == "substitute" {
         let me = b.poke(att);
         let up = dex.conds_id("substitute").is_some_and(|sid| me.has_volatile(sid));
+        // Both halves are about OUR state at resolution time: a faster foe can
+        // break the sub we already have, or damage us past the quarter gate
+        // (72 of this rule's 1,138 firings were wrong for that reason).
         verdict!(
-            up || me.hp as f64 <= me.maxhp as f64 / 4.0 || me.maxhp == 1,
+            (up || me.hp as f64 <= me.maxhp as f64 / 4.0 || me.maxhp == 1)
+                && faster_than_foe(b, dex, side),
             "Substitute is already up, or there is not enough HP to pay for one"
         );
     }
 
     if let Some(v) = ms.volatile_status.as_deref() {
+        // Safeguard again: side-wide, so it stops confusion whoever is in.
+        if v == "confusion" && key != "swagger" && foe_targeted && safeguard {
+            yes!("Safeguard blocks confusion");
+        }
         let tgt = if ms.target == "self" { Some(att) } else { foe };
         // Only when the volatile IS the move. Swagger also boosts, and the
         // engine lands that boost even when the confusion fails — masking it
@@ -658,7 +702,11 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
         if let (true, Some(t), Some(vid)) = (volatile_is_everything, tgt, dex.conds_id(v)) {
             // the volatile is already on the target — re-applying fails,
             // since none of these conditions carries an `onRestart`
-            if b.poke(t).has_volatile(vid) {
+            // A volatile can also run out on its owner's own move (a
+            // confusion clock is decremented before the move it hinders), so
+            // the foe-directed half needs us to move first.
+            let stable = tgt == Some(att) || faster_than_foe(b, dex, side);
+            if stable && b.poke(t).has_volatile(vid) {
                 yes!("the target already has that volatile");
             }
         }
@@ -667,8 +715,8 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
             // Swagger is the documented exception — the engine strips its
             // confusion behind a Substitute but still lands the +2 Attack,
             // so it is NOT a no-op there.
-            if v == "confusion" && key != "swagger" && (sub_up || safeguard) {
-                yes!("a Substitute or Safeguard blocks confusion");
+            if v == "confusion" && key != "swagger" && sub_up {
+                yes!("a Substitute blocks confusion");
             }
             // moves the Substitute rejects wholesale
             // (`conditions.rs` substitute/onTryPrimaryHit SUB_BLOCKED)
@@ -741,7 +789,10 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
                 let cur = boosts[stat];
                 (amount > 0 && cur >= 6) || (amount < 0 && cur <= -6) || amount == 0
             });
-            if capped {
+            // A faster foe can un-cap us first (Screech into our +6 defence
+            // is the census's example), so our own stages are only fixed if we
+            // act first; the foe's are covered by the switch gate above.
+            if capped && (!self_targeted || faster_than_foe(b, dex, side)) {
                 yes!("every stat this move moves is already capped");
             }
         }
@@ -1150,7 +1201,19 @@ impl Agent for RmAgent {
 mod dominated_action_tests {
     use super::*;
     use nc2000_engine::battle::{EffectHandle, PokemonSet};
-    use nc2000_engine::state::Status;
+    use nc2000_engine::state::{PokeId, Status};
+
+    /// Faint `side`'s bench so its active cannot leave. Every rule that reads
+    /// the CURRENT foe is conditioned on this: switches resolve before moves,
+    /// so with a bench available the same move is a legitimate switch read.
+    fn strand(b: &mut Battle, side: usize) {
+        let party = b.sides[side].party.clone();
+        for &slot in party.iter().skip(1) {
+            let id = PokeId { side: side as u8, slot };
+            b.poke_mut(id).hp = 0;
+            b.poke_mut(id).fainted = true;
+        }
+    }
 
     fn team() -> Vec<PokemonSet> {
         // from_fixture does not validate movesets — purpose-built slots
@@ -1217,12 +1280,14 @@ mod dominated_action_tests {
         // status move onto an existing status / through a Substitute
         {
             let mut b = b.clone();
+            strand(&mut b, 1);
             let def = b.active_id(1).unwrap();
             b.set_status(&dex, def, "par", None, EffectHandle::None, true);
             assert!(noop(&b, 0, "sleeppowder"), "status onto statused foe");
         }
         {
             let mut b = b.clone();
+            strand(&mut b, 1);
             let def = b.active_id(1).unwrap();
             b.add_volatile(&dex, def, "substitute", None, EffectHandle::None);
             assert!(noop(&b, 0, "sleeppowder"), "Sleep Powder into a Substitute");
@@ -1233,11 +1298,16 @@ mod dominated_action_tests {
         // re-inflicting a volatile / Substitute behind its own sub
         {
             let mut b = b.clone();
+            strand(&mut b, 0);
             let att0 = b.active_id(0).unwrap();
             let def = b.active_id(1).unwrap();
             b.add_volatile(&dex, att0, "confusion", None, EffectHandle::None);
             b.add_volatile(&dex, def, "substitute", None, EffectHandle::None);
-            assert!(noop(&b, 1, "confuseray"), "Confuse Ray onto confused foe");
+            // A confusion clock ticks down on its owner's own move, so this
+            // rule needs the caster to move first.
+            assert!(!noop(&b, 1, "confuseray"), "slower: the clock may run out first");
+            b.poke_mut(def).boosts[4] = 6;
+            assert!(noop(&b, 1, "confuseray"), "Confuse Ray onto confused foe, moving first");
             assert!(noop(&b, 1, "substitute"), "Substitute behind its own sub");
         }
     }
@@ -1267,8 +1337,19 @@ mod dominated_action_tests {
         .unwrap()
     }
 
-    /// `lead1` picks which of the three leads side 1 sends out.
+    /// `lead1` picks which of the three leads side 1 sends out. Both benches
+    /// are fainted: the foe-state rules only apply to a foe that cannot
+    /// leave, and `switchable_foe_disarms_every_foe_state_rule` covers the
+    /// other half.
     fn imm_setup(lead1: &str) -> (Dex, Battle) {
+        let (dex, mut b) = imm_setup_open(lead1);
+        strand(&mut b, 0);
+        strand(&mut b, 1);
+        (dex, b)
+    }
+
+    /// The same position with both benches intact.
+    fn imm_setup_open(lead1: &str) -> (Dex, Battle) {
         let dex = conformance::load_dex();
         let t = imm_team();
         let mut b = Battle::from_fixture(&dex, "7,8,9,10", &t, &t).unwrap();
@@ -1276,6 +1357,45 @@ mod dominated_action_tests {
         b.choose(&dex, 0, "team 1, 2, 3").unwrap();
         b.choose(&dex, 1, lead1).unwrap();
         (dex, b)
+    }
+
+    /// The rule the owner caught missing: a foe with somewhere to go makes
+    /// every current-foe reading provisional, because switches resolve before
+    /// moves. Thunder Wave at a Ground type is aimed at its replacement.
+    #[test]
+    fn switchable_foe_disarms_every_foe_state_rule() {
+        let (dex, open) = imm_setup_open("team 2, 1, 3");
+        let mut stuck = open.clone();
+        strand(&mut stuck, 1);
+        let noop = |b: &Battle, side: usize, key: &str| certain_noop(b, &dex, side, mv(&dex, key));
+        for key in ["thunderwave", "toxic"] {
+            assert!(!noop(&open, 0, key), "{key} is a switch read while the foe has a bench");
+            assert!(noop(&stuck, 0, key), "{key} is refused once the foe is stuck");
+        }
+        // Trapping is the other way to be stuck, and the engine's own flag is
+        // what both the mask and `legal_choices` read.
+        {
+            let mut trapped = open.clone();
+            let def = trapped.active_id(1).unwrap();
+            trapped.poke_mut(def).trapped = true;
+            assert!(noop(&trapped, 0, "thunderwave"), "a trapped foe cannot leave either");
+        }
+        // Own-state rules are unaffected: a switch cannot heal me, refill my
+        // HP, or move my stat stages.
+        {
+            let mut b = open.clone();
+            let att = b.active_id(0).unwrap();
+            b.poke_mut(att).boosts[0] = 6;
+            assert!(noop(&b, 0, "swordsdance"), "capped self-boost does not care");
+        }
+        // Safeguard is a SIDE condition: it survives the switch, so it still
+        // refuses whoever comes in.
+        {
+            let mut b = open.clone();
+            let def = b.active_id(1).unwrap();
+            b.add_side_condition(&dex, 1, "safeguard", Some(def), EffectHandle::None);
+            assert!(noop(&b, 0, "toxic"), "Safeguard covers the replacement too");
+        }
     }
 
     /// Run one turn with `mover` using move slot `slot` (1-based) and the
@@ -1314,6 +1434,58 @@ mod dominated_action_tests {
         assert!(noop(&b, 1, "earthquake"), "Earthquake into a Flying type");
         let after = play(&dex, &b, 1, 1);
         assert_eq!(after.poke(att).hp, after.poke(att).maxhp, "no damage dealt");
+
+        // Hidden Power's dex type is Normal, which would refuse it into
+        // every Ghost; its real type comes from the user's DVs. The census
+        // found the engine damaging Misdreavus through 7 such refusals.
+        {
+            let ghost: Vec<PokemonSet> = serde_json::from_str(
+                r#"[
+                {"name":"Misdreavus","species":"Misdreavus","item":"","ability":"No Ability",
+                 "moves":["Confuse Ray","Pain Split","Perish Song","Protect"],
+                 "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"F","level":50},
+                {"name":"Gengar","species":"Gengar","item":"","ability":"No Ability",
+                 "moves":["Night Shade","Hypnosis","Explosion","Thunderbolt"],
+                 "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+                {"name":"Haunter","species":"Haunter","item":"","ability":"No Ability",
+                 "moves":["Night Shade","Hypnosis","Explosion","Thunderbolt"],
+                 "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50}
+            ]"#,
+            )
+            .unwrap();
+            let mine: Vec<PokemonSet> = serde_json::from_str(
+                r#"[
+                {"name":"Zapdos","species":"Zapdos","item":"","ability":"No Ability",
+                 "moves":["Hidden Power","Body Slam","Swords Dance","Thunderbolt"],
+                 "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"N","level":50},
+                {"name":"Nidoking","species":"Nidoking","item":"","ability":"No Ability",
+                 "moves":["Earthquake","Substitute","Screech","Dream Eater"],
+                 "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+                {"name":"Exeggutor","species":"Exeggutor","item":"","ability":"No Ability",
+                 "moves":["Confuse Ray","Safeguard","Mist","Swagger"],
+                 "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50}
+            ]"#,
+            )
+            .unwrap();
+            let dex3 = conformance::load_dex();
+            let mut b3 = Battle::from_fixture(&dex3, "7,8,9,10", &mine, &ghost).unwrap();
+            b3.set_log_enabled(false);
+            b3.choose(&dex3, 0, "team 1, 2, 3").unwrap();
+            b3.choose(&dex3, 1, "team 1, 2, 3").unwrap();
+            strand(&mut b3, 1); // the foe-state rules need a foe that cannot leave
+            let me = b3.active_id(0).unwrap();
+            assert_ne!(
+                b3.poke(me).hp_type,
+                dex3.known_types.normal,
+                "the fixture's Hidden Power must not be Normal-typed"
+            );
+            assert!(
+                !certain_noop(&b3, &dex3, 0, mv(&dex3, "hiddenpower")),
+                "Hidden Power is typed by the user's DVs, not the dex's Normal placeholder"
+            );
+            // A genuinely Normal-typed attack into the same Ghost IS refused.
+            assert!(certain_noop(&b3, &dex3, 0, mv(&dex3, "bodyslam")), "Body Slam into a Ghost");
+        }
 
         // Controls: the same moves are live against a legal target.
         let (dex2, b2) = imm_setup("team 3, 1, 2"); // side 1 leads Exeggutor
@@ -1405,7 +1577,11 @@ mod dominated_action_tests {
             let mut b = b.clone();
             let quarter = b.poke(def).maxhp / 4;
             b.poke_mut(def).hp = quarter;
-            assert!(noop(&b, 1, "substitute"), "Substitute at exactly a quarter");
+            // Our own HP only survives to our move if we act first: a faster
+            // foe can damage us past the gate, and then Substitute works.
+            assert!(!noop(&b, 1, "substitute"), "slower: the foe can change our HP first");
+            b.poke_mut(def).boosts[4] = 6;
+            assert!(noop(&b, 1, "substitute"), "Substitute at exactly a quarter, moving first");
             let sub = dex.conds_id("substitute").unwrap();
             let after = play(&dex, &b, 1, 2);
             assert!(!after.poke(after.active_id(1).unwrap()).has_volatile(sub));

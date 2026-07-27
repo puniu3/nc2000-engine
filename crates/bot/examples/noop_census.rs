@@ -49,7 +49,7 @@ fn arg_s(args: &[String], key: &str, default: &str) -> String {
 /// the foe put up, a natural wake-up — none of which this move caused. Lines
 /// carrying a `[from]` tag are indirect by construction and are skipped even
 /// inside the window.
-fn read_outcome(log: &[String], actor: &str) -> (bool, Option<String>) {
+fn read_outcome(log: &[String], actor: &str, subject: &str) -> (bool, Option<String>) {
     let start = log
         .iter()
         .position(|l| l.starts_with("|move|") && l[6..].starts_with(actor));
@@ -75,8 +75,16 @@ fn read_outcome(log: &[String], actor: &str) -> (bool, Option<String>) {
             // expire, inside the window when the turn has no upkeep line.
             "-start" if line.contains("perish") => {}
             "-sideend" => {}
-            "-status" | "-start" | "-boost" | "-unboost" | "-heal" | "-sidestart" | "-weather"
-            | "-damage" => return (false, Some(line.clone())),
+            // Weather ticks and the foe's own Rest can land in the window
+            // when the turn logs no `|upkeep|`; an effect is only this move's
+            // if it lands on the mon this move could touch.
+            "-weather" => {}
+            "-status" | "-start" | "-boost" | "-unboost" | "-heal" | "-sidestart" | "-damage" => {
+                let on = f.get(1).copied().unwrap_or("");
+                if on.starts_with(subject) || tag == "-sidestart" {
+                    return (false, Some(line.clone()));
+                }
+            }
             _ => {}
         }
     }
@@ -201,6 +209,13 @@ fn main() {
                 play.set_log_enabled(true);
                 play.log.clear();
                 let actor = format!("p{}a", d.side + 1);
+                // Which mon this move could have touched: itself, or the foe.
+                let tgt = dex.move_static(id).target;
+                let subject = if matches!(tgt, "normal" | "allAdjacentFoes" | "allAdjacent") {
+                    format!("p{}a", 2 - d.side)
+                } else {
+                    actor.clone()
+                };
                 let mine = SearchChoice::Move(id).to_input(&dex);
                 if play.choose(&dex, d.side, &mine).is_err() {
                     continue;
@@ -210,7 +225,7 @@ fn main() {
                 }
                 let log: Vec<String> = play.log.clone();
                 checked += 1;
-                let (failed, effect) = read_outcome(&log, &actor);
+                let (failed, effect) = read_outcome(&log, &actor, &subject);
                 match effect {
                     Some(line) => {
                         *bad_rule.entry(why).or_default() += 1;
