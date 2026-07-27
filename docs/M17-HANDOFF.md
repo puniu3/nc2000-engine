@@ -18,12 +18,22 @@ on the screen).
   exit code is the gate (0 measurable / 1 inconclusive / 2 unmeasurable / 3 no
   floor). First applications: the exchange term 0.89x the floor, the M16c
   rollout arm 1.10x — both unresolvable by any duel.
-- **Confusion term + Phase B exchange scheme implemented, shipped inert**
-  (`4443548`): `EvalWeights::confusion`, `EvalWeights::exchange_v2`,
-  `EvalWeights::exchange_scheme(w, damp)`, `eval::exchange_matrix` as the
-  diagnostic surface, harness arms on all three instruments, 10 new tests in
-  `crates/bot/tests/exchange.rs`. Details and the smoke numbers are in the M17
-  README entry; the gate is open, not passed.
+- **Confusion term + Phase B exchange scheme: BUILT, INERT, CUT (owner,
+  2026-07-27).** `EvalWeights::confusion`, `EvalWeights::exchange_v2`,
+  `EvalWeights::exchange_scheme(w, damp)`, `eval::exchange_matrix`, harness
+  arms on all three instruments, 10 tests in `crates/bot/tests/exchange.rs`
+  (`4443548`). No calibration, no duel, no default flip — the screen and the
+  slice measurements in the M17 README entry say why, and the general finding
+  is that the bot's confident choices are invariant to the eval's
+  formulation. Do not restart this line without a new instrument.
+- **Guaranteed-fail pruning shipped instead (`b3aefb3`)** — the visible
+  defect the confusion investigation actually found. Ten new rules on
+  `certain_noop`, all engine-mirrored, plus `examples/noop_census.rs`, which
+  replays every refusal through the engine and is the standing check for the
+  next rule anyone adds. Numbers in the M17 README entry. Run it after any
+  change to the mask:
+  `cargo run --release -p nc2000-bot --example noop_census -- --battles 0-569`
+  (add `--agreement tmp/ha-30k-base3.jsonl` for the shipped-argmax impact).
 - **The belief prior reaches blind play** (`2606e8d`, `4c6dc59`): a wasm
   `setBeliefPrior(json)` on `ProtocolSearcher` that refuses (out loud, without
   throwing) on an empty/unparseable table, after the first request, or in
@@ -147,23 +157,20 @@ Key checkpoints:
       `corpus::reconstruct_*` (today `corpus::cfg()` silently takes
       `EvalWeights::default()`), which is why the plumbing is worth building
       properly rather than hacking.
-   3. **Confusion eval feature** (8.6%), the second missing term — **built,
-      inert, gate open.** `EvalWeights::confusion` default 0.0, priced per
-      expected lost turn off the engine's confusion clock. Smoke (30 battles /
-      90 positions / 8 playouts / GT 150) improves monotonically to 1.5
-      (r 0.596→0.607, Brier 0.2060→0.2042); that scale's last prediction was
-      noise, so it decides nothing.
+   3. **Confusion eval feature and Phase B: CUT (owner, 2026-07-27).** Both
+      are built and inert; neither is being taken further. The evidence and
+      the general finding are in the M17 README entry. The artifacts behind it
+      are `tmp/ha-30k-base3.jsonl` (fresh 30k baseline, seed 1),
+      `tmp/ha-30k-base3-s2.jsonl` (the seed floor, 0.1547),
+      `tmp/ha-30k-confusion1.jsonl`, `tmp/ha-30k-scheme05.jsonl`,
+      `tmp/ha-30k-scheme10-d0.jsonl`.
 
-      **The Phase B exchange scheme is the same gate and should be run in the
-      same batch** (`EvalWeights::exchange_scheme(w, damp)`, `exchange_v2`).
-      Smoke peaks at exchange **0.5 with damp 1.0** (r 0.596→0.640, Brier
-      0.2060→0.1984) — i.e. the matrix pays as an *addition*, and moving the
-      status/Substitute/Spikes weights out of the additive sum makes
-      calibration worse at every weight. Order, and do not skip a step:
+      The gate order those arms were being prepared for still stands for any
+      future eval candidate, and step 2 is not optional:
 
       ```
-      # 1. full corpus calibration (the CX-scale run; ~80 min at this shape)
-      eval_calibration --corpus tmp/corpus-spectator --battles 0-569 \
+      # 1. full corpus calibration (~80 min on 16 cores, ~5 h on this box)
+      eval_calibration --games 0 --corpus tmp/corpus-spectator --battles 0-569 \
           --playouts 32 --gt-iters 300 --ab --confusion-sweep --scheme-sweep
       # 2. footprint screen at PRODUCT budget, against the seed floor
       human_agreement --corpus tmp/corpus-spectator --battles 0-59 \
@@ -173,12 +180,10 @@ Key checkpoints:
       eval_ab_duel --games 800 --iters 3000  --scheme W --scheme-damp D
       ```
 
-      A baseline must be re-measured through today's code rather than reused:
+      A baseline must be re-measured through current code rather than reused:
       `tmp/ha-30k-base2.jsonl` predates the 2026-07-27 reveal-channel fixes
-      (`db7d7cb`, `a5495f9`, `3d34eaf`), which move belief imputation and hence
-      the rows. The seed floor from `ha-30k-s1`/`s2` (0.1547) is a property of
-      search noise and is expected to carry, but it is cheap to re-derive in
-      the same batch.
+      (`db7d7cb`, `a5495f9`, `3d34eaf`) and every 30k artifact predates the
+      `human_agreement` argmax fix in `b3aefb3`, which changes ~1% of rows.
    4. **Status-move valuation**, then the Curse/Body Slam, Rest, and Perish
       Song clusters — likely overlapping causes, so re-measure M16b between
       them rather than fixing all four blind.
