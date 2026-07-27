@@ -210,6 +210,11 @@ struct Stats {
     mismatches: u32,
     illegal_choices: u32,
     vol_diffs: u32,
+    /// Sleeping mons whose reconstructed `status_state.source` was checked
+    /// against the protocol. Sleep Clause Mod and Freeze Clause Mod read
+    /// nothing else, so a self-attributed foe-inflicted sleep silently
+    /// disengages both for the rest of the battle.
+    sleep_sources: u32,
     notes: Vec<String>,
     vol_notes: Vec<String>,
 }
@@ -455,6 +460,9 @@ fn replay(dex: &Dex, fixture: &Value, side: usize, pinned: bool, stats: &mut Sta
     }
 
     let mut filter = SplitFilter::new(side);
+    // (protocol side, nickname) -> was the latest sleep on that mon Rest?
+    let mut sleep_rest: std::collections::HashMap<(usize, String), bool> =
+        std::collections::HashMap::new();
     let mut fed = 0usize; // snapshots whose log has been fed
     for ch in choices {
         let ci = ch["index"].as_i64().unwrap();
@@ -474,6 +482,13 @@ fn replay(dex: &Dex, fixture: &Value, side: usize, pinned: bool, stats: &mut Sta
             for line in snaps[fed]["log"].as_array().unwrap() {
                 let line = line.as_str().unwrap();
                 if filter.visible(line) {
+                    if line.starts_with("|-status|") && line.contains("|slp") {
+                        let f: Vec<&str> = line.split('|').collect();
+                        let who = f.get(2).copied().unwrap_or("");
+                        let s = if who.starts_with("p2") { 1 } else { 0 };
+                        let nick = who.split(": ").nth(1).unwrap_or("").to_string();
+                        sleep_rest.insert((s, nick), line.contains("move: Rest"));
+                    }
                     agent.push_line(dex, line);
                 }
             }
@@ -503,6 +518,39 @@ fn replay(dex: &Dex, fixture: &Value, side: usize, pinned: bool, stats: &mut Sta
         }
         let battle = agent.battle().unwrap().clone();
         compare(dex, &battle, snap, side, &ctx, stats);
+        // Who inflicted a sleep is the whole input to Sleep Clause Mod
+        // (`conditions.rs` sleepclausemod/onSetStatus: ally-sourced → the
+        // clause stays open). The protocol says which it was; the synthesized
+        // battle must agree, or the bot searches a world where it can sleep
+        // a second foe mon.
+        for s in 0..2usize {
+            for slot in 0..battle.sides[s].roster.len() {
+                let p = &battle.sides[s].roster[slot];
+                if p.status != Status::Slp {
+                    continue;
+                }
+                let name = dex.species.key(p.species).to_string();
+                let Some((_, &rest)) = sleep_rest
+                    .iter()
+                    .find(|((ls, nick), _)| *ls == s && toid(nick) == name)
+                else {
+                    continue;
+                };
+                stats.sleep_sources += 1;
+                let src_side = p.status_state.source.map(|x| x.side as usize);
+                let ally_sourced = src_side == Some(s);
+                if ally_sourced != rest {
+                    stats.miss(
+                        &ctx,
+                        format!(
+                            "{name} sleep source: protocol says {}, synthesis says {}",
+                            if rest { "Rest (ally)" } else { "foe" },
+                            if ally_sourced { "Rest (ally)" } else { "foe" }
+                        ),
+                    );
+                }
+            }
+        }
         // the actually-played choice must be legal in the synthesized battle
         let mut bb = battle.clone();
         let legal: Vec<String> =
@@ -568,8 +616,9 @@ fn corpus_replay_both_modes() {
     }
     eprintln!(
         "corpus replay: {n_fixtures} fixtures, {} decisions, {} mismatches, {} illegal, \
-         {} volatile-set diffs (diagnostic)",
-        stats.decisions, stats.mismatches, stats.illegal_choices, stats.vol_diffs
+         {} volatile-set diffs (diagnostic), {} sleep sources checked",
+        stats.decisions, stats.mismatches, stats.illegal_choices, stats.vol_diffs,
+        stats.sleep_sources
     );
     for n in &stats.notes {
         eprintln!("  {n}");
@@ -579,4 +628,5 @@ fn corpus_replay_both_modes() {
     }
     assert_eq!(stats.mismatches, 0, "public-field mismatches");
     assert_eq!(stats.illegal_choices, 0, "played choices must be legal in synthesis");
+    assert!(stats.sleep_sources > 0, "no sleep reached the source check — gate is vacuous");
 }

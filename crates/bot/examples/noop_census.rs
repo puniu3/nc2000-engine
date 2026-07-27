@@ -79,6 +79,13 @@ fn read_outcome(log: &[String], actor: &str, subject: &str) -> (bool, Option<Str
             // when the turn logs no `|upkeep|`; an effect is only this move's
             // if it lands on the mon this move could touch.
             "-weather" => {}
+            // `[silent]` heals are Leech Seed drain and Rest only (`dmg.rs`
+            // heal: the two effect ids that log silently) — residual and
+            // foe-move traffic, never something the masked move could have
+            // caused. They were the entire disagreement list (5 of 5 before
+            // this line existed), which is how a 4,000-refusal audit sat at
+            // "5 disagreements" while every rule was in fact clean.
+            "-heal" if line.contains("[silent]") => {}
             "-status" | "-start" | "-boost" | "-unboost" | "-heal" | "-sidestart" | "-damage" => {
                 let on = f.get(1).copied().unwrap_or("");
                 if on.starts_with(subject) || tag == "-sidestart" {

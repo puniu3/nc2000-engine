@@ -1625,13 +1625,29 @@ impl ProtocolTracker {
     }
 
     fn plant_status(&self, dex: &Dex, b: &mut Battle, id: PokeId, tm: &TrackMon) {
+        // Who inflicted it is not cosmetic: Sleep Clause Mod and Freeze
+        // Clause Mod both return early on an ally-sourced status
+        // (`conditions.rs` sleepclausemod/freezeclausemod onSetStatus), and
+        // `set_status` defaults a `None` source to the mon ITSELF
+        // (`pokemon.rs::set_status`). Planting with no source therefore made
+        // every reconstructed status look self-inflicted and disengaged both
+        // clauses for the whole battle — measured over the 570-battle corpus:
+        // of 447 decisions where the server had Sleep Clause engaged against
+        // the acting side, the reconstruction blocked 0 and landed a second
+        // sleep in 127 (53 of them with the acting side moving first, where
+        // the block is certain). Rest is the only self-inflicted status here
+        // and the tracker knows it, so everything else is foe-sourced; the
+        // clauses only compare sides, so any mon over there will do.
+        let self_inflicted = tm.status == Status::Slp && tm.rest;
+        let source = (!self_inflicted).then(|| PokeId { side: 1 - id.side, slot: 0 });
         // plant through the engine so companion state (residualdmg counter,
         // brnattackdrop, rolled sleep turns) comes from the real code paths
-        let r = b.set_status(dex, id, tm.status.as_str(), None, EffectHandle::None, true);
+        let r = b.set_status(dex, id, tm.status.as_str(), source, EffectHandle::None, true);
         if !r.truthy() {
             // defensive: force the enum (e.g. an immunity edge the tracker
             // cannot see) — public status is authoritative
             b.poke_mut(id).status = tm.status;
+            b.poke_mut(id).status_state.source = source.or(Some(id));
             b.refresh_poke_mask(dex, id);
         }
         match tm.status {

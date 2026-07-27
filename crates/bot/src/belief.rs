@@ -66,8 +66,11 @@
 //! counter purity" is a README non-goal), boosts, volatiles, side
 //! conditions, move history (`last_move*` — every writer is a public
 //! `|move|`), `last_item` bookkeeping (every writer is public, including
-//! the gen ≤ 4 switch-in migration), trapped flags, `quick_claw_roll` (a
-//! shared per-turn coin — non-goal), and the whole observing side.
+//! the gen ≤ 4 switch-in migration), trapped flags, and the whole observing
+//! side. `quick_claw_roll` — this turn's preempt coin — is resampled rather
+//! than kept: it is unobservable chance, and carrying the true value through
+//! leaked it in the arena while pinning it to the importer's `false` on the
+//! ladder.
 
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -542,6 +545,14 @@ impl Belief {
         // chance is hidden: the search resamples it anyway, but the artifact
         // must not carry the true RNG stream
         out.reseed(rng.next());
+        // This turn's Quick Claw coin is chance the player never sees
+        // (`turn.rs` endTurn rolls it before the request). Copying it through
+        // was a leak in the arena and a lie on the ladder, where the importer
+        // leaves it false in every reconstructed state — the search then
+        // never models a foe preempt on the one turn it is deciding. Resample
+        // it at the engine's own rate, drawn from the battle PRNG that was
+        // just reseeded so the belief's own stream stays bit-identical.
+        out.quick_claw_roll = out.prng.random_chance(60, 256);
 
         let opp = obs.opp();
         let roster_len = out.sides[opp].roster.len();
@@ -1240,7 +1251,7 @@ fn audit_battle_hidden(b: &Battle) {
         last_move_line: _,     // log bookkeeping
         last_successful_move_this_turn: _, // public move history
         last_damage: _,        // public damage events
-        quick_claw_roll: _,    // hidden shared per-turn coin: declared non-goal
+        quick_claw_roll: _,    // hidden per-turn coin → resampled by determinize
         speed_order: _,        // public (resolved order was displayed)
         format_data: _,        // static
         sent_log_pos: _,       // log bookkeeping

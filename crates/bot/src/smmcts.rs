@@ -515,10 +515,27 @@ fn foe_can_switch(b: &Battle, side: usize) -> bool {
 /// Whether `side`'s active moves first on speed alone (no tie, no priority
 /// read — the foe's move is unknown in blind play). Used by the rules that
 /// depend on the user's own state surviving until its move resolves.
+///
+/// **Quick Claw voids the proof.** The item preempts on a per-turn coin
+/// (`turn.rs` endTurn, 60/256) that `get_pokemon_action_speed` reads as a
+/// 65535 speed. Inside the engine that coin is already rolled at the request
+/// point, but the live client cannot observe it: the importer leaves
+/// `quick_claw_roll` false in every reconstructed state (measured over the
+/// 570-battle corpus: 0 true out of 20,765 decisions, with a Quick Claw on
+/// the field in 3.1% of active slots). So a foe holding one moves first
+/// nearly a quarter of the time with nothing in the state to say so, and the
+/// rules gated on this would refuse moves the preempt makes live. Claim the
+/// proof only when the foe cannot preempt at all.
 fn faster_than_foe(b: &Battle, dex: &Dex, side: usize) -> bool {
     let (Some(me), Some(foe)) = (b.active_id(side), b.active_id(1 - side)) else {
         return false;
     };
+    if !b.quick_claw_roll
+        && b.poke(foe).item.is_some()
+        && b.poke(foe).item == dex.known_items.quickclaw
+    {
+        return false;
+    }
     b.get_pokemon_action_speed(dex, me) > b.get_pokemon_action_speed(dex, foe)
 }
 
@@ -644,6 +661,26 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
         // the replacement too and needs no switch gate.
         if safeguard {
             yes!("Safeguard blocks foe-inflicted status");
+        }
+        // Sleep Clause Mod (`conditions.rs` sleepclausemod/onSetStatus): a
+        // second FOE-SOURCED sleep on that side is refused outright, and
+        // Rest-sleep does not engage it. Like Safeguard this reads the whole
+        // side rather than the mon in front, so it survives a switch — a
+        // sleeper that leaves the field keeps its status, and the replacement
+        // cannot be slept either. What it does need is for us to move first:
+        // the one way the clause lifts before our move is the sleeper waking
+        // up on its own turn.
+        if ms.status.as_deref() == Some("slp") && faster_than_foe(b, dex, side) {
+            let opp = 1 - side;
+            let engaged = b.sides[opp].party.iter().any(|&slot| {
+                let p = &b.sides[opp].roster[slot as usize];
+                p.hp > 0
+                    && p.status == Status::Slp
+                    && p.status_state.source.map(|s| s.side as usize != opp).unwrap_or(true)
+            });
+            if engaged {
+                yes!("Sleep Clause Mod blocks a second foe-sourced sleep");
+            }
         }
         if let Some(def) = foe {
             let d = b.poke(def);
@@ -1310,6 +1347,83 @@ mod dominated_action_tests {
             assert!(noop(&b, 1, "confuseray"), "Confuse Ray onto confused foe, moving first");
             assert!(noop(&b, 1, "substitute"), "Substitute behind its own sub");
         }
+    }
+
+    /// Sleep Clause Mod is the one foe-state rule that survives a switch: it
+    /// reads the whole side, and a sleeper that leaves the field stays
+    /// asleep. The mask has to refuse a second sleep even when the mon in
+    /// front is healthy and free to leave.
+    #[test]
+    fn noop_mask_covers_sleep_clause() {
+        let (dex, b) = setup();
+        let noop = |b: &Battle, side: usize, key: &str| certain_noop(b, &dex, side, mv(&dex, key));
+        let me = b.active_id(0).unwrap();
+        let bench = PokeId { side: 1, slot: b.sides[1].party[1] };
+
+        // foe-sourced sleeper on the bench, healthy switchable mon in front
+        {
+            let mut b = b.clone();
+            b.set_status(&dex, bench, "slp", Some(me), EffectHandle::None, true);
+            assert!(noop(&b, 0, "sleeppowder"), "second foe-sourced sleep");
+            let def = b.active_id(1).unwrap();
+            let mut after = b.clone();
+            after.set_log_enabled(true);
+            after.choose(&dex, 0, "move sleeppowder").unwrap();
+            after.choose(&dex, 1, "move bodyslam").unwrap();
+            assert!(
+                after.log.iter().any(|l| l.contains("Sleep Clause Mod activated")),
+                "engine did not engage the clause: {:?}",
+                after.log
+            );
+            assert_eq!(after.poke(def).status, Status::None, "no sleep landed");
+        }
+
+        // Rest-sleep is ally-sourced and leaves the clause open
+        // (`conditions.rs` sleepclausemod/onSetStatus: ally source → Undef).
+        {
+            let mut b = b.clone();
+            b.set_status(&dex, bench, "slp", Some(bench), EffectHandle::None, true);
+            assert!(!noop(&b, 0, "sleeppowder"), "Rest sleep does not engage the clause");
+        }
+
+        // a fainted sleeper does not hold the clause either (`hp > 0`)
+        {
+            let mut b = b.clone();
+            b.set_status(&dex, bench, "slp", Some(me), EffectHandle::None, true);
+            b.poke_mut(bench).hp = 0;
+            b.poke_mut(bench).fainted = true;
+            assert!(!noop(&b, 0, "sleeppowder"), "a fainted sleeper releases the clause");
+        }
+
+        // moving second is not a proof: the sleeper can wake on its own turn
+        {
+            let mut b = b.clone();
+            b.set_status(&dex, bench, "slp", Some(me), EffectHandle::None, true);
+            let def = b.active_id(1).unwrap();
+            b.poke_mut(def).boosts[4] = 6;
+            assert!(!noop(&b, 0, "sleeppowder"), "slower: the clause may lift first");
+        }
+    }
+
+    /// Quick Claw preempts on a coin the client cannot see, so it voids every
+    /// rule that needs us to move first (`faster_than_foe`).
+    #[test]
+    fn quick_claw_voids_the_speed_proof() {
+        let (dex, b) = setup();
+        let noop = |b: &Battle, side: usize, key: &str| certain_noop(b, &dex, side, mv(&dex, key));
+        let mut b = b.clone();
+        strand(&mut b, 1);
+        let me = b.active_id(0).unwrap();
+        let def = b.active_id(1).unwrap();
+        b.set_status(&dex, def, "par", Some(me), EffectHandle::None, true);
+        assert!(noop(&b, 0, "sleeppowder"), "statused foe, and we act first");
+
+        b.poke_mut(def).item = dex.known_items.quickclaw;
+        assert!(!noop(&b, 0, "sleeppowder"), "a Quick Claw foe may move first");
+        // …and when the coin is up it is the speed comparison itself that
+        // says we are second.
+        b.quick_claw_roll = true;
+        assert!(!noop(&b, 0, "sleeppowder"), "coin up: the foe is faster outright");
     }
 
     // ---- 2026-07-27: the same class, everywhere else it occurs -----------
