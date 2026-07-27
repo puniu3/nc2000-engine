@@ -464,6 +464,16 @@ impl BlindSearch {
         &self.my_n
     }
 
+    /// Per-action dominated flags — the guaranteed-fail / certain-self-loss
+    /// mask [`Self::best`] applies. Exposed because a harness that ranks by
+    /// raw visits does NOT reproduce the shipped choice: it can report a move
+    /// the product would never play (2026-07-27, `human_agreement` was doing
+    /// exactly that, which sent a corpus review chasing a Swagger the bot
+    /// could not have chosen).
+    pub fn dominated(&self) -> &[bool] {
+        &self.my_dominated
+    }
+
     /// Per-action mean rewards (own perspective — `my_w` is accumulated
     /// from this side's view), 0.5 when unvisited.
     pub fn means(&self) -> Vec<f64> {

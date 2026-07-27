@@ -117,8 +117,17 @@ fn process_battle(
             HumanAction::Move(key) => format!("move {key}"),
             HumanAction::Switch(species) => format!("switch {species}"),
         };
+        // Rank by visits, but push the actions the product refuses to the
+        // back — `best()` masks guaranteed-fail and certain-self-loss moves,
+        // so ranking on raw visits reports a choice the shipped bot cannot
+        // make. Fixed 2026-07-27 after a corpus review spent its time on a
+        // Swagger that was masked all along.
+        let dominated = search.dominated();
         let mut order: Vec<usize> = (0..actions.len()).collect();
-        order.sort_by(|&a, &z| visits[z].cmp(&visits[a]));
+        order.sort_by(|&a, &z| {
+            let (da, dz) = (dominated.get(a) == Some(&true), dominated.get(z) == Some(&true));
+            da.cmp(&dz).then_with(|| visits[z].cmp(&visits[a]))
+        });
         let bot_best = order
             .first()
             .map(|&i| actions[i].clone())
