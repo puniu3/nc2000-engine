@@ -9,3 +9,10 @@ repository = "https://github.com/puniu3/nc2000-engine"
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+
+# Native release profile matches the tuned wasm build (crates/wasm/build.sh
+# has exported these as env overrides since M9c). Measured on the M3 bench:
+# +3-4% replay, +7% random playouts, +18% clone playouts vs the defaults.
+[profile.release]
+lto = "fat"
+codegen-units = 1

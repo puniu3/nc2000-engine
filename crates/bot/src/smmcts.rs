@@ -62,10 +62,9 @@
 //! Playouts and leaf eval reuse the M6 heavy machinery unchanged (ε-greedy
 //! max-damage rollouts, truncation, weighted static eval).
 
-use std::collections::HashMap;
-
 use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::dex::Dex;
+use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::{Battle, PokeId};
 
 use crate::agent::Agent;
@@ -340,7 +339,7 @@ pub(crate) fn run_iteration(
     cfg: &RmConfig,
     rng: &mut SplitMix64,
     nodes: &mut Vec<Node>,
-    table: &mut HashMap<u64, usize>,
+    table: &mut FxHashMap<u64, usize>,
     sim: &mut Battle,
     dex: &Dex,
     turn_cap: u16,
@@ -441,7 +440,7 @@ pub struct SkuctSearch {
     root: Battle,
     turn_cap: u16,
     nodes: Vec<Node>,
-    table: HashMap<u64, usize>,
+    table: FxHashMap<u64, usize>,
     done: u32,
     depth_sum: u64,
     /// Per-side mask over the root action lists: `true` = the action is
@@ -850,7 +849,7 @@ impl SkuctSearch {
         root.set_log_enabled(false);
         let turn_cap = root.turn.saturating_add(cfg.horizon);
         let nodes = vec![Node::at(&mut root, dex)];
-        let mut table = HashMap::new();
+        let mut table = FxHashMap::default();
         table.insert(key_of(&cfg, dex, &mut root), 0usize);
         let root_dominated = [0usize, 1].map(|s| {
             nodes[0].acts[s]

@@ -19,6 +19,13 @@
 //! mode — except `BlindAgent`, which restricts itself to the
 //! `observe`/`belief` surface plus determinized clones.
 
+// Allocator choice cannot affect decisions (PRNG + state only), so this is
+// a pure-throughput switch for native search binaries; wasm is excluded at
+// the target level (mimalloc does not build there).
+#[cfg(all(feature = "mi", not(target_arch = "wasm32")))]
+#[global_allocator]
+static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 pub mod agent;
 pub mod belief;
 pub mod blind;

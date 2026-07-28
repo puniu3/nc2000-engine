@@ -21,10 +21,9 @@
 //! configuration survives untouched as `Playout::Uniform` (same PRNG draw
 //! order) so gate measurements compare against the real baseline.
 
-use std::collections::HashMap;
-
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
+use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::Battle;
 
 use crate::agent::Agent;
@@ -84,13 +83,15 @@ pub(crate) struct ActStats {
 pub(crate) type Joint = (Option<SearchChoice>, Option<SearchChoice>);
 
 pub(crate) struct Node {
-    pub(crate) stats: [HashMap<SearchChoice, ActStats>; 2],
-    pub(crate) children: HashMap<Joint, usize>,
+    // FxHash maps (behavior-identical to SipHash ones: these are only ever
+    // get/entry'd, never iterated, so the hasher cannot affect decisions).
+    pub(crate) stats: [FxHashMap<SearchChoice, ActStats>; 2],
+    pub(crate) children: FxHashMap<Joint, usize>,
 }
 
 impl Node {
     pub(crate) fn new() -> Self {
-        Node { stats: [HashMap::new(), HashMap::new()], children: HashMap::new() }
+        Node { stats: Default::default(), children: Default::default() }
     }
 }
 
