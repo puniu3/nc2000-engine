@@ -59,11 +59,11 @@
 //! the arena for blind specs): the trace-free reveal channel (Leftovers /
 //! Focus Band / Sleep Talk) degrades silently when the log is off.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::dex::Dex;
+use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::Battle;
 
 use crate::agent::Agent;
@@ -290,7 +290,7 @@ pub struct BlindSearch {
     my_dominated: Vec<bool>,
     /// Per-determinization roots + everything below (state-keyed).
     nodes: Vec<Node>,
-    table: HashMap<u64, usize>,
+    table: FxHashMap<u64, usize>,
     done: u32,
 }
 
@@ -332,7 +332,7 @@ impl BlindSearch {
             my_dominated,
             my_acts,
             nodes: Vec::new(),
-            table: HashMap::new(),
+            table: FxHashMap::default(),
             done: 0,
         }
     }

@@ -390,6 +390,7 @@ name = "nc2000-bot"
 version = "0.1.0"
 dependencies = [
  "conformance",
+ "mimalloc",
  "nc2000-engine",
  "pprof",
  "serde",
