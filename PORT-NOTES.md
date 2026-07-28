@@ -226,6 +226,38 @@ Read once from PS; keep updated as the port progresses. All line refs are PS rep
   blocks attach): run the binary UNDER gdb batch with a script of
   `bt/continue` pairs and a background `pkill -INT` pulse.
 
+## Perf pass 2026-07-28 (post-ship, behavior-preserving only)
+
+Three build/plumbing changes, zero state-layout changes. Verification for
+each: full `cargo test` green, plus seed-paired arena runs (`skuct:1000`
+and `mcts:1000` mirrors, 8 games, `--seed 7`) whose per-game results and
+pool/dex fingerprints are byte-identical to the pre-change build — the
+changes cannot and do not alter decisions.
+
+- **Native release = fat LTO + 1 codegen unit** (workspace `Cargo.toml`),
+  matching what `crates/wasm/build.sh` always did for wasm. M3 bench:
+  replay +4%, random playouts +7%, clone playouts +18%.
+- **Search maps off SipHash** (`engine::fxhash`, the state-key hasher made
+  public): DUCT node stats/children + skuct/blind state-key tables. These
+  maps are only get/entry'd, never iterated, so the hasher is invisible to
+  behavior. Worth ~1% (skuct — its per-node stats are Vecs) to ~3% (mcts).
+- **mimalloc as the native global allocator** (`nc2000-bot` default `mi`
+  feature; wasm excluded at the target level). The old "mimalloc barely
+  moved turns/s" verdict was measured when fmt dominated at 1585
+  allocs/turn; at today's 43 allocs/turn the allocator was ~10% of MCTS
+  self-time and mimalloc converts a chunk of it: -3% (skuct) / -6% (mcts).
+- Net on the seed-paired arena (this machine, 4-core container):
+  skuct:1000 48.3 -> 40.5 ms/move (-16%), mcts:1000 48.0 -> 36.7 ms/move
+  (-23%).
+- **Rejected on measurement: structural sharing of the immutable Pokemon
+  fields.** A mid-battle clone is 1.6 µs / 3 allocs / 10.6 KB and only
+  ~5-8% of MCTS iteration time (clone + memcpy in the profile); the
+  set-derived fields are ~25% of `sizeof(Pokemon)` = 880 B, so an Arc'd
+  set table caps out around 1-2% end-to-end while adding a pointer chase
+  to every stat read and a refactor across the total-destructure hash
+  walks. The profile is flat (top item ~11%); no structural rewrite pays
+  post-ship.
+
 ## Format migration: gen2stadium2nc2000 (2026-07-21)
 
 The engine now targets `gen2nintendocup2000noohkostadium2strict` (the

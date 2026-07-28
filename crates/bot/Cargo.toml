@@ -11,12 +11,15 @@ nc2000-engine = { path = "../engine" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-# Native-only allocator experiment surface (never reaches wasm builds):
-# `--features mi` swaps the global allocator to mimalloc for search binaries.
+# Native-only global allocator (never reaches wasm builds: the dependency is
+# target-gated and the attribute is cfg'd out). Default-on — measured on the
+# seed-paired arena: -3% think time on skuct:1000, -6% on mcts:1000, with
+# bit-identical decisions. Opt out with --no-default-features.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 mimalloc = { version = "0.1.52", optional = true }
 
 [features]
+default = ["mi"]
 mi = ["dep:mimalloc"]
 
 [dev-dependencies]
