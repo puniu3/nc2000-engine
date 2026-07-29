@@ -14,7 +14,9 @@
 // which is the guarantee game.tsx is written against. The team pool is
 // state: one file replaces the pool everywhere it is read (team-pool.ts).
 // The bundled pool is held next to the active one so going back to it is a
-// state change rather than a second trip to the network.
+// state change rather than a second trip to the network — and, since the
+// swap is now blind-only, so that open mode has the untouched pool to play
+// no matter what the user loaded (see `activePool`).
 
 import { useEffect, useState } from "preact/hooks";
 import { loadEngine } from "./engine";
@@ -22,7 +24,12 @@ import { fetchDexJson, fetchI18nJa, fetchPool } from "./data";
 import { loadSetDex } from "./set-info";
 import { randomPoolTeam, type SelectedTeam } from "./pool-pick";
 import { readInfoMode, type InfoMode } from "./info-mode";
-import { loadStoredPool, parsePoolText, type LoadedPool } from "./team-pool";
+import {
+  clearStoredPool,
+  loadStoredPool,
+  parsePoolText,
+  type LoadedPool,
+} from "./team-pool";
 import { loadStoredPrior, type StoredPrior } from "./belief-prior";
 import { StartScreen } from "./select";
 import { Game } from "./game";
@@ -61,15 +68,27 @@ interface GameSpec {
  * build, against a validator that may since have moved. A file that no
  * longer parses is dropped without a word: boot must not hang on a stale
  * preference, and there is nowhere honest to report a file the user is not
- * loading right now. The bundled pool then stands, as it did before. */
+ * loading right now. The bundled pool then stands, as it did before.
+ *
+ * Dropped *and deleted*, though. This runs after the engine is up, so a
+ * failure here is a verdict on the record, not on the browser: it will fail
+ * the same way on every future load, costing a full validator pass each
+ * time, while the only control that could remove it — the panel's reset
+ * button — is disabled exactly when the bundled pool is in play. A record
+ * that cannot be adopted and cannot be cleared is unreachable forever, so
+ * the read is what clears it. */
 function restoreStoredPool(): LoadedPool | null {
   try {
     const stored = loadStoredPool();
     if (!stored) return null;
     const parsed = parsePoolText(stored.json);
-    if (!parsed.ok) return null;
+    if (!parsed.ok) {
+      clearStoredPool();
+      return null;
+    }
     return { name: stored.name, pool: parsed.pool, poolJson: parsed.poolJson };
   } catch {
+    clearStoredPool();
     return null;
   }
 }
@@ -79,11 +98,11 @@ export function App() {
     "loading",
   );
   const [error, setError] = useState("");
-  // The pool in play, and the bundled one it can always fall back to. The
-  // same object until a file is loaded, but two references: "use the
+  // The pool the user chose, and the bundled one it can always fall back to.
+  // The same object until a file is loaded, but two references: "use the
   // bundled pool" has to work after a swap, and the bundled pool is already
   // in memory — refetching it to get it back would be the one path that can
-  // fail offline.
+  // fail offline. Which of the two is actually played is `activePool`, below.
   const [bundled, setBundled] = useState<LoadedPool | null>(null);
   const [loadedPool, setLoadedPool] = useState<LoadedPool | null>(null);
   const [game, setGame] = useState<GameSpec | null>(null);
@@ -111,7 +130,10 @@ export function App() {
         };
         setBundled(bundledPool);
         // Only now: re-validating a stored pool runs the wasm validator,
-        // which the engine load above is what makes available.
+        // which the engine load above is what makes available. Restored in
+        // either mode — the record belongs to the user, not to the mode, so
+        // coming back to `?blind` finds the file still loaded, and a record
+        // that has gone bad gets swept whichever door they came in by.
         setLoadedPool(restoreStoredPool() ?? bundledPool);
         setStatus("ready");
       } catch (e) {
@@ -139,10 +161,20 @@ export function App() {
     );
   }
 
+  // The one pool everything below reads. A loaded file stays in state — it
+  // is the user's, and `?blind` will find it again — but only blind mode
+  // plays it: whoever opens `/` gets the bundled pool, every time. Keeping
+  // the file live in open mode while hiding the control that loaded it would
+  // leave a stored pool quietly rewriting the public team lists, with no sign
+  // of why and nothing on screen to undo it. This is the same line the belief
+  // prior already sits behind, where an open game refuses the table outright
+  // rather than half-using it.
+  const activePool = MODE === "blind" ? loadedPool : bundled;
+
   if (!game) {
     return (
       <StartScreen
-        loadedPool={loadedPool}
+        loadedPool={activePool}
         bundledPool={bundled}
         onPool={setLoadedPool}
         locale={loc}
@@ -161,10 +193,12 @@ export function App() {
   return (
     <Game
       key={game.n}
-      poolJson={loadedPool.poolJson}
+      poolJson={activePool.poolJson}
       // Baked artifacts are indexed by the bundled pool's rank order, so a
-      // swapped pool's indices name different teams entirely.
-      poolIsCustom={loadedPool.name !== null}
+      // swapped pool's indices name different teams entirely. Open mode is
+      // never custom by construction, which is what gives the public build
+      // its pair tables back.
+      poolIsCustom={activePool.name !== null}
       humanTeam={game.human}
       botTeam={game.bot}
       mode={game.mode}
@@ -182,7 +216,7 @@ export function App() {
                 ...g,
                 n: g.n + 1,
                 bot:
-                  g.mode === "blind" ? randomPoolTeam(loadedPool.pool) : g.bot,
+                  g.mode === "blind" ? randomPoolTeam(activePool.pool) : g.bot,
               },
         )
       }

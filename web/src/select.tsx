@@ -12,20 +12,27 @@
 // policy for pool and custom teams alike. Only picks stay hidden.
 //
 // Information mode (M18): blind is entered only through `?blind`
-// (info-mode.ts), so this screen has no switch for it — in open mode it is
-// the M12 screen exactly, with nothing said about modes at all. Blind
-// changes it in four places: a static banner names the mode in force, the
-// opponent stops being choosable (it is drawn from the pool at start and
-// redrawn on rematch, so the human never knows the foe's sets), the
-// party-modal note describes the blind policy instead of the open one, and
-// the belief-prior button appears (a prior is only consulted when the bot
-// cannot identify the opponent, which cannot happen in open mode).
+// (info-mode.ts), so this screen has no switch for it. In open mode the
+// screen is the M12 screen exactly — title, Start, Your party, Opponent's
+// party, and not one word about modes, pools or priors. That is the point:
+// a visitor who arrived without the link must not be able to tell from this
+// screen that the experiment exists, so every element below is gated on
+// blind rather than merely defaulted to something harmless.
 //
-// The team pool is the other thing this screen owns: a file that replaces
-// the pool wherever it is read (team-pool.ts). Its button sits with the
-// party buttons because the team lists are what it visibly changes here,
-// and it is offered in BOTH modes — which teams exist is not an
-// information policy.
+// Blind changes it in three places: a one-line banner names the policy in
+// force, the opponent row disappears entirely (the foe is drawn from the
+// pool at start and redrawn on rematch — there is nothing to choose, and
+// the banner already says so, so an inert row would only add furniture),
+// and one `Blind setup` button appears.
+//
+// Blind setup is a single modal, not two buttons: the team pool and the
+// belief prior are the same question asked twice — which teams the bot may
+// be facing, and what it assumes about a team it cannot identify. Neither
+// has any effect outside blind (app.tsx pins the bundled pool in open, and
+// a searcher that already knows the foe's sets refuses a prior outright),
+// so both belong behind the one blind-only door. Inside, each half keeps
+// its own heading, controls and report box: someone who just loaded a pool
+// file must not read the prior's verdict as a verdict on their file.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam, PriorReport } from "./types";
@@ -488,8 +495,9 @@ function probeQuiet(json: string): {
   }
 }
 
-/** Belief-prior panel (modal body): pick a table file or load the shipped
- * sample, read back what the engine makes of it, or clear it. Both sources
+/** Belief-prior panel (the second half of the Blind setup modal): pick a
+ * table file or load the shipped sample, read back what the engine makes of
+ * it, or clear it. Both sources
  * run the same adopt() path — probe first (so the user sees the verdict
  * even when the table is useless), then persist, and only a table the
  * browser can keep is adopted: one that cannot be stored would silently
@@ -628,8 +636,8 @@ type PoolResult =
   | { ok: true; teams: number; notStored: string | null }
   | { ok: false; errors: string[] };
 
-/** Team-pool panel (modal body): load a pool file, or go back to the
- * bundled pool.
+/** Team-pool panel (the first half of the Blind setup modal): load a pool
+ * file, or go back to the bundled pool.
  *
  * Adoption is all-or-nothing — parsePoolText validates every team before
  * anything is installed, so a refused file leaves the running pool exactly
@@ -726,6 +734,43 @@ function PoolPanel(props: {
   );
 }
 
+// ------------------------------------------------- blind setup (one modal)
+
+/** Body of the Blind setup modal: the pool panel and the prior panel, in
+ * that order (the pool decides what the bot can be; the prior only matters
+ * for a team no pool explains).
+ *
+ * They stay two <section>s with two headings rather than one flowing panel
+ * because each ends in a verdict box, and the two verdicts are about
+ * different files. Loading a pool and then glancing down at "NOT applied"
+ * — the prior's line about a table that was never loaded — would read as
+ * the pool having been refused. The separator rule and the headings are
+ * what keep that misreading off the screen. */
+function SetupPanel(props: {
+  loaded: LoadedPool;
+  bundled: LoadedPool;
+  onPool: (p: LoadedPool) => void;
+  prior: StoredPrior | null;
+  onPrior: (p: StoredPrior | null) => void;
+}) {
+  return (
+    <>
+      <section class="setup-section">
+        <h3>{ui().poolLabel}</h3>
+        <PoolPanel
+          loaded={props.loaded}
+          bundled={props.bundled}
+          onPool={props.onPool}
+        />
+      </section>
+      <section class="setup-section">
+        <h3>{ui().priorLabel}</h3>
+        <PriorPanel prior={props.prior} onPrior={props.onPrior} />
+      </section>
+    </>
+  );
+}
+
 // ---------------------------------------------------------- start screen
 
 export function StartScreen(props: {
@@ -749,9 +794,9 @@ export function StartScreen(props: {
   const [picks, setPicks] = useState<Picks>(() =>
     loadPicks(pool, loadCustomTeams()),
   );
-  const [modal, setModal] = useState<null | "human" | "bot" | "prior" | "pool">(
-    null,
-  );
+  // "settings" is unreachable in open mode: the only thing that sets it is
+  // the blind-only button below.
+  const [modal, setModal] = useState<null | "human" | "bot" | "settings">(null);
 
   // A pool swap invalidates the pinned picks: an id from the old pool is
   // either absent from the new one — the button would name a team that no
@@ -872,14 +917,14 @@ export function StartScreen(props: {
         </button>
         {blind && (
           // A readout, not a control: `?blind` is the only way in or out
-          // (info-mode.ts), so there is nothing here to press. Open mode
-          // renders nothing at all in this slot — no note, no empty row —
-          // because a public build should not advertise the experiment to
-          // a visitor who arrived without the link.
-          <div class="mode-banner" data-testid="mode-banner">
-            <strong>{ui().blindBanner}</strong>
-            <span>{ui().modeNoteBlind}</span>
-          </div>
+          // (info-mode.ts), so there is nothing here to press. One line,
+          // because it has exactly two things to say — sets are hidden both
+          // ways, and the opponent is redrawn each battle — and the second
+          // of them is why no opponent row follows. Open mode renders
+          // nothing at all in this slot: no note, no empty row.
+          <p class="mode-banner" data-testid="mode-banner">
+            {ui().blindBanner}
+          </p>
         )}
         <button
           class="party-btn"
@@ -889,15 +934,11 @@ export function StartScreen(props: {
           <span class="party-label">{ui().yourParty}</span>
           <span class="party-value">{humanValue}</span>
         </button>
-        {blind ? (
-          // Not a control: in blind mode the opponent is drawn at start and
-          // redrawn on every rematch, so there is nothing to open. The slot
-          // stays, in the party buttons' shape, to say what will happen.
-          <div class="party-btn party-static" data-party="bot-random">
-            <span class="party-label">{ui().oppParty}</span>
-            <span class="party-value">{ui().oppRandomBlind}</span>
-          </div>
-        ) : (
+        {!blind && (
+          // Blind has no opponent row at all — not even an inert one. The
+          // foe is drawn at start and redrawn on every rematch, which the
+          // banner states; a greyed row saying the same thing again would
+          // be the only piece of furniture on the screen that does nothing.
           <button
             class="party-btn"
             data-party="bot"
@@ -907,32 +948,25 @@ export function StartScreen(props: {
             <span class="party-value">{botValue}</span>
           </button>
         )}
-        {/* Both modes: which teams exist is not a question of who may see
-         * what. It wears the party buttons' shape because it decides what
-         * those buttons are choosing from. */}
-        <button
-          class="party-btn"
-          data-party="pool"
-          onClick={() => setModal("pool")}
-        >
-          <span class="party-label">{ui().poolLabel}</span>
-          <span class="party-value">
-            {props.loadedPool.name === null
-              ? ui().poolBundled(teams.length)
-              : ui().poolLoaded(props.loadedPool.name, teams.length)}
-          </span>
-        </button>
         {blind && (
-          // Only blind can consult a prior: open mode pins the opponent's
-          // real sets, and a pinned searcher refuses the table outright.
+          // The experiment's one door. Its value line reports both halves so
+          // the usual answer — bundled pool, no prior — is readable without
+          // opening anything; .party-value wraps rather than truncates, so
+          // a long file name pushes the prior onto a second line instead of
+          // hiding it.
           <button
             class="party-btn"
-            data-party="prior"
-            onClick={() => setModal("prior")}
+            data-party="settings"
+            onClick={() => setModal("settings")}
           >
-            <span class="party-label">{ui().priorLabel}</span>
+            <span class="party-label">{ui().settingsLabel}</span>
             <span class="party-value">
-              {props.prior ? props.prior.name : ui().priorNone}
+              {ui().settingsValue(
+                props.loadedPool.name === null
+                  ? ui().poolBundled(teams.length)
+                  : ui().poolLoaded(props.loadedPool.name, teams.length),
+                props.prior ? props.prior.name : ui().priorNone,
+              )}
             </span>
           </button>
         )}
@@ -974,18 +1008,15 @@ export function StartScreen(props: {
           />
         </Modal>
       )}
-      {modal === "pool" && (
-        <Modal title={ui().poolTitle} onClose={() => setModal(null)}>
-          <PoolPanel
+      {modal === "settings" && (
+        <Modal title={ui().settingsTitle} onClose={() => setModal(null)}>
+          <SetupPanel
             loaded={props.loadedPool}
             bundled={props.bundledPool}
             onPool={props.onPool}
+            prior={props.prior}
+            onPrior={props.onPrior}
           />
-        </Modal>
-      )}
-      {modal === "prior" && (
-        <Modal title={ui().priorTitle} onClose={() => setModal(null)}>
-          <PriorPanel prior={props.prior} onPrior={props.onPrior} />
         </Modal>
       )}
     </div>

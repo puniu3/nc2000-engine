@@ -196,31 +196,17 @@ small {
 /* Information mode (M18): blind announces itself once, in the slot between
  * the start button and the party buttons. Not a control and not styled like
  * one — no panel fill, no min-height — because `?blind` is the only switch
- * there is. Open mode renders nothing here, so the column's 12px gap closes
- * over it and the screen is the M12 screen. */
+ * there is. One sentence, so a <p>, and the margin reset leaves the
+ * column's 12px gap as the only spacing around it. Open mode renders
+ * nothing here, so that gap closes over the slot and the screen is the M12
+ * screen. */
 .mode-banner {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  margin: 0;
   padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   font-size: 0.8rem;
   color: var(--text-dim);
-}
-.mode-banner strong {
-  color: var(--text);
-  font-size: 0.85rem;
-  letter-spacing: 0.04em;
-}
-/* Blind's opponent slot: the party buttons' shape without their
- * affordances. A <div> gets none of the button element's rules, so the
- * border is restored here; the transparent fill (vs .party-btn's panel)
- * is what says "readout, not control". */
-.party-static {
-  border: 1px solid var(--line);
-  background: transparent;
-  cursor: default;
 }
 
 /* ------------------------------------------------------------- modal */
@@ -502,6 +488,23 @@ dialog.modal::backdrop {
 }
 
 /* ------------------------- belief prior (M18) + team pool */
+
+/* Both panels live in one modal (Blind setup), so the halves have to stay
+ * legibly separate: each ends in a verdict box, and the two verdicts are
+ * about different files. The heading takes full text colour — the global h3
+ * is dim, which reads as a caption trailing the panel above rather than as
+ * the start of the next one — and every section after the first carries a
+ * rule. That is the whole separation; no boxes, or the modal turns into
+ * cards inside a card. */
+.setup-section > h3 {
+  margin-top: 0;
+  color: var(--text);
+}
+.setup-section + .setup-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
 
 /* The two panels are the same widget — help note, an action row with a file
  * picker, a report box — so they share the rules rather than repeat them.

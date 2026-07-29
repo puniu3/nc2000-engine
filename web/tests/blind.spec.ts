@@ -1,12 +1,22 @@
 // Blind information mode + belief prior (M18 experiment) — contract B4,
-// revised for the URL-gated entry.
+// revised for the URL-gated entry and the one Blind setup modal.
 //
 // Blind is no longer something the start screen offers. `?blind` is the
 // only door (info-mode.ts), nothing about the mode is persisted, and open
 // mode says nothing about modes at all — so every case here enters with
 // page.goto("/?blind"), and the first one is about the door itself: that
 // it opens, that `blind=0` closes it, and that the screen behind it is the
-// shipped M12 screen with no trace of the experiment on it.
+// shipped M12 screen with no trace of the experiment on it. That last part
+// is the regression test the simplification pass asked for, so it names
+// every element the experiment has ever added to this screen and asserts
+// each one absent, dead testids included.
+//
+// The blind screen is five things and nothing else: title/subtitle, Start
+// battle, a one-line banner, your party, and the Blind setup button. There
+// is no opponent row at all — the banner's "a random opponent each battle"
+// is the whole of what the deleted static row said — and no separate pool
+// or prior button: both panels are sections of the single
+// `[data-party="settings"]` modal.
 //
 // The six required cases run as four browser sessions: cases 2-4 are one
 // full game (they are three assertions about the SAME battle — preview,
@@ -26,10 +36,13 @@
 // Written against the contract's testids/attributes rather than against a
 // running app: the UI implementing them lands in parallel with this file.
 // Selectors depended on (integration must check them):
-// [data-testid="mode-banner"], [data-party="bot"|"bot-random"|"prior"],
-// [data-testid="prior-file"|prior-sample|prior-report|prior-clear
-// |belief-chip|reveal-foe], plus the shipped .preview-cols/.team-sheets/
-// .mon-sheet/.set-detail structure.
+// [data-testid="mode-banner"] (blind only), [data-party="human"|"bot"|
+// "settings"] with their .party-value, [data-testid="pool-file"|prior-file
+// |prior-sample|prior-report|prior-clear|belief-chip|reveal-foe], plus the
+// shipped .start-col/.party-btn and .preview-cols/.team-sheets/.mon-sheet/
+// .set-detail structure. Depended on by their ABSENCE, which is just as
+// load-bearing here: [data-party="bot-random"|"pool"|"prior"] and
+// [data-testid="mode-row"] must exist nowhere, in either mode.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
@@ -256,43 +269,76 @@ async function playToOutcome(page: Page) {
 // the other cases' verdicts. The harness is single-worker anyway.
 
 // --------------------------------------------------------- contract B4-1
-test("blind is URL-gated and hides the opponent picker", async ({ page }) => {
+/** Everything the experiment has ever put on the start screen, by the
+ * selector it put there. `/` must have none of them: not the mode toggle
+ * the feature started as, not the banner, not the static opponent row, and
+ * not the pool / prior buttons the one setup modal replaced. Two of these
+ * are dead testids from earlier rounds and are listed on purpose — a dead
+ * control that survived a delete is exactly the thing that still looks
+ * like working UI. */
+const EXPERIMENT_SELECTORS = [
+  '[data-testid="mode-row"]',
+  '[data-testid="mode-banner"]',
+  '[data-party="bot-random"]',
+  '[data-party="settings"]',
+  '[data-party="pool"]',
+  '[data-party="prior"]',
+];
+
+async function expectShippedOpenScreen(page: Page) {
+  await expect(page.locator(".start-screen")).toBeVisible();
+  for (const sel of EXPERIMENT_SELECTORS)
+    await expect(page.locator(sel), `open mode must not render ${sel}`)
+      .toHaveCount(0);
+  await expect(page.locator('[data-party="bot"]')).toHaveCount(1);
+  // Nothing unnamed either: the M12 screen is Start battle plus exactly two
+  // party rows, so a control this file has never heard of cannot slip in
+  // under a testid it does not check.
+  await expect(page.locator(".start-col .party-btn")).toHaveCount(2);
+  // ...and no copy points at the door. Hiding the experiment from the
+  // public build is the entire purpose of the revision, so "there is a
+  // mode, add ?blind to get it" must not be discoverable here. Nothing
+  // else on this screen can say "blind": both parties read "Random", and
+  // no pool team id contains it.
+  await expect(page.locator(".start-col")).not.toContainText(/blind/i);
+}
+
+test("blind is URL-gated, and the open screen keeps no trace of the experiment", async ({
+  page,
+}) => {
   const errors = guardConsole(page);
   // No saved parties here: the start screen's text is asserted below, and a
   // custom team named "Blind Custom" would be part of it.
   await seedStorage(page);
 
   await page.goto("/");
-  await expect(page.locator(".start-screen")).toBeVisible();
-  // The default is open, and open is now the M12 screen exactly: no
-  // banner, and the toggle that used to select the mode is gone rather
-  // than moved (the testid is asserted absent on purpose — it is the one
-  // thing that would still look like a passing UI if it survived).
-  await expect(page.locator('[data-testid="mode-row"]')).toHaveCount(0);
-  await expect(page.locator('[data-testid="mode-banner"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="bot"]')).toHaveCount(1);
-  await expect(page.locator('[data-party="bot-random"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="prior"]')).toHaveCount(0);
-  // ...and no copy points at the door either. Hiding the experiment from
-  // the public build is the entire purpose of the revision, so "there is a
-  // mode, add ?blind to get it" must not be discoverable here. Nothing
-  // else on this screen can say "blind": both parties read "Random", the
-  // pool label reads "Bundled (…)", and no pool team id contains it.
-  await expect(page.locator(".start-col")).not.toContainText(/blind/i);
+  await expectShippedOpenScreen(page);
 
   await page.goto("/?blind");
   const banner = page.locator('[data-testid="mode-banner"]');
   await expect(banner).toBeVisible();
-  await expect(banner).toContainText("Blind mode");
-  // The opponent is no longer choosable: blind draws from the pool.
+  // One line, carrying both facts the screen says nowhere else: the sets
+  // are hidden in both directions, and the opponent is redrawn every
+  // battle. The second of those had a row of its own until this pass, and
+  // the row is gone — so if the banner ever stops saying it, nothing does.
+  await expect(banner).toContainText(/blind/i);
+  await expect(banner).toContainText(/random/i);
+  // The opponent is neither choosable nor listed: blind draws from the pool
+  // at start and redraws on rematch.
   await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
-  const botStatic = page.locator('[data-party="bot-random"]');
-  await expect(botStatic).toBeVisible();
-  await expect(botStatic).toContainText("Randomly drawn each battle");
-  // The prior is blind-only (contract "決定済み 6"), and starts unset.
-  await expect(page.locator('[data-party="prior"] .party-value')).toHaveText(
-    "None",
-  );
+  await expect(page.locator('[data-party="bot-random"]')).toHaveCount(0);
+  // One button for both of the experiment's settings, and its value line is
+  // their resting state — the bundled pool, no prior. Asserting that the
+  // line names no file is how "no prior" is checked without pinning the
+  // wording of the empty case: a loaded prior IS a file name, which is what
+  // B4-5 reads off this very element.
+  const setup = page.locator('[data-party="settings"] .party-value');
+  await expect(setup).toContainText(`Bundled (${pool.teams.length} teams)`);
+  await expect(setup).not.toContainText(".json");
+  await expect(page.locator('[data-party="pool"]')).toHaveCount(0);
+  await expect(page.locator('[data-party="prior"]')).toHaveCount(0);
+  // Two rows here as well: your party, and the setup button.
+  await expect(page.locator(".start-col .party-btn")).toHaveCount(2);
 
   // A reload keeps blind — but only because the query string is still
   // there. Nothing was written down: a stored preference would outlive the
@@ -302,13 +348,10 @@ test("blind is URL-gated and hides the opponent picker", async ({ page }) => {
   await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
 
   // `blind=0` reads as absent, so a link that has been passed around can
-  // be defused by editing one character.
+  // be defused by editing one character — and what it lands on is the same
+  // untouched open screen, not a half-dressed one.
   await page.goto("/?blind=0");
-  await expect(page.locator(".start-screen")).toBeVisible();
-  await expect(page.locator('[data-testid="mode-banner"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="bot"]')).toHaveCount(1);
-  await expect(page.locator('[data-party="bot-random"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="prior"]')).toHaveCount(0);
+  await expectShippedOpenScreen(page);
   expect(errors).toEqual([]);
 });
 
@@ -401,8 +444,20 @@ test("the sample belief prior loads, applies, and governs the bot's read", async
   });
   await page.goto("/?blind");
 
+  const setup = page.locator('[data-party="settings"] .party-value');
+  // The line at rest, captured rather than spelled out: the clear at the
+  // end has to put it back exactly, and comparing against a copy of the
+  // wording would only test that this file and i18n-strings.ts agree.
+  const atRest = ((await setup.textContent()) ?? "").replace(/\s+/g, " ").trim();
+  expect(atRest, "the setup line starts on the bundled pool").toContain(
+    `Bundled (${pool.teams.length} teams)`,
+  );
+
   const report = page.locator('[data-testid="prior-report"]');
-  await page.locator('[data-party="prior"]').click();
+  await page.locator('[data-party="settings"]').click();
+  // One modal, two sections: the pool panel and the prior panel are behind
+  // the same button now, so both file inputs are in this dialog.
+  await expect(page.locator('[data-testid="pool-file"]')).toHaveCount(1);
   // The hand-pick path exists; this test drives the sample instead (no
   // file chooser needed, and the same code path behind it).
   await expect(page.locator('[data-testid="prior-file"]')).toHaveCount(1);
@@ -412,10 +467,15 @@ test("the sample belief prior loads, applies, and governs the bot's read", async
   await expect(report).toContainText("42 species");
   await expect(report).toContainText("Applied");
   await expect(report).not.toContainText("NOT applied");
+  // Each verdict box belongs to the file it is about: loading a prior must
+  // not raise the pool panel's box, whose "Rejected" would read as a
+  // verdict on what just happened.
+  await expect(page.locator('[data-testid="pool-report"]')).toHaveCount(0);
   await page.locator("dialog.modal .modal-head button").click();
-  await expect(page.locator('[data-party="prior"] .party-value')).toHaveText(
-    "belief-prior-v0.sample.json",
-  );
+  // The button's value line reports both halves; the prior half is now the
+  // file, and the pool half is exactly where it was.
+  await expect(setup).toContainText("belief-prior-v0.sample.json");
+  await expect(setup).toContainText(`Bundled (${pool.teams.length} teams)`);
 
   await page.getByRole("button", { name: "Start battle" }).click();
   await expect(page.locator(".preview-screen")).toBeVisible();
@@ -438,15 +498,16 @@ test("the sample belief prior loads, applies, and governs the bot's read", async
   expect(Number(governed![1])).toBeGreaterThanOrEqual(1);
   expect(Number(governed![2])).toBeGreaterThanOrEqual(Number(governed![1]));
 
-  // Back to the start screen: a stored prior re-probes on open (so the
-  // user sees what is loaded without re-picking it), and clears cleanly.
+  // Back to the start screen: a stored prior re-probes when the setup
+  // modal mounts (so the user sees what is loaded without re-picking it),
+  // and clears cleanly.
   await page.locator(".battle-screen .quit-btn").click();
-  await page.locator('[data-party="prior"]').click();
+  await page.locator('[data-party="settings"]').click();
   await expect(report).toContainText("42 species");
   await page.locator('[data-testid="prior-clear"]').click();
-  await expect(page.locator('[data-party="prior"] .party-value')).toHaveText(
-    "None",
-  );
+  // All the way back to the line this screen opened with — not merely
+  // "no longer the file name", which a half-cleared state would also pass.
+  await expect(setup).toHaveText(atRest);
   expect(
     await page.evaluate(() => localStorage.getItem("nc2000-belief-prior")),
   ).toBeNull();
@@ -471,13 +532,15 @@ test("open mode keeps the shipped open-team-sheet behavior", async ({
   await page.goto("/");
 
   // Nothing blind is even offered: the experiment must not change the
-  // default screen by merely existing.
-  await expect(page.locator('[data-testid="mode-banner"]')).toHaveCount(0);
+  // default screen by merely existing. B4-1 proves that on an empty
+  // profile; here it holds with both sides pinned to pool teams, which is
+  // the state a returning player arrives in.
+  for (const sel of EXPERIMENT_SELECTORS)
+    await expect(page.locator(sel), `open mode must not render ${sel}`)
+      .toHaveCount(0);
   await expect(page.locator('[data-party="bot"] .party-value')).toHaveText(
     pool.teams[4].id,
   );
-  await expect(page.locator('[data-party="bot-random"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="prior"]')).toHaveCount(0);
 
   await page.getByRole("button", { name: "Start battle" }).click();
   await expect(page.locator(".preview-screen")).toBeVisible();

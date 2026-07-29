@@ -24,6 +24,14 @@
 // own bytes. The ids this module filled in and the sets the validator
 // rewrote have to be the ones the searcher sees — otherwise the bot draws
 // from a pool that differs from the one the screen is showing.
+//
+// Size is a door check, not an exit check. `parsePoolText` runs synchronously
+// on the UI thread and calls the wasm validator once per team, so an
+// oversized file locks the tab up instead of being turned away by it; and a
+// cap that only `storePool` enforced would adopt pools it then refuses to
+// keep — a state the panel has no honest sentence for, since "loaded but not
+// saved" is meant to describe a browser's storage fault, not this module
+// disagreeing with itself.
 
 import { getValidator } from "./engine";
 import { findingAnchor, findingText, type Finding } from "./findings";
@@ -62,12 +70,24 @@ const TEAM_SIZE = 6;
  * collapses into `poolMore`. Re-loading after a fix shows the next batch. */
 const MAX_ERROR_LINES = 5;
 
-/** Refuse to persist pools that cannot plausibly fit localStorage (~5 MB per
- * origin, shared with saved teams, picks and the belief prior). The bundled
- * 32-team pool is ~180 KB and a 135-team pool ~760 KB, so this is roughly
- * 350 teams — far past anything hand-assembled. Over the cap the pool still
- * plays; only the persistence is refused. */
+/** Both caps are the entrance's, not storage's: over either one a file is
+ * neither adopted nor saved.
+ *
+ * The bundled 32-team pool is ~180 KB, so ~5.6 KB per team; the 135-team pool
+ * this is expected to grow into is ~760 KB and 135 teams — under 40% of the
+ * byte cap and about a quarter of the team cap, so it clears both without
+ * anyone having to think about it. 2 MB is ~357 teams at that rate (and more
+ * once minified, which is the form that gets stored), while localStorage gives
+ * an origin ~5 MB shared with saved teams, pinned picks and the belief prior;
+ * 512 teams is past any hand-assembled pool and keeps the per-team validator
+ * loop bounded at a few seconds of frozen tab in the worst case.
+ *
+ * Both refusals go through i18n like every other line the panel shows
+ * (`poolErrTooLarge` / `poolErrTooManyTeams`), and both are handed the
+ * constant rather than restating it: the number in the sentence is the number
+ * enforced here, in whichever language the page is in. */
 export const POOL_MAX_BYTES = 2_000_000;
+export const POOL_MAX_TEAMS = 512;
 
 /** `canonicalizeTeam`'s JSON (crates/engine/src/validate.rs). `applied` (the
  * fixes it made) is deliberately not surfaced here: for a pool file, a fix
@@ -85,6 +105,14 @@ interface CanonResult {
  * stay untouched.
  */
 export function parsePoolText(text: string): PoolParse {
+  // Before `JSON.parse`, which is itself the first thing big enough to hurt.
+  const inBytes = byteLength(text);
+  if (inBytes > POOL_MAX_BYTES)
+    return {
+      ok: false,
+      errors: [ui().poolErrTooLarge(inBytes, POOL_MAX_BYTES)],
+    };
+
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -95,6 +123,13 @@ export function parsePoolText(text: string): PoolParse {
   const entries = poolEntries(raw);
   if (!entries || entries.length === 0)
     return { ok: false, errors: [ui().poolErrNoTeams] };
+  // Counted before the loop, not inside it: the point is to never run the
+  // validator that many times.
+  if (entries.length > POOL_MAX_TEAMS)
+    return {
+      ok: false,
+      errors: [ui().poolErrTooManyTeams(entries.length, POOL_MAX_TEAMS)],
+    };
 
   const validator = getValidator();
   const teams: PoolTeam[] = [];
@@ -165,12 +200,20 @@ export function parsePoolText(text: string): PoolParse {
   // Same shape as the bundled file, so a saved pool re-reads through this
   // very function on the next load.
   const pool: MetaPool = { meta: { teams: teams.length }, teams };
-  return {
-    ok: true,
-    pool,
-    poolJson: JSON.stringify(pool),
-    teams: teams.length,
-  };
+  const poolJson = JSON.stringify(pool);
+  // Normalization only ever adds — filled-in ids, derived species / levels,
+  // whatever the validator writes back — so clearing the cap on the way in
+  // does not prove the text on the way out clears it. Measuring the string
+  // `storePool` will actually be handed is what makes "adopted ⇒ storable"
+  // true rather than nearly true.
+  const outBytes = byteLength(poolJson);
+  if (outBytes > POOL_MAX_BYTES)
+    return {
+      ok: false,
+      errors: [ui().poolErrTooLarge(outBytes, POOL_MAX_BYTES)],
+    };
+
+  return { ok: true, pool, poolJson, teams: teams.length };
 }
 
 export function loadStoredPool(): StoredPool | null {
@@ -198,7 +241,17 @@ export function loadStoredPool(): StoredPool | null {
  * pool defects never get this far.
  */
 export function storePool(name: string, json: string): string | null {
+  // Drop the old record first, whatever happens next. It names a pool this
+  // session has already stopped playing, so keeping it through a failed write
+  // would resurrect the *previous* custom pool on reload — which is not what
+  // `poolNotStored` says happens ("gone after a reload"), and is the harder
+  // state to explain of the two. Removing first also frees the quota this
+  // write needs.
+  clearStoredPool();
   const bytes = byteLength(json);
+  // Unreachable from the panel: `parsePoolText` already measured this exact
+  // string against the same cap. Kept because this is an exported function
+  // and the invariant is cheaper to restate than to rely on.
   if (bytes > POOL_MAX_BYTES)
     return `pool too large (${bytes} bytes, limit ${POOL_MAX_BYTES})`;
   try {
