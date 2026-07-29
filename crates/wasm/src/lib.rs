@@ -366,6 +366,9 @@ pub struct WasmBlindSearcher {
     /// the opponent's true sets and preview resolves both sides by
     /// signature (public) instead of through pool identification.
     pinned: bool,
+    /// M18: has the first `observe()` run? A belief prior is accepted only
+    /// before it — see `setBeliefPrior`'s third refusal.
+    observed: bool,
     rng: SplitMix64,
     search: Option<BlindSearch>,
     baked: Option<SearchChoice>,
@@ -403,6 +406,7 @@ impl WasmBlindSearcher {
             observer,
             belief,
             pinned: false,
+            observed: false,
             rng: SplitMix64::new(seed as u64),
             search: None,
             baked: None,
@@ -418,6 +422,11 @@ impl WasmBlindSearcher {
     /// table lookup — both sheets are public, so the baked pair answers
     /// whenever the matchup is baked, collision pair included. Call once,
     /// right after construction (at team preview).
+    ///
+    /// M18 note: this REPLACES the belief wholesale with
+    /// `Belief::pinned_checked`, whose `prior` is `None` — so a belief prior
+    /// installed before this call is dropped structurally, not by a guard.
+    /// (`setBeliefPrior` refuses outright in the other order.)
     #[wasm_bindgen(js_name = pinOpponent)]
     pub fn pin_opponent(&mut self, team_json: &str) -> Result<(), JsError> {
         let sets: Vec<PokemonSet> = serde_json::from_str(team_json).map_err(js_err)?;
@@ -441,6 +450,7 @@ impl WasmBlindSearcher {
     /// M8 mixed table plays instead: `bakedPreview()`/`best()` return the
     /// table pick immediately and `step` is a no-op.
     pub fn observe(&mut self, battle: &WasmBattle) -> Result<(), JsError> {
+        self.observed = true;
         self.observer.observe(&battle.battle, &self.dex);
         self.belief
             .sync_checked(&self.dex, &self.observer)
@@ -557,6 +567,89 @@ impl WasmBlindSearcher {
             "count": self.belief.candidate_count(),
             "fallback": self.belief.is_fallback(),
             "candidates": candidates,
+        })
+        .to_string()
+    }
+
+    /// M18: install the community belief prior from the table's JSON TEXT
+    /// (the contents of `data/belief-prior-v0.sample.json`, or of whatever
+    /// file the user pointed the browser at — wasm has no filesystem, so the
+    /// page reads the bytes and hands them over as a string). Returns the
+    /// `belief_prior_report` JSON rather than throwing: the interpreter is
+    /// total, so a typo degrades into `warnings` the caller can surface
+    /// instead of the bot silently playing with no prior.
+    ///
+    /// Governs **only** the blind (non-pinned) fallback imputation — the
+    /// hidden-custom-team branch of the determinizer, which is exactly the
+    /// blind product's opponent. `Belief::set_prior` clears the belief's
+    /// `draws`/`synced` (belief.rs:443-447), so the table takes effect at the
+    /// next `observe()`, whose `sync_checked` rebuilds the fallback roster and
+    /// the per-slot draw plans together with it — installing before the first
+    /// `observe()` is therefore both necessary and sufficient.
+    ///
+    /// Three refusals return `applied: false` and change nothing:
+    ///
+    /// - `pinOpponent` was called (open team sheet): the belief is pinned to
+    ///   the opponent's true sets, so a prior must never be consulted there —
+    ///   sampling would contaminate the certified open-sheet configuration;
+    /// - the table yielded no usable species: not installing it keeps the
+    ///   no-prior determinization *bit*-identical rather than merely
+    ///   equivalent (an empty prior is inert inside the belief too, but the
+    ///   guarantee is worth having structurally, at this boundary);
+    /// - the first `observe()` already ran: a mid-game install would change
+    ///   the information structure of a game in progress under a live search.
+    ///
+    /// Note the one order this report cannot describe: install-then-`pinOpponent`
+    /// returns `applied: true` and is then dropped by the pin (which replaces
+    /// the belief wholesale). The invariant holds — the pinned belief is
+    /// prior-free either way — but the report handed back earlier has already
+    /// said otherwise, so callers must not treat a stale `applied: true` as
+    /// proof that a prior is live. `beliefPriorInfo()` reads the truth off the
+    /// belief itself and is the surface to trust. The browser client cannot
+    /// reach this order (the two calls sit in one exclusive if/else).
+    #[wasm_bindgen(js_name = setBeliefPrior)]
+    pub fn set_belief_prior(&mut self, json: &str) -> String {
+        let prior = BeliefPrior::from_json(json);
+        let mut refusals: Vec<String> = Vec::new();
+        if self.pinned {
+            refusals.push(
+                "open-team-sheet mode (pinOpponent): the belief is pinned to the opponent's \
+                 true sets, so a prior must never be consulted; table ignored"
+                    .to_string(),
+            );
+        }
+        if prior.is_empty() {
+            refusals.push(
+                "no usable species in the table; today's fallback imputation is unchanged"
+                    .to_string(),
+            );
+        }
+        if self.observed {
+            refusals.push(
+                "called after the first observe(), where it would change the information \
+                 structure of a game already in progress; set the prior at team preview"
+                    .to_string(),
+            );
+        }
+        let applied = refusals.is_empty();
+        let report = belief_prior_report(&prior, applied, &refusals);
+        if applied {
+            self.belief.set_prior(Arc::new(prior));
+        }
+        report
+    }
+
+    /// JSON `{installed, governed}` — whether a non-empty prior reached this
+    /// game's belief, and which opponent roster slots it currently drives
+    /// (`governed` in observer roster order; empty before the first
+    /// `observe()`, on a pool-identified or pinned opponent, and whenever the
+    /// table says nothing usable about this roster). The M18 coverage read for
+    /// a live game — what the blind UI's prior chip renders.
+    #[wasm_bindgen(js_name = beliefPriorInfo)]
+    pub fn belief_prior_info(&self) -> String {
+        serde_json::json!({
+            "installed": self.belief.has_prior(),
+            "governed": self.belief.prior_governed(),
         })
         .to_string()
     }
@@ -1084,6 +1177,20 @@ pub fn derive_battle_seed(seed: u32) -> String {
     SplitMix64::new(seed as u64).battle_seed()
 }
 
+/// M18: interpret a belief-prior table WITHOUT installing it anywhere — the
+/// start screen wants to tell the user what their file says long before a
+/// `BlindSearcher` for the game exists. Same report shape as
+/// `BlindSearcher.setBeliefPrior`, where `applied` means "this table would
+/// apply if installed": the per-searcher refusals (pinned opponent, already
+/// observed) are not knowable from here and are therefore not claimed, so a
+/// probe of a good table on an open-sheet game still reports `true`.
+#[wasm_bindgen(js_name = probeBeliefPrior)]
+pub fn probe_belief_prior(json: &str) -> String {
+    let prior = BeliefPrior::from_json(json);
+    let applied = !prior.is_empty();
+    belief_prior_report(&prior, applied, &[])
+}
+
 // ------------------------------------------------------------------ tests
 
 #[cfg(test)]
@@ -1524,5 +1631,219 @@ mod tests {
                 "pin_first={pin_first}: the open-sheet configuration changed"
             );
         }
+    }
+
+    /// M18 on the BLIND product path (`BlindSearcher.setBeliefPrior`) — the
+    /// web client's only route to a belief-prior file, since wasm has no
+    /// filesystem and the table crosses as JSON text. Driven against an
+    /// OFF-POOL opponent, the only belief a prior can touch (a pool team
+    /// identifies publicly and is imputed from its own sheet), and pinning the
+    /// four properties the design requires:
+    ///
+    /// 1. a malformed / empty table yields warnings AND leaves the
+    ///    determinization byte-identical to the no-prior default;
+    /// 2. the shipped reference table is genuinely consumed — it governs
+    ///    roster slots and it moves the search — so the binding cannot be a
+    ///    silent no-op;
+    /// 3. the prior never reaches the pinned (open-team-sheet) belief, in
+    ///    EITHER call order — that is the one unacceptable outcome;
+    /// 4. a table handed over after the first `observe()` is refused, so a
+    ///    game in progress never changes information structure mid-flight.
+    #[test]
+    fn blind_belief_prior_binding() {
+        let root = conformance::fixture::repo_root();
+        let pool_json =
+            std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+        let pool: serde_json::Value = serde_json::from_str(&pool_json).unwrap();
+        let dex = WasmDex::new().map_err(|_| "dex").unwrap();
+        // side 0 = the off-pool fixture team = the bot's opponent (=> fallback
+        // belief); side 1 = the bot, on a pool team. Exactly the blind
+        // product's shape: a human custom team the bot cannot identify.
+        let (opp_json, _) = fixture_teams();
+        let own_json = pool["teams"][1]["sets"].to_string();
+
+        /// One team-preview decision point; `(report, rootPolicy, priorInfo)`.
+        struct Run {
+            report: Option<String>,
+            policy: String,
+            info: serde_json::Value,
+        }
+        // Fresh battle + searcher per run, same seeds throughout, so the
+        // policies are byte-comparable. `late` moves the setBeliefPrior call
+        // to AFTER the first observe(); `pin_first` orders it against
+        // pinOpponent.
+        let run = |prior: Option<&str>, pin: Option<&str>, pin_first: bool, late: bool| -> Run {
+            let b = WasmBattle::new(&dex, &opp_json, &own_json, "1,2,3,4")
+                .map_err(|_| "battle")
+                .unwrap();
+            let mut bs = WasmBlindSearcher::new(&b, 1, &pool_json, 7, None, None)
+                .map_err(|_| "blind searcher")
+                .unwrap();
+            let mut report = None;
+            let mut set_prior = |bs: &mut WasmBlindSearcher| {
+                if let Some(text) = prior {
+                    report = Some(bs.set_belief_prior(text));
+                }
+            };
+            if pin_first {
+                if let Some(t) = pin {
+                    bs.pin_opponent(t).map_err(|_| "pin").unwrap();
+                }
+                if !late {
+                    set_prior(&mut bs);
+                }
+            } else {
+                if !late {
+                    set_prior(&mut bs);
+                }
+                if let Some(t) = pin {
+                    bs.pin_opponent(t).map_err(|_| "pin").unwrap();
+                }
+            }
+            bs.observe(&b).unwrap();
+            if late {
+                set_prior(&mut bs);
+            }
+            assert!(bs.baked_preview().is_none(), "no pair tables were fed");
+            bs.step(120).map_err(|_| "step").unwrap();
+            Run {
+                report,
+                policy: bs.root_policy(),
+                info: serde_json::from_str(&bs.belief_prior_info()).unwrap(),
+            }
+        };
+
+        // ---- baseline: no prior at all (today's shipped blind behaviour)
+        let base = run(None, None, false, false);
+        assert_eq!(base.info["installed"], false);
+        assert_eq!(base.info["governed"].as_array().unwrap().len(), 0);
+
+        // ---- (1) malformed / empty tables: warnings, and NOTHING changes
+        for bad in [
+            "{ this is not json",
+            "[1, 2, 3]",
+            r#""a string""#,
+            r#"{"format":"nc2000-belief-prior","version":1}"#,
+            r#"{"format":"nc2000-belief-prior","version":1,"species":{}}"#,
+            r#"{"species":{"Snorlax":{"moves":{"Body Slam":"very likely"}}}}"#,
+            "",
+        ] {
+            let r = run(Some(bad), None, false, false);
+            let rep: serde_json::Value = serde_json::from_str(r.report.as_ref().unwrap()).unwrap();
+            assert_eq!(rep["applied"], false, "{bad}: {rep}");
+            assert_eq!(rep["species"], 0, "{bad}: {rep}");
+            assert!(
+                !rep["warnings"].as_array().unwrap().is_empty(),
+                "{bad}: a malformed table must warn, got {rep}"
+            );
+            assert_eq!(r.info["installed"], false, "{bad}");
+            assert_eq!(
+                r.policy, base.policy,
+                "{bad}: a malformed table changed the determinization"
+            );
+            // The install-free probe reads the same table the same way. Its
+            // `warnings` carry only the interpreter's own — the refusals are
+            // per-searcher facts a free function cannot know — so the report
+            // is a superset, not an equal.
+            let probe: serde_json::Value =
+                serde_json::from_str(&probe_belief_prior(bad)).unwrap();
+            assert_eq!(probe["applied"], false, "{bad}: probe disagreed: {probe}");
+            assert_eq!(probe["species"], 0, "{bad}: {probe}");
+            for w in probe["warnings"].as_array().unwrap() {
+                assert!(
+                    rep["warnings"].as_array().unwrap().contains(w),
+                    "{bad}: probe warned {w} and the binding did not: {rep}"
+                );
+            }
+        }
+
+        // ---- (2) the shipped reference table: actually consumed
+        let sample_text =
+            std::fs::read_to_string(root.join("data/belief-prior-v0.sample.json")).unwrap();
+        let sample: serde_json::Value = serde_json::from_str(&sample_text).unwrap();
+        let sample_species = sample["species"].as_object().unwrap().len();
+        assert_eq!(sample_species, 42, "the shipped sample table is the 42-species one");
+        let good = run(Some(&sample_text), None, false, false);
+        let rep: serde_json::Value = serde_json::from_str(good.report.as_ref().unwrap()).unwrap();
+        assert_eq!(rep["applied"], true, "{rep}");
+        assert_eq!(rep["species"], sample_species, "{rep}");
+        assert_eq!(rep["skipped"], 0, "{rep}");
+        assert!(rep["warnings"].as_array().unwrap().is_empty(), "{rep}");
+        assert!(rep["meanMoveSum"].as_f64().unwrap() > 0.0, "{rep}");
+        assert_eq!(good.info["installed"], true);
+        let governed = good.info["governed"].as_array().unwrap();
+        assert_eq!(governed.len(), 6, "one flag per opponent roster slot: {governed:?}");
+        assert!(
+            governed.iter().any(|g| g == true),
+            "the sample table covers Gengar, which is on the fixture team: {governed:?}"
+        );
+        assert_ne!(
+            good.policy, base.policy,
+            "an applied prior must move the determinization"
+        );
+        // The probe agrees, without touching any searcher.
+        let probe: serde_json::Value =
+            serde_json::from_str(&probe_belief_prior(&sample_text)).unwrap();
+        assert_eq!(probe["applied"], true, "{probe}");
+        assert_eq!(probe["species"], sample_species, "{probe}");
+        assert_eq!(probe["meanMoveSum"], rep["meanMoveSum"], "{probe}");
+
+        // ---- (3) the pinned (open-team-sheet) belief: unreachable in BOTH
+        // orders. Prior-then-pin still reports `applied: true` — at that
+        // instant the searcher was not pinned and the answer was honest — but
+        // `pinOpponent` replaces the belief wholesale, so nothing survives to
+        // the game. The property that matters is asserted on the belief and on
+        // the search output, not on the report.
+        let pinned_base = run(None, Some(&opp_json), true, false);
+        assert_eq!(pinned_base.info["installed"], false);
+        assert_eq!(pinned_base.info["governed"].as_array().unwrap().len(), 0);
+        for pin_first in [true, false] {
+            let r = run(Some(&sample_text), Some(&opp_json), pin_first, false);
+            let rep: serde_json::Value = serde_json::from_str(r.report.as_ref().unwrap()).unwrap();
+            if pin_first {
+                assert_eq!(rep["applied"], false, "pinned first: {rep}");
+                assert!(
+                    rep["warnings"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|w| w.as_str().unwrap().contains("pinOpponent")),
+                    "the refusal must name the reason: {rep}"
+                );
+            }
+            assert_eq!(
+                r.info["installed"], false,
+                "pin_first={pin_first}: a prior reached the open-sheet belief"
+            );
+            assert_eq!(
+                r.info["governed"].as_array().unwrap().len(),
+                0,
+                "pin_first={pin_first}: the open-sheet belief is governed by a prior"
+            );
+            assert_eq!(
+                r.policy, pinned_base.policy,
+                "pin_first={pin_first}: the open-sheet configuration changed"
+            );
+        }
+
+        // ---- (4) after the first observe(): refused, and the game in
+        // progress is bit-identical to the one that never saw a table.
+        let late = run(Some(&sample_text), None, false, true);
+        let rep: serde_json::Value = serde_json::from_str(late.report.as_ref().unwrap()).unwrap();
+        assert_eq!(rep["applied"], false, "a mid-game prior must be refused: {rep}");
+        assert_eq!(rep["species"], sample_species, "the table still parsed: {rep}");
+        assert!(
+            rep["warnings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|w| w.as_str().unwrap().contains("observe()")),
+            "the refusal must name the reason: {rep}"
+        );
+        assert_eq!(late.info["installed"], false);
+        assert_eq!(
+            late.policy, base.policy,
+            "a refused late prior changed the running search"
+        );
     }
 }

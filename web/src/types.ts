@@ -88,6 +88,43 @@ export interface RootPolicy {
   actions: { input: string; visits: number; mean: number; frac: number }[];
 }
 
+// --------------------------------------------------- belief (blind mode)
+
+/** `BlindSearcher.beliefInfo()` — the bot's current read of the opponent's
+ * team. `count` 1 = publicly identified; `fallback` true = no pool team is
+ * consistent with everything observed (a custom team), so imputation runs on
+ * a synthesized roster instead of on a pool set. */
+export interface BeliefInfo {
+  count: number;
+  fallback: boolean;
+  /** Pool team ids still alive in the belief. */
+  candidates: string[];
+}
+
+/** `BlindSearcher.beliefPriorInfo()` — whether a non-empty community prior
+ * (M18) actually reached this game's belief, and which opponent roster slots
+ * it currently drives (observer roster order). `governed` is empty before the
+ * first observe(), on a pool-identified or pinned opponent, and whenever the
+ * table says nothing usable about this roster — installed but governing
+ * nothing is a real and reportable state. */
+export interface PriorInfo {
+  installed: boolean;
+  governed: boolean[];
+}
+
+/** `BlindSearcher.setBeliefPrior()` / `probeBeliefPrior()` — the table
+ * interpreter is total, so a malformed or half-usable file degrades into
+ * `warnings` rather than throwing. `applied` false means nothing was
+ * installed (from a probe: nothing would be); `skipped` counts entries the
+ * interpreter dropped, so `species` + `skipped` is what the file offered. */
+export interface PriorReport {
+  applied: boolean;
+  species: number;
+  meanMoveSum: number;
+  skipped: number;
+  warnings: string[];
+}
+
 // ------------------------------------------------------------- meta pool
 
 export interface PoolTeam {

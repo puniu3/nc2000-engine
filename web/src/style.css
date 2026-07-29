@@ -193,6 +193,41 @@ small {
   overflow-wrap: anywhere;
 }
 
+/* Information mode (M18): a two-option toggle sitting between the start
+ * button and the party buttons. The two options share the leftover width
+ * so neither reads as the "real" one; which is on comes from .primary /
+ * .ghost (and aria-pressed), never from position. */
+.mode-row {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.mode-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+.mode-opt {
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+/* Column gap is 12px; the note belongs to the row above it, so it is
+ * pulled up against it and keeps only the gap below. */
+.mode-note {
+  margin: -6px 2px 0;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+/* Blind's opponent slot: the party buttons' shape without their
+ * affordances. A <div> gets none of the button element's rules, so the
+ * border is restored here; the transparent fill (vs .party-btn's panel)
+ * is what says "readout, not control". */
+.party-static {
+  border: 1px solid var(--line);
+  background: transparent;
+  cursor: default;
+}
+
 /* ------------------------------------------------------------- modal */
 
 dialog.modal {
@@ -469,6 +504,91 @@ dialog.modal::backdrop {
   min-height: 32px;
   display: flex;
   align-items: center;
+}
+
+/* -------------------------------------------- belief prior (M18) */
+
+.prior-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+/* The <label> IS the control: a file input has no accessible name of its
+ * own and no styleable button, so the input is pulled out of the layout
+ * (sr-only, NOT display:none — it must stay focusable and clickable) and
+ * the label carries both the name and the button look. Hover/press cues
+ * are re-stated because none of the button rules reach a <label>. */
+.prior-pick {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.prior-pick input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.prior-pick:focus-within,
+.prior-pick:active {
+  border-color: var(--accent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .prior-pick:hover {
+    border-color: var(--accent);
+  }
+}
+.prior-failure {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: var(--bad);
+}
+/* Same panel-in-a-modal box as the import result, read top-down: does the
+ * table apply, what is in it, what did the interpreter object to. */
+.prior-report {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.prior-verdict {
+  font-weight: 600;
+}
+.prior-verdict.ok {
+  color: var(--good);
+}
+.prior-verdict.no {
+  color: var(--warn);
+}
+.prior-summary {
+  margin-top: 2px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.prior-report h3 {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.prior-warnings {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: var(--warn);
 }
 
 /* ---------------------------------------------------------- preview */
@@ -906,7 +1026,7 @@ dialog.modal::backdrop {
   animation-duration: 2.4s;
 }
 
-/* -------------------------------------------- belief chip (fair mode) */
+/* ------------------------------------------- belief chip (blind mode) */
 
 .belief-chip {
   display: inline-flex;
@@ -1006,6 +1126,24 @@ dialog.modal::backdrop {
 .mon-sheet-head:not([aria-disabled="true"]):active,
 .sheet-expand:active {
   background: var(--panel-2);
+}
+/* Blind foe row (M18): the head is a <div>, so it keeps the class's
+ * geometry but inherits none of the button element's rules — the tap
+ * height is restored, and the shared hover/press cues are revoked
+ * explicitly (they come from .mon-sheet-head, which it still carries)
+ * so an inert row never feels tappable. Declared after the :active rule
+ * above: same specificity, so source order is what settles it. */
+.mon-sheet-head.static {
+  min-height: 44px;
+  cursor: default;
+}
+.mon-sheet-head.static:active {
+  background: transparent;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mon-sheet-head.static:hover {
+    background: transparent;
+  }
 }
 
 /* --------------------------------------- own preview pick rows (UI-7) */
@@ -1135,6 +1273,25 @@ dialog.modal::backdrop {
 .battle-header .think-chip {
   min-width: 12em;
   justify-content: center;
+}
+/* The belief chip is nowrap, so its min-content width is its whole text:
+ * without this it would refuse to shrink and push the header (flex) or
+ * the grid column (narrow) past the viewport. It clips instead — the
+ * team sheets carry the same information at full length. */
+.battle-header .belief-chip {
+  min-width: 0;
+}
+@media (max-width: 480px) {
+  /* Narrow: share the reserved chip row with the think chip rather than
+   * auto-placing into the 1fr gap in row 1, where the chip would be
+   * squeezed to ~150px and lose the prior counter — the half of it worth
+   * reading. Opposite ends of the same area, so neither moves when the
+   * other appears; the 55% cap keeps them from meeting in the middle. */
+  .battle-header .belief-chip {
+    grid-area: chip;
+    justify-self: end;
+    max-width: 55%;
+  }
 }
 .preview-actions .quit-btn {
   margin-left: auto;

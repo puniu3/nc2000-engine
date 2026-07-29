@@ -116,7 +116,11 @@ export function ItemChip(props: {
   return (
     <span
       class={`item-chip${it ? "" : " none"}${note ? " has-note" : ""}`}
-      data-item={it ? toId(it) : undefined}
+      // `|| undefined` so a masked item ("?" in blind mode) drops the
+      // attribute entirely rather than shipping data-item="" — an empty
+      // value no real item can produce, which would silently join any
+      // future [data-item] selector.
+      data-item={it ? toId(it) || undefined : undefined}
       tabIndex={note ? 0 : undefined}
     >
       {it ? (

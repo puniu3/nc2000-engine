@@ -87,6 +87,47 @@ export interface UIStrings {
   tie: string;
   rematch: string;
   newTeams: string;
+  // information mode (M18 blind experiment). "open" is the historical mode
+  // and stays the default; "blind" hides both sides' sets symmetrically —
+  // each side gets only the other's six species/levels/types plus the public
+  // battle log, and the opponent is drawn from the pool anew on each rematch.
+  // The *Blind keys are drop-in replacements for their open-mode neighbours
+  // (openSheetNote, foeTeam, previewTapHint, sheetNote) — same slot, blind copy.
+  modeLabel: string;
+  modeOpen: string;
+  modeBlind: string;
+  modeNoteOpen: string;
+  modeNoteBlind: string;
+  blindSheetNote: string;
+  oppRandomBlind: string;
+  foeTeamBlind: string;
+  previewTapHintBlind: string;
+  sheetNoteBlind: string;
+  revealFoeTeam: string;
+  // what the bot currently believes the hidden opponent is (blind only):
+  // how many pool teams still match what it has seen, or "off-pool" once no
+  // pool team can explain the observations and it falls back to imputation.
+  beliefChipPool: (n: number) => string;
+  beliefChipOff: string;
+  priorChip: (n: number, total: number) => string;
+  // community belief prior (M18): a distribution table that fills in an
+  // unidentifiable opponent's sets. Loaded by hand, never automatically.
+  priorLabel: string;
+  priorNone: string;
+  priorTitle: string;
+  priorHelp: string;
+  priorPick: string;
+  priorSample: string;
+  priorClear: string;
+  priorSummary: (
+    species: number,
+    meanMoveSum: number,
+    skipped: number,
+  ) => string;
+  priorApplied: string;
+  priorNotApplied: string;
+  priorWarnings: string;
+  priorLoadFailed: (why: string) => string;
   // screen reader only (UI-4) — never rendered visibly
   srLevel: (n: number) => string;
   srGender: (g: string) => string;
@@ -192,6 +233,49 @@ const EN: UIStrings = {
   tie: "Tie",
   rematch: "Rematch",
   newTeams: "New teams",
+  modeLabel: "Information",
+  modeOpen: "Open sheet",
+  modeBlind: "Blind",
+  modeNoteOpen:
+    "Open team sheet: both full parties are readable by both sides — only " +
+    "which 3 each side picked stays hidden until they appear in battle.",
+  modeNoteBlind:
+    "Blind: each side sees only the other's six species, levels and types " +
+    "plus the public battle log — sets stay hidden both ways. The opponent " +
+    "is drawn from the pool at random, and redrawn on every rematch.",
+  blindSheetNote:
+    "Blind: neither side sees the other's sets. The bot gets your six " +
+    "species, levels and types and nothing more — exactly what you get " +
+    "from it.",
+  oppRandomBlind: "Randomly drawn each battle",
+  foeTeamBlind: "Opponent's party",
+  previewTapHintBlind:
+    "Blind — only species, level and types are public on the foe side; on your side the ▸ button opens your own sets.",
+  sheetNoteBlind:
+    "The opponent's sets are hidden — the foe side lists species, level and " +
+    "types only. Your own team is shown in full.",
+  revealFoeTeam: "Show opponent's sets",
+  beliefChipPool: (n) =>
+    `bot's read: ${n} ${n === 1 ? "candidate" : "candidates"}`,
+  beliefChipOff: "bot's read: off-pool",
+  priorChip: (n, total) => `prior: ${n}/${total}`,
+  priorLabel: "Belief prior",
+  priorNone: "None",
+  priorTitle: "Belief prior",
+  priorHelp:
+    "A distribution table the bot uses to fill in an opponent's unknown " +
+    "sets. It only bites in blind mode against a team the bot cannot " +
+    "identify — in practice, when you play a custom team.",
+  priorPick: "Choose a table file…",
+  priorSample: "Load the sample table",
+  priorClear: "Clear",
+  priorSummary: (species, meanMoveSum, skipped) =>
+    `${species} species, mean move-probability sum ${meanMoveSum.toFixed(2)}, ` +
+    `${skipped} ${skipped === 1 ? "entry" : "entries"} skipped`,
+  priorApplied: "Applied",
+  priorNotApplied: "NOT applied",
+  priorWarnings: "Warnings",
+  priorLoadFailed: (why) => `Could not load that table — ${why}`,
   srLevel: (n) => `Level ${n}`,
   srGender: (g) => (g === "M" ? "Male" : g === "F" ? "Female" : "Genderless"),
   srBattleHeading: "Battle",
@@ -297,6 +381,48 @@ const JA: UIStrings = {
   tie: "ひきわけ",
   rematch: "再戦",
   newTeams: "チーム選択へ",
+  modeLabel: "情報",
+  modeOpen: "オープンシート",
+  modeBlind: "ブラインド",
+  modeNoteOpen:
+    "オープンチームシート: 互いに6体すべての構成が読めます。伏せられ" +
+    "ているのは、どの3体を選出したかだけです。",
+  modeNoteBlind:
+    "ブラインド: 互いに見えるのは相手6体の種族・レベル・タイプと公開" +
+    "のバトルログだけで、構成(技・持ち物・DV)はどちらも非公開です。" +
+    "相手チームはプールからランダムに引かれ、再戦のたびに引き直します。",
+  blindSheetNote:
+    "ブラインド: 互いの構成は非公開です。ボットに渡るのもあなたの6体の" +
+    "種族・レベル・タイプだけで、条件は同じです。",
+  oppRandomBlind: "毎回プールからランダム",
+  foeTeamBlind: "相手のパーティ",
+  previewTapHintBlind:
+    "ブラインド — 相手側は種族・レベル・タイプのみ公開です。自分の側は ▸ ボタンで構成を開けます。",
+  sheetNoteBlind:
+    "相手の構成は非公開です。相手側は種族・レベル・タイプのみ、自分の" +
+    "チームだけ全部表示されます。",
+  revealFoeTeam: "相手の構成を見る",
+  beliefChipPool: (n) => `ボットの読み: 候補${n}`,
+  beliefChipOff: "ボットの読み: プール外",
+  priorChip: (n, total) => `事前分布: ${n}/${total}`,
+  priorLabel: "相手構成の事前分布",
+  priorNone: "なし",
+  priorTitle: "相手構成の事前分布",
+  priorHelp:
+    "相手の構成が読めないときに、どの技・持ち物がどれくらい出やすいか" +
+    "を埋めるための分布表です。効くのはブラインドで、かつボットが相手" +
+    "チームを特定できないとき — つまりあなたがカスタムチームを使うとき" +
+    "だけです。",
+  priorPick: "表ファイルを選ぶ…",
+  priorSample: "サンプル表を読み込む",
+  priorClear: "クリア",
+  priorSummary: (species, meanMoveSum, skipped) =>
+    `${species}種、技確率の平均合計 ${meanMoveSum.toFixed(2)}、` +
+    `除外 ${skipped}件`,
+  priorApplied: "適用されます",
+  priorNotApplied: "適用されません",
+  priorWarnings: "警告",
+  priorLoadFailed: (why) => `表を読み込めませんでした — ${why}`,
   srLevel: (n) => `レベル${n}`,
   srGender: (g) => (g === "M" ? "オス" : g === "F" ? "メス" : "せいべつなし"),
   srBattleHeading: "対戦",

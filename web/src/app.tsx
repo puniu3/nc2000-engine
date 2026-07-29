@@ -6,12 +6,21 @@
 // hides the wait) and the information policy is OPEN TEAM SHEET — both
 // sides' sets are public, only selection (which 3 of 6 + lead, until
 // revealed) is hidden. No settings.
+//
+// M18 adds one setting after all: the information mode (open / blind, see
+// info-mode.ts), still defaulting to open. It is a start-screen preference,
+// not a battle parameter — a GameSpec captures the mode in force at start,
+// so toggling it later cannot change the information structure of a running
+// game, and a rematch of an open game stays open even if the toggle moved.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { loadEngine } from "./engine";
 import { fetchDexJson, fetchI18nJa, fetchPool } from "./data";
 import { loadSetDex } from "./set-info";
 import type { MetaPool } from "./types";
+import { randomPoolTeam, type SelectedTeam } from "./pool-pick";
+import { loadInfoMode, storeInfoMode, type InfoMode } from "./info-mode";
+import { loadStoredPrior, type StoredPrior } from "./belief-prior";
 import { StartScreen } from "./select";
 import { Game } from "./game";
 import { loadJaNames, locale, setLocale, ui, type Locale } from "./i18n";
@@ -26,20 +35,17 @@ const testBudget =
 export const BUDGET =
   Number.isSafeInteger(testBudget) && testBudget > 0 ? testBudget : 30000;
 
-/** One side's selected team: a pool team (poolIdx set — baked pair tables
- * may apply) or a saved custom team (poolIdx null — preview is always live
- * search). Sets are captured at start, so deleting a saved custom during
- * the game cannot alter the current battle or its rematches. */
-export interface SelectedTeam {
-  id: string;
-  sets: unknown[];
-  poolIdx: number | null;
-}
+/** `SelectedTeam` moved to pool-pick.ts, next to the pool draw that builds
+ * one; re-exported here so the existing `from "./app"` imports keep
+ * working. */
+export type { SelectedTeam } from "./pool-pick";
 
 interface GameSpec {
   human: SelectedTeam;
   bot: SelectedTeam;
   n: number;
+  /** The information mode this game runs under, frozen at start. */
+  mode: InfoMode;
 }
 
 export function App() {
@@ -51,6 +57,11 @@ export function App() {
   const poolJsonRef = useRef("");
   const [game, setGame] = useState<GameSpec | null>(null);
   const [loc, setLoc] = useState<Locale>(locale());
+  // Per-browser preferences, restored on load. `prior` is a table the user
+  // once picked by hand; nothing here ever fetches one on its own
+  // (crates/bot/src/prior.rs:491).
+  const [mode, setMode] = useState<InfoMode>(loadInfoMode);
+  const [prior, setPrior] = useState<StoredPrior | null>(loadStoredPrior);
 
   useEffect(() => {
     void (async () => {
@@ -101,7 +112,14 @@ export function App() {
           setLocale(l);
           setLoc(l);
         }}
-        onStart={(human, bot) => setGame({ human, bot, n: 1 })}
+        mode={mode}
+        onMode={(m) => {
+          setMode(m);
+          storeInfoMode(m);
+        }}
+        prior={prior}
+        onPrior={setPrior}
+        onStart={(human, bot) => setGame({ human, bot, n: 1, mode })}
       />
     );
   }
@@ -112,7 +130,25 @@ export function App() {
       poolJson={poolJsonRef.current}
       humanTeam={game.human}
       botTeam={game.bot}
-      onRematch={() => setGame({ ...game, n: game.n + 1 })}
+      mode={game.mode}
+      // The prior only ever reaches a blind game: in open mode the searcher
+      // pins the human's real team and refuses the table outright. `game.mode`
+      // (not the live toggle) decides, for the same reason the mode is frozen.
+      priorJson={game.mode === "blind" ? prior?.json : undefined}
+      // Blind rematch redraws the opponent: replaying a lost battle against
+      // the team you just watched play would hand the human the very
+      // information blind mode withholds. Open mode keeps the same foe.
+      onRematch={() =>
+        setGame((g) =>
+          g === null
+            ? g
+            : {
+                ...g,
+                n: g.n + 1,
+                bot: g.mode === "blind" ? randomPoolTeam(pool) : g.bot,
+              },
+        )
+      }
       onNewTeams={() => setGame(null)}
     />
   );

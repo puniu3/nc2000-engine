@@ -7,8 +7,9 @@ import init, {
   Battle,
   Validator,
   deriveBattleSeed,
+  probeBeliefPrior,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
-import type { Choice, StateView } from "./types";
+import type { Choice, PriorReport, StateView } from "./types";
 
 export { Battle };
 
@@ -59,4 +60,14 @@ export function stateView(battle: Battle): StateView {
 
 export function takeNewLog(battle: Battle): string[] {
   return JSON.parse(battle.takeNewLog()) as string[];
+}
+
+/** M18: read a belief-prior table WITHOUT installing it — the start screen
+ * reports what a picked file says long before the game's searcher (which
+ * lives in the worker's own wasm instance) exists. `applied` here means
+ * "this table would apply if installed": the per-searcher refusals (pinned
+ * opponent, already observed) are not knowable from the main thread.
+ * The interpreter is total, so a malformed file comes back as warnings. */
+export function probePrior(json: string): PriorReport {
+  return JSON.parse(probeBeliefPrior(json)) as PriorReport;
 }

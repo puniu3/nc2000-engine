@@ -10,12 +10,29 @@
 // Open team sheet (M12): the bot's sets are readable in the party modal,
 // and the bot receives the human's exact sets — a single information
 // policy for pool and custom teams alike. Only picks stay hidden.
+//
+// Information mode (M18): the start screen also owns the open/blind toggle
+// and the belief-prior table, both per-browser preferences (app.tsx holds
+// the state; a Game freezes the mode at start). Blind changes this screen
+// in three places — the opponent is no longer choosable (it is drawn from
+// the pool at start and redrawn on rematch, so the human never knows the
+// foe's sets), the party-modal note describes the blind policy instead of
+// the open one, and the belief-prior button appears (a prior is only
+// consulted when the bot cannot identify the opponent, which cannot happen
+// in open mode).
 
 import { useState } from "preact/hooks";
-import type { MetaPool, PoolTeam } from "./types";
+import type { MetaPool, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
+import { randomPoolTeam } from "./pool-pick";
+import type { InfoMode } from "./info-mode";
+import {
+  clearStoredPrior,
+  storePrior,
+  type StoredPrior,
+} from "./belief-prior";
 import { Modal } from "./modal";
-import { getValidator, randomSeed32 } from "./engine";
+import { getValidator, probePrior } from "./engine";
 import { parsePsExport } from "./ps-import";
 import { findingAnchor, findingText, type Finding } from "./findings";
 import {
@@ -343,11 +360,16 @@ function HumanPicker(props: {
   onPick: (c: PartyChoice) => void;
   customs: CustomTeam[];
   onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
+  mode: InfoMode;
 }) {
   const { teams, choice, customs } = props;
   return (
     <>
-      <p class="modal-note">{ui().openSheetNote}</p>
+      {/* The note states what the choice costs in information: in open mode
+       * the bot reads the sets you pick here, in blind mode it does not. */}
+      <p class="modal-note">
+        {props.mode === "blind" ? ui().blindSheetNote : ui().openSheetNote}
+      </p>
       <button
         class={`team-card random-card ${choice.kind === "random" ? "selected" : ""}`}
         aria-pressed={choice.kind === "random"}
@@ -385,11 +407,16 @@ function BotPicker(props: {
   onPick: (c: PartyChoice) => void;
   customs: CustomTeam[];
   onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
+  mode: InfoMode;
 }) {
   const { teams, choice } = props;
   return (
     <>
-      <p class="modal-note">{ui().openSheetNote}</p>
+      {/* Blind never opens this modal (the opponent button is not rendered),
+       * but the branch is kept so the note can never contradict the mode. */}
+      <p class="modal-note">
+        {props.mode === "blind" ? ui().blindSheetNote : ui().openSheetNote}
+      </p>
       <button
         class={`team-card random-card ${choice.kind === "random" ? "selected" : ""}`}
         aria-pressed={choice.kind === "random"}
@@ -419,20 +446,179 @@ function BotPicker(props: {
   );
 }
 
+// ------------------------------------------------- belief prior (M18)
+
+/** The one table shipped with the app, served like every other data file
+ * (repo `data/`, mapped under the deploy base — see vite.config.ts). It is
+ * fetched only when the user presses the button: nothing loads a prior on
+ * its own, by policy (crates/bot/src/prior.rs:491). */
+const SAMPLE_PRIOR = "belief-prior-v0.sample.json";
+
+/** Interpret a table without installing it. The wasm interpreter is total —
+ * a malformed file degrades into `warnings` — so a throw here means the
+ * boundary itself failed, which is reported as a load failure rather than
+ * as a verdict about the table. */
+function probeQuiet(json: string): {
+  report: PriorReport | null;
+  error: string | null;
+} {
+  try {
+    return { report: probePrior(json), error: null };
+  } catch (e) {
+    return { report: null, error: String(e) };
+  }
+}
+
+/** Belief-prior panel (modal body): pick a table file or load the shipped
+ * sample, read back what the engine makes of it, or clear it. Both sources
+ * run the same adopt() path — probe first (so the user sees the verdict
+ * even when the table is useless), then persist, and only a table the
+ * browser can keep is adopted: one that cannot be stored would silently
+ * vanish on reload, which is worse than refusing it now. */
+function PriorPanel(props: {
+  prior: StoredPrior | null;
+  onPrior: (p: StoredPrior | null) => void;
+}) {
+  // Mounting IS "the modal opened" (the parent mounts it on open), so a
+  // table kept from an earlier session gets its report back before the user
+  // touches anything.
+  const [report, setReport] = useState<PriorReport | null>(() =>
+    props.prior ? probeQuiet(props.prior.json).report : null,
+  );
+  const [failure, setFailure] = useState<string | null>(null);
+
+  function adopt(name: string, json: string) {
+    const probed = probeQuiet(json);
+    setReport(probed.report);
+    if (probed.error !== null) {
+      setFailure(ui().priorLoadFailed(probed.error));
+      return;
+    }
+    // OPEN QUESTION: a table the engine reports as NOT applied (unparseable
+    // or empty) is still adopted here — the contract gates adoption on the
+    // storage result only, and the report says plainly that it will not
+    // apply. Refusing it outright may read better; owner call.
+    const why = storePrior(name, json);
+    if (why !== null) {
+      setFailure(ui().priorLoadFailed(why));
+      return;
+    }
+    setFailure(null);
+    props.onPrior({ name, json });
+  }
+
+  async function loadSample() {
+    try {
+      const res = await fetch(
+        `${import.meta.env.BASE_URL}data/${SAMPLE_PRIOR}`,
+      );
+      if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+      adopt(SAMPLE_PRIOR, await res.text());
+    } catch (e) {
+      setReport(null);
+      setFailure(ui().priorLoadFailed(String(e)));
+    }
+  }
+
+  return (
+    <div class="prior-panel">
+      <p class="modal-note">{ui().priorHelp}</p>
+      <div class="prior-actions">
+        {/* A real <label> wrapping the input: the native file button has no
+         * accessible name of its own, and the visible text must be the one
+         * a screen reader announces. */}
+        <label class="prior-pick">
+          <span class="prior-pick-label">{ui().priorPick}</span>
+          <input
+            type="file"
+            accept=".json,application/json"
+            data-testid="prior-file"
+            onChange={(e) => {
+              const input = e.currentTarget as HTMLInputElement;
+              const file = input.files?.[0];
+              // Clearing the value lets the same file be re-picked (the
+              // change event would not fire again otherwise).
+              input.value = "";
+              if (!file) return;
+              void file
+                .text()
+                .then((text) => adopt(file.name, text))
+                .catch((err: unknown) => {
+                  setReport(null);
+                  setFailure(ui().priorLoadFailed(String(err)));
+                });
+            }}
+          />
+        </label>
+        <button data-testid="prior-sample" onClick={() => void loadSample()}>
+          {ui().priorSample}
+        </button>
+        <button
+          class="ghost"
+          data-testid="prior-clear"
+          disabled={props.prior === null}
+          onClick={() => {
+            clearStoredPrior();
+            props.onPrior(null);
+            setReport(null);
+            setFailure(null);
+          }}
+        >
+          {ui().priorClear}
+        </button>
+      </div>
+      {failure !== null && <p class="prior-failure">{failure}</p>}
+      {report && (
+        // Reading order is the order of the claims: does it apply, what does
+        // it contain, what did the interpreter object to.
+        <div class="prior-report" data-testid="prior-report">
+          {/* The verdict is the one line that must not be missed, so it
+              carries colour as well as words (never colour alone). */}
+          <div class={`prior-verdict ${report.applied ? "ok" : "no"}`}>
+            {report.applied ? ui().priorApplied : ui().priorNotApplied}
+          </div>
+          <div class="prior-summary">
+            {ui().priorSummary(
+              report.species,
+              report.meanMoveSum,
+              report.skipped,
+            )}
+          </div>
+          {report.warnings.length > 0 && (
+            <>
+              <h3>{ui().priorWarnings}</h3>
+              <ul class="prior-warnings">
+                {report.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------- start screen
 
 export function StartScreen(props: {
   pool: MetaPool;
   locale: Locale;
   onLocale: (l: Locale) => void;
+  mode: InfoMode;
+  onMode: (m: InfoMode) => void;
+  prior: StoredPrior | null;
+  onPrior: (p: StoredPrior | null) => void;
   onStart: (human: SelectedTeam, bot: SelectedTeam) => void;
 }) {
   const teams = props.pool.teams;
+  const blind = props.mode === "blind";
   const [customs, setCustoms] = useState<CustomTeam[]>(loadCustomTeams);
   const [picks, setPicks] = useState<Picks>(() =>
     loadPicks(props.pool, loadCustomTeams()),
   );
-  const [modal, setModal] = useState<null | "human" | "bot">(null);
+  const [modal, setModal] = useState<null | "human" | "bot" | "prior">(null);
 
   function update(next: Picks) {
     setPicks(next);
@@ -471,10 +657,11 @@ export function StartScreen(props: {
         return { id: custom.name, sets: custom.sets, poolIdx: null };
     }
     // Random is resolved here, at start: a fresh roll every game unless
-    // the user pinned a pool team.
+    // the user pinned a pool team. The roll is pool-pick.ts's, shared with
+    // the blind rematch redraw so both draw by exactly the same rule.
     const pinned = choice.kind === "pool" ? poolIdx(choice.id) : -1;
-    const idx = pinned >= 0 ? pinned : randomSeed32() % teams.length;
-    return { id: teams[idx].id, sets: teams[idx].sets, poolIdx: idx };
+    if (pinned < 0) return randomPoolTeam(props.pool);
+    return { id: teams[pinned].id, sets: teams[pinned].sets, poolIdx: pinned };
   }
 
   function customsChanged(
@@ -502,7 +689,14 @@ export function StartScreen(props: {
   }
 
   function start() {
-    props.onStart(selectedTeam(picks.human), selectedTeam(picks.bot));
+    // Blind ignores the pinned opponent entirely: a foe you chose is a foe
+    // whose sets you know, which is precisely the information the mode
+    // withholds. The pin is kept in storage, unread, for the way back to
+    // open mode.
+    props.onStart(
+      selectedTeam(picks.human),
+      blind ? randomPoolTeam(props.pool) : selectedTeam(picks.bot),
+    );
   }
 
   return (
@@ -525,6 +719,32 @@ export function StartScreen(props: {
         <button class="primary start-main-btn" onClick={start}>
           {ui().startBattle}
         </button>
+        {/* Information mode: a two-option radio built from buttons, so the
+         * state is carried by aria-pressed (announced as pressed/not) and
+         * the selected one also reads as `primary` for sighted users — the
+         * page must not depend on a stylesheet rule to show which is on. */}
+        <div class="mode-row" data-testid="mode-row">
+          <span class="mode-label">{ui().modeLabel}</span>
+          <button
+            class={`mode-opt ${blind ? "ghost" : "primary"}`}
+            data-mode="open"
+            aria-pressed={!blind}
+            onClick={() => props.onMode("open")}
+          >
+            {ui().modeOpen}
+          </button>
+          <button
+            class={`mode-opt ${blind ? "primary" : "ghost"}`}
+            data-mode="blind"
+            aria-pressed={blind}
+            onClick={() => props.onMode("blind")}
+          >
+            {ui().modeBlind}
+          </button>
+        </div>
+        <p class="mode-note">
+          {blind ? ui().modeNoteBlind : ui().modeNoteOpen}
+        </p>
         <button
           class="party-btn"
           data-party="human"
@@ -533,14 +753,38 @@ export function StartScreen(props: {
           <span class="party-label">{ui().yourParty}</span>
           <span class="party-value">{humanValue}</span>
         </button>
-        <button
-          class="party-btn"
-          data-party="bot"
-          onClick={() => setModal("bot")}
-        >
-          <span class="party-label">{ui().oppParty}</span>
-          <span class="party-value">{botValue}</span>
-        </button>
+        {blind ? (
+          // Not a control: in blind mode the opponent is drawn at start and
+          // redrawn on every rematch, so there is nothing to open. The slot
+          // stays, in the party buttons' shape, to say what will happen.
+          <div class="party-btn party-static" data-party="bot-random">
+            <span class="party-label">{ui().oppParty}</span>
+            <span class="party-value">{ui().oppRandomBlind}</span>
+          </div>
+        ) : (
+          <button
+            class="party-btn"
+            data-party="bot"
+            onClick={() => setModal("bot")}
+          >
+            <span class="party-label">{ui().oppParty}</span>
+            <span class="party-value">{botValue}</span>
+          </button>
+        )}
+        {blind && (
+          // Only blind can consult a prior: open mode pins the opponent's
+          // real sets, and a pinned searcher refuses the table outright.
+          <button
+            class="party-btn"
+            data-party="prior"
+            onClick={() => setModal("prior")}
+          >
+            <span class="party-label">{ui().priorLabel}</span>
+            <span class="party-value">
+              {props.prior ? props.prior.name : ui().priorNone}
+            </span>
+          </button>
+        )}
       </main>
 
       {modal === "human" && (
@@ -558,6 +802,7 @@ export function StartScreen(props: {
               // panel; the modal stays open so applied fixes remain visible.
               customsChanged("human", list, picked);
             }}
+            mode={props.mode}
           />
         </Modal>
       )}
@@ -574,7 +819,13 @@ export function StartScreen(props: {
             onCustomsChange={(list, picked) =>
               customsChanged("bot", list, picked)
             }
+            mode={props.mode}
           />
+        </Modal>
+      )}
+      {modal === "prior" && (
+        <Modal title={ui().priorTitle} onClose={() => setModal(null)}>
+          <PriorPanel prior={props.prior} onPrior={props.onPrior} />
         </Modal>
       )}
     </div>

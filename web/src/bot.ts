@@ -1,7 +1,7 @@
 // Main-thread client for the bot search worker.
 
 import type { WorkerRequest, WorkerResponse } from "./bot-worker";
-import type { RootPolicy } from "./types";
+import type { BeliefInfo, PriorInfo, PriorReport, RootPolicy } from "./types";
 
 export interface SearchOutcome {
   best: string | null;
@@ -15,6 +15,13 @@ export class BotWorker {
   private worker: Worker;
   private ready: Promise<void>;
   private nextId = 1;
+  /** Blind mode: the bot's read of the opponent, refreshed at every search
+   * (the worker posts it right after observe(), so it is the read the search
+   * about to run is actually using). Never fires in open mode. */
+  onBelief?: (info: BeliefInfo, prior: PriorInfo) => void;
+  /** The verdict on the belief-prior table handed to `newBattle` — fires
+   * once per battle that carried one, whether it was applied or refused. */
+  onPriorReport?: (report: PriorReport) => void;
   private pending = new Map<
     number,
     {
@@ -51,6 +58,15 @@ export class BotWorker {
           }
           break;
         }
+        case "belief":
+          this.onBelief?.(
+            JSON.parse(m.info) as BeliefInfo,
+            JSON.parse(m.prior) as PriorInfo,
+          );
+          break;
+        case "prior":
+          this.onPriorReport?.(JSON.parse(m.report) as PriorReport);
+          break;
         case "error":
           console.error("bot worker:", m.message);
           break;
@@ -62,17 +78,27 @@ export class BotWorker {
     this.worker.postMessage(m);
   }
 
-  /** Start a game under the open-team-sheet policy: the worker's per-game
-   * searcher plays with the opponent's true sets pinned as its belief —
-   * only the opponent's picks (which 3 + lead) stay hidden to it. */
+  /** Start a game. `searcher.mode` fixes the worker's information policy for
+   * the whole battle: "open" pins the opponent's true sets as the belief —
+   * only the opponent's picks (which 3 + lead) stay hidden to it — while
+   * "blind" leaves it with what the human also sees, and lets
+   * `searcher.priorJson` (raw table text, blind only) govern its fallback
+   * imputation. The prior verdict comes back on `onPriorReport`; the belief
+   * itself streams on `onBelief`. */
   async newBattle(
     p1: string,
     p2: string,
     seed: string,
-    open: { poolJson: string; side: number; seed: number },
+    searcher: {
+      poolJson: string;
+      side: number;
+      seed: number;
+      mode: "open" | "blind";
+      priorJson?: string;
+    },
   ): Promise<void> {
     await this.ready;
-    this.send({ t: "battle", p1, p2, seed, open });
+    this.send({ t: "battle", p1, p2, seed, searcher });
   }
 
   /** Feed one baked pair table for the table preview (call before the
