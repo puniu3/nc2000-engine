@@ -91,12 +91,12 @@ export interface UIStrings {
   // and stays the default; "blind" hides both sides' sets symmetrically —
   // each side gets only the other's six species/levels/types plus the public
   // battle log, and the opponent is drawn from the pool anew on each rematch.
+  // Blind is reached only through `?blind` (info-mode.ts), so there is no
+  // switch and no open-mode copy: open says nothing about modes at all, and
+  // blind announces itself once with blindBanner + modeNoteBlind.
   // The *Blind keys are drop-in replacements for their open-mode neighbours
   // (openSheetNote, foeTeam, previewTapHint, sheetNote) — same slot, blind copy.
-  modeLabel: string;
-  modeOpen: string;
-  modeBlind: string;
-  modeNoteOpen: string;
+  blindBanner: string;
   modeNoteBlind: string;
   blindSheetNote: string;
   oppRandomBlind: string;
@@ -128,6 +128,31 @@ export interface UIStrings {
   priorNotApplied: string;
   priorWarnings: string;
   priorLoadFailed: (why: string) => string;
+  // swappable team pool: one file replaces the pool everywhere it is read
+  // (the bot's draw, the blind belief's candidates, both team lists), in
+  // either information mode. poolHelp has to say all three, or the swap
+  // looks like it only changes the list the user is looking at.
+  poolLabel: string;
+  poolBundled: (n: number) => string;
+  poolLoaded: (name: string, n: number) => string;
+  poolTitle: string;
+  poolHelp: string;
+  poolPick: string;
+  poolReset: string;
+  poolAccepted: (n: number) => string;
+  poolRejected: string;
+  poolMore: (n: number) => string;
+  poolNotStored: (why: string) => string;
+  // rejection lines from the pool loader (team-pool.ts). Read by someone
+  // staring at a file they hand-edited, so each one names the team and the
+  // defect; `why` in poolErrTeam is an anchored validator finding, in
+  // poolErrJson the runtime's own parse message.
+  poolErrJson: (why: string) => string;
+  poolErrNoTeams: string;
+  poolErrSets: (team: string) => string;
+  poolErrTeamSize: (team: string, n: number) => string;
+  poolErrDupId: (team: string) => string;
+  poolErrTeam: (team: string, why: string) => string;
   // screen reader only (UI-4) — never rendered visibly
   srLevel: (n: number) => string;
   srGender: (g: string) => string;
@@ -233,12 +258,7 @@ const EN: UIStrings = {
   tie: "Tie",
   rematch: "Rematch",
   newTeams: "New teams",
-  modeLabel: "Information",
-  modeOpen: "Open sheet",
-  modeBlind: "Blind",
-  modeNoteOpen:
-    "Open team sheet: both full parties are readable by both sides — only " +
-    "which 3 each side picked stays hidden until they appear in battle.",
+  blindBanner: "Blind mode",
   modeNoteBlind:
     "Blind: each side sees only the other's six species, levels and types " +
     "plus the public battle log — sets stay hidden both ways. The opponent " +
@@ -276,6 +296,34 @@ const EN: UIStrings = {
   priorNotApplied: "NOT applied",
   priorWarnings: "Warnings",
   priorLoadFailed: (why) => `Could not load that table — ${why}`,
+  poolLabel: "Team pool",
+  poolBundled: (n) => `Bundled (${n} ${n === 1 ? "team" : "teams"})`,
+  poolLoaded: (name, n) => `${name} (${n} ${n === 1 ? "team" : "teams"})`,
+  poolTitle: "Team pool",
+  poolHelp:
+    "A pool file replaces the pool everywhere it is used: the teams the " +
+    "bot is drawn from, the candidates it narrows the opponent down to in " +
+    "blind mode, and the team lists for both sides on this screen. Same " +
+    "JSON as the bundled pool — {\"teams\": [{\"id\": …, \"sets\": […]}]} is " +
+    "the minimum, a bare array of teams also reads, and id / tier / rank " +
+    "are filled in when missing. Every team is exactly 6 Pokémon and is " +
+    "checked against this format's rules; if a single team cannot play, " +
+    "the whole file is refused.",
+  poolPick: "Choose a pool file…",
+  poolReset: "Use the bundled pool",
+  poolAccepted: (n) => `${n} ${n === 1 ? "team" : "teams"} accepted`,
+  poolRejected: "Rejected — nothing was changed",
+  poolMore: (n) => `…and ${n} more`,
+  poolNotStored: (why) =>
+    `Loaded for this session, but not saved — ${why}. It will be gone after a reload.`,
+  poolErrJson: (why) => `Not valid JSON — ${why}`,
+  poolErrNoTeams:
+    "No teams in this file — expected {\"teams\": [ … ]} or a bare array of teams.",
+  poolErrSets: (team) => `Team ${team}: no “sets” array`,
+  poolErrTeamSize: (team, n) =>
+    `Team ${team}: ${n} Pokémon — a team is exactly 6`,
+  poolErrDupId: (team) => `Team ${team}: duplicate id — ids must be unique`,
+  poolErrTeam: (team, why) => `Team ${team} — ${why}`,
   srLevel: (n) => `Level ${n}`,
   srGender: (g) => (g === "M" ? "Male" : g === "F" ? "Female" : "Genderless"),
   srBattleHeading: "Battle",
@@ -381,12 +429,7 @@ const JA: UIStrings = {
   tie: "ひきわけ",
   rematch: "再戦",
   newTeams: "チーム選択へ",
-  modeLabel: "情報",
-  modeOpen: "オープンシート",
-  modeBlind: "ブラインド",
-  modeNoteOpen:
-    "オープンチームシート: 互いに6体すべての構成が読めます。伏せられ" +
-    "ているのは、どの3体を選出したかだけです。",
+  blindBanner: "ブラインド",
   modeNoteBlind:
     "ブラインド: 互いに見えるのは相手6体の種族・レベル・タイプと公開" +
     "のバトルログだけで、構成(技・持ち物・DV)はどちらも非公開です。" +
@@ -423,6 +466,32 @@ const JA: UIStrings = {
   priorNotApplied: "適用されません",
   priorWarnings: "警告",
   priorLoadFailed: (why) => `表を読み込めませんでした — ${why}`,
+  poolLabel: "チームプール",
+  poolBundled: (n) => `同梱(${n}チーム)`,
+  poolLoaded: (name, n) => `${name}(${n}チーム)`,
+  poolTitle: "チームプール",
+  poolHelp:
+    "プールを使っている箇所はすべて、このファイルに置き換わります — " +
+    "ボットが引くチーム、ブラインドでボットが相手を絞り込む候補、そして" +
+    "この画面の自分・相手のチーム一覧です。形式は同梱プールと同じ JSON " +
+    "で、{\"teams\": [{\"id\": …, \"sets\": […]}]} が最小。チームだけの配列" +
+    "でも読めます(id・tier・rank は無ければこちらで補います)。各チーム" +
+    "はちょうど6体で、この形式のルールに照らして検査し、対戦できない" +
+    "チームが1つでもあればファイル全体を拒否します。",
+  poolPick: "プールのファイルを選ぶ…",
+  poolReset: "同梱プールに戻す",
+  poolAccepted: (n) => `${n}チームを読み込みました`,
+  poolRejected: "拒否しました — プールは元のままです",
+  poolMore: (n) => `他${n}件`,
+  poolNotStored: (why) =>
+    `このセッションでは使えますが、保存できませんでした — ${why}。再読み込みで元に戻ります。`,
+  poolErrJson: (why) => `JSON として読めません — ${why}`,
+  poolErrNoTeams:
+    "チームが1つもありません — {\"teams\": [ … ]} かチームの配列を渡してください。",
+  poolErrSets: (team) => `チーム ${team}: sets がありません`,
+  poolErrTeamSize: (team, n) => `チーム ${team}: ${n}体です(6体ちょうど)`,
+  poolErrDupId: (team) => `チーム ${team}: id が重複しています`,
+  poolErrTeam: (team, why) => `チーム ${team} — ${why}`,
   srLevel: (n) => `レベル${n}`,
   srGender: (g) => (g === "M" ? "オス" : g === "F" ? "メス" : "せいべつなし"),
   srBattleHeading: "対戦",

@@ -145,6 +145,10 @@ const UNKNOWN_ITEM = "?";
 
 export function Game(props: {
   poolJson: string;
+  /** Whether `poolJson` is a pool the user loaded rather than the bundled
+   * one. Only the baked-artifact lookups care: pool indices are the bundled
+   * pool's rank order and mean nothing outside it. */
+  poolIsCustom: boolean;
   humanTeam: SelectedTeam;
   botTeam: SelectedTeam;
   /** Information policy, frozen at game start by the caller. */
@@ -244,13 +248,23 @@ export function Game(props: {
     // Baked pair tables exist only between pool teams. If either side is
     // custom, preview falls back to the same pinned live search.
     //
+    // A swapped pool skips the fetch too, and this one is a correctness
+    // stop rather than a policy one: the baked pairs are indexed by the
+    // BUNDLED pool's rank order, so team 7 of a loaded file and team 7 of
+    // the bundled pool share an index and nothing else. Fetching would
+    // either 404 or, worse, answer with an equilibrium for two teams that
+    // are not on the field.
+    //
     // Blind skips the fetch outright. Not for cost — the request URL names
     // BOTH pool indices, and the player knows their own, so a pool-vs-pool
     // blind game would put the foe's index in the network log. The table
     // could only pay off where the belief identifies the player anyway,
     // which blind play does not lean on.
     pairPromiseRef.current =
-      blind || humanTeam.poolIdx === null || botTeam.poolIdx === null
+      blind ||
+      props.poolIsCustom ||
+      humanTeam.poolIdx === null ||
+      botTeam.poolIdx === null
         ? Promise.resolve(null)
         : fetchPairJson(humanTeam.poolIdx, botTeam.poolIdx);
     // Blind reporting channels, wired before the battle message so the

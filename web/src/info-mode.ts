@@ -8,28 +8,32 @@
 //             sides; the bot falls back to pool imputation (+ optional
 //             belief prior).
 //
-// The choice is a per-browser preference, not part of a battle: a Game
-// captures the mode at start so toggling mid-battle cannot change the
-// information structure of a running game. Storage failures degrade to the
-// default — a missing preference must never block play.
+// The URL is the only door: `?blind` opens it and nothing else does. Blind
+// is an experiment riding along in a public build, so the start screen
+// shows no switch for it — a visitor without the link gets the M12 screen,
+// unchanged and un-nudged. Nothing is persisted either: a stored preference
+// would outlive the link that set it, silently leaving a first-time visitor
+// in the experiment with no UI to get back out of.
+//
+// A Game freezes the mode at start, so this is read on the start screen
+// only and a running battle's information structure cannot move under it.
 
 export type InfoMode = "open" | "blind";
 
-const LS_KEY = "nc2000-info-mode";
-
-/** The default stays "open" (M12 product policy); blind is opt-in. */
-export function loadInfoMode(): InfoMode {
-  try {
-    return localStorage.getItem(LS_KEY) === "blind" ? "blind" : "open";
-  } catch {
-    return "open";
-  }
-}
-
-export function storeInfoMode(m: InfoMode): void {
-  try {
-    localStorage.setItem(LS_KEY, m);
-  } catch {
-    /* storage unavailable: the mode still holds this session */
-  }
+/**
+ * `?blind`, `?blind=1`, `?blind=yes` → blind; no `blind` parameter → open.
+ * `?blind=0` and `?blind=false` also read as open: a link that has been
+ * passed around is easier to neutralize by editing one character than by
+ * surgery on the query string.
+ *
+ * `search` defaults to `location.search` and exists as a parameter so the
+ * rule can be exercised without a document.
+ */
+export function readInfoMode(search?: string): InfoMode {
+  const query =
+    search ?? (typeof location === "undefined" ? "" : location.search);
+  const v = new URLSearchParams(query).get("blind");
+  if (v === null) return "open";
+  const t = v.trim().toLowerCase();
+  return t === "0" || t === "false" ? "open" : "blind";
 }

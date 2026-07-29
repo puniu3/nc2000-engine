@@ -11,21 +11,33 @@
 // and the bot receives the human's exact sets — a single information
 // policy for pool and custom teams alike. Only picks stay hidden.
 //
-// Information mode (M18): the start screen also owns the open/blind toggle
-// and the belief-prior table, both per-browser preferences (app.tsx holds
-// the state; a Game freezes the mode at start). Blind changes this screen
-// in three places — the opponent is no longer choosable (it is drawn from
-// the pool at start and redrawn on rematch, so the human never knows the
-// foe's sets), the party-modal note describes the blind policy instead of
-// the open one, and the belief-prior button appears (a prior is only
-// consulted when the bot cannot identify the opponent, which cannot happen
-// in open mode).
+// Information mode (M18): blind is entered only through `?blind`
+// (info-mode.ts), so this screen has no switch for it — in open mode it is
+// the M12 screen exactly, with nothing said about modes at all. Blind
+// changes it in four places: a static banner names the mode in force, the
+// opponent stops being choosable (it is drawn from the pool at start and
+// redrawn on rematch, so the human never knows the foe's sets), the
+// party-modal note describes the blind policy instead of the open one, and
+// the belief-prior button appears (a prior is only consulted when the bot
+// cannot identify the opponent, which cannot happen in open mode).
+//
+// The team pool is the other thing this screen owns: a file that replaces
+// the pool wherever it is read (team-pool.ts). Its button sits with the
+// party buttons because the team lists are what it visibly changes here,
+// and it is offered in BOTH modes — which teams exist is not an
+// information policy.
 
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
 import { randomPoolTeam } from "./pool-pick";
 import type { InfoMode } from "./info-mode";
+import {
+  clearStoredPool,
+  parsePoolText,
+  storePool,
+  type LoadedPool,
+} from "./team-pool";
 import {
   clearStoredPrior,
   storePrior,
@@ -60,6 +72,13 @@ function TeamCard(props: {
   onTap: () => void;
 }) {
   const { team, index, selected } = props;
+  // Tier and provenance are optional metadata, and a loaded pool file
+  // usually carries neither (team-pool.ts defaults them to "" and {}). The
+  // tier pill is a bordered box, so rendering it empty draws a stray blank
+  // chip on every card; the provenance line just eats its margins. Both are
+  // dropped rather than rendered hollow — the bundled pool always fills
+  // them, so this only shows on a swapped pool.
+  const prov = provenanceLine(team);
   return (
     <button
       class={`team-card ${selected ? "selected" : ""}`}
@@ -70,9 +89,9 @@ function TeamCard(props: {
       <div class="team-card-head">
         <span class="team-rank">#{index + 1}</span>
         <span class="team-id">{team.id}</span>
-        <span class="team-tier">{team.tier}</span>
+        {team.tier && <span class="team-tier">{team.tier}</span>}
       </div>
-      <div class="team-prov">{provenanceLine(team)}</div>
+      {prov && <div class="team-prov">{prov}</div>}
       <div class="team-species">
         {team.species.map((sp, i) => (
           <span class="species-chip" key={i}>
@@ -600,25 +619,157 @@ function PriorPanel(props: {
   );
 }
 
+// ------------------------------------------------- team pool (swappable)
+
+/** What the last attempt in the pool panel did. One value, because the
+ * cases are exclusive: either a file is in play (possibly unsaved), or it
+ * was refused and nothing moved. */
+type PoolResult =
+  | { ok: true; teams: number; notStored: string | null }
+  | { ok: false; errors: string[] };
+
+/** Team-pool panel (modal body): load a pool file, or go back to the
+ * bundled pool.
+ *
+ * Adoption is all-or-nothing — parsePoolText validates every team before
+ * anything is installed, so a refused file leaves the running pool exactly
+ * where it was and the report says so in as many words. Persistence is the
+ * one step allowed to fail on its own: unlike a belief prior, an accepted
+ * pool is already proven playable, so a browser that cannot store it still
+ * gets to play it this session and is told it will not survive a reload. */
+function PoolPanel(props: {
+  loaded: LoadedPool;
+  bundled: LoadedPool;
+  onPool: (p: LoadedPool) => void;
+}) {
+  const [result, setResult] = useState<PoolResult | null>(null);
+
+  function adopt(name: string, text: string) {
+    const parsed = parsePoolText(text);
+    if (!parsed.ok) {
+      setResult({ ok: false, errors: parsed.errors });
+      return;
+    }
+    // What gets stored is the normalized text, not the file's own bytes:
+    // it is what the searcher is handed, so it is what has to come back
+    // unchanged on the next visit.
+    const notStored = storePool(name, parsed.poolJson);
+    setResult({ ok: true, teams: parsed.teams, notStored });
+    props.onPool({ name, pool: parsed.pool, poolJson: parsed.poolJson });
+  }
+
+  return (
+    <div class="pool-panel">
+      <p class="modal-note">{ui().poolHelp}</p>
+      <div class="pool-actions">
+        {/* Same construction as the prior panel's picker: a real <label>
+         * around the input, because the native file button has no
+         * accessible name of its own. */}
+        <label class="pool-pick">
+          <span>{ui().poolPick}</span>
+          <input
+            type="file"
+            accept=".json,application/json"
+            data-testid="pool-file"
+            onChange={(e) => {
+              const input = e.currentTarget as HTMLInputElement;
+              const file = input.files?.[0];
+              // Clearing the value lets the same file be re-picked after a
+              // hand edit (no change event otherwise).
+              input.value = "";
+              if (!file) return;
+              void file
+                .text()
+                .then((text) => adopt(file.name, text))
+                // A file the browser could not read at all: reported in the
+                // rejection slot, since that is what happened to the pool.
+                .catch((err: unknown) =>
+                  setResult({ ok: false, errors: [String(err)] }),
+                );
+            }}
+          />
+        </label>
+        <button
+          class="ghost"
+          data-testid="pool-reset"
+          disabled={props.loaded.name === null}
+          onClick={() => {
+            clearStoredPool();
+            props.onPool(props.bundled);
+            setResult(null);
+          }}
+        >
+          {ui().poolReset}
+        </button>
+      </div>
+      {result && (
+        <div class="pool-report" data-testid="pool-report">
+          <div class={`pool-verdict ${result.ok ? "ok" : "no"}`}>
+            {result.ok ? ui().poolAccepted(result.teams) : ui().poolRejected}
+          </div>
+          {result.ok
+            ? result.notStored !== null && (
+                <p class="pool-not-stored">
+                  {ui().poolNotStored(result.notStored)}
+                </p>
+              )
+            : result.errors.length > 0 && (
+                <ul class="pool-errors">
+                  {result.errors.map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ul>
+              )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------- start screen
 
 export function StartScreen(props: {
-  pool: MetaPool;
+  /** The pool in play. */
+  loadedPool: LoadedPool;
+  /** The bundled pool, held by app.tsx so the reset button has something to
+   * install without going back to the network. */
+  bundledPool: LoadedPool;
+  onPool: (p: LoadedPool) => void;
   locale: Locale;
   onLocale: (l: Locale) => void;
   mode: InfoMode;
-  onMode: (m: InfoMode) => void;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
   onStart: (human: SelectedTeam, bot: SelectedTeam) => void;
 }) {
-  const teams = props.pool.teams;
+  const pool = props.loadedPool.pool;
+  const teams = pool.teams;
   const blind = props.mode === "blind";
   const [customs, setCustoms] = useState<CustomTeam[]>(loadCustomTeams);
   const [picks, setPicks] = useState<Picks>(() =>
-    loadPicks(props.pool, loadCustomTeams()),
+    loadPicks(pool, loadCustomTeams()),
   );
-  const [modal, setModal] = useState<null | "human" | "bot" | "prior">(null);
+  const [modal, setModal] = useState<null | "human" | "bot" | "prior" | "pool">(
+    null,
+  );
+
+  // A pool swap invalidates the pinned picks: an id from the old pool is
+  // either absent from the new one — the button would name a team that no
+  // longer exists, and start() would quietly draw a random one instead — or
+  // it names a different team's slot. Re-running loadPicks is the same
+  // reconciliation the first mount does, so a pin survives exactly when the
+  // new pool has that id. (Remounting the whole screen would do it too, but
+  // it would tear down the modal that is showing the load report.)
+  // Identity, not name: two files can share a name and hold different
+  // teams, and app.tsx only ever hands over a new object when the pool
+  // actually changed.
+  const poolRef = useRef(props.loadedPool);
+  useEffect(() => {
+    if (poolRef.current === props.loadedPool) return;
+    poolRef.current = props.loadedPool;
+    setPicks(loadPicks(props.loadedPool.pool, customs));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.loadedPool]);
 
   function update(next: Picks) {
     setPicks(next);
@@ -660,7 +811,7 @@ export function StartScreen(props: {
     // the user pinned a pool team. The roll is pool-pick.ts's, shared with
     // the blind rematch redraw so both draw by exactly the same rule.
     const pinned = choice.kind === "pool" ? poolIdx(choice.id) : -1;
-    if (pinned < 0) return randomPoolTeam(props.pool);
+    if (pinned < 0) return randomPoolTeam(pool);
     return { id: teams[pinned].id, sets: teams[pinned].sets, poolIdx: pinned };
   }
 
@@ -695,7 +846,7 @@ export function StartScreen(props: {
     // open mode.
     props.onStart(
       selectedTeam(picks.human),
-      blind ? randomPoolTeam(props.pool) : selectedTeam(picks.bot),
+      blind ? randomPoolTeam(pool) : selectedTeam(picks.bot),
     );
   }
 
@@ -719,32 +870,17 @@ export function StartScreen(props: {
         <button class="primary start-main-btn" onClick={start}>
           {ui().startBattle}
         </button>
-        {/* Information mode: a two-option radio built from buttons, so the
-         * state is carried by aria-pressed (announced as pressed/not) and
-         * the selected one also reads as `primary` for sighted users — the
-         * page must not depend on a stylesheet rule to show which is on. */}
-        <div class="mode-row" data-testid="mode-row">
-          <span class="mode-label">{ui().modeLabel}</span>
-          <button
-            class={`mode-opt ${blind ? "ghost" : "primary"}`}
-            data-mode="open"
-            aria-pressed={!blind}
-            onClick={() => props.onMode("open")}
-          >
-            {ui().modeOpen}
-          </button>
-          <button
-            class={`mode-opt ${blind ? "primary" : "ghost"}`}
-            data-mode="blind"
-            aria-pressed={blind}
-            onClick={() => props.onMode("blind")}
-          >
-            {ui().modeBlind}
-          </button>
-        </div>
-        <p class="mode-note">
-          {blind ? ui().modeNoteBlind : ui().modeNoteOpen}
-        </p>
+        {blind && (
+          // A readout, not a control: `?blind` is the only way in or out
+          // (info-mode.ts), so there is nothing here to press. Open mode
+          // renders nothing at all in this slot — no note, no empty row —
+          // because a public build should not advertise the experiment to
+          // a visitor who arrived without the link.
+          <div class="mode-banner" data-testid="mode-banner">
+            <strong>{ui().blindBanner}</strong>
+            <span>{ui().modeNoteBlind}</span>
+          </div>
+        )}
         <button
           class="party-btn"
           data-party="human"
@@ -771,6 +907,21 @@ export function StartScreen(props: {
             <span class="party-value">{botValue}</span>
           </button>
         )}
+        {/* Both modes: which teams exist is not a question of who may see
+         * what. It wears the party buttons' shape because it decides what
+         * those buttons are choosing from. */}
+        <button
+          class="party-btn"
+          data-party="pool"
+          onClick={() => setModal("pool")}
+        >
+          <span class="party-label">{ui().poolLabel}</span>
+          <span class="party-value">
+            {props.loadedPool.name === null
+              ? ui().poolBundled(teams.length)
+              : ui().poolLoaded(props.loadedPool.name, teams.length)}
+          </span>
+        </button>
         {blind && (
           // Only blind can consult a prior: open mode pins the opponent's
           // real sets, and a pinned searcher refuses the table outright.
@@ -820,6 +971,15 @@ export function StartScreen(props: {
               customsChanged("bot", list, picked)
             }
             mode={props.mode}
+          />
+        </Modal>
+      )}
+      {modal === "pool" && (
+        <Modal title={ui().poolTitle} onClose={() => setModal(null)}>
+          <PoolPanel
+            loaded={props.loadedPool}
+            bundled={props.bundledPool}
+            onPool={props.onPool}
           />
         </Modal>
       )}

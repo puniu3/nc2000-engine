@@ -193,30 +193,25 @@ small {
   overflow-wrap: anywhere;
 }
 
-/* Information mode (M18): a two-option toggle sitting between the start
- * button and the party buttons. The two options share the leftover width
- * so neither reads as the "real" one; which is on comes from .primary /
- * .ghost (and aria-pressed), never from position. */
-.mode-row {
-  display: grid;
-  grid-template-columns: auto 1fr 1fr;
-  align-items: center;
-  gap: 8px;
-}
-.mode-label {
-  font-size: 0.75rem;
-  color: var(--text-dim);
-}
-.mode-opt {
+/* Information mode (M18): blind announces itself once, in the slot between
+ * the start button and the party buttons. Not a control and not styled like
+ * one — no panel fill, no min-height — because `?blind` is the only switch
+ * there is. Open mode renders nothing here, so the column's 12px gap closes
+ * over it and the screen is the M12 screen. */
+.mode-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 8px 10px;
-}
-/* Column gap is 12px; the note belongs to the row above it, so it is
- * pulled up against it and keeps only the gap below. */
-.mode-note {
-  margin: -6px 2px 0;
   font-size: 0.8rem;
   color: var(--text-dim);
+}
+.mode-banner strong {
+  color: var(--text);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
 }
 /* Blind's opponent slot: the party buttons' shape without their
  * affordances. A <div> gets none of the button element's rules, so the
@@ -506,9 +501,13 @@ dialog.modal::backdrop {
   align-items: center;
 }
 
-/* -------------------------------------------- belief prior (M18) */
+/* ------------------------- belief prior (M18) + team pool */
 
-.prior-actions {
+/* The two panels are the same widget — help note, an action row with a file
+ * picker, a report box — so they share the rules rather than repeat them.
+ * Only the verdict colours differ, at the bottom of this block. */
+.prior-actions,
+.pool-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -520,7 +519,8 @@ dialog.modal::backdrop {
  * (sr-only, NOT display:none — it must stay focusable and clickable) and
  * the label carries both the name and the button look. Hover/press cues
  * are re-stated because none of the button rules reach a <label>. */
-.prior-pick {
+.prior-pick,
+.pool-pick {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -533,7 +533,8 @@ dialog.modal::backdrop {
   cursor: pointer;
   touch-action: manipulation;
 }
-.prior-pick input[type="file"] {
+.prior-pick input[type="file"],
+.pool-pick input[type="file"] {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -544,11 +545,14 @@ dialog.modal::backdrop {
   white-space: nowrap;
 }
 .prior-pick:focus-within,
-.prior-pick:active {
+.prior-pick:active,
+.pool-pick:focus-within,
+.pool-pick:active {
   border-color: var(--accent);
 }
 @media (hover: hover) and (pointer: fine) {
-  .prior-pick:hover {
+  .prior-pick:hover,
+  .pool-pick:hover {
     border-color: var(--accent);
   }
 }
@@ -559,20 +563,29 @@ dialog.modal::backdrop {
 }
 /* Same panel-in-a-modal box as the import result, read top-down: does the
  * table apply, what is in it, what did the interpreter object to. */
-.prior-report {
+.prior-report,
+.pool-report {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 12px 14px;
 }
-.prior-verdict {
+.prior-verdict,
+.pool-verdict {
   font-weight: 600;
 }
-.prior-verdict.ok {
+.prior-verdict.ok,
+.pool-verdict.ok {
   color: var(--good);
 }
+/* A table that will not apply is inert — the app carries on without it, so
+ * it is a warning. A refused pool file is a thing the user asked for and
+ * did not get, so it reads as an error. */
 .prior-verdict.no {
   color: var(--warn);
+}
+.pool-verdict.no {
+  color: var(--bad);
 }
 .prior-summary {
   margin-top: 2px;
@@ -588,6 +601,20 @@ dialog.modal::backdrop {
   margin: 4px 0 0;
   padding-left: 18px;
   font-size: 0.8rem;
+  color: var(--warn);
+}
+/* The rejection lines: full text colour, because each one is a defect in a
+ * file the reader is about to go and edit. */
+.pool-errors {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+}
+/* The pool loaded but could not be persisted — the session is fine, the
+ * next one will not be. */
+.pool-not-stored {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
   color: var(--warn);
 }
 

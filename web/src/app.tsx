@@ -7,19 +7,22 @@
 // sides' sets are public, only selection (which 3 of 6 + lead, until
 // revealed) is hidden. No settings.
 //
-// M18 adds one setting after all: the information mode (open / blind, see
-// info-mode.ts), still defaulting to open. It is a start-screen preference,
-// not a battle parameter — a GameSpec captures the mode in force at start,
-// so toggling it later cannot change the information structure of a running
-// game, and a rematch of an open game stays open even if the toggle moved.
+// M18 adds two things, neither of them a setting on the screen. The
+// information mode (open / blind, see info-mode.ts) is read once from the
+// URL at module load — `?blind` is the only door, and nothing the user can
+// press moves it; a GameSpec still carries the mode its game started under,
+// which is the guarantee game.tsx is written against. The team pool is
+// state: one file replaces the pool everywhere it is read (team-pool.ts).
+// The bundled pool is held next to the active one so going back to it is a
+// state change rather than a second trip to the network.
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { loadEngine } from "./engine";
 import { fetchDexJson, fetchI18nJa, fetchPool } from "./data";
 import { loadSetDex } from "./set-info";
-import type { MetaPool } from "./types";
 import { randomPoolTeam, type SelectedTeam } from "./pool-pick";
-import { loadInfoMode, storeInfoMode, type InfoMode } from "./info-mode";
+import { readInfoMode, type InfoMode } from "./info-mode";
+import { loadStoredPool, parsePoolText, type LoadedPool } from "./team-pool";
 import { loadStoredPrior, type StoredPrior } from "./belief-prior";
 import { StartScreen } from "./select";
 import { Game } from "./game";
@@ -40,6 +43,11 @@ export const BUDGET =
  * working. */
 export type { SelectedTeam } from "./pool-pick";
 
+/** This page load's information mode. Read at module scope because that is
+ * the truth about it: the query string cannot change without a navigation,
+ * and holding it in state would suggest something here could flip it. */
+const MODE: InfoMode = readInfoMode();
+
 interface GameSpec {
   human: SelectedTeam;
   bot: SelectedTeam;
@@ -48,19 +56,40 @@ interface GameSpec {
   mode: InfoMode;
 }
 
+/** The pool this browser was handed in an earlier session — re-validated,
+ * never trusted: it is text the user picked by hand, saved by an older
+ * build, against a validator that may since have moved. A file that no
+ * longer parses is dropped without a word: boot must not hang on a stale
+ * preference, and there is nowhere honest to report a file the user is not
+ * loading right now. The bundled pool then stands, as it did before. */
+function restoreStoredPool(): LoadedPool | null {
+  try {
+    const stored = loadStoredPool();
+    if (!stored) return null;
+    const parsed = parsePoolText(stored.json);
+    if (!parsed.ok) return null;
+    return { name: stored.name, pool: parsed.pool, poolJson: parsed.poolJson };
+  } catch {
+    return null;
+  }
+}
+
 export function App() {
   const [status, setStatus] = useState<"loading" | "error" | "ready">(
     "loading",
   );
   const [error, setError] = useState("");
-  const [pool, setPool] = useState<MetaPool | null>(null);
-  const poolJsonRef = useRef("");
+  // The pool in play, and the bundled one it can always fall back to. The
+  // same object until a file is loaded, but two references: "use the
+  // bundled pool" has to work after a swap, and the bundled pool is already
+  // in memory — refetching it to get it back would be the one path that can
+  // fail offline.
+  const [bundled, setBundled] = useState<LoadedPool | null>(null);
+  const [loadedPool, setLoadedPool] = useState<LoadedPool | null>(null);
   const [game, setGame] = useState<GameSpec | null>(null);
   const [loc, setLoc] = useState<Locale>(locale());
-  // Per-browser preferences, restored on load. `prior` is a table the user
-  // once picked by hand; nothing here ever fetches one on its own
-  // (crates/bot/src/prior.rs:491).
-  const [mode, setMode] = useState<InfoMode>(loadInfoMode);
+  // A table the user once picked by hand; nothing here ever fetches one on
+  // its own (crates/bot/src/prior.rs:491).
   const [prior, setPrior] = useState<StoredPrior | null>(loadStoredPrior);
 
   useEffect(() => {
@@ -75,8 +104,15 @@ export function App() {
           loadJaNames(fetchI18nJa),
           loadSetDex(fetchDexJson),
         ]);
-        poolJsonRef.current = pd.poolJson;
-        setPool(pd.pool);
+        const bundledPool: LoadedPool = {
+          name: null,
+          pool: pd.pool,
+          poolJson: pd.poolJson,
+        };
+        setBundled(bundledPool);
+        // Only now: re-validating a stored pool runs the wasm validator,
+        // which the engine load above is what makes available.
+        setLoadedPool(restoreStoredPool() ?? bundledPool);
         setStatus("ready");
       } catch (e) {
         setError(String(e));
@@ -92,7 +128,7 @@ export function App() {
       </div>
     );
   }
-  if (status === "error" || !pool) {
+  if (status === "error" || !loadedPool || !bundled) {
     return (
       <div class="center-screen">
         <div class="error-box">
@@ -106,20 +142,18 @@ export function App() {
   if (!game) {
     return (
       <StartScreen
-        pool={pool}
+        loadedPool={loadedPool}
+        bundledPool={bundled}
+        onPool={setLoadedPool}
         locale={loc}
         onLocale={(l) => {
           setLocale(l);
           setLoc(l);
         }}
-        mode={mode}
-        onMode={(m) => {
-          setMode(m);
-          storeInfoMode(m);
-        }}
+        mode={MODE}
         prior={prior}
         onPrior={setPrior}
-        onStart={(human, bot) => setGame({ human, bot, n: 1, mode })}
+        onStart={(human, bot) => setGame({ human, bot, n: 1, mode: MODE })}
       />
     );
   }
@@ -127,13 +161,15 @@ export function App() {
   return (
     <Game
       key={game.n}
-      poolJson={poolJsonRef.current}
+      poolJson={loadedPool.poolJson}
+      // Baked artifacts are indexed by the bundled pool's rank order, so a
+      // swapped pool's indices name different teams entirely.
+      poolIsCustom={loadedPool.name !== null}
       humanTeam={game.human}
       botTeam={game.bot}
       mode={game.mode}
       // The prior only ever reaches a blind game: in open mode the searcher
-      // pins the human's real team and refuses the table outright. `game.mode`
-      // (not the live toggle) decides, for the same reason the mode is frozen.
+      // pins the human's real team and refuses the table outright.
       priorJson={game.mode === "blind" ? prior?.json : undefined}
       // Blind rematch redraws the opponent: replaying a lost battle against
       // the team you just watched play would hand the human the very
@@ -145,7 +181,8 @@ export function App() {
             : {
                 ...g,
                 n: g.n + 1,
-                bot: g.mode === "blind" ? randomPoolTeam(pool) : g.bot,
+                bot:
+                  g.mode === "blind" ? randomPoolTeam(loadedPool.pool) : g.bot,
               },
         )
       }

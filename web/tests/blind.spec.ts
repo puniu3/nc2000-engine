@@ -1,4 +1,12 @@
-// Blind information mode + belief prior (M18 experiment) — contract B4.
+// Blind information mode + belief prior (M18 experiment) — contract B4,
+// revised for the URL-gated entry.
+//
+// Blind is no longer something the start screen offers. `?blind` is the
+// only door (info-mode.ts), nothing about the mode is persisted, and open
+// mode says nothing about modes at all — so every case here enters with
+// page.goto("/?blind"), and the first one is about the door itself: that
+// it opens, that `blind=0` closes it, and that the screen behind it is the
+// shipped M12 screen with no trace of the experiment on it.
 //
 // The six required cases run as four browser sessions: cases 2-4 are one
 // full game (they are three assertions about the SAME battle — preview,
@@ -17,15 +25,14 @@
 //
 // Written against the contract's testids/attributes rather than against a
 // running app: the UI implementing them lands in parallel with this file.
-// Selectors depended on (integration must check them): [data-mode],
-// [data-party="bot-random"], [data-party="prior"], [data-testid="prior-file"
-// |prior-sample|prior-report|prior-clear|belief-chip|reveal-foe], plus the
-// shipped .preview-cols/.team-sheets/.mon-sheet/.set-detail structure.
+// Selectors depended on (integration must check them):
+// [data-testid="mode-banner"], [data-party="bot"|"bot-random"|"prior"],
+// [data-testid="prior-file"|prior-sample|prior-report|prior-clear
+// |belief-chip|reveal-foe], plus the shipped .preview-cols/.team-sheets/
+// .mon-sheet/.set-detail structure.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
-
-type InfoMode = "open" | "blind";
 
 interface SetJson {
   species: string;
@@ -98,29 +105,30 @@ function toId(s: string): string {
 
 /** Start-screen pin for the opponent side. Blind ignores it (it always
  * draws from the pool), but seeding it keeps the record shape honest and
- * makes the same seed reusable if the mode is flipped mid-test. */
+ * makes the same seed reusable if the URL drops `?blind`. */
 const RANDOM_PICK = { kind: "random" } as const;
 
 interface SeedOpts {
   customs?: CustomRecord[];
   picks?: unknown;
-  /** Omitted = key removed, i.e. the shipped default ("open"). */
-  mode?: InfoMode;
 }
 
 /** Same one-shot seeding idiom as custom-bot.spec.ts: the init script runs
- * on every navigation, so a sessionStorage flag keeps a reload from
- * undoing what the test itself changed through the UI. */
+ * on every navigation, so a sessionStorage flag keeps a reload — or a
+ * second goto with a different query string — from undoing what the test
+ * itself changed through the UI. The mode is NOT seeded: it lives in the
+ * URL now, and this suite asserts that nothing writes it down. The team
+ * pool is cleared because every foe id here is looked up in the bundled
+ * pool file read above. */
 async function seedStorage(page: Page, opts: SeedOpts = {}) {
   await page.addInitScript(
-    ({ records, initialPicks, mode }) => {
+    ({ records, initialPicks }) => {
       if (sessionStorage.getItem("nc2000-e2e-seeded") === "1") return;
       sessionStorage.setItem("nc2000-e2e-seeded", "1");
       localStorage.setItem("nc2000-locale", "en");
       localStorage.setItem("nc2000-custom-teams", JSON.stringify(records));
       localStorage.removeItem("nc2000-belief-prior");
-      if (mode === undefined) localStorage.removeItem("nc2000-info-mode");
-      else localStorage.setItem("nc2000-info-mode", mode);
+      localStorage.removeItem("nc2000-team-pool");
       if (initialPicks === undefined)
         localStorage.removeItem("nc2000-start-picks");
       else
@@ -132,7 +140,6 @@ async function seedStorage(page: Page, opts: SeedOpts = {}) {
     {
       records: opts.customs ?? [],
       initialPicks: opts.picks,
-      mode: opts.mode,
     },
   );
 }
@@ -249,60 +256,59 @@ async function playToOutcome(page: Page) {
 // the other cases' verdicts. The harness is single-worker anyway.
 
 // --------------------------------------------------------- contract B4-1
-test("blind replaces the opponent picker with a random draw, and persists", async ({
-  page,
-}) => {
+test("blind is URL-gated and hides the opponent picker", async ({ page }) => {
   const errors = guardConsole(page);
-  await seedStorage(page, { customs: [customBlind] });
-  await page.goto("/");
+  // No saved parties here: the start screen's text is asserted below, and a
+  // custom team named "Blind Custom" would be part of it.
+  await seedStorage(page);
 
-  // Default is open (contract "決定済み 4"): the toggle reflects it and no
-  // blind-only affordance exists yet.
-  await expect(page.locator('[data-testid="mode-row"]')).toBeVisible();
-  await expect(page.locator('[data-mode="open"]')).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.locator('[data-mode="blind"]')).toHaveAttribute(
-    "aria-pressed",
-    "false",
-  );
+  await page.goto("/");
+  await expect(page.locator(".start-screen")).toBeVisible();
+  // The default is open, and open is now the M12 screen exactly: no
+  // banner, and the toggle that used to select the mode is gone rather
+  // than moved (the testid is asserted absent on purpose — it is the one
+  // thing that would still look like a passing UI if it survived).
+  await expect(page.locator('[data-testid="mode-row"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="mode-banner"]')).toHaveCount(0);
   await expect(page.locator('[data-party="bot"]')).toHaveCount(1);
   await expect(page.locator('[data-party="bot-random"]')).toHaveCount(0);
   await expect(page.locator('[data-party="prior"]')).toHaveCount(0);
+  // ...and no copy points at the door either. Hiding the experiment from
+  // the public build is the entire purpose of the revision, so "there is a
+  // mode, add ?blind to get it" must not be discoverable here. Nothing
+  // else on this screen can say "blind": both parties read "Random", the
+  // pool label reads "Bundled (…)", and no pool team id contains it.
+  await expect(page.locator(".start-col")).not.toContainText(/blind/i);
 
-  await page.locator('[data-mode="blind"]').click();
-
+  await page.goto("/?blind");
+  const banner = page.locator('[data-testid="mode-banner"]');
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText("Blind mode");
   // The opponent is no longer choosable: blind draws from the pool.
   await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
   const botStatic = page.locator('[data-party="bot-random"]');
   await expect(botStatic).toBeVisible();
   await expect(botStatic).toContainText("Randomly drawn each battle");
-  await expect(page.locator(".mode-note")).not.toBeEmpty();
   // The prior is blind-only (contract "決定済み 6"), and starts unset.
   await expect(page.locator('[data-party="prior"] .party-value')).toHaveText(
     "None",
   );
-  expect(
-    await page.evaluate(() => localStorage.getItem("nc2000-info-mode")),
-  ).toBe("blind");
 
+  // A reload keeps blind — but only because the query string is still
+  // there. Nothing was written down: a stored preference would outlive the
+  // link that set it and strand a later visitor in the experiment.
   await page.reload();
-  await expect(page.locator('[data-mode="blind"]')).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(page.locator('[data-testid="mode-banner"]')).toBeVisible();
   await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="bot-random"]')).toBeVisible();
 
-  // ...and back: switching to open restores the shipped start screen.
-  await page.locator('[data-mode="open"]').click();
+  // `blind=0` reads as absent, so a link that has been passed around can
+  // be defused by editing one character.
+  await page.goto("/?blind=0");
+  await expect(page.locator(".start-screen")).toBeVisible();
+  await expect(page.locator('[data-testid="mode-banner"]')).toHaveCount(0);
   await expect(page.locator('[data-party="bot"]')).toHaveCount(1);
   await expect(page.locator('[data-party="bot-random"]')).toHaveCount(0);
   await expect(page.locator('[data-party="prior"]')).toHaveCount(0);
-  expect(
-    await page.evaluate(() => localStorage.getItem("nc2000-info-mode")),
-  ).toBe("open");
   expect(errors).toEqual([]);
 });
 
@@ -314,10 +320,9 @@ test("blind hides the foe's sets for the whole game, then reveals them at the en
   expect(mixTwins, "the mixed party must not be a pool signature").toEqual([]);
   await seedStorage(page, {
     customs: [customBlind],
-    mode: "blind",
     picks: { human: { kind: "custom", id: customBlind.id }, bot: RANDOM_PICK },
   });
-  await page.goto("/");
+  await page.goto("/?blind");
   await expect(page.locator('[data-party="human"] .party-value')).toHaveText(
     customBlind.name,
   );
@@ -392,10 +397,9 @@ test("the sample belief prior loads, applies, and governs the bot's read", async
   expect(mixTwins, "the mixed party must not be a pool signature").toEqual([]);
   await seedStorage(page, {
     customs: [customBlind],
-    mode: "blind",
     picks: { human: { kind: "custom", id: customBlind.id }, bot: RANDOM_PICK },
   });
-  await page.goto("/");
+  await page.goto("/?blind");
 
   const report = page.locator('[data-testid="prior-report"]');
   await page.locator('[data-party="prior"]').click();
@@ -466,15 +470,9 @@ test("open mode keeps the shipped open-team-sheet behavior", async ({
   });
   await page.goto("/");
 
-  // Nothing blind is even offered, and the preference is still unwritten:
-  // the experiment must not change the default by merely existing.
-  expect(
-    await page.evaluate(() => localStorage.getItem("nc2000-info-mode")),
-  ).toBeNull();
-  await expect(page.locator('[data-mode="open"]')).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  // Nothing blind is even offered: the experiment must not change the
+  // default screen by merely existing.
+  await expect(page.locator('[data-testid="mode-banner"]')).toHaveCount(0);
   await expect(page.locator('[data-party="bot"] .party-value')).toHaveText(
     pool.teams[4].id,
   );
