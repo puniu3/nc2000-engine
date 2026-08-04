@@ -447,6 +447,21 @@ pub struct SkuctSearch {
     /// dominated — a certain immediate self-loss ([`certain_self_loss`]) or
     /// a provable no-op ([`certain_noop`]); `best()` never argmaxes these
     /// while any alternative exists.
+    ///
+    /// **Only [`SkuctSearch::best`] consults this, so only callers that go
+    /// through `best()` are masked at all.** [`BlindAgent`](crate::BlindAgent)
+    /// does (it keeps its own copy and filters there), and that is the shipped
+    /// ladder client, so play is masked in production. [`RmAgent::choose`]
+    /// does NOT: it picks straight off the visit counts and never calls
+    /// `best()`. Every RmAgent consumer is therefore unmasked — `runner`,
+    /// `duel`, `eval_ab_duel`, and arena's `skuct`/`rm` specs. Measured over
+    /// 600 skuct self-play games: 669 actions that `dominated_actions` flags
+    /// were chosen and played, 2.03% of 32,981 decisions.
+    ///
+    /// The consequence that bites: **a duel built on those harnesses cannot
+    /// measure a change to [`noop_reason`] and will return a null.** Gate mask
+    /// changes with `arena blind:… blind:…` instead. `best_never_picks_masked_noop`
+    /// covers `best()`, not `choose()`, which is why this stayed invisible.
     root_dominated: [Vec<bool>; 2],
 }
 
