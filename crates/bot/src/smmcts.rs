@@ -588,6 +588,29 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
             "that side condition is already up"
         );
     }
+    // ---- a phazing move with nobody left to drag in. `moveexec.rs:2262`
+    // raises didSomething only for `md.force_switch && self.can_switch(t.side)`
+    // and the drag at `moveexec.rs:2412` is gated on the same pair, so with an
+    // empty foe bench the move ends as a bare `-fail`. `forceSwitch` is exactly
+    // {roar, whirlwind} in this format and neither carries a second payload
+    // (data/gen2stadium2.json: category Status, all effect fields null), so
+    // nothing else can land.
+    //
+    // Calls the engine's own `can_switch` rather than transcribing it, and
+    // deliberately NOT `foe_can_switch` above: that one also reports false for
+    // a TRAPPED foe, but a trapped foe still gets dragged out by a phaze, so
+    // reusing it here would refuse a move that works.
+    //
+    // No speed gate, unlike the rules below. A bench only ever shrinks —
+    // `fainted` is only ever assigned true (`turn.rs:314`), `pokemon_left` is
+    // only decremented in battle (`turn.rs:297`), and `party` only grows at the
+    // preview action (`turn.rs:53`) — and a foe with no bench cannot switch,
+    // Baton Pass being gated on the same `can_switch` (`moveexec.rs:2265`).
+    // Zero at the decision therefore implies zero at resolution whatever the
+    // move order, so there is nothing for a faster foe to invalidate.
+    if ms.force_switch && !b.can_switch((1 - side) as u8) {
+        yes!("there is nobody left to phaze in");
+    }
     // Every rule below that reads the foe is conditioned on the foe being
     // stuck with the mon it has: otherwise the move is aimed at whatever
     // switches in, and refusing it would delete a real option.
@@ -1508,6 +1531,91 @@ mod dominated_action_tests {
             let def = b.active_id(1).unwrap();
             b.add_side_condition(&dex, 1, "safeguard", Some(def), EffectHandle::None);
             assert!(noop(&b, 0, "toxic"), "Safeguard covers the replacement too");
+        }
+    }
+
+    /// A phaze is a no-op exactly when the foe has nobody to be dragged in.
+    /// The trapped case is the false positive this rule has to dodge:
+    /// `foe_can_switch` calls a trapped foe stuck, but the engine's
+    /// `can_switch` never reads `trapped` and the drag lands anyway.
+    #[test]
+    fn noop_mask_covers_phaze_with_no_bench() {
+        let dex = conformance::load_dex();
+        let phazer: Vec<PokemonSet> = serde_json::from_str(
+            r#"[
+            {"name":"Skarmory","species":"Skarmory","item":"","ability":"No Ability",
+             "moves":["Whirlwind","Drill Peck","Rest","Curse"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+            {"name":"Exeggutor","species":"Exeggutor","item":"","ability":"No Ability",
+             "moves":["Sleep Powder","Reflect","Rest","Spikes"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+            {"name":"Zapdos","species":"Zapdos","item":"","ability":"No Ability",
+             "moves":["Thunder Wave","Toxic","Leech Seed","Swords Dance"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"N","level":50}
+        ]"#,
+        )
+        .unwrap();
+        let foes: Vec<PokemonSet> = serde_json::from_str(
+            r#"[
+            {"name":"Snorlax","species":"Snorlax","item":"","ability":"No Ability",
+             "moves":["Body Slam","Substitute","Confuse Ray","Rest"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+            {"name":"Nidoking","species":"Nidoking","item":"","ability":"No Ability",
+             "moves":["Earthquake","Substitute","Screech","Dream Eater"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+            {"name":"Exeggutor","species":"Exeggutor","item":"","ability":"No Ability",
+             "moves":["Confuse Ray","Safeguard","Mist","Swagger"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50}
+        ]"#,
+        )
+        .unwrap();
+        let mut open = Battle::from_fixture(&dex, "7,8,9,10", &phazer, &foes).unwrap();
+        open.set_log_enabled(false);
+        open.choose(&dex, 0, "team 1, 2, 3").unwrap();
+        open.choose(&dex, 1, "team 1, 2, 3").unwrap();
+        // Gen 2 phazes also fail when the user moved FIRST (`moveexec.rs:619`),
+        // a separate speed-dependent class this rule does not claim. Skarmory
+        // outruns Snorlax, so slow it down to isolate the bench question.
+        let att = open.active_id(0).unwrap();
+        open.poke_mut(att).boosts[4] = -6;
+
+        let noop = |b: &Battle, side: usize, key: &str| certain_noop(b, &dex, side, mv(&dex, key));
+
+        // A live foe bench: not a no-op, and the engine really does drag.
+        assert!(!noop(&open, 0, "whirlwind"), "a full bench is a live phaze");
+        let dragged = play(&dex, &open, 0, 1);
+        assert_ne!(
+            dragged.active_id(1).unwrap(),
+            open.active_id(1).unwrap(),
+            "the engine dragged a bench mon in"
+        );
+
+        // Trapped, but the bench is alive: `can_switch` ignores `trapped`, so
+        // the drag still lands and the mask must NOT claim it.
+        {
+            let mut trapped = open.clone();
+            let def = trapped.active_id(1).unwrap();
+            trapped.poke_mut(def).trapped = true;
+            assert!(!noop(&trapped, 0, "whirlwind"), "a trapped foe is still draggable");
+            let after = play(&dex, &trapped, 0, 1);
+            assert_ne!(
+                after.active_id(1).unwrap(),
+                trapped.active_id(1).unwrap(),
+                "trapping does not stop a phaze"
+            );
+        }
+
+        // Nobody left to drag in: refused, and the engine agrees nothing moved.
+        {
+            let mut stuck = open.clone();
+            strand(&mut stuck, 1);
+            assert!(noop(&stuck, 0, "whirlwind"), "phaze into an empty bench");
+            let after = play(&dex, &stuck, 0, 1);
+            assert_eq!(
+                after.active_id(1).unwrap(),
+                stuck.active_id(1).unwrap(),
+                "the foe's active is untouched"
+            );
         }
     }
 
