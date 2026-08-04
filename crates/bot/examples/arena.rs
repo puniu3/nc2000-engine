@@ -552,6 +552,43 @@ fn main() {
     } else {
         load_team_pool()
     };
+    // A-PRIORI team-level restriction, for gating a change whose effect only
+    // appears in long stall games. It has to be a property of the TEAM, never
+    // a post-hoc filter on turn count: game length is affected by the thing
+    // under test, so conditioning the scoring on it is post-treatment
+    // selection and biases the comparison.
+    //
+    // `--heal-min 4` is the principled stall cut: preview picks 3 of 6, so
+    // 6-h >= 3 fails only at h >= 4, i.e. 4 GUARANTEES every legal triple
+    // carries a healer (3 does not). Measured on the meta pool it selects 8 of
+    // 32 teams, 2.1x the Struggle rate and 2.0x the >=80-turn share.
+    // `--phaze-min 1` selects the teams that can exercise the phaze rules.
+    let teams = {
+        let mut teams = teams;
+        let carries = |sets: &Vec<PokemonSet>, keys: &[&str]| {
+            sets.iter()
+                .filter(|s| {
+                    s.moves.iter().any(|m| {
+                        let id: String =
+                            m.chars().filter(|c| c.is_ascii_alphanumeric()).flat_map(|c| c.to_lowercase()).collect();
+                        keys.contains(&id.as_str())
+                    })
+                })
+                .count()
+        };
+        for (name, keys) in [
+            ("--heal-min", &["rest", "recover", "softboiled", "milkdrink"][..]),
+            ("--phaze-min", &["roar", "whirlwind"][..]),
+        ] {
+            if let Some(n) = flag(&args, name).map(|v| v.parse::<usize>().unwrap()) {
+                let before = teams.len();
+                teams.retain(|sets| carries(sets, keys) >= n);
+                eprintln!("{name} {n}: {before} -> {} teams", teams.len());
+                assert!(teams.len() >= 2, "{name} {n} left fewer than 2 teams");
+            }
+        }
+        teams
+    };
     eprintln!("{} teams in pool ({pool_spec})", teams.len());
 
     let tables_dir = (spec_a.needs_tables() || spec_b.needs_tables()).then(|| {
