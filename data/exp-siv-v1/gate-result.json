@@ -1,0 +1,134 @@
+{
+ "experiment": "EXP-SIV v1 (docs/EXP-signature-info-value.md)",
+ "date": "2026-08-11",
+ "engine_commit": "15bf72800ace2095dd7608d6b1506e9a1f4bdda2",
+ "base_seed": 20260811,
+ "pairs": [
+  "lax-eggy (2-mon axis: Snorlax boom/rest + Exeggutor boom/seed)",
+  "zapdos (1-mon axis: sub-swagger vs rest-talk)"
+ ],
+ "gauntlet": [
+  "hc75-1st-show (g0)",
+  "hc75-top8-tsuru (g4)"
+ ],
+ "arms": {
+  "x": "OpenAgent (opponent g pinned truth)",
+  "y": "PinAgent truth / PinAgent frozen wrong (stubborn) / PinAgent frozen weak (C2) / OpenAgent (C1) / BlindAgent uniform {A,B} pool prior (Phase 2)"
+ },
+ "instrument_checks": {
+  "c1_identity_open_minus_truthpin": {
+   "1000": [
+    -0.0469,
+    0.0831,
+    128
+   ],
+   "3000": [
+    -0.0312,
+    0.1089,
+    64
+   ],
+   "verdict": "PASS (straddles 0 at both budgets; resolution \u00b10.08-0.11, not the aspirational \u00b10.02)"
+  },
+  "c2_teeth_weakpin_minus_truthpin": {
+   "1000": [
+    0.2188,
+    0.0782,
+    128
+   ],
+   "3000": [
+    0.2266,
+    0.1022,
+    64
+   ],
+   "verdict": "PASS (clearly positive at both budgets)"
+  },
+  "belief_persistence_wide_share_zapdos_g4": {
+   "1000": 0.769,
+   "3000": 0.761,
+   "10000": 0.767,
+   "verdict": "PASS (uncertainty persists on ~77% of hedger decisions; Phase 2 nulls are not belief collapse)"
+  },
+  "preview_screen_20k": "3 of 4 pair x g at 1.36-1.45x seed floor (screen-i20000.json); at 2000 indistinguishable from floor"
+ },
+ "phase1_envelope": {
+  "grand": {
+   "1000": [
+    0.0547,
+    0.0301,
+    1024
+   ],
+   "3000": [
+    0.0801,
+    0.041,
+    512
+   ]
+  },
+  "zapdos_g4": {
+   "1000": [
+    0.1055,
+    0.0588,
+    256
+   ],
+   "3000": [
+    0.1602,
+    0.0842,
+    128
+   ],
+   "10000": [
+    0.0833,
+    0.0959,
+    96
+   ]
+  },
+  "bh_significant_cells": [
+   "zapdos-g4@3000 (p=1.9e-4)",
+   "zapdos-g4@1000 (p=4.3e-4)"
+  ],
+  "sign_consistency": "8/8 pair x g x budget cells positive",
+  "preregistered_rule": "promotion if grand lower>0 and point>=+0.05, or any pair BH-significant with point>=+0.10",
+  "verdict": "H0 REJECTED - promotion to Phase 2 via both routes, both budgets"
+ },
+ "phase2_delta_blind": {
+  "grand": {
+   "1000": [
+    0.0322,
+    0.0285,
+    1024
+   ],
+   "3000": [
+    -0.0137,
+    0.0397,
+    512
+   ]
+  },
+  "zapdos_g4": {
+   "1000": [
+    0.0781,
+    0.0571,
+    256
+   ],
+   "3000": [
+    0.0078,
+    0.0799,
+    128
+   ],
+   "10000": [
+    -0.0729,
+    0.0929,
+    96
+   ]
+  },
+  "materiality_bar": "+0.05",
+  "verdict": "HEDGING RECOVERS THE ENVELOPE - delta_blind decays monotonically in the hedger's budget, crossing zero by 10k; below materiality at every budget; product budget (30k) extrapolates to <=0"
+ },
+ "conclusion": {
+  "envelope": "Real: a committed WRONG belief bleeds +0.05..+0.16 (grows with budget). Deception value exists.",
+  "information_term": "Dead against the posited opponent: an honest hedger holding the pool prior recovers everything at >=3000 iterations despite verified persistent uncertainty.",
+  "design_consequence": "The metapool program reduces to matrix-Nash mixing over distinct-signature teams (the H0 branch of the prereg): prior fixed-point machinery, weighted candidate beliefs, and signature-variant generation are cut from the main-run plan. Mixing's value (M8 +0.077 vs counter-picking) stands - and the envelope shows WHY mixing matters: committed reads bleed, so never commit; hedge (which the blind machinery already does).",
+  "caveats": [
+   "two pairs, two gauntlet opponents, one format; effects matchup-dependent (zapdos-g4 dominated)",
+   "product budget 30k not measured directly; delta_blind trend extrapolated from 1k/3k/10k",
+   "envelope value vs humans who commit to reads is out of scope (no opponent modeling, repo non-goal)"
+  ]
+ }
+}
