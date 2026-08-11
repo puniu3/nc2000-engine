@@ -1,0 +1,50 @@
+Steelix (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Rock Slide
+- Body Slam
+- Screech
+
+Starmie @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Hydro Pump
+- Thunder Wave
+- Light Screen
+- Recover
+
+Zapdos @ Scope Lens
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Thunder
+- Hidden Power [Ice]
+- Rest
+- Sleep Talk
+
+Snorlax (M) @ BrightPowder
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Dynamic Punch
+- Rest
+- Sleep Talk
+
+Exeggutor (M) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Psychic
+- Leech Seed
+- Reflect
+- Synthesis
+
+Tentacruel (M) @ Mint Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Hydro Pump
+- Sludge Bomb
+- Swords Dance
+- Rest

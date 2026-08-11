@@ -1,0 +1,47 @@
+Dragonite (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Dragon Breath
+- Wing Attack
+- Iron Tail
+- Surf
+
+Tyranitar (M) @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Rock Slide
+- Crunch
+- Dynamic Punch
+- Fire Blast
+
+Gengar (M) @ PRZCureBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Ice Punch
+- Shadow Ball
+- Psychic
+
+Snorlax (M) @ BrightPowder
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Curse
+- Rest
+- Sleep Talk
+
+Heracross (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Megahorn
+- Earthquake
+- Curse
+- Rest
+
+Victreebel (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Sludge Bomb
+- Giga Drain
+- Sleep Powder
+- Encore

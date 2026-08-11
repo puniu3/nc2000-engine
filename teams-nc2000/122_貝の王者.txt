@@ -1,0 +1,52 @@
+Cloyster (F) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Surf
+- Rapid Spin
+- Rain Dance
+
+Starmie @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Hydro Pump
+- Thunder
+- Reflect
+- Recover
+
+Gligar (M) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 14 HP / 24 Atk / 26 Def
+- Earthquake
+- Hidden Power [Flying]
+- Screech
+- Rest
+
+Blissey (F) @ Quick Claw
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Present
+- Heal Bell
+- Soft-Boiled
+
+Machamp (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 28 Def
+- Cross Chop
+- Hidden Power [Ghost]
+- Rest
+- Sleep Talk
+
+Snorlax (M) @ Mint Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Earthquake
+- Curse
+- Rest

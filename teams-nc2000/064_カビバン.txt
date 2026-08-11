@@ -1,0 +1,49 @@
+Snorlax (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Earthquake
+- Curse
+- Rest
+
+Skarmory (M) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Drill Peck
+- Toxic
+- Whirlwind
+- Rest
+
+Misdreavus (F) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Mean Look
+- Perish Song
+- Destiny Bond
+- Rest
+
+Starmie @ BrightPowder
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Rapid Spin
+- Thunder Wave
+- Recover
+
+Heracross (M) @ Scope Lens
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Megahorn
+- Earthquake
+- Rest
+- Sleep Talk
+
+Tyranitar (M) @ Mint Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Rock Slide
+- Ice Beam
+- Screech
+- Rest

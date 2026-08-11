@@ -1,0 +1,50 @@
+Porygon2 @ Leftovers
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Thunder Wave
+- Curse
+- Recover
+
+Marowak (M) @ Thick Club
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 14 HP / 24 Atk / 26 Def
+- Bonemerang
+- Rock Slide
+- Hidden Power [Flying]
+- Swords Dance
+
+Snorlax (M) @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Earthquake
+- Belly Drum
+- Rest
+
+Cloyster (M) @ Gold Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Ice Beam
+- Spikes
+- Reflect
+- Explosion
+
+Raikou @ MiracleBerry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Roar
+- Rest
+
+Hitmonlee (M) @ BrightPowder
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Hidden Power [Bug]
+- Meditate
+- Substitute
+- Reversal

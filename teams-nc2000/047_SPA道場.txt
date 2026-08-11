@@ -1,0 +1,51 @@
+Raikou @ MiracleBerry
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Spark
+- Hidden Power [Ice]
+- Roar
+- Rest
+
+Cloyster (M) @ Gold Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Surf
+- Spikes
+- Reflect
+- Explosion
+
+Snorlax (M) @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Earthquake
+- Belly Drum
+- Rest
+
+Marowak (M) @ Thick Club
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Alakazam (F) @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Psychic
+- Thunder Wave
+- Attract
+- Substitute
+
+Hitmonlee (M) @ BrightPowder
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 28 Def
+- Hidden Power [Ghost]
+- Meditate
+- Substitute
+- Reversal

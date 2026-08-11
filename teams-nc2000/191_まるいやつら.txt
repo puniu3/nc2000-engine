@@ -1,0 +1,49 @@
+Politoed (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Hydro Pump
+- Double-Edge
+- Belly Drum
+- Hypnosis
+
+Electrode @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Thunder Wave
+- Light Screen
+- Explosion
+
+Snorlax (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Earthquake
+- Rest
+- Self-Destruct
+
+Exeggutor (M) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Psychic
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Forretress (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Hidden Power [Bug]
+- Spikes
+- Reflect
+- Explosion
+
+Gengar (M) @ Polkadot Bow
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunder
+- Ice Punch
+- Rain Dance
+- Explosion

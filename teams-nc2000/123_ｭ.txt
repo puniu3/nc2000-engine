@@ -1,0 +1,52 @@
+Sneasel (M) @ Berserk Gene
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 24 Def
+- Hidden Power [Rock]
+- Shadow Ball
+- Dynamic Punch
+- Screech
+
+Dewgong (F) @ Leftovers
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Toxic
+- Encore
+- Perish Song
+
+Ninetales (F) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Flamethrower
+- Toxic
+- Confuse Ray
+- Rest
+
+Raichu (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Thunderbolt
+- Toxic
+- Encore
+- Charm
+
+Pikachu (M) @ Light Ball
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Encore
+- Swagger
+
+Dragonite (M) @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Dynamic Punch
+- Thunder
+- Ice Beam

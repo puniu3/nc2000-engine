@@ -1,0 +1,50 @@
+Sandslash (M) @ Gold Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Rock Slide
+- Counter
+- Swords Dance
+
+Primeape (M) @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 28 Def
+- Cross Chop
+- Rock Slide
+- Hidden Power [Ghost]
+- Meditate
+
+Moltres @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Sunny Day
+- Reflect
+- Rest
+
+Snorlax (M) @ Leftovers
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Earthquake
+- Curse
+- Self-Destruct
+
+Cloyster (M) @ Polkadot Bow
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Surf
+- Spikes
+- Curse
+- Explosion
+
+Alakazam (F) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Psychic
+- Encore
+- Light Screen
+- Recover

@@ -1,0 +1,49 @@
+Snorlax (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Earthquake
+- Curse
+- Rest
+
+Skarmory (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Drill Peck
+- Toxic
+- Whirlwind
+- Rest
+
+Starmie @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Hydro Pump
+- Psychic
+- Thunder Wave
+- Recover
+
+Koffing (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Zap Cannon
+- Toxic
+- Pain Split
+- Explosion
+
+Weezing (M) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Sludge Bomb
+- Fire Blast
+- Screech
+- Explosion
+
+Marowak (M) @ Thick Club
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance

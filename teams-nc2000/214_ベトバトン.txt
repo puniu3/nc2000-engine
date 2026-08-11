@@ -1,0 +1,49 @@
+Muk (M) @ Leftovers
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Sludge Bomb
+- Fire Blast
+- Curse
+- Mean Look
+
+Tentacruel (M) @ MiracleBerry
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Hydro Pump
+- Sludge Bomb
+- Swords Dance
+- Rest
+
+Umbreon (F) @ BrightPowder
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Double Team
+- Substitute
+- Baton Pass
+- Moonlight
+
+Vaporeon (F) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Acid Armor
+- Baton Pass
+- Roar
+
+Snorlax (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Earthquake
+- Belly Drum
+- Rest
+
+Heracross (M) @ Scope Lens
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Megahorn
+- Bide
+- Rest
+- Sleep Talk

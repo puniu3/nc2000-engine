@@ -1,0 +1,47 @@
+Porygon2 @ BrightPowder
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Curse
+- Double Team
+- Recover
+
+Charizard (M) @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Fire Blast
+- Earthquake
+- Hyper Beam
+- Belly Drum
+
+Tauros (M) @ Berserk Gene
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Earthquake
+- Fire Blast
+- Hyper Beam
+
+Snorlax (M) @ Leftovers
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Fire Blast
+- Curse
+- Self-Destruct
+
+Cloyster (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Ice Beam
+- Spikes
+- Reflect
+- Explosion
+
+Electrode @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Thunder Wave
+- Light Screen
+- Explosion

@@ -1,0 +1,47 @@
+Marowak (M) @ Thick Club
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Bonemerang
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Pikachu (M) @ Light Ball
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Thunder
+- Hidden Power [Ice]
+- Sweet Kiss
+- Encore
+
+Farfetch’d (M) @ Stick
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Swords Dance
+- Agility
+- Baton Pass
+
+Chansey (F) @ Lucky Punch
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Dynamic Punch
+- Curse
+- Soft-Boiled
+
+Ditto @ Metal Powder
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Transform
+
+Tauros (M) @ Berserk Gene
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Earthquake
+- Fire Blast
+- Hyper Beam

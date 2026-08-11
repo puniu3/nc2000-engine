@@ -1,0 +1,51 @@
+Farfetch’d (M) @ Stick
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Iron Tail
+- Swords Dance
+- Whirlwind
+
+Alakazam (M) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 10 Atk
+- Psychic
+- Encore
+- Light Screen
+- Recover
+
+Venusaur (M) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 Atk
+- Razor Leaf
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Umbreon (F) @ Leftovers
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Pursuit
+- Toxic
+- Charm
+- Rest
+
+Skarmory (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Drill Peck
+- Toxic
+- Whirlwind
+- Rest
+
+Blissey (F) @ Quick Claw
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Seismic Toss
+- Toxic
+- Reflect
+- Soft-Boiled

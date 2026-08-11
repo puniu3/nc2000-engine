@@ -1,0 +1,53 @@
+Umbreon (F) @ MiracleBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Toxic
+- Mean Look
+- Baton Pass
+- Moonlight
+
+Jumpluff (F) @ PRZCureBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Leech Seed
+- Sleep Powder
+- Encore
+- Synthesis
+
+Forretress (M) @ Gold Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Spikes
+- Toxic
+- Defense Curl
+- Rest
+
+Misdreavus (F) @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Mean Look
+- Perish Song
+- Pain Split
+- Protect
+
+Skarmory (M) @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Toxic
+- Sandstorm
+- Whirlwind
+- Rest
+
+Smeargle (M) @ BrightPowder
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Leech Seed
+- Spore
+- Encore
+- Perish Song

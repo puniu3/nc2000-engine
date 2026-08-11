@@ -1,0 +1,51 @@
+Ursaring (M) @ Scope Lens
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Earthquake
+- Rest
+- Sleep Talk
+
+Omastar (F) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Ice Beam
+- Haze
+- Protect
+
+Ampharos (M) @ Mint Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Fire Punch
+- Dynamic Punch
+- Rest
+
+Machamp (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Cross Chop
+- Earthquake
+- Hidden Power [Bug]
+- Encore
+
+Exeggutor (M) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Psychic
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Blissey (F) @ Quick Claw
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Present
+- Toxic
+- Soft-Boiled

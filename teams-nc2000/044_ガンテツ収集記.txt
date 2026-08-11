@@ -1,0 +1,51 @@
+Snorlax (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Curse
+- Rest
+- Sleep Talk
+
+Tentacruel (F) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Rapid Spin
+- Toxic
+- Rest
+
+Heracross (M) @ Scope Lens
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 24 Atk / 24 Def
+- Megahorn
+- Hidden Power [Fighting]
+- Rest
+- Sleep Talk
+
+Smeargle (F) @ Polkadot Bow
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Present
+- Sacred Fire
+- Leech Seed
+- Encore
+
+Crobat (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Wing Attack
+- Pursuit
+- Toxic
+- Confuse Ray
+
+Tangela (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Giga Drain
+- Sleep Powder
+- Reflect
+- Rest

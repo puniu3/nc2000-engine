@@ -1,0 +1,50 @@
+Granbull (F) @ Quick Claw
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk
+- Return
+- Shadow Ball
+- Zap Cannon
+- Present
+
+Marowak (M) @ Thick Club
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Rock Slide
+- Fire Blast
+- Swords Dance
+
+Snorlax (M) @ Leftovers
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Curse
+- Rest
+- Sleep Talk
+
+Gengar (M) @ Gold Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Fire Punch
+- Toxic
+- Confuse Ray
+- Perish Song
+
+Skarmory (M) @ Mint Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Steel Wing
+- Toxic
+- Whirlwind
+- Rest
+
+Starmie @ MiracleBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Psychic
+- Thunder Wave
+- Recover

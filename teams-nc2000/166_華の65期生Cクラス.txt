@@ -1,0 +1,50 @@
+Kabutops (M) @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 24 Def
+- Hidden Power [Rock]
+- Hydro Pump
+- Swords Dance
+- Rest
+
+Persian (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Psych Up
+- Swagger
+- Substitute
+
+Quagsire (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 24 Def
+- Earthquake
+- Hidden Power [Rock]
+- Belly Drum
+- Rest
+
+Snorlax (M) @ Quick Claw
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Earthquake
+- Curse
+- Self-Destruct
+
+Muk (M) @ Polkadot Bow
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Sludge Bomb
+- Fire Blast
+- Dynamic Punch
+- Explosion
+
+Machamp (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Cross Chop
+- Earthquake
+- Hidden Power [Bug]
+- Encore

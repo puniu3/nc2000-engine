@@ -1,0 +1,51 @@
+Kangaskhan (F) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Earthquake
+- Curse
+- Roar
+
+Poliwhirl (M) @ Black Belt
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Mega Kick
+- Submission
+- Hypnosis
+- Belly Drum
+
+Moltres @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Sunny Day
+- Reflect
+- Rest
+
+Mr. Mime (F) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Psychic
+- Thunder Wave
+- Light Screen
+- Encore
+
+Venomoth (M) @ BrightPowder
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Giga Drain
+- Sleep Powder
+- Double Team
+- Baton Pass
+
+Pikachu (M) @ Light Ball
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Thunder
+- Hidden Power [Ice]
+- Swagger
+- Encore

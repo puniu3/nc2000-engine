@@ -1,0 +1,50 @@
+Tyranitar (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Rock Slide
+- Fire Blast
+- Dynamic Punch
+- Curse
+
+Venusaur (M) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 Atk
+- Razor Leaf
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Moltres @ Scope Lens
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Sunny Day
+- Rest
+- Sleep Talk
+
+Marowak (M) @ Thick Club
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Bonemerang
+- Rock Slide
+- Fire Blast
+- Swords Dance
+
+Blissey (F) @ BrightPowder
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Rollout
+- Defense Curl
+- Minimize
+- Soft-Boiled
+
+Starmie @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Hydro Pump
+- Thunder
+- Reflect
+- Recover

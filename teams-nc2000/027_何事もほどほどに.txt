@@ -1,0 +1,53 @@
+Aerodactyl (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 24 Def
+- Hidden Power [Rock]
+- Earthquake
+- Sandstorm
+- Whirlwind
+
+Blissey (F) @ Quick Claw
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Seismic Toss
+- Toxic
+- Sandstorm
+- Soft-Boiled
+
+Misdreavus (F) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Toxic
+- Confuse Ray
+- Curse
+- Pain Split
+
+Smeargle (F) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Sacred Fire
+- Present
+- Encore
+- Spikes
+
+Venusaur (M) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 Atk
+- Razor Leaf
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Starmie @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Confuse Ray
+- Nightmare
+- Recover

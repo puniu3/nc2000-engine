@@ -1,0 +1,52 @@
+Alakazam (F) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Psychic
+- Toxic
+- Attract
+- Substitute
+
+Venusaur (M) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 Atk
+- Razor Leaf
+- Leech Seed
+- Sleep Powder
+- Synthesis
+
+Forretress (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Hidden Power [Bug]
+- Toxic
+- Spikes
+- Explosion
+
+Moltres @ Charcoal
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Sunny Day
+- Rest
+- Sleep Talk
+
+Umbreon (F) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Toxic
+- Charm
+- Mean Look
+- Rest
+
+Magmar (M) @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Fire Blast
+- Cross Chop
+- Thunder Punch
+- Confuse Ray

@@ -1,0 +1,49 @@
+Raticate (M) @ Gold Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Super Fang
+- Hyper Beam
+- Thunder
+- Screech
+
+Chansey (F) @ Lucky Punch
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Present
+- Curse
+- Soft-Boiled
+
+Lapras (F) @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Toxic
+- Confuse Ray
+- Rest
+
+Raichu (M) @ PRZCureBerry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Encore
+- Endure
+- Reversal
+
+Vileplume (M) @ MiracleBerry
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Sludge Bomb
+- Sleep Powder
+- Swords Dance
+- Moonlight
+
+Lanturn (F) @ Leftovers
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Hydro Pump
+- Thunderbolt
+- Thunder Wave
+- Confuse Ray

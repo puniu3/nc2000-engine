@@ -23,9 +23,10 @@
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
 //     [--games N] [--iters 30000] [--seed 1] [--mode blind|open] \
 //     [--opp-team-file FILE.json] [--random] [--timer] [--no-tables] \
-//     [--decision-log FILE.jsonl] [--belief-prior FILE.json] \
+//     [--decision-log FILE.jsonl] [--belief-prior FILE.json|auto] \
 //     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
-//     [--drop SPEC] [--quiet]
+//     [--lobby lobby] [--pool FILE.json | --team-dir DIR] \
+//     [--unknown-log FILE.jsonl] [--drop SPEC] [--quiet]
 //
 // --random turns the client into the second driver: choices are drawn
 // uniformly from the request-legal set (level-cap-aware at team preview)
@@ -40,9 +41,10 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const WebSocket = require('ws');
-const { sim, FORMAT } = require('./ps');
-const { Teams } = sim;
+const { sim, FORMAT, MOD } = require('./ps');
+const { Teams, TeamValidator, Dex } = sim;
 
 const REPO = path.join(__dirname, '..');
 
@@ -76,9 +78,14 @@ if (args.help || args.h) {
                     bare guest /trn is refused or --password is given)
   --format ID       format id (default ${FORMAT})
   --team SPEC       pool:IDX | pool:random | FILE.json (required)
+  --pool FILE       opponent/team pool JSON (default data/meta-pool-v0/meta-pool.json)
+  --team-dir DIR    rebuild the pool from the latest Showdown .txt teams in DIR
+                    before each new battle; useful for teams-nc2000/
+  --no-validate-pool
+                    skip TeamValidator when building --team-dir pool
   --challenge USER  challenge USER repeatedly until --games are done
   --accept WHO      accept challenges: 'any' or comma list of names
-  --games N         number of complete battles to play (default 1)
+  --games N         number of complete battles to play (default 1; 0 = unlimited)
   --mode M          blind (default; pool-prior belief) | open (pin the
                     opponent's true sets — needs --opp-team-file, only
                     meaningful where sheets are genuinely open)
@@ -88,14 +95,21 @@ if (args.help || args.h) {
   --seed N          searcher / random-mode seed (default 1)
   --random          random driver mode (no searcher; uniform legal choice)
   --timer           turn the battle timer on in every game
+  --lobby ROOM      join ROOM after login so the bot is visible (default lobby)
+  --no-lobby        do not join a lobby room
   --no-tables       skip loading baked preview tables
   --belief-prior F  M18 community belief prior (a table in the
-                    data/belief-prior-v0.sample.json shape). Read once at
-                    startup and handed to each game's searcher as JSON text;
+                    data/belief-prior-v0.sample.json shape), or 'auto' to
+                    generate one at startup from --team-dir/--pool. Read once
+                    at startup and handed to each game's searcher as JSON text;
                     it governs ONLY the hidden-team fallback imputation, so
                     it needs --mode blind. Without the flag the fallback
                     imputation is exactly today's. A malformed table warns
                     and degrades rather than failing the run
+  --unknown-log F   JSONL log for opponent observations outside the pool
+                    (default logs/opponent-observations.jsonl)
+  --unknown-log-all log every completed battle, not only unknown observations
+  --no-unknown-log  disable opponent observation logging
   --drop SPEC       verification hook: socket kills at chosen decision
                     points (see header comment)
   --decision-log F  append private (mode 0600) JSONL for regret replay:
@@ -117,6 +131,10 @@ const SERVER_RAW = need('server');
 const NAME = need('name');
 const TEAMSPEC = need('team');
 const FORMATID = String(args.format || FORMAT);
+function resolveUserPath(p) {
+	return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
+}
+
 const PASSWORD = args.password && args.password !== true ? String(args.password) : '';
 const LOGINSERVER = String(args.loginserver || 'https://play.pokemonshowdown.com').replace(/\/$/, '');
 const CHALLENGE = args.challenge && args.challenge !== true ? String(args.challenge) : '';
@@ -140,10 +158,17 @@ const SEED = parseInt(args.seed || '1', 10);
 const RANDOM = !!args.random;
 const TIMER = !!args.timer;
 const QUIET = !!args.quiet;
+const LOBBY_ROOM = args['no-lobby'] ? '' : String(args.lobby || 'lobby');
+const VALIDATE_POOL = !args['no-validate-pool'];
+const TEAM_DIR = args['team-dir'] && args['team-dir'] !== true ? resolveUserPath(String(args['team-dir'])) : '';
+const POOL_FILE = args.pool && args.pool !== true ? resolveUserPath(String(args.pool)) : path.join(REPO, 'data/meta-pool-v0/meta-pool.json');
+const UNKNOWN_LOG = args['no-unknown-log'] ? '' : resolveUserPath(String(args['unknown-log'] && args['unknown-log'] !== true ? args['unknown-log'] : path.join(REPO, 'logs/opponent-observations.jsonl')));
+const UNKNOWN_LOG_ALL = !!args['unknown-log-all'];
 const DECISION_LOG = args['decision-log'] && args['decision-log'] !== true ?
 	path.resolve(String(args['decision-log'])) : '';
-const BELIEF_PRIOR_FILE = args['belief-prior'] && args['belief-prior'] !== true ?
-	path.resolve(String(args['belief-prior'])) : '';
+const BELIEF_PRIOR_ARG = args['belief-prior'] && args['belief-prior'] !== true ? String(args['belief-prior']) : '';
+const BELIEF_PRIOR_AUTO = BELIEF_PRIOR_ARG.toLowerCase() === 'auto';
+const BELIEF_PRIOR_FILE = BELIEF_PRIOR_ARG && !BELIEF_PRIOR_AUTO ? resolveUserPath(BELIEF_PRIOR_ARG) : '';
 const DEBOUNCE_MS = 100; // network analogue of the M15a stream-quiescence wait
 const RECONNECT_MS = 500;
 
@@ -181,11 +206,154 @@ const wsUrl = (() => {
 })();
 
 // ------------------------------------------------------------------ teams
-const pool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/meta-pool-v0/meta-pool.json'), 'utf8'));
-const poolJson = JSON.stringify(pool);
+function listTxtFilesRecursive(dir) {
+	const out = [];
+	for (const name of fs.readdirSync(dir).sort()) {
+		const full = path.join(dir, name);
+		const st = fs.statSync(full);
+		if (st.isDirectory()) out.push(...listTxtFilesRecursive(full));
+		else if (st.isFile() && name.toLowerCase().endsWith('.txt')) out.push(full);
+	}
+	return out;
+}
+
+function normalizeImportedTeam(team, label) {
+	if (!team || team.length !== 6) throw new Error(`${label}: imported ${team ? team.length : 0} sets, want 6`);
+	const dexMod = Dex.mod(MOD);
+	for (const set of team) {
+		set.ability = 'No Ability';
+		if (!set.evs) set.evs = { hp: 255, atk: 255, def: 255, spa: 255, spd: 255, spe: 255 };
+		for (const stat of ['hp', 'atk', 'def', 'spa', 'spd', 'spe']) {
+			if (set.evs[stat] === undefined) set.evs[stat] = 255;
+		}
+		if (set.happiness === undefined) {
+			set.happiness = set.moves && set.moves.some(mv => dexMod.moves.get(mv).id === 'frustration') ? 0 : 255;
+		}
+	}
+	return team;
+}
+
+function teamToPoolEntry(team, id, sourceFile) {
+	const packed = Teams.pack(team);
+	const sets = Teams.unpack(packed);
+	return {
+		id,
+		tier: 'local',
+		provenance: { source: 'local team directory', file: sourceFile },
+		species: sets.map(set => set.species || set.name).filter(Boolean),
+		levels: sets.map(set => set.level || 100),
+		pedigree: { tournamentPoints: 0, vrMean: 0, hc75UsageMean: 0 },
+		export: Teams.export(team),
+		packed,
+		sets,
+	};
+}
+
+function makeTeamId(file, root, i) {
+	const rel = path.relative(root, file).replace(/\\/g, '/').replace(/\.txt$/i, '');
+	const base = rel.replace(/[^A-Za-z0-9_.\/-]+/g, '_').replace(/[\/]+/g, '__');
+	return base || `team-${i + 1}`;
+}
+
+function buildPoolFromTeamDir(dir) {
+	const files = listTxtFilesRecursive(dir);
+	if (!files.length) throw new Error(`no .txt team files found in --team-dir ${dir}`);
+	const validator = VALIDATE_POOL ? new TeamValidator(FORMATID) : null;
+	const teams = [];
+	const failures = [];
+	for (let i = 0; i < files.length; i++) {
+		const file = files[i];
+		const label = path.relative(dir, file) || file;
+		try {
+			const imported = normalizeImportedTeam(Teams.import(fs.readFileSync(file, 'utf8')), label);
+			if (validator) {
+				const errors = validator.validateTeam(imported);
+				if (errors) throw new Error(errors.join('; '));
+			}
+			teams.push(teamToPoolEntry(imported, makeTeamId(file, dir, i), file));
+		} catch (err) {
+			failures.push(`${label}: ${err && err.message || err}`);
+		}
+	}
+	if (!teams.length) {
+		throw new Error(`all teams failed while building --team-dir pool ${dir}: ${failures.slice(0, 5).join(' | ')}`);
+	}
+	if (failures.length) {
+		console.error(`[${NAME}] WARN_POOL_TEAM_FAILURES ${failures.length}/${files.length}; first=${failures.slice(0, 3).join(' | ')}`);
+	}
+	teams.forEach((team, i) => (team.rank = i + 1));
+	return {
+		meta: {
+			format: FORMATID,
+			mod: MOD,
+			generated: new Date().toISOString(),
+			teams: teams.length,
+			source: 'team-dir',
+			dir,
+			files: files.length,
+			failures: failures.length,
+		},
+		teams,
+	};
+}
+
+function loadPoolSnapshot() {
+	const pool = TEAM_DIR
+		? buildPoolFromTeamDir(TEAM_DIR)
+		: JSON.parse(fs.readFileSync(POOL_FILE, 'utf8'));
+	if (!pool || !Array.isArray(pool.teams) || !pool.teams.length) {
+		throw new Error(`pool has no teams (${TEAM_DIR ? TEAM_DIR : POOL_FILE})`);
+	}
+	return {
+		pool,
+		poolJson: JSON.stringify(pool),
+		label: TEAM_DIR ? `team-dir:${TEAM_DIR}` : `pool:${POOL_FILE}`,
+	};
+}
+
+function prob(n, d) {
+	return Number((n / d).toFixed(6));
+}
+
+function buildBeliefPriorFromPool(pool, label) {
+	const speciesCounts = new Map();
+	for (const team of pool && pool.teams || []) {
+		for (const set of team.sets || []) {
+			const sid = toID(set.species || set.name || '');
+			if (!sid) continue;
+			let entry = speciesCounts.get(sid);
+			if (!entry) {
+				entry = { n: 0, moves: new Map(), items: new Map() };
+				speciesCounts.set(sid, entry);
+			}
+			entry.n++;
+			for (const mv of new Set(set.moves || [])) {
+				const mid = toID(mv);
+				if (mid) entry.moves.set(mid, (entry.moves.get(mid) || 0) + 1);
+			}
+			const iid = toID(set.item || '');
+			if (iid) entry.items.set(iid, (entry.items.get(iid) || 0) + 1);
+		}
+	}
+	const species = {};
+	for (const sid of Array.from(speciesCounts.keys()).sort()) {
+		const entry = speciesCounts.get(sid);
+		const moves = {};
+		for (const mid of Array.from(entry.moves.keys()).sort()) moves[mid] = prob(entry.moves.get(mid), entry.n);
+		const items = {};
+		for (const iid of Array.from(entry.items.keys()).sort()) items[iid] = prob(entry.items.get(iid), entry.n);
+		species[sid] = { moves, items, n: entry.n };
+	}
+	return JSON.stringify({
+		format: 'nc2000-belief-prior',
+		version: 1,
+		note: `auto-generated at ps-client startup from ${label}; per-species move/item carry marginals`,
+		species,
+	}, null, 2);
+}
 
 let rngState = (SEED ^ 0x9e3779b9) >>> 0;
-const rng = () => { // mulberry32 (random-mode choices + pool:random picks)
+const rng = () => { // mulberry32 (random-mode choices; crypto.randomInt is used for pool:random picks)
 	rngState = (rngState + 0x6d2b79f5) >>> 0;
 	let t = rngState;
 	t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -195,16 +363,23 @@ const rng = () => { // mulberry32 (random-mode choices + pool:random picks)
 const rngInt = n => Math.floor(rng() * n);
 
 function pickTeam() {
+	const snapshot = loadPoolSnapshot();
 	if (TEAMSPEC.startsWith('pool:')) {
 		const which = TEAMSPEC.slice(5);
-		const idx = which === 'random' ? rngInt(pool.teams.length) : parseInt(which, 10);
-		if (!(idx >= 0 && idx < pool.teams.length)) throw new Error(`bad pool index ${which}`);
-		return { sets: pool.teams[idx].sets, label: `pool:${idx}` };
+		const idx = which === 'random' ? crypto.randomInt(snapshot.pool.teams.length) : parseInt(which, 10);
+		if (!(idx >= 0 && idx < snapshot.pool.teams.length)) throw new Error(`bad pool index ${which}`);
+		return {
+			sets: snapshot.pool.teams[idx].sets,
+			label: `${snapshot.label}:pool:${idx}`,
+			pool: snapshot.pool,
+			poolJson: snapshot.poolJson,
+			poolLabel: snapshot.label,
+		};
 	}
 	const raw = JSON.parse(fs.readFileSync(TEAMSPEC, 'utf8'));
 	const sets = Array.isArray(raw) ? raw : raw.sets;
 	if (!Array.isArray(sets)) throw new Error(`${TEAMSPEC}: expected a JSON array of sets (or {sets:[...]})`);
-	return { sets, label: TEAMSPEC };
+	return { sets, label: TEAMSPEC, pool: snapshot.pool, poolJson: snapshot.poolJson, poolLabel: snapshot.label };
 }
 
 // ------------------------------------------------------------------ wasm
@@ -266,7 +441,8 @@ function reportPrior(reportJson, log) {
 }
 
 let priorText = '';
-if (BELIEF_PRIOR_FILE) {
+let priorSource = '';
+if (BELIEF_PRIOR_ARG) {
 	if (RANDOM) {
 		console.error('--belief-prior has nothing to act on in --random mode (no searcher)');
 		process.exit(2);
@@ -276,17 +452,31 @@ if (BELIEF_PRIOR_FILE) {
 			'true sets, and the prior must never reach the open-sheet path');
 		process.exit(2);
 	}
+	let probeSnapshot;
 	try {
-		priorText = fs.readFileSync(BELIEF_PRIOR_FILE, 'utf8');
+		probeSnapshot = loadPoolSnapshot();
 	} catch (e) {
-		console.error(`--belief-prior: cannot read ${BELIEF_PRIOR_FILE}: ${e.message}`);
+		console.error(`--belief-prior: cannot load pool for probe/auto prior: ${e.message}`);
 		process.exit(2);
+	}
+	if (BELIEF_PRIOR_AUTO) {
+		priorText = buildBeliefPriorFromPool(probeSnapshot.pool, probeSnapshot.label);
+		priorSource = `auto:${probeSnapshot.label}`;
+	} else {
+		try {
+			priorText = fs.readFileSync(BELIEF_PRIOR_FILE, 'utf8');
+			priorSource = BELIEF_PRIOR_FILE;
+		} catch (e) {
+			console.error(`--belief-prior: cannot read ${BELIEF_PRIOR_FILE}: ${e.message}`);
+			process.exit(2);
+		}
 	}
 	// Probe once up front so a typo in the TABLE is visible before the first
 	// challenge instead of one line per game; each game's searcher gets its
 	// own install below (the prior lives on the searcher, one per battle).
-	const probe = new wasm.ProtocolSearcher(dex, 0, poolJson, 0);
+	const probe = new wasm.ProtocolSearcher(dex, 0, probeSnapshot.poolJson, 0);
 	reportPrior(probe.setBeliefPrior(priorText), m => console.log(`[${NAME}] ${m}`));
+	console.log(`[${NAME}] belief prior source: ${priorSource}`);
 	if (typeof probe.free === 'function') probe.free();
 }
 
@@ -357,6 +547,80 @@ const NOISE = new Set([
 	'notify', 'tempnotify', 'tempnotifyoff', 'hidelines', 'unlink', 'b', 'battle',
 ]);
 
+function ensureParentDir(file) {
+	if (!file) return;
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+}
+
+function appendJsonl(file, obj) {
+	if (!file) return;
+	ensureParentDir(file);
+	fs.appendFileSync(file, JSON.stringify(obj) + '\n');
+}
+
+function identSide(ident) {
+	const m = /^p([12])/.exec(String(ident || ''));
+	return m ? `p${m[1]}` : '';
+}
+
+function identSlot(ident) {
+	const m = /^(p[12][a-z]?):/.exec(String(ident || ''));
+	return m ? m[1] : '';
+}
+
+function speciesFromIdent(ident) {
+	const s = String(ident || '');
+	const i = s.indexOf(':');
+	return i >= 0 ? s.slice(i + 1).trim() : '';
+}
+
+function parseDetails(details) {
+	const raw = String(details || '');
+	const parts = raw.split(',').map(x => x.trim()).filter(Boolean);
+	const species = parts[0] || '';
+	let level = 100;
+	let gender = '';
+	for (const part of parts.slice(1)) {
+		const lm = /^L(\d+)$/.exec(part);
+		if (lm) level = parseInt(lm[1], 10);
+		else if (part === 'M' || part === 'F' || part === 'N') gender = part;
+	}
+	return { species, level, gender, details: raw };
+}
+
+function poolIndex(pool) {
+	const bySpecies = new Map();
+	const teamKeys = new Set();
+	const teamIdsByKey = new Map();
+	for (const team of pool && pool.teams || []) {
+		const keyParts = [];
+		for (const set of team.sets || []) {
+			const species = set.species || set.name || '';
+			const sid = toID(species);
+			if (!sid) continue;
+			let entry = bySpecies.get(sid);
+			if (!entry) {
+				entry = { species, moves: new Map(), items: new Map(), setCount: 0 };
+				bySpecies.set(sid, entry);
+			}
+			entry.setCount++;
+			for (const mv of set.moves || []) entry.moves.set(toID(mv), mv);
+			if (set.item) entry.items.set(toID(set.item), set.item);
+			keyParts.push(`${sid}:L${set.level || 100}`);
+		}
+		const key = keyParts.sort().join('|');
+		teamKeys.add(key);
+		if (!teamIdsByKey.has(key)) teamIdsByKey.set(key, []);
+		teamIdsByKey.get(key).push(team.id || String(team.rank || ''));
+	}
+	return { bySpecies, teamKeys, teamIdsByKey };
+}
+
+function previewKey(preview) {
+	return preview.map(p => `${toID(p.species)}:L${p.level || 100}`).sort().join('|');
+}
+
+
 // ----------------------------------------------------------------- stats
 const stats = {
 	games: 0, W: 0, L: 0, T: 0, turns: 0, decisions: 0,
@@ -397,6 +661,21 @@ class BattleDriver {
 		this.awaitingReplay = false; // set when we /join after a reconnect
 		this.drop = dropSpecs[battleIdx] || null;
 		this.preDropView = null; // { rqid, view } for the resume proof
+		this.players = {};
+		this.selfSide = '';
+		this.oppSide = '';
+		this.opponentName = '';
+		this.activeSpeciesBySlot = new Map();
+		this.oppPreview = [];
+		this.poolIdx = null;
+		this.poolLabel = '';
+		this.unknownTeam = false;
+		this.unknownTeamChecked = false;
+		this.unknownMoves = [];
+		this.unknownItems = [];
+		this.unknownSpecies = [];
+		this.revealedMoves = new Map();
+		this.revealedItems = new Map();
 		this.log = m => console.log(`[${this.room}] ${m}`);
 	}
 
@@ -432,6 +711,171 @@ class BattleDriver {
 		this.log(`rejoined; rebuilding from the replayed room log`);
 	}
 
+
+	setSelfSide(side) {
+		if (!side || (side !== 'p1' && side !== 'p2')) return;
+		this.selfSide = side;
+		this.oppSide = side === 'p1' ? 'p2' : 'p1';
+		this.opponentName = this.players[this.oppSide] || this.opponentName;
+	}
+
+	getPoolIndex() {
+		if (this.poolIdx) return this.poolIdx;
+		const source = this.client.currentTeam || {};
+		let pool = source.pool;
+		this.poolLabel = source.poolLabel || '';
+		if (!pool) {
+			try {
+				const snap = loadPoolSnapshot();
+				pool = snap.pool;
+				this.poolLabel = snap.label;
+			} catch { /* unknown logging can proceed without pool */ }
+		}
+		this.poolIdx = poolIndex(pool || { teams: [] });
+		return this.poolIdx;
+	}
+
+	noteSpecies(species, line) {
+		const sid = toID(species);
+		if (!sid) return;
+		const idx = this.getPoolIndex();
+		if (!idx.bySpecies.has(sid) && !this.unknownSpecies.some(x => toID(x.species) === sid)) {
+			this.unknownSpecies.push({ species, line });
+		}
+	}
+
+	noteMove(species, move, line) {
+		const sid = toID(species);
+		const mid = toID(move);
+		if (!sid || !mid || mid === 'struggle') return;
+		this.noteSpecies(species, line);
+		if (!this.revealedMoves.has(sid)) this.revealedMoves.set(sid, new Map());
+		this.revealedMoves.get(sid).set(mid, move);
+		const idx = this.getPoolIndex();
+		const known = idx.bySpecies.get(sid);
+		if ((!known || !known.moves.has(mid)) && !this.unknownMoves.some(x => toID(x.species) === sid && toID(x.move) === mid)) {
+			this.unknownMoves.push({ species, move, line });
+		}
+	}
+
+	noteItem(species, item, line) {
+		const sid = toID(species);
+		const iid = toID(item);
+		if (!sid || !iid) return;
+		this.noteSpecies(species, line);
+		if (!this.revealedItems.has(sid)) this.revealedItems.set(sid, new Map());
+		this.revealedItems.get(sid).set(iid, item);
+		const idx = this.getPoolIndex();
+		const known = idx.bySpecies.get(sid);
+		if ((!known || !known.items.has(iid)) && !this.unknownItems.some(x => toID(x.species) === sid && toID(x.item) === iid)) {
+			this.unknownItems.push({ species, item, line });
+		}
+	}
+
+	speciesForIdent(ident, details) {
+		const slot = identSlot(ident);
+		if (details) return parseDetails(details).species;
+		if (slot && this.activeSpeciesBySlot.has(slot)) return this.activeSpeciesBySlot.get(slot);
+		return speciesFromIdent(ident);
+	}
+
+	maybeCheckUnknownTeam() {
+		if (this.unknownTeamChecked) return;
+		if (!this.oppSide || this.oppPreview.length < 6) return;
+		this.unknownTeamChecked = true;
+		const key = previewKey(this.oppPreview);
+		const idx = this.getPoolIndex();
+		this.unknownTeam = !idx.teamKeys.has(key);
+	}
+
+	observeOpponentLine(line) {
+		if (!UNKNOWN_LOG && !UNKNOWN_LOG_ALL) return;
+		if (!line.startsWith('|')) return;
+		const parts = line.split('|');
+		const cmd = parts[1] || '';
+		if (cmd === 'player') {
+			const side = parts[2] || '';
+			const name = (parts[3] || '').trim();
+			if (side === 'p1' || side === 'p2') this.players[side] = name;
+			if (toID(name) === toID(NAME)) this.setSelfSide(side);
+			else if (this.selfSide && side === this.oppSide) this.opponentName = name;
+			return;
+		}
+		if (cmd === 'poke') {
+			const side = parts[2] || '';
+			const info = parseDetails(parts[3] || '');
+			if (side && side === this.oppSide && info.species) {
+				this.oppPreview.push({ species: info.species, level: info.level, gender: info.gender, details: info.details, hasItem: !!parts[4] });
+				this.noteSpecies(info.species, line);
+			}
+			return;
+		}
+		if (cmd === 'teampreview') {
+			this.maybeCheckUnknownTeam();
+			return;
+		}
+		if (cmd === 'switch' || cmd === 'drag' || cmd === 'replace') {
+			const ident = parts[2] || '';
+			const side = identSide(ident);
+			const info = parseDetails(parts[3] || '');
+			const slot = identSlot(ident);
+			if (slot && info.species) this.activeSpeciesBySlot.set(slot, info.species);
+			if (side === this.oppSide && info.species) this.noteSpecies(info.species, line);
+			return;
+		}
+		if (cmd === 'move') {
+			const ident = parts[2] || '';
+			if (identSide(ident) !== this.oppSide) return;
+			const move = parts[3] || '';
+			if (parts.slice(4).some(p => /\[from\]\s*(move:\s*)?(metronome|mirror move|mimic)/i.test(p))) return;
+			const species = this.speciesForIdent(ident);
+			this.noteMove(species, move, line);
+			return;
+		}
+		if (cmd === '-enditem' || cmd === '-item') {
+			const ident = parts[2] || '';
+			if (identSide(ident) !== this.oppSide) return;
+			this.noteItem(this.speciesForIdent(ident), parts[3] || '', line);
+			return;
+		}
+		for (const token of parts.slice(3)) {
+			const m = /\[from\]\s*item:\s*(.+)$/i.exec(token);
+			if (!m) continue;
+			const ident = parts[2] || '';
+			if (identSide(ident) === this.oppSide) this.noteItem(this.speciesForIdent(ident), m[1], line);
+		}
+	}
+
+	writeUnknownObservation() {
+		if (!UNKNOWN_LOG) return;
+		this.maybeCheckUnknownTeam();
+		const hasUnknown = this.unknownTeam || this.unknownMoves.length || this.unknownItems.length || this.unknownSpecies.length;
+		if (!hasUnknown && !UNKNOWN_LOG_ALL) return;
+		const mapToObject = map => {
+			const obj = {};
+			for (const [sid, inner] of map) obj[sid] = Array.from(inner.values()).sort();
+			return obj;
+		};
+		appendJsonl(UNKNOWN_LOG, {
+			timestamp: new Date().toISOString(),
+			room: this.room,
+			format: FORMATID,
+			bot: NAME,
+			opponent: this.opponentName,
+			pool: this.poolLabel,
+			poolTeams: this.client.currentTeam && this.client.currentTeam.pool ? this.client.currentTeam.pool.teams.length : undefined,
+			unknownTeam: this.unknownTeam,
+			preview: this.oppPreview,
+			revealedMoves: mapToObject(this.revealedMoves),
+			revealedItems: mapToObject(this.revealedItems),
+			unknownSpecies: this.unknownSpecies,
+			unknownMoves: this.unknownMoves,
+			unknownItems: this.unknownItems,
+			result: this.result || 'T',
+			turns: this.turn,
+		});
+	}
+
 	onFrame(lines) {
 		if (this.ended) return;
 		if (lines[0] === '|init|battle' && this.initialized) this.resetForRejoin();
@@ -446,6 +890,7 @@ class BattleDriver {
 
 	onLine(line) {
 		if (!line.startsWith('|')) return;
+		this.observeOpponentLine(line);
 		const cmd = line.split('|')[2] !== undefined ? line.split('|')[1] : line.slice(1);
 		if (cmd === 'request') {
 			const j = line.slice('|request|'.length);
@@ -553,14 +998,16 @@ class BattleDriver {
 			if (this.maybeDrop(req, 'pre')) return;
 			const choice = randomChoice(req);
 			this.client.send(`${this.room}|/choose ${choice}${rqid !== undefined ? `|${rqid}` : ''}`);
-			this.recordDecision(req, choice, null, null, 'random');
+			this.recordDecision(req, choice, null, null, null, 'random');
 			this.maybeDrop(req, 'post');
 			return;
 		}
 
 		if (!this.searcher) {
 			this.side = req.side && req.side.id === 'p2' ? 1 : 0;
-			this.searcher = new wasm.ProtocolSearcher(dex, this.side, poolJson, SEED * 1000 + this.battleIdx);
+			const activePoolJson = this.client.currentTeam && this.client.currentTeam.poolJson ?
+				this.client.currentTeam.poolJson : loadPoolSnapshot().poolJson;
+			this.searcher = new wasm.ProtocolSearcher(dex, this.side, activePoolJson, SEED * 1000 + this.battleIdx);
 			this.searcher.setOwnTeam(JSON.stringify(this.client.currentTeam.sets));
 			if (MODE === 'open') this.searcher.pinOpponent(oppTeamJson);
 			// after pinOpponent on purpose: if the two ever coexist the binding
@@ -618,7 +1065,8 @@ class BattleDriver {
 		const t0 = Date.now();
 		let choice = this.searcher.bakedPreview();
 		if (!choice) {
-			this.searcher.step(ITERS);
+			const searchIters = req.teamPreview ? ITERS * 5 : ITERS;
+			this.searcher.step(searchIters);
 			choice = this.searcher.best();
 		}
 		const think = Date.now() - t0;
@@ -631,11 +1079,13 @@ class BattleDriver {
 		try { policy = JSON.parse(this.searcher.rootPolicy()); } catch { /* diagnostic only */ }
 		let state = null;
 		try { state = JSON.parse(this.searcher.stateView()); } catch { /* diagnostic only */ }
-		this.recordDecision(req, choice, policy, state, 'search');
+		let beliefInfo = null;
+		try { beliefInfo = JSON.parse(this.searcher.beliefInfo()); } catch { /* diagnostic only */ }
+		this.recordDecision(req, choice, policy, state, beliefInfo, 'search');
 		this.maybeDrop(req, 'post');
 	}
 
-	recordDecision(req, choice, rootPolicy, stateView, driver) {
+	recordDecision(req, choice, rootPolicy, stateView, beliefInfo, driver) {
 		if (!DECISION_LOG) return;
 		const rqidKey = String(req.rqid ?? `decision-${this.decisions}`);
 		if (this.loggedRqids.has(rqidKey)) return;
@@ -666,6 +1116,7 @@ class BattleDriver {
 			protocolDelta,
 			submitted: choice,
 			rootPolicy,
+			beliefInfo,
 			stateViewKind: 'diagnostic-imputed',
 			stateView,
 		});
@@ -701,8 +1152,9 @@ class BattleDriver {
 		stats.games++;
 		stats[this.result || 'T']++;
 		stats.turns += this.turn;
+		this.writeUnknownObservation();
 		console.log(
-			`game ${stats.games}/${GAMES}: ${this.result} in ${this.turn} turns, ` +
+			`game ${stats.games}/${hasGameLimit() ? GAMES : 'unlimited'}: ${this.result} in ${this.turn} turns, ` +
 			`${this.decisions} decisions (${this.room})`
 		);
 		this.freeSearcher();
@@ -887,6 +1339,10 @@ class PSClient {
 	}
 
 	onLoggedIn() {
+		if (LOBBY_ROOM) {
+			this.send(`|/join ${LOBBY_ROOM}`);
+			this.log(`joining ${LOBBY_ROOM}`);
+		}
 		// resume: rejoin every battle that was live when the socket dropped
 		for (const [room, driver] of this.drivers) {
 			if (!driver.ended) {
@@ -905,7 +1361,7 @@ class PSClient {
 
 	onTick() {
 		if (!this.loggedIn || this.shuttingDown) return;
-		if (stats.games >= GAMES) return this.shutdown();
+		if (reachedGameLimit()) return this.shutdown();
 		if (this.activeBattles() > 0) return;
 		if (CHALLENGE) {
 			if (this.outgoingTo) {
@@ -940,7 +1396,7 @@ class PSClient {
 
 	onBattleEnd(room) {
 		setTimeout(() => this.drivers.delete(room), 5000); // let deinit frames drain
-		if (stats.games >= GAMES) this.shutdown();
+		if (reachedGameLimit()) this.shutdown();
 	}
 
 	shutdown() {
@@ -954,6 +1410,14 @@ class PSClient {
 		const bad = stats.rejections.length + stats.desyncs + stats.proofsBad.length;
 		process.exit(bad > 0 ? 1 : 0);
 	}
+}
+
+function hasGameLimit() {
+	return GAMES > 0;
+}
+
+function reachedGameLimit() {
+	return hasGameLimit() && stats.games >= GAMES;
 }
 
 function summarize() {

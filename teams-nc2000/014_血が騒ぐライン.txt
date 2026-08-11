@@ -1,0 +1,52 @@
+Marowak (M) @ Thick Club
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Dodrio (M) @ Berserk Gene
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 24 Atk / 24 Def
+- Double-Edge
+- Drill Peck
+- Hidden Power [Fighting]
+- Hyper Beam
+
+Electrode @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Thunder Wave
+- Light Screen
+- Explosion
+
+Starmie @ Leftovers
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Confuse Ray
+- Thunder Wave
+- Substitute
+
+Misdreavus (F) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Zap Cannon
+- Confuse Ray
+- Pain Split
+- Perish Song
+
+Parasect (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Hidden Power [Bug]
+- Giga Drain
+- Spore
+- Reflect

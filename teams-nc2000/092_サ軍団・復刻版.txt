@@ -1,0 +1,51 @@
+Rhydon (M) @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Rock Slide
+- Zap Cannon
+- Curse
+
+Corsola (M) @ Scope Lens
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 24 Def
+- Hidden Power [Rock]
+- Curse
+- Amnesia
+- Recover
+
+Hitmonlee (M) @ Black Belt
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Hidden Power [Bug]
+- Meditate
+- Substitute
+- Reversal
+
+Zapdos @ MiracleBerry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Thunder
+- Hidden Power [Ice]
+- Reflect
+- Rest
+
+Jolteon (F) @ BrightPowder
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Thunderbolt
+- Double Team
+- Substitute
+- Baton Pass
+
+Sandslash (M) @ Gold Berry
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Rock Slide
+- Counter
+- Swords Dance

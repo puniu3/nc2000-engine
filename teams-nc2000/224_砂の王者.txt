@@ -1,0 +1,51 @@
+Omastar (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 Atk
+- Surf
+- Sandstorm
+- Swagger
+- Substitute
+
+Venusaur (M) @ Scope Lens
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 Atk
+- Razor Leaf
+- Leech Seed
+- Rest
+- Sleep Talk
+
+Blissey (F) @ NeverMeltIce
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Seismic Toss
+- Toxic
+- Soft-Boiled
+
+Skarmory (M) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Drill Peck
+- Sandstorm
+- Whirlwind
+- Rest
+
+Starmie @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Thunderbolt
+- Light Screen
+- Recover
+
+Tyranitar (M) @ Mint Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Crunch
+- Earthquake
+- Sandstorm
+- Rest

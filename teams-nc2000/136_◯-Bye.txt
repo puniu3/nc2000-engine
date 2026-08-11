@@ -1,0 +1,50 @@
+Espeon (F) @ MiracleBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Psychic
+- Zap Cannon
+- Charm
+- Morning Sun
+
+Umbreon (F) @ PRZCureBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Pursuit
+- Toxic
+- Charm
+- Moonlight
+
+Gengar (M) @ Polkadot Bow
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Ice Punch
+- Destiny Bond
+- Explosion
+
+Quagsire (M) @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 24 Def
+- Earthquake
+- Hidden Power [Rock]
+- Belly Drum
+- Rest
+
+Skarmory (M) @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Steel Wing
+- Toxic
+- Whirlwind
+- Protect
+
+Snorlax (M) @ Quick Claw
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Earthquake
+- Belly Drum
+- Self-Destruct

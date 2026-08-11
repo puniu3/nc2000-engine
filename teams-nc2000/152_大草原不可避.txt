@@ -1,0 +1,50 @@
+Exeggutor (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Psychic
+- Hidden Power [Bug]
+- Leech Seed
+- Sleep Powder
+
+Victreebel (M) @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 28 Atk / 24 Def
+- Sludge Bomb
+- Giga Drain
+- Hidden Power [Fire]
+- Sleep Powder
+
+Jumpluff (M) @ Bitter Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Leech Seed
+- Sleep Powder
+- Amnesia
+- Synthesis
+
+Venusaur (M) @ BrightPowder
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Fury Cutter
+- Double Team
+- Substitute
+- Synthesis
+
+Golem (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Fire Blast
+- Curse
+- Explosion
+
+Snorlax (M) @ Quick Claw
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Earthquake
+- Curse
+- Self-Destruct

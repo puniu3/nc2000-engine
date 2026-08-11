@@ -1,0 +1,50 @@
+Houndoom (F) @ MiracleBerry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Crunch
+- Counter
+- Sunny Day
+
+Heracross (M) @ Hard Stone
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 24 Def
+- Megahorn
+- Hidden Power [Rock]
+- Rest
+- Sleep Talk
+
+Persian (M) @ Gold Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Shadow Ball
+- Hypnosis
+- Screech
+
+Lickitung (M) @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Dynamic Punch
+- Disable
+- Rest
+
+Grimer (M) @ Quick Claw
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 28 Def
+- Sludge Bomb
+- Dynamic Punch
+- Hidden Power [Ghost]
+- Explosion
+
+Muk (M) @ Leftovers
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Sludge Bomb
+- Dynamic Punch
+- Fire Blast
+- Curse

@@ -1,0 +1,52 @@
+Noctowl (M) @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Night Shade
+- Hypnosis
+- Nightmare
+- Reflect
+
+Umbreon (F) @ MiracleBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Pursuit
+- Toxic
+- Charm
+- Moonlight
+
+Snorlax (M) @ Mint Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Earthquake
+- Belly Drum
+- Rest
+
+Gengar (M) @ PRZCureBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Thunderbolt
+- Ice Punch
+- Mean Look
+- Perish Song
+
+Marowak (M) @ Thick Club
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Bonemerang
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Poliwrath (M) @ Gold Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 24 Atk / 24 Def
+- Surf
+- Hidden Power [Fighting]
+- Hyper Beam
+- Belly Drum

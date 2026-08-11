@@ -1,0 +1,50 @@
+Porygon2 @ BrightPowder
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Ice Beam
+- Curse
+- Recover
+
+Umbreon (F) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Pursuit
+- Toxic
+- Charm
+- Rest
+
+Gengar (M) @ Polkadot Bow
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Ice Punch
+- Destiny Bond
+- Explosion
+
+Snorlax (M) @ Leftovers
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Earthquake
+- Curse
+- Self-Destruct
+
+Exeggutor (M) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 28 Atk / 28 Def
+- Hidden Power [Grass]
+- Sleep Powder
+- Sunny Day
+- Explosion
+
+Entei @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 24 Atk / 24 Def
+- Fire Blast
+- Hidden Power [Fighting]
+- Sunny Day
+- Solar Beam

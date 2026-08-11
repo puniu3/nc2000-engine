@@ -1,0 +1,49 @@
+Dragonite (M) @ PRZCureBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Dynamic Punch
+- Fire Blast
+- Thunder Wave
+
+Kingdra (F) @ Mystic Water
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Blizzard
+- Rest
+- Sleep Talk
+
+Gengar (M) @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Ice Punch
+- Shadow Ball
+- Dynamic Punch
+
+Misdreavus (F) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Confuse Ray
+- Mean Look
+- Perish Song
+- Protect
+
+Exeggutor (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Psychic
+- Leech Seed
+- Sleep Powder
+- Explosion
+
+Snorlax (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Earthquake
+- Rest
+- Self-Destruct

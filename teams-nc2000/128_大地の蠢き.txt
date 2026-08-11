@@ -1,0 +1,48 @@
+Marowak (M) @ Thick Club
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Bonemerang
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Nidoking (M) @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Fire Blast
+- Thunder
+- Ice Beam
+
+Quagsire (M) @ Mint Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Belly Drum
+- Amnesia
+- Rest
+
+Steelix (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Iron Tail
+- Toxic
+- Screech
+- Protect
+
+Gengar (M) @ Polkadot Bow
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Ice Punch
+- Sunny Day
+- Destiny Bond
+- Explosion
+
+Snorlax (M) @ Quick Claw
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Earthquake
+- Fire Blast
+- Self-Destruct

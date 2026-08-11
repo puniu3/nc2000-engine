@@ -1,0 +1,49 @@
+Electrode @ MiracleBerry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Thunder Wave
+- Reflect
+- Explosion
+
+Miltank (F) @ PRZCureBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Dynamic Punch
+- Attract
+- Milk Drink
+
+Misdreavus (M) @ Leftovers
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 24 Atk / 24 Def
+- Shadow Ball
+- Hidden Power [Fighting]
+- Screech
+- Pain Split
+
+Meganium (M) @ BrightPowder
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Iron Tail
+- Leech Seed
+- Swords Dance
+- Synthesis
+
+Venomoth (F) @ Gold Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Giga Drain
+- Sleep Powder
+- Double Team
+- Baton Pass
+
+Slowking (M) @ Mint Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Surf
+- Return
+- Belly Drum
+- Rest

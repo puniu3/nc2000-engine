@@ -1,0 +1,51 @@
+Tentacruel (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Hydro Pump
+- Sludge Bomb
+- Swords Dance
+- Substitute
+
+Dodrio (M) @ Berserk Gene
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 24 Atk / 24 Def
+- Double-Edge
+- Drill Peck
+- Hidden Power [Fighting]
+- Hyper Beam
+
+Smeargle (F) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Sacred Fire
+- Mirror Coat
+- Encore
+- Destiny Bond
+
+Donphan (M) @ Scope Lens
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Body Slam
+- Rest
+- Sleep Talk
+
+Togetic (F) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Zap Cannon
+- Sweet Kiss
+- Encore
+
+Togepi (F) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Present
+- Toxic
+- Encore
+- Rest

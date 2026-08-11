@@ -427,6 +427,26 @@ impl Belief {
         self.fallback_policy
     }
 
+    pub fn mode_id(&self) -> &'static str {
+        if self.pinned { "pinned" } else { "blind" }
+    }
+
+    pub fn is_pinned(&self) -> bool {
+        self.pinned
+    }
+
+    pub fn fallback_reason(&self) -> Option<&'static str> {
+        if !self.is_fallback() {
+            None
+        } else if self.pinned {
+            Some("pinned-preview-alignment-failed")
+        } else if self.cands.is_empty() {
+            Some("empty-candidate-pool")
+        } else {
+            Some("no-consistent-candidates")
+        }
+    }
+
     /// M18: install the community belief prior. It governs **only** the
     /// fallback (hidden custom team) imputation:
     ///

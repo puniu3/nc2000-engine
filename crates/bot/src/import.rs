@@ -1911,6 +1911,7 @@ pub struct ProtocolAgent {
     baked: Option<SearchChoice>,
     forced: Option<String>,
     request: Option<Request>,
+    sampled_candidate: Option<usize>,
     /// Decision points where the synthesized own-side legal set differed
     /// from the request-derived one (target 0; the projection still keeps
     /// every submission PS-legal).
@@ -1946,6 +1947,7 @@ impl ProtocolAgent {
             baked: None,
             forced: None,
             request: None,
+            sampled_candidate: None,
             legality_drift: 0,
             projections: 0,
         }
@@ -2012,6 +2014,7 @@ impl ProtocolAgent {
             self.baked = None;
             self.forced = None;
             self.request = None;
+            self.sampled_candidate = None;
             return Ok(false);
         }
         if self.own_sets.is_empty() {
@@ -2044,6 +2047,7 @@ impl ProtocolAgent {
 
         // synthesize
         let pick = belief.alive().first().copied();
+        self.sampled_candidate = pick;
         let battle = {
             let refs = belief.refs(pick);
             self.tracker.synthesize(dex, &self.own_sets, refs, obs, &req, &mut self.rng)?
@@ -2159,20 +2163,49 @@ impl ProtocolAgent {
         Some(legal[0].clone())
     }
 
-    /// JSON belief info (mirrors the wasm `BlindSearcher.beliefInfo`).
+    /// JSON belief info for decision logs and diagnostics. Keeps the
+    /// historical `count`/`fallback`/`candidates` aliases while adding the
+    /// explicit fields used by ps-client decision logs.
     pub fn belief_info(&self) -> String {
         match &self.belief {
             Some(b) => {
-                let candidates: Vec<&str> =
+                let candidate_ids: Vec<&str> =
                     b.alive().iter().map(|&i| b.candidate_id(i)).collect();
+                let sampled_candidate_id = self.sampled_candidate.map(|i| b.candidate_id(i));
+                let last_observer_revision = self.observer.as_ref().map(|obs| obs.revision());
                 serde_json::json!({
+                    "mode": b.mode_id(),
+                    "candidateCount": b.candidate_count(),
+                    "isFallback": b.is_fallback(),
+                    "candidateIds": candidate_ids.clone(),
+                    "sampledCandidateId": sampled_candidate_id,
+                    "sampledCandidateName": sampled_candidate_id,
+                    "fallbackReason": b.fallback_reason(),
+                    "lastObserverRevision": last_observer_revision,
+                    // Backward-compatible aliases used by existing tests/tools.
                     "count": b.candidate_count(),
                     "fallback": b.is_fallback(),
-                    "candidates": candidates,
+                    "candidates": candidate_ids,
                 })
                 .to_string()
             }
-            None => r#"{"count":0,"fallback":false,"candidates":[]}"#.to_string(),
+            None => {
+                let mode = if self.pinned_sets.is_some() { "pinned" } else { "blind" };
+                serde_json::json!({
+                    "mode": mode,
+                    "candidateCount": 0,
+                    "isFallback": false,
+                    "candidateIds": [],
+                    "sampledCandidateId": serde_json::Value::Null,
+                    "sampledCandidateName": serde_json::Value::Null,
+                    "fallbackReason": serde_json::Value::Null,
+                    "lastObserverRevision": serde_json::Value::Null,
+                    "count": 0,
+                    "fallback": false,
+                    "candidates": [],
+                })
+                .to_string()
+            }
         }
     }
 

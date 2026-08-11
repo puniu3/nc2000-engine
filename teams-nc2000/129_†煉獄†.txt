@@ -1,0 +1,50 @@
+Charizard (M) @ Quick Claw
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Fire Blast
+- Earthquake
+- Hyper Beam
+- Belly Drum
+
+Houndoom (F) @ Mint Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Solar Beam
+- Sunny Day
+- Rest
+
+Ninetales (F) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Flamethrower
+- Confuse Ray
+- Attract
+- Substitute
+
+Magmar (M) @ MiracleBerry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Fire Blast
+- Thunder Punch
+- Cross Chop
+- Confuse Ray
+
+Exeggutor (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 28 Atk / 28 Def
+- Hidden Power [Grass]
+- Sleep Powder
+- Sunny Day
+- Explosion
+
+Snorlax (M) @ PSNCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Earthquake
+- Curse
+- Self-Destruct
