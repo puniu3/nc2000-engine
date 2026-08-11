@@ -15,3 +15,5 @@ Gen2NintendoCup2000*.html
 # the spectator corpus itself: 570 real games, both handles in every log
 /data/corpus-spectator-logs.zip
 .playwright-mcp/
+data/exp-siv-v1/run.log
+data/exp-siv-v1/cells/*.tmp
