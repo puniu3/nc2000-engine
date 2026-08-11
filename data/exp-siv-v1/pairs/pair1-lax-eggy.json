@@ -1,0 +1,458 @@
+{
+ "id": "lax-eggy",
+ "base": "hc75-2nd-toriyama",
+ "axis": "Snorlax: BodySlam/DPunch/SleepTalk/Rest@BrightPowder vs BodySlam/EQ/Self-Destruct/Rest@MintBerry; Exeggutor: Explosion vs Leech Seed. Boom threat + sleep-talk stall vs double-boom: the ghost/booming answer changes.",
+ "a": [
+  {
+   "name": "Zapdos",
+   "species": "Zapdos",
+   "item": "Magnet",
+   "ability": "No Ability",
+   "moves": [
+    "Thunder",
+    "Thunderbolt",
+    "Sleep Talk",
+    "Rest"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "N",
+   "level": 55
+  },
+  {
+   "name": "Starmie",
+   "species": "Starmie",
+   "item": "Leftovers",
+   "ability": "No Ability",
+   "moves": [
+    "Surf",
+    "Thunder Wave",
+    "Confuse Ray",
+    "Substitute"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "N",
+   "level": 55
+  },
+  {
+   "name": "Snorlax",
+   "species": "Snorlax",
+   "item": "Bright Powder",
+   "ability": "No Ability",
+   "moves": [
+    "Body Slam",
+    "Dynamic Punch",
+    "Sleep Talk",
+    "Rest"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  },
+  {
+   "name": "Exeggutor",
+   "species": "Exeggutor",
+   "item": "Quick Claw",
+   "ability": "No Ability",
+   "moves": [
+    "Psychic",
+    "Hidden Power Bug",
+    "Sleep Powder",
+    "Explosion"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "ivs": {
+    "hp": 31,
+    "atk": 26,
+    "def": 26,
+    "spa": 31,
+    "spd": 31,
+    "spe": 31
+   },
+   "level": 50,
+   "happiness": 255,
+   "hpType": "Bug",
+   "pokeball": "",
+   "gigantamax": false,
+   "dynamaxLevel": 10,
+   "teraType": ""
+  },
+  {
+   "name": "Steelix",
+   "species": "Steelix",
+   "item": "Polkadot Bow",
+   "ability": "No Ability",
+   "moves": [
+    "Earthquake",
+    "Toxic",
+    "Roar",
+    "Explosion"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  },
+  {
+   "name": "Misdreavus",
+   "species": "Misdreavus",
+   "item": "Gold Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Zap Cannon",
+    "Mean Look",
+    "Perish Song",
+    "Destiny Bond"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  }
+ ],
+ "b": [
+  {
+   "name": "Zapdos",
+   "species": "Zapdos",
+   "item": "Magnet",
+   "ability": "No Ability",
+   "moves": [
+    "Thunder",
+    "Thunderbolt",
+    "Sleep Talk",
+    "Rest"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "N",
+   "level": 55
+  },
+  {
+   "name": "Starmie",
+   "species": "Starmie",
+   "item": "Leftovers",
+   "ability": "No Ability",
+   "moves": [
+    "Surf",
+    "Thunder Wave",
+    "Confuse Ray",
+    "Substitute"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "N",
+   "level": 55
+  },
+  {
+   "name": "Snorlax",
+   "species": "Snorlax",
+   "item": "Mint Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Body Slam",
+    "Earthquake",
+    "Self-Destruct",
+    "Rest"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  },
+  {
+   "name": "Exeggutor",
+   "species": "Exeggutor",
+   "item": "Quick Claw",
+   "ability": "No Ability",
+   "moves": [
+    "Psychic",
+    "Hidden Power Bug",
+    "Leech Seed",
+    "Sleep Powder"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "ivs": {
+    "hp": 31,
+    "atk": 26,
+    "def": 26,
+    "spa": 31,
+    "spd": 31,
+    "spe": 31
+   },
+   "level": 50,
+   "happiness": 255,
+   "hpType": "Bug",
+   "pokeball": "",
+   "gigantamax": false,
+   "dynamaxLevel": 10,
+   "teraType": ""
+  },
+  {
+   "name": "Steelix",
+   "species": "Steelix",
+   "item": "Polkadot Bow",
+   "ability": "No Ability",
+   "moves": [
+    "Earthquake",
+    "Toxic",
+    "Roar",
+    "Explosion"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  },
+  {
+   "name": "Misdreavus",
+   "species": "Misdreavus",
+   "item": "Gold Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Zap Cannon",
+    "Mean Look",
+    "Perish Song",
+    "Destiny Bond"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  }
+ ],
+ "weak": [
+  {
+   "name": "Zapdos",
+   "species": "Zapdos",
+   "item": "Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Peck",
+    "Thunder Shock",
+    "Thunder Wave",
+    "Agility"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "N",
+   "level": 55
+  },
+  {
+   "name": "Starmie",
+   "species": "Starmie",
+   "item": "Bitter Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Tackle",
+    "Water Gun",
+    "Rapid Spin",
+    "Harden"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "N",
+   "level": 55
+  },
+  {
+   "name": "Snorlax",
+   "species": "Snorlax",
+   "item": "Burnt Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Tackle",
+    "Headbutt",
+    "Defense Curl",
+    "Amnesia"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  },
+  {
+   "name": "Exeggutor",
+   "species": "Exeggutor",
+   "item": "Ice Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Barrage",
+    "Confusion",
+    "Stun Spore",
+    "Solar Beam"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50,
+   "happiness": 255,
+   "pokeball": "",
+   "gigantamax": false,
+   "dynamaxLevel": 10,
+   "teraType": ""
+  },
+  {
+   "name": "Steelix",
+   "species": "Steelix",
+   "item": "PSN Cure Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Tackle",
+    "Screech",
+    "Bind",
+    "Rock Throw"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  },
+  {
+   "name": "Misdreavus",
+   "species": "Misdreavus",
+   "item": "PRZ Cure Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Growl",
+    "Psywave",
+    "Spite",
+    "Confuse Ray"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  }
+ ]
+}

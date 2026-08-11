@@ -243,6 +243,13 @@ pub struct Belief {
     /// filtering is skipped (provably a no-op, and skipping keeps a filter
     /// bug from silently dropping the truth to fallback).
     pinned: bool,
+    /// EXP-SIV (2026-08-11) stubborn pin: hold the pinned candidate even
+    /// when public reveals contradict it — `sync` stops failing closed and
+    /// determinization imputes the candidate verbatim (reveal channels
+    /// scrubbed, so the reveal merge and its filter-drift assert never
+    /// see the contradiction). Experiment-only wrong-pin arm
+    /// (docs/EXP-signature-info-value.md); never a product path.
+    frozen: bool,
     fallback_policy: FallbackPolicy,
     /// M18: the community belief prior, when the owner loaded one.
     prior: Option<Arc<BeliefPrior>>,
@@ -282,6 +289,7 @@ impl Belief {
             alive: Vec::new(),
             fallback: None,
             pinned: false,
+            frozen: false,
             fallback_policy,
             prior: None,
             draws: None,
@@ -346,6 +354,7 @@ impl Belief {
             alive: vec![0],
             fallback: None,
             pinned: true,
+            frozen: false,
             fallback_policy: FallbackPolicy::Layered,
             prior: None,
             draws: None,
@@ -371,11 +380,23 @@ impl Belief {
             alive: vec![0],
             fallback: None,
             pinned: true,
+            frozen: false,
             fallback_policy: FallbackPolicy::Layered,
             prior: None,
             draws: None,
             synced: Some(obs.revision()),
         }
+    }
+
+    /// EXP-SIV: freeze a pinned belief onto its candidate. Public reveals
+    /// that contradict the pin are ignored instead of failing closed, and
+    /// determinizations impute the candidate's sets verbatim (no reveal
+    /// merge). This deliberately plays a wrong belief to the end — the
+    /// signature-scoped information-value experiment's wrong-pin envelope
+    /// arm (docs/EXP-signature-info-value.md). Never a product path.
+    pub fn freeze_pinned(&mut self) {
+        assert!(self.pinned, "freeze_pinned on a non-pinned belief");
+        self.frozen = true;
     }
 
     /// Re-filter after new observations. Cheap no-op at an unchanged
@@ -391,6 +412,12 @@ impl Belief {
     /// closed if later public evidence contradicts the submitted sheet.
     pub fn sync_checked(&mut self, dex: &Dex, obs: &Observer) -> Result<(), String> {
         if self.synced == Some(obs.revision()) {
+            return Ok(());
+        }
+        if self.pinned && self.frozen {
+            // EXP-SIV stubborn pin: contradictions are the experiment's
+            // point — hold the candidate, skip the fail-closed check.
+            self.synced = Some(obs.revision());
             return Ok(());
         }
         if self.pinned && !self.alive.is_empty() {
@@ -598,9 +625,21 @@ impl Belief {
         }
 
         // ---- per-mon set imputation (all 6 roster mons, picked or not)
+        // EXP-SIV frozen pin: erase the in-battle reveal channels so the
+        // (possibly contradicted) candidate is imputed verbatim — the
+        // reveal merge and its filter-drift assert never fire. Preview
+        // facts and pick publicity stay, keeping the clone coherent with
+        // the public battle state.
+        let scrubbed: Option<Vec<MonObs>> = self
+            .frozen
+            .then(|| obs.mons().iter().map(|m| m.preview_only()).collect());
         for slot in 0..roster_len {
             let mon = &mut out.sides[opp].roster[slot];
-            impute_mon(mon, &refs[slot], &obs.mons()[slot], dex);
+            let mo = match &scrubbed {
+                Some(v) => &v[slot],
+                None => &obs.mons()[slot],
+            };
+            impute_mon(mon, &refs[slot], mo, dex);
             out.refresh_poke_mask(dex, PokeId { side: opp as u8, slot: slot as u8 });
         }
         // active speed reflects stats (+ paralysis, quick claw) like the
@@ -1312,6 +1351,7 @@ mod fallback_tests {
             alive: Vec::new(),
             fallback: None,
             pinned: false,
+            frozen: false,
             fallback_policy: FallbackPolicy::Layered,
             prior: None,
             draws: None,

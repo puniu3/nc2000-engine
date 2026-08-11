@@ -1,0 +1,360 @@
+{
+ "id": "zapdos",
+ "base": "hc75-3rd-bean",
+ "axis": "Zapdos: Thunder/HPIce/Swagger/Substitute@Leftovers vs Thunder/Tbolt/SleepTalk/Rest@Magnet. Sub-swagger punisher vs rest-talk tank: status play and Ground pivots vs PP stall answers diverge.",
+ "a": [
+  {
+   "name": "Zapdos",
+   "species": "Zapdos",
+   "item": "Leftovers",
+   "ability": "No Ability",
+   "moves": [
+    "Thunder",
+    "Hidden Power Ice",
+    "Swagger",
+    "Substitute"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "N",
+   "ivs": {
+    "hp": 31,
+    "atk": 31,
+    "def": 26,
+    "spa": 31,
+    "spd": 31,
+    "spe": 31
+   },
+   "level": 55,
+   "happiness": 255,
+   "hpType": "Ice",
+   "pokeball": "",
+   "gigantamax": false,
+   "dynamaxLevel": 10,
+   "teraType": ""
+  },
+  {
+   "name": "Miltank",
+   "species": "Miltank",
+   "item": "Bright Powder",
+   "ability": "No Ability",
+   "moves": [
+    "Return",
+    "Curse",
+    "Double Team",
+    "Milk Drink"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "F",
+   "level": 55
+  },
+  {
+   "name": "Snorlax",
+   "species": "Snorlax",
+   "item": "Mint Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Body Slam",
+    "Earthquake",
+    "Self-Destruct",
+    "Rest"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  },
+  {
+   "name": "Exeggutor",
+   "species": "Exeggutor",
+   "item": "Quick Claw",
+   "ability": "No Ability",
+   "moves": [
+    "Psychic",
+    "Hidden Power Bug",
+    "Leech Seed",
+    "Sleep Powder"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "ivs": {
+    "hp": 31,
+    "atk": 26,
+    "def": 26,
+    "spa": 31,
+    "spd": 31,
+    "spe": 31
+   },
+   "level": 50,
+   "happiness": 255,
+   "hpType": "Bug",
+   "pokeball": "",
+   "gigantamax": false,
+   "dynamaxLevel": 10,
+   "teraType": ""
+  },
+  {
+   "name": "Cloyster",
+   "species": "Cloyster",
+   "item": "Miracle Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Surf",
+    "Ice Beam",
+    "Spikes",
+    "Explosion"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  },
+  {
+   "name": "Machamp",
+   "species": "Machamp",
+   "item": "Gold Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Cross Chop",
+    "Earthquake",
+    "Rock Slide",
+    "Hidden Power Bug"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "ivs": {
+    "hp": 31,
+    "atk": 26,
+    "def": 26,
+    "spa": 31,
+    "spd": 31,
+    "spe": 31
+   },
+   "level": 50,
+   "happiness": 255,
+   "hpType": "Bug",
+   "pokeball": "",
+   "gigantamax": false,
+   "dynamaxLevel": 10,
+   "teraType": ""
+  }
+ ],
+ "b": [
+  {
+   "name": "Zapdos",
+   "species": "Zapdos",
+   "item": "Magnet",
+   "ability": "No Ability",
+   "moves": [
+    "Thunder",
+    "Thunderbolt",
+    "Sleep Talk",
+    "Rest"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "N",
+   "level": 55,
+   "happiness": 255,
+   "pokeball": "",
+   "gigantamax": false,
+   "dynamaxLevel": 10,
+   "teraType": ""
+  },
+  {
+   "name": "Miltank",
+   "species": "Miltank",
+   "item": "Bright Powder",
+   "ability": "No Ability",
+   "moves": [
+    "Return",
+    "Curse",
+    "Double Team",
+    "Milk Drink"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "F",
+   "level": 55
+  },
+  {
+   "name": "Snorlax",
+   "species": "Snorlax",
+   "item": "Mint Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Body Slam",
+    "Earthquake",
+    "Self-Destruct",
+    "Rest"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  },
+  {
+   "name": "Exeggutor",
+   "species": "Exeggutor",
+   "item": "Quick Claw",
+   "ability": "No Ability",
+   "moves": [
+    "Psychic",
+    "Hidden Power Bug",
+    "Leech Seed",
+    "Sleep Powder"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "ivs": {
+    "hp": 31,
+    "atk": 26,
+    "def": 26,
+    "spa": 31,
+    "spd": 31,
+    "spe": 31
+   },
+   "level": 50,
+   "happiness": 255,
+   "hpType": "Bug",
+   "pokeball": "",
+   "gigantamax": false,
+   "dynamaxLevel": 10,
+   "teraType": ""
+  },
+  {
+   "name": "Cloyster",
+   "species": "Cloyster",
+   "item": "Miracle Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Surf",
+    "Ice Beam",
+    "Spikes",
+    "Explosion"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "level": 50
+  },
+  {
+   "name": "Machamp",
+   "species": "Machamp",
+   "item": "Gold Berry",
+   "ability": "No Ability",
+   "moves": [
+    "Cross Chop",
+    "Earthquake",
+    "Rock Slide",
+    "Hidden Power Bug"
+   ],
+   "nature": "Serious",
+   "evs": {
+    "hp": 255,
+    "atk": 255,
+    "def": 255,
+    "spa": 255,
+    "spd": 255,
+    "spe": 255
+   },
+   "gender": "M",
+   "ivs": {
+    "hp": 31,
+    "atk": 26,
+    "def": 26,
+    "spa": 31,
+    "spd": 31,
+    "spe": 31
+   },
+   "level": 50,
+   "happiness": 255,
+   "hpType": "Bug",
+   "pokeball": "",
+   "gigantamax": false,
+   "dynamaxLevel": 10,
+   "teraType": ""
+  }
+ ]
+}

@@ -148,6 +148,17 @@ pub struct MonObs {
     pub appeared: bool,
 }
 
+impl MonObs {
+    /// EXP-SIV frozen-pin support: this observation with the in-battle
+    /// reveal channels erased (revealed moves, item knowledge). Preview
+    /// facts and pick publicity are kept so determinization stays coherent
+    /// with the public battle state while a stubbornly-held wrong candidate
+    /// is imputed verbatim (docs/EXP-signature-info-value.md).
+    pub(crate) fn preview_only(&self) -> MonObs {
+        MonObs { revealed_moves: Vec::new(), item: ItemObs::default(), ..self.clone() }
+    }
+}
+
 /// Observation tracker for one side of one battle. Construct at battle
 /// start (team preview — item *presence* is read then), call `observe`
 /// at every real decision point.
