@@ -35,12 +35,15 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
+use std::sync::Arc;
+
 use conformance::fixture::repo_root;
 use conformance::load_dex;
-use nc2000_bot::preview::load_meta_pool;
+use nc2000_bot::preview::{load_meta_pool, MetaPool, MetaTeam};
 use nc2000_bot::smmcts::SelRule;
 use nc2000_bot::{
-    play_game, Agent, Belief, BlindSearch, GameResult, Observer, OpenAgent, RmConfig, SplitMix64,
+    play_game, Agent, Belief, BlindAgent, BlindSearch, GameResult, Observer, OpenAgent, RmConfig,
+    SplitMix64,
 };
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::Dex;
@@ -164,20 +167,50 @@ impl Agent for PinAgent {
 
 // ------------------------------------------------------------------- cells
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Arm {
-    Truth,
-    Wrong,
-    Weak,
+/// Which adversary Y is in a cell (the treatment).
+enum YSpec<'a> {
+    /// C1 arm: the product `OpenAgent` (truth pinned from the battle).
     Open,
+    /// Truth / wrong / weak pin (`frozen` = stubborn).
+    Pin { sets: &'a [PokemonSet], frozen: bool },
+    /// Phase 2 arm: the hedging blind adversary — uniform belief over the
+    /// pair's two variants (the pool prior), collapsing on reveals.
+    Blind { pool: Arc<MetaPool> },
 }
 
-impl Arm {
-    fn label(self) -> &'static str {
+/// Y agent instance; the Blind arm records the live candidate count after
+/// every decision (the belief-persistence manipulation check).
+enum YAgent {
+    O(OpenAgent),
+    P(PinAgent),
+    B(BlindAgent, Vec<usize>),
+}
+
+impl Agent for YAgent {
+    fn name(&self) -> String {
         match self {
-            Arm::Truth | Arm::Wrong => unreachable!("labeled via belief letter"),
-            Arm::Weak => "weak",
-            Arm::Open => "open",
+            YAgent::O(a) => a.name(),
+            YAgent::P(a) => a.name(),
+            YAgent::B(a, _) => a.name(),
+        }
+    }
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        match self {
+            YAgent::O(a) => a.choose(battle, dex, side, choices),
+            YAgent::P(a) => a.choose(battle, dex, side, choices),
+            YAgent::B(a, counts) => {
+                let c = a.choose(battle, dex, side, choices);
+                if let Some(b) = a.belief() {
+                    counts.push(b.candidate_count());
+                }
+                c
+            }
         }
     }
 }
@@ -223,14 +256,13 @@ fn run_cell(
     dex: &Dex,
     x_sets: &[PokemonSet],
     g_sets: &[PokemonSet],
-    pin_sets: Option<&[PokemonSet]>, // None = Open arm
-    frozen: bool,
+    yspec: &YSpec,
     budget: u32,
     games: usize,
     base_seed: u64,
     threads: usize,
     max_turns: u16,
-) -> (Vec<f64>, Vec<u16>, usize, f64, f64, f64) {
+) -> (Vec<f64>, Vec<u16>, usize, f64, f64, f64, Vec<usize>, Vec<f64>) {
     let blocks = games.div_ceil(2);
     let seeds: Vec<String> = {
         let mut r = SplitMix64::new(base_seed);
@@ -238,8 +270,9 @@ fn run_cell(
     };
     let cursor = AtomicUsize::new(0);
     let t0 = Instant::now();
-    // per-game record: (x_score, turns, capped, x_ns, x_moves, y_ns, y_moves)
-    type Rec = (f64, u16, bool, u64, u64, u64, u64);
+    // per-game record: (x_score, turns, capped, x_ns, x_moves, y_ns, y_moves,
+    //                   y_min_cands, y_wide_share) — last two only for Blind
+    type Rec = (f64, u16, bool, u64, u64, u64, u64, usize, f64);
     let mut results: Vec<Rec> = Vec::new();
     std::thread::scope(|scope| {
         let mut handles = Vec::new();
@@ -257,10 +290,16 @@ fn run_cell(
                     let sx = base_seed ^ (idx as u64).wrapping_mul(K_X);
                     let sy = base_seed ^ (idx as u64).wrapping_mul(K_Y);
                     let cfg = agent_cfg(budget);
-                    let mut agent_x: Box<dyn Agent> = Box::new(OpenAgent::new(cfg.clone(), None, sx));
-                    let mut agent_y: Box<dyn Agent> = match pin_sets {
-                        None => Box::new(OpenAgent::new(cfg.clone(), None, sy)),
-                        Some(p) => Box::new(PinAgent::new(cfg, p.to_vec(), frozen, sy)),
+                    let mut agent_x = OpenAgent::new(cfg.clone(), None, sx);
+                    let mut agent_y = match yspec {
+                        YSpec::Open => YAgent::O(OpenAgent::new(cfg.clone(), None, sy)),
+                        YSpec::Pin { sets, frozen } => {
+                            YAgent::P(PinAgent::new(cfg, sets.to_vec(), *frozen, sy))
+                        }
+                        YSpec::Blind { pool } => YAgent::B(
+                            BlindAgent::new(cfg, pool.clone(), None, sy),
+                            Vec::new(),
+                        ),
                     };
                     let (p1_sets, p2_sets) =
                         if x_is_p1 { (x_sets, g_sets) } else { (g_sets, x_sets) };
@@ -270,12 +309,12 @@ fn run_cell(
                     let (mut x_ns, mut y_ns, mut x_mv, mut y_mv) = (0u64, 0u64, 0u64, 0u64);
                     let res = {
                         let mut timed_x = TimedAgent {
-                            inner: &mut *agent_x,
+                            inner: &mut agent_x,
                             ns: &mut x_ns,
                             moves: &mut x_mv,
                         };
                         let mut timed_y = TimedAgent {
-                            inner: &mut *agent_y,
+                            inner: &mut agent_y,
                             ns: &mut y_ns,
                             moves: &mut y_mv,
                         };
@@ -292,6 +331,14 @@ fn run_cell(
                         GameResult::Outcome(Outcome::Tie) | GameResult::TurnCapped => 0.5,
                     };
                     let x_score = if x_is_p1 { p1_score } else { 1.0 - p1_score };
+                    let (y_min, y_wide) = match &agent_y {
+                        YAgent::B(_, counts) if !counts.is_empty() => (
+                            *counts.iter().min().unwrap(),
+                            counts.iter().filter(|&&c| c >= 2).count() as f64
+                                / counts.len() as f64,
+                        ),
+                        _ => (0, 0.0),
+                    };
                     out.push((
                         idx,
                         (
@@ -302,6 +349,8 @@ fn run_cell(
                             x_mv,
                             y_ns,
                             y_mv,
+                            y_min,
+                            y_wide,
                         ),
                     ));
                 }
@@ -321,7 +370,18 @@ fn run_cell(
     let (x_ns, x_mv) = results.iter().fold((0u64, 0u64), |(n, m), r| (n + r.3, m + r.4));
     let (y_ns, y_mv) = results.iter().fold((0u64, 0u64), |(n, m), r| (n + r.5, m + r.6));
     let ms = |ns: u64, mv: u64| ns as f64 / 1e6 / mv.max(1) as f64;
-    (scores, turns, caps, ms(x_ns, x_mv), ms(y_ns, y_mv), t0.elapsed().as_secs_f64())
+    let y_min_cands: Vec<usize> = results.iter().map(|r| r.7).collect();
+    let y_wide_share: Vec<f64> = results.iter().map(|r| r.8).collect();
+    (
+        scores,
+        turns,
+        caps,
+        ms(x_ns, x_mv),
+        ms(y_ns, y_mv),
+        t0.elapsed().as_secs_f64(),
+        y_min_cands,
+        y_wide_share,
+    )
 }
 
 /// Borrowing timing wrapper (the duel harness's `Timed`, example-local).
@@ -562,15 +622,25 @@ fn main() {
             pair_idx: 0,
             g_idx: gauntlet[0],
             truth_is_a: true,
-            belief: Arm::Open.label().into(),
+            belief: "open".into(),
         });
         assert!(pairs[0].weak.is_some(), "--controls needs a weak team on the first pair");
         cells.push(CellSpec {
             pair_idx: 0,
             g_idx: gauntlet[0],
             truth_is_a: true,
-            belief: Arm::Weak.label().into(),
+            belief: "weak".into(),
         });
+    }
+    if has(&args, "--phase2") {
+        // hedging adversary vs both truths, every pair x gauntlet
+        for (pi, _) in pairs.iter().enumerate() {
+            for &g in &gauntlet {
+                for truth_is_a in [true, false] {
+                    cells.push(CellSpec { pair_idx: pi, g_idx: g, truth_is_a, belief: "blind".into() });
+                }
+            }
+        }
     }
 
     std::fs::create_dir_all(&out_dir).unwrap();
@@ -593,20 +663,29 @@ fn main() {
         let pair = &pairs[cell.pair_idx];
         let x_sets = if cell.truth_is_a { &pair.a } else { &pair.b };
         let g_sets = &meta.teams[cell.g_idx].sets;
-        let (pin_sets, frozen): (Option<&[PokemonSet]>, bool) = match cell.belief.as_str() {
-            "a" => (Some(&pair.a), !cell.truth_is_a), // wrong iff truth is B
-            "b" => (Some(&pair.b), cell.truth_is_a),
-            "weak" => (Some(pair.weak.as_ref().unwrap()), true),
-            "open" => (None, false),
+        let yspec = match cell.belief.as_str() {
+            "a" => YSpec::Pin { sets: &pair.a, frozen: !cell.truth_is_a }, // wrong iff truth is B
+            "b" => YSpec::Pin { sets: &pair.b, frozen: cell.truth_is_a },
+            "weak" => YSpec::Pin { sets: pair.weak.as_ref().unwrap(), frozen: true },
+            "open" => YSpec::Open,
+            "blind" => YSpec::Blind {
+                pool: Arc::new(MetaPool {
+                    teams: vec![
+                        MetaTeam { id: format!("{}-a", pair.id), sets: pair.a.clone() },
+                        MetaTeam { id: format!("{}-b", pair.id), sets: pair.b.clone() },
+                    ],
+                }),
+            },
             other => panic!("unknown belief arm {other}"),
         };
+        let frozen = matches!(yspec, YSpec::Pin { frozen: true, .. });
         let name = cell.file_name(&pair.id, budget);
         eprintln!("[{}/{}] {name} ...", ci + 1, todo.len());
-        let (scores, turns, caps, x_ms, y_ms, secs) = run_cell(
-            &dex, x_sets, g_sets, pin_sets, frozen, budget, games, base_seed, threads, max_turns,
+        let (scores, turns, caps, x_ms, y_ms, secs, y_min_cands, y_wide_share) = run_cell(
+            &dex, x_sets, g_sets, &yspec, budget, games, base_seed, threads, max_turns,
         );
         let mean = scores.iter().sum::<f64>() / scores.len() as f64;
-        let json = serde_json::json!({
+        let mut json = serde_json::json!({
             "pair": pair.id, "g": cell.g_idx, "g_id": meta.teams[cell.g_idx].id,
             "truth": if cell.truth_is_a { "a" } else { "b" }, "belief": cell.belief,
             "frozen": frozen, "budget": budget, "games": scores.len(),
@@ -617,6 +696,10 @@ fn main() {
             "x_ms_per_move": x_ms, "y_ms_per_move": y_ms, "secs": secs,
             "game_scores": scores, "turns": turns,
         });
+        if cell.belief == "blind" {
+            json["y_min_cands"] = serde_json::json!(y_min_cands);
+            json["y_wide_share"] = serde_json::json!(y_wide_share);
+        }
         let path = out_dir.join(&name);
         let tmp = out_dir.join(format!("{name}.tmp"));
         std::fs::write(&tmp, serde_json::to_string(&json).unwrap()).unwrap();
@@ -723,5 +806,45 @@ fn summarize(out_dir: &Path, pairs: &[PairFile], gauntlet: &[usize], budget: u32
             .collect();
         let (m, ci, n) = pooled_stats(&d);
         println!("C2 teeth (weak-pin − truth-pin): {m:+.4} ± {ci:.4} (n={n})  [expect clearly > 0]");
+    }
+    // ---- Phase 2: hedging adversary (blind over {A,B}) vs truth pin
+    let mut grand2: Vec<f64> = Vec::new();
+    let mut any2 = false;
+    for (pi, pair) in pairs.iter().enumerate() {
+        for &g in gauntlet {
+            let cells4 = [
+                (cell(pi, g, "a", "blind"), cell(pi, g, "a", "a")),
+                (cell(pi, g, "b", "blind"), cell(pi, g, "b", "b")),
+            ];
+            let mut diffs: Vec<f64> = Vec::new();
+            let mut wide = Vec::new();
+            for (bl, tr) in cells4.into_iter() {
+                let (Some(bl), Some(tr)) = (bl, tr) else { continue };
+                diffs.extend(
+                    cell_blocks(&bl).iter().zip(cell_blocks(&tr)).map(|(x, y)| x - y),
+                );
+                if let Some(ws) = bl["y_wide_share"].as_array() {
+                    wide.extend(ws.iter().filter_map(|v| v.as_f64()));
+                }
+            }
+            if diffs.is_empty() {
+                continue;
+            }
+            if !any2 {
+                println!("--- Phase 2: Δ_blind (hedging − truth-pin), belief persistence");
+                any2 = true;
+            }
+            let (m, ci, n) = pooled_stats(&diffs);
+            let wide_mean = wide.iter().sum::<f64>() / wide.len().max(1) as f64;
+            println!(
+                "{:<12} {:>3}  Δ_blind {:+.3}±{:.3} (n={})   Y-belief wide (≥2 cands) share of decisions: {:.2}",
+                pair.id, g, m, ci, n, wide_mean
+            );
+            grand2.extend(diffs);
+        }
+    }
+    if !grand2.is_empty() {
+        let (m, ci, n) = pooled_stats(&grand2);
+        println!("GRAND Δ_blind: {m:+.4} ± {ci:.4} (n={n})   [H1': materially > 0; hedging-recovers-all: ≈ 0]");
     }
 }
