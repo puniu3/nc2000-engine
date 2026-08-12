@@ -1,0 +1,5 @@
+br gb-nash-s07: target data/meta-nash-v1/solutions/nash-all-r1.json, support 3 teams, 8 games/opp, skuct:300
+  [gb-nash-s07 0] parent 0.431 best-child 0.519 ACCEPT
+  [gb-nash-s07 1] parent 0.269 best-child 0.688 ACCEPT
+  [gb-nash-s07 2] parent 0.481 best-child 0.481 keep
+  [gb-nash-s07 3] parent 0.456 best-child 0.588 ACCEPT
