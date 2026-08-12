@@ -4,3 +4,130 @@ br gb-nash-s07: target data/meta-nash-v1/solutions/nash-all-r1.json, support 3 t
   [gb-nash-s07 2] parent 0.481 best-child 0.481 keep
   [gb-nash-s07 3] parent 0.456 best-child 0.588 ACCEPT
   [gb-nash-s07 4] parent 0.431 best-child 0.675 ACCEPT
+  [gb-nash-s07 5] parent 0.375 best-child 0.412 ACCEPT
+  [gb-nash-s07 6] parent 0.313 best-child 0.587 ACCEPT
+  [gb-nash-s07 7] parent 0.544 best-child 0.481 keep
+  [gb-nash-s07 8] parent 0.562 best-child 0.312 keep
+  [gb-nash-s07 9] parent 0.437 best-child 0.487 ACCEPT
+  [gb-nash-s07 10] parent 0.506 best-child 0.606 ACCEPT
+  [gb-nash-s07 11] parent 0.669 best-child 0.669 keep
+  [gb-nash-s07 12] parent 0.481 best-child 0.456 keep
+  [gb-nash-s07 13] parent 0.506 best-child 0.412 keep
+  [gb-nash-s07 14] parent 0.525 best-child 0.581 ACCEPT
+  [gb-nash-s07 15] parent 0.331 best-child 0.456 ACCEPT
+  [gb-nash-s07 16] parent 0.400 best-child 0.437 ACCEPT
+  [gb-nash-s07 17] parent 0.500 best-child 0.569 ACCEPT
+  [gb-nash-s07 18] parent 0.312 best-child 0.544 ACCEPT
+  [gb-nash-s07 19] parent 0.419 best-child 0.475 ACCEPT
+br gb-nash-s07 done: holdout 0.323 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/gb-nash-s07.json
+br gb-nash-rand: target data/meta-nash-v1/solutions/nash-all-r1.json, support 3 teams, 8 games/opp, skuct:300
+  [gb-nash-rand 0] parent 0.019 best-child 0.084 ACCEPT
+  [gb-nash-rand 1] parent 0.000 best-child 0.066 ACCEPT
+  [gb-nash-rand 2] parent 0.063 best-child 0.063 keep
+  [gb-nash-rand 3] parent 0.053 best-child 0.087 ACCEPT
+  [gb-nash-rand 4] parent 0.125 best-child 0.062 keep
+  [gb-nash-rand 5] parent 0.000 best-child 0.106 ACCEPT
+  [gb-nash-rand 6] parent 0.037 best-child 0.044 ACCEPT
+  [gb-nash-rand 7] parent 0.100 best-child 0.169 ACCEPT
+  [gb-nash-rand 8] parent 0.063 best-child 0.063 keep
+  [gb-nash-rand 9] parent 0.125 best-child 0.144 ACCEPT
+  [gb-nash-rand 10] parent 0.000 best-child 0.144 ACCEPT
+  [gb-nash-rand 11] parent 0.063 best-child 0.269 ACCEPT
+  [gb-nash-rand 12] parent 0.125 best-child 0.225 ACCEPT
+  [gb-nash-rand 13] parent 0.062 best-child 0.144 ACCEPT
+  [gb-nash-rand 14] parent 0.119 best-child 0.187 ACCEPT
+  [gb-nash-rand 15] parent 0.150 best-child 0.231 ACCEPT
+  [gb-nash-rand 16] parent 0.150 best-child 0.225 ACCEPT
+  [gb-nash-rand 17] parent 0.056 best-child 0.450 ACCEPT
+  [gb-nash-rand 18] parent 0.375 best-child 0.375 ACCEPT
+  [gb-nash-rand 19] parent 0.269 best-child 0.419 ACCEPT
+br gb-nash-rand done: holdout 0.254 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/gb-nash-rand.json
+br gb-nash-s13: target data/meta-nash-v1/solutions/nash-all-r1.json, support 3 teams, 8 games/opp, skuct:300
+  [gb-nash-s13 0] parent 0.419 best-child 0.575 ACCEPT
+  [gb-nash-s13 1] parent 0.312 best-child 0.425 ACCEPT
+  [gb-nash-s13 2] parent 0.275 best-child 0.506 ACCEPT
+  [gb-nash-s13 3] parent 0.381 best-child 0.394 ACCEPT
+  [gb-nash-s13 4] parent 0.256 best-child 0.525 ACCEPT
+  [gb-nash-s13 5] parent 0.525 best-child 0.375 keep
+  [gb-nash-s13 6] parent 0.313 best-child 0.381 ACCEPT
+  [gb-nash-s13 7] parent 0.500 best-child 0.500 keep
+  [gb-nash-s13 8] parent 0.275 best-child 0.381 ACCEPT
+  [gb-nash-s13 9] parent 0.356 best-child 0.563 ACCEPT
+  [gb-nash-s13 10] parent 0.419 best-child 0.550 ACCEPT
+  [gb-nash-s13 11] parent 0.250 best-child 0.625 ACCEPT
+  [gb-nash-s13 12] parent 0.419 best-child 0.481 ACCEPT
+  [gb-nash-s13 13] parent 0.519 best-child 0.544 ACCEPT
+  [gb-nash-s13 14] parent 0.269 best-child 0.687 ACCEPT
+  [gb-nash-s13 15] parent 0.462 best-child 0.544 ACCEPT
+  [gb-nash-s13 16] parent 0.462 best-child 0.412 keep
+  [gb-nash-s13 17] parent 0.500 best-child 0.500 keep
+  [gb-nash-s13 18] parent 0.256 best-child 0.381 ACCEPT
+  [gb-nash-s13 19] parent 0.337 best-child 0.425 ACCEPT
+br gb-nash-s13 done: holdout 0.315 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/gb-nash-s13.json
+br gb-uni-s07: target uniform-curated, support 12 teams, 8 games/opp, skuct:300
+  [gb-uni-s07 0] parent 0.667 best-child 0.687 ACCEPT
+  [gb-uni-s07 1] parent 0.604 best-child 0.667 ACCEPT
+  [gb-uni-s07 2] parent 0.573 best-child 0.646 ACCEPT
+  [gb-uni-s07 3] parent 0.604 best-child 0.625 ACCEPT
+  [gb-uni-s07 4] parent 0.594 best-child 0.594 keep
+  [gb-uni-s07 5] parent 0.594 best-child 0.625 ACCEPT
+  [gb-uni-s07 6] parent 0.458 best-child 0.562 ACCEPT
+  [gb-uni-s07 7] parent 0.562 best-child 0.562 keep
+  [gb-uni-s07 8] parent 0.562 best-child 0.625 ACCEPT
+  [gb-uni-s07 9] parent 0.500 best-child 0.521 ACCEPT
+  [gb-uni-s07 10] parent 0.573 best-child 0.521 keep
+  [gb-uni-s07 11] parent 0.552 best-child 0.625 ACCEPT
+  [gb-uni-s07 12] parent 0.490 best-child 0.646 ACCEPT
+  [gb-uni-s07 13] parent 0.521 best-child 0.490 keep
+  [gb-uni-s07 14] parent 0.479 best-child 0.583 ACCEPT
+  [gb-uni-s07 15] parent 0.552 best-child 0.510 keep
+  [gb-uni-s07 16] parent 0.427 best-child 0.604 ACCEPT
+  [gb-uni-s07 17] parent 0.583 best-child 0.542 keep
+  [gb-uni-s07 18] parent 0.552 best-child 0.604 ACCEPT
+  [gb-uni-s07 19] parent 0.469 best-child 0.573 ACCEPT
+br gb-uni-s07 done: holdout 0.490 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/gb-uni-s07.json
+br gb-uni-rand: target uniform-curated, support 12 teams, 8 games/opp, skuct:300
+  [gb-uni-rand 0] parent 0.099 best-child 0.099 keep
+  [gb-uni-rand 1] parent 0.036 best-child 0.161 ACCEPT
+  [gb-uni-rand 2] parent 0.135 best-child 0.167 ACCEPT
+  [gb-uni-rand 3] parent 0.167 best-child 0.177 ACCEPT
+  [gb-uni-rand 4] parent 0.208 best-child 0.146 keep
+  [gb-uni-rand 5] parent 0.172 best-child 0.167 keep
+  [gb-uni-rand 6] parent 0.188 best-child 0.198 ACCEPT
+  [gb-uni-rand 7] parent 0.115 best-child 0.177 ACCEPT
+  [gb-uni-rand 8] parent 0.135 best-child 0.229 ACCEPT
+  [gb-uni-rand 9] parent 0.198 best-child 0.187 keep
+  [gb-uni-rand 10] parent 0.094 best-child 0.187 ACCEPT
+  [gb-uni-rand 11] parent 0.104 best-child 0.161 ACCEPT
+  [gb-uni-rand 12] parent 0.177 best-child 0.156 keep
+  [gb-uni-rand 13] parent 0.146 best-child 0.219 ACCEPT
+  [gb-uni-rand 14] parent 0.245 best-child 0.208 keep
+  [gb-uni-rand 15] parent 0.208 best-child 0.281 ACCEPT
+  [gb-uni-rand 16] parent 0.219 best-child 0.260 ACCEPT
+  [gb-uni-rand 17] parent 0.177 best-child 0.391 ACCEPT
+  [gb-uni-rand 18] parent 0.417 best-child 0.396 keep
+  [gb-uni-rand 19] parent 0.427 best-child 0.531 ACCEPT
+br gb-uni-rand done: holdout 0.497 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/gb-uni-rand.json
+br gb-uni-s13: target uniform-curated, support 12 teams, 8 games/opp, skuct:300
+  [gb-uni-s13 0] parent 0.594 best-child 0.667 ACCEPT
+  [gb-uni-s13 1] parent 0.552 best-child 0.667 ACCEPT
+  [gb-uni-s13 2] parent 0.552 best-child 0.667 ACCEPT
+  [gb-uni-s13 3] parent 0.656 best-child 0.625 keep
+  [gb-uni-s13 4] parent 0.615 best-child 0.646 ACCEPT
+  [gb-uni-s13 5] parent 0.646 best-child 0.635 keep
+  [gb-uni-s13 6] parent 0.635 best-child 0.667 ACCEPT
+  [gb-uni-s13 7] parent 0.531 best-child 0.510 keep
+  [gb-uni-s13 8] parent 0.500 best-child 0.604 ACCEPT
+  [gb-uni-s13 9] parent 0.479 best-child 0.542 ACCEPT
+  [gb-uni-s13 10] parent 0.490 best-child 0.552 ACCEPT
+  [gb-uni-s13 11] parent 0.469 best-child 0.573 ACCEPT
+  [gb-uni-s13 12] parent 0.427 best-child 0.521 ACCEPT
+  [gb-uni-s13 13] parent 0.521 best-child 0.521 keep
+  [gb-uni-s13 14] parent 0.562 best-child 0.521 keep
+  [gb-uni-s13 15] parent 0.573 best-child 0.510 keep
+  [gb-uni-s13 16] parent 0.542 best-child 0.531 keep
+  [gb-uni-s13 17] parent 0.500 best-child 0.521 ACCEPT
+  [gb-uni-s13 18] parent 0.667 best-child 0.667 keep
+  [gb-uni-s13 19] parent 0.594 best-child 0.656 ACCEPT
+br gb-uni-s13 done: holdout 0.573 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/gb-uni-s13.json
+=== GATEB SEARCH COMPLETE ===
