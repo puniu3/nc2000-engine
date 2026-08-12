@@ -1,0 +1,8 @@
+duel gate-b-nash-300: X 0.3975 ± 0.0305 (1024 games, 114s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-nash-300.json
+duel gate-b-uni-300: X 0.5879 ± 0.0316 (1024 games, 190s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-uni-300.json
+duel gate-b-nash-1000: X 0.3027 ± 0.0404 (512 games, 206s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-nash-1000.json
+duel gate-b-uni-1000: X 0.6211 ± 0.0436 (512 games, 385s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-uni-1000.json
+duel gate-a-e0-300: X 0.4525 ± 0.0253 (1600 games, 336s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-a-e0-300.json
+duel gate-a-e02-300: X 0.4487 ± 0.0249 (1600 games, 324s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-a-e02-300.json
+duel gate-a-e0-1000: X 0.4700 ± 0.0369 (800 games, 589s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-a-e0-1000.json
+=== GATES COMPLETE ===

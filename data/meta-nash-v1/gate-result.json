@@ -1,0 +1,90 @@
+{
+ "experiment": "META-NASH v1 (docs/META-NASH-V1.md)",
+ "date": "2026-08-12",
+ "engine_commit": "fa6ab4a378afc12ad9d4ec5be9debfd8db3216a2",
+ "or_gate": {
+  "route_a_diversity": {
+   "material": "20 evolved teams harvested from 10 lineages (6 random-seeded, 4 tournament-seeded) vs the r0 equilibrium",
+   "count_bar": "FAIL: 20 evolved candidates < 24 required at >=1% weight",
+   "non_regression": {
+    "ai-pool-e0 vs uniform-curated @300 n=1600": [
+     0.4525,
+     0.0253
+    ],
+    "ai-pool-e0 vs uniform-curated @1000 n=800": [
+     0.47,
+     0.0369
+    ],
+    "ai-pool-e0.2 vs uniform-curated @300 n=1600": [
+     0.4487,
+     0.0249
+    ],
+    "bar": "point >= 0.48 AND lower95 >= 0.45 at both budgets",
+    "verdict": "FAIL at both budgets"
+   },
+   "verdict": "ROUTE A FAIL"
+  },
+  "route_b_strength": {
+   "target_pool": "nash-all-r1: sample-07 0.500 / sample-13 0.349 / sample-12 0.150 (+sample-14 0.001), internal BR margin 0.0",
+   "exploiter_protocol": "equal-budget (1+lambda) searches, 3 lineages per target (seeds: sample-07 / random / sample-13), best-by-holdout rescored on fresh seed 777 with full weighted pools",
+   "conceded_to_best_exploiter": {
+    "nash_pool @300 n=1024": [
+     0.3975,
+     0.0305
+    ],
+    "uniform_curated @300 n=1024": [
+     0.5879,
+     0.0316
+    ],
+    "nash_pool @1000 n=512": [
+     0.3027,
+     0.0404
+    ],
+    "uniform_curated @1000 n=512": [
+     0.6211,
+     0.0436
+    ]
+   },
+   "ci_separation": "non-overlapping at both budgets; gap widens with budget (0.19 -> 0.32)",
+   "search_robustness": "13 total lineages ever aimed at the equilibrium (10 phase-1 + 3 gate-B) plateau at holdout <= 0.40",
+   "verdict": "ROUTE B PASS"
+  },
+  "verdict": "OR GATE PASS via route B"
+ },
+ "product_pool": {
+  "artifact": "data/meta-nash-v1/pool-artifact.json",
+  "teams": {
+   "sample-07 (w=0.500)": [
+    "Electrode",
+    "Tauros",
+    "Cloyster",
+    "Marowak",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "sample-13 (w=0.349)": [
+    "Gengar",
+    "Steelix",
+    "Starmie",
+    "Cloyster",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "sample-12 (w=0.150)": [
+    "Gengar",
+    "Starmie",
+    "Cloyster",
+    "Umbreon",
+    "Marowak",
+    "Snorlax"
+   ]
+  },
+  "vs_current_uniform_pool_matrix_predicted": 0.656
+ },
+ "caveats": [
+  "equilibrium of the bot's game at skuct:300 (gates re-run at 1000); 30k product transfer unverified",
+  "the equilibrium prefers expert sample teams over tournament winners - a statement about bot-vs-bot play, not human meta",
+  "evolution rediscovered meta species cores but never beat the curated frontier (M11's lesson reconfirmed against a proper equilibrium target)",
+  "web wiring (weighted sampling of pool-artifact.json) is a follow-up commit; artifact format is final"
+ ]
+}

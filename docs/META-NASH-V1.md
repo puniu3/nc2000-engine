@@ -1,6 +1,8 @@
 # META-NASH v1 — AI進化プール + 行列ナッシュ混合（本走）
 
-Status: **PREREGISTERED, IMPLEMENTING.** 2026-08-12。EXP-SIV(docs/EXP-signature-info-value.md)の
+Status: **COMPLETE — OR GATE PASS (Route B). 2026-08-12.** 結果は§結果、機械可読は
+`data/meta-nash-v1/gate-result.json`、製品プールは `data/meta-nash-v1/pool-artifact.json`。
+設計 2026-08-12。EXP-SIV(docs/EXP-signature-info-value.md)の
 帰結を反映した縮退版本走: 署名内情報項なし、prior固定点なし。UXは現行のまま
 (AIプール + Blind)。パーティを進化探索で追加し、チーム対チーム行列のナッシュ混合を
 解いて「プール + 選択確率表」を1つ出す。
@@ -47,6 +49,43 @@ Status: **PREREGISTERED, IMPLEMENTING.** 2026-08-12。EXP-SIV(docs/EXP-signature
 4. 成果物: `data/meta-nash-v1/`(candidates / cells / lineages / solutions / gates)、
    最終 `pool-artifact.json` {teams, weights, provenance}。web は既存のファイル読込
    プール + 重み付き抽選(botの自チーム選択のみ; 相手beliefは不変)。
+
+## 結果（2026-08-12）
+
+**判定: OR GATE PASS — Route B（強さルート）で合格。Route A は不成立。**
+
+実施実績: 行列 52チーム×1326ペア×64戦(skuct:300、seed-paired)、BR系統13本
+(フェーズ1に10、Gate Bに6のうち対ナッシュ3)、全ゲートを新シード777で再採点。
+
+### Route B — 敵対的exploiterへの明確な優位: **PASS**
+
+同一予算のexploiter探索(3系統/対象、holdout選抜、フル重み付きプールで再採点):
+
+| 被搾取スコア(小さいほど良) | 300反復 n=1024 | 1000反復 n=512 |
+|---|---|---|
+| **ナッシュプール** | **0.398 ± 0.031** | **0.303 ± 0.040** |
+| 現行(キュレート一様) | 0.588 ± 0.032 | 0.621 ± 0.044 |
+
+95%CIは両予算で非重複、**差は予算とともに拡大**(0.19→0.32)。現行プールは自身への
+最良exploiterに負け越す(0.59〜0.62を明け渡す)のに対し、ナッシュプールは自身への
+最良exploiterに**勝ち越す**。均衡を狙った全13系統のholdoutは0.40以下で頭打ち —
+内部BRマージン0.0の外部確認。おまけに、ナッシュプール自体が現行一様プールに対して
+行列予測0.656で明確に強い。
+
+**製品プール**(`pool-artifact.json`): sample-07 (Electrode/Tauros/Cloyster/Marowak/
+Snorlax/Zapdos) w=0.500、sample-13 (Gengar/Steelix/Starmie/Cloyster/Snorlax/Zapdos)
+w=0.349、sample-12 (Gengar/Starmie/Cloyster/Umbreon/Marowak/Snorlax) w=0.150。
+「ゲームの結論が出た」ストーリー: この3チーム混合が、候補空間と進化探索の双方に
+対してexploit不能な均衡点。
+
+### Route A — 多様性: **FAIL**(両バーとも)
+
+- 材料: 進化20チーム < 24(ランダム種holdout 0.05〜0.34、トーナメント種0.15〜0.40 —
+  誰も均衡サポートに勝てず、r1均衡はr0と完全同一 = DOは1ラウンドで収束)。
+- 非退行: ai-pool-e0 vs 現行一様 = 0.453±0.025(300) / 0.470±0.037(1000)、
+  基準(点≥0.48かつ下限≥0.45)を両予算で下回る。
+- M11の教訓の再確認: 進化はメタの種族コア(Cloyster/Snorlax/Zapdos/Gengar)を
+  自力で再発見するが、キュレート済みフロンティアを超える個体は生まなかった。
 
 ## 既知の留保(プレレジ)
 

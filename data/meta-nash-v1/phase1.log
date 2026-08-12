@@ -1,0 +1,436 @@
+matrix: 32 teams, 496 pairs, 496 to run (iters 300, 64 games/cell)
+  10/496 cells (200s, 20.0s/cell)
+  20/496 cells (421s, 21.0s/cell)
+  30/496 cells (624s, 20.8s/cell)
+  40/496 cells (782s, 19.5s/cell)
+  50/496 cells (956s, 19.1s/cell)
+  60/496 cells (1109s, 18.5s/cell)
+  70/496 cells (1236s, 17.7s/cell)
+  80/496 cells (1354s, 16.9s/cell)
+  90/496 cells (1492s, 16.6s/cell)
+  100/496 cells (1621s, 16.2s/cell)
+  110/496 cells (1793s, 16.3s/cell)
+  120/496 cells (1920s, 16.0s/cell)
+  130/496 cells (1993s, 15.3s/cell)
+  140/496 cells (2078s, 14.8s/cell)
+  150/496 cells (2164s, 14.4s/cell)
+  160/496 cells (2256s, 14.1s/cell)
+  170/496 cells (2345s, 13.8s/cell)
+  180/496 cells (2502s, 13.9s/cell)
+  190/496 cells (2751s, 14.5s/cell)
+  200/496 cells (2915s, 14.6s/cell)
+  210/496 cells (3059s, 14.6s/cell)
+  220/496 cells (3220s, 14.6s/cell)
+  230/496 cells (3410s, 14.8s/cell)
+  240/496 cells (3597s, 15.0s/cell)
+  250/496 cells (3754s, 15.0s/cell)
+  260/496 cells (3965s, 15.2s/cell)
+  270/496 cells (4104s, 15.2s/cell)
+  280/496 cells (4278s, 15.3s/cell)
+  290/496 cells (4419s, 15.2s/cell)
+  300/496 cells (4621s, 15.4s/cell)
+  310/496 cells (4738s, 15.3s/cell)
+  320/496 cells (4868s, 15.2s/cell)
+  330/496 cells (4974s, 15.1s/cell)
+  340/496 cells (5080s, 14.9s/cell)
+  350/496 cells (5184s, 14.8s/cell)
+  360/496 cells (5273s, 14.6s/cell)
+  370/496 cells (5543s, 15.0s/cell)
+  380/496 cells (5726s, 15.1s/cell)
+  390/496 cells (5888s, 15.1s/cell)
+  400/496 cells (6142s, 15.4s/cell)
+  410/496 cells (6351s, 15.5s/cell)
+  420/496 cells (6529s, 15.5s/cell)
+  430/496 cells (6731s, 15.7s/cell)
+  440/496 cells (6916s, 15.7s/cell)
+  450/496 cells (7098s, 15.8s/cell)
+  460/496 cells (7257s, 15.8s/cell)
+  470/496 cells (7412s, 15.8s/cell)
+  480/496 cells (7545s, 15.7s/cell)
+  490/496 cells (7666s, 15.6s/cell)
+  496/496 cells (7730s, 15.6s/cell)
+matrix complete
+solved nash-curated-r0: 32 rows, support 4 (>=1% 3), worst column sample-13 at 0.500 (margin 0.000)
+wrote /home/user/nc2000-engine/data/meta-nash-v1/solutions/nash-curated-r0.json
+br r1-rand-0: target data/meta-nash-v1/solutions/nash-curated-r0.json, support 3 teams, 8 games/opp, skuct:300
+  [r1-rand-0 0] parent 0.075 best-child 0.053 keep
+  [r1-rand-0 1] parent 0.044 best-child 0.053 ACCEPT
+  [r1-rand-0 2] parent 0.044 best-child 0.053 ACCEPT
+  [r1-rand-0 3] parent 0.022 best-child 0.044 ACCEPT
+  [r1-rand-0 4] parent 0.022 best-child 0.065 ACCEPT
+  [r1-rand-0 5] parent 0.000 best-child 0.106 ACCEPT
+  [r1-rand-0 6] parent 0.022 best-child 0.063 ACCEPT
+  [r1-rand-0 7] parent 0.022 best-child 0.022 keep
+  [r1-rand-0 8] parent 0.050 best-child 0.125 ACCEPT
+  [r1-rand-0 9] parent 0.019 best-child 0.169 ACCEPT
+  [r1-rand-0 10] parent 0.125 best-child 0.125 keep
+  [r1-rand-0 11] parent 0.169 best-child 0.063 keep
+  [r1-rand-0 12] parent 0.062 best-child 0.194 ACCEPT
+  [r1-rand-0 13] parent 0.037 best-child 0.150 ACCEPT
+  [r1-rand-0 14] parent 0.000 best-child 0.169 ACCEPT
+  [r1-rand-0 15] parent 0.188 best-child 0.144 keep
+  [r1-rand-0 16] parent 0.081 best-child 0.150 ACCEPT
+  [r1-rand-0 17] parent 0.000 best-child 0.231 ACCEPT
+  [r1-rand-0 18] parent 0.000 best-child 0.194 ACCEPT
+  [r1-rand-0 19] parent 0.087 best-child 0.231 ACCEPT
+  [r1-rand-0 20] parent 0.106 best-child 0.312 ACCEPT
+  [r1-rand-0 21] parent 0.169 best-child 0.394 ACCEPT
+  [r1-rand-0 22] parent 0.313 best-child 0.313 keep
+  [r1-rand-0 23] parent 0.125 best-child 0.294 ACCEPT
+  [r1-rand-0 24] parent 0.144 best-child 0.194 ACCEPT
+  [r1-rand-0 25] parent 0.087 best-child 0.188 ACCEPT
+  [r1-rand-0 26] parent 0.100 best-child 0.338 ACCEPT
+  [r1-rand-0 27] parent 0.106 best-child 0.250 ACCEPT
+  [r1-rand-0 28] parent 0.081 best-child 0.150 ACCEPT
+  [r1-rand-0 29] parent 0.044 best-child 0.206 ACCEPT
+  [r1-rand-0 30] parent 0.150 best-child 0.188 ACCEPT
+  [r1-rand-0 31] parent 0.062 best-child 0.125 ACCEPT
+br r1-rand-0 done: holdout 0.054 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/r1-rand-0.json
+br r1-rand-1: target data/meta-nash-v1/solutions/nash-curated-r0.json, support 3 teams, 8 games/opp, skuct:300
+  [r1-rand-1 0] parent 0.187 best-child 0.106 keep
+  [r1-rand-1 1] parent 0.141 best-child 0.125 keep
+  [r1-rand-1 2] parent 0.231 best-child 0.231 keep
+  [r1-rand-1 3] parent 0.037 best-child 0.231 ACCEPT
+  [r1-rand-1 4] parent 0.331 best-child 0.306 keep
+  [r1-rand-1 5] parent 0.294 best-child 0.457 ACCEPT
+  [r1-rand-1 6] parent 0.250 best-child 0.331 ACCEPT
+  [r1-rand-1 7] parent 0.100 best-child 0.212 ACCEPT
+  [r1-rand-1 8] parent 0.294 best-child 0.256 keep
+  [r1-rand-1 9] parent 0.406 best-child 0.275 keep
+  [r1-rand-1 10] parent 0.187 best-child 0.356 ACCEPT
+  [r1-rand-1 11] parent 0.225 best-child 0.356 ACCEPT
+  [r1-rand-1 12] parent 0.356 best-child 0.356 keep
+  [r1-rand-1 13] parent 0.244 best-child 0.338 ACCEPT
+  [r1-rand-1 14] parent 0.312 best-child 0.387 ACCEPT
+  [r1-rand-1 15] parent 0.318 best-child 0.419 ACCEPT
+  [r1-rand-1 16] parent 0.237 best-child 0.394 ACCEPT
+  [r1-rand-1 17] parent 0.237 best-child 0.362 ACCEPT
+  [r1-rand-1 18] parent 0.213 best-child 0.313 ACCEPT
+  [r1-rand-1 19] parent 0.275 best-child 0.256 keep
+  [r1-rand-1 20] parent 0.294 best-child 0.525 ACCEPT
+  [r1-rand-1 21] parent 0.481 best-child 0.425 keep
+  [r1-rand-1 22] parent 0.294 best-child 0.313 ACCEPT
+  [r1-rand-1 23] parent 0.250 best-child 0.356 ACCEPT
+  [r1-rand-1 24] parent 0.475 best-child 0.331 keep
+  [r1-rand-1 25] parent 0.369 best-child 0.413 ACCEPT
+  [r1-rand-1 26] parent 0.144 best-child 0.375 ACCEPT
+  [r1-rand-1 27] parent 0.268 best-child 0.188 keep
+  [r1-rand-1 28] parent 0.312 best-child 0.275 keep
+  [r1-rand-1 29] parent 0.144 best-child 0.312 ACCEPT
+  [r1-rand-1 30] parent 0.212 best-child 0.338 ACCEPT
+  [r1-rand-1 31] parent 0.181 best-child 0.419 ACCEPT
+br r1-rand-1 done: holdout 0.213 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/r1-rand-1.json
+br r1-rand-2: target data/meta-nash-v1/solutions/nash-curated-r0.json, support 3 teams, 8 games/opp, skuct:300
+  [r1-rand-2 0] parent 0.044 best-child 0.022 keep
+  [r1-rand-2 1] parent 0.000 best-child 0.044 ACCEPT
+  [r1-rand-2 2] parent 0.109 best-child 0.019 keep
+  [r1-rand-2 3] parent 0.000 best-child 0.022 ACCEPT
+  [r1-rand-2 4] parent 0.044 best-child 0.044 keep
+  [r1-rand-2 5] parent 0.044 best-child 0.087 ACCEPT
+  [r1-rand-2 6] parent 0.022 best-child 0.087 ACCEPT
+  [r1-rand-2 7] parent 0.044 best-child 0.103 ACCEPT
+  [r1-rand-2 8] parent 0.062 best-child 0.063 ACCEPT
+  [r1-rand-2 9] parent 0.044 best-child 0.063 ACCEPT
+  [r1-rand-2 10] parent 0.022 best-child 0.037 ACCEPT
+  [r1-rand-2 11] parent 0.106 best-child 0.468 ACCEPT
+  [r1-rand-2 12] parent 0.506 best-child 0.418 keep
+  [r1-rand-2 13] parent 0.394 best-child 0.500 ACCEPT
+  [r1-rand-2 14] parent 0.244 best-child 0.500 ACCEPT
+  [r1-rand-2 15] parent 0.181 best-child 0.356 ACCEPT
+  [r1-rand-2 16] parent 0.312 best-child 0.469 ACCEPT
+  [r1-rand-2 17] parent 0.293 best-child 0.500 ACCEPT
+  [r1-rand-2 18] parent 0.256 best-child 0.437 ACCEPT
+  [r1-rand-2 19] parent 0.337 best-child 0.544 ACCEPT
+  [r1-rand-2 20] parent 0.338 best-child 0.437 ACCEPT
+  [r1-rand-2 21] parent 0.562 best-child 0.731 ACCEPT
+  [r1-rand-2 22] parent 0.269 best-child 0.650 ACCEPT
+  [r1-rand-2 23] parent 0.519 best-child 0.537 ACCEPT
+  [r1-rand-2 24] parent 0.287 best-child 0.432 ACCEPT
+  [r1-rand-2 25] parent 0.444 best-child 0.525 ACCEPT
+  [r1-rand-2 26] parent 0.438 best-child 0.437 keep
+  [r1-rand-2 27] parent 0.312 best-child 0.525 ACCEPT
+  [r1-rand-2 28] parent 0.400 best-child 0.563 ACCEPT
+  [r1-rand-2 29] parent 0.287 best-child 0.444 ACCEPT
+  [r1-rand-2 30] parent 0.362 best-child 0.457 ACCEPT
+  [r1-rand-2 31] parent 0.275 best-child 0.438 ACCEPT
+br r1-rand-2 done: holdout 0.335 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/r1-rand-2.json
+br r1-rand-3: target data/meta-nash-v1/solutions/nash-curated-r0.json, support 3 teams, 8 games/opp, skuct:300
+  [r1-rand-3 0] parent 0.041 best-child 0.128 ACCEPT
+  [r1-rand-3 1] parent 0.000 best-child 0.187 ACCEPT
+  [r1-rand-3 2] parent 0.000 best-child 0.037 ACCEPT
+  [r1-rand-3 3] parent 0.000 best-child 0.059 ACCEPT
+  [r1-rand-3 4] parent 0.019 best-child 0.100 ACCEPT
+  [r1-rand-3 5] parent 0.069 best-child 0.084 ACCEPT
+  [r1-rand-3 6] parent 0.022 best-child 0.063 ACCEPT
+  [r1-rand-3 7] parent 0.065 best-child 0.087 ACCEPT
+  [r1-rand-3 8] parent 0.000 best-child 0.050 ACCEPT
+  [r1-rand-3 9] parent 0.031 best-child 0.059 ACCEPT
+  [r1-rand-3 10] parent 0.044 best-child 0.062 ACCEPT
+  [r1-rand-3 11] parent 0.022 best-child 0.188 ACCEPT
+  [r1-rand-3 12] parent 0.050 best-child 0.185 ACCEPT
+  [r1-rand-3 13] parent 0.044 best-child 0.087 ACCEPT
+  [r1-rand-3 14] parent 0.078 best-child 0.156 ACCEPT
+  [r1-rand-3 15] parent 0.044 best-child 0.112 ACCEPT
+  [r1-rand-3 16] parent 0.062 best-child 0.200 ACCEPT
+  [r1-rand-3 17] parent 0.100 best-child 0.206 ACCEPT
+  [r1-rand-3 18] parent 0.206 best-child 0.234 ACCEPT
+  [r1-rand-3 19] parent 0.144 best-child 0.269 ACCEPT
+  [r1-rand-3 20] parent 0.269 best-child 0.418 ACCEPT
+  [r1-rand-3 21] parent 0.325 best-child 0.350 ACCEPT
+  [r1-rand-3 22] parent 0.269 best-child 0.225 keep
+  [r1-rand-3 23] parent 0.206 best-child 0.400 ACCEPT
+  [r1-rand-3 24] parent 0.306 best-child 0.287 keep
+  [r1-rand-3 25] parent 0.181 best-child 0.375 ACCEPT
+  [r1-rand-3 26] parent 0.200 best-child 0.331 ACCEPT
+  [r1-rand-3 27] parent 0.437 best-child 0.331 keep
+  [r1-rand-3 28] parent 0.456 best-child 0.394 keep
+  [r1-rand-3 29] parent 0.225 best-child 0.456 ACCEPT
+  [r1-rand-3 30] parent 0.231 best-child 0.369 ACCEPT
+  [r1-rand-3 31] parent 0.231 best-child 0.282 ACCEPT
+br r1-rand-3 done: holdout 0.310 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/r1-rand-3.json
+br r1-rand-4: target data/meta-nash-v1/solutions/nash-curated-r0.json, support 3 teams, 8 games/opp, skuct:300
+  [r1-rand-4 0] parent 0.294 best-child 0.294 keep
+  [r1-rand-4 1] parent 0.125 best-child 0.300 ACCEPT
+  [r1-rand-4 2] parent 0.125 best-child 0.106 keep
+  [r1-rand-4 3] parent 0.188 best-child 0.212 ACCEPT
+  [r1-rand-4 4] parent 0.081 best-child 0.318 ACCEPT
+  [r1-rand-4 5] parent 0.106 best-child 0.369 ACCEPT
+  [r1-rand-4 6] parent 0.187 best-child 0.181 keep
+  [r1-rand-4 7] parent 0.150 best-child 0.332 ACCEPT
+  [r1-rand-4 8] parent 0.207 best-child 0.207 keep
+  [r1-rand-4 9] parent 0.144 best-child 0.357 ACCEPT
+  [r1-rand-4 10] parent 0.206 best-child 0.381 ACCEPT
+  [r1-rand-4 11] parent 0.206 best-child 0.400 ACCEPT
+  [r1-rand-4 12] parent 0.119 best-child 0.125 ACCEPT
+  [r1-rand-4 13] parent 0.063 best-child 0.062 keep
+  [r1-rand-4 14] parent 0.019 best-child 0.138 ACCEPT
+  [r1-rand-4 15] parent 0.081 best-child 0.144 ACCEPT
+  [r1-rand-4 16] parent 0.081 best-child 0.125 ACCEPT
+  [r1-rand-4 17] parent 0.125 best-child 0.106 keep
+  [r1-rand-4 18] parent 0.000 best-child 0.081 ACCEPT
+  [r1-rand-4 19] parent 0.144 best-child 0.244 ACCEPT
+  [r1-rand-4 20] parent 0.144 best-child 0.225 ACCEPT
+  [r1-rand-4 21] parent 0.269 best-child 0.163 keep
+  [r1-rand-4 22] parent 0.288 best-child 0.187 keep
+  [r1-rand-4 23] parent 0.100 best-child 0.162 ACCEPT
+  [r1-rand-4 24] parent 0.269 best-child 0.294 ACCEPT
+  [r1-rand-4 25] parent 0.144 best-child 0.250 ACCEPT
+  [r1-rand-4 26] parent 0.100 best-child 0.350 ACCEPT
+  [r1-rand-4 27] parent 0.432 best-child 0.369 keep
+  [r1-rand-4 28] parent 0.225 best-child 0.431 ACCEPT
+  [r1-rand-4 29] parent 0.162 best-child 0.187 ACCEPT
+  [r1-rand-4 30] parent 0.037 best-child 0.275 ACCEPT
+  [r1-rand-4 31] parent 0.287 best-child 0.475 ACCEPT
+br r1-rand-4 done: holdout 0.242 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/r1-rand-4.json
+br r1-rand-5: target data/meta-nash-v1/solutions/nash-curated-r0.json, support 3 teams, 8 games/opp, skuct:300
+  [r1-rand-5 0] parent 0.037 best-child 0.019 keep
+  [r1-rand-5 1] parent 0.031 best-child 0.044 ACCEPT
+  [r1-rand-5 2] parent 0.081 best-child 0.063 keep
+  [r1-rand-5 3] parent 0.000 best-child 0.084 ACCEPT
+  [r1-rand-5 4] parent 0.063 best-child 0.081 ACCEPT
+  [r1-rand-5 5] parent 0.019 best-child 0.019 keep
+  [r1-rand-5 6] parent 0.044 best-child 0.081 ACCEPT
+  [r1-rand-5 7] parent 0.081 best-child 0.169 ACCEPT
+  [r1-rand-5 8] parent 0.063 best-child 0.063 keep
+  [r1-rand-5 9] parent 0.163 best-child 0.056 keep
+  [r1-rand-5 10] parent 0.000 best-child 0.081 ACCEPT
+  [r1-rand-5 11] parent 0.081 best-child 0.163 ACCEPT
+  [r1-rand-5 12] parent 0.056 best-child 0.081 ACCEPT
+  [r1-rand-5 13] parent 0.056 best-child 0.106 ACCEPT
+  [r1-rand-5 14] parent 0.100 best-child 0.144 ACCEPT
+  [r1-rand-5 15] parent 0.125 best-child 0.081 keep
+  [r1-rand-5 16] parent 0.019 best-child 0.081 ACCEPT
+  [r1-rand-5 17] parent 0.019 best-child 0.100 ACCEPT
+  [r1-rand-5 18] parent 0.044 best-child 0.081 ACCEPT
+  [r1-rand-5 19] parent 0.062 best-child 0.206 ACCEPT
+  [r1-rand-5 20] parent 0.106 best-child 0.119 ACCEPT
+  [r1-rand-5 21] parent 0.162 best-child 0.162 keep
+  [r1-rand-5 22] parent 0.163 best-child 0.506 ACCEPT
+  [r1-rand-5 23] parent 0.481 best-child 0.519 ACCEPT
+  [r1-rand-5 24] parent 0.500 best-child 0.456 keep
+  [r1-rand-5 25] parent 0.443 best-child 0.500 ACCEPT
+  [r1-rand-5 26] parent 0.256 best-child 0.381 ACCEPT
+  [r1-rand-5 27] parent 0.375 best-child 0.394 ACCEPT
+  [r1-rand-5 28] parent 0.300 best-child 0.362 ACCEPT
+  [r1-rand-5 29] parent 0.362 best-child 0.375 ACCEPT
+  [r1-rand-5 30] parent 0.256 best-child 0.318 ACCEPT
+  [r1-rand-5 31] parent 0.318 best-child 0.356 ACCEPT
+br r1-rand-5 done: holdout 0.308 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/r1-rand-5.json
+br r1-pool-hc75-1st-show: target data/meta-nash-v1/solutions/nash-curated-r0.json, support 3 teams, 8 games/opp, skuct:300
+  [r1-pool-hc75-1st-show 0] parent 0.169 best-child 0.231 ACCEPT
+  [r1-pool-hc75-1st-show 1] parent 0.125 best-child 0.350 ACCEPT
+  [r1-pool-hc75-1st-show 2] parent 0.162 best-child 0.281 ACCEPT
+  [r1-pool-hc75-1st-show 3] parent 0.269 best-child 0.212 keep
+  [r1-pool-hc75-1st-show 4] parent 0.206 best-child 0.394 ACCEPT
+  [r1-pool-hc75-1st-show 5] parent 0.331 best-child 0.544 ACCEPT
+  [r1-pool-hc75-1st-show 6] parent 0.206 best-child 0.313 ACCEPT
+  [r1-pool-hc75-1st-show 7] parent 0.369 best-child 0.338 keep
+  [r1-pool-hc75-1st-show 8] parent 0.287 best-child 0.400 ACCEPT
+  [r1-pool-hc75-1st-show 9] parent 0.338 best-child 0.356 ACCEPT
+  [r1-pool-hc75-1st-show 10] parent 0.144 best-child 0.356 ACCEPT
+  [r1-pool-hc75-1st-show 11] parent 0.206 best-child 0.331 ACCEPT
+  [r1-pool-hc75-1st-show 12] parent 0.162 best-child 0.381 ACCEPT
+  [r1-pool-hc75-1st-show 13] parent 0.169 best-child 0.338 ACCEPT
+  [r1-pool-hc75-1st-show 14] parent 0.356 best-child 0.356 keep
+  [r1-pool-hc75-1st-show 15] parent 0.250 best-child 0.269 ACCEPT
+  [r1-pool-hc75-1st-show 16] parent 0.244 best-child 0.244 keep
+  [r1-pool-hc75-1st-show 17] parent 0.125 best-child 0.312 ACCEPT
+  [r1-pool-hc75-1st-show 18] parent 0.231 best-child 0.362 ACCEPT
+  [r1-pool-hc75-1st-show 19] parent 0.206 best-child 0.319 ACCEPT
+br r1-pool-hc75-1st-show done: holdout 0.152 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/r1-pool-hc75-1st-show.json
+br r1-pool-hc75-2nd-toriyama: target data/meta-nash-v1/solutions/nash-curated-r0.json, support 3 teams, 8 games/opp, skuct:300
+  [r1-pool-hc75-2nd-toriyama 0] parent 0.313 best-child 0.488 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 1] parent 0.506 best-child 0.506 keep
+  [r1-pool-hc75-2nd-toriyama 2] parent 0.269 best-child 0.312 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 3] parent 0.563 best-child 0.394 keep
+  [r1-pool-hc75-2nd-toriyama 4] parent 0.338 best-child 0.337 keep
+  [r1-pool-hc75-2nd-toriyama 5] parent 0.568 best-child 0.531 keep
+  [r1-pool-hc75-2nd-toriyama 6] parent 0.225 best-child 0.487 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 7] parent 0.356 best-child 0.462 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 8] parent 0.481 best-child 0.481 keep
+  [r1-pool-hc75-2nd-toriyama 9] parent 0.332 best-child 0.468 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 10] parent 0.313 best-child 0.400 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 11] parent 0.269 best-child 0.425 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 12] parent 0.269 best-child 0.444 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 13] parent 0.269 best-child 0.400 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 14] parent 0.375 best-child 0.462 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 15] parent 0.413 best-child 0.619 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 16] parent 0.231 best-child 0.400 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 17] parent 0.357 best-child 0.400 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 18] parent 0.263 best-child 0.294 ACCEPT
+  [r1-pool-hc75-2nd-toriyama 19] parent 0.169 best-child 0.338 ACCEPT
+br r1-pool-hc75-2nd-toriyama done: holdout 0.235 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/r1-pool-hc75-2nd-toriyama.json
+br r1-pool-hc75-3rd-bean: target data/meta-nash-v1/solutions/nash-curated-r0.json, support 3 teams, 8 games/opp, skuct:300
+  [r1-pool-hc75-3rd-bean 0] parent 0.356 best-child 0.519 ACCEPT
+  [r1-pool-hc75-3rd-bean 1] parent 0.463 best-child 0.587 ACCEPT
+  [r1-pool-hc75-3rd-bean 2] parent 0.419 best-child 0.506 ACCEPT
+  [r1-pool-hc75-3rd-bean 3] parent 0.381 best-child 0.588 ACCEPT
+  [r1-pool-hc75-3rd-bean 4] parent 0.400 best-child 0.569 ACCEPT
+  [r1-pool-hc75-3rd-bean 5] parent 0.562 best-child 0.562 keep
+  [r1-pool-hc75-3rd-bean 6] parent 0.612 best-child 0.500 keep
+  [r1-pool-hc75-3rd-bean 7] parent 0.431 best-child 0.612 ACCEPT
+  [r1-pool-hc75-3rd-bean 8] parent 0.688 best-child 0.525 keep
+  [r1-pool-hc75-3rd-bean 9] parent 0.594 best-child 0.437 keep
+  [r1-pool-hc75-3rd-bean 10] parent 0.400 best-child 0.425 ACCEPT
+  [r1-pool-hc75-3rd-bean 11] parent 0.331 best-child 0.419 ACCEPT
+  [r1-pool-hc75-3rd-bean 12] parent 0.231 best-child 0.419 ACCEPT
+  [r1-pool-hc75-3rd-bean 13] parent 0.343 best-child 0.343 keep
+  [r1-pool-hc75-3rd-bean 14] parent 0.288 best-child 0.506 ACCEPT
+  [r1-pool-hc75-3rd-bean 15] parent 0.413 best-child 0.350 keep
+  [r1-pool-hc75-3rd-bean 16] parent 0.403 best-child 0.338 keep
+  [r1-pool-hc75-3rd-bean 17] parent 0.338 best-child 0.544 ACCEPT
+  [r1-pool-hc75-3rd-bean 18] parent 0.375 best-child 0.500 ACCEPT
+  [r1-pool-hc75-3rd-bean 19] parent 0.288 best-child 0.375 ACCEPT
+br r1-pool-hc75-3rd-bean done: holdout 0.356 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/r1-pool-hc75-3rd-bean.json
+br r1-pool-hc75-top8-tezan: target data/meta-nash-v1/solutions/nash-curated-r0.json, support 3 teams, 8 games/opp, skuct:300
+  [r1-pool-hc75-top8-tezan 0] parent 0.331 best-child 0.419 ACCEPT
+  [r1-pool-hc75-top8-tezan 1] parent 0.457 best-child 0.475 ACCEPT
+  [r1-pool-hc75-top8-tezan 2] parent 0.481 best-child 0.606 ACCEPT
+  [r1-pool-hc75-top8-tezan 3] parent 0.419 best-child 0.468 ACCEPT
+  [r1-pool-hc75-top8-tezan 4] parent 0.337 best-child 0.463 ACCEPT
+  [r1-pool-hc75-top8-tezan 5] parent 0.544 best-child 0.563 ACCEPT
+  [r1-pool-hc75-top8-tezan 6] parent 0.463 best-child 0.631 ACCEPT
+  [r1-pool-hc75-top8-tezan 7] parent 0.475 best-child 0.519 ACCEPT
+  [r1-pool-hc75-top8-tezan 8] parent 0.394 best-child 0.625 ACCEPT
+  [r1-pool-hc75-top8-tezan 9] parent 0.544 best-child 0.606 ACCEPT
+  [r1-pool-hc75-top8-tezan 10] parent 0.406 best-child 0.588 ACCEPT
+  [r1-pool-hc75-top8-tezan 11] parent 0.375 best-child 0.425 ACCEPT
+  [r1-pool-hc75-top8-tezan 12] parent 0.400 best-child 0.463 ACCEPT
+  [r1-pool-hc75-top8-tezan 13] parent 0.668 best-child 0.500 keep
+  [r1-pool-hc75-top8-tezan 14] parent 0.468 best-child 0.481 ACCEPT
+  [r1-pool-hc75-top8-tezan 15] parent 0.463 best-child 0.582 ACCEPT
+  [r1-pool-hc75-top8-tezan 16] parent 0.475 best-child 0.563 ACCEPT
+  [r1-pool-hc75-top8-tezan 17] parent 0.275 best-child 0.381 ACCEPT
+  [r1-pool-hc75-top8-tezan 18] parent 0.563 best-child 0.400 keep
+  [r1-pool-hc75-top8-tezan 19] parent 0.550 best-child 0.563 ACCEPT
+br r1-pool-hc75-top8-tezan done: holdout 0.396 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/r1-pool-hc75-top8-tezan.json
+harvest: +20 teams (20 evolved / 52 total)
+matrix: 52 teams, 1326 pairs, 830 to run (iters 300, 64 games/cell)
+  10/830 cells (257s, 25.7s/cell)
+  20/830 cells (471s, 23.6s/cell)
+  30/830 cells (637s, 21.2s/cell)
+  40/830 cells (769s, 19.2s/cell)
+  50/830 cells (894s, 17.9s/cell)
+  60/830 cells (994s, 16.6s/cell)
+  70/830 cells (1151s, 16.4s/cell)
+  80/830 cells (1285s, 16.1s/cell)
+  90/830 cells (1363s, 15.1s/cell)
+  100/830 cells (1421s, 14.2s/cell)
+  110/830 cells (1520s, 13.8s/cell)
+  120/830 cells (1596s, 13.3s/cell)
+  130/830 cells (1776s, 13.7s/cell)
+  140/830 cells (1955s, 14.0s/cell)
+  150/830 cells (2090s, 13.9s/cell)
+  160/830 cells (2249s, 14.1s/cell)
+  170/830 cells (2442s, 14.4s/cell)
+  180/830 cells (2609s, 14.5s/cell)
+  190/830 cells (2785s, 14.7s/cell)
+  200/830 cells (2921s, 14.6s/cell)
+  210/830 cells (3105s, 14.8s/cell)
+  220/830 cells (3254s, 14.8s/cell)
+  230/830 cells (3443s, 15.0s/cell)
+  240/830 cells (3582s, 14.9s/cell)
+  250/830 cells (3724s, 14.9s/cell)
+  260/830 cells (3816s, 14.7s/cell)
+  270/830 cells (3929s, 14.6s/cell)
+  280/830 cells (4008s, 14.3s/cell)
+  290/830 cells (4118s, 14.2s/cell)
+  300/830 cells (4191s, 14.0s/cell)
+  310/830 cells (4388s, 14.2s/cell)
+  320/830 cells (4538s, 14.2s/cell)
+  330/830 cells (4736s, 14.4s/cell)
+  340/830 cells (4857s, 14.3s/cell)
+  350/830 cells (5052s, 14.4s/cell)
+  360/830 cells (5233s, 14.5s/cell)
+  370/830 cells (5427s, 14.7s/cell)
+  380/830 cells (5560s, 14.6s/cell)
+  390/830 cells (5761s, 14.8s/cell)
+  400/830 cells (5911s, 14.8s/cell)
+  410/830 cells (6146s, 15.0s/cell)
+  420/830 cells (6318s, 15.0s/cell)
+  430/830 cells (6518s, 15.2s/cell)
+  440/830 cells (6680s, 15.2s/cell)
+  450/830 cells (6837s, 15.2s/cell)
+  460/830 cells (6983s, 15.2s/cell)
+  470/830 cells (7192s, 15.3s/cell)
+  480/830 cells (7343s, 15.3s/cell)
+  490/830 cells (7582s, 15.5s/cell)
+  500/830 cells (7777s, 15.6s/cell)
+  510/830 cells (7909s, 15.5s/cell)
+  520/830 cells (8019s, 15.4s/cell)
+  530/830 cells (8187s, 15.4s/cell)
+  540/830 cells (8327s, 15.4s/cell)
+  550/830 cells (8416s, 15.3s/cell)
+  560/830 cells (8488s, 15.2s/cell)
+  570/830 cells (8568s, 15.0s/cell)
+  580/830 cells (8627s, 14.9s/cell)
+  590/830 cells (8753s, 14.8s/cell)
+  600/830 cells (8853s, 14.8s/cell)
+  610/830 cells (9028s, 14.8s/cell)
+  620/830 cells (9166s, 14.8s/cell)
+  630/830 cells (9387s, 14.9s/cell)
+  640/830 cells (9565s, 14.9s/cell)
+  650/830 cells (9705s, 14.9s/cell)
+  660/830 cells (9856s, 14.9s/cell)
+  670/830 cells (9990s, 14.9s/cell)
+  680/830 cells (10156s, 14.9s/cell)
+  690/830 cells (10289s, 14.9s/cell)
+  700/830 cells (10420s, 14.9s/cell)
+  710/830 cells (10550s, 14.9s/cell)
+  720/830 cells (10731s, 14.9s/cell)
+  730/830 cells (10883s, 14.9s/cell)
+  740/830 cells (11056s, 14.9s/cell)
+  750/830 cells (11164s, 14.9s/cell)
+matrix: 52 teams, 1326 pairs, 73 to run (iters 300, 64 games/cell)
+  10/73 cells (102s, 10.2s/cell)
+  20/73 cells (216s, 10.8s/cell)
+  30/73 cells (328s, 10.9s/cell)
+  40/73 cells (424s, 10.6s/cell)
+  50/73 cells (520s, 10.4s/cell)
+  60/73 cells (638s, 10.6s/cell)
+  70/73 cells (716s, 10.2s/cell)
+  73/73 cells (740s, 10.1s/cell)
+matrix complete
+solved nash-all-r1: 52 rows, support 4 (>=1% 3), worst column sample-13 at 0.500 (margin 0.000)
+wrote /home/user/nc2000-engine/data/meta-nash-v1/solutions/nash-all-r1.json
+=== PHASE1 COMPLETE ===
