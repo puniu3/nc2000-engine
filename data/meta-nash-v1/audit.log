@@ -1,1 +1,13 @@
 matrix: 52 teams, 1326 pairs, 66 to run (iters 300, 256 games/cell)
+  10/66 cells (282s, 28.2s/cell)
+  20/66 cells (682s, 34.1s/cell)
+  30/66 cells (1210s, 40.3s/cell)
+  40/66 cells (1570s, 39.2s/cell)
+  50/66 cells (1871s, 37.4s/cell)
+  60/66 cells (2218s, 37.0s/cell)
+  66/66 cells (2453s, 37.2s/cell)
+matrix complete
+=== B1 REFINE DONE ===
+duel gate-b-nash-3000: X 0.2461 ± 0.0554 (256 games, 299s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-nash-3000.json
+duel gate-b-uni-3000: X 0.6484 ± 0.0637 (256 games, 543s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-uni-3000.json
+duel gate-b-nash-10000: X 0.2656 ± 0.0816 (128 games, 641s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-nash-10000.json

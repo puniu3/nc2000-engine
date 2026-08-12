@@ -1,0 +1,28 @@
+{
+ "inclusion": {
+  "hc75-2nd-toriyama": 0.188,
+  "sample-14": 0.11,
+  "sample-13": 0.256,
+  "sample-10": 0.448,
+  "sample-07": 1.0,
+  "sample-06": 0.278,
+  "sample-12": 0.27,
+  "sample-11": 0.128
+ },
+ "trio_combined_w_q": [
+  0.5483483525011922,
+  0.8359358187394279,
+  0.9999960624443441
+ ],
+ "support_size_dist": {
+  "4": 76,
+  "3": 145,
+  "1": 167,
+  "2": 19,
+  "5": 71,
+  "6": 21,
+  "8": 1
+ },
+ "reps": 500,
+ "note": "binomial resample per cell at its recorded n; python RM+ 2000 sweeps"
+}
