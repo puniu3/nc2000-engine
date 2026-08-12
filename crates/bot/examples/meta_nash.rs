@@ -31,7 +31,7 @@ use std::time::Instant;
 use conformance::fixture::repo_root;
 use conformance::load_dex;
 use nc2000_bot::smmcts::{solve_rm_plus, SelRule};
-use nc2000_bot::teamgen::{gauntlet_eval, to_sets, EvalCfg, TeamGen};
+use nc2000_bot::teamgen::{gauntlet_eval, to_sets, EvalCfg, MutOp, TeamGen};
 use nc2000_bot::{play_game, Agent, GameResult, RmAgent, RmConfig, SplitMix64};
 use nc2000_engine::battle::{Outcome, PokemonSet};
 use nc2000_engine::dex::Dex;
@@ -127,10 +127,28 @@ fn matrix_mode(root: &Path, dex: &Dex, args: &[String]) {
         .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4));
     let cands = load_candidates(root);
     let k = cands.teams.len();
+    // optional restriction: only pairs WITHIN this id list (refinement /
+    // high-budget sub-matrices); default = all pairs
+    let allowed: Option<Vec<bool>> = flag(args, "--teams").map(|list| {
+        let want: Vec<&str> = list.split(',').collect();
+        let mask: Vec<bool> =
+            cands.teams.iter().map(|t| want.contains(&t.id.as_str())).collect();
+        assert_eq!(
+            mask.iter().filter(|&&b| b).count(),
+            want.len(),
+            "--teams contains unknown ids"
+        );
+        mask
+    });
     // pairs missing a cell, or holding fewer games than requested (refine)
     let mut todo: Vec<(usize, usize)> = Vec::new();
     for i in 0..k {
         for j in i + 1..k {
+            if let Some(m) = &allowed {
+                if !m[i] || !m[j] {
+                    continue;
+                }
+            }
             let p = cell_path(root, &cands.teams[i].id, &cands.teams[j].id, iters);
             let have = std::fs::read_to_string(&p)
                 .ok()
@@ -422,9 +440,19 @@ fn br_mode(root: &Path, dex: &Dex, args: &[String]) {
         let parent_fit = weighted_fitness(
             dex, &parent_sets, &gauntlet, &gweights, games, agent_iters, threads, eval_seed,
         );
+        let fine_only = has(args, "--fine-only");
         let mut best_child: Option<(f64, Vec<Value>, String)> = None;
         for _ in 0..lambda {
-            let Some(prop) = tg.propose_valid(dex, &parent, &mut prop_rng, 200) else { continue };
+            let Some(prop) = (0..40).find_map(|_| {
+                let p = tg.propose_valid(dex, &parent, &mut prop_rng, 200)?;
+                if fine_only && matches!(p.op, MutOp::SpeciesSwap | MutOp::MonReplace) {
+                    None
+                } else {
+                    Some(p)
+                }
+            }) else {
+                continue;
+            };
             let sets = to_sets(&prop.team).unwrap();
             let fit = weighted_fitness(
                 dex, &sets, &gauntlet, &gweights, games, agent_iters, threads, eval_seed,
@@ -473,6 +501,105 @@ fn br_mode(root: &Path, dex: &Dex, args: &[String]) {
     v["holdout"] = json!({"seed": holdout_seed, "games_per_opponent": games * 3, "fit": holdout});
     atomic_write(&ck_path, &serde_json::to_string(&v).unwrap());
     eprintln!("br {lineage} done: holdout {holdout:.3} -> {}", ck_path.display());
+}
+
+// ----------------------------------------------------------- neighborhood
+
+/// Systematic fine-variation edge probe (build-detail audit): generate N
+/// distinct set-level variants (move/item/level/DV/statexp — never species
+/// or whole-mon swaps) of a seed team, screen them all against the target
+/// mixture under one shared eval seed (CRN, seed team included as the
+/// baseline), then confirm the top K plus the baseline on a shifted seed
+/// at higher games. Edge = confirmed(variant) − confirmed(seed).
+fn neighborhood_mode(root: &Path, dex: &Dex, args: &[String]) {
+    let target = flag(args, "--target").expect("--neighborhood needs --target");
+    let seed_id = flag(args, "--seed-team").expect("--neighborhood needs --seed-team");
+    let n_props: usize = flag(args, "--proposals").map(|v| v.parse().unwrap()).unwrap_or(300);
+    let screen_games: u32 =
+        flag(args, "--screen-games").map(|v| v.parse().unwrap()).unwrap_or(8);
+    let top: usize = flag(args, "--top").map(|v| v.parse().unwrap()).unwrap_or(16);
+    let confirm_games: u32 =
+        flag(args, "--confirm-games").map(|v| v.parse().unwrap()).unwrap_or(64);
+    let agent_iters: u32 = flag(args, "--iters").map(|v| v.parse().unwrap()).unwrap_or(300);
+    let base_seed: u64 = flag(args, "--seed").map(|v| v.parse().unwrap()).unwrap_or(20260812);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4));
+    let cands = load_candidates(root);
+    let pool = load_pool(root, &cands, &target);
+    let (gauntlet, gweights) = support_of(&pool, 0.02, 12);
+    let seed_team = cands.teams.iter().find(|t| t.id == seed_id).expect("unknown seed team");
+    let parent: Vec<Value> =
+        seed_team.sets.iter().map(|s| serde_json::to_value(s).unwrap()).collect();
+    let tg = TeamGen::new(
+        dex,
+        &std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap(),
+        &std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap(),
+    )
+    .unwrap();
+    // distinct fine variants
+    let mut rng = SplitMix64::new(base_seed ^ fnv1a64(&format!("nbhd|{seed_id}")));
+    let mut seen = std::collections::HashSet::new();
+    seen.insert(team_signature(&seed_team.sets));
+    let mut variants: Vec<(String, usize, Vec<PokemonSet>)> = Vec::new();
+    let mut tries = 0;
+    while variants.len() < n_props && tries < n_props * 60 {
+        tries += 1;
+        let Some(p) = tg.propose_valid(dex, &parent, &mut rng, 50) else { continue };
+        if matches!(p.op, MutOp::SpeciesSwap | MutOp::MonReplace) {
+            continue;
+        }
+        let sets = to_sets(&p.team).unwrap();
+        if seen.insert(team_signature(&sets)) {
+            variants.push((format!("{:?}", p.op), p.slot, sets));
+        }
+    }
+    eprintln!(
+        "neighborhood {seed_id}: {} distinct fine variants (support {} teams), screening at {screen_games} games/opp",
+        variants.len(),
+        gauntlet.len()
+    );
+    let screen_seed = base_seed ^ fnv1a64(&format!("nbhd-screen|{seed_id}"));
+    let fit = |sets: &[PokemonSet], games: u32, seed: u64| {
+        weighted_fitness(dex, sets, &gauntlet, &gweights, games, agent_iters, threads, seed)
+    };
+    let t0 = Instant::now();
+    let base_screen = fit(&seed_team.sets, screen_games, screen_seed);
+    let mut screened: Vec<(usize, f64)> = variants
+        .iter()
+        .enumerate()
+        .map(|(i, (_, _, sets))| {
+            let f = fit(sets, screen_games, screen_seed);
+            if (i + 1) % 50 == 0 {
+                eprintln!("  screened {}/{} ({:.0}s)", i + 1, variants.len(), t0.elapsed().as_secs_f64());
+            }
+            (i, f)
+        })
+        .collect();
+    screened.sort_by(|a, b| b.1.total_cmp(&a.1));
+    let confirm_seed = base_seed ^ fnv1a64(&format!("nbhd-confirm|{seed_id}"));
+    let base_confirm = fit(&seed_team.sets, confirm_games, confirm_seed);
+    let mut rows: Vec<Value> = Vec::new();
+    for &(i, sf) in screened.iter().take(top) {
+        let (op, slot, sets) = &variants[i];
+        let cf = fit(sets, confirm_games, confirm_seed);
+        rows.push(json!({
+            "op": op, "slot": slot, "screened": sf, "confirmed": cf,
+            "edge": cf - base_confirm, "sets": sets,
+        }));
+        eprintln!("  confirm {op}@{slot}: screened {sf:.3} confirmed {cf:.3} edge {:+.3}", cf - base_confirm);
+    }
+    rows.sort_by(|a, b| b["edge"].as_f64().unwrap().total_cmp(&a["edge"].as_f64().unwrap()));
+    let out = json!({
+        "seed_team": seed_id, "target": target, "agent_iters": agent_iters,
+        "proposals": variants.len(), "screen_games": screen_games,
+        "confirm_games": confirm_games, "base_screen": base_screen,
+        "base_confirm": base_confirm, "top": rows,
+        "engine_commit": commit(root), "secs": t0.elapsed().as_secs_f64(),
+    });
+    let path = root.join(format!("data/meta-nash-v1/neighborhoods/{seed_id}.json"));
+    atomic_write(&path, &serde_json::to_string(&out).unwrap());
+    eprintln!("neighborhood {seed_id} done -> {}", path.display());
 }
 
 // ---------------------------------------------------------------- harvest
@@ -721,6 +848,8 @@ fn main() {
         solve_mode(&root, &args);
     } else if has(&args, "--br") {
         br_mode(&root, &dex, &args);
+    } else if has(&args, "--neighborhood") {
+        neighborhood_mode(&root, &dex, &args);
     } else if has(&args, "--harvest") {
         harvest_mode(&root, &args);
     } else if has(&args, "--duel") {
