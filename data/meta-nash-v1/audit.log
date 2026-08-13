@@ -11,3 +11,121 @@ matrix complete
 duel gate-b-nash-3000: X 0.2461 ± 0.0554 (256 games, 299s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-nash-3000.json
 duel gate-b-uni-3000: X 0.6484 ± 0.0637 (256 games, 543s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-uni-3000.json
 duel gate-b-nash-10000: X 0.2656 ± 0.0816 (128 games, 641s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-nash-10000.json
+duel gate-b-uni-10000: X 0.5547 ± 0.0954 (128 games, 1416s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/gate-b-uni-10000.json
+=== B3 RESCORES DONE ===
+neighborhood sample-07: 300 distinct fine variants (support 3 teams), screening at 8 games/opp
+  screened 50/300 (167s)
+  screened 100/300 (333s)
+  screened 150/300 (496s)
+  screened 200/300 (669s)
+  screened 250/300 (836s)
+  screened 300/300 (1006s)
+  confirm LevelTweak@3: screened 0.838 confirmed 0.476 edge -0.089
+  confirm MoveSwap@5: screened 0.800 confirmed 0.502 edge -0.063
+  confirm MoveSwap@5: screened 0.800 confirmed 0.506 edge -0.059
+  confirm MoveSwap@3: screened 0.775 confirmed 0.543 edge -0.023
+  confirm MoveSwap@4: screened 0.775 confirmed 0.461 edge -0.105
+  confirm LevelTweak@0: screened 0.769 confirmed 0.515 edge -0.051
+  confirm MoveSwap@1: screened 0.769 confirmed 0.563 edge -0.002
+  confirm MoveSwap@1: screened 0.769 confirmed 0.563 edge -0.002
+  confirm ItemSwap@1: screened 0.750 confirmed 0.534 edge -0.032
+  confirm DvTweak@4: screened 0.750 confirmed 0.596 edge +0.030
+  confirm ItemSwap@1: screened 0.731 confirmed 0.516 edge -0.049
+  confirm ItemSwap@1: screened 0.731 confirmed 0.516 edge -0.049
+  confirm ItemSwap@1: screened 0.731 confirmed 0.516 edge -0.049
+  confirm ItemSwap@1: screened 0.731 confirmed 0.516 edge -0.049
+  confirm DvTweak@4: screened 0.731 confirmed 0.500 edge -0.066
+  confirm MoveSwap@5: screened 0.731 confirmed 0.488 edge -0.077
+neighborhood sample-07 done -> /home/user/nc2000-engine/data/meta-nash-v1/neighborhoods/sample-07.json
+neighborhood sample-13: 300 distinct fine variants (support 3 teams), screening at 8 games/opp
+  screened 50/300 (277s)
+  screened 100/300 (535s)
+  screened 150/300 (820s)
+  screened 200/300 (1090s)
+  screened 250/300 (1366s)
+  screened 300/300 (1647s)
+  confirm EvTweak@0: screened 0.756 confirmed 0.429 edge -0.035
+  confirm MoveSwap@1: screened 0.719 confirmed 0.523 edge +0.058
+  confirm DvTweak@3: screened 0.719 confirmed 0.433 edge -0.031
+  confirm EvTweak@2: screened 0.713 confirmed 0.465 edge +0.001
+  confirm EvTweak@5: screened 0.675 confirmed 0.465 edge +0.001
+  confirm MoveSwap@1: screened 0.669 confirmed 0.423 edge -0.041
+  confirm LevelTweak@0: screened 0.669 confirmed 0.418 edge -0.046
+  confirm EvTweak@4: screened 0.669 confirmed 0.489 edge +0.025
+  confirm DvTweak@2: screened 0.669 confirmed 0.402 edge -0.062
+  confirm DvTweak@2: screened 0.669 confirmed 0.402 edge -0.062
+  confirm LevelTweak@2: screened 0.644 confirmed 0.518 edge +0.054
+  confirm ItemSwap@3: screened 0.632 confirmed 0.441 edge -0.023
+  confirm ItemSwap@3: screened 0.632 confirmed 0.441 edge -0.023
+  confirm ItemSwap@3: screened 0.632 confirmed 0.439 edge -0.025
+  confirm ItemSwap@3: screened 0.632 confirmed 0.441 edge -0.023
+  confirm ItemSwap@3: screened 0.632 confirmed 0.441 edge -0.023
+neighborhood sample-13 done -> /home/user/nc2000-engine/data/meta-nash-v1/neighborhoods/sample-13.json
+neighborhood sample-12: 300 distinct fine variants (support 3 teams), screening at 8 games/opp
+  screened 50/300 (245s)
+  screened 100/300 (505s)
+  screened 150/300 (741s)
+  screened 200/300 (988s)
+  screened 250/300 (1251s)
+  screened 300/300 (1501s)
+  confirm MoveSwap@4: screened 0.794 confirmed 0.576 edge +0.095
+  confirm EvTweak@4: screened 0.775 confirmed 0.497 edge +0.016
+  confirm DvTweak@1: screened 0.750 confirmed 0.525 edge +0.045
+  confirm EvTweak@4: screened 0.731 confirmed 0.505 edge +0.025
+  confirm MoveSwap@3: screened 0.719 confirmed 0.551 edge +0.071
+  confirm EvTweak@3: screened 0.712 confirmed 0.517 edge +0.037
+  confirm MoveSwap@3: screened 0.706 confirmed 0.514 edge +0.034
+  confirm MoveSwap@3: screened 0.687 confirmed 0.528 edge +0.048
+  confirm DvTweak@0: screened 0.675 confirmed 0.530 edge +0.049
+  confirm EvTweak@3: screened 0.675 confirmed 0.492 edge +0.012
+  confirm DvTweak@1: screened 0.669 confirmed 0.531 edge +0.051
+  confirm ItemSwap@2: screened 0.669 confirmed 0.480 edge +0.000
+  confirm EvTweak@1: screened 0.669 confirmed 0.534 edge +0.054
+  confirm EvTweak@4: screened 0.669 confirmed 0.522 edge +0.042
+  confirm EvTweak@2: screened 0.668 confirmed 0.516 edge +0.036
+  confirm EvTweak@2: screened 0.656 confirmed 0.518 edge +0.038
+neighborhood sample-12 done -> /home/user/nc2000-engine/data/meta-nash-v1/neighborhoods/sample-12.json
+=== B2 NEIGHBORHOODS DONE ===
+br fine-s07: target sol:data/meta-nash-v1/solutions/nash-all-r1.json, support 3 teams, 8 games/opp, skuct:300
+  [fine-s07 0] parent 0.650 best-child 0.600 keep
+  [fine-s07 1] parent 0.413 best-child 0.625 ACCEPT
+  [fine-s07 2] parent 0.581 best-child 0.519 keep
+  [fine-s07 3] parent 0.456 best-child 0.544 ACCEPT
+  [fine-s07 4] parent 0.369 best-child 0.744 ACCEPT
+  [fine-s07 5] parent 0.456 best-child 0.525 ACCEPT
+  [fine-s07 6] parent 0.275 best-child 0.575 ACCEPT
+  [fine-s07 7] parent 0.487 best-child 0.437 keep
+  [fine-s07 8] parent 0.506 best-child 0.500 keep
+  [fine-s07 9] parent 0.350 best-child 0.537 ACCEPT
+  [fine-s07 10] parent 0.394 best-child 0.775 ACCEPT
+  [fine-s07 11] parent 0.544 best-child 0.600 ACCEPT
+  [fine-s07 12] parent 0.387 best-child 0.481 ACCEPT
+  [fine-s07 13] parent 0.419 best-child 0.412 keep
+  [fine-s07 14] parent 0.562 best-child 0.644 ACCEPT
+  [fine-s07 15] parent 0.462 best-child 0.562 ACCEPT
+br fine-s07 done: holdout 0.435 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/fine-s07.json
+br fine-s13: target sol:data/meta-nash-v1/solutions/nash-all-r1.json, support 3 teams, 8 games/opp, skuct:300
+  [fine-s13 0] parent 0.612 best-child 0.606 keep
+  [fine-s13 1] parent 0.331 best-child 0.525 ACCEPT
+  [fine-s13 2] parent 0.256 best-child 0.500 ACCEPT
+  [fine-s13 3] parent 0.425 best-child 0.612 ACCEPT
+  [fine-s13 4] parent 0.313 best-child 0.438 ACCEPT
+  [fine-s13 5] parent 0.313 best-child 0.462 ACCEPT
+  [fine-s13 6] parent 0.313 best-child 0.537 ACCEPT
+  [fine-s13 7] parent 0.457 best-child 0.544 ACCEPT
+  [fine-s13 8] parent 0.193 best-child 0.525 ACCEPT
+  [fine-s13 9] parent 0.287 best-child 0.394 ACCEPT
+  [fine-s13 10] parent 0.250 best-child 0.444 ACCEPT
+  [fine-s13 11] parent 0.163 best-child 0.294 ACCEPT
+  [fine-s13 12] parent 0.313 best-child 0.338 ACCEPT
+  [fine-s13 13] parent 0.044 best-child 0.406 ACCEPT
+  [fine-s13 14] parent 0.300 best-child 0.425 ACCEPT
+  [fine-s13 15] parent 0.413 best-child 0.456 ACCEPT
+br fine-s13 done: holdout 0.279 -> /home/user/nc2000-engine/data/meta-nash-v1/lineages/fine-s13.json
+=== B2 FINE LINEAGES DONE ===
+matrix: 52 teams, 1326 pairs, 15 to run (iters 3000, 192 games/cell)
+  10/15 cells (2734s, 273.4s/cell)
+  15/15 cells (4141s, 276.1s/cell)
+matrix complete
+=== B3 MATRIX3000 DONE ===
+matrix: 52 teams, 1326 pairs, 6 to run (iters 10000, 96 games/cell)
