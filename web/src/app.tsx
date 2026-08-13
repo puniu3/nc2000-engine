@@ -9,21 +9,32 @@
 //
 // M18 adds two things, neither of them a setting on the screen. The
 // information mode (open / blind, see info-mode.ts) is read once from the
-// URL at module load — `?blind` is the only door, and nothing the user can
-// press moves it; a GameSpec still carries the mode its game started under,
-// which is the guarantee game.tsx is written against. The team pool is
-// state: one file replaces the pool everywhere it is read (team-pool.ts).
-// The bundled pool is held next to the active one so going back to it is a
-// state change rather than a second trip to the network — and, since the
-// swap is now blind-only, so that open mode has the untouched pool to play
-// no matter what the user loaded (see `activePool`).
+// URL at module load — the query string is the only door, and nothing the
+// user can press moves it; a GameSpec still carries the mode its game
+// started under, which is the guarantee game.tsx is written against. The
+// team pool is state: one file replaces the pool everywhere it is read
+// (team-pool.ts). The bundled pool is held next to the active one so going
+// back to it is a state change rather than a second trip to the network —
+// and, since the swap is now blind-only, so that open mode has the
+// untouched pool to play no matter what the user loaded (see `activePool`).
+//
+// `?nash` (META-NASH v1's conclusion) is blind play with one substitution
+// and one subtraction. The substitution: the opponent is drawn from the
+// solved three-team mixture instead of uniformly from the pool — the draw
+// rule lives in one place here, `drawOpponent`, because the start screen and
+// the rematch must roll identically or the mixed strategy is not the thing
+// being played. The subtraction: nothing is configurable, so nash pins the
+// bundled pool exactly as open mode does and never passes a belief prior.
+// What the bot ASSUMES about its opponent is untouched by all of this
+// (docs/META-NASH-V1.md §4) — only which team it brings.
 
 import { useEffect, useState } from "preact/hooks";
 import { loadEngine } from "./engine";
-import { fetchDexJson, fetchI18nJa, fetchPool } from "./data";
+import { fetchDexJson, fetchI18nJa, fetchNashArtifact, fetchPool } from "./data";
 import { loadSetDex } from "./set-info";
 import { randomPoolTeam, type SelectedTeam } from "./pool-pick";
-import { readInfoMode, type InfoMode } from "./info-mode";
+import { drawNashTeam, parseNashArtifact, type NashMix } from "./nash-mix";
+import { infoModeOf, readDoor, type Door, type InfoMode } from "./info-mode";
 import {
   clearStoredPool,
   loadStoredPool,
@@ -50,10 +61,13 @@ export const BUDGET =
  * working. */
 export type { SelectedTeam } from "./pool-pick";
 
-/** This page load's information mode. Read at module scope because that is
- * the truth about it: the query string cannot change without a navigation,
- * and holding it in state would suggest something here could flip it. */
-const MODE: InfoMode = readInfoMode();
+/** This page load's door and the information mode it implies. Read at
+ * module scope because that is the truth about them: the query string cannot
+ * change without a navigation, and holding either in state would suggest
+ * something here could flip it. */
+const DOOR: Door = readDoor();
+const MODE: InfoMode = infoModeOf(DOOR);
+const NASH = DOOR === "nash";
 
 interface GameSpec {
   human: SelectedTeam;
@@ -106,6 +120,10 @@ export function App() {
   const [bundled, setBundled] = useState<LoadedPool | null>(null);
   const [loadedPool, setLoadedPool] = useState<LoadedPool | null>(null);
   const [game, setGame] = useState<GameSpec | null>(null);
+  // The solved mixture, on the `?nash` door only. Null everywhere else, and
+  // never null on a nash page that got past boot: a failure to load or
+  // validate it fails the page (see the boot effect).
+  const [nashMix, setNashMix] = useState<NashMix | null>(null);
   const [loc, setLoc] = useState<Locale>(locale());
   // A table the user once picked by hand; nothing here ever fetches one on
   // its own (crates/bot/src/prior.rs:491).
@@ -117,11 +135,14 @@ export function App() {
         // JP name tables and the set-sheet dex load alongside the engine;
         // both swallow failures (missing tables just mean English names /
         // sheets without move meta).
-        const [, pd] = await Promise.all([
+        // The nash artifact rides along in the same wave — one door's
+        // 11 KB, fetched only on that door, never on the product page.
+        const [, pd, , , nashText] = await Promise.all([
           loadEngine(),
           fetchPool(),
           loadJaNames(fetchI18nJa),
           loadSetDex(fetchDexJson),
+          NASH ? fetchNashArtifact() : Promise.resolve(""),
         ]);
         const bundledPool: LoadedPool = {
           name: null,
@@ -129,6 +150,15 @@ export function App() {
           poolJson: pd.poolJson,
         };
         setBundled(bundledPool);
+        // Parsed after the engine is up, because validating the mixture is
+        // a wasm call. Strict: a mixture that cannot play takes the page
+        // down with it rather than leaving `?nash` running as plain blind
+        // under a name that promises otherwise.
+        if (NASH) {
+          const parsed = parseNashArtifact(nashText);
+          if (!parsed.ok) throw new Error(parsed.errors.join("; "));
+          setNashMix(parsed.mix);
+        }
         // Only now: re-validating a stored pool runs the wasm validator,
         // which the engine load above is what makes available. Restored in
         // either mode — the record belongs to the user, not to the mode, so
@@ -150,7 +180,7 @@ export function App() {
       </div>
     );
   }
-  if (status === "error" || !loadedPool || !bundled) {
+  if (status === "error" || !loadedPool || !bundled || (NASH && !nashMix)) {
     return (
       <div class="center-screen">
         <div class="error-box">
@@ -169,7 +199,18 @@ export function App() {
   // of why and nothing on screen to undo it. This is the same line the belief
   // prior already sits behind, where an open game refuses the table outright
   // rather than half-using it.
-  const activePool = MODE === "blind" ? loadedPool : bundled;
+  // Nash sits on the bundled side of this line with open mode: the mode is
+  // a fixed configuration or it is not the conclusion, so a pool file the
+  // user once loaded through `?blind` must not quietly redefine the bot's
+  // candidate set here. `?blind` still finds that file, untouched.
+  const activePool = MODE === "blind" && !NASH ? loadedPool : bundled;
+
+  /** The opponent draw, in one place because two callers must roll the same
+   * way: pressing Start, and every rematch. Nash samples the solved mixture;
+   * plain blind draws uniformly from the pool. (Open mode never comes here —
+   * its opponent is whatever the human picked on the screen.) */
+  const drawOpponent = (): SelectedTeam =>
+    NASH && nashMix ? drawNashTeam(nashMix) : randomPoolTeam(activePool.pool);
 
   if (!game) {
     return (
@@ -183,6 +224,9 @@ export function App() {
           setLoc(l);
         }}
         mode={MODE}
+        nash={NASH}
+        nashMix={nashMix}
+        drawOpponent={drawOpponent}
         prior={prior}
         onPrior={setPrior}
         onStart={(human, bot) => setGame({ human, bot, n: 1, mode: MODE })}
@@ -203,8 +247,13 @@ export function App() {
       botTeam={game.bot}
       mode={game.mode}
       // The prior only ever reaches a blind game: in open mode the searcher
-      // pins the human's real team and refuses the table outright.
-      priorJson={game.mode === "blind" ? prior?.json : undefined}
+      // pins the human's real team and refuses the table outright. Nash is
+      // blind and still gets none — the mode ships one configuration, and a
+      // table left in storage by an earlier `?blind` visit is exactly the
+      // kind of invisible state it must not inherit.
+      priorJson={
+        game.mode === "blind" && !NASH ? prior?.json : undefined
+      }
       // Blind rematch redraws the opponent: replaying a lost battle against
       // the team you just watched play would hand the human the very
       // information blind mode withholds. Open mode keeps the same foe.
@@ -215,8 +264,7 @@ export function App() {
             : {
                 ...g,
                 n: g.n + 1,
-                bot:
-                  g.mode === "blind" ? randomPoolTeam(activePool.pool) : g.bot,
+                bot: g.mode === "blind" ? drawOpponent() : g.bot,
               },
         )
       }

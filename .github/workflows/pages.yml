@@ -77,7 +77,14 @@ jobs:
           # default — see crates/bot/src/prior.rs). The blind-mode panel's
           # "load the sample table" button fetches it at runtime.
           cp data/belief-prior-v0.sample.json web/dist/data/
+          # META-NASH v1: the shipped mixture ONLY (11 KB). The study's
+          # 1,361 measurement cells, BR lineages and gate records live in
+          # the same directory and are audit trail, not payload — a `cp -r`
+          # here would put all of it on the CDN for no reader.
+          mkdir -p web/dist/data/meta-nash-v1
+          cp data/meta-nash-v1/pool-artifact.json web/dist/data/meta-nash-v1/
           test -s web/dist/data/gen2stadium2.json
+          test -s web/dist/data/meta-nash-v1/pool-artifact.json
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

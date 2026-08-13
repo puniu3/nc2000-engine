@@ -50,6 +50,15 @@ Status: **COMPLETE — OR GATE PASS (Route B). 2026-08-12.** 結果は§結果�
    最終 `pool-artifact.json` {teams, weights, provenance}。web は既存のファイル読込
    プール + 重み付き抽選(botの自チーム選択のみ; 相手beliefは不変)。
 
+   **UI配線 SHIPPED 2026-08-14**: `?nash` = 第3の入口(`web/src/info-mode.ts`)。
+   ブラインド規則、bot の自チームは毎戦 `pool-artifact.json` からの重み付き抽選のみ
+   (再戦も引き直し = 混合戦略そのもの)、人間は自由編成、設定項目ゼロ(プール差し替え
+   も belief prior も `?blind` 側のもので、nash は継承しない)。相手 belief は設計どおり
+   不変(キュレート32プール)。混合の内訳と確率は開始画面で公開する — 均衡は「相手に
+   知られても崩れない」ことが主張なので、隠すと弱い主張の実演になる。伏せるのは
+   ブラインドが常に伏せるもの(今どの腕か、その構成)だけ。出荷重みは 0.998 和なので
+   読み込み時に正規化 (57.6 / 22.2 / 20.1%)。契約は `web/tests/nash.spec.ts`。
+
 ## 結果（2026-08-12）
 
 **判定: OR GATE PASS — Route B（強さルート）で合格。Route A は不成立。**

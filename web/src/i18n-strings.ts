@@ -124,6 +124,18 @@ export interface UIStrings {
   settingsLabel: string;
   settingsTitle: string;
   settingsValue: (pool: string, prior: string) => string;
+  // META-NASH v1's conclusion mode (`?nash`, info-mode.ts): blind rules, but
+  // the opponent is drawn from the solved three-team mixture and nothing on
+  // the screen is configurable. nashBanner replaces blindBanner in the same
+  // one-line slot; it has to say what blind's says (sets hidden both ways,
+  // new opponent every battle) AND why the opponent row below it is now
+  // worth opening. The mixture's weights are shown, deliberately: the claim
+  // is that knowing the distribution does not help, so hiding it would be
+  // demonstrating something weaker than what was proved.
+  nashBanner: string;
+  nashTitle: string;
+  nashMixNote: string;
+  nashSource: (file: string) => string;
   // community belief prior (M18): a distribution table that fills in an
   // unidentifiable opponent's sets. Loaded by hand, never automatically.
   priorLabel: string;
@@ -310,6 +322,17 @@ const EN: UIStrings = {
   settingsLabel: "Blind setup",
   settingsTitle: "Blind setup",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
+  nashBanner:
+    "The solved mixture — neither side sees the other's sets; each battle " +
+    "the bot draws one of three teams at the odds below. Build whatever you " +
+    "like: knowing the mixture is the point.",
+  nashTitle: "The solved mixture",
+  nashMixNote:
+    "META-NASH v1's shipped answer: against a best-response search given the " +
+    "same budget, no team and no blend beat this one. The bot samples it " +
+    "afresh every battle, so which of the three you are facing stays hidden " +
+    "until the game ends — the odds do not.",
+  nashSource: (file) => `Solution: ${file}`,
   priorLabel: "Belief prior",
   priorNone: "None",
   priorHelp:
@@ -484,6 +507,17 @@ const JA: UIStrings = {
   settingsLabel: "ブラインド設定",
   settingsTitle: "ブラインド設定",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
+  nashBanner:
+    "結論の混合戦略 — 互いの構成(技・持ち物)は非公開。ボットは毎回、下の" +
+    "確率で3チームから1つを引きます。あなたの編成は自由 — 混合を知られても" +
+    "崩れないことが結論の中身です。",
+  nashTitle: "結論の混合戦略",
+  nashMixNote:
+    "META-NASH v1 の出荷解です。同じ予算を与えた最適応答探索でも、単体の" +
+    "チームでも混合でも、これを上回るものは出ませんでした。ボットは毎回" +
+    "引き直すので、今どれと当たっているかは終局まで伏せられます — 確率は" +
+    "最初から公開です。",
+  nashSource: (file) => `解: ${file}`,
   priorLabel: "相手構成の事前分布",
   priorNone: "なし",
   priorHelp:

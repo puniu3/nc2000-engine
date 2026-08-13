@@ -33,11 +33,24 @@
 // so both belong behind the one blind-only door. Inside, each half keeps
 // its own heading, controls and report box: someone who just loaded a pool
 // file must not read the prior's verdict as a verdict on their file.
+//
+// Nash (`?nash`) is blind with the two halves swapped over. Blind setup is
+// gone — the mode ships exactly one configuration, so there is nothing to
+// press — and the opponent row comes BACK, because in nash there is finally
+// something true to say in it: the foe is drawn from a known three-team
+// mixture with known probabilities. The row is a readout that opens a
+// read-only panel, never a picker. Showing the mixture is not a leak and is
+// most of the point: an equilibrium is a strategy that survives the
+// opponent knowing it, so the demonstration is stronger with the
+// distribution on the screen than hidden behind it. What stays hidden is
+// what blind always hides — which of the three was drawn this battle, and
+// every set in it, until the game ends.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
 import { randomPoolTeam } from "./pool-pick";
+import type { NashMix, NashTeam } from "./nash-mix";
 import type { InfoMode } from "./info-mode";
 import {
   clearStoredPool,
@@ -111,6 +124,57 @@ function TeamCard(props: {
       </div>
     </button>
   );
+}
+
+/** The solved mixture, read-only (`?nash`). Cards, not buttons: nothing here
+ * is selectable, and a card that looks pressable in a panel with no pick to
+ * make would be the screen's one lie. Species and levels only — the sets are
+ * blind until the game ends, exactly as they are for a pool foe. */
+function NashMixPanel(props: { mix: NashMix }) {
+  return (
+    <div class="nash-mix" data-testid="nash-mix">
+      <p class="modal-note">{ui().nashMixNote}</p>
+      <div class="team-list">
+        {props.mix.teams.map((t, i) => (
+          <NashCard key={t.id} team={t} index={i} />
+        ))}
+      </div>
+      {props.mix.source && (
+        <p class="modal-note nash-source">
+          {ui().nashSource(props.mix.source)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function NashCard(props: { team: NashTeam; index: number }) {
+  const { team, index } = props;
+  return (
+    <div class="team-card nash-card" data-team={index} data-nash={team.id}>
+      <div class="team-card-head">
+        <span class="team-rank">{pct(team.weight)}</span>
+        <span class="team-id">{team.id}</span>
+      </div>
+      <div class="team-species">
+        {team.species.map((sp, i) => (
+          <span class="species-chip" key={i}>
+            {speciesName(sp)}{" "}
+            <small>
+              <Lvl n={team.levels[i]} />
+            </small>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** One decimal, which is the precision the study publishes and the precision
+ * the weights are stored at; a bare integer would round two of the three arms
+ * into looking equal. */
+function pct(w: number): string {
+  return `${(w * 100).toFixed(1)}%`;
 }
 
 // ------------------------------------------------- custom teams (M14)
@@ -783,6 +847,14 @@ export function StartScreen(props: {
   locale: Locale;
   onLocale: (l: Locale) => void;
   mode: InfoMode;
+  /** `?nash`: blind rules, fixed opponent mixture, no setup. */
+  nash: boolean;
+  /** The mixture itself, for the read-only opponent panel. Non-null
+   * whenever `nash` is (app.tsx fails the page otherwise). */
+  nashMix: NashMix | null;
+  /** The opponent draw for blind and nash alike, owned by app.tsx so that
+   * pressing Start and taking a rematch roll by the same rule. */
+  drawOpponent: () => SelectedTeam;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
   onStart: (human: SelectedTeam, bot: SelectedTeam) => void;
@@ -790,13 +862,16 @@ export function StartScreen(props: {
   const pool = props.loadedPool.pool;
   const teams = pool.teams;
   const blind = props.mode === "blind";
+  const nash = props.nash;
   const [customs, setCustoms] = useState<CustomTeam[]>(loadCustomTeams);
   const [picks, setPicks] = useState<Picks>(() =>
     loadPicks(pool, loadCustomTeams()),
   );
   // "settings" is unreachable in open mode: the only thing that sets it is
   // the blind-only button below.
-  const [modal, setModal] = useState<null | "human" | "bot" | "settings">(null);
+  const [modal, setModal] = useState<
+    null | "human" | "bot" | "settings" | "mix"
+  >(null);
 
   // A pool swap invalidates the pinned picks: an id from the old pool is
   // either absent from the new one — the button would name a team that no
@@ -888,10 +963,11 @@ export function StartScreen(props: {
     // Blind ignores the pinned opponent entirely: a foe you chose is a foe
     // whose sets you know, which is precisely the information the mode
     // withholds. The pin is kept in storage, unread, for the way back to
-    // open mode.
+    // open mode. Nash goes down the same branch and lands on the same
+    // `drawOpponent` — uniform-from-pool there, the solved mixture here.
     props.onStart(
       selectedTeam(picks.human),
-      blind ? randomPoolTeam(pool) : selectedTeam(picks.bot),
+      blind ? props.drawOpponent() : selectedTeam(picks.bot),
     );
   }
 
@@ -923,7 +999,7 @@ export function StartScreen(props: {
           // of them is why no opponent row follows. Open mode renders
           // nothing at all in this slot: no note, no empty row.
           <p class="mode-banner" data-testid="mode-banner">
-            {ui().blindBanner}
+            {nash ? ui().nashBanner : ui().blindBanner}
           </p>
         )}
         <button
@@ -948,7 +1024,25 @@ export function StartScreen(props: {
             <span class="party-value">{botValue}</span>
           </button>
         )}
-        {blind && (
+        {nash && props.nashMix && (
+          // Nash's opponent row is a readout of the distribution, not a
+          // picker: there is nothing to choose, but there IS something to
+          // read, which is exactly what blind's deleted row lacked. Its
+          // value line carries the whole distribution, so the panel is for
+          // seeing which six species each arm brings, not for learning the
+          // odds.
+          <button
+            class="party-btn"
+            data-party="nash"
+            onClick={() => setModal("mix")}
+          >
+            <span class="party-label">{ui().oppParty}</span>
+            <span class="party-value">
+              {props.nashMix.teams.map((t) => `${t.id} ${pct(t.weight)}`).join(" · ")}
+            </span>
+          </button>
+        )}
+        {blind && !nash && (
           // The experiment's one door. Its value line reports both halves so
           // the usual answer — bundled pool, no prior — is readable without
           // opening anything; .party-value wraps rather than truncates, so
@@ -1006,6 +1100,11 @@ export function StartScreen(props: {
             }
             mode={props.mode}
           />
+        </Modal>
+      )}
+      {modal === "mix" && props.nashMix && (
+        <Modal title={ui().nashTitle} onClose={() => setModal(null)}>
+          <NashMixPanel mix={props.nashMix} />
         </Modal>
       )}
       {modal === "settings" && (

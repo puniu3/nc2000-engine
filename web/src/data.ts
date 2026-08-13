@@ -41,6 +41,17 @@ export async function fetchPool(): Promise<PoolData> {
   return { pool: JSON.parse(poolJson) as MetaPool, poolJson };
 }
 
+/** META-NASH v1's shipped mixture (`?nash` only, so it is fetched only on
+ * that door). Returned as text because nash-mix.ts is what decides what the
+ * file means — and because a nash page with no mixture is not a mode, this
+ * one throws: the caller lets it reach the boot error box rather than
+ * quietly starting a plainer game under the mode's name. */
+export async function fetchNashArtifact(): Promise<string> {
+  const res = await fetch(dataUrl("meta-nash-v1/pool-artifact.json"));
+  if (!res.ok) throw new Error(`nash artifact fetch failed: ${res.status}`);
+  return res.text();
+}
+
 /** Pair table for pool indices (i, j); canonical file is lo-hi. Returns the
  * raw JSON text, or null when the pair is not baked yet (404) or the file
  * is mid-write (parse failure). */
