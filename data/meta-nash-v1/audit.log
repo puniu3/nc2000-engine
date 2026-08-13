@@ -129,3 +129,4 @@ matrix: 52 teams, 1326 pairs, 15 to run (iters 3000, 192 games/cell)
 matrix complete
 === B3 MATRIX3000 DONE ===
 matrix: 52 teams, 1326 pairs, 6 to run (iters 10000, 96 games/cell)
+matrix: 52 teams, 1326 pairs, 3 to run (iters 10000, 96 games/cell)
