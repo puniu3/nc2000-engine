@@ -1,1 +1,8 @@
 matrix: 54 teams, 1431 pairs, 7 to run (iters 300, 256 games/cell)
+  7/7 cells (242s, 34.6s/cell)
+matrix complete
+matrix: 54 teams, 1431 pairs, 7 to run (iters 3000, 192 games/cell)
+  7/7 cells (1865s, 266.4s/cell)
+matrix complete
+duel ship-cert-exploiter-3000: X 0.3359 ± 0.0625 (256 games, 220s) -> /home/user/nc2000-engine/data/meta-nash-v1/gates/ship-cert-exploiter-3000.json
+=== R2 PRICING COMPLETE ===
