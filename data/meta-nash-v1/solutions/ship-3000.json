@@ -1,0 +1,29 @@
+{
+ "tag": "ship-3000",
+ "iters": 3000,
+ "note": "6-team sub-game RM+ at 3000 iters (192-game cells); anchor-stable, closes the 07>?10>?08 cycle",
+ "ids": [
+  "sample-07",
+  "sample-08",
+  "sample-10"
+ ],
+ "weights": [
+  0.575,
+  0.222,
+  0.201
+ ],
+ "support": [
+  {
+   "id": "sample-07",
+   "w": 0.575
+  },
+  {
+   "id": "sample-08",
+   "w": 0.222
+  },
+  {
+   "id": "sample-10",
+   "w": 0.201
+  }
+ ]
+}
