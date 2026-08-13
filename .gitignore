@@ -19,3 +19,4 @@ data/exp-siv-v1/run.log
 data/exp-siv-v1/cells/*.tmp
 data/meta-nash-v1/phase1.log
 data/meta-nash-v1/**/*.tmp
+data/meta-nash-v1/r2pricing.log
