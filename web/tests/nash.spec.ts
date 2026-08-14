@@ -334,7 +334,7 @@ test("the nash belief pool is belief-pool-v1, exclusive to the door and load-bea
   );
   await page.goto("/?nash");
   await gotBelief;
-  await expect(page.locator('[data-testid="nash-mix"]')).toBeVisible();
+  await expect(page.locator('[data-party="nash"]')).toBeVisible();
   expect(beliefUrls.length).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 
