@@ -210,6 +210,116 @@ fn fitness(
         .sum()
 }
 
+/// Phase 5 (§9): score every eligible team in a teams file against the ship
+/// mixture — no hill-climb. Eligible = 6 sets, buildable, full-set signature
+/// matching no META-NASH candidate (true out-of-sample). Resumable per team.
+#[allow(clippy::too_many_arguments)]
+fn score_file_mode(
+    root: &Path,
+    dex: &Dex,
+    ship: &ShipPool,
+    defense: Defense,
+    defense_name: &str,
+    belief_pool: &Arc<MetaPool>,
+    args: &[String],
+) {
+    let file = flag(args, "--score-file").unwrap();
+    let games: u32 = flag(args, "--fit-games").map(|v| v.parse().unwrap()).unwrap_or(128);
+    let agent_iters: u32 = flag(args, "--iters").map(|v| v.parse().unwrap()).unwrap_or(300);
+    let base_seed: u64 =
+        flag(args, "--seed").map(|v| v.parse().unwrap()).unwrap_or(20260814);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4));
+    let label = flag(args, "--label")
+        .unwrap_or_else(|| format!("oos-{defense_name}-i{agent_iters}"));
+    let only: Option<Vec<String>> =
+        flag(args, "--only").map(|s| s.split(',').map(|x| x.to_string()).collect());
+
+    use nc2000_bot::preview::team_sig;
+    let cands: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("data/meta-nash-v1/candidates.json")).unwrap(),
+    )
+    .unwrap();
+    let cand_sigs: Vec<_> = cands["teams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| team_sig(dex, &to_sets(t["sets"].as_array().unwrap()).unwrap()))
+        .collect();
+
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    let teams = v["teams"].as_array().expect("teams file");
+    let out_path = root.join(format!("data/prior-exploit-v1/oos/{label}.json"));
+    let mut results: Vec<Value> = std::fs::read_to_string(&out_path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v["teams"].as_array().cloned())
+        .unwrap_or_default();
+
+    for (i, t) in teams.iter().enumerate() {
+        let id = t["cban"]
+            .as_u64()
+            .map(|n| format!("cban-{n}"))
+            .or_else(|| t["id"].as_str().map(String::from))
+            .unwrap_or_else(|| format!("team-{i}"));
+        if let Some(list) = &only {
+            if !list.contains(&id) {
+                continue;
+            }
+        }
+        if results.iter().any(|r| r["id"].as_str() == Some(&id)) {
+            continue;
+        }
+        let Some(sets_v) = t["sets"].as_array() else { continue };
+        if sets_v.len() != 6 {
+            eprintln!("  {id}: skipped ({} sets)", sets_v.len());
+            continue;
+        }
+        let Ok(sets) = to_sets(sets_v) else {
+            eprintln!("  {id}: skipped (unparseable)");
+            continue;
+        };
+        if Battle::from_fixture(dex, "1,2,3,4", &sets, &ship.teams[0]).is_err() {
+            eprintln!("  {id}: skipped (unbuildable)");
+            continue;
+        }
+        let sig = team_sig(dex, &sets);
+        if cand_sigs.contains(&sig) {
+            eprintln!("  {id}: skipped (signature matches a META-NASH candidate)");
+            continue;
+        }
+        let seed = base_seed ^ fnv1a64(&format!("oos|{id}"));
+        let take = fitness(
+            dex, &sets, ship, defense, belief_pool, games, agent_iters, threads, seed,
+        );
+        let n = (games + games % 2) as f64 * ship.teams.len() as f64;
+        eprintln!("  {id} ({}): take {take:.4} over {n:.0} games", t["archetype"].as_str().unwrap_or(""));
+        results.push(json!({
+            "id": id, "archetype": t["archetype"], "take": take,
+            "games": n, "iters": agent_iters, "seed": seed,
+        }));
+        atomic_write(
+            &out_path,
+            &serde_json::to_string_pretty(&json!({
+                "label": label, "defense": defense_name, "source": file,
+                "games_per_opponent": games, "iters": agent_iters,
+                "teams": results,
+            }))
+            .unwrap(),
+        );
+    }
+    let mut sorted: Vec<(f64, String)> = results
+        .iter()
+        .map(|r| (r["take"].as_f64().unwrap(), r["id"].as_str().unwrap().to_string()))
+        .collect();
+    sorted.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    eprintln!("oos {label}: {} teams scored; top takes:", sorted.len());
+    for (take, id) in sorted.iter().take(5) {
+        eprintln!("  {id}: {take:.4}");
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let root = repo_root();
@@ -220,6 +330,18 @@ fn main() {
         Some("skuct") => Defense::Skuct,
         other => panic!("--defense blind|skuct required, got {other:?}"),
     };
+    if flag(&args, "--score-file").is_some() {
+        let ship = load_ship_pool(&root);
+        let belief_path = flag(&args, "--belief-pool")
+            .unwrap_or_else(|| "data/belief-pool-v1/belief-pool.json".into());
+        let belief_pool = Arc::new(load_meta_pool(&root.join(&belief_path)));
+        let defense_name = match defense {
+            Defense::Blind => "blind",
+            Defense::Skuct => "skuct",
+        };
+        score_file_mode(&root, &dex, &ship, defense, defense_name, &belief_pool, &args);
+        return;
+    }
     let lineage = flag(&args, "--lineage").expect("--lineage NAME");
     let iters: usize =
         flag(&args, "--br-iters").map(|v| v.parse().unwrap()).unwrap_or(40);
