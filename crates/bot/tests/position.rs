@@ -152,9 +152,31 @@ fn a_position_is_analyzed_and_every_legal_action_is_scored() {
     let total: f64 = actions.iter().map(|a| a["frac"].as_f64().unwrap()).sum();
     assert!((total - 1.0).abs() < 1e-6, "visit shares must sum to 1, got {total}");
     for a in actions {
-        let mean = a["mean"].as_f64().unwrap();
-        assert!((0.0..=1.0).contains(&mean), "win rate out of range: {a}");
+        for key in ["mean", "equity"] {
+            let v = a[key].as_f64().unwrap();
+            assert!((0.0..=1.0).contains(&v), "{key} out of range: {a}");
+        }
+        // The floor cannot be above the value against a mixture that
+        // includes it — that ordering is what makes the pair readable.
+        if let Some(worst) = a["worst"].as_f64() {
+            assert!(
+                worst <= a["equity"].as_f64().unwrap() + 1e-9,
+                "worst reply beats the equilibrium answer: {a}"
+            );
+        }
     }
+    // the equilibrium is a distribution, and its value is one of the rows'
+    let mix: f64 = actions.iter().map(|a| a["mix"].as_f64().unwrap()).sum();
+    assert!((mix - 1.0).abs() < 1e-6, "our equilibrium mixture must sum to 1, got {mix}");
+    let theirs: f64 = r["equilibrium"]["theirs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_f64().unwrap())
+        .sum();
+    assert!((theirs - 1.0).abs() < 1e-6, "their mixture must sum to 1, got {theirs}");
+    let value = r["equilibrium"]["value"].as_f64().unwrap();
+    assert!((0.0..=1.0).contains(&value), "position value out of range: {value}");
     // sorted by visits, descending
     let visits: Vec<u64> = actions.iter().map(|a| a["visits"].as_u64().unwrap()).collect();
     assert!(visits.windows(2).all(|w| w[0] >= w[1]), "not sorted by visits: {visits:?}");
@@ -286,4 +308,56 @@ fn team_preview_is_a_position_too() {
         "preview actions are picks: {actions:#?}"
     );
     assert_eq!(r["preview"], json!(true));
+}
+
+
+/// The bug this exists for: `appeared` and "has switched in at least once"
+/// are the same statement, and `Belief::determinize` reads the second to
+/// decide which party slots still hold unseen picks. A hand-written position
+/// states only the first — so a `from_spec` that did not restore the other
+/// let the determinizer shuffle a live bench mon into the slot where the
+/// user had just watched something faint, and the search answered a question
+/// about a team the opponent did not have.
+#[test]
+fn a_dead_opponent_bench_stays_dead() {
+    let dex = load_dex();
+    let mut v = demo_position();
+    // their Zapdos is out; their other two picks are down
+    for slot in [0, 1] {
+        v["sides"][1]["mons"][slot] = json!({
+            "species": v["sides"][1]["mons"][slot]["species"],
+            "level": v["sides"][1]["mons"][slot]["level"],
+            "appeared": true, "fainted": true, "hp_num": 0, "status": "fnt",
+        });
+    }
+    let spec = PositionSpec::parse(&v.to_string()).unwrap();
+    let b = synthesize_spec(&dex, &spec, &pool(), None, 7).unwrap();
+    assert_eq!(b.sides[1].pokemon_left, 1, "they are down to their last mon");
+
+    let cfg = RmConfig { rule: SelRule::Ucb, ..RmConfig::default() };
+    let mut agent = ProtocolAgent::new(&dex, 0, pool(), cfg, 9);
+    agent.set_position(&dex, &spec).unwrap();
+    agent.step(&dex, 800).unwrap();
+    let r = analysis::report(&agent, &dex, 0, 9);
+    let replies: Vec<&str> = r["matrix"]["cols"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["input"].as_str().unwrap())
+        .collect();
+    assert!(
+        replies.iter().all(|i| !i.starts_with("switch")),
+        "an opponent on its last Pokémon cannot switch: {replies:?}"
+    );
+}
+
+#[test]
+fn a_pokemon_cannot_faint_without_appearing() {
+    let mut v = demo_position();
+    v["sides"][1]["mons"][0] = json!({
+        "species": "Exeggutor", "level": 50,
+        "fainted": true, "hp_num": 0, "status": "fnt",
+    });
+    let err = PositionSpec::parse(&v.to_string()).unwrap_err();
+    assert!(err.contains("without ever appearing"), "{err}");
 }

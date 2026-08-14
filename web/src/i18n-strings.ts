@@ -282,7 +282,13 @@ export interface SolverStrings {
   colOption: string;
   colShare: string;
   colWinRate: string;
+  colWorst: string;
+  colMix: string;
   colVisits: string;
+  positionValue: (pct: string) => string;
+  valueHelp: string;
+  mixHelp: string;
+  availableIn: (pct: string) => string;
   dominatedTag: string;
   matrixTitle: string;
   matrixHelp: string;
@@ -554,7 +560,15 @@ const EN: UIStrings = {
     colOption: "Option",
     colShare: "Search share",
     colWinRate: "Win rate",
+    colWorst: "Their best reply",
+    colMix: "Play it",
     colVisits: "Playouts",
+    positionValue: (pct) => `This position is worth ${pct} to you`,
+    valueHelp:
+      "Win rate = what the option is worth when they answer it as well as this matrix says they can. The next column is what it is worth against the single reply that hurts it most: a gap between the two is a move that needs them to guess wrong.",
+    mixHelp:
+      "How often to choose each option. Both sides pick at the same time, so in many positions no single move is right every time — a split here is the answer, not indecision.",
+    availableIn: (pct) => `in ${pct} of their possible sets`,
     dominatedTag: "proven pointless",
     matrixTitle: "Against each of their replies",
     matrixHelp:
@@ -826,7 +840,15 @@ const JA: UIStrings = {
     colOption: "選択肢",
     colShare: "探索の配分",
     colWinRate: "勝率",
+    colWorst: "相手最善",
+    colMix: "選ぶ割合",
     colVisits: "playout",
+    positionValue: (pct) => `この局面の値: ${pct}`,
+    valueHelp:
+      "勝率＝この表の範囲で相手が最善に返してきたときの値。次の列は「一番刺さる1手で返されたとき」。差が大きい手は、相手が読み違えることに賭けている手。",
+    mixHelp:
+      "それぞれをどの割合で選ぶか。同時に手を出す以上、常に同じ手が正解とは限らない — 割れているのが答えであって、迷いではない。",
+    availableIn: (pct) => `相手候補の ${pct} にしか無い手`,
     dominatedTag: "無意味と証明済み",
     matrixTitle: "相手の手ごとの勝率",
     matrixHelp:

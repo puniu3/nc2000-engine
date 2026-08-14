@@ -127,9 +127,19 @@ export interface AnalysisReport {
   preview: boolean;
   belief: { count: number; fallback: boolean; candidates: string[] } | null;
   actions: ActionRow[];
-  matrix: { cols: ActionRef[]; cells: (MatrixCell | null)[][] };
+  /** The sampled matrix's own answer: the position's value, and the mixture
+   * the opponent should play to hold it. */
+  equilibrium: { value: number; theirs: number[] };
+  matrix: { cols: MatrixCol[]; cells: (MatrixCell | null)[][] };
   damage: { mine: DamageRow[]; theirs: DamageRow[] };
   line: PrincipalLine | null;
+}
+
+export interface MatrixCol extends ActionRef {
+  /** Share of playouts in which this reply was even legal. Below 1 the
+   * column is about the candidate teams that carry the move, not about the
+   * opponent as a whole. */
+  available: number;
 }
 
 export interface ActionRef {
@@ -145,8 +155,18 @@ export interface ActionRef {
 
 export interface ActionRow extends ActionRef {
   visits: number;
+  /** The search's own average over the replies it explored. Above the worst
+   * case by construction — kept for the record, not for the headline. */
   mean: number;
   frac: number;
+  /** Value against the opponent's equilibrium mixture: what choosing this
+   * is worth when they play the position properly. */
+  equity: number;
+  /** Value against their single best reply, or null when every cell in the
+   * row is too thin to be evidence. */
+  worst: number | null;
+  /** Our own equilibrium probability for this action. */
+  mix: number;
   dominated: boolean;
   /** Why the search proved this action pointless, when it did. */
   reason: string | null;
@@ -178,6 +198,8 @@ export interface PrincipalLine {
   steps: {
     mine: string | null;
     theirs: string | null;
+    /** Playouts behind this step's choice. */
+    visits: number;
     log: string[];
     outcome: "p1" | "p2" | "tie" | null;
   }[];

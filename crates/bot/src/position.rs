@@ -439,6 +439,11 @@ impl PositionSpec {
                 if !m.fainted && m.hp_num == 0 {
                     return Err(format!("sides[{s}].mons[{i}] is at 0 HP but not fainted"));
                 }
+                if m.fainted && !m.appeared {
+                    return Err(format!(
+                        "sides[{s}].mons[{i}] has fainted without ever appearing"
+                    ));
+                }
                 if m.active && m.fainted && !self.force_switch && !self.team_preview {
                     return Err(format!(
                         "sides[{s}].mons[{i}] is the fainted active outside a switch request"

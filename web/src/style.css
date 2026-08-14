@@ -1970,3 +1970,16 @@ td.solver-cell {
   min-height: 32px;
   padding: 2px 6px;
 }
+
+.solver-value {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.solver-avail {
+  display: block;
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  font-weight: 400;
+}

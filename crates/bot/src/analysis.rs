@@ -8,9 +8,12 @@
 //! nothing about *why*:
 //!
 //! - the **root matrix**: the search's estimate per (our action, their
-//!   action) pair. The per-action means everyone quotes are this matrix
-//!   marginalized over what the opponent actually got played, which is
-//!   exactly the information a human needs and the marginal destroys;
+//!   action) pair, plus the two summaries a single number cannot carry —
+//!   what an action is worth against an opponent playing the matrix's
+//!   equilibrium mixture, and what it is worth against their best reply.
+//!   The raw per-action mean is neither: it averages over the opponent
+//!   actions UCB happened to explore, so it sits ABOVE the worst case and
+//!   flatters every option that a rare reply punishes;
 //! - the **damage table**: engine-truth damage, computed through
 //!   `get_damage_synthetic`, so screens, boosts, items and type effects are
 //!   the real ones rather than a calculator's re-derivation;
@@ -30,8 +33,20 @@ use serde_json::{json, Value};
 use crate::blind::BlindSearch;
 use crate::import::ProtocolAgent;
 use crate::observe::Observer;
+use crate::smmcts::solve_rm_plus;
 
 pub const SCHEMA: &str = "nc2000-analysis-v1";
+
+/// A cell sampled fewer times than this is not evidence about a worst case:
+/// the minimum of six noisy estimates is biased low, and one thin cell would
+/// own the answer. Such cells still show in the matrix (with their count) —
+/// they are just not allowed to define `worst`.
+const MIN_CELL: u32 = 20;
+
+/// RM+ sweeps over the sampled matrix. The matrix is tiny (single-digit
+/// dimensions) so this is microseconds, and the same solver the baked
+/// preview tables and the RM root use.
+const SOLVE_SWEEPS: u32 = 2000;
 
 /// Gen 2 damage variance: the top roll times 217/255, floored.
 const MIN_ROLL_NUM: f64 = 217.0;
@@ -193,9 +208,12 @@ pub fn report(agent: &ProtocolAgent, dex: &Dex, line_plies: usize, line_seed: u6
     let mut order: Vec<usize> = (0..acts.len()).collect();
     order.sort_by_key(|&i| std::cmp::Reverse(visits[i]));
 
+    let m = MatrixSummary::build(search, &means, &order);
+
     let actions: Vec<Value> = order
         .iter()
-        .map(|&i| {
+        .enumerate()
+        .map(|(rank, &i)| {
             let mut row = battle
                 .map(|b| action_json(b, dex, side, None, acts[i]))
                 .unwrap_or_else(|| json!({"input": acts[i].to_input(dex)}));
@@ -208,6 +226,13 @@ pub fn report(agent: &ProtocolAgent, dex: &Dex, line_plies: usize, line_seed: u6
             } else {
                 1.0 / acts.len() as f64
             });
+            // What the action is worth if they answer it with the mixture
+            // the matrix says they should, and if they answer it with the
+            // single reply that hurts it most. The first is the value of
+            // choosing it in a simultaneous game; the second is the floor.
+            row["equity"] = json!(m.equity.get(rank).copied());
+            row["worst"] = json!(m.worst.get(rank).copied().flatten());
+            row["mix"] = json!(m.mix_mine.get(rank).copied());
             row["dominated"] = json!(dominated.get(i).copied().unwrap_or(false));
             row["reason"] = json!(reasons
                 .iter()
@@ -225,7 +250,14 @@ pub fn report(agent: &ProtocolAgent, dex: &Dex, line_plies: usize, line_seed: u6
         "preview": search.is_preview(),
         "belief": serde_json::from_str::<Value>(&agent.belief_info()).unwrap_or(Value::Null),
         "actions": actions,
-        "matrix": matrix_json(search, battle, dex, side, obs, &order),
+        // The position's own value, and the mixture each side should play to
+        // hold it. In a simultaneous game a single best move is the special
+        // case, not the rule — this is where that becomes visible.
+        "equilibrium": {
+            "value": m.value,
+            "theirs": m.mix_theirs,
+        },
+        "matrix": matrix_json(search, battle, dex, side, obs, &m),
         "damage": battle
             .map(|b| damage_table(b, dex, side, obs))
             .unwrap_or_else(|| json!({"mine": [], "theirs": []})),
@@ -237,54 +269,150 @@ pub fn report(agent: &ProtocolAgent, dex: &Dex, line_plies: usize, line_seed: u6
     })
 }
 
-/// The root matrix as a dense rows-by-columns grid (rows follow the action
-/// list's display order). Unsampled cells are `null`: UCB concentrates, so
-/// most of a wide matrix is genuinely unmeasured, and a zero there would
-/// read as a verdict.
+/// The sampled root matrix, summarized once and read by everything that
+/// needs it: the grid the screen draws, the per-action equity and floor, and
+/// the equilibrium mixture.
+struct MatrixSummary {
+    /// Opponent replies, busiest first.
+    cols: Vec<SearchChoice>,
+    /// `cells[row][col]` — `None` where the pair was never sampled. Rows
+    /// follow the display order handed in, not the action order.
+    cells: Vec<Vec<Option<(u32, f64)>>>,
+    /// Per row, value against the opponent's equilibrium mixture.
+    equity: Vec<f64>,
+    /// Per row, the worst sampled reply (`None` when every cell in the row
+    /// is too thin to be evidence).
+    worst: Vec<Option<f64>>,
+    /// Equilibrium mixtures, ours and theirs.
+    mix_mine: Vec<f64>,
+    mix_theirs: Vec<f64>,
+    /// The game value of the sampled matrix.
+    value: f64,
+}
+
+impl MatrixSummary {
+    fn build(search: &BlindSearch, means: &[f64], order: &[usize]) -> MatrixSummary {
+        let sampled = search.root_matrix();
+        let mut cols: Vec<SearchChoice> = Vec::new();
+        for &(_, c, _, _) in &sampled {
+            if !cols.contains(&c) {
+                cols.push(c);
+            }
+        }
+        let weight = |c: SearchChoice| -> u32 {
+            sampled.iter().filter(|(_, cc, _, _)| *cc == c).map(|(_, _, n, _)| *n).sum()
+        };
+        cols.sort_by_key(|&c| std::cmp::Reverse(weight(c)));
+
+        let cells: Vec<Vec<Option<(u32, f64)>>> = order
+            .iter()
+            .map(|&row| {
+                cols.iter()
+                    .map(|&c| {
+                        sampled
+                            .iter()
+                            .find(|(a, cc, _, _)| *a == row && *cc == c)
+                            .map(|&(_, _, n, mean)| (n, mean))
+                    })
+                    .collect()
+            })
+            .collect();
+
+        // Only cells the search actually sampled enough times are evidence.
+        // Everything thinner is replaced by the row's own average — the one
+        // stand-in that adds no claim about the reply it stands for — and a
+        // column with no evidence anywhere is dropped rather than handed to
+        // the solver as a reply the opponent might have.
+        let thick = |c: Option<(u32, f64)>| c.filter(|(n, _)| *n >= MIN_CELL).map(|(_, m)| m);
+        let keep: Vec<usize> =
+            (0..cols.len()).filter(|&c| cells.iter().any(|row| thick(row[c]).is_some())).collect();
+        let (rows, ncols) = (order.len(), keep.len());
+        if rows == 0 || ncols == 0 {
+            return MatrixSummary {
+                cols,
+                cells,
+                equity: vec![0.5; rows],
+                worst: vec![None; rows],
+                mix_mine: vec![1.0 / rows.max(1) as f64; rows],
+                mix_theirs: vec![],
+                value: 0.5,
+            };
+        }
+        let mut flat = vec![0.0f64; rows * ncols];
+        for (r, &i) in order.iter().enumerate() {
+            for (c, &col) in keep.iter().enumerate() {
+                flat[r * ncols + c] = thick(cells[r][col]).unwrap_or(means[i]);
+            }
+        }
+        let (mix_mine, mix_kept) = solve_rm_plus(&flat, [rows, ncols], SOLVE_SWEEPS);
+        let equity: Vec<f64> = (0..rows)
+            .map(|r| (0..ncols).map(|c| flat[r * ncols + c] * mix_kept[c]).sum())
+            .collect();
+        let value: f64 = (0..rows).map(|r| equity[r] * mix_mine[r]).sum();
+        // The floor is the minimum of the SAME row the equity averages over,
+        // so it can never sit above it — and it is reported only for a row
+        // that has some evidence to floor.
+        let worst: Vec<Option<f64>> = (0..rows)
+            .map(|r| {
+                keep.iter().any(|&c| thick(cells[r][c]).is_some()).then(|| {
+                    (0..ncols).map(|c| flat[r * ncols + c]).fold(f64::INFINITY, f64::min)
+                })
+            })
+            .collect();
+        // The mixture is reported over the columns as displayed, so a dropped
+        // column reads as the zero it is.
+        let mut mix_theirs = vec![0.0; cols.len()];
+        for (c, &col) in keep.iter().enumerate() {
+            mix_theirs[col] = mix_kept[c];
+        }
+        MatrixSummary { cols, cells, equity, worst, mix_mine, mix_theirs, value }
+    }
+}
+
+/// The grid the screen draws. Unsampled cells are `null`: UCB concentrates,
+/// so most of a wide matrix is genuinely unmeasured, and a zero there would
+/// read as a verdict. Each column also carries how often the reply was even
+/// LEGAL — in blind play a move exists only in the candidate teams that
+/// carry it, and a column sampled rarely because it is rarely available says
+/// something quite different from one the search kept declining.
 fn matrix_json(
     search: &BlindSearch,
     battle: Option<&Battle>,
     dex: &Dex,
     side: usize,
     obs: Option<&Observer>,
-    order: &[usize],
+    m: &MatrixSummary,
 ) -> Value {
-    let cells = search.root_matrix();
-    let mut cols: Vec<SearchChoice> = Vec::new();
-    for &(_, c, _, _) in &cells {
-        if !cols.contains(&c) {
-            cols.push(c);
-        }
-    }
-    // busiest opponent replies first
-    let weight = |c: SearchChoice| -> u32 {
-        cells.iter().filter(|(_, cc, _, _)| *cc == c).map(|(_, _, n, _)| *n).sum()
-    };
-    cols.sort_by_key(|&c| std::cmp::Reverse(weight(c)));
-
-    let grid: Vec<Vec<Value>> = order
-        .iter()
-        .map(|&row| {
-            cols.iter()
-                .map(|&c| {
-                    match cells.iter().find(|(a, cc, _, _)| *a == row && *cc == c) {
-                        Some(&(_, _, n, mean)) => json!({"n": n, "mean": mean}),
-                        None => Value::Null,
-                    }
-                })
-                .collect()
-        })
-        .collect();
-
+    let iters = search.iterations().max(1) as f64;
+    let avail = search.root_replies();
     json!({
-        "cols": cols
+        "cols": m
+            .cols
             .iter()
-            .map(|&c| match battle {
-                Some(b) => action_json(b, dex, 1 - side, obs, c),
-                None => json!({"input": c.to_input(dex)}),
+            .map(|&c| {
+                let mut col = match battle {
+                    Some(b) => action_json(b, dex, 1 - side, obs, c),
+                    None => json!({"input": c.to_input(dex)}),
+                };
+                let n = avail.iter().find(|(x, _)| *x == c).map(|(_, n)| *n).unwrap_or(0);
+                col["available"] = json!(n as f64 / iters);
+                col
             })
             .collect::<Vec<Value>>(),
-        "cells": grid,
+        "cells": m
+            .cells
+            .iter()
+            .map(|row| {
+                Value::Array(
+                    row.iter()
+                        .map(|c| match c {
+                            Some((n, mean)) => json!({"n": n, "mean": mean}),
+                            None => Value::Null,
+                        })
+                        .collect(),
+                )
+            })
+            .collect::<Vec<Value>>(),
     })
 }
 
@@ -315,6 +443,7 @@ fn line_json(agent: &ProtocolAgent, dex: &Dex, seed: u64, plies: usize) -> Value
             .map(|s| json!({
                 "mine": s.mine.map(|c| c.to_input(dex)),
                 "theirs": s.theirs.map(|c| c.to_input(dex)),
+                "visits": s.visits,
                 "log": s.log,
                 "outcome": s.outcome.map(|o| match o {
                     nc2000_engine::battle::Outcome::P1Win => "p1",

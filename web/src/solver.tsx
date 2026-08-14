@@ -1030,12 +1030,18 @@ function Results(props: { result: SolveResult; side: number }) {
         )}
       </div>
       <p class="solver-note">{s.estimateNote}</p>
+      <p class="solver-value" data-testid="solver-value">
+        {s.positionValue(pct(report.equilibrium.value))}
+      </p>
+      <p class="solver-note">{s.valueHelp}</p>
 
       <table class="solver-actions" data-testid="solver-actions">
         <thead>
           <tr>
             <th>{s.colOption}</th>
             <th>{s.colWinRate}</th>
+            <th>{s.colWorst}</th>
+            <th title={s.mixHelp}>{s.colMix}</th>
             <th>{s.colShare}</th>
             <th>{s.colVisits}</th>
           </tr>
@@ -1051,7 +1057,11 @@ function Results(props: { result: SolveResult; side: number }) {
                   </span>
                 )}
               </td>
-              <td class="num">{pct(a.mean)}</td>
+              <td class="num">{pct(a.equity)}</td>
+              {/* The floor. Blank when no reply to this action was sampled
+                * often enough to be evidence about a worst case. */}
+              <td class="num solver-dim">{a.worst === null ? "—" : pct(a.worst)}</td>
+              <td class="num">{a.mix > 0.005 ? pct(a.mix) : ""}</td>
               <td>
                 <div class="solver-share">
                   <div class="solver-share-fill" style={{ width: `${a.frac * 100}%` }} />
@@ -1074,7 +1084,14 @@ function Results(props: { result: SolveResult; side: number }) {
                 <tr>
                   <th />
                   {report.matrix.cols.map((c) => (
-                    <th key={c.input}>{actionLabel(c)}</th>
+                    <th key={c.input}>
+                      {actionLabel(c)}
+                      {/* A reply that only some candidate sets carry is a
+                        * statement about those sets, not about the opponent. */}
+                      {c.available < 0.995 && (
+                        <span class="solver-avail">{s.availableIn(pct(c.available))}</span>
+                      )}
+                    </th>
                   ))}
                 </tr>
               </thead>

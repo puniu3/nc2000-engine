@@ -102,11 +102,31 @@ checkEq(
   "actions are ordered by playouts"
 );
 for (const a of report.actions) {
-  check(a.mean >= 0 && a.mean <= 1, `win rate in [0,1] for ${a.input}`);
+  for (const k of ["mean", "equity"]) {
+    check(a[k] >= 0 && a[k] <= 1, `${k} in [0,1] for ${a.input}`);
+  }
+  check(
+    a.worst === null || a.worst <= a.equity + 1e-9,
+    `${a.input}: the worst reply cannot beat the equilibrium answer`
+  );
 }
+const mixMine = report.actions.reduce((x, a) => x + a.mix, 0);
+check(Math.abs(mixMine - 1) < 1e-6, `our equilibrium mixture sums to 1 (${mixMine})`);
+const mixTheirs = report.equilibrium.theirs.reduce((x, p) => x + p, 0);
+check(Math.abs(mixTheirs - 1) < 1e-6, `their mixture sums to 1 (${mixTheirs})`);
+check(
+  report.equilibrium.value >= 0 && report.equilibrium.value <= 1,
+  "the position value is a probability"
+);
 
 // the joint the marginals hide
 check(report.matrix.cols.length > 0, "the root matrix has opponent columns");
+for (const c of report.matrix.cols) {
+  check(
+    c.available > 0 && c.available <= 1,
+    `${c.input}: availability is a share of playouts (${c.available})`
+  );
+}
 checkEq(
   report.matrix.cells.length,
   report.actions.length,
@@ -180,7 +200,14 @@ if (process.env.NC2000_NATIVE_PARITY === "1") {
     native.actions.forEach((a, i) =>
       checkClose(a.mean, report.actions[i].mean, `action ${a.input} win rate`)
     );
-    checkEq(native.matrix.cols, report.matrix.cols, "native ≡ wasm: matrix columns");
+    checkEq(
+      native.matrix.cols.map((c) => ({ ...c, available: undefined })),
+      report.matrix.cols.map((c) => ({ ...c, available: undefined })),
+      "native ≡ wasm: matrix columns"
+    );
+    native.matrix.cols.forEach((c, i) =>
+      checkClose(c.available, report.matrix.cols[i].available, `col ${c.input} availability`)
+    );
     checkEq(
       native.matrix.cells.map((row) => row.map((c) => (c ? c.n : null))),
       report.matrix.cells.map((row) => row.map((c) => (c ? c.n : null))),

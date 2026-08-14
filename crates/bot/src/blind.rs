@@ -304,6 +304,12 @@ pub struct BlindSearch {
     /// decides which moves exist), so an index means nothing across
     /// iterations while a `Move(id)` means the same move every time.
     joint: Vec<(usize, SearchChoice, u32, f64)>,
+    /// How often each opponent action was even LEGAL, across iterations.
+    /// A blind root's opponent action list is determinization-dependent — a
+    /// move exists only in the candidates that carry it — so a column's
+    /// sample count conflates "rarely chosen" with "rarely available", and
+    /// only this tells them apart.
+    avail: Vec<(SearchChoice, u32)>,
 }
 
 impl BlindSearch {
@@ -347,6 +353,7 @@ impl BlindSearch {
             table: FxHashMap::default(),
             done: 0,
             joint: Vec::new(),
+            avail: Vec::new(),
         }
     }
 
@@ -458,6 +465,13 @@ impl BlindSearch {
     fn record_joint(&mut self, root: usize, my_pick: usize, joint: [usize; 2], r: f64) {
         let opp = 1 - self.side;
         let acts = &self.nodes[root].acts[opp];
+        for &c in acts.iter() {
+            match self.avail.iter_mut().find(|(x, _)| *x == c) {
+                Some((_, n)) => *n += 1,
+                None => self.avail.push((c, 1)),
+            }
+        }
+        let acts = &self.nodes[root].acts[opp];
         let Some(&opp_act) = acts.get(joint[opp]) else { return };
         let mine = if self.side == 0 { r } else { 1.0 - r };
         match self
@@ -523,6 +537,16 @@ impl BlindSearch {
             }
             let key = key_of(&self.cfg, dex, &mut sim);
             let Some(&node) = self.table.get(&key) else { break };
+            // A node the search barely entered has no policy to read: its
+            // per-action counts are UCB's first-visit sweep, not a
+            // preference. Stopping is the honest end of a line — a step
+            // invented from four playouts reads exactly like a searched one.
+            let node_visits: u32 = self.nodes[node].n[self.side].iter().sum();
+            let root_visits: u32 = self.my_n.iter().sum();
+            let seen = if ply == 0 { root_visits } else { node_visits };
+            if seen < MIN_LINE_VISITS {
+                break;
+            }
             let mut joint = [None, None];
             for side in 0..2 {
                 let acts = &self.nodes[node].acts[side];
@@ -552,11 +576,19 @@ impl BlindSearch {
             steps.push(LineStep {
                 mine: joint[self.side],
                 theirs: joint[1 - self.side],
+                visits: seen,
                 log,
                 outcome: sim.outcome(),
             });
         }
         PrincipalLine { assumed, steps }
+    }
+
+    /// Per opponent action, the number of iterations in which it was legal.
+    /// Read next to `root_matrix`: a reply available in a third of the
+    /// determinizations is a statement about a third of the candidate teams.
+    pub fn root_replies(&self) -> &[(SearchChoice, u32)] {
+        &self.avail
     }
 
     /// Pump `n` iterations, return the total run so far.
@@ -846,6 +878,8 @@ pub struct LineStep {
     /// The analyzing side's action (`None` = it owed nothing).
     pub mine: Option<SearchChoice>,
     pub theirs: Option<SearchChoice>,
+    /// Playouts behind this step's choice — the reader's confidence in it.
+    pub visits: u32,
     /// Protocol lines this turn produced — the same channel the battle log
     /// is narrated from, so a UI needs no second renderer.
     pub log: Vec<String>,
@@ -861,6 +895,11 @@ pub struct PrincipalLine {
     pub assumed: Vec<(nc2000_engine::dex::SpeciesId, Vec<nc2000_engine::dex::MoveId>)>,
     pub steps: Vec<LineStep>,
 }
+
+/// Below this many playouts a node's visit counts are UCB's untried-first
+/// sweep rather than a preference, so a line stops instead of continuing on
+/// noise.
+const MIN_LINE_VISITS: u32 = 20;
 
 /// Most-visited action index, skipping dominated ones while any alternative
 /// survives — the same play rule as `BlindSearch::best`.

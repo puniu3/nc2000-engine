@@ -121,7 +121,14 @@ test("every legal option comes back scored", async ({ page }) => {
     const tr = [...document.querySelectorAll('[data-testid="solver-actions"] tbody tr')];
     return tr.map((r) => {
       const cells = [...r.querySelectorAll("td")].map((c) => c.innerText.trim());
-      return { label: cells[0], win: cells[1], share: cells[2], visits: cells[3] };
+      return {
+        label: cells[0],
+        win: cells[1],
+        worst: cells[2],
+        mix: cells[3],
+        share: cells[4],
+        visits: cells[5],
+      };
     });
   });
   const num = (s: string) => Number(s.replace(/[^0-9.]/g, ""));
@@ -135,7 +142,13 @@ test("every legal option comes back scored", async ({ page }) => {
     const w = num(d.win);
     expect(w).toBeGreaterThanOrEqual(0);
     expect(w).toBeLessThanOrEqual(100);
+    // the floor never beats the value against a mixture that contains it
+    if (d.worst !== "—") expect(num(d.worst)).toBeLessThanOrEqual(w + 0.05);
   }
+  // the position has a stated value, and it is one of the options' equity
+  await expect(page.getByTestId("solver-value")).toBeVisible();
+  const value = num(await page.getByTestId("solver-value").innerText());
+  expect(Math.min(...data.map((d) => Math.abs(num(d.win) - value)))).toBeLessThan(0.15);
 
   // the joint view is what the marginal hides, so it has to be there
   await expect(page.getByTestId("solver-matrix")).toBeVisible();

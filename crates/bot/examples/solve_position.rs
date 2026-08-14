@@ -96,16 +96,23 @@ fn print_report(r: &Value, ms: u128) {
         if belief["fallback"].as_bool() == Some(true) { " (off-pool fallback)" } else { "" }
     );
 
-    println!("\nactions (visit share / estimated win rate):");
+    println!(
+        "\nposition value {} (both sides at equilibrium over the sampled matrix)",
+        pct(&r["equilibrium"]["value"])
+    );
+    println!("\nactions (playouts / search share / vs their equilibrium / vs their best reply / equilibrium mix):");
     for a in r["actions"].as_array().into_iter().flatten() {
         let mark = if a["dominated"].as_bool() == Some(true) { " [dominated]" } else { "" };
         let why = a["reason"].as_str().map(|w| format!("  <- {w}")).unwrap_or_default();
+        let worst = if a["worst"].is_null() { "   —".to_string() } else { pct(&a["worst"]) };
         println!(
-            "  {:<22} {:>6}  {:>7}  {:>7}{mark}{why}",
+            "  {:<22} {:>6}  {:>7}  {:>7}  {:>7}  {:>6}{mark}{why}",
             a["input"].as_str().unwrap_or(""),
             a["visits"].as_u64().unwrap_or(0),
             pct(&a["frac"]),
-            pct(&a["mean"]),
+            pct(&a["equity"]),
+            worst,
+            pct(&a["mix"]),
         );
     }
 
@@ -115,6 +122,11 @@ fn print_report(r: &Value, ms: u128) {
         print!("  {:<22}", "");
         for c in &cols {
             print!("{:>14}", short(c["input"].as_str().unwrap_or("")));
+        }
+        println!();
+        print!("  {:<22}", "available in");
+        for c in &cols {
+            print!("{:>14}", pct(&c["available"]));
         }
         println!();
         for (i, a) in r["actions"].as_array().into_iter().flatten().enumerate() {
@@ -161,10 +173,11 @@ fn print_report(r: &Value, ms: u128) {
         println!("\nsearched line:");
         for (i, s) in steps.iter().enumerate() {
             println!(
-                "  {}. us: {:<20} them: {}",
+                "  {}. us: {:<20} them: {:<20} ({} playouts)",
                 i + 1,
                 s["mine"].as_str().unwrap_or("-"),
-                s["theirs"].as_str().unwrap_or("-")
+                s["theirs"].as_str().unwrap_or("-"),
+                s["visits"].as_u64().unwrap_or(0)
             );
             for l in s["log"].as_array().into_iter().flatten() {
                 let l = l.as_str().unwrap_or("");

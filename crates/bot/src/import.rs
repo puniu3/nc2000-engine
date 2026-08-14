@@ -2490,7 +2490,19 @@ impl TrackMon {
         let mut tm = TrackMon::new(species, m.level, gender_of(&m.gender), m.item_flag);
         tm.name = m.name.clone();
         tm.appeared = m.appeared;
-        tm.appear_count = m.appear_count;
+        // "It has appeared" and "it has switched in at least once" are the
+        // same statement, and the tracker sets them together on every switch
+        // line. A hand-written position states only the first — there is no
+        // control for a switch-in COUNT and there should not be — so the
+        // second is restored here.
+        //
+        // Not cosmetic: `Belief::determinize` decides which party slots hold
+        // unseen picks from `previously_switched_in`, which this feeds. Left
+        // at zero, an opponent the user has seen (and possibly watched
+        // faint) reads as a slot never revealed, and the determinizer
+        // reshuffles a live bench mon into it — the search then answers a
+        // question about a team the opponent does not have.
+        tm.appear_count = m.appear_count.max(i32::from(m.appeared));
         tm.switch_in_turn = m.switch_in_turn;
         tm.active = m.active;
         tm.fainted = m.fainted;
