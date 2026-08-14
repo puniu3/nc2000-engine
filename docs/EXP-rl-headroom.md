@@ -163,6 +163,52 @@ The rollout is worth **+0.115 ≈ +81 Elo** at the 1,000-iteration rung, and its
 advantage **grows** with budget (near-parity at the 300 rung). This is the
 mirror image of the prior's curve.
 
+### 7. Where the leaf's value actually lives: lookahead, not the evaluator
+
+Two measurements, added after the owner asked whether `eval01` is on the
+critical path at all.
+
+**Leaf provenance** (`--features leafstats`, shipped `skuct:1000` self-play,
+20 games, 874k leaf evaluations):
+
+| leaf produced by | share |
+|---|---|
+| terminal outcome — the rollout played the battle out | **0.701** |
+| 8-turn truncation → `eval01` | 0.299 |
+| tree turn cap → `eval01` | 0.000 |
+
+The rollout starts at a tree leaf, which deepens as the tree grows, and
+ε-greedy max-damage play ends battles fast — so 70% of the time the "leaf
+value" is a real game result, not an estimate. `eval01` is consulted on the
+remaining 30%.
+
+**Eval degradation** — strip `EvalWeights` to HP + alive (no threat, no status
+penalties, no boosts, no PP, no Spikes/Substitute, no sleep clock), everything
+else identical. This is the leaf-side twin of the inverted prior:
+
+| arm | 300 iters | 1,000 iters |
+|---|---|---|
+| HP-only vs shipped eval | 0.496 ±0.043 | 0.480 ±0.042 |
+| threat term removed only | — | 0.485 ±0.041 |
+
+**Every feature `eval.rs` has accumulated beyond "HP + alive" is worth no
+measurable strength.** Not a footprint problem — play visibly changes (average
+game length moves to 44.4 turns at 300) — the changed decisions simply do not
+convert.
+
+This is the mechanism behind the repo's standing finding that "the bot's
+confident choices are invariant to the eval's formulation". `eval01` is asked
+an **easy question, rarely**: 30% of leaves, and those leaves sit 8 turns
+downstream of the tree, where HP and how many mons are still alive already
+carry nearly all the signal. Improving the answer to an easy question buys
+nothing.
+
+It also sharpens §6. The +81 Elo there is the value of the **lookahead** — 8
+turns of simulation that reach a terminal state 70% of the time — and not the
+value of the static evaluator sitting behind it. A learned value competing for
+that slot is not competing against `eval01`; it is competing against actually
+playing the game out.
+
 ## Verdict
 
 **The two halves of the RL proposal do not have the same prospects, and the
@@ -188,12 +234,22 @@ That is the channel a learned value would occupy. What this experiment does
 channel matters and fixes the bar precisely:
 
 - beat **8-turn ε-greedy rollout + `eval01`**, not `eval01` (the eval alone
-  loses by 81 Elo — the rollout is not a weak baseline);
+  loses by 81 Elo — the rollout is not a weak baseline, and §7 shows why: 70%
+  of its returns are real game outcomes);
 - fit in **~27 µs/iteration** on this machine (52.2 − 25.1 ms per 1,000
   iterations), i.e. about half the current per-iteration cost, or it pays for
   itself in lost iterations;
 - and survive the extrapolation from 1,000 to 30,000, which is measured only
   in trend direction here (favourable) and not at the product budget.
+
+*And the corollary from §7, which is the sharpest practical rule here:*
+**incremental eval accuracy is worthless, and this is now measured rather than
+inferred.** Gutting `eval01` to HP+alive costs nothing, so no amount of making
+it more accurate — by RL, regression, or hand — pays while it stays in its
+current slot, where it is asked an easy question on 30% of leaves. A learned
+value is worth building only as the thing that **deletes the rollout**, which
+moves it to 100% of leaves and asks it the hard question. Half-measures in
+this slot are provably null.
 
 *Recommended order if this line is opened:* value first, policy not at all.
 Start from `eval_calibration`'s existing labelling path (GT `skuct:300`, 32
@@ -221,6 +277,10 @@ cargo run --release -p nc2000-bot --example prior_probe -- \
     --games 30 --iters 1000 --puct 2.0 --seed 5 --positions 300
 cargo run --release -p nc2000-bot --example arena -- \
     skuctv:2000:0 skuctv:1000:8 --games 400 --seed 21
+cargo run --release -p nc2000-bot --example arena -- \
+    skuctw:1000:hponly skuctw:1000:shipped --games 400 --seed 21
+cargo run --release -p nc2000-bot --features leafstats --example prior_probe -- \
+    --games 20 --iters 1000 --seed 5 --positions 1 --arms base
 ```
 
 Machine: 4 vCPU container, `skuct:300` = 15.1 ms/move (the README's baseline

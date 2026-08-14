@@ -215,13 +215,19 @@ fn main() {
     println!("positions: SELF-PLAY (the 570-battle human corpus is not in-tree; this is");
     println!("           the distribution M16a warned is not the human one)\n");
 
-    println!("[2] action-class mechanism ({games} self-play games per arm)");
+    // --arms base restricts to the shipped configuration, which is what the
+    // leaf-provenance counters have to describe: the prior arms shorten games
+    // and would bias the terminal/cutoff split.
+    let arms = get("--arms", "all");
+    println!("[2] action-class mechanism ({games} self-play games per arm, arms={arms})");
     let (t_base, positions) = self_play(&dex, &teams, &base, games, seed, true);
     t_base.report("baseline skuct");
-    let (t_unif, _) = self_play(&dex, &teams, &unif, games, seed, false);
-    t_unif.report("puct uniform prior");
-    let (t_cand, _) = self_play(&dex, &teams, &cand, games, seed, false);
-    t_cand.report("puct greedy prior");
+    if arms == "all" {
+        let (t_unif, _) = self_play(&dex, &teams, &unif, games, seed, false);
+        t_unif.report("puct uniform prior");
+        let (t_cand, _) = self_play(&dex, &teams, &cand, games, seed, false);
+        t_cand.report("puct greedy prior");
+    }
 
     // ---- footprint screen on the baseline-generated positions
     let mut pos = positions;
@@ -231,6 +237,15 @@ fn main() {
         let keep = max_positions as f64 / pos.len() as f64;
         pos.retain(|_| rng.next_f64() < keep);
         pos.truncate(max_positions);
+    }
+    #[cfg(feature = "leafstats")]
+    {
+        let (t, c, h) = nc2000_bot::mcts::leafstats::read();
+        let tot = (t + c + h).max(1) as f64;
+        println!("\n[0] leaf provenance over the self-play arms above");
+        println!("  terminal (rollout played it out) : {t:>10}  {:.3}", t as f64 / tot);
+        println!("  cutoff   (8-turn trunc -> eval01): {c:>10}  {:.3}", c as f64 / tot);
+        println!("  horizon  (tree turn cap -> eval01): {h:>9}  {:.3}", h as f64 / tot);
     }
     println!("\n[1] footprint vs seed floor ({} positions)", pos.len());
     let (mut moved_cand, mut moved_seed) = (0usize, 0usize);

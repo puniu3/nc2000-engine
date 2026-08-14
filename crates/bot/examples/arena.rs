@@ -74,6 +74,12 @@ enum AgentSpec {
     /// TURNS=0 is "eval only, no rollout" — the shape a learned value net
     /// would have, so its strength/cost tells us what such a net must beat.
     SkUctV { iterations: u32, turns: u16, buckets: i64 },
+    /// M18c eval-channel arm: skuct with a deliberately degraded leaf eval.
+    /// MODE=hponly strips every feature except HP/alive (so no threat, no
+    /// status, no boosts, no Spikes/Substitute) — the leaf-side twin of the
+    /// inverted prior, bounding how much strength the eval's accuracy is
+    /// worth at all.
+    SkUctW { iterations: u32, mode: String, buckets: i64 },
     /// Threshold key + damage-bookkeeping-free key (the full abstraction).
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
     Blind { iterations: u32, c: f64, buckets: i64 },
@@ -145,6 +151,11 @@ impl AgentSpec {
                 turns: opt_num(&parts, 2, "turns")?.unwrap_or(8),
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
             }),
+            "skuctw" => Ok(AgentSpec::SkUctW {
+                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
+                mode: parts.get(2).copied().unwrap_or("shipped").to_string(),
+                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
+            }),
             "skuct" => Ok(AgentSpec::SkUct {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
@@ -190,6 +201,7 @@ impl AgentSpec {
             | AgentSpec::SkUct { iterations, .. }
             | AgentSpec::SkUctP { iterations, .. }
             | AgentSpec::SkUctV { iterations, .. }
+            | AgentSpec::SkUctW { iterations, .. }
             | AgentSpec::SkUctNs { iterations, .. }
             | AgentSpec::Blind { iterations, .. }
             | AgentSpec::Open { iterations, .. } => *iterations,
@@ -300,6 +312,40 @@ impl AgentSpec {
                 },
                 seed,
             )),
+            AgentSpec::SkUctW { iterations, mode, buckets } => {
+                let mut w = EvalWeights::default();
+                match mode.as_str() {
+                    "shipped" => {}
+                    "hponly" => {
+                        w.brn = 0.0;
+                        w.par = 0.0;
+                        w.slp = 0.0;
+                        w.frz = 0.0;
+                        w.psn = 0.0;
+                        w.tox = 0.0;
+                        w.boost = [0.0; 7];
+                        w.threat = 0.0;
+                        w.pp = 0.0;
+                        w.substitute = 0.0;
+                        w.race = 0.0;
+                        w.spikes = 0.0;
+                        w.exchange = 0.0;
+                        w.slp_time_scale = false;
+                    }
+                    "nothreat" => w.threat = 0.0,
+                    other => panic!("bad skuctw mode: {other}"),
+                }
+                Box::new(RmAgent::new(
+                    RmConfig {
+                        iterations: *iterations,
+                        rule: SelRule::Ucb,
+                        hp_buckets: *buckets,
+                        playout: Playout::Heavy { eps: 0.2, turns: 8, weights: w },
+                        ..Default::default()
+                    },
+                    seed,
+                ))
+            }
             AgentSpec::SkUctAbs { iterations, c, buckets } => Box::new(RmAgent::new(
                 RmConfig {
                     iterations: *iterations,
@@ -393,6 +439,9 @@ impl AgentSpec {
             }
             AgentSpec::SkUctV { iterations, turns, buckets } => {
                 format!("skuctv:{iterations}:{turns}:{buckets}")
+            }
+            AgentSpec::SkUctW { iterations, mode, buckets } => {
+                format!("skuctw:{iterations}:{mode}:{buckets}")
             }
             AgentSpec::SkUctP { iterations, puct, prior, tau, status_bonus, buckets } => {
                 let k = match prior {

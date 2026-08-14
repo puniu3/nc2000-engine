@@ -510,9 +510,13 @@ pub(crate) fn run_iteration(
         sim.apply_choices(dex, joint)
             .expect("cached legal choice rejected (state_key collision?)");
         if let Some(o) = sim.outcome() {
+            #[cfg(feature = "leafstats")]
+            crate::mcts::leafstats::bump(&crate::mcts::leafstats::TERMINAL);
             break outcome_reward(o);
         }
         if sim.turn > turn_cap {
+            #[cfg(feature = "leafstats")]
+            crate::mcts::leafstats::bump(&crate::mcts::leafstats::HORIZON);
             break leaf_eval(cfg, sim, dex);
         }
         let key = key_of(cfg, dex, sim);

@@ -428,9 +428,13 @@ pub(crate) fn playout_value(
     };
     loop {
         if let Some(o) = sim.outcome() {
+            #[cfg(feature = "leafstats")]
+            leafstats::bump(&leafstats::TERMINAL);
             return outcome_reward(o);
         }
         if sim.turn > cutoff {
+            #[cfg(feature = "leafstats")]
+            leafstats::bump(&leafstats::CUTOFF);
             return match playout {
                 Playout::Uniform => hp_eval(sim),
                 Playout::Heavy { weights, .. } => eval::eval_leaf(sim, dex, weights),
@@ -616,6 +620,37 @@ impl Agent for MctsAgent {
             .copied()
             .max_by_key(|c| nodes[0].stats[side].get(c).map(|s| s.n).unwrap_or(0))
             .unwrap()
+    }
+}
+
+/// Research counters (`--features leafstats`): how each leaf value was
+/// produced. `TERMINAL` = the rollout played the battle out; `CUTOFF` = it
+/// hit the 8-turn truncation and `eval01` decided; `HORIZON` = the tree's own
+/// turn cap. The ratio is what says whether the eval is on the critical path
+/// at all.
+#[cfg(feature = "leafstats")]
+pub mod leafstats {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    pub static TERMINAL: AtomicU64 = AtomicU64::new(0);
+    pub static CUTOFF: AtomicU64 = AtomicU64::new(0);
+    pub static HORIZON: AtomicU64 = AtomicU64::new(0);
+
+    pub fn bump(c: &AtomicU64) {
+        c.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn read() -> (u64, u64, u64) {
+        (
+            TERMINAL.load(Ordering::Relaxed),
+            CUTOFF.load(Ordering::Relaxed),
+            HORIZON.load(Ordering::Relaxed),
+        )
+    }
+
+    pub fn reset() {
+        TERMINAL.store(0, Ordering::Relaxed);
+        CUTOFF.store(0, Ordering::Relaxed);
+        HORIZON.store(0, Ordering::Relaxed);
     }
 }
 

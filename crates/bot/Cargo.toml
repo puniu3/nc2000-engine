@@ -21,6 +21,10 @@ mimalloc = { version = "0.1.52", optional = true }
 [features]
 default = ["mi"]
 mi = ["dep:mimalloc"]
+# Research instrumentation: count how each search iteration's leaf value was
+# produced (terminal outcome / rollout truncation / tree horizon). Relaxed
+# atomics in the hot loop, so it is opt-in and never in a shipped build.
+leafstats = []
 
 [dev-dependencies]
 conformance = { path = "../conformance" }
