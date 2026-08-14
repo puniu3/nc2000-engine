@@ -148,3 +148,8 @@ w=0.349、sample-12 (Gengar/Starmie/Cloyster/Umbreon/Marowak/Snorlax) w=0.150。
 - M11旧データはレギュレーション移行前のため数字は不使用(機構のみ再利用)。
 - 「exploiterに強い」は適応型相手への防御であり、非適応相手への平均勝率向上を
   約束しない(M8 end-to-end probe = null)。Gate B が測るのは前者。
+- **後続 (2026-08-14)**: 出荷後の prior 最適化と頑健性証明プログラムは
+  `docs/EXP-PRIOR-EXPLOIT`(docs/EXP-prior-exploit.md)。帰結: `?nash` の相手 belief は
+  belief-pool v1.1(87チーム)に差し替え(blind規則・UXは不変)、blind-native BR /
+  人間型探針 / out-of-sample レンタルの3方向で「破れなし」を確認、主張は反証条件
+  つきの運用形(同文書§8)へ較正。
