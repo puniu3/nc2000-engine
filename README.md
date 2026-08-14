@@ -334,14 +334,31 @@ Milestones:
   iterations the search was running anyway, and keyed by the opponent's action identity rather than
   its index, since a blind root's action list is determinization-dependent), **engine-truth damage**
   through `get_damage_synthetic` (min/max roll, crit, guaranteed hits-to-KO), and a **searched
-  line** replayed from the tree under one stated assumption about the hidden set. Every figure that
-  leans on an imputed set is labelled as one, and unsampled matrix cells read "never tried" rather
-  than zero. Parity: `crates/wasm/tests-node/solver.js` checks the bridge's report against
+  line** replayed from the tree under one stated assumption about the hidden set (it stops rather
+  than continue out of a node with under 20 playouts behind it). Every figure that leans on an
+  imputed set is labelled as one, and unsampled matrix cells read "never tried" rather than zero.
+  The headline number is **not** the search's own per-action mean: that averages over whichever
+  replies UCB explored, so it sits above the worst case and flatters any move a rare answer
+  punishes (measured on a real position: 85.7% quoted where the opponent's best reply holds it to
+  83.6%). What is shown instead is the sampled matrix solved with the same RM+ the preview tables
+  use — the position's value, each option against the opponent's equilibrium mixture, its floor
+  against their single best reply, and the mixture to play. Both summaries read the same evidence
+  (cells thinner than 20 playouts are stand-ins, not measurements), so the floor can never print
+  above the value. Each column also carries how often that reply was even legal: in blind play a
+  move exists only in the candidate sets that carry it. Parity: `crates/wasm/tests-node/solver.js` checks the bridge's report against
   `examples/solve_position` — same actions, order, visit counts and matrix samples exactly, averaged
   values to 1e-9 (libm's `exp`/`ln` are not bit-identical across targets). Contract in
   `web/tests/solver.spec.ts`, which also pins the blind claim on this screen: loading the opponent's
   roster from a pool team copies six species, levels, genders and item flags — never their sets —
   and no move of theirs is treated as known unless the user typed it into "moves shown".
+  **One bug the screen found in the belief machinery, fixed with it:** `appeared` and "has switched
+  in at least once" are the same statement, and `Belief::determinize` reads the second
+  (`previously_switched_in`) to decide which party slots still hold unseen picks. A hand-written
+  position states only the first, so `from_spec` restores the other — without it the determinizer
+  shuffled a live bench mon into the slot where the user had just watched something faint, and the
+  search answered about a team the opponent did not have (regression:
+  `a_dead_opponent_bench_stays_dead`). Live play was never affected: a real tracker sets both on the
+  same switch line.
 
 Parked (not scheduled, not dead-by-principle):
 
