@@ -264,6 +264,61 @@ certified bounds (Phase C product use still gated). A heal war is a long
 resource race — PP and Toxic counters decided dozens of turns out. That wants
 exact depth, not a better static guess.
 
+### 9. The endgame solver: does exactness convert? (owner question)
+
+§8 ended by pointing at M17e's certified solver as the right instrument for
+stall play. That pointer needed testing too. `examples/solver_reach.rs` walks
+shipped-`skuct` self-play games and, at each decision point, asks
+`BoundSolver` whether it can certify the root inside a fixed budget. Positions
+are the ones the product actually reaches, and the solver is handed the true
+full-information state — which is what the shipped open-team-sheet product has
+once everything has been revealed.
+
+**Reach and cost.** Ungated, work budget 30,000 engine runs (5 games, 210
+decisions):
+
+| mons left | 6 | 5 | 4 | 3 | 2 |
+|---|---|---|---|---|---|
+| certify rate | 0.000 | 0.000 | 0.000 | 0.061 | 0.222 |
+| ms if it fails | 2154 | 1959 | 2139 | 1738 | 1499 |
+
+4.3% of decisions certified, and each failure burns ~2 s. Raising the budget to
+200,000 and gating to ≤3 mons remaining (the only region with any hit rate)
+lifts reach to 18.2% — at **3.4 s per success and 16.3 s per failure**, on a
+machine ~18x faster than the README's baseline and far faster than the
+certified iPad the product's 2.3 s/move budget was set on.
+
+**And then the finding that settles it.** Every certified value:
+
+```
+0.99 0.99 0.99 0.99 0.99 0.99 0.99 0.99 0.99 1.00 1.00 1.00 1.00 1.00
+```
+
+**14 of 14 already decided** (0/14 have 0.5 inside the bracket). The solver
+certifies exactly when the position has collapsed to a forced win — which is
+structural, not incidental: a subgame is cheap to prove precisely when the
+branching has died, and it has died precisely when the outcome is no longer in
+doubt. Contested positions are the ones that do not collapse, so they are the
+ones the solver cannot afford.
+
+That is the opposite of the shape a strength gain needs. Exactness is
+available where it changes nothing, and unavailable where it would change
+something. It corroborates M17e's own artifact from the other direction: 72
+eligible rows across all 570 corpus battles, against ~20,719 valid decision
+rows.
+
+**Not measured:** the direct win-rate delta of a hybrid agent (solver when it
+certifies, `skuct` otherwise). Given 14/14 certified positions sitting at
+0.99+, such an agent would be paying seconds per move to confirm moves the
+search already plays, so it was not built. The residual case for it is narrow —
+a bot that blunders a 0.99 position back to contention — and it is not worth
+3.4–16 s per decision to insure against.
+
+**Where the solver still earns its keep** is exactly where it already is: as
+an offline oracle (the M17e anchor gate, `endgame_exactness_corpus`) that
+proves the eval wrong on certified rows. That is measurement infrastructure,
+not a player.
+
 ## Verdict
 
 **The two halves of the RL proposal do not have the same prospects, and the
@@ -310,6 +365,10 @@ this slot are provably null.
 about 33 Elo in the stall stratum and roughly nothing elsewhere, because a
 constant leaf only costs that much. The slot, not the accuracy, is the
 binding constraint.
+
+§9 closes the endgame-solver route the previous section pointed at: it
+certifies 4.3% of decisions ungated, and every position it can certify is
+already won. Exactness is cheap only where the answer no longer matters.
 
 *Recommended order if this line is opened:* value first, policy not at all.
 Start from `eval_calibration`'s existing labelling path (GT `skuct:300`, 32
