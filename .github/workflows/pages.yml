@@ -83,8 +83,13 @@ jobs:
           # here would put all of it on the CDN for no reader.
           mkdir -p web/dist/data/meta-nash-v1
           cp data/meta-nash-v1/pool-artifact.json web/dist/data/meta-nash-v1/
+          # EXP-PRIOR-EXPLOIT v1: the nash door's belief candidate pool
+          # (curated 32 + known strong candidates). Belief-only payload.
+          mkdir -p web/dist/data/belief-pool-v1
+          cp data/belief-pool-v1/belief-pool.json web/dist/data/belief-pool-v1/
           test -s web/dist/data/gen2stadium2.json
           test -s web/dist/data/meta-nash-v1/pool-artifact.json
+          test -s web/dist/data/belief-pool-v1/belief-pool.json
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

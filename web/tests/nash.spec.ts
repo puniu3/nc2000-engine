@@ -20,6 +20,10 @@
 //      visit does NOT reach a nash game. That is the mode's "one shipped
 //      configuration" promise, and it is the only one of the four that
 //      state left over from another door could silently break.
+//   5. the belief candidate pool is the belief-pool-v1 artifact
+//      (EXP-PRIOR-EXPLOIT v1): the nash door fetches it, the other doors
+//      never do, and it is load-bearing — a nash page that cannot get it
+//      fails closed instead of quietly playing under the plainer prior.
 //
 // (4) is the reason this suite plays a whole game against a hand-mixed
 // off-pool party: the prior only ever governs the fallback roster, so a
@@ -313,4 +317,39 @@ test("the drawn opponent is one arm of the mixture, and no prior reaches the gam
   await expect(chip).not.toContainText("prior:");
 
   expect(errors).toEqual([]);
+});
+
+test("the nash belief pool is belief-pool-v1, exclusive to the door and load-bearing", async ({
+  page,
+}) => {
+  // (a) the nash door fetches the artifact and boots on it.
+  const errors = guardConsole(page);
+  const beliefUrls: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().includes("belief-pool-v1/belief-pool.json"))
+      beliefUrls.push(r.url());
+  });
+  const gotBelief = page.waitForResponse(
+    (r) => r.url().includes("belief-pool-v1/belief-pool.json") && r.ok(),
+  );
+  await page.goto("/?nash");
+  await gotBelief;
+  await expect(page.locator('[data-testid="nash-mix"]')).toBeVisible();
+  expect(beliefUrls.length).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+
+  // (b) neither plain door asks for it: the swap is the nash door's alone.
+  beliefUrls.length = 0;
+  await page.goto("/?blind");
+  await expect(page.locator('[data-party="settings"]')).toBeVisible();
+  await page.goto("/");
+  await expect(page.locator(".start-col").first()).toBeVisible();
+  expect(beliefUrls).toEqual([]);
+
+  // (c) load-bearing: a nash page that cannot get the file fails closed
+  // (the boot error box), never a quiet game under the plainer prior.
+  await page.route("**/belief-pool-v1/**", (r) => r.abort());
+  await page.goto("/?nash");
+  await expect(page.locator(".error-box")).toBeVisible();
+  await page.unroute("**/belief-pool-v1/**");
 });

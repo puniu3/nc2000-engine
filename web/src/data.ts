@@ -52,6 +52,26 @@ export async function fetchNashArtifact(): Promise<string> {
   return res.text();
 }
 
+/** The `?nash` door's belief candidate pool (EXP-PRIOR-EXPLOIT v1, docs/
+ * EXP-prior-exploit.md §6): the bundled curated 32 plus every known strong
+ * candidate from the META-NASH study. Belief-only — the own-team draw, the
+ * start-screen lists and the baked tables never read it. Fetched only on
+ * the nash door, and strict like the mixture artifact: a nash page that
+ * cannot load its fixed configuration fails rather than quietly playing
+ * under a plainer prior. */
+export async function fetchBeliefPool(): Promise<PoolData> {
+  const res = await fetch(dataUrl("belief-pool-v1/belief-pool.json"));
+  if (!res.ok) throw new Error(`belief pool fetch failed: ${res.status}`);
+  const poolJson = await res.text();
+  const pool = JSON.parse(poolJson) as MetaPool;
+  // Sanity, not validation: the curated 32 are the floor, so a truncated
+  // or wrong file cannot silently narrow the shipped belief.
+  if (!Array.isArray(pool.teams) || pool.teams.length < 32) {
+    throw new Error(`belief pool: expected >=32 teams, got ${pool.teams?.length}`);
+  }
+  return { pool, poolJson };
+}
+
 /** Pair table for pool indices (i, j); canonical file is lo-hi. Returns the
  * raw JSON text, or null when the pair is not baked yet (404) or the file
  * is mid-write (parse failure). */

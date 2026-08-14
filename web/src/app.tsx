@@ -30,7 +30,13 @@
 
 import { useEffect, useState } from "preact/hooks";
 import { loadEngine } from "./engine";
-import { fetchDexJson, fetchI18nJa, fetchNashArtifact, fetchPool } from "./data";
+import {
+  fetchBeliefPool,
+  fetchDexJson,
+  fetchI18nJa,
+  fetchNashArtifact,
+  fetchPool,
+} from "./data";
 import { loadSetDex } from "./set-info";
 import { randomPoolTeam, type SelectedTeam } from "./pool-pick";
 import { drawNashTeam, parseNashArtifact, type NashMix } from "./nash-mix";
@@ -124,6 +130,15 @@ export function App() {
   // never null on a nash page that got past boot: a failure to load or
   // validate it fails the page (see the boot effect).
   const [nashMix, setNashMix] = useState<NashMix | null>(null);
+  // The nash door's belief candidate pool (EXP-PRIOR-EXPLOIT v1): the
+  // searcher's candidate set only. Own-team draw, screen lists and baked
+  // tables keep reading the bundled pool — this is the one documented
+  // exception to "everything downstream of the pool moves together", and
+  // it exists because identification is the prior's entire measured value
+  // while the pool's other roles must not inherit the study's exploiter
+  // teams (drawing them as the bot's own team would be a strength
+  // regression, Route A's non-regression FAIL).
+  const [nashBeliefJson, setNashBeliefJson] = useState<string | null>(null);
   const [loc, setLoc] = useState<Locale>(locale());
   // A table the user once picked by hand; nothing here ever fetches one on
   // its own (crates/bot/src/prior.rs:491).
@@ -137,12 +152,13 @@ export function App() {
         // sheets without move meta).
         // The nash artifact rides along in the same wave — one door's
         // 11 KB, fetched only on that door, never on the product page.
-        const [, pd, , , nashText] = await Promise.all([
+        const [, pd, , , nashText, beliefPd] = await Promise.all([
           loadEngine(),
           fetchPool(),
           loadJaNames(fetchI18nJa),
           loadSetDex(fetchDexJson),
           NASH ? fetchNashArtifact() : Promise.resolve(""),
+          NASH ? fetchBeliefPool() : Promise.resolve(null),
         ]);
         const bundledPool: LoadedPool = {
           name: null,
@@ -158,6 +174,7 @@ export function App() {
           const parsed = parseNashArtifact(nashText);
           if (!parsed.ok) throw new Error(parsed.errors.join("; "));
           setNashMix(parsed.mix);
+          setNashBeliefJson(beliefPd ? beliefPd.poolJson : null);
         }
         // Only now: re-validating a stored pool runs the wasm validator,
         // which the engine load above is what makes available. Restored in
@@ -180,7 +197,12 @@ export function App() {
       </div>
     );
   }
-  if (status === "error" || !loadedPool || !bundled || (NASH && !nashMix)) {
+  if (
+    status === "error" ||
+    !loadedPool ||
+    !bundled ||
+    (NASH && (!nashMix || !nashBeliefJson))
+  ) {
     return (
       <div class="center-screen">
         <div class="error-box">
@@ -237,7 +259,12 @@ export function App() {
   return (
     <Game
       key={game.n}
-      poolJson={activePool.poolJson}
+      // The searcher's candidate pool. On the nash door this is the
+      // belief-pool-v1 artifact (curated 32 + known strong candidates) —
+      // reaching ONLY the belief: nash is blind, and a blind game never
+      // fetches pair tables (game.tsx), so no baked artifact is ever read
+      // against these indices.
+      poolJson={NASH && nashBeliefJson ? nashBeliefJson : activePool.poolJson}
       // Baked artifacts are indexed by the bundled pool's rank order, so a
       // swapped pool's indices name different teams entirely. Open mode is
       // never custom by construction, which is what gives the public build
