@@ -50,6 +50,7 @@ import {
 import { loadStoredPrior, type StoredPrior } from "./belief-prior";
 import { StartScreen } from "./select";
 import { Game } from "./game";
+import { Solver } from "./solver";
 import { loadJaNames, locale, setLocale, ui, type Locale } from "./i18n";
 
 /** The fixed bot strength: the former "Max" tier, always on. Browser E2E
@@ -74,6 +75,9 @@ export type { SelectedTeam } from "./pool-pick";
 const DOOR: Door = readDoor();
 const MODE: InfoMode = infoModeOf(DOOR);
 const NASH = DOOR === "nash";
+/** The study board is not a way to play: it replaces the whole screen, so it
+ * is checked before any of the game state below is consulted. */
+const SOLVER = DOOR === "solver";
 
 interface GameSpec {
   human: SelectedTeam;
@@ -158,7 +162,11 @@ export function App() {
           loadJaNames(fetchI18nJa),
           loadSetDex(fetchDexJson),
           NASH ? fetchNashArtifact() : Promise.resolve(""),
-          NASH ? fetchBeliefPool() : Promise.resolve(null),
+          // The solver reasons with the same shipped belief pool the nash
+          // door hands its bot: identification is the whole of what the
+          // opponent panel's "moves shown" field buys, and the wider table
+          // is what it is bought against.
+          NASH || SOLVER ? fetchBeliefPool() : Promise.resolve(null),
         ]);
         const bundledPool: LoadedPool = {
           name: null,
@@ -174,6 +182,8 @@ export function App() {
           const parsed = parseNashArtifact(nashText);
           if (!parsed.ok) throw new Error(parsed.errors.join("; "));
           setNashMix(parsed.mix);
+        }
+        if (NASH || SOLVER) {
           setNashBeliefJson(beliefPd ? beliefPd.poolJson : null);
         }
         // Only now: re-validating a stored pool runs the wasm validator,
@@ -201,7 +211,8 @@ export function App() {
     status === "error" ||
     !loadedPool ||
     !bundled ||
-    (NASH && (!nashMix || !nashBeliefJson))
+    (NASH && (!nashMix || !nashBeliefJson)) ||
+    (SOLVER && !nashBeliefJson)
   ) {
     return (
       <div class="center-screen">
@@ -225,7 +236,24 @@ export function App() {
   // a fixed configuration or it is not the conclusion, so a pool file the
   // user once loaded through `?blind` must not quietly redefine the bot's
   // candidate set here. `?blind` still finds that file, untouched.
-  const activePool = MODE === "blind" && !NASH ? loadedPool : bundled;
+  const activePool = MODE === "blind" && !NASH && !SOLVER ? loadedPool : bundled;
+
+  // The study board takes over the page. Nothing below it runs: there is no
+  // game, no opponent draw, and no team selection — a position is typed,
+  // not played into.
+  if (SOLVER) {
+    return (
+      <Solver
+        pool={bundled.pool}
+        poolJson={nashBeliefJson!}
+        locale={loc}
+        onLocale={(l) => {
+          setLocale(l);
+          setLoc(l);
+        }}
+      />
+    );
+  }
 
   /** The opponent draw, in one place because two callers must roll the same
    * way: pressing Start, and every rematch. Nash samples the solved mixture;

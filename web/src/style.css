@@ -1477,3 +1477,496 @@ h2.end-text {
     opacity: 1;
   }
 }
+
+/* ------------------------------------------------- solver / study board */
+
+.solver-screen {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px 12px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.solver-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.solver-title {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.solver-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.solver-intro,
+.solver-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.86rem;
+}
+
+.solver-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.solver-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.solver-panel-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.solver-panel-head button {
+  margin-left: auto;
+}
+
+.solver-empty {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.solver-mons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.solver-mon {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  background: var(--panel-2);
+}
+
+/* The one Pokémon actually out is the subject of every number below; the
+ * accent border is the cheapest way to keep that unambiguous while twelve
+ * rows are on screen. */
+.solver-mon.is-active {
+  border-color: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px var(--accent-dim);
+}
+
+.solver-mon-head,
+.solver-mon-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.solver-mon-row + .solver-mon-row {
+  margin-top: 6px;
+}
+
+.solver-mon-name {
+  font-weight: 600;
+}
+
+.solver-lvl {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.solver-active-btn {
+  min-height: 32px;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+  border-radius: 8px;
+}
+
+.solver-active-btn.on {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.solver-check,
+.solver-field,
+.solver-boost,
+.solver-pp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.solver-field input,
+.solver-boost input,
+.solver-pp input,
+.solver-foe-manual input,
+.solver-move-input {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  min-height: 36px;
+}
+
+.solver-field input[type="number"],
+.solver-boost input,
+.solver-pp input {
+  width: 4.5em;
+}
+
+.solver-field select,
+.solver-budget select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  min-height: 36px;
+}
+
+.solver-label {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.solver-active-detail {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.solver-chip {
+  min-height: 30px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  border-radius: 999px;
+}
+
+.solver-move-input {
+  min-width: 10em;
+}
+
+.solver-run {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.solver-budget {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 0.86rem;
+}
+
+.solver-progress {
+  flex: 1 1 160px;
+  height: 6px;
+  background: var(--panel-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.solver-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+
+.solver-problems {
+  margin: 0;
+  color: var(--warn);
+  font-size: 0.86rem;
+}
+
+.solver-error {
+  margin: 0;
+  color: var(--bad);
+}
+
+/* ---- results */
+
+.solver-results {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.solver-results-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.solver-results-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.solver-meta {
+  color: var(--text-dim);
+  font-size: 0.84rem;
+}
+
+.solver-block {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.solver-block h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+
+table.solver-actions,
+table.solver-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+table.solver-actions th,
+table.solver-actions td,
+table.solver-matrix th,
+table.solver-matrix td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+table.solver-actions th {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 0.78rem;
+}
+
+.solver-actions .num,
+.solver-readback .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A move the search proved pointless is still listed — knowing WHY an
+ * option is dead is the lesson — but it must not read as a candidate. */
+.solver-actions tr.is-dominated {
+  opacity: 0.5;
+}
+
+.solver-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: 0.7rem;
+}
+
+.solver-share {
+  position: relative;
+  min-width: 120px;
+  height: 18px;
+  background: var(--panel-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.solver-share-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent-dim);
+}
+
+.solver-share span {
+  position: relative;
+  padding-left: 6px;
+  font-size: 0.75rem;
+  line-height: 18px;
+}
+
+/* Wide tables scroll inside their own box; the page never scrolls sideways. */
+.solver-scroll {
+  overflow-x: auto;
+}
+
+table.solver-matrix th {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 0.78rem;
+}
+
+td.solver-cell {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.solver-damage {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.solver-damage h4 {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.solver-damage-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.solver-damage-list li {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.solver-move {
+  min-width: 8em;
+  font-weight: 500;
+}
+
+.solver-ko {
+  color: var(--warn);
+}
+
+.solver-dim {
+  color: var(--text-dim);
+}
+
+.solver-line-steps {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 0.85rem;
+}
+
+.solver-line-steps li {
+  padding: 4px 0;
+}
+
+.solver-line-picks {
+  display: flex;
+  gap: 14px;
+  font-weight: 500;
+}
+
+.solver-line-log {
+  margin: 2px 0 0;
+  padding-left: 1em;
+  list-style: none;
+  color: var(--text-dim);
+}
+
+.solver-readback-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+
+.solver-readback-who {
+  min-width: 4em;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+/* ---- pickers */
+
+.solver-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.solver-tabs button.on {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.solver-team-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.solver-team-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 6px;
+}
+
+.solver-team-btn span {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.solver-paste textarea {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.solver-errors {
+  margin: 8px 0 0;
+  padding-left: 1.2em;
+  color: var(--bad);
+  font-size: 0.85rem;
+}
+
+.solver-foe-manual {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.solver-gender {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 32px;
+  padding: 2px 6px;
+}

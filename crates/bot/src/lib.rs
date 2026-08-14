@@ -27,6 +27,7 @@
 static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 pub mod agent;
+pub mod analysis;
 pub mod belief;
 pub mod blind;
 pub mod bounds;
@@ -40,6 +41,7 @@ pub mod import;
 pub mod mcts;
 pub mod m17e_artifact;
 pub mod observe;
+pub mod position;
 pub mod preview;
 pub mod prior;
 pub mod regret;
@@ -58,6 +60,7 @@ pub use eval::EvalWeights;
 pub use exploit::BrAgent;
 pub use import::{ProtocolAgent, ProtocolTracker, Request};
 pub use mcts::{MctsAgent, MctsConfig, Playout};
+pub use position::PositionSpec;
 pub use preview::{BakedPreviewAgent, CounterPickAgent, PreviewMode, TableSet};
 pub use prior::{BeliefPrior, SpeciesPrior};
 pub use rng::SplitMix64;

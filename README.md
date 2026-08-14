@@ -34,12 +34,17 @@ crates/bot/                bots: random / max-damage / open-loop DUCT MCTS (M5) 
                            best-response exploitability probe (M7) + baked preview tables, baked/counter
                            agents (M8) + observation tracker, meta-pool belief, hidden-field determinizer
                            (M10a), blind imperfect-info agent (M10b) + its stepped form BlindSearch
-                           (M10c), open-team-sheet agent — pinned true-sets belief (M14);
-                           examples: arena / play / tune / profile_mcts / bake_preview
+                           (M10c), open-team-sheet agent — pinned true-sets belief (M14),
+                           hand-entered positions (position.rs = the `nc2000-position-v1` document
+                           + its tracker round trip) and the solver report (analysis.rs = scored
+                           actions + root matrix + engine-truth damage + a searched line);
+                           examples: arena / play / tune / profile_mcts / bake_preview /
+                           solve_position
 crates/wasm/               nc2000-wasm JS bridge (M9): Dex / Battle / Searcher (stepped skuct — the
                            ponder substrate) / PreviewTables / BlindSearcher (M10c per-game imperfect-
                            info agent: observe/step/best + beliefInfo; pinOpponent = M12 open-team-sheet
                            mode) / Validator (M14a validateTeam+canonicalizeTeam, embedded learnsets),
+                           ProtocolSearcher.setPosition/report (the solver's entry point),
                            JSON-string API, embedded dex; build.sh = tuned wasm-pack build;
                            tests-node/ = parity + bench twins vs native
 web/                       Vite+Preact browser demo (M9): worker-threaded bot with ponder, baked-table
@@ -49,7 +54,9 @@ web/                       Vite+Preact browser demo (M9): worker-threaded bot wi
                            PS-export paste import (ps-import.ts) -> wasm canonicalize/validate ->
                            localStorage, played under the same open-sheet policy; meta pool + pair
                            tables fetched from <base>data/* at runtime (never bundled — the background
-                           bake extends the app in place; the Pages build copies data/ into dist/)
+                           bake extends the app in place; the Pages build copies data/ into dist/);
+                           `?solver` (solver.tsx + position.ts + solver-worker.ts) is a fourth door
+                           and not a battle at all: a position is typed in and every option scored
 .github/workflows/pages.yml GH Pages build+deploy (M12): wasm build -> vite build (NC2000_BASE=
                            /nc2000-engine/) -> data copy -> actions/deploy-pages
 PORTING.md                 porting checklist (377 callbacks, generated)
@@ -115,8 +122,14 @@ node tools/ps-client.js --server ws://127.0.0.1:8123 --name bot1 --team pool:ran
 #        extras: --timer (battle timer on), --mode open --opp-team-file F (pinned sheets),
 #        --drop preview:pre,move4:pre,fs:pre (reconnect chaos: kill the socket at those decision
 #        points; auto-resume rebuilds from the replayed room log and proves stateView bit-identity)
+# solver (study board): score every option on a hand-entered position — the browser's
+#   `?solver` screen and this print the same report (analysis::report), so a number on the
+#   screen is reproducible here. POSITION.json = a `nc2000-position-v1` document
+#   (crates/bot/src/position.rs); `--json` emits the raw report.
+cargo run --release -p nc2000-bot --example solve_position -- POSITION.json --iters 30000
 # wasm (M9): tuned build (fat LTO + wasm-opt -O3; native profile untouched), parity, throughput
 crates/wasm/build.sh nodejs && node crates/wasm/tests-node/parity.js
+node crates/wasm/tests-node/solver.js    # solver report shape; NC2000_NATIVE_PARITY=1 adds the twin
 node crates/wasm/tests-node/bench.js     # wasm iters/s; native twin: -p nc2000-wasm --example native_bench
 # browser demo (pkg-web via crates/wasm/build.sh): dev server, or typecheck+build+serve the dist
 cd web && npm run dev                    # 0.0.0.0:8000 (auto-bumps port if busy)
@@ -303,6 +316,32 @@ Milestones:
 
 - **META-NASH v1 — the shipping team mixture: DONE (2026-08-12, OR gate PASS on Route B).** Owner-reopened metagame research, run under a pre-registered OR gate and merged from the `claude/ai-metapool-design-94shyi` branch. 52-team pairwise matrix (1,326 pairs x 64 games, `skuct:300`, seed-paired) solved with RM+, best responses supplied by 13 `TeamGen` hill-climb lineages. **Route B (strength) passed**: against same-budget adversarial exploiters the Nash pool is exploited to 0.398 +/- 0.031 (300 iters) and 0.303 +/- 0.040 (1,000 iters) where the curated-34 uniform pool concedes 0.588 / 0.621 — CIs disjoint at every budget through 30k, and the gap widens with budget. **Route A (diversity) failed**: evolution rediscovers the meta's species core but produced 20 teams < the 24-team bar, and the AI-only pool regressed (0.453 +/- 0.025). Shipped artifact `data/meta-nash-v1/pool-artifact.json` = `ship-3000`: sample-07 0.575 / sample-08 0.222 / sample-10 0.201, a mixture closing a real 07>08>10 cycle that no BR lineage, set-level neighborhood sweep, or full-candidate column could break. Exact equilibrium weights are **not** claimed budget-invariant; the exploitability separation is. Method and pre-registrations: [`docs/META-NASH-V1.md`](docs/META-NASH-V1.md); the signature-information experiment it degenerated from is [`docs/EXP-signature-info-value.md`](docs/EXP-signature-info-value.md) (deception pays, hiding does not). **Wired to the app behind `?nash`** (info-mode.ts's third door, alongside `/` and `?blind`): blind information rules, the opponent drawn afresh from the mixture every battle (start and rematch alike), the human free to bring anything, and no controls at all — the pool swap and the belief prior are `?blind`'s, and a nash page inherits neither. The distribution is shown on the start screen on purpose: an equilibrium is a strategy that survives the opponent knowing it, so the demonstration is stronger with the odds on the table. What stays hidden is what blind always hides — which arm was drawn, and every set in it, until the game ends. Scope is unchanged from the study: **bot self-team choice only; the opponent belief still reads the curated 32-team pool**. Contract in `web/tests/nash.spec.ts`.
 
+
+- **Solver (the study board, `?solver`): DONE (2026-08-14).** The app's fourth door, and the first
+  screen that is not a battle: the visitor describes a position — their own six sets exactly, the
+  opponent by public facts only — and every legal option comes back scored, under the information
+  structure the ladder bot actually plays with. Built on the M15 importer rather than beside it: a
+  `PositionSpec` (`crates/bot/src/position.rs`, schema `nc2000-position-v1`) is a complete, hand-
+  writable serialization of what `ProtocolTracker` + `Observer` know, so `set_position` lands on the
+  same `synthesize` → `BlindSearch` path `on_request` does (one shared `install`, so the live and
+  typed paths cannot drift). **Gate — the round trip, on real battles:** `tests/import.rs` now
+  exports every decision point of the 60-fixture corpus replay to a spec, sends it through JSON,
+  rebuilds tracker + observer + belief from it, and re-synthesizes with the same seed — **8,236
+  decision points, 0 divergences, 0 inexpressible** (state_key128 equality; team preview included).
+  A hand-typed position is therefore the same kind of object as a live one, which is the claim the
+  whole feature rests on. Beyond the score, three answers to *why*, because a number alone teaches
+  nothing: the **root matrix** (per (our action, their reply) cell — accumulated free from
+  iterations the search was running anyway, and keyed by the opponent's action identity rather than
+  its index, since a blind root's action list is determinization-dependent), **engine-truth damage**
+  through `get_damage_synthetic` (min/max roll, crit, guaranteed hits-to-KO), and a **searched
+  line** replayed from the tree under one stated assumption about the hidden set. Every figure that
+  leans on an imputed set is labelled as one, and unsampled matrix cells read "never tried" rather
+  than zero. Parity: `crates/wasm/tests-node/solver.js` checks the bridge's report against
+  `examples/solve_position` — same actions, order, visit counts and matrix samples exactly, averaged
+  values to 1e-9 (libm's `exp`/`ln` are not bit-identical across targets). Contract in
+  `web/tests/solver.spec.ts`, which also pins the blind claim on this screen: loading the opponent's
+  roster from a pool team copies six species, levels, genders and item flags — never their sets —
+  and no move of theirs is treated as known unless the user typed it into "moves shown".
 
 Parked (not scheduled, not dead-by-principle):
 

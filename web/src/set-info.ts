@@ -17,14 +17,24 @@ export interface MoveMeta {
 }
 
 interface DexMove {
+  name: string;
   type: string;
   category: MoveCategory;
   basePower: number;
+  pp: number;
+  noPPBoosts?: boolean;
 }
 
 interface DexData {
   moves: Record<string, DexMove>;
-  species: Record<string, { types: string[] }>;
+  species: Record<string, {
+    name: string;
+    types: string[];
+    /** Present only when the species has ONE gender ("M" / "F" / "N"). */
+    gender?: string;
+    genderRatio?: { M: number; F: number };
+  }>;
+  items: Record<string, { name: string }>;
 }
 
 let dexData: DexData | null = null;
@@ -102,6 +112,65 @@ export function moveMeta(
  * the dex table is unavailable. */
 export function speciesTypes(species: string): string[] | null {
   return dexData?.species[toId(species)]?.types ?? null;
+}
+
+/** Every species id the format knows, ordered by dex number — the solver's
+ * opponent picker needs a list, not a lookup. Empty when the dex table is
+ * unavailable, which the caller shows as "type the name" rather than an
+ * empty menu. */
+export function speciesList(): string[] {
+  return dexData ? Object.keys(dexData.species) : [];
+}
+
+/** Every move id, for the revealed-move picker. */
+export function moveList(): string[] {
+  return dexData ? Object.keys(dexData.moves) : [];
+}
+
+/** The gender a species is FIXED at ("N" for genderless, "M"/"F" for the
+ * one-gender lines), or null when it can be either.
+ *
+ * Load-bearing, not cosmetic: gender is public at team preview, and the
+ * belief matches candidate teams on it — a position that says "genderless"
+ * about a Snorlax matches no known team and drops the solver into set-by-set
+ * imputation. So a species that admits both has to be ASKED about. */
+export function fixedGender(species: string): string | null {
+  const e = dexData?.species[toId(species)];
+  if (!e) return null;
+  if (e.gender) return e.gender;
+  const r = e.genderRatio;
+  if (r && r.M === 1) return "M";
+  if (r && r.F === 1) return "F";
+  if (r && r.M === 0 && r.F === 0) return "N";
+  return null;
+}
+
+/** Every item id, for the revealed-item picker. */
+export function itemList(): string[] {
+  return dexData?.items ? Object.keys(dexData.items) : [];
+}
+
+/** The dex's own display name for an id ("mrmime" -> "Mr. Mime"); the id
+ * itself when the table is unavailable, so nothing renders blank. */
+export function speciesDisplay(id: string): string {
+  return dexData?.species[toId(id)]?.name ?? id;
+}
+
+export function moveDisplay(id: string): string {
+  return dexData?.moves[toId(id)]?.name ?? id;
+}
+
+/** Max PP under this format's fixed 3 PP Ups — the same arithmetic the
+ * engine applies when it builds a set (`battle/mod.rs`, `new_pokemon`), and
+ * the reason the solver can show "PP 12/24" from a use count alone. Null
+ * when the dex table is unavailable. */
+export function maxPp(move: string): number | null {
+  const e = dexData?.moves[toId(move)];
+  if (!e) return null;
+  const ups = e.noPPBoosts ? 0 : 3;
+  let maxpp = Math.floor((e.pp * (5 + ups)) / 5);
+  if (e.pp === 40) maxpp -= ups;
+  return maxpp;
 }
 
 // ------------------------------------------------ set JSON normalization

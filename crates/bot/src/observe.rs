@@ -82,8 +82,10 @@ pub struct ItemObs {
     /// known consumed/stolen away.
     pub current: Option<Option<ItemId>>,
     /// A gain event (Thief steal) was observed — later reveals no longer
-    /// identify the original item.
-    gained: bool,
+    /// identify the original item. `pub(crate)` so a hand-entered position
+    /// can round-trip the whole channel (`position.rs`), not just the two
+    /// halves a reader would guess at.
+    pub(crate) gained: bool,
 }
 
 impl ItemObs {
@@ -195,7 +197,75 @@ pub struct Observer {
     revision: u64,
 }
 
+impl ItemObs {
+    /// Rebuild the channel from a serialized position (`position.rs`). The
+    /// three parts are not independent — `gained` decides whether a later
+    /// reveal may still identify `original` — so they are set together
+    /// rather than through three public fields.
+    pub fn from_parts(
+        original: Option<Option<ItemId>>,
+        current: Option<Option<ItemId>>,
+        gained: bool,
+    ) -> ItemObs {
+        ItemObs { original, current, gained }
+    }
+}
+
 impl Observer {
+    /// Solver mode: construct the reveal channel directly from a
+    /// hand-entered position instead of replaying protocol lines. Same
+    /// contract as `from_mons` — the state-diff channel never runs, so
+    /// `observe` must not be called on the result.
+    pub fn from_position(
+        dex: &Dex,
+        spec: &crate::position::PositionSpec,
+    ) -> Result<Observer, String> {
+        let foe = spec.foe();
+        let item = |k: &crate::position::ItemKnowledge| -> Result<Option<Option<ItemId>>, String> {
+            match k.to_obs() {
+                None => Ok(None),
+                Some(None) => Ok(Some(None)),
+                Some(Some(key)) => dex
+                    .items
+                    .id(&toid(key))
+                    .map(|i| Some(Some(i)))
+                    .ok_or_else(|| format!("unknown item `{key}`")),
+            }
+        };
+        let mut mons = Vec::new();
+        for m in &spec.sides[foe].mons {
+            let species = dex
+                .species
+                .id(&toid(&m.species))
+                .ok_or_else(|| format!("unknown species `{}`", m.species))?;
+            let mut revealed = Vec::new();
+            for key in &m.revealed_moves {
+                let id = dex
+                    .moves
+                    .id(&toid(key))
+                    .ok_or_else(|| format!("unknown move `{key}`"))?;
+                if !revealed.contains(&id) {
+                    revealed.push(id);
+                }
+            }
+            mons.push(MonObs {
+                species,
+                level: m.level,
+                gender: match m.gender.as_str() {
+                    "M" => Gender::M,
+                    "F" => Gender::F,
+                    _ => Gender::N,
+                },
+                name: m.name.clone(),
+                preview_has_item: m.item_flag,
+                revealed_moves: revealed,
+                item: ItemObs::from_parts(item(&m.item_original)?, item(&m.item_current)?, m.item_gained),
+                appeared: m.appeared,
+            });
+        }
+        Ok(Observer::from_mons(spec.side, mons))
+    }
+
     /// M15 protocol mode: construct from preview-public facts parsed out of
     /// the protocol (`|poke|` lines) instead of a battle. The state-diff
     /// channel never runs (there is no true battle to diff — `observe` must

@@ -26,7 +26,8 @@
 use conformance::fixture::repo_root;
 use conformance::load_dex;
 use nc2000_bot::import::ProtocolAgent;
-use nc2000_bot::preview::load_meta_pool;
+use nc2000_bot::position::{synthesize_spec, PositionSpec};
+use nc2000_bot::preview::{load_meta_pool, MetaPool};
 use nc2000_bot::smmcts::RmConfig;
 use nc2000_engine::battle::PokemonSet;
 use nc2000_engine::dex::{toid, Dex};
@@ -215,6 +216,12 @@ struct Stats {
     /// nothing else, so a self-attributed foe-inflicted sleep silently
     /// disengages both for the rest of the battle.
     sleep_sources: u32,
+    /// Decision points exported to a `PositionSpec` and rebuilt from it.
+    roundtrips: u32,
+    /// Round trips the spec could not describe (counted, never skipped
+    /// silently — a shape the solver cannot express is the one thing this
+    /// gate exists to find).
+    roundtrip_gaps: u32,
     notes: Vec<String>,
     vol_notes: Vec<String>,
 }
@@ -424,6 +431,8 @@ fn replay(dex: &Dex, fixture: &Value, side: usize, pinned: bool, stats: &mut Sta
 
     let pool = load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json"));
     let cfg = RmConfig { horizon: 6, ..RmConfig::default() };
+    let pool_ref = pool.clone();
+    let opp_ref = opp_sets.clone();
     let mut agent = ProtocolAgent::new(dex, side, pool, cfg, 7 + side as u64);
     agent.set_own_team(own_sets);
     if pinned {
@@ -518,6 +527,14 @@ fn replay(dex: &Dex, fixture: &Value, side: usize, pinned: bool, stats: &mut Sta
         }
         let battle = agent.battle().unwrap().clone();
         compare(dex, &battle, snap, side, &ctx, stats);
+        roundtrip_position(
+            dex,
+            &agent,
+            &pool_ref,
+            pinned.then_some(opp_ref.as_slice()),
+            &ctx,
+            stats,
+        );
         // Who inflicted a sleep is the whole input to Sleep Clause Mod
         // (`conditions.rs` sleepclausemod/onSetStatus: ally-sourced → the
         // clause stays open). The protocol says which it was; the synthesized
@@ -570,6 +587,97 @@ fn replay(dex: &Dex, fixture: &Value, side: usize, pinned: bool, stats: &mut Sta
     }
 }
 
+/// Solver round trip: export the decision point as a `PositionSpec`, send it
+/// through JSON (the only form the browser ever sees), rebuild the whole
+/// information set from it, and re-synthesize with the same seed. Same
+/// tracker + same observer + same belief must give the same battle, down to
+/// the essence the conformance fixtures are written against.
+///
+/// This is what lets a hand-entered position claim to be the same kind of
+/// object as a live one: every field the importer reads is proven to survive
+/// the trip, on real battles, at every decision point.
+fn roundtrip_position(
+    dex: &Dex,
+    agent: &ProtocolAgent,
+    pool: &MetaPool,
+    pinned: Option<&[PokemonSet]>,
+    ctx: &str,
+    stats: &mut Stats,
+) {
+    const SEED: u64 = 0x5061_7274; // any fixed value: both sides must roll alike
+    let Some(spec) = agent.to_position_spec(dex) else {
+        stats.roundtrip_gaps += 1;
+        return;
+    };
+    stats.roundtrips += 1;
+    let json = match serde_json::to_string(&spec) {
+        Ok(j) => j,
+        Err(e) => return stats.miss(ctx, format!("spec serialize: {e}")),
+    };
+    let spec = match PositionSpec::parse(&json) {
+        Ok(s) => s,
+        Err(e) => return stats.miss(ctx, format!("spec reparse: {e}")),
+    };
+    // re-serializing the reparsed spec must be a fixed point (no field is
+    // read into a shape that writes back differently)
+    match serde_json::to_string(&spec) {
+        Ok(j2) if j2 == json => {}
+        Ok(_) => stats.miss(ctx, "spec is not a serialization fixed point".to_string()),
+        Err(e) => return stats.miss(ctx, format!("spec re-serialize: {e}")),
+    }
+    let live = match agent.resynthesize(dex, SEED) {
+        Ok(b) => b,
+        Err(e) => return stats.miss(ctx, format!("resynthesize: {e}")),
+    };
+    let rebuilt = match synthesize_spec(dex, &spec, pool, pinned, SEED) {
+        Ok(b) => b,
+        Err(e) => return stats.miss(ctx, format!("synthesize_spec: {e}")),
+    };
+    if live.state_key128() != rebuilt.state_key128() {
+        let (a, b) = (live.essence(dex), rebuilt.essence(dex));
+        let detail = if a == b {
+            "state keys differ but essences match".to_string()
+        } else {
+            first_essence_diff(&a, &b)
+        };
+        stats.miss(ctx, format!("position round trip diverged: {detail}"));
+    }
+}
+
+/// The first differing path between two essences — a whole essence dump is
+/// unreadable and a bare "differs" is unactionable.
+fn first_essence_diff(a: &Value, b: &Value) -> String {
+    fn walk(a: &Value, b: &Value, path: &str, out: &mut Vec<String>) {
+        if out.len() >= 3 || a == b {
+            return;
+        }
+        match (a, b) {
+            (Value::Object(x), Value::Object(y)) => {
+                let mut keys: Vec<&String> = x.keys().chain(y.keys()).collect();
+                keys.sort();
+                keys.dedup();
+                for k in keys {
+                    walk(
+                        x.get(k).unwrap_or(&Value::Null),
+                        y.get(k).unwrap_or(&Value::Null),
+                        &format!("{path}.{k}"),
+                        out,
+                    );
+                }
+            }
+            (Value::Array(x), Value::Array(y)) if x.len() == y.len() => {
+                for (i, (xa, yb)) in x.iter().zip(y).enumerate() {
+                    walk(xa, yb, &format!("{path}[{i}]"), out);
+                }
+            }
+            _ => out.push(format!("{path}: {a} != {b}")),
+        }
+    }
+    let mut out = Vec::new();
+    walk(a, b, "", &mut out);
+    out.join("; ")
+}
+
 /// Fixture choices are already id-based ("move thief", "team 2, 4, 5",
 /// "switch 2"); normalize spacing.
 fn normalize_choice(dex: &Dex, c: &str) -> String {
@@ -616,9 +724,10 @@ fn corpus_replay_both_modes() {
     }
     eprintln!(
         "corpus replay: {n_fixtures} fixtures, {} decisions, {} mismatches, {} illegal, \
-         {} volatile-set diffs (diagnostic), {} sleep sources checked",
+         {} volatile-set diffs (diagnostic), {} sleep sources checked, \
+         {} position round trips ({} inexpressible)",
         stats.decisions, stats.mismatches, stats.illegal_choices, stats.vol_diffs,
-        stats.sleep_sources
+        stats.sleep_sources, stats.roundtrips, stats.roundtrip_gaps
     );
     for n in &stats.notes {
         eprintln!("  {n}");
@@ -629,4 +738,6 @@ fn corpus_replay_both_modes() {
     assert_eq!(stats.mismatches, 0, "public-field mismatches");
     assert_eq!(stats.illegal_choices, 0, "played choices must be legal in synthesis");
     assert!(stats.sleep_sources > 0, "no sleep reached the source check — gate is vacuous");
+    assert!(stats.roundtrips > 0, "no position round trip ran — gate is vacuous");
+    assert_eq!(stats.roundtrip_gaps, 0, "decision points a PositionSpec could not describe");
 }

@@ -37,6 +37,7 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 use nc2000_bot::preview::{MetaPool, TableSet};
+use nc2000_bot::position::PositionSpec;
 use nc2000_bot::{
     baked_preview_pick, open_preview_pick, BeliefPrior, Belief, BlindSearch, Observer,
     ProtocolAgent, RmConfig, SkuctSearch, SplitMix64,
@@ -879,6 +880,42 @@ impl WasmProtocolSearcher {
             .battle()
             .ok_or_else(|| JsError::new("stateView before onRequest"))?;
         Ok(state_view_json(battle, &self.dex).to_string())
+    }
+
+    /// Solver mode: analyze a hand-entered position instead of a protocol
+    /// stream. `spec_json` is a `nc2000-position-v1` document (own sets
+    /// exact, opponent public-only); it replaces the whole information set,
+    /// so it may be called again every time the user edits the board.
+    ///
+    /// Rejections throw, naming the field that caused them: a position
+    /// quietly analyzed as something other than what was typed is the one
+    /// failure this feature cannot afford.
+    #[wasm_bindgen(js_name = setPosition)]
+    pub fn set_position(&mut self, spec_json: &str) -> Result<(), JsError> {
+        let spec = PositionSpec::parse(spec_json).map_err(|e| JsError::new(&e))?;
+        self.agent.set_position(&self.dex, &spec).map_err(|e| JsError::new(&e))
+    }
+
+    /// The current decision point as a `nc2000-position-v1` document — the
+    /// inverse of `setPosition`, for saving or sharing a position. `null`
+    /// before the first request or position.
+    #[wasm_bindgen(js_name = positionSpec)]
+    pub fn position_spec(&self) -> Option<String> {
+        self.agent
+            .to_position_spec(&self.dex)
+            .map(|s| serde_json::to_string(&s).unwrap_or_default())
+    }
+
+    /// The full solver report for the installed position: scored actions
+    /// (with the provable-no-op reasons attached), the root matrix, the
+    /// damage table, and a searched line. `line_plies` 0 omits the line.
+    ///
+    /// Identical to `analysis::report` in the native twin
+    /// (`examples/solve_position.rs`), which is what makes a number on the
+    /// screen reproducible off it.
+    pub fn report(&self, line_plies: usize, line_seed: u32) -> String {
+        nc2000_bot::analysis::report(&self.agent, &self.dex, line_plies, line_seed as u64)
+            .to_string()
     }
 
     /// `[legality_drift, projections]` counters (target: zeros).

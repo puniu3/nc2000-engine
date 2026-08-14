@@ -2038,6 +2038,15 @@ impl ProtocolAgent {
             self.observer = Some(obs);
             self.belief = Some(belief);
         }
+        self.install(dex, req)
+    }
+
+    /// Everything a decision point needs once the observer and belief
+    /// exist and the request is parsed: belief sync, synthesis, and the
+    /// searcher plus its preview/forced shortcuts. Shared by the live
+    /// protocol path (`on_request`) and the hand-entered one
+    /// (`set_position`), so the two can never drift apart.
+    fn install(&mut self, dex: &Dex, req: Request) -> Result<bool, String> {
         let obs = self.observer.as_ref().unwrap();
         let belief = self.belief.as_mut().unwrap();
         belief.sync_checked(dex, obs)?;
@@ -2395,5 +2404,316 @@ mod m17a_tests {
             }
         }
         assert!(checked > 900, "only {checked} buckets exercised");
+    }
+}
+
+// ================================================== hand-entered positions
+
+use crate::position::{
+    CondSpec, ItemKnowledge, MonSpec, PositionSpec, PpSpec, SideSpec, UseSpec, VolSpec,
+    WeatherSpec, SCHEMA,
+};
+
+fn gender_of(s: &str) -> Gender {
+    match s {
+        "M" => Gender::M,
+        "F" => Gender::F,
+        _ => Gender::N,
+    }
+}
+
+fn move_key(dex: &Dex, id: MoveId) -> String {
+    dex.moves.key(id).to_string()
+}
+
+fn move_id_of(dex: &Dex, key: &str) -> Result<MoveId, String> {
+    dex.moves.id(&toid(key)).ok_or_else(|| format!("unknown move `{key}`"))
+}
+
+impl TrackMon {
+    fn to_spec(&self, dex: &Dex) -> MonSpec {
+        MonSpec {
+            species: dex.species.key(self.species).to_string(),
+            level: self.level,
+            gender: self.gender.as_str().to_string(),
+            name: self.name.clone(),
+            item_flag: self.preview_item,
+            appeared: self.appeared,
+            appear_count: self.appear_count,
+            switch_in_turn: self.switch_in_turn,
+            active: self.active,
+            fainted: self.fainted,
+            hp_num: self.pixels,
+            hp_den: self.hp_den.max(1),
+            hp_exact: None,
+            status: self.status.as_str().to_string(),
+            rest: self.rest,
+            slept: self.slept,
+            tox_counter: self.comp_res,
+            comp_brn: self.comp_brn,
+            comp_par: self.comp_par,
+            boosts: self.boosts,
+            volatiles: self
+                .vols
+                .iter()
+                .map(|v| VolSpec {
+                    key: v.key.clone(),
+                    start_turn: v.start_turn,
+                    move_key: v.move_id.map(|m| move_key(dex, m)),
+                    source: v.source.map(|(s, slot)| [s, slot]),
+                    counter: v.counter,
+                })
+                .collect(),
+            uses: self
+                .uses
+                .iter()
+                .map(|&(m, n)| UseSpec { move_key: move_key(dex, m), n })
+                .collect(),
+            locked: self.locked.map(|(m, n)| UseSpec { move_key: move_key(dex, m), n }),
+            charging: self.charging.map(|m| move_key(dex, m)),
+            must_recharge: self.must_recharge,
+            transformed_into: self.transformed_into.map(|(s, slot)| [s, slot]),
+            mimic_overlay: self.mimic_overlay.map(|m| move_key(dex, m)),
+            last_move: self.last_move.map(|m| move_key(dex, m)),
+            stall_streak: self.stall_streak,
+            last_protect_turn: self.last_protect_turn,
+            protected_this_turn: self.protected_this_turn,
+            ..MonSpec::default()
+        }
+    }
+
+    fn from_spec(dex: &Dex, m: &MonSpec) -> Result<TrackMon, String> {
+        let species = dex
+            .species
+            .id(&toid(&m.species))
+            .ok_or_else(|| format!("unknown species `{}`", m.species))?;
+        let mut tm = TrackMon::new(species, m.level, gender_of(&m.gender), m.item_flag);
+        tm.name = m.name.clone();
+        tm.appeared = m.appeared;
+        tm.appear_count = m.appear_count;
+        tm.switch_in_turn = m.switch_in_turn;
+        tm.active = m.active;
+        tm.fainted = m.fainted;
+        tm.pixels = m.hp_num;
+        tm.hp_den = m.hp_den.max(1);
+        tm.status = m.status_enum();
+        tm.rest = m.rest;
+        tm.slept = m.slept;
+        tm.comp_res = m.tox_counter;
+        tm.comp_brn = m.comp_brn;
+        tm.comp_par = m.comp_par;
+        tm.boosts = m.boosts;
+        for v in &m.volatiles {
+            tm.vols.push(TVol {
+                key: v.key.clone(),
+                start_turn: v.start_turn,
+                move_id: v.move_key.as_deref().map(|k| move_id_of(dex, k)).transpose()?,
+                source: v.source.map(|[s, slot]| (s, slot)),
+                counter: v.counter,
+            });
+        }
+        for u in &m.uses {
+            tm.uses.push((move_id_of(dex, &u.move_key)?, u.n));
+        }
+        tm.locked = match &m.locked {
+            Some(u) => Some((move_id_of(dex, &u.move_key)?, u.n)),
+            None => None,
+        };
+        tm.charging = m.charging.as_deref().map(|k| move_id_of(dex, k)).transpose()?;
+        tm.must_recharge = m.must_recharge;
+        tm.transformed_into = m.transformed_into.map(|[s, slot]| (s, slot));
+        tm.mimic_overlay = m.mimic_overlay.as_deref().map(|k| move_id_of(dex, k)).transpose()?;
+        tm.last_move = m.last_move.as_deref().map(|k| move_id_of(dex, k)).transpose()?;
+        tm.stall_streak = m.stall_streak;
+        tm.last_protect_turn = m.last_protect_turn;
+        tm.protected_this_turn = m.protected_this_turn;
+        Ok(tm)
+    }
+}
+
+impl ProtocolTracker {
+    /// Serialize the whole tracked information set as a hand-editable
+    /// position. `obs` supplies the opponent reveal channel, which lives in
+    /// the `Observer` rather than here (the tracker records *what happened*;
+    /// the observer records *what that proves about the set*).
+    ///
+    /// `own_sets` are copied in verbatim — they are the analyzing side's
+    /// private truth and have no protocol representation at all.
+    pub fn to_spec(
+        &self,
+        dex: &Dex,
+        own_sets: &[PokemonSet],
+        obs: &Observer,
+        req: &Request,
+    ) -> PositionSpec {
+        let me = self.side;
+        let opp = 1 - me;
+        let side_spec = |s: usize| -> SideSpec {
+            let ts = &self.sides[s];
+            SideSpec {
+                mons: ts.mons.iter().map(|m| m.to_spec(dex)).collect(),
+                active: ts.active,
+                conditions: ts
+                    .conds
+                    .iter()
+                    .map(|(key, start)| CondSpec { key: key.clone(), start_turn: *start })
+                    .collect(),
+                pending_bp: ts.pending_bp,
+                acted_this_turn: ts.acted_this_turn,
+                fainted_this_turn: ts.fainted_this_turn,
+                fainted_last_turn: ts.fainted_last_turn,
+                last_move: ts.side_last_move.map(|m| move_key(dex, m)),
+                party: Vec::new(),
+            }
+        };
+        let mut sides = [side_spec(0), side_spec(1)];
+        // Own side: the REQUEST is the authority, not the protocol echo —
+        // display order, exact HP, the item actually in hand, and the active's
+        // per-move PP all come from it, and all four can differ from what the
+        // public channel implies (a consumed berry, a Mystery Berry's PP, a
+        // party the player reordered by switching).
+        for (pos, rm) in req.pokemon.iter().enumerate() {
+            let Some(slot) = self.sides[me]
+                .mons
+                .iter()
+                .position(|m| m.species == rm.species && m.level == rm.level)
+            else {
+                continue;
+            };
+            sides[me].party.push(slot);
+            let m = &mut sides[me].mons[slot];
+            m.hp_exact = Some(rm.hp);
+            m.item_now = Some(rm.item.clone());
+            if rm.active && !req.active_moves.is_empty() {
+                m.pp = req
+                    .active_moves
+                    .iter()
+                    .map(|am| PpSpec {
+                        move_key: am.id.clone(),
+                        pp: am.pp.unwrap_or(0),
+                        maxpp: am.maxpp.unwrap_or(0),
+                        disabled: am.disabled,
+                    })
+                    .collect();
+            }
+            let _ = pos;
+        }
+        // Opponent: fold in the reveal channel, slot-aligned with the
+        // observer's roster (both follow `|poke|` order).
+        for (slot, mo) in obs.mons().iter().enumerate() {
+            let Some(m) = sides[opp].mons.get_mut(slot) else { break };
+            m.revealed_moves = mo.revealed_moves.iter().map(|&x| move_key(dex, x)).collect();
+            m.item_original =
+                ItemKnowledge::from_obs(mo.item.original.map(|x| x.map(|i| dex.items.key(i))));
+            m.item_current =
+                ItemKnowledge::from_obs(mo.item.current.map(|x| x.map(|i| dex.items.key(i))));
+            m.item_gained = mo.item.gained;
+        }
+        PositionSpec {
+            schema: SCHEMA.to_string(),
+            side: me,
+            turn: self.turn,
+            upkeep_this_turn: self.upkeep_this_turn,
+            own_sets: own_sets.to_vec(),
+            sides,
+            weather: self
+                .weather
+                .as_ref()
+                .map(|(key, upkeeps)| WeatherSpec { key: key.clone(), upkeeps: *upkeeps }),
+            team_preview: req.team_preview,
+            force_switch: req.force_switch,
+            trapped: req.trapped,
+        }
+    }
+
+    /// Rebuild a tracker from a position — the exact inverse of [`to_spec`]
+    /// over every tracked field. `crates/bot/tests/import.rs` proves the
+    /// round trip at every decision point of the conformance corpus.
+    pub fn from_spec(dex: &Dex, spec: &PositionSpec) -> Result<ProtocolTracker, String> {
+        let mut tr = ProtocolTracker::new(spec.side);
+        tr.turn = spec.turn;
+        tr.upkeep_this_turn = spec.upkeep_this_turn;
+        tr.weather = spec.weather.as_ref().map(|w| (w.key.clone(), w.upkeeps));
+        for s in 0..2 {
+            let src = &spec.sides[s];
+            let dst = &mut tr.sides[s];
+            for m in &src.mons {
+                dst.mons.push(TrackMon::from_spec(dex, m)?);
+            }
+            dst.active = src.active;
+            dst.conds = src.conditions.iter().map(|c| (c.key.clone(), c.start_turn)).collect();
+            dst.pending_bp = src.pending_bp;
+            dst.acted_this_turn = src.acted_this_turn;
+            dst.fainted_this_turn = src.fainted_this_turn;
+            dst.fainted_last_turn = src.fainted_last_turn;
+            dst.side_last_move = src.last_move.as_deref().map(|k| move_id_of(dex, k)).transpose()?;
+        }
+        Ok(tr)
+    }
+}
+
+impl ProtocolAgent {
+    /// The accumulated public information set (solver export, harness
+    /// inspection). Read-only: the tracker only ever advances through
+    /// `push_line` or a whole-position install.
+    pub fn tracker(&self) -> &ProtocolTracker {
+        &self.tracker
+    }
+
+    /// Export the current decision point as a hand-editable position.
+    /// `None` before the first request — there is no decision point yet, and
+    /// a spec without one would not describe anything.
+    pub fn to_position_spec(&self, dex: &Dex) -> Option<PositionSpec> {
+        let obs = self.observer.as_ref()?;
+        let req = self.request.as_ref()?;
+        Some(self.tracker.to_spec(dex, &self.own_sets, obs, req))
+    }
+
+    /// Re-run this decision point's synthesis with an explicit seed. The
+    /// battle `on_request` already built is the one being searched; this is
+    /// the same construction made reproducible, so two information sets can
+    /// be compared field-for-field without the rolled hidden durations
+    /// (sleep counters, bind turns, substitute HP) drifting between them.
+    pub fn resynthesize(&self, dex: &Dex, seed: u64) -> Result<Battle, String> {
+        let obs = self.observer.as_ref().ok_or("resynthesize before on_request")?;
+        let belief = self.belief.as_ref().ok_or("resynthesize before on_request")?;
+        let req = self.request.as_ref().ok_or("resynthesize before on_request")?;
+        let pick = belief.alive().first().copied();
+        let mut rng = SplitMix64::new(seed);
+        self.tracker.synthesize(dex, &self.own_sets, belief.refs(pick), obs, req, &mut rng)
+    }
+
+    /// Solver mode: analyze a hand-entered position. Replaces the tracked
+    /// battle wholesale — own team, public facts, reveal channel and belief
+    /// — and lands on the same searcher the live path builds.
+    ///
+    /// Deliberately NOT a variant of `push_line`: a position is a *state*,
+    /// while the protocol is a *history*, and fabricating a history that
+    /// happens to produce the desired state is both harder and weaker than
+    /// stating the state (see `position.rs`).
+    pub fn set_position(&mut self, dex: &Dex, spec: &PositionSpec) -> Result<(), String> {
+        spec.check()?;
+        if spec.side != self.side {
+            return Err(format!(
+                "position is for side {} but this agent plays side {}",
+                spec.side, self.side
+            ));
+        }
+        let request_json = spec.request_json(dex)?;
+        let req = Request::parse(dex, &request_json)?;
+        self.own_sets = spec.own_sets.clone();
+        self.tracker = ProtocolTracker::from_spec(dex, spec)?;
+        self.history.clear();
+        let obs = Observer::from_position(dex, spec)?;
+        let mut belief = match &self.pinned_sets {
+            Some(sets) => Belief::pinned_checked(dex, "opponent", sets, &obs)?,
+            None => Belief::new(dex, &self.pool, &obs),
+        };
+        if let (Some(prior), None) = (self.prior.clone(), &self.pinned_sets) {
+            belief.set_prior(prior);
+        }
+        self.observer = Some(obs);
+        self.belief = Some(belief);
+        self.install(dex, req).map(|_| ())
     }
 }

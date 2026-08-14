@@ -292,6 +292,18 @@ pub struct BlindSearch {
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
     done: u32,
+    /// Root joint statistics: `(own root action index, the opponent action
+    /// it met, samples, summed reward from THIS side)`. Free — every entry
+    /// comes from an iteration the search was running anyway — and it is the
+    /// only place the simultaneous structure is visible at all: the per-side
+    /// visit counts marginalize it away, so "this move is good, but only
+    /// because they rarely stay in" cannot be read off `visits()`.
+    ///
+    /// Keyed by the opponent's `SearchChoice`, never by its index: the
+    /// opponent's legal list is determinization-dependent (an imputed set
+    /// decides which moves exist), so an index means nothing across
+    /// iterations while a `Move(id)` means the same move every time.
+    joint: Vec<(usize, SearchChoice, u32, f64)>,
 }
 
 impl BlindSearch {
@@ -334,6 +346,7 @@ impl BlindSearch {
             nodes: Vec::new(),
             table: FxHashMap::default(),
             done: 0,
+            joint: Vec::new(),
         }
     }
 
@@ -378,6 +391,7 @@ impl BlindSearch {
             &mut joint,
             &mut 0,
         );
+        self.record_joint(root, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
         r
@@ -432,9 +446,117 @@ impl BlindSearch {
             &mut joint,
             &mut 0,
         );
+        self.record_joint(root, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
         r
+    }
+
+    /// Fold one iteration's root joint into the matrix. Silently drops the
+    /// iterations where the opponent owed nothing (a forced switch on our
+    /// side alone) — there is no cell for "they did not act".
+    fn record_joint(&mut self, root: usize, my_pick: usize, joint: [usize; 2], r: f64) {
+        let opp = 1 - self.side;
+        let acts = &self.nodes[root].acts[opp];
+        let Some(&opp_act) = acts.get(joint[opp]) else { return };
+        let mine = if self.side == 0 { r } else { 1.0 - r };
+        match self
+            .joint
+            .iter_mut()
+            .find(|(a, c, _, _)| *a == my_pick && *c == opp_act)
+        {
+            Some((_, _, n, w)) => {
+                *n += 1;
+                *w += mine;
+            }
+            None => self.joint.push((my_pick, opp_act, 1, mine)),
+        }
+    }
+
+    /// The root joint cells: `(own action index, opponent action, samples,
+    /// mean reward from this side)`. Unvisited cells are absent rather than
+    /// zero — "never tried" and "tried and scored 0" are different answers,
+    /// and a reader that cannot tell them apart will draw the wrong one.
+    pub fn root_matrix(&self) -> Vec<(usize, SearchChoice, u32, f64)> {
+        self.joint
+            .iter()
+            .map(|&(a, c, n, w)| (a, c, n, if n > 0 { w / n as f64 } else { 0.5 }))
+            .collect()
+    }
+
+    /// A representative continuation of the search's own recommendation —
+    /// the "読み筋" a study screen shows under the score.
+    ///
+    /// Honest about two things a principal variation normally hides. First,
+    /// it is one determinization: the opponent's hidden set is *assumed*,
+    /// and `assumed` states which assumption, because the line only makes
+    /// sense against it. Second, it stops at the first state the tree has
+    /// never visited rather than continuing on an evaluation — a made-up
+    /// continuation reads exactly like a searched one, and the reader cannot
+    /// tell them apart.
+    pub fn principal_line(
+        &self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        seed: u64,
+        plies: usize,
+    ) -> PrincipalLine {
+        let mut rng = SplitMix64::new(seed);
+        let mut sim = belief.determinize(dex, &self.base, obs, &mut rng);
+        let assumed = sim.sides[1 - self.side]
+            .roster
+            .iter()
+            .map(|p| {
+                (
+                    p.species,
+                    p.base_move_slots.iter().map(|m| m.id).collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        sim.set_log_enabled(true);
+        let mut steps = Vec::new();
+        let mut log_cursor = sim.log.len();
+        for ply in 0..plies {
+            if sim.outcome().is_some() {
+                break;
+            }
+            let key = key_of(&self.cfg, dex, &mut sim);
+            let Some(&node) = self.table.get(&key) else { break };
+            let mut joint = [None, None];
+            for side in 0..2 {
+                let acts = &self.nodes[node].acts[side];
+                if acts.is_empty() {
+                    continue;
+                }
+                // At the root our own statistics are the global ones (the
+                // per-determinization node only ever saw the actions this
+                // determinization forced), so read them from there.
+                let visits: &[u32] = if ply == 0 && side == self.side {
+                    &self.my_n
+                } else {
+                    &self.nodes[node].n[side]
+                };
+                let dominated = (ply == 0 && side == self.side).then_some(&self.my_dominated[..]);
+                let pick = argmax_visits(visits, dominated);
+                joint[side] = acts.get(pick).copied();
+            }
+            if joint == [None, None] {
+                break;
+            }
+            if sim.apply_choices(dex, joint).is_err() {
+                break;
+            }
+            let log = sim.log[log_cursor..].to_vec();
+            log_cursor = sim.log.len();
+            steps.push(LineStep {
+                mine: joint[self.side],
+                theirs: joint[1 - self.side],
+                log,
+                outcome: sim.outcome(),
+            });
+        }
+        PrincipalLine { assumed, steps }
     }
 
     /// Pump `n` iterations, return the total run so far.
@@ -716,4 +838,44 @@ impl Agent for BlindAgent {
         }
         self.search(battle, dex, side, choices)
     }
+}
+
+/// One turn of a [`PrincipalLine`].
+#[derive(Clone, Debug)]
+pub struct LineStep {
+    /// The analyzing side's action (`None` = it owed nothing).
+    pub mine: Option<SearchChoice>,
+    pub theirs: Option<SearchChoice>,
+    /// Protocol lines this turn produced — the same channel the battle log
+    /// is narrated from, so a UI needs no second renderer.
+    pub log: Vec<String>,
+    pub outcome: Option<nc2000_engine::battle::Outcome>,
+}
+
+/// A searched continuation under one assumed opponent team.
+#[derive(Clone, Debug)]
+pub struct PrincipalLine {
+    /// The opponent roster the line assumed: `(species, the four moves the
+    /// determinizer gave it)` per roster slot. Meaningful for the mons whose
+    /// set is still hidden; for a revealed one it is just the truth.
+    pub assumed: Vec<(nc2000_engine::dex::SpeciesId, Vec<nc2000_engine::dex::MoveId>)>,
+    pub steps: Vec<LineStep>,
+}
+
+/// Most-visited action index, skipping dominated ones while any alternative
+/// survives — the same play rule as `BlindSearch::best`.
+fn argmax_visits(visits: &[u32], dominated: Option<&[bool]>) -> usize {
+    let ok = |i: usize| dominated.map(|d| !d.get(i).copied().unwrap_or(false)).unwrap_or(true);
+    let mut best = None;
+    for i in 0..visits.len() {
+        if !ok(i) {
+            continue;
+        }
+        if best.map(|b: usize| visits[i] > visits[b]).unwrap_or(true) {
+            best = Some(i);
+        }
+    }
+    best.unwrap_or_else(|| {
+        (0..visits.len()).max_by_key(|&i| visits[i]).unwrap_or(0)
+    })
 }
