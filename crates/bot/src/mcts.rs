@@ -429,12 +429,24 @@ pub(crate) fn playout_value(
     loop {
         if let Some(o) = sim.outcome() {
             #[cfg(feature = "leafstats")]
-            leafstats::bump(&leafstats::TERMINAL);
+            {
+                leafstats::bump(&leafstats::TERMINAL);
+                leafstats::add(&leafstats::TERMINAL_TURNS, sim.turn as u64);
+                if leafstats::has_recovery(sim, dex) {
+                    leafstats::bump(&leafstats::TERMINAL_HEAL);
+                }
+            }
             return outcome_reward(o);
         }
         if sim.turn > cutoff {
             #[cfg(feature = "leafstats")]
-            leafstats::bump(&leafstats::CUTOFF);
+            {
+                leafstats::bump(&leafstats::CUTOFF);
+                leafstats::add(&leafstats::CUTOFF_TURNS, sim.turn as u64);
+                if leafstats::has_recovery(sim, dex) {
+                    leafstats::bump(&leafstats::CUTOFF_HEAL);
+                }
+            }
             return match playout {
                 Playout::Uniform => hp_eval(sim),
                 Playout::Heavy { weights, .. } => eval::eval_leaf(sim, dex, weights),
@@ -634,9 +646,56 @@ pub mod leafstats {
     pub static TERMINAL: AtomicU64 = AtomicU64::new(0);
     pub static CUTOFF: AtomicU64 = AtomicU64::new(0);
     pub static HORIZON: AtomicU64 = AtomicU64::new(0);
+    /// Split of each class by whether a *recovery engine* is live on the
+    /// board — the owner's hypothesis that `eval01` is consulted mainly in
+    /// heal-stalled positions. See `has_recovery`.
+    pub static TERMINAL_HEAL: AtomicU64 = AtomicU64::new(0);
+    pub static CUTOFF_HEAL: AtomicU64 = AtomicU64::new(0);
+    /// Turn sums, for the mean turn at which each class fires.
+    pub static TERMINAL_TURNS: AtomicU64 = AtomicU64::new(0);
+    pub static CUTOFF_TURNS: AtomicU64 = AtomicU64::new(0);
+
+    /// Gen-2 recovery set: the moves and the item that let a side undo chip
+    /// damage and drag a position past the rollout's 8-turn window. `heal` in
+    /// the dex only covers recover/softboiled/milkdrink (Rest, Moonlight,
+    /// Morning Sun and Synthesis are callback-powered), so the set is named.
+    pub const RECOVERY: [&str; 7] = [
+        "rest",
+        "recover",
+        "softboiled",
+        "milkdrink",
+        "moonlight",
+        "morningsun",
+        "synthesis",
+    ];
+
+    /// True when either side still has a living mon that can heal — a
+    /// recovery move with PP left, or Leftovers.
+    pub fn has_recovery(b: &super::Battle, dex: &super::Dex) -> bool {
+        for side in &b.sides {
+            for p in side.roster.iter() {
+                if p.hp == 0 {
+                    continue;
+                }
+                if p.item.is_some_and(|i| dex.items.key(i) == "leftovers") {
+                    return true;
+                }
+                for ms in p.move_slots.iter() {
+                    if ms.pp > 0 && RECOVERY.contains(&dex.moves.key(ms.id)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
 
     pub fn bump(c: &AtomicU64) {
         c.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn add(c: &AtomicU64, v: u64) {
+        c.fetch_add(v, Ordering::Relaxed);
     }
 
     pub fn read() -> (u64, u64, u64) {
@@ -647,10 +706,24 @@ pub mod leafstats {
         )
     }
 
+    /// (terminal_heal, cutoff_heal, terminal_turns, cutoff_turns)
+    pub fn read_heal() -> (u64, u64, u64, u64) {
+        (
+            TERMINAL_HEAL.load(Ordering::Relaxed),
+            CUTOFF_HEAL.load(Ordering::Relaxed),
+            TERMINAL_TURNS.load(Ordering::Relaxed),
+            CUTOFF_TURNS.load(Ordering::Relaxed),
+        )
+    }
+
     pub fn reset() {
         TERMINAL.store(0, Ordering::Relaxed);
         CUTOFF.store(0, Ordering::Relaxed);
         HORIZON.store(0, Ordering::Relaxed);
+        TERMINAL_HEAL.store(0, Ordering::Relaxed);
+        CUTOFF_HEAL.store(0, Ordering::Relaxed);
+        TERMINAL_TURNS.store(0, Ordering::Relaxed);
+        CUTOFF_TURNS.store(0, Ordering::Relaxed);
     }
 }
 

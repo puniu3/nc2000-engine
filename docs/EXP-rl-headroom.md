@@ -209,6 +209,61 @@ value of the static evaluator sitting behind it. A learned value competing for
 that slot is not competing against `eval01`; it is competing against actually
 playing the game out.
 
+### 8. Is the eval slot the *stall* slot? (owner hypothesis, 2026-08-14)
+
+The natural objection to §7: `eval01` may be consulted mainly in heal-stalled
+positions, so an average-effect measurement could be null while the eval
+matters a great deal inside that stratum. Two parts, and the hypothesis is
+directionally right but the prize is small.
+
+**Is the cutoff stratum stall-shaped?** Partly. Over the same 874k baseline
+leaves, splitting by whether any living mon on either side still has a
+recovery move with PP or Leftovers:
+
+| | recovery live | mean turn |
+|---|---|---|
+| terminal leaves | 0.440 | 18.8 |
+| cutoff leaves (`eval01`) | **0.602** | **16.1** |
+
+A real 1.93x odds enrichment — but 40% of eval leaves have no recovery at all,
+so "ばかり" overstates it. And the mean turn runs the other way: eval leaves
+fire *earlier*, because a cutoff means the rollout **started shallow**, not
+that the game dragged.
+
+**Does eval quality convert inside that stratum?** Stratification is a-priori
+and team-level, using the arena's existing `--heal-min 4` (preview picks 3 of
+6, so 4 healers guarantee every legal triple carries one; 8 of the 32 meta
+teams qualify). Filtering on realised game length would be post-treatment
+selection — length is affected by the thing under test.
+
+| arm (1,000 iters) | fixtures | full meta | stall pool |
+|---|---|---|---|
+| HP+alive vs shipped | 0.480 ±0.042 | 0.505 ±0.037 | 0.513 ±0.039 |
+| **constant 0.5** vs shipped | — | 0.482 ±0.051 | **0.453 ±0.046** |
+
+The second row is the eval-side twin of the inverted prior: every weight zero,
+so `eval01` returns a constant and the 30% of leaves that call it carry **no
+information at all**. That costs 0.047 in the stall pool and is not resolvable
+from zero on the full pool.
+
+So the whole eval channel is worth ~0.047 (≈33 Elo) where it matters most —
+and **HP+alive already collects essentially all of it** (0.513, i.e. no loss
+against shipped). The curve flat → HP+alive → shipped saturates immediately.
+The hypothesis is right that the effect concentrates in stall play; it is the
+size that kills it, not the location.
+
+Strictly, flat→shipped bounds the channel from below, not shipped→perfect from
+above. But two points on a curve that has already flattened, applied 8 turns
+downstream and then averaged over hundreds of rollouts per root action, leave
+very little room for an oracle evaluator to find above shipped **in this
+slot**.
+
+And for stall positions specifically the repo already owns the right
+instrument, and it is not a network: M17e's **exact endgame solver** with
+certified bounds (Phase C product use still gated). A heal war is a long
+resource race — PP and Toxic counters decided dozens of turns out. That wants
+exact depth, not a better static guess.
+
 ## Verdict
 
 **The two halves of the RL proposal do not have the same prospects, and the
@@ -250,6 +305,11 @@ current slot, where it is asked an easy question on 30% of leaves. A learned
 value is worth building only as the thing that **deletes the rollout**, which
 moves it to 100% of leaves and asks it the hard question. Half-measures in
 this slot are provably null.
+
+§8 adds the bound: even an oracle evaluator in the current slot is playing for
+about 33 Elo in the stall stratum and roughly nothing elsewhere, because a
+constant leaf only costs that much. The slot, not the accuracy, is the
+binding constraint.
 
 *Recommended order if this line is opened:* value first, policy not at all.
 Start from `eval_calibration`'s existing labelling path (GT `skuct:300`, 32

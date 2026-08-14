@@ -333,6 +333,30 @@ impl AgentSpec {
                         w.slp_time_scale = false;
                     }
                     "nothreat" => w.threat = 0.0,
+                    // Information-free leaf: every weight zero, so the side
+                    // differential is 0 and eval01 returns a constant 0.5.
+                    // The eval-side twin of the inverted prior — it bounds
+                    // what the 30% of leaves that call eval are worth AT ALL,
+                    // which "hponly" cannot (HP is a strong stall signal, so
+                    // hponly is still a decent evaluator).
+                    "flat" => {
+                        w.hp = 0.0;
+                        w.alive = 0.0;
+                        w.brn = 0.0;
+                        w.par = 0.0;
+                        w.slp = 0.0;
+                        w.frz = 0.0;
+                        w.psn = 0.0;
+                        w.tox = 0.0;
+                        w.boost = [0.0; 7];
+                        w.threat = 0.0;
+                        w.pp = 0.0;
+                        w.substitute = 0.0;
+                        w.race = 0.0;
+                        w.spikes = 0.0;
+                        w.exchange = 0.0;
+                        w.slp_time_scale = false;
+                    }
                     other => panic!("bad skuctw mode: {other}"),
                 }
                 Box::new(RmAgent::new(

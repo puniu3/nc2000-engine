@@ -246,6 +246,18 @@ fn main() {
         println!("  terminal (rollout played it out) : {t:>10}  {:.3}", t as f64 / tot);
         println!("  cutoff   (8-turn trunc -> eval01): {c:>10}  {:.3}", c as f64 / tot);
         println!("  horizon  (tree turn cap -> eval01): {h:>9}  {:.3}", h as f64 / tot);
+        let (th, ch, tt, ct) = nc2000_bot::mcts::leafstats::read_heal();
+        println!("  -- the owner's hypothesis: is the eval slot the stall slot?");
+        println!(
+            "  recovery live at leaf : terminal {:.3}   cutoff(eval01) {:.3}",
+            th as f64 / t.max(1) as f64,
+            ch as f64 / c.max(1) as f64
+        );
+        println!(
+            "  mean turn at leaf     : terminal {:.1}     cutoff(eval01) {:.1}",
+            tt as f64 / t.max(1) as f64,
+            ct as f64 / c.max(1) as f64
+        );
     }
     println!("\n[1] footprint vs seed floor ({} positions)", pos.len());
     let (mut moved_cand, mut moved_seed) = (0usize, 0usize);
