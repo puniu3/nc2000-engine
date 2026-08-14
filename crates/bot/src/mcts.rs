@@ -245,7 +245,7 @@ const PSEUDO_SPIKES: f64 = 0.15;
 const PSEUDO_BOOST: f64 = 0.15;
 const PSEUDO_HEAL: f64 = 0.25;
 
-fn status_pseudo_score(
+pub(crate) fn status_pseudo_score(
     sim: &Battle,
     dex: &Dex,
     side: usize,
@@ -328,6 +328,90 @@ fn status_pseudo_score(
         }
         _ => 0.0,
     }
+}
+
+/// Per-action quality scores for the PUCT prior probe (M18a research arm).
+///
+/// The ingredients are exactly the ones the greedy rollout ranks moves by —
+/// `expected_hit_fraction`, falling back to the M16c `status_pseudo_score`
+/// when a move deals no damage — so the prior carries the same action-quality
+/// information M16c handed to the *rollout tail*, delivered into the **tree**
+/// instead. That is the whole point of the probe: M16c's recorded diagnosis
+/// was "at product budgets the tree, not the rollout tail, owns the root
+/// values", and this is where that diagnosis says the information belongs.
+///
+/// Switches all take the mean of the move scores, i.e. the prior is uniform
+/// across them and never shifts move-vs-switch mass. M16b cluster 1 closed
+/// voluntary switching as "not a defect — do not optimise switch top-1", and
+/// a prior that re-weighted that balance would confound this probe with a
+/// question the corpus already answered.
+///
+/// `None` = nothing to rank (team preview, no active pair, or every score
+/// equal); the caller leaves that node uniform.
+/// `status_bonus` is the M18a cluster-2 arm: a flat addition to every
+/// Status-category move's score. The plain greedy scores measured as a
+/// *damage amplifier* (self-play status rate 0.184 → 0.047, class shift
+/// Status→Damage 43:0) because `expected_hit_fraction` runs 0.25–0.5 where
+/// `status_pseudo_score` tops out at 0.30 and is 0.0 for every move it does
+/// not name (Double Team, Substitute, Toxic, Perish Song, Mean Look — most
+/// of M16b cluster 2). This knob pushes the other way, so "does steering the
+/// tree toward multi-turn plans help" gets its own measurement instead of
+/// riding on a prior that does the reverse.
+pub fn action_scores(
+    sim: &Battle,
+    dex: &Dex,
+    side: usize,
+    cs: &[SearchChoice],
+    status_bonus: f64,
+) -> Option<Vec<f64>> {
+    let (att, def) = (sim.active_id(side)?, sim.active_id(1 - side)?);
+    if cs.iter().any(|c| matches!(c, SearchChoice::Team(_))) {
+        return None;
+    }
+    // Mirrors `greedy_pick`'s last-mon self-KO guard: bp 250 tops every
+    // damage ranking while the Self-KO clause rules the user the loser.
+    let last_mon = sim.sides[side].pokemon_left == 1;
+    let mut scores = vec![0.0f64; cs.len()];
+    let mut move_sum = 0.0;
+    let mut moves = 0usize;
+    for (i, &c) in cs.iter().enumerate() {
+        let SearchChoice::Move(id) = c else { continue };
+        let s = if last_mon && dex.move_static(id).selfdestruct {
+            0.0
+        } else {
+            let dmg = eval::expected_hit_fraction(sim, dex, att, def, id, true);
+            if dmg > 0.0 {
+                dmg
+            } else {
+                // Category, not `dmg == 0`: the bp=0 family (return/flail/
+                // magnitude/counter/...) is the documented M16c L1 eval bug
+                // and scores 0.0 while being very much a damaging move — it
+                // must not collect the status bonus.
+                let bonus = match dex.move_static(id).category {
+                    nc2000_engine::dex::Category::Status => status_bonus,
+                    _ => 0.0,
+                };
+                status_pseudo_score(sim, dex, side, att, def, id) + bonus
+            }
+        };
+        scores[i] = s;
+        move_sum += s;
+        moves += 1;
+    }
+    if moves == 0 {
+        return None;
+    }
+    let mean = move_sum / moves as f64;
+    for (i, &c) in cs.iter().enumerate() {
+        if matches!(c, SearchChoice::Switch(_)) {
+            scores[i] = mean;
+        }
+    }
+    let flat = scores.iter().all(|&s| (s - scores[0]).abs() < 1e-12);
+    if flat {
+        return None;
+    }
+    Some(scores)
 }
 
 pub(crate) fn playout_value(

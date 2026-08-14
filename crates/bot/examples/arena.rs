@@ -44,7 +44,7 @@ use nc2000_bot::smmcts::SelRule;
 use nc2000_bot::{
     run_duel, Agent, BakedPreviewAgent, BlindAgent, BrAgent, CounterPickAgent, DuelSpec,
     EvalWeights, MaxDamageAgent, MctsAgent, MctsConfig, OpenAgent, Playout, PreviewMode,
-    RandomAgent, RmAgent, RmConfig, TableSet,
+    PriorKind, RandomAgent, RmAgent, RmConfig, TableSet,
 };
 use nc2000_engine::battle::PokemonSet;
 
@@ -60,6 +60,20 @@ enum AgentSpec {
     SkUctNs { iterations: u32, c: f64, buckets: i64 },
     /// M17 cluster-2 probe: threshold-preserving node key (`hp_class`).
     SkUctThr { iterations: u32, c: f64, buckets: i64 },
+    /// M18a PUCT prior probe: `skuctp:ITERS:PUCT:KIND[:TAU[:BUCKETS]]`,
+    /// KIND ∈ uniform | greedy | inverted.
+    SkUctP {
+        iterations: u32,
+        puct: f64,
+        prior: PriorKind,
+        tau: f64,
+        status_bonus: f64,
+        buckets: i64,
+    },
+    /// M18b leaf-value arm: skuct with the rollout truncation set to TURNS.
+    /// TURNS=0 is "eval only, no rollout" — the shape a learned value net
+    /// would have, so its strength/cost tells us what such a net must beat.
+    SkUctV { iterations: u32, turns: u16, buckets: i64 },
     /// Threshold key + damage-bookkeeping-free key (the full abstraction).
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
     Blind { iterations: u32, c: f64, buckets: i64 },
@@ -113,6 +127,24 @@ impl AgentSpec {
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
             }),
+            "skuctp" => Ok(AgentSpec::SkUctP {
+                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
+                puct: opt_num(&parts, 2, "puct")?.unwrap_or(1.0),
+                prior: match parts.get(3).copied().unwrap_or("greedy") {
+                    "uniform" => PriorKind::Uniform,
+                    "greedy" => PriorKind::Greedy,
+                    "inverted" => PriorKind::Inverted,
+                    k => return Err(format!("bad prior kind: {k}")),
+                },
+                tau: opt_num(&parts, 4, "tau")?.unwrap_or(0.15),
+                status_bonus: opt_num(&parts, 5, "status_bonus")?.unwrap_or(0.0),
+                buckets: opt_num(&parts, 6, "buckets")?.unwrap_or(16),
+            }),
+            "skuctv" => Ok(AgentSpec::SkUctV {
+                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
+                turns: opt_num(&parts, 2, "turns")?.unwrap_or(8),
+                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
+            }),
             "skuct" => Ok(AgentSpec::SkUct {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
@@ -156,6 +188,8 @@ impl AgentSpec {
             | AgentSpec::Mcts5 { iterations, .. }
             | AgentSpec::Rm { iterations, .. }
             | AgentSpec::SkUct { iterations, .. }
+            | AgentSpec::SkUctP { iterations, .. }
+            | AgentSpec::SkUctV { iterations, .. }
             | AgentSpec::SkUctNs { iterations, .. }
             | AgentSpec::Blind { iterations, .. }
             | AgentSpec::Open { iterations, .. } => *iterations,
@@ -233,6 +267,35 @@ impl AgentSpec {
                     rule: SelRule::Ucb,
                     c: *c,
                     hp_buckets: *buckets,
+                    ..Default::default()
+                },
+                seed,
+            )),
+            AgentSpec::SkUctP { iterations, puct, prior, tau, status_bonus, buckets } => {
+                Box::new(RmAgent::new(
+                    RmConfig {
+                        iterations: *iterations,
+                        rule: SelRule::Ucb,
+                        hp_buckets: *buckets,
+                        prior: *prior,
+                        puct: *puct,
+                        prior_tau: *tau,
+                        prior_status_bonus: *status_bonus,
+                        ..Default::default()
+                    },
+                    seed,
+                ))
+            }
+            AgentSpec::SkUctV { iterations, turns, buckets } => Box::new(RmAgent::new(
+                RmConfig {
+                    iterations: *iterations,
+                    rule: SelRule::Ucb,
+                    hp_buckets: *buckets,
+                    playout: Playout::Heavy {
+                        eps: 0.2,
+                        turns: *turns,
+                        weights: EvalWeights::default(),
+                    },
                     ..Default::default()
                 },
                 seed,
@@ -327,6 +390,18 @@ impl AgentSpec {
             }
             AgentSpec::SkUct { iterations, c, buckets } => {
                 format!("skuct:{iterations}:{c}:{buckets}")
+            }
+            AgentSpec::SkUctV { iterations, turns, buckets } => {
+                format!("skuctv:{iterations}:{turns}:{buckets}")
+            }
+            AgentSpec::SkUctP { iterations, puct, prior, tau, status_bonus, buckets } => {
+                let k = match prior {
+                    PriorKind::Off => "off",
+                    PriorKind::Uniform => "uniform",
+                    PriorKind::Greedy => "greedy",
+                    PriorKind::Inverted => "inverted",
+                };
+                format!("skuctp:{iterations}:{puct}:{k}:{tau}:{status_bonus}:{buckets}")
             }
             AgentSpec::SkUctNs { iterations, c, buckets } => {
                 format!("skuctm16c:{iterations}:{c}:{buckets}")

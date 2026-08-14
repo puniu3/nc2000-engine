@@ -71,6 +71,28 @@ use crate::agent::Agent;
 use crate::mcts::{outcome_reward, playout_value, Playout};
 use crate::rng::SplitMix64;
 
+/// Action prior for the PUCT selection slot (M18a research probe; default
+/// `Off` reproduces the shipped decoupled UCB1 bit-for-bit).
+///
+/// The probe exists to answer one question before any learning machinery is
+/// built: **does this search have a usable policy-prior slot at all?** A
+/// learned policy net is precisely "a cheap position-dependent action prior
+/// evaluated at every node", so if the slot has no leverage, no net can help
+/// through it. `Inverted` is the leverage probe — a deliberately bad prior
+/// that bounds the slot's influence from below without needing a good one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PriorKind {
+    /// No prior: untried-first + UCB1, the shipped rule.
+    Off,
+    /// PUCT with a uniform prior — the selection-rule control. Isolates
+    /// "PUCT instead of UCB1" from "the prior carries information".
+    Uniform,
+    /// PUCT over `softmax(mcts::action_scores / tau)`.
+    Greedy,
+    /// PUCT over `softmax(-mcts::action_scores / tau)` — adversarial.
+    Inverted,
+}
+
 /// Selection rule for the root decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelRule {
@@ -126,6 +148,18 @@ pub struct RmConfig {
     /// can read them (Counter/Mirror Coat); the search checks that once at
     /// construction and clears this flag if it cannot.
     pub key_no_damage: bool,
+    /// M18a PUCT prior probe. `PriorKind::Off` = the shipped UCB1 rule,
+    /// bit-identical (asserted by `tests/prior.rs`).
+    pub prior: PriorKind,
+    /// PUCT exploration constant (only read when `prior != Off`).
+    pub puct: f64,
+    /// Softmax temperature over `mcts::action_scores` (only read for the
+    /// informed priors). Scores are HP fractions per turn, so ~0.15 puts a
+    /// 0.3 score gap at a ~7x probability ratio.
+    pub prior_tau: f64,
+    /// M18a cluster-2 arm: flat prior bonus on every Status-category move.
+    /// 0.0 = the plain greedy scores (which measured as a damage amplifier).
+    pub prior_status_bonus: f64,
 }
 
 impl Default for RmConfig {
@@ -144,6 +178,10 @@ impl Default for RmConfig {
             rollout_m16c: false,
             threshold_key: false,
             key_no_damage: false,
+            prior: PriorKind::Off,
+            puct: 0.0,
+            prior_tau: 0.15,
+            prior_status_bonus: 0.0,
         }
     }
 }
@@ -157,19 +195,55 @@ pub(crate) struct Node {
     pub(crate) w: [Vec<f64>; 2],
     /// Team-preview node (always UCB1 + argmax).
     pub(crate) preview: bool,
+    /// M18a PUCT prior per side; empty = uniform (and always empty when
+    /// `cfg.prior == PriorKind::Off`, so the shipped path allocates nothing).
+    pub(crate) p: [Vec<f64>; 2],
+}
+
+/// `softmax(scores / tau)`, sign-flipped for the adversarial arm.
+fn softmax_prior(scores: &[f64], tau: f64, invert: bool) -> Vec<f64> {
+    let sign = if invert { -1.0 } else { 1.0 };
+    let z: Vec<f64> = scores.iter().map(|&s| sign * s / tau).collect();
+    let max = z.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let e: Vec<f64> = z.iter().map(|&v| (v - max).exp()).collect();
+    let sum: f64 = e.iter().sum();
+    e.into_iter().map(|v| v / sum).collect()
 }
 
 impl Node {
-    pub(crate) fn at(sim: &mut Battle, dex: &Dex) -> Node {
+    pub(crate) fn at(sim: &mut Battle, dex: &Dex, cfg: &RmConfig) -> Node {
         let acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];
         let preview = acts
             .iter()
             .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
+        let p = [0usize, 1].map(|s| match cfg.prior {
+            PriorKind::Off | PriorKind::Uniform => Vec::new(),
+            PriorKind::Greedy | PriorKind::Inverted => {
+                if acts[s].len() < 2 {
+                    return Vec::new();
+                }
+                match crate::mcts::action_scores(
+                    sim,
+                    dex,
+                    s,
+                    &acts[s],
+                    cfg.prior_status_bonus,
+                ) {
+                    Some(scores) => softmax_prior(
+                        &scores,
+                        cfg.prior_tau,
+                        cfg.prior == PriorKind::Inverted,
+                    ),
+                    None => Vec::new(),
+                }
+            }
+        });
         Node {
             n: [vec![0; acts[0].len()], vec![0; acts[1].len()]],
             w: [vec![0.0; acts[0].len()], vec![0.0; acts[1].len()]],
             preview,
             acts,
+            p,
         }
     }
 }
@@ -295,13 +369,62 @@ pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     key
 }
 
-/// UCB1 (untried-first, then mean + c·sqrt(ln N / n)).
+/// PUCT: `Q(a) + puct · P(a) · sqrt(N) / (1 + n(a))`, unvisited actions
+/// taking the side's visited mean as their first-play value (FPU; 0.5 —
+/// an even game — when nothing is visited yet).
+///
+/// Unlike UCB1 this does **not** force every action to be tried once: which
+/// action is worth a first visit is exactly what the prior is claiming to
+/// know, so untried-first would erase the effect under test. `PriorKind::
+/// Uniform` runs this same rule on a flat prior, which is the control that
+/// separates the rule change from the prior's information content.
+fn select_puct(cfg: &RmConfig, node: &mut Node, side: usize) -> usize {
+    let k = node.acts[side].len();
+    let total: u32 = node.n[side].iter().sum();
+    let sqrt_total = (total as f64).max(1.0).sqrt();
+    let visited: u32 = node.n[side].iter().filter(|&&n| n > 0).count() as u32;
+    let fpu = if visited == 0 {
+        0.5
+    } else {
+        let (mut w, mut n) = (0.0, 0.0);
+        for a in 0..k {
+            w += node.w[side][a];
+            n += node.n[side][a] as f64;
+        }
+        if n > 0.0 {
+            w / n
+        } else {
+            0.5
+        }
+    };
+    let uniform = 1.0 / k as f64;
+    let mut best = 0;
+    let mut best_v = f64::NEG_INFINITY;
+    for a in 0..k {
+        let n = node.n[side][a] as f64;
+        let q = if n > 0.0 { node.w[side][a] / n } else { fpu };
+        let p = node.p[side].get(a).copied().unwrap_or(uniform);
+        let v = q + cfg.puct * p * sqrt_total / (1.0 + n);
+        if v > best_v {
+            best_v = v;
+            best = a;
+        }
+    }
+    node.n[side][best] += 1;
+    best
+}
+
+/// UCB1 (untried-first, then mean + c·sqrt(ln N / n)); PUCT when the M18a
+/// prior slot is armed.
 pub(crate) fn select_ucb(
     cfg: &RmConfig,
     rng: &mut SplitMix64,
     node: &mut Node,
     side: usize,
 ) -> usize {
+    if cfg.prior != PriorKind::Off {
+        return select_puct(cfg, node, side);
+    }
     let k = node.acts[side].len();
     let untried: Vec<usize> = (0..k).filter(|&a| node.n[side][a] == 0).collect();
     let pick = if !untried.is_empty() {
@@ -401,7 +524,7 @@ pub(crate) fn run_iteration(
             None => {
                 // expand exactly one node per iteration, then roll out
                 let child = nodes.len();
-                nodes.push(Node::at(sim, dex));
+                nodes.push(Node::at(sim, dex, cfg));
                 table.insert(key, child);
                 break playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_m16c);
             }
@@ -886,7 +1009,7 @@ impl SkuctSearch {
         let mut root = battle.clone();
         root.set_log_enabled(false);
         let turn_cap = root.turn.saturating_add(cfg.horizon);
-        let nodes = vec![Node::at(&mut root, dex)];
+        let nodes = vec![Node::at(&mut root, dex, &cfg)];
         let mut table = FxHashMap::default();
         table.insert(key_of(&cfg, dex, &mut root), 0usize);
         let root_dominated = [0usize, 1].map(|s| {

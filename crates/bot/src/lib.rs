@@ -65,5 +65,5 @@ pub use preview::{BakedPreviewAgent, CounterPickAgent, PreviewMode, TableSet};
 pub use prior::{BeliefPrior, SpeciesPrior};
 pub use rng::SplitMix64;
 pub use runner::{play_game, GameResult};
-pub use smmcts::{RmAgent, RmConfig, SkuctSearch};
+pub use smmcts::{PriorKind, RmAgent, RmConfig, SkuctSearch};
 pub use teamgen::{gauntlet_eval, to_sets, EvalCfg, EvalResult, MutOp, Proposal, TeamGen};

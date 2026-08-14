@@ -367,7 +367,7 @@ impl BlindSearch {
         let root = match self.table.get(&key) {
             Some(&i) => i,
             None => {
-                let node = Node::at(&mut sim, dex);
+                let node = Node::at(&mut sim, dex, &self.cfg);
                 debug_assert_eq!(
                     node.acts[self.side], self.my_acts,
                     "determinization changed the observer's own root actions"
@@ -428,7 +428,7 @@ impl BlindSearch {
         let root = match self.table.get(&key) {
             Some(&i) => i,
             None => {
-                let node = Node::at(&mut sim, dex);
+                let node = Node::at(&mut sim, dex, &self.cfg);
                 debug_assert_eq!(
                     node.acts[self.side], self.my_acts,
                     "determinization changed the observer's own root actions"
