@@ -219,9 +219,26 @@ fn a_position_is_analyzed_and_every_legal_action_is_scored() {
         "Thunderbolt was revealed and must be marked so"
     );
 
-    // the line is searched, not invented: every step names an action we own
+    // the line is searched, not sampled: every step names an action, carries
+    // the probability of the outcome it shows, and reports what changed
     for step in r["line"]["steps"].as_array().unwrap() {
         assert!(step["mine"].is_string() || step["mine"].is_null());
+        let p = step["prob"].as_f64().unwrap();
+        assert!(p > 0.0 && p <= 1.0, "chance-branch probability out of range: {p}");
+        assert!(step["iterations"].as_u64().unwrap() > 0, "a step was not searched");
+        for e in step["effects"].as_array().unwrap() {
+            let (before, after, maxhp) = (
+                e["hpBefore"].as_i64().unwrap(),
+                e["hpAfter"].as_i64().unwrap(),
+                e["maxhp"].as_i64().unwrap(),
+            );
+            assert!(after >= 0 && after <= maxhp && before <= maxhp, "hp out of range: {e}");
+            // a mon that was already down and stayed down is not an event
+            assert!(
+                before > 0 || after > 0 || e["switchedIn"].as_bool() == Some(true),
+                "a corpse was reported as a board change: {e}"
+            );
+        }
     }
 }
 

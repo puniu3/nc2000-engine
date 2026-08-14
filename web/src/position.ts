@@ -195,14 +195,37 @@ export interface DamageRow {
 
 export interface PrincipalLine {
   assumed: { slot: number; species: string; moves: string[]; appeared: boolean }[];
-  steps: {
-    mine: string | null;
-    theirs: string | null;
-    /** Playouts behind this step's choice. */
-    visits: number;
-    log: string[];
-    outcome: "p1" | "p2" | "tie" | null;
-  }[];
+  steps: LineStep[];
+}
+
+export interface LineStep {
+  mine: string | null;
+  theirs: string | null;
+  /** Species a switch brings in, resolved against the party of the moment. */
+  mineTarget: string | null;
+  theirsTarget: string | null;
+  /** Playouts behind this step's two choices. */
+  iterations: number;
+  /** How likely the shown outcome was among this step's chance events. The
+   * line follows the likeliest branch; a low number here is the reader's cue
+   * that the rest of the line rests on a coin flip. */
+  prob: number;
+  effects: LineEffect[];
+  outcome: "p1" | "p2" | "tie" | null;
+}
+
+export interface LineEffect {
+  side: number;
+  /** It is ours. */
+  mine: boolean;
+  species: string;
+  hpBefore: number;
+  hpAfter: number;
+  maxhp: number;
+  statusBefore: string;
+  statusAfter: string;
+  active: boolean;
+  switchedIn: boolean;
 }
 
 // ------------------------------------------------------------- authoring

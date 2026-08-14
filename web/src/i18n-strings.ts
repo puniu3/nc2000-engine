@@ -307,6 +307,10 @@ export interface SolverStrings {
   lineHelp: string;
   lineUs: string;
   lineThem: string;
+  lineOdds: (pct: string) => string;
+  lineIn: string;
+  lineFainted: string;
+  lineCured: string;
   understood: string;
   understoodHelp: string;
   unknownMon: (pos: number) => string;
@@ -586,9 +590,13 @@ const EN: UIStrings = {
     lineTitle: "How it expects this to go",
     lineAssumed: "assuming their set is",
     lineHelp:
-      "One continuation the search actually visited, under one guess at their hidden set. Change the guess and the line changes.",
+      "Every ply is searched fresh, so both sides play the best move they can find from that board — under one guess at their hidden set, and knowing it. Chance is not rolled: each step follows the single likeliest outcome, and says how likely that was.",
     lineUs: "you",
     lineThem: "them",
+    lineOdds: (pct) => `this outcome: ${pct}`,
+    lineIn: "comes in",
+    lineFainted: "faints",
+    lineCured: "cured",
     understood: "The board it read",
     understoodHelp:
       "Their HP lands in the middle of the percentage you gave — that is all a percentage says.",
@@ -866,9 +874,13 @@ const JA: UIStrings = {
     lineTitle: "この後の読み筋",
     lineAssumed: "相手のセットを次と仮定",
     lineHelp:
-      "探索が実際に通った進行を1本。相手の隠れたセットを1通りに仮定しているので、仮定が変われば読み筋も変わる。",
+      "1手ごとに探索し直しているので、双方その盤面での最善を指している（相手のセットは1通りに仮定し、それを互いに知っている前提）。乱数は振らず、各手で最も起こりやすい結果だけを辿り、その確率を併記する。",
     lineUs: "自分",
     lineThem: "相手",
+    lineOdds: (pct) => `この結果になる確率 ${pct}`,
+    lineIn: "登場",
+    lineFainted: "ひんし",
+    lineCured: "回復",
     understood: "ソルバが読み取った盤面",
     understoodHelp:
       "相手の HP は入力した％の中央値になる — ％が言えるのはそこまで。",

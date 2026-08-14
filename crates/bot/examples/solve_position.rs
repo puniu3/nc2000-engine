@@ -170,20 +170,37 @@ fn print_report(r: &Value, ms: u128) {
     }
 
     if let Some(steps) = r["line"]["steps"].as_array() {
-        println!("\nsearched line:");
+        println!("\nsearched line (each ply searched fresh; likeliest outcome shown):");
         for (i, s) in steps.iter().enumerate() {
             println!(
-                "  {}. us: {:<20} them: {:<20} ({} playouts)",
+                "  {}. us: {:<20} them: {:<20}  this outcome {}",
                 i + 1,
                 s["mine"].as_str().unwrap_or("-"),
                 s["theirs"].as_str().unwrap_or("-"),
-                s["visits"].as_u64().unwrap_or(0)
+                pct(&s["prob"]),
             );
-            for l in s["log"].as_array().into_iter().flatten() {
-                let l = l.as_str().unwrap_or("");
-                if l.starts_with("|move|") || l.starts_with("|switch|") || l.starts_with("|-") {
-                    println!("       {l}");
-                }
+            for e in s["effects"].as_array().into_iter().flatten() {
+                let (hp0, hp1, maxhp) = (
+                    e["hpBefore"].as_i64().unwrap_or(0),
+                    e["hpAfter"].as_i64().unwrap_or(0),
+                    e["maxhp"].as_i64().unwrap_or(1).max(1),
+                );
+                let who = if e["mine"].as_bool() == Some(true) { "us  " } else { "them" };
+                let st = match (e["statusBefore"].as_str(), e["statusAfter"].as_str()) {
+                    (a, b) if a == b => String::new(),
+                    (_, Some(b)) if b.is_empty() => "  (cured)".to_string(),
+                    (_, Some(b)) => format!("  ({b})"),
+                    _ => String::new(),
+                };
+                let tag = if e["switchedIn"].as_bool() == Some(true) { " <- in" } else { "" };
+                println!(
+                    "       {who} {:<12} {hp0:>4} -> {hp1:<4} ({:>3}%){st}{tag}",
+                    e["species"].as_str().unwrap_or(""),
+                    100 * hp1 / maxhp,
+                );
+            }
+            if let Some(o) = s["outcome"].as_str() {
+                println!("       game over: {o}");
             }
         }
     }

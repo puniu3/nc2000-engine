@@ -21,7 +21,6 @@ import { HpBar, StatusBadge, TypeBadge } from "./battle-ui";
 import { getValidator } from "./engine";
 import { findingText, type Finding } from "./findings";
 import { parsePsExport } from "./ps-import";
-import { Narrator } from "./narrate";
 import {
   loadCustomTeams,
   type CustomTeam,
@@ -1185,7 +1184,6 @@ function DamageList(props: { title: string; rows: AnalysisReport["damage"]["mine
 
 function Line(props: { line: NonNullable<AnalysisReport["line"]>; side: number }) {
   const s = ui().solver;
-  const narrator = new Narrator(props.side);
   const hidden = props.line.assumed.filter((a) => !a.appeared);
   return (
     <div class="solver-line">
@@ -1207,16 +1205,33 @@ function Line(props: { line: NonNullable<AnalysisReport["line"]>; side: number }
           <li key={i}>
             <div class="solver-line-picks">
               <span>
-                {s.lineUs}: {step.mine ? inputLabel(step.mine) : "—"}
+                {s.lineUs}: {step.mine ? inputLabel(step.mine, step.mineTarget) : "—"}
               </span>
               <span>
-                {s.lineThem}: {step.theirs ? inputLabel(step.theirs) : "—"}
+                {s.lineThem}: {step.theirs ? inputLabel(step.theirs, step.theirsTarget) : "—"}
               </span>
             </div>
+            <span class="solver-line-odds">{s.lineOdds(pct(step.prob))}</span>
             <ul class="solver-line-log">
-              {narrator.render(step.log).map((e, j) => (
-                <li key={j} class={`log-${e.kind}`}>
-                  {e.text}
+              {step.effects.map((e, j) => (
+                <li key={j}>
+                  <span class="solver-line-who">{e.mine ? s.lineUs : s.lineThem}</span>
+                  <span class="solver-line-mon">{speciesName(speciesDisplay(e.species))}</span>
+                  {/* Their max HP is imputed, so their side is shown as the
+                    * percentage the battle would announce; ours is exact
+                    * because ours is known. */}
+                  <span class="num">
+                    {e.mine
+                      ? `${e.hpBefore} → ${e.hpAfter}`
+                      : `${hpPct(e.hpBefore, e.maxhp)} → ${hpPct(e.hpAfter, e.maxhp)}`}
+                  </span>
+                  {e.hpAfter === 0 && <span class="solver-ko">{s.lineFainted}</span>}
+                  {e.statusAfter !== e.statusBefore && e.hpAfter > 0 && (
+                    <span class="solver-dim">
+                      {e.statusAfter === "" ? s.lineCured : statusName(e.statusAfter)}
+                    </span>
+                  )}
+                  {e.switchedIn && <span class="solver-dim">{s.lineIn}</span>}
                 </li>
               ))}
             </ul>
@@ -1269,6 +1284,12 @@ function BoardReadback(props: { state: StateView; side: number }) {
 
 const pct = (x: number) => `${(100 * x).toFixed(1)}%`;
 
+/** The opponent's HP as the battle would announce it: a percentage, because
+ * their max HP is imputed and printing it as a number would dress a guess up
+ * as a reading. */
+const hpPct = (hp: number, maxhp: number) =>
+  `${Math.max(0, Math.round((100 * hp) / Math.max(1, maxhp)))}%`;
+
 /** A win rate painted onto a red-to-green ramp, faded by how little the cell
  * was sampled: a bright colour on four playouts would be a lie told in the
  * most persuasive channel the table has. */
@@ -1292,9 +1313,11 @@ function actionLabel(a: ActionRef): string {
   return a.input;
 }
 
-/** A PS choice string ("move surf" / "switch 2") for the line, where no
- * structured action is available. */
-function inputLabel(input: string): string {
+/** A PS choice string for the line: the move's name, or the Pokémon a switch
+ * brings in — "switch 3" is a party index, which is not a reading of a line. */
+function inputLabel(input: string, target: string | null): string {
   const m = input.match(/^move (.+)$/);
-  return m ? moveName(toId(m[1])) : input;
+  if (m) return moveName(toId(m[1]));
+  if (target) return `→ ${speciesName(speciesDisplay(target))}`;
+  return input;
 }

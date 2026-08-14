@@ -154,6 +154,20 @@ check(
   "unshown opponent moves are marked assumed"
 );
 
+// the searched line, when asked for, is searched rather than sampled
+{
+  const withLine = new wasm.ProtocolSearcher(dex, 0, poolJson, SEED);
+  withLine.setPosition(specJson);
+  withLine.step(ITERS);
+  const line = JSON.parse(withLine.report(3, SEED)).line;
+  check(line !== null && line.steps.length > 0, "a line was produced");
+  for (const st of line.steps) {
+    check(st.prob > 0 && st.prob <= 1, `step probability in (0,1]: ${st.prob}`);
+    check(st.iterations > 0, "every step of the line was searched");
+  }
+  withLine.free();
+}
+
 // the synthesized board is readable back
 const view = JSON.parse(searcher.stateView());
 checkEq(view.turn, 1, "state view turn");

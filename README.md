@@ -334,9 +334,16 @@ Milestones:
   iterations the search was running anyway, and keyed by the opponent's action identity rather than
   its index, since a blind root's action list is determinization-dependent), **engine-truth damage**
   through `get_damage_synthetic` (min/max roll, crit, guaranteed hits-to-KO), and a **searched
-  line** replayed from the tree under one stated assumption about the hidden set (it stops rather
-  than continue out of a node with under 20 playouts behind it). Every figure that leans on an
-  imputed set is labelled as one, and unsampled matrix cells read "never tried" rather than zero.
+  line**. That line is not read off the blind tree's visit counts, which below the root are
+  state-keyed across determinizations, HP-bucketed and often entered a handful of times — an argmax
+  there is noise wearing the search's authority, and it showed: the first version answered a
+  position by playing a move its own damage table rated at half the alternative. Every ply is now
+  its own `SkuctSearch` (a tenth of the analysis's budget, full information inside one
+  determinization), the recommended move opens it so the line explains the score above it, and
+  chance is enumerated rather than rolled — `enumerate_step` with damage collapsed to its
+  probability-weighted mean, following the likeliest outcome and printing how likely that was.
+  Every figure that leans on an imputed set is labelled as one, and unsampled matrix cells read
+  "never tried" rather than zero.
   The headline number is **not** the search's own per-action mean: that averages over whichever
   replies UCB explored, so it sits above the worst case and flatters any move a rare answer
   punishes (measured on a real position: 85.7% quoted where the opponent's best reply holds it to

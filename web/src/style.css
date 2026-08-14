@@ -1983,3 +1983,27 @@ td.solver-cell {
   font-size: 0.68rem;
   font-weight: 400;
 }
+
+.solver-line-odds {
+  margin-left: 8px;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.solver-line-log li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.solver-line-who {
+  min-width: 2.5em;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+.solver-line-mon {
+  min-width: 6em;
+  color: var(--text);
+}

@@ -48,6 +48,16 @@ const MIN_CELL: u32 = 20;
 /// preview tables and the RM root use.
 const SOLVE_SWEEPS: u32 = 2000;
 
+/// Playouts per ply of the searched line, as a share of the analysis that
+/// asked for it and a ceiling on that share. Each ply is a full-information
+/// search of one determinized state — far cheaper than the root's blind
+/// search — so a tenth of the budget buys a continuation whose every step
+/// was actually chosen. Tying it to the budget matters at both ends: a quick
+/// look should not spend ten times its own cost on the story underneath it,
+/// and a deep one should not illustrate itself with a shallow guess.
+const LINE_ITERS_MAX: u32 = 3000;
+const LINE_ITERS_MIN: u32 = 200;
+
 /// Gen 2 damage variance: the top roll times 217/255, floored.
 const MIN_ROLL_NUM: f64 = 217.0;
 const MIN_ROLL_DEN: f64 = 255.0;
@@ -422,7 +432,8 @@ fn line_json(agent: &ProtocolAgent, dex: &Dex, seed: u64, plies: usize) -> Value
     else {
         return Value::Null;
     };
-    let line = search.principal_line(dex, belief, obs, seed, plies);
+    let iters = (search.iterations() / 10).clamp(LINE_ITERS_MIN, LINE_ITERS_MAX);
+    let line = search.principal_line(dex, belief, obs, seed, plies, iters, search.best());
     json!({
         "assumed": line
             .assumed
@@ -443,8 +454,29 @@ fn line_json(agent: &ProtocolAgent, dex: &Dex, seed: u64, plies: usize) -> Value
             .map(|s| json!({
                 "mine": s.mine.map(|c| c.to_input(dex)),
                 "theirs": s.theirs.map(|c| c.to_input(dex)),
-                "visits": s.visits,
-                "log": s.log,
+                "mineTarget": s.mine_target.map(|sp| dex.species.key(sp)),
+                "theirsTarget": s.theirs_target.map(|sp| dex.species.key(sp)),
+                "iterations": s.iterations,
+                // How likely the shown outcome was, among this step's chance
+                // events. A line that keeps taking 30% branches is a story;
+                // this is how the reader tells the two apart.
+                "prob": s.prob,
+                "effects": s
+                    .effects
+                    .iter()
+                    .map(|e| json!({
+                        "side": e.side,
+                        "mine": e.side == agent.side(),
+                        "species": dex.species.key(e.species),
+                        "hpBefore": e.hp_before,
+                        "hpAfter": e.hp_after,
+                        "maxhp": e.maxhp,
+                        "statusBefore": e.status_before.as_str(),
+                        "statusAfter": e.status_after.as_str(),
+                        "active": e.active,
+                        "switchedIn": e.switched_in,
+                    }))
+                    .collect::<Vec<Value>>(),
                 "outcome": s.outcome.map(|o| match o {
                     nc2000_engine::battle::Outcome::P1Win => "p1",
                     nc2000_engine::battle::Outcome::P2Win => "p2",
