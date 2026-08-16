@@ -626,6 +626,25 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
     if ms.force_switch && !b.can_switch((1 - side) as u8) {
         yes!("there is nobody left to phaze in");
     }
+    // ---- Perish Song / Destiny Bond from the last mon. The Stadium 2 rule
+    // at `moveexec.rs:499` (destinybond/perishsong onPrepareHit) returns
+    // False on `pokemon_left == 1`, so the move ends as a bare `-fail` with
+    // the "fails if it is being used by your last Pokemon" hint and nothing
+    // else runs. The pair is exactly the set of moves that arm covers.
+    //
+    // Reads OUR OWN bench, which is why this needs no speed gate and no
+    // switch gate: a side's `pokemon_left` only ever decreases within a
+    // battle (`turn.rs`), and nothing the foe does on this turn can hand us
+    // a Pokemon back. One at the decision therefore implies one at
+    // resolution, whatever the move order — the same argument the phaze rule
+    // above makes about an empty foe bench.
+    //
+    // Found by battle-4040 (2026-08-16): Gengar's kit is Ice Punch / Mean
+    // Look / Destiny Bond / Perish Song, and as the last mon the bot spent 8
+    // of 22 turns on the two that cannot do anything.
+    if matches!(key, "perishsong" | "destinybond") && b.sides[side].pokemon_left == 1 {
+        yes!("Perish Song and Destiny Bond fail from the last mon");
+    }
     // Every rule below that reads the foe is conditioned on the foe being
     // stuck with the mon it has: otherwise the move is aimed at whatever
     // switches in, and refusing it would delete a real option.
@@ -1632,6 +1651,96 @@ mod dominated_action_tests {
                 "the foe's active is untouched"
             );
         }
+    }
+
+    /// The Stadium 2 last-mon rule (`moveexec.rs:499`). Reported from ladder
+    /// battle-4040 (2026-08-16): the bot's Gengar carries Ice Punch / Mean
+    /// Look / Destiny Bond / Perish Song, and as the last mon it spent 8 of
+    /// its 22 remaining turns on the two moves that cannot do anything.
+    #[test]
+    fn noop_mask_covers_last_mon_perish_song_and_destiny_bond() {
+        let dex = conformance::load_dex();
+        let ghost: Vec<PokemonSet> = serde_json::from_str(
+            r#"[
+            {"name":"Gengar","species":"Gengar","item":"","ability":"No Ability",
+             "moves":["Ice Punch","Mean Look","Destiny Bond","Perish Song"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"F","level":50},
+            {"name":"Exeggutor","species":"Exeggutor","item":"","ability":"No Ability",
+             "moves":["Sleep Powder","Reflect","Rest","Spikes"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+            {"name":"Cloyster","species":"Cloyster","item":"","ability":"No Ability",
+             "moves":["Surf","Ice Beam","Screech","Toxic"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50}
+        ]"#,
+        )
+        .unwrap();
+        let foes = team();
+        let mut open = Battle::from_fixture(&dex, "7,8,9,10", &ghost, &foes).unwrap();
+        open.set_log_enabled(false);
+        open.choose(&dex, 0, "team 1, 2, 3").unwrap();
+        open.choose(&dex, 1, "team 2, 1, 3").unwrap();
+        let noop = |b: &Battle, side: usize, key: &str| certain_noop(b, &dex, side, mv(&dex, key));
+
+        // The engine's own verdict, read off the turn it logs. Destiny Bond's
+        // volatile is stripped again by `onFoeAfterMoveSelf` once the foe has
+        // moved (`conditions.rs:828`), so a post-turn volatile check can only
+        // speak for Perish Song — the hint line speaks for both.
+        let hinted = |b: &Battle, slot: usize| -> bool {
+            let mut b = b.clone();
+            b.set_log_enabled(true);
+            b.log.clear();
+            let after = play(&dex, &b, 0, slot);
+            after.log.iter().any(|l| l.contains("used by your last Pokemon"))
+        };
+
+        // A live bench: both moves work, and the engine really does apply them.
+        for key in ["perishsong", "destinybond"] {
+            assert!(!noop(&open, 0, key), "{key} works while the bench is alive");
+        }
+        let ps_cond = dex.conds_id("perishsong").unwrap();
+        let perished = play(&dex, &open, 0, 4);
+        assert!(
+            perished.poke(perished.active_id(1).unwrap()).has_volatile(ps_cond),
+            "the engine set the perish counter"
+        );
+        assert!(!hinted(&open, 4), "no Stadium refusal with a bench");
+        assert!(!hinted(&open, 3), "no Stadium refusal with a bench");
+
+        // Last mon: refused, and the engine agrees nothing landed.
+        let mut last = open.clone();
+        strand(&mut last, 0);
+        // `strand` plants the faints directly, so it does not run the
+        // decrement at `turn.rs:297`. The rule and the engine both read
+        // `pokemon_left`, so the fixture has to carry it.
+        last.sides[0].pokemon_left = 1;
+        for key in ["perishsong", "destinybond"] {
+            assert!(noop(&last, 0, key), "{key} fails from the last mon");
+        }
+        let after_ps = play(&dex, &last, 0, 4);
+        assert!(
+            !after_ps.poke(after_ps.active_id(1).unwrap()).has_volatile(ps_cond),
+            "no perish counter from the last mon"
+        );
+        assert!(hinted(&last, 4), "the engine refused Perish Song");
+        assert!(hinted(&last, 3), "the engine refused Destiny Bond");
+
+        // The rule is about our OWN bench, not the foe's, and it claims
+        // nothing about the rest of the kit.
+        let mut foe_last = open.clone();
+        strand(&mut foe_last, 1);
+        for key in ["perishsong", "destinybond"] {
+            assert!(!noop(&foe_last, 0, key), "{key} does not read the foe's bench");
+        }
+        assert!(!noop(&last, 0, "icepunch"), "the damaging move stays live");
+        assert!(!noop(&last, 0, "meanlook"), "Mean Look still applies its volatile");
+
+        // …and it is the argmax consequence that matters: with the mask in
+        // place `best` can never submit one of the two while Ice Punch exists,
+        // however flat the root values are.
+        let acts = last.clone().legal_choices(&dex, 0);
+        let refused: Vec<&'static str> =
+            dominated_actions(&last, &dex, 0).into_iter().map(|(_, why)| why).collect();
+        assert_eq!(refused.len(), 2, "exactly the two moves, out of {}", acts.len());
     }
 
     /// Run one turn with `mover` using move slot `slot` (1-based) and the

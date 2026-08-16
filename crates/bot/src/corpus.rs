@@ -1167,6 +1167,7 @@ mod tests {
             by_species,
             learnsets: HashMap::new(),
             hp_dvs: HashMap::new(),
+            rejected: Vec::new(),
         };
         let mon = snapshot(&dex, "snorlax", &["bodyslam", "earthquake"]);
 
@@ -1207,6 +1208,7 @@ mod tests {
             by_species,
             learnsets: HashMap::new(),
             hp_dvs: HashMap::new(),
+            rejected: Vec::new(),
         };
         let mon = snapshot(&dex, "pikachu", &["splash"]);
         let (set, _) = fabricate_set(&dex, &src, &mon, &[], None, false);
