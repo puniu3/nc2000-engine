@@ -19,6 +19,13 @@
 //! What the developer owns is this format and this reference count. What the
 //! machine's owner owns is the content.
 //!
+//! Both set corpora are filtered to the teams that belong to the played
+//! format (`load_sources`): a Little Cup team, a Metronome-rule team, an
+//! OHKO variant or a links page is not evidence about this regulation, and
+//! its marginals would be spent on moves the sampler is then obliged to
+//! refuse — or, in the Metronome team's case, on six species that carry
+//! exactly one move.
+//!
 //! Usage:
 //!   cargo run --release -p nc2000-bot --example count_belief_prior -- \
 //!     [--source sets|reveals] [--corpus tmp/corpus-spectator] \
@@ -67,6 +74,15 @@ fn to_id(dex: &Dex, name: &str) -> Option<String> {
 /// sample, but the quantity is the one the sampler actually wants.
 fn count_sets(dex: &Dex, root: &std::path::Path) -> BTreeMap<String, Counts> {
     let src = load_sources(dex, root);
+    if !src.rejected.is_empty() {
+        eprintln!(
+            "excluded {} team(s) that do not belong to the played format:",
+            src.rejected.len()
+        );
+        for t in &src.rejected {
+            eprintln!("  {t}");
+        }
+    }
     let mut out: BTreeMap<String, Counts> = BTreeMap::new();
     for (sp, sets) in src.by_species.iter() {
         let key = dex.species.key(*sp).to_string();

@@ -102,19 +102,69 @@ struct CommunityRentalDb {
 
 #[derive(serde::Deserialize)]
 struct CommunityRentalTeam {
+    #[serde(default)]
+    archetype: String,
     sets: Vec<PokemonSet>,
 }
 
-fn community_rental_sets() -> &'static [PokemonSet] {
+/// Does the entry's own name say it belongs to a different rule set? The
+/// source tags those with 「専用」("exclusive to"): a Little Cup team and a
+/// 指振り (Metronome-only) team. Neither is illegal *as a team*, so no
+/// validator can see them, and both are worthless as evidence about this
+/// regulation — the Metronome entry alone would teach the bot that six
+/// species carry exactly one move.
+///
+/// The author's third variant tag, 【一撃あり用】, is deliberately NOT
+/// matched here: those teams are excluded by the OHKO Clause, which is the
+/// right reason, and one that would stop applying by itself if the played
+/// format ever allowed OHKO again.
+pub(crate) fn names_another_ruleset(archetype: &str) -> bool {
+    archetype.contains("専用")
+}
+
+/// The imputation pool, which is **not** the whole crawl. The file is an
+/// archive of everything the source published, and eight of its 28 entries
+/// are not legal teams in the played format
+/// (`data/community-rentals-v0/ASSESSMENT.md` names them): a Little Cup team
+/// at L5, a links page dressed as a one-mon entry, the author's three
+/// explicitly-tagged OHKO variants, an Item Clause violation, and two
+/// five-mon drafts. A team the format rejects is not evidence about the
+/// format, so only teams `validate_team` accepts reach the pool.
+///
+/// A ninth entry is legal but belongs to another rule set entirely; see
+/// [`names_another_ruleset`].
+///
+/// This matters more than the 8/28 ratio suggests: the rental layer only
+/// ever fires for species the meta pool does not carry, and before this
+/// filter eight of the ten species it served came from those rejected
+/// entries — an opponent Chansey was modelled on a Little Cup set and an
+/// opponent Dugtrio on a Fissure set. Dropping them costs those species
+/// their rental prior; they fall through to the learnset layer, which is
+/// what that layer is for.
+///
+/// The verdicts are cached with everything else here, so they are taken
+/// under the first caller's `dex`. That is not a hidden dependency: the
+/// format's dex is a build constant (`data/gen2stadium2.json`), the same
+/// file every `Dex` in the process is built from.
+fn community_rental_sets(dex: &Dex) -> &'static [PokemonSet] {
     static SETS: OnceLock<Vec<PokemonSet>> = OnceLock::new();
     SETS.get_or_init(|| {
         serde_json::from_str::<CommunityRentalDb>(COMMUNITY_RENTALS_JSON)
             .expect("embedded community rentals must parse")
             .teams
             .into_iter()
+            .filter(|t| !names_another_ruleset(&t.archetype))
+            .filter(|t| team_is_format_legal(dex, &t.sets))
             .flat_map(|t| t.sets)
             .collect()
     })
+}
+
+/// Does the played regulation accept this team as entered? `fix`-severity
+/// findings (canonicalization nits) keep a team legal; `error`s do not.
+fn team_is_format_legal(dex: &Dex, sets: &[PokemonSet]) -> bool {
+    let Ok(json) = serde_json::to_string(sets) else { return false };
+    validate_team(dex, format_learnsets(), &json)["ok"] == serde_json::Value::Bool(true)
 }
 
 fn format_learnsets() -> &'static Learnsets {
@@ -907,7 +957,7 @@ impl Belief {
         match self.fallback_policy {
             FallbackPolicy::LegacyMetaOnly => FallbackSource::LegacyEmpty,
             FallbackPolicy::Layered
-                if community_rental_sets()
+                if community_rental_sets(dex)
                     .iter()
                     .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species)) =>
             {
@@ -930,7 +980,7 @@ impl Belief {
         // same-species behavior.
         let source = self.fallback_source(dex, mo);
         let prior = pool_set.or_else(|| match source {
-            FallbackSource::CommunityRental => community_rental_sets()
+            FallbackSource::CommunityRental => community_rental_sets(dex)
                 .iter()
                 .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species)),
             _ => None,
@@ -1416,6 +1466,57 @@ mod fallback_tests {
         }
     }
 
+    /// The crawl is an archive, the pool is not: nine of its 28 entries do
+    /// not belong to the played format — eight the validator rejects, one
+    /// the source names for another rule set — and none of their sets may
+    /// reach the imputation pool. Derived from the embedded JSON rather
+    /// than a hard-coded list, so a data edit moves the test with it; only
+    /// the counts and the species those entries owned are pinned.
+    #[test]
+    fn the_rental_pool_takes_only_teams_the_format_accepts() {
+        let dex = test_dex();
+        let db: CommunityRentalDb = serde_json::from_str(COMMUNITY_RENTALS_JSON).unwrap();
+        let (legal, rejected): (Vec<_>, Vec<_>) = db.teams.into_iter().partition(|t| {
+            !names_another_ruleset(&t.archetype) && team_is_format_legal(&dex, &t.sets)
+        });
+        assert_eq!(rejected.len(), 9, "entries excluded from the pool");
+        assert_eq!(
+            rejected.iter().filter(|t| names_another_ruleset(&t.archetype)).count(),
+            2,
+            "entries named for another rule set (Little Cup, 指振り)"
+        );
+
+        let pool = community_rental_sets(&dex);
+        let kept: Vec<&PokemonSet> = legal.iter().flat_map(|t| &t.sets).collect();
+        assert_eq!(pool.len(), kept.len(), "pool size");
+        for (got, want) in pool.iter().zip(kept) {
+            assert_eq!(got.species, want.species);
+            assert_eq!(got.moves, want.moves);
+        }
+
+        // Set-level too, since the pool is consumed one set at a time.
+        for set in pool {
+            assert!((50..=55).contains(&set.level), "{} L{}", set.species, set.level);
+            for mv in &set.moves {
+                assert!(
+                    format_move_legal_at_level(&toid(&set.species), &toid(mv), set.level),
+                    "{} carries {mv}",
+                    set.species
+                );
+            }
+        }
+
+        // The species the rejected entries were the sole source of: a Little
+        // Cup Chansey, a Fissure Dugtrio, the links page's Ditto, and a
+        // Granbull whose whole moveset was Metronome.
+        for sid in ["chansey", "dugtrio", "ditto", "granbull"] {
+            assert!(
+                pool.iter().all(|s| toid(&s.species) != sid),
+                "{sid} is still in the pool"
+            );
+        }
+    }
+
     #[test]
     fn fallback_priority_is_reveal_then_pool_then_rental_then_legal_default() {
         let dex = test_dex();
@@ -1435,27 +1536,39 @@ mod fallback_tests {
             }
         }
 
-        // Chansey is absent from the meta pool but present in the community
+        // Vaporeon is absent from the meta pool but present in the community
         // rentals, so its first rental set supplies the filler.
         assert!(belief
             .cands
             .iter()
             .flat_map(|c| &c.sets)
-            .all(|s| toid(&s.species) != "chansey"));
-        let rental_chansey = community_rental_sets()
+            .all(|s| toid(&s.species) != "vaporeon"));
+        let rental_vaporeon = community_rental_sets(&dex)
             .iter()
-            .find(|s| toid(&s.species) == "chansey")
+            .find(|s| toid(&s.species) == "vaporeon")
             .unwrap();
-        let chansey = belief.fallback_set(&dex, &mon(&dex, "chansey", 50, &[]));
-        assert_eq!(chansey.moves, rental_chansey.moves);
+        // At its own level: Hydro Pump is a L52 level-up move, so asking at
+        // L50 would (correctly) drop it — the filler is legality-filtered
+        // per level, not copied wholesale.
+        let lv = rental_vaporeon.level;
+        let vaporeon = belief.fallback_set(&dex, &mon(&dex, "vaporeon", lv, &[]));
+        assert_eq!(vaporeon.moves, rental_vaporeon.moves);
         assert_eq!(
-            belief.fallback_source(&dex, &mon(&dex, "chansey", 50, &[])),
+            belief.fallback_source(&dex, &mon(&dex, "vaporeon", lv, &[])),
             FallbackSource::CommunityRental
         );
-        let revealed_chansey =
-            belief.fallback_set(&dex, &mon(&dex, "chansey", 50, &["toxic"]));
-        assert_eq!(toid(&revealed_chansey.moves[0]), "toxic");
-        assert_eq!(revealed_chansey.moves.len(), 4);
+        let revealed_vaporeon =
+            belief.fallback_set(&dex, &mon(&dex, "vaporeon", lv, &["toxic"]));
+        assert_eq!(toid(&revealed_vaporeon.moves[0]), "toxic");
+        assert_eq!(revealed_vaporeon.moves.len(), 4);
+
+        // Chansey reaches the bot ONLY through the Little Cup entry, which
+        // the format rejects — so it is not a rental species at all and gets
+        // the learnset layer, not a L5 set's moves.
+        assert_eq!(
+            belief.fallback_source(&dex, &mon(&dex, "chansey", 50, &[])),
+            FallbackSource::Learnset
+        );
 
         // Reveals lead and survive even when neither empirical source has
         // the species. Zero reveal gets the legal deterministic default.
@@ -1463,7 +1576,7 @@ mod fallback_tests {
             .cands
             .iter()
             .flat_map(|c| &c.sets)
-            .chain(community_rental_sets())
+            .chain(community_rental_sets(&dex))
             .all(|s| toid(&s.species) != "bulbasaur"));
         let revealed = belief.fallback_set(&dex, &mon(&dex, "bulbasaur", 50, &["tackle"]));
         assert_eq!(revealed.moves, ["tackle"]);

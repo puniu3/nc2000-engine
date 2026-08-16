@@ -10,6 +10,7 @@ use crate::preview::{load_meta_pool, MetaPool};
 use crate::smmcts::{RmConfig, SelRule};
 use nc2000_engine::dex::{toid, Dex, SpeciesId};
 use nc2000_engine::state::{Battle, MoveSlot, Status};
+use nc2000_engine::validate::{validate_team, Learnsets};
 
 /// Full-log facts about the acting side's own set. These are legitimate in
 /// an offline reconstruction: a live bot knows its submitted team even when
@@ -317,45 +318,83 @@ pub struct SetSources {
     pub by_species: HashMap<SpeciesId, Vec<serde_json::Value>>,
     pub learnsets: HashMap<String, Vec<String>>,
     pub hp_dvs: HashMap<String, (i64, i64)>,
+    /// Teams excluded from the pool, as `file#index label`. Kept so the
+    /// drop is reportable: this loader used to lose a whole corpus in
+    /// silence, and a filter dropping teams on purpose must not look the
+    /// same as a loader losing them by accident.
+    pub rejected: Vec<String>,
+}
+
+/// The sets of one corpus file's format-legal teams, flattened in file
+/// order; rejected teams are appended to `rejected` instead.
+///
+/// A team the regulation rejects, or one the source published for another
+/// rule set, is not evidence about the regulation. The rentals file is an
+/// archive of everything the source published — a Little Cup team, a
+/// Metronome-rule team, a links page, the author's OHKO variants — and
+/// `fabricate_set` copies a candidate's moves and item wholesale, so
+/// whatever is in here is imputed onto a real opponent verbatim.
+fn accepted_team_sets(
+    dex: &Dex,
+    ls: &Learnsets,
+    file: &str,
+    text: &str,
+    rejected: &mut Vec<String>,
+) -> Vec<serde_json::Value> {
+    let db: serde_json::Value =
+        serde_json::from_str(text).unwrap_or_else(|e| panic!("{file}: {e}"));
+    // Asserted, not `if let`-ed: both corpora are `{meta, teams}` objects,
+    // and treating a shape mismatch as "no teams" is how this loader read
+    // zero of the rentals' 28 teams without anyone noticing.
+    let teams = db["teams"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{file}: expected a `teams` array"));
+    let mut out = Vec::new();
+    for (i, t) in teams.iter().enumerate() {
+        let label = t["id"]
+            .as_str()
+            .or_else(|| t["archetype"].as_str())
+            .unwrap_or("?");
+        let Some(sets) = t["sets"].as_array() else {
+            rejected.push(format!("{file}#{i} {label} (no sets)"));
+            continue;
+        };
+        // Legal as a team, but published for a different rule set.
+        if crate::belief::names_another_ruleset(t["archetype"].as_str().unwrap_or("")) {
+            rejected.push(format!("{file}#{i} {label} (another rule set)"));
+            continue;
+        }
+        let team_json = serde_json::Value::Array(sets.clone()).to_string();
+        if validate_team(dex, ls, &team_json)["ok"] == serde_json::Value::Bool(true) {
+            out.extend(sets.iter().cloned());
+        } else {
+            rejected.push(format!("{file}#{i} {label}"));
+        }
+    }
+    out
 }
 
 pub fn load_sources(dex: &Dex, root: &std::path::Path) -> SetSources {
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let format_ls = Learnsets::from_json(&ls_text).expect("format learnsets must parse");
+    let mut rejected: Vec<String> = Vec::new();
+    let mut sets: Vec<serde_json::Value> = Vec::new();
+    for file in [
+        "data/community-rentals-v0/teams.json",
+        "data/meta-pool-v0/meta-pool.json",
+    ] {
+        let text = std::fs::read_to_string(root.join(file)).unwrap();
+        sets.extend(accepted_team_sets(dex, &format_ls, file, &text, &mut rejected));
+    }
     let mut by_species: HashMap<SpeciesId, Vec<serde_json::Value>> = HashMap::new();
-    let mut add_sets = |sets: &[serde_json::Value]| {
-        for s in sets {
-            if let Some(sp) = s["species"].as_str() {
-                if let Some(id) = dex.species.id(&toid(sp)) {
-                    by_species.entry(id).or_default().push(s.clone());
-                }
-            }
-        }
-    };
-    let rentals: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(root.join("data/community-rentals-v0/teams.json")).unwrap(),
-    )
-    .unwrap();
-    if let Some(teams) = rentals.as_array() {
-        for t in teams {
-            if let Some(sets) = t["sets"].as_array() {
-                add_sets(sets);
+    for s in sets {
+        if let Some(sp) = s["species"].as_str() {
+            if let Some(id) = dex.species.id(&toid(sp)) {
+                by_species.entry(id).or_default().push(s);
             }
         }
     }
-    let pool: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap(),
-    )
-    .unwrap();
-    if let Some(teams) = pool["teams"].as_array() {
-        for t in teams {
-            if let Some(sets) = t["sets"].as_array() {
-                add_sets(sets);
-            }
-        }
-    }
-    let ls: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap(),
-    )
-    .unwrap();
+    let ls: serde_json::Value = serde_json::from_str(&ls_text).unwrap();
     let mut learnsets = HashMap::new();
     if let Some(sp) = ls["species"].as_object() {
         for (k, v) in sp {
@@ -386,6 +425,7 @@ pub fn load_sources(dex: &Dex, root: &std::path::Path) -> SetSources {
         by_species,
         learnsets,
         hp_dvs,
+        rejected,
     }
 }
 

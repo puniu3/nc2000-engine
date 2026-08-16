@@ -5,19 +5,19 @@
   "species": {
     "alakazam": {
       "moves": {
-        "encore": 0.667,
-        "firepunch": 0.333,
-        "icepunch": 0.333,
+        "encore": 0.75,
+        "firepunch": 0.25,
+        "icepunch": 0.5,
         "psychic": 1.0,
         "recover": 1.0,
-        "seismictoss": 0.333,
-        "thunderwave": 0.333
+        "seismictoss": 0.25,
+        "thunderwave": 0.25
       },
       "items": {
-        "miracleberry": 0.333,
-        "przcureberry": 0.667
+        "miracleberry": 0.5,
+        "przcureberry": 0.5
       },
-      "n": 3
+      "n": 4
     },
     "ampharos": {
       "moves": {
@@ -29,22 +29,23 @@
       "items": {
         "miracleberry": 1.0
       },
-      "n": 1
+      "n": 2
     },
     "blissey": {
       "moves": {
-        "counter": 0.333,
-        "flamethrower": 0.333,
-        "healbell": 0.667,
+        "counter": 0.25,
+        "flamethrower": 0.25,
+        "healbell": 0.75,
         "icebeam": 1.0,
+        "present": 0.25,
         "softboiled": 1.0,
-        "thunder": 0.667
+        "thunder": 0.5
       },
       "items": {
-        "miracleberry": 0.333,
-        "quickclaw": 0.667
+        "miracleberry": 0.25,
+        "quickclaw": 0.75
       },
-      "n": 3
+      "n": 4
     },
     "charizard": {
       "moves": {
@@ -72,20 +73,20 @@
     },
     "cloyster": {
       "moves": {
-        "curse": 0.4,
+        "curse": 0.471,
         "explosion": 1.0,
-        "icebeam": 0.9,
-        "reflect": 0.3,
+        "icebeam": 0.824,
+        "reflect": 0.294,
         "spikes": 1.0,
-        "surf": 0.4
+        "surf": 0.412
       },
       "items": {
-        "goldberry": 0.6,
-        "miracleberry": 0.2,
-        "pinkbow": 0.1,
-        "przcureberry": 0.1
+        "goldberry": 0.706,
+        "miracleberry": 0.176,
+        "pinkbow": 0.059,
+        "przcureberry": 0.059
       },
-      "n": 10
+      "n": 17
     },
     "dragonite": {
       "moves": {
@@ -97,20 +98,20 @@
       "items": {
         "miracleberry": 1.0
       },
-      "n": 1
+      "n": 2
     },
     "electrode": {
       "moves": {
         "explosion": 1.0,
-        "lightscreen": 0.667,
-        "reflect": 0.333,
+        "lightscreen": 0.6,
+        "reflect": 0.4,
         "thunderbolt": 1.0,
         "thunderwave": 1.0
       },
       "items": {
         "miracleberry": 1.0
       },
-      "n": 3
+      "n": 5
     },
     "entei": {
       "moves": {
@@ -126,25 +127,26 @@
     },
     "exeggutor": {
       "moves": {
-        "explosion": 0.714,
-        "gigadrain": 0.071,
-        "hiddenpower": 0.643,
-        "leechseed": 0.714,
-        "moonlight": 0.071,
-        "psychic": 0.786,
-        "reflect": 0.143,
-        "sleeppowder": 0.643,
-        "stunspore": 0.071,
-        "sunnyday": 0.143
+        "explosion": 0.682,
+        "gigadrain": 0.045,
+        "hiddenpower": 0.545,
+        "leechseed": 0.773,
+        "moonlight": 0.045,
+        "psychic": 0.818,
+        "reflect": 0.182,
+        "sleeppowder": 0.682,
+        "stunspore": 0.091,
+        "sunnyday": 0.091,
+        "synthesis": 0.045
       },
       "items": {
-        "goldberry": 0.429,
-        "mintberry": 0.071,
-        "miracleberry": 0.143,
-        "przcureberry": 0.071,
-        "quickclaw": 0.286
+        "goldberry": 0.455,
+        "mintberry": 0.091,
+        "miracleberry": 0.136,
+        "przcureberry": 0.091,
+        "quickclaw": 0.227
       },
-      "n": 14
+      "n": 22
     },
     "forretress": {
       "moves": {
@@ -158,31 +160,31 @@
         "polkadotbow": 0.5,
         "scopelens": 0.5
       },
-      "n": 2
+      "n": 4
     },
     "gengar": {
       "moves": {
-        "destinybond": 0.818,
-        "explosion": 0.273,
-        "firepunch": 0.727,
-        "icepunch": 0.364,
-        "meanlook": 0.545,
-        "perishsong": 0.545,
-        "shadowball": 0.091,
-        "sunnyday": 0.182,
-        "thunder": 0.091,
-        "thunderbolt": 0.273,
-        "zapcannon": 0.091
+        "destinybond": 0.765,
+        "explosion": 0.176,
+        "firepunch": 0.647,
+        "icepunch": 0.353,
+        "meanlook": 0.647,
+        "perishsong": 0.647,
+        "shadowball": 0.118,
+        "sunnyday": 0.118,
+        "thunder": 0.118,
+        "thunderbolt": 0.294,
+        "zapcannon": 0.118
       },
       "items": {
-        "berryjuice": 0.091,
-        "goldberry": 0.091,
-        "miracleberry": 0.091,
-        "polkadotbow": 0.273,
-        "przcureberry": 0.364,
-        "scopelens": 0.091
+        "berryjuice": 0.118,
+        "goldberry": 0.059,
+        "miracleberry": 0.118,
+        "polkadotbow": 0.176,
+        "przcureberry": 0.471,
+        "scopelens": 0.059
       },
-      "n": 11
+      "n": 17
     },
     "gligar": {
       "moves": {
@@ -198,33 +200,35 @@
     },
     "golem": {
       "moves": {
-        "curse": 0.667,
-        "earthquake": 0.667,
+        "curse": 0.6,
+        "earthquake": 0.8,
         "explosion": 1.0,
-        "fireblast": 0.667,
-        "roar": 0.333,
-        "rockslide": 0.667
+        "fireblast": 0.6,
+        "roar": 0.4,
+        "rockslide": 0.6
       },
       "items": {
-        "goldberry": 0.333,
-        "przcureberry": 0.333,
-        "softsand": 0.333
+        "goldberry": 0.4,
+        "przcureberry": 0.2,
+        "quickclaw": 0.2,
+        "softsand": 0.2
       },
-      "n": 3
+      "n": 5
     },
     "heracross": {
       "moves": {
-        "curse": 0.5,
-        "hiddenpower": 1.0,
+        "curse": 0.333,
+        "earthquake": 0.333,
+        "hiddenpower": 0.667,
         "megahorn": 1.0,
         "rest": 1.0,
-        "sleeptalk": 0.5
+        "sleeptalk": 0.667
       },
       "items": {
-        "mintberry": 0.5,
-        "scopelens": 0.5
+        "mintberry": 0.333,
+        "scopelens": 0.667
       },
-      "n": 2
+      "n": 3
     },
     "houndoom": {
       "moves": {
@@ -237,7 +241,7 @@
         "berryjuice": 0.5,
         "miracleberry": 0.5
       },
-      "n": 2
+      "n": 4
     },
     "jolteon": {
       "moves": {
@@ -282,81 +286,84 @@
       "items": {
         "leftovers": 1.0
       },
-      "n": 1
+      "n": 2
     },
     "machamp": {
       "moves": {
-        "bodyslam": 0.167,
+        "bodyslam": 0.125,
         "crosschop": 1.0,
-        "earthquake": 0.833,
-        "flamethrower": 0.167,
-        "hiddenpower": 0.667,
-        "rest": 0.333,
-        "rockslide": 0.667,
-        "sleeptalk": 0.167
+        "earthquake": 0.875,
+        "flamethrower": 0.125,
+        "hiddenpower": 0.75,
+        "rest": 0.25,
+        "rockslide": 0.75,
+        "sleeptalk": 0.125
       },
       "items": {
         "goldberry": 0.5,
-        "mintberry": 0.167,
-        "scopelens": 0.333
+        "mintberry": 0.125,
+        "quickclaw": 0.125,
+        "scopelens": 0.25
       },
-      "n": 6
+      "n": 8
     },
     "marowak": {
       "moves": {
         "bellydrum": 0.111,
-        "bonemerang": 0.111,
-        "earthquake": 0.889,
+        "bonemerang": 0.222,
+        "earthquake": 0.778,
         "fireblast": 0.111,
         "flamethrower": 0.111,
-        "hiddenpower": 0.667,
-        "rest": 0.111,
+        "hiddenpower": 0.722,
+        "rest": 0.056,
         "rockslide": 1.0,
-        "sleeptalk": 0.111,
-        "swordsdance": 0.778
+        "sleeptalk": 0.056,
+        "swordsdance": 0.833
       },
       "items": {
         "thickclub": 1.0
       },
-      "n": 9
+      "n": 18
     },
     "miltank": {
       "moves": {
         "curse": 1.0,
-        "doubleteam": 0.4,
-        "dynamicpunch": 0.4,
+        "doubleteam": 0.25,
+        "dynamicpunch": 0.375,
+        "frustration": 0.125,
         "milkdrink": 1.0,
-        "return": 1.0,
-        "zapcannon": 0.2
+        "return": 0.875,
+        "zapcannon": 0.375
       },
       "items": {
-        "brightpowder": 0.4,
-        "polkadotbow": 0.4,
-        "scopelens": 0.2
+        "brightpowder": 0.25,
+        "pinkbow": 0.375,
+        "polkadotbow": 0.25,
+        "scopelens": 0.125
       },
-      "n": 5
+      "n": 8
     },
     "misdreavus": {
       "moves": {
-        "confuseray": 0.125,
-        "destinybond": 0.625,
-        "hiddenpower": 0.125,
+        "confuseray": 0.167,
+        "destinybond": 0.583,
+        "hiddenpower": 0.083,
         "meanlook": 1.0,
         "perishsong": 1.0,
         "protect": 0.5,
-        "rest": 0.125,
-        "shadowball": 0.125,
-        "thunder": 0.125,
-        "thunderbolt": 0.125,
-        "zapcannon": 0.125
+        "rest": 0.167,
+        "shadowball": 0.083,
+        "thunder": 0.083,
+        "thunderbolt": 0.083,
+        "zapcannon": 0.25
       },
       "items": {
         "goldberry": 0.5,
         "leftovers": 0.25,
-        "mintberry": 0.125,
-        "przcureberry": 0.125
+        "mintberry": 0.167,
+        "przcureberry": 0.083
       },
-      "n": 8
+      "n": 12
     },
     "moltres": {
       "moves": {
@@ -381,7 +388,7 @@
       "items": {
         "mintberry": 1.0
       },
-      "n": 1
+      "n": 2
     },
     "poliwrath": {
       "moves": {
@@ -393,39 +400,43 @@
       "items": {
         "blackbelt": 1.0
       },
-      "n": 1
+      "n": 2
     },
     "porygon2": {
       "moves": {
-        "curse": 1.0,
+        "curse": 0.833,
+        "doubleedge": 0.167,
         "icebeam": 1.0,
         "recover": 1.0,
-        "return": 1.0
+        "reflect": 0.167,
+        "return": 0.667,
+        "thunderwave": 0.167
       },
       "items": {
-        "leftovers": 0.333,
-        "miracleberry": 0.333,
-        "przcureberry": 0.333
+        "brightpowder": 0.167,
+        "leftovers": 0.167,
+        "miracleberry": 0.5,
+        "przcureberry": 0.167
       },
-      "n": 3
+      "n": 6
     },
     "raikou": {
       "moves": {
         "hiddenpower": 1.0,
-        "reflect": 0.25,
-        "rest": 0.75,
-        "roar": 0.25,
-        "sleeptalk": 0.75,
-        "thunder": 0.25,
-        "thunderbolt": 0.75
+        "reflect": 0.333,
+        "rest": 0.667,
+        "roar": 0.333,
+        "sleeptalk": 0.667,
+        "thunder": 0.333,
+        "thunderbolt": 0.667
       },
       "items": {
-        "leftovers": 0.25,
-        "magnet": 0.25,
-        "miracleberry": 0.25,
-        "przcureberry": 0.25
+        "leftovers": 0.333,
+        "magnet": 0.333,
+        "miracleberry": 0.167,
+        "przcureberry": 0.167
       },
-      "n": 4
+      "n": 6
     },
     "rhydon": {
       "moves": {
@@ -441,19 +452,20 @@
     },
     "skarmory": {
       "moves": {
-        "curse": 0.833,
+        "curse": 0.727,
         "drillpeck": 1.0,
-        "rest": 0.833,
-        "thief": 0.167,
-        "toxic": 0.333,
-        "whirlwind": 0.833
+        "rest": 0.818,
+        "thief": 0.182,
+        "toxic": 0.455,
+        "whirlwind": 0.818
       },
       "items": {
-        "goldberry": 0.167,
-        "mintberry": 0.5,
-        "miracleberry": 0.333
+        "brightpowder": 0.091,
+        "goldberry": 0.182,
+        "mintberry": 0.545,
+        "miracleberry": 0.182
       },
-      "n": 6
+      "n": 11
     },
     "smeargle": {
       "moves": {
@@ -463,138 +475,153 @@
         "spore": 1.0
       },
       "items": {
-        "przcureberry": 1.0
+        "brightpowder": 0.5,
+        "przcureberry": 0.5
       },
-      "n": 1
+      "n": 2
     },
     "snorlax": {
       "moves": {
-        "bellydrum": 0.036,
-        "bodyslam": 0.571,
-        "curse": 0.679,
-        "doubleedge": 0.357,
-        "dynamicpunch": 0.107,
-        "earthquake": 0.607,
-        "fireblast": 0.071,
-        "flamethrower": 0.107,
-        "rest": 0.643,
-        "return": 0.071,
-        "selfdestruct": 0.5,
-        "sleeptalk": 0.179,
-        "thunder": 0.036,
-        "thunderbolt": 0.036
+        "bellydrum": 0.067,
+        "bodyslam": 0.533,
+        "curse": 0.711,
+        "doubleedge": 0.4,
+        "dynamicpunch": 0.089,
+        "earthquake": 0.6,
+        "fireblast": 0.067,
+        "flamethrower": 0.089,
+        "rest": 0.622,
+        "return": 0.067,
+        "selfdestruct": 0.489,
+        "sleeptalk": 0.178,
+        "thunder": 0.044,
+        "thunderbolt": 0.022,
+        "zapcannon": 0.022
       },
       "items": {
-        "brightpowder": 0.036,
-        "leftovers": 0.5,
-        "mintberry": 0.393,
-        "polkadotbow": 0.036,
-        "quickclaw": 0.036
+        "brightpowder": 0.044,
+        "leftovers": 0.556,
+        "mintberry": 0.333,
+        "polkadotbow": 0.022,
+        "quickclaw": 0.044
       },
-      "n": 28
+      "n": 45
     },
     "starmie": {
       "moves": {
-        "confuseray": 0.267,
-        "hydropump": 0.267,
-        "lightscreen": 0.067,
-        "psychic": 0.667,
-        "rapidspin": 0.067,
-        "recover": 0.733,
-        "reflect": 0.2,
-        "substitute": 0.267,
-        "surf": 0.733,
-        "thunderwave": 0.733
+        "confuseray": 0.261,
+        "hydropump": 0.304,
+        "lightscreen": 0.043,
+        "psychic": 0.696,
+        "rapidspin": 0.043,
+        "recover": 0.739,
+        "reflect": 0.174,
+        "substitute": 0.261,
+        "surf": 0.696,
+        "thunderwave": 0.783
       },
       "items": {
-        "leftovers": 0.333,
-        "miracleberry": 0.4,
-        "mysteryberry": 0.067,
-        "przcureberry": 0.133,
-        "scopelens": 0.067
+        "brightpowder": 0.043,
+        "leftovers": 0.304,
+        "miracleberry": 0.435,
+        "mysteryberry": 0.043,
+        "przcureberry": 0.13,
+        "scopelens": 0.043
       },
-      "n": 15
+      "n": 23
     },
     "steelix": {
       "moves": {
-        "curse": 0.167,
+        "curse": 0.125,
         "earthquake": 1.0,
-        "explosion": 0.833,
+        "explosion": 0.875,
         "roar": 1.0,
-        "rockslide": 0.167,
-        "toxic": 0.833
+        "rockslide": 0.125,
+        "toxic": 0.875
       },
       "items": {
-        "leftovers": 0.333,
+        "leftovers": 0.25,
         "polkadotbow": 0.5,
-        "quickclaw": 0.167
+        "quickclaw": 0.25
       },
-      "n": 6
+      "n": 8
     },
     "suicune": {
       "moves": {
         "icebeam": 1.0,
         "rest": 1.0,
-        "roar": 0.2,
-        "sleeptalk": 0.8,
+        "roar": 0.143,
+        "sleeptalk": 0.857,
         "surf": 1.0
       },
       "items": {
-        "brightpowder": 0.2,
-        "mintberry": 0.2,
-        "przcureberry": 0.2,
-        "scopelens": 0.4
+        "brightpowder": 0.286,
+        "mintberry": 0.143,
+        "przcureberry": 0.143,
+        "scopelens": 0.429
       },
-      "n": 5
+      "n": 7
     },
     "tauros": {
       "moves": {
-        "bodyslam": 0.5,
-        "curse": 0.5,
-        "doubleedge": 0.5,
+        "bodyslam": 0.333,
+        "curse": 0.333,
+        "doubleedge": 0.667,
         "earthquake": 1.0,
-        "fireblast": 0.5,
-        "hyperbeam": 0.5,
-        "rest": 0.5
+        "fireblast": 0.667,
+        "hyperbeam": 0.667,
+        "rest": 0.333
       },
       "items": {
-        "berserkgene": 0.5,
-        "miracleberry": 0.5
-      },
-      "n": 2
-    },
-    "tyranitar": {
-      "moves": {
-        "crunch": 1.0,
-        "dynamicpunch": 0.667,
-        "earthquake": 0.333,
-        "fireblast": 0.333,
-        "flamethrower": 0.333,
-        "icebeam": 0.333,
-        "rockslide": 1.0
-      },
-      "items": {
-        "leftovers": 0.667,
+        "berserkgene": 0.667,
         "miracleberry": 0.333
       },
       "n": 3
     },
-    "umbreon": {
+    "tyranitar": {
       "moves": {
-        "batonpass": 0.167,
-        "charm": 1.0,
-        "meanlook": 0.167,
-        "moonlight": 0.5,
-        "pursuit": 0.833,
-        "rest": 0.5,
-        "toxic": 0.833
+        "crunch": 0.833,
+        "dynamicpunch": 0.833,
+        "earthquake": 0.333,
+        "fireblast": 0.5,
+        "flamethrower": 0.167,
+        "icebeam": 0.333,
+        "rockslide": 1.0
       },
       "items": {
-        "blackglasses": 0.167,
-        "mintberry": 0.333,
+        "leftovers": 0.5,
         "miracleberry": 0.5
       },
       "n": 6
+    },
+    "umbreon": {
+      "moves": {
+        "batonpass": 0.222,
+        "charm": 1.0,
+        "meanlook": 0.222,
+        "moonlight": 0.444,
+        "pursuit": 0.778,
+        "rest": 0.556,
+        "toxic": 0.778
+      },
+      "items": {
+        "blackglasses": 0.111,
+        "mintberry": 0.333,
+        "miracleberry": 0.556
+      },
+      "n": 9
+    },
+    "vaporeon": {
+      "moves": {
+        "hydropump": 1.0,
+        "icebeam": 1.0,
+        "rest": 1.0,
+        "sleeptalk": 1.0
+      },
+      "items": {
+        "brightpowder": 1.0
+      },
+      "n": 1
     },
     "venusaur": {
       "moves": {
@@ -606,7 +633,7 @@
       "items": {
         "przcureberry": 1.0
       },
-      "n": 5
+      "n": 8
     },
     "victreebel": {
       "moves": {
@@ -618,30 +645,30 @@
       "items": {
         "goldberry": 1.0
       },
-      "n": 1
+      "n": 2
     },
     "zapdos": {
       "moves": {
-        "hiddenpower": 0.909,
-        "reflect": 0.091,
-        "rest": 0.727,
-        "sleeptalk": 0.364,
-        "substitute": 0.091,
-        "swagger": 0.182,
-        "thunder": 0.273,
-        "thunderbolt": 0.818,
-        "thunderwave": 0.182,
-        "whirlwind": 0.364
+        "hiddenpower": 0.944,
+        "reflect": 0.111,
+        "rest": 0.722,
+        "sleeptalk": 0.278,
+        "substitute": 0.111,
+        "swagger": 0.222,
+        "thunder": 0.278,
+        "thunderbolt": 0.778,
+        "thunderwave": 0.167,
+        "whirlwind": 0.389
       },
       "items": {
-        "leftovers": 0.182,
-        "magnet": 0.091,
-        "mintberry": 0.364,
-        "miracleberry": 0.091,
-        "przcureberry": 0.091,
-        "scopelens": 0.182
+        "leftovers": 0.222,
+        "magnet": 0.056,
+        "mintberry": 0.444,
+        "miracleberry": 0.056,
+        "przcureberry": 0.056,
+        "scopelens": 0.167
       },
-      "n": 11
+      "n": 18
     }
   }
 }

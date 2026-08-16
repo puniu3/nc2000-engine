@@ -157,3 +157,38 @@ publication decision reserved to the owner. It has been committed **locally only
 and NOT pushed** — review provenance/attribution (and whether to keep the raw
 EUC-JP HTML, `raw/`) before any push. Consider adding these sources to
 `THIRD-PARTY-NOTICES.md` if adopted.
+
+## Addendum 2026-08-16 — what the consumers actually take
+
+This file is now read by two things: the shipped bot's hidden-set imputation
+(`crates/bot/src/belief.rs`, which `include_str!`s it) and the corpus
+fabricator behind the M17 harnesses (`crates/bot/src/corpus.rs`). Both had
+been taking the archive **whole**, contradicting this document's own
+recommendation 3 ("exclude No.16 … and the off-format No.26/27/28"). Both
+now take only entries that belong to the played format:
+
+- the **8 the validator rejects** — No.16 (Item Clause), No.21/22 (5 mons),
+  No.23/24/25 (OHKO Clause, post-migration), No.26 (Little Cup levels),
+  No.28 (the links page);
+- plus **No.27 【指振りルール専用】**, which the sections above list as
+  off-format but which no validator can see: a Metronome-only team for the
+  指振り variant is perfectly *legal* under this regulation. It is excluded
+  by the source's own 「専用」 tag. Its six one-move sets were also the whole
+  reason the belief-prior table's per-species move-probability sum sat at
+  3.89 instead of the 4.00 that complete sets give.
+
+19 of the 28 entries (114 sets) survive. Two consequences worth recording:
+
+- **The rental layer was mostly serving off-format data.** It only ever
+  fires for species the 32-team meta pool does not carry, and 9 of the 10
+  species it served came from excluded entries — Chansey / Cubone / Elekid /
+  Porygon / Scyther / Voltorb from the Little Cup team, Ditto from the links
+  page, Dugtrio from a Fissure team, Granbull from the Metronome team. Only
+  **Vaporeon** (No.14) is left; those nine species now fall through to the
+  learnset layer, which is what that layer is for. Recovering them means
+  adding in-format sets, not relaxing the filter.
+- **The counter had never seen this file.** `load_sources` read the
+  `{meta, teams}` object as a bare array, so it contributed zero of its 28
+  teams in silence and `data/belief-prior-v0.sample.json` was counted from
+  the meta pool alone. Fixed; the sample is recounted from both corpora
+  (306 sets, 43 species).
