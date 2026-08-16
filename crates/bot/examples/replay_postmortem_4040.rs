@@ -23,7 +23,9 @@ use conformance::load_dex;
 use nc2000_bot::corpus::{
     load_battle, load_sources, reconstruct_context_with_pool, HumanAction,
 };
+use nc2000_bot::import::ProtocolAgent;
 use nc2000_bot::preview::load_meta_pool;
+use nc2000_bot::smmcts::{RmConfig, SelRule};
 use nc2000_bot::smmcts::dominated_actions;
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
@@ -65,6 +67,12 @@ fn main() {
         .map(|s| s.split(',').map(|t| t.trim().parse().unwrap()).collect())
         .unwrap_or_default();
     let terse = args.iter().any(|a| a == "--terse");
+    // Open team sheet (`ps-client --mode open`, and the shipped product
+    // policy): re-pose the same reconstructed position to a fresh agent whose
+    // belief is PINNED to the opponent's true sets.
+    let open: Option<Vec<nc2000_engine::battle::PokemonSet>> = arg(&args, "--open").map(|p| {
+        serde_json::from_str(&std::fs::read_to_string(p).expect("open team file")).expect("sets")
+    });
     let side: usize = arg(&args, "--side").unwrap_or("1").parse().unwrap();
 
     let dex = load_dex();
@@ -96,6 +104,19 @@ fn main() {
                 break;
             };
             let mut agent = rec.agent;
+            if let Some(sets) = &open {
+                let spec = agent.to_position_spec(&dex).expect("position spec");
+                let cfg = RmConfig { rule: SelRule::Ucb, c: 1.0, hp_buckets: 16, ..RmConfig::default() };
+                let mut pinned = ProtocolAgent::new(&dex, side, pool.clone(), cfg, seed);
+                pinned.pin_opponent(sets.clone());
+                match pinned.set_position(&dex, &spec) {
+                    Ok(()) => agent = pinned,
+                    Err(e) => {
+                        println!("turn {:>2}: pinned position refused: {e}", d.turn);
+                        break;
+                    }
+                }
+            }
             let b = agent.battle().cloned().expect("battle");
             if !header_done {
                 println!("--- turn {:>2}  played: {played}", d.turn);
