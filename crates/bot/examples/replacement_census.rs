@@ -167,6 +167,27 @@ fn replacements(lines: &[String]) -> Vec<Replacement> {
 /// to `RequestState::Switch` (import.rs:1519), so nothing downstream needs to
 /// know this came from a different emitter.
 #[allow(clippy::too_many_arguments)]
+/// How many distinct Pokemon this side has shown by `cut`. Three means no
+/// candidate's kit is pool-imputed, which is the strict control for any
+/// statistic that reads a candidate's moves.
+fn appeared_count(lines: &[String], side: usize, cut: usize) -> usize {
+    let mut seen: Vec<String> = Vec::new();
+    for ln in &lines[..=cut] {
+        let p: Vec<&str> = ln.split('|').collect();
+        if p.len() < 4 || !matches!(p[1], "switch" | "drag" | "replace") {
+            continue;
+        }
+        if usize::from(p[2].as_bytes().get(1) == Some(&b'2')) != side {
+            continue;
+        }
+        let sp = toid(p[3].split(',').next().unwrap_or(""));
+        if !seen.contains(&sp) {
+            seen.push(sp);
+        }
+    }
+    seen.len()
+}
+
 fn reconstruct_replacement(
     dex: &Dex,
     src: &SetSources,
@@ -331,6 +352,11 @@ fn main() {
     let mut hard_gaps: Vec<f64> = Vec::new();
     // Outcome of the games in which the human made each choice — the
     // directional signal, since the human rate alone cannot say who is right.
+    let (mut one_sided, mut two_sided) = (0usize, 0usize);
+    let (mut both_le2, mut formal_eligible) = (0usize, 0usize);
+    let mut hp_at_le2: Vec<u64> = Vec::new();
+    let (mut hard_seen_n, mut hard_seen_strand) = (0usize, 0usize);
+    let (mut hard_bot_seen_n, mut hard_bot_seen_strand) = (0usize, 0usize);
     let (mut hard_pub_n, mut hard_pub_strand) = (0usize, 0usize);
     let (mut hard_imp_n, mut hard_imp_strand) = (0usize, 0usize);
     let (mut hard_strand_games, mut hard_strand_wins) = (0usize, 0usize);
@@ -359,6 +385,39 @@ fn main() {
                 continue;
             }
             real += 1;
+            // Certified-solver reach, using `endgame_exactness_corpus`'s own
+            // filter (alive<=2 per side and ABSOLUTE total party HP <= 150,
+            // `SelectionConfig::formal`). A replacement happens while the
+            // acting side still has two mons, so this is the question of
+            // whether corpus mining can ever feed the certified gate.
+            let alive = |sd: usize| {
+                b.sides[sd].party.iter().filter(|&&sl| !b.sides[sd].roster[sl as usize].fainted).count()
+            };
+            let total_hp: u64 = b
+                .sides
+                .iter()
+                .flat_map(|sd| sd.party.iter().map(|&sl| sd.roster[sl as usize].hp as u64))
+                .sum();
+            // Does the opponent still owe a move this turn? `synthesize`
+            // pushes a pending foe move when the foe has not acted, so a
+            // mid-turn replacement is a 2-sided node, not the n0x1 the
+            // "certified ordering bracket" argument assumes.
+            let needs = b.needs_choice();
+            if needs[1 - r.side] {
+                two_sided += 1;
+            } else {
+                one_sided += 1;
+            }
+            if alive(0) <= 2 && alive(1) <= 2 {
+                both_le2 += 1;
+                hp_at_le2.push(total_hp);
+                if total_hp <= 150 {
+                    formal_eligible += 1;
+                }
+            }
+            // Strict control: every one of the acting side's three picks has
+            // already appeared, so no candidate's kit is pool-imputed.
+            let all_seen = appeared_count(&cb.lines, r.side, r.cut) == 3;
 
             // Which candidates carry a bench-dependent kit?
             let mut dep: Vec<(String, Vec<String>)> = Vec::new();
@@ -382,6 +441,7 @@ fn main() {
             // The clean contrast: exactly one candidate is bench-dependent,
             // so "who gets stranded" is a single binary choice. Sending in
             // the OTHER one strands the dependent kit for later.
+            let _ = all_seen;
             let hard_one: Option<&(String, bool, bool)> =
                 if cand.iter().filter(|c| c.1).count() == 1 && cand.len() == 2 {
                     cand.iter().find(|c| c.1)
@@ -404,6 +464,10 @@ fn main() {
                 });
                 hard_n += 1;
                 let stranded = r.picked != d.0;
+                if all_seen {
+                    hard_seen_n += 1;
+                    if stranded { hard_seen_strand += 1; }
+                }
                 if public {
                     hard_pub_n += 1;
                     if stranded { hard_pub_strand += 1; }
@@ -465,6 +529,10 @@ fn main() {
                 if bot_species != d.0 {
                     hard_bot_strand += 1;
                 }
+                if all_seen {
+                    hard_bot_seen_n += 1;
+                    if bot_species != d.0 { hard_bot_seen_strand += 1; }
+                }
             }
             if let Some(d) = soft_one {
                 soft_searched += 1;
@@ -491,6 +559,12 @@ fn main() {
     println!("  REAL decisions (>=2 live options)  : {real}");
     println!("  ...with a bench-dependent candidate: {dep_cases}");
     println!("  option-count histogram             : {opts_hist:?}");
+    hp_at_le2.sort_unstable();
+    let med_hp = if hp_at_le2.is_empty() { 0 } else { hp_at_le2[hp_at_le2.len() / 2] };
+    println!("    single-sided (foe owes nothing) : {one_sided}   two-sided (foe still owes a move): {two_sided}");
+    println!("  certified-solver reach (endgame_exactness_corpus's own filter):");
+    println!("    both sides <=2 alive             : {both_le2}");
+    println!("    ...AND total party HP <= 150     : {formal_eligible}   (median total HP at those rows: {med_hp})");
     if do_search {
         let mut g = gaps.clone();
         g.sort_by(f64::total_cmp);
@@ -517,6 +591,10 @@ fn main() {
               deployed it -> {hard_deploy_wins}/{hard_deploy_games} won ({:.0}%)",
              100.0 * hard_strand_wins as f64 / hard_strand_games.max(1) as f64,
              100.0 * hard_deploy_wins as f64 / hard_deploy_games.max(1) as f64);
+    println!("      strict control, all 3 picks already seen: n={hard_seen_n}, human stranded {hard_seen_strand} ({:.0}%)   \
+              bot {hard_bot_seen_strand}/{hard_bot_seen_n} ({:.0}%)",
+             100.0 * hard_seen_strand as f64 / hard_seen_n.max(1) as f64,
+             100.0 * hard_bot_seen_strand as f64 / hard_bot_seen_n.max(1) as f64);
     println!("      label already PUBLIC at the decision: n={hard_pub_n}, human stranded {hard_pub_strand} ({:.0}%)   \
               label IMPUTED from the pool: n={hard_imp_n}, human stranded {hard_imp_strand} ({:.0}%)",
              100.0 * hard_pub_strand as f64 / hard_pub_n.max(1) as f64,
