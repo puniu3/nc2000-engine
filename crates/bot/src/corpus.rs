@@ -379,9 +379,16 @@ pub fn load_sources(dex: &Dex, root: &std::path::Path) -> SetSources {
     let format_ls = Learnsets::from_json(&ls_text).expect("format learnsets must parse");
     let mut rejected: Vec<String> = Vec::new();
     let mut sets: Vec<serde_json::Value> = Vec::new();
+    // Meta pool first, deliberately: `fabricate_set` breaks an overlap tie
+    // by source order, so listing the rentals first would re-pick nearly
+    // every reconstructed set (measured: 100% of corpus decisions) purely
+    // by reordering. Pool-first keeps the shipped precedence — `belief.rs`
+    // also takes the pool set and falls back to a rental — so the rentals
+    // now change a reconstruction only where they strictly fit the revealed
+    // moves better, or where the pool has no set for the species at all.
     for file in [
-        "data/community-rentals-v0/teams.json",
         "data/meta-pool-v0/meta-pool.json",
+        "data/community-rentals-v0/teams.json",
     ] {
         let text = std::fs::read_to_string(root.join(file)).unwrap();
         sets.extend(accepted_team_sets(dex, &format_ls, file, &text, &mut rejected));
