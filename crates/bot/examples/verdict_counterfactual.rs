@@ -1133,6 +1133,7 @@ fn main() {
     // The two opponent axes V5 says the answer depends on. Both default to
     // exactly what the harness did before they existed.
     let foe_perish_stay = flag(&args, "--foe-perish-stay");
+    let dump_recon = flag(&args, "--dump-recon");
     let foe_replacement = parse_replacement(arg(&args, "--foe-replacement").unwrap_or("healthiest"));
     let csv_path = arg(&args, "--csv").map(str::to_string);
     let threads: usize = arg(&args, "--threads")
@@ -1237,6 +1238,69 @@ fn main() {
                 .collect();
             println!("    active {}: {}", dex.species.key(base.poke(id).species), pp.join(" "));
         }
+    }
+
+    // `--dump-recon`: the FULL reconstructed board for both sides -- every
+    // party member's set as the rollout will actually use it, plus which of
+    // its moves the protocol had actually revealed by this decision's cut.
+    // Everything not in the revealed list is fabricated (`corpus::fabricate_set`
+    // for our own side, the belief's candidate team for the opponent's) or,
+    // for the ACTIVE pair only, leaked from the future by `--oracle-moves`.
+    if dump_recon {
+        let mut revealed: [std::collections::BTreeMap<String, Vec<String>>; 2] =
+            [Default::default(), Default::default()];
+        let mut t: u16 = 0;
+        for ln in &battle_log.lines {
+            if let Some(rest) = ln.strip_prefix("|turn|") {
+                t = rest.trim().parse().unwrap_or(t);
+            }
+            if t >= turn {
+                break;
+            }
+            if let Some(rest) = ln.strip_prefix("|move|") {
+                let mut it = rest.split('|');
+                let who = it.next().unwrap_or("");
+                let mv = it.next().unwrap_or("");
+                let side = if who.starts_with("p1") { 0 } else { 1 };
+                let nick = who.split_once(": ").map(|x| x.1).unwrap_or(who).to_string();
+                let e = revealed[side].entry(nick).or_default();
+                let key = mv.to_lowercase().replace([' ', '-', '\''], "");
+                if !e.contains(&key) {
+                    e.push(key);
+                }
+            }
+        }
+        println!("\n--- reconstruction dump (cut = start of turn {turn}) ---");
+        for s in 0..2 {
+            let active = base.active_id(s);
+            for (i, &slot) in base.sides[s].party.iter().enumerate() {
+                let p = &base.sides[s].roster[slot as usize];
+                let nick = p.name.to_string();
+                let empty: Vec<String> = Vec::new();
+                let rv = revealed[s].get(&nick).unwrap_or(&empty);
+                let mvs: Vec<String> = p
+                    .base_move_slots
+                    .iter()
+                    .map(|m| {
+                        let k = dex.moves.key(m.id).to_string();
+                        let tag = if rv.iter().any(|r| *r == k) { "REVEALED" } else { "fabricated" };
+                        format!("{k}[{tag}]")
+                    })
+                    .collect();
+                let mark = if active.map(|a| a.slot) == Some(slot) { " <ACTIVE>" } else { "" };
+                let item = p.item.map(|i| dex.items.key(i).to_string()).unwrap_or_else(|| "-".into());
+                println!(
+                    "  side {s} slot{i} {}{mark} L{} hp {}/{} {:?} item {item}\n      moves: {}\n      revealed-by-cut: {rv:?}",
+                    dex.species.key(p.species),
+                    p.level,
+                    p.hp,
+                    p.maxhp,
+                    p.status,
+                    mvs.join(" ")
+                );
+            }
+        }
+        println!("--- end dump ---\n");
     }
 
     if let FoeReplacement::Species(sp) = &foe_replacement {
