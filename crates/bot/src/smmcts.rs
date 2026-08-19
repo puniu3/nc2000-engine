@@ -732,11 +732,17 @@ fn noop_reason(
     // stalling Umbreon, spent 6 of its 64 last-mon turns on an awake Sleep
     // Talk. Corpus rate: 54 of 863 Sleep Talk selections (6.3%) were made by a
     // plainly awake mon.
-    if rules.sleep_talk_awake && ms.sleep_usable {
-        verdict!(
-            b.poke(att).status != Status::Slp && faster_than_foe(b, dex, side),
-            "Sleep Talk and Snore need the user asleep"
-        );
+    //
+    // Deliberately `if`, not `verdict!`: a false verdict here returns None and
+    // would shadow every rule below for this move. Snore is a Normal-typed
+    // attack, so an ASLEEP user aiming it at a stranded Ghost still has to
+    // reach the type-immunity arm.
+    if rules.sleep_talk_awake
+        && ms.sleep_usable
+        && b.poke(att).status != Status::Slp
+        && faster_than_foe(b, dex, side)
+    {
+        yes!("Sleep Talk and Snore need the user asleep");
     }
     // Every rule below that reads the foe is conditioned on the foe being
     // stuck with the mon it has: otherwise the move is aimed at whatever
