@@ -13,6 +13,16 @@
 //!                          control — if surf-max does not beat it, V3's
 //!                          reasoning is not what moves the number.
 //!   `--case 4069-lead`     turn 1, Miltank vs the Ghost Misdreavus (V1).
+//!                          Arms: as-played / switch-zapdos /
+//!                          switch-zapdos-noww / switch-snorlax /
+//!                          curse-through / return / doubleteam / search.
+//!                          `switch-zapdos-noww` is `switch-zapdos` on a
+//!                          board where Zapdos has no Whirlwind at all, so
+//!                          the pair separates "the phaze escape wins it"
+//!                          from "any switch off the doomed mon wins it".
+//!                          Takes `--turn N` -- turn 26 (Snorlax, still able
+//!                          to switch) is the same experiment on the
+//!                          position round 1 left open.
 //!   `--case 4069-trapped`  turn 2, Miltank already Mean Looked (V2).
 //!
 //! Standard counterfactual semantics: the arm script overrides the first
@@ -27,6 +37,17 @@
 //! `--arm as-played` it reproduces the actual game, and it degrades to
 //! nonsense once an arm makes the line diverge. `max-damage` and `search` are
 //! the two strength brackets.
+//!
+//! Two axes of the SCRIPTED 4069 opponent, both defaulting to what the
+//! recorded human actually did, so every earlier number reproduces:
+//!   * `--foe-perish-stay` -- the Misdreavus does NOT leave at perish1; it
+//!     stays and dies on its own song with the mon it trapped. This is the
+//!     opponent V2's addendum names, and V5 says the answer is
+//!     board-dependent, so it is the axis on which that would show.
+//!   * `--foe-replacement <species|healthiest|first>` -- which bench mon it
+//!     sends when it does bail out (and when it is replacing a faint).
+//!     `healthiest` (default) always sends Skarmory in 4069; `blissey` is
+//!     the branch V2's +4 Return could plausibly KO.
 //!
 //! Two deliberate research-only leaks, both switchable and both printed:
 //!   * `--oracle-moves` (DEFAULT ON) runs `complete_active_moves_from_future`
@@ -43,7 +64,8 @@
 //!   cargo run --release -p nc2000-bot --example verdict_counterfactual -- \
 //!     --case 4070-endgame [--turn 50] [--trials 20000] [--arm all] \
 //!     [--foe script|replay|max-damage|search] [--rest-at 0.5] [--tail search|...] \
-//!     [--iters 30000] [--threads 14] [--no-wake-rule] [--csv FILE]
+//!     [--iters 30000] [--threads 14] [--no-wake-rule] [--csv FILE] \
+//!     [--foe-perish-stay] [--foe-replacement healthiest|first|<species>]
 //!
 //! Trials are sharded over `--threads`; every seed is a pure function of the
 //! trial index, so the thread count cannot move a number (checked: identical
@@ -63,7 +85,7 @@ use nc2000_bot::smmcts::RmConfig;
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::prng::{BattleRng, Prng};
-use nc2000_engine::state::{Battle, PokeId, Status, DK};
+use nc2000_engine::state::{Battle, MoveSlots, PokeId, Status, DK};
 
 // ------------------------------------------------------------------ args
 
@@ -131,6 +153,87 @@ fn healthiest_switch(b: &Battle, side: usize, choices: &[SearchChoice]) -> Searc
         }
     }
     best
+}
+
+/// Which bench mon the SCRIPTED opponent sends in -- both when it bails out
+/// voluntarily (Misdreavus leaving at perish1) and when it is replacing a
+/// faint. `Healthiest` is what the harness has always done, and is the
+/// default, so every number measured before this flag existed reproduces.
+///
+/// It is a free parameter of the harness, not of the position: `healthiest`
+/// always sends Skarmory in 4069, so the Blissey branch of V2 -- the one
+/// replacement a +4 Return could plausibly KO -- was never on the board.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum FoeReplacement {
+    Healthiest,
+    First,
+    Species(String),
+}
+
+fn parse_replacement(s: &str) -> FoeReplacement {
+    match s {
+        "healthiest" => FoeReplacement::Healthiest,
+        "first" => FoeReplacement::First,
+        sp => FoeReplacement::Species(sp.to_lowercase()),
+    }
+}
+
+/// `Species` falls back to `Healthiest` when that mon is not (or is no
+/// longer) a legal switch -- it has fainted, or it is already in. The
+/// fallback is silent by design: the run is a distribution over lines in
+/// which the named mon is sometimes gone, and panicking there would only
+/// select for the lines where it survived.
+fn foe_switch(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    choices: &[SearchChoice],
+    rep: &FoeReplacement,
+) -> SearchChoice {
+    match rep {
+        FoeReplacement::Healthiest => healthiest_switch(b, side, choices),
+        FoeReplacement::First => choices
+            .iter()
+            .copied()
+            .find(|c| matches!(c, SearchChoice::Switch(_)))
+            .unwrap_or(choices[0]),
+        FoeReplacement::Species(sp) => pick_switch(dex, b, side, choices, sp)
+            .unwrap_or_else(|| healthiest_switch(b, side, choices)),
+    }
+}
+
+/// Take a move away from one species for the WHOLE rollout, in the state
+/// rather than in the agent. `switch-zapdos-noww` has to be a board on which
+/// the phaze does not exist -- if it were only filtered out of the agent's
+/// choices, our own search would still plan around a Whirlwind it is never
+/// allowed to play, and the arm would measure an irrational policy instead of
+/// a Whirlwind-less board.
+///
+/// Both lists are stripped: `clear_volatile` restores `move_slots` from
+/// `base_move_slots` on every switch-in (`pokemon.rs:792`), so stripping only
+/// the live list would hand Whirlwind straight back when Zapdos came in.
+fn strip_move(dex: &Dex, b: &mut Battle, side: usize, species: &str, key: &str) -> usize {
+    let Some(mid) = dex.moves.id(key) else { return 0 };
+    let party: Vec<u8> = b.sides[side].party.iter().copied().collect();
+    let mut dropped = 0usize;
+    for slot in party {
+        let p = &mut b.sides[side].roster[slot as usize];
+        if dex.species.key(p.species) != species {
+            continue;
+        }
+        for list in [&mut p.move_slots, &mut p.base_move_slots] {
+            let mut kept = MoveSlots::default();
+            for m in list.iter() {
+                if m.id == mid {
+                    dropped += 1;
+                } else {
+                    kept.push(*m);
+                }
+            }
+            *list = kept;
+        }
+    }
+    dropped
 }
 
 /// Sleep counter of `side`'s active. `("slp","onBeforeMove")`
@@ -441,6 +544,13 @@ impl Agent for FoeUmbreon {
 /// Perish Song, then Destiny Bond, and leave at perish1 for the healthiest
 /// bench mon (which is what saved it from its own song on turn 5).
 struct FoeMisdreavus {
+    /// `--foe-perish-stay`: do NOT leave at perish1 -- stay in and die with
+    /// the mon it trapped. This is the opponent the player himself names in
+    /// V2's addendum; the recorded human did the opposite.
+    perish_stay: bool,
+    /// `--foe-replacement`: which bench mon it sends, both on the perish1
+    /// bail-out and on a forced replacement.
+    replacement: FoeReplacement,
     inner: Box<dyn Agent>,
 }
 
@@ -460,7 +570,7 @@ impl Agent for FoeMisdreavus {
             return choices[0];
         }
         if is_forced_switch(choices) {
-            return healthiest_switch(b, side, choices);
+            return foe_switch(b, dex, side, choices, &self.replacement);
         }
         let Some(active) = b.active_id(side) else { return choices[0] };
         if dex.species.key(b.poke(active).species) != "misdreavus" {
@@ -469,11 +579,15 @@ impl Agent for FoeMisdreavus {
         let perish = dex
             .conds_id("perishsong")
             .and_then(|id| b.poke(active).volatile(id).and_then(|s| s.duration));
-        // perish1 = faints at this turn's residual; the human left instead
-        if perish.is_some_and(|d| d <= 1)
+        // perish1 = faints at this turn's residual; the human left instead.
+        // `--foe-perish-stay` keeps it in: it then falls through to the move
+        // ladder below (Destiny Bond, at that point) and dies on the song
+        // with whatever it trapped.
+        if !self.perish_stay
+            && perish.is_some_and(|d| d <= 1)
             && choices.iter().any(|c| matches!(c, SearchChoice::Switch(_)))
         {
-            return healthiest_switch(b, side, choices);
+            return foe_switch(b, dex, side, choices, &self.replacement);
         }
         let foe_trapped = b.active_id(1 - side).map(|f| b.poke(f).trapped).unwrap_or(true);
         if !foe_trapped {
@@ -673,6 +787,10 @@ struct ArmSpec {
     depth: usize,
     tail: Tail,
     dead_filter: bool,
+    /// Remove Whirlwind from side-1 Zapdos for the whole rollout (see
+    /// `strip_move`). The control that separates "the phaze escape wins it"
+    /// from "any switch off the doomed mon wins it".
+    strip_whirlwind: bool,
 }
 
 // ------------------------------------------------------------- trial loop
@@ -686,6 +804,8 @@ struct Ctx<'a> {
     depth: usize,
     rest_at: f64,
     toxic_on_sleeper: bool,
+    foe_perish_stay: bool,
+    foe_replacement: &'a FoeReplacement,
     wake_rule: bool,
     replace_first_max: bool,
     iters: u32,
@@ -753,7 +873,11 @@ fn build_foe(
                 inner: Box::new(MaxDamageAgent::new()),
             })
         } else {
-            Box::new(FoeMisdreavus { inner: Box::new(MaxDamageAgent::new()) })
+            Box::new(FoeMisdreavus {
+                perish_stay: ctx.foe_perish_stay,
+                replacement: ctx.foe_replacement.clone(),
+                inner: Box::new(MaxDamageAgent::new()),
+            })
         }
     };
     match ctx.foe_kind {
@@ -1006,6 +1130,10 @@ fn main() {
     // restricts it to the strictly-awake case so the two can be separated.
     let wake_rule = !flag(&args, "--no-wake-rule");
     let replace_first_max = flag(&args, "--replace-first-max");
+    // The two opponent axes V5 says the answer depends on. Both default to
+    // exactly what the harness did before they existed.
+    let foe_perish_stay = flag(&args, "--foe-perish-stay");
+    let foe_replacement = parse_replacement(arg(&args, "--foe-replacement").unwrap_or("healthiest"));
     let csv_path = arg(&args, "--csv").map(str::to_string);
     let threads: usize = arg(&args, "--threads")
         .map(|s| s.parse().expect("--threads"))
@@ -1111,6 +1239,14 @@ fn main() {
         }
     }
 
+    if let FoeReplacement::Species(sp) = &foe_replacement {
+        let on_team = base.sides[0]
+            .party
+            .iter()
+            .any(|&slot| dex.species.key(base.sides[0].roster[slot as usize].species) == sp);
+        assert!(on_team, "--foe-replacement {sp}: side 0 has no such mon in this reconstruction");
+    }
+
     // ---- arms
     let default_tail = match case.as_str() {
         "4070-endgame" => Tail::FirstLegal,
@@ -1131,6 +1267,7 @@ fn main() {
                     script: script.clone(),
                     tail,
                     dead_filter: false,
+                    strip_whirlwind: false,
                 },
                 ArmSpec {
                     name: "no-dead",
@@ -1138,6 +1275,7 @@ fn main() {
                     script,
                     tail: Tail::SurfMax,
                     dead_filter: true,
+                    strip_whirlwind: false,
                 },
                 ArmSpec {
                     name: "surf-max",
@@ -1145,6 +1283,7 @@ fn main() {
                     depth: 0,
                     tail: Tail::SurfMax,
                     dead_filter: false,
+                    strip_whirlwind: false,
                 },
                 ArmSpec {
                     name: "ice-max",
@@ -1152,6 +1291,7 @@ fn main() {
                     depth: 0,
                     tail: Tail::IceMax,
                     dead_filter: false,
+                    strip_whirlwind: false,
                 },
                 ArmSpec {
                     name: "search",
@@ -1159,6 +1299,7 @@ fn main() {
                     depth: 0,
                     tail: Tail::Search,
                     dead_filter: false,
+                    strip_whirlwind: false,
                 },
             ]
         }
@@ -1174,6 +1315,7 @@ fn main() {
                 script,
                 tail,
                 dead_filter: false,
+                strip_whirlwind: false,
             }];
             if case == "4069-lead" {
                 v.push(ArmSpec {
@@ -1182,6 +1324,20 @@ fn main() {
                     depth: 1,
                     tail,
                     dead_filter: false,
+                    strip_whirlwind: false,
+                });
+                // Same first action, on a board where Zapdos has no
+                // Whirlwind at all. `switch-zapdos` minus this arm is the
+                // part of the gain that the phaze escape is responsible for;
+                // this arm alone is the part that is just "get off the mon
+                // that is about to die".
+                v.push(ArmSpec {
+                    name: "switch-zapdos-noww",
+                    script: vec![Act::SwitchTo("zapdos")],
+                    depth: 1,
+                    tail,
+                    dead_filter: false,
+                    strip_whirlwind: true,
                 });
                 v.push(ArmSpec {
                     name: "switch-snorlax",
@@ -1189,6 +1345,7 @@ fn main() {
                     depth: 1,
                     tail,
                     dead_filter: false,
+                    strip_whirlwind: false,
                 });
                 v.push(ArmSpec {
                     name: "curse-through",
@@ -1196,6 +1353,7 @@ fn main() {
                     depth: 64,
                     tail,
                     dead_filter: false,
+                    strip_whirlwind: false,
                 });
                 v.push(ArmSpec {
                     name: "return",
@@ -1203,6 +1361,7 @@ fn main() {
                     depth: 1,
                     tail,
                     dead_filter: false,
+                    strip_whirlwind: false,
                 });
                 v.push(ArmSpec {
                     name: "doubleteam",
@@ -1210,6 +1369,7 @@ fn main() {
                     depth: 1,
                     tail,
                     dead_filter: false,
+                    strip_whirlwind: false,
                 });
             } else {
                 for k in ["curse", "doubleteam", "milkdrink", "return"] {
@@ -1219,7 +1379,14 @@ fn main() {
                         "milkdrink" => "milkdrink-through",
                         _ => "return-through",
                     };
-                    v.push(ArmSpec { name, script: rep(k), depth: 64, tail, dead_filter: false });
+                    v.push(ArmSpec {
+                        name,
+                        script: rep(k),
+                        depth: 64,
+                        tail,
+                        dead_filter: false,
+                        strip_whirlwind: false,
+                    });
                 }
             }
             v.push(ArmSpec {
@@ -1228,6 +1395,7 @@ fn main() {
                 depth: 0,
                 tail: Tail::Search,
                 dead_filter: false,
+                strip_whirlwind: false,
             });
             v
         }
@@ -1249,7 +1417,8 @@ fn main() {
     println!(
         "\nfoe={foe_kind} rest-at={rest_at:.2} tail={tail:?} iters={iters} trials={trials} \
          max-turns={max_turns} wake-rule={wake_rule} replace-first-max={replace_first_max} \
-         threads={threads}\n"
+         threads={threads}\n\
+         foe-perish-stay={foe_perish_stay} foe-replacement={foe_replacement:?}\n"
     );
 
     let mut csv = String::from(
@@ -1262,6 +1431,18 @@ fn main() {
     for spec in &arms {
         let depth = arm_depth_override.unwrap_or(spec.depth);
         let started = std::time::Instant::now();
+        // Per-arm board. Only `strip_whirlwind` arms differ from `base`, and
+        // they differ in the STATE, so the search, the mask and PP accounting
+        // all see the same Zapdos.
+        let arm_base: Battle = {
+            let mut nb = base.clone();
+            if spec.strip_whirlwind {
+                let n = strip_move(&dex, &mut nb, 1, "zapdos", "whirlwind");
+                assert!(n > 0, "arm {}: side-1 Zapdos carries no Whirlwind to strip", spec.name);
+                println!("[{}] stripped {n} Whirlwind slot(s) from side-1 Zapdos", spec.name);
+            }
+            nb
+        };
         let ctx = Ctx {
             case: &case,
             foe_kind: &foe_kind,
@@ -1269,6 +1450,8 @@ fn main() {
             depth,
             rest_at,
             toxic_on_sleeper,
+            foe_perish_stay,
+            foe_replacement: &foe_replacement,
             wake_rule,
             replace_first_max,
             iters,
@@ -1290,7 +1473,7 @@ fn main() {
                 .map(|k| {
                     let (lo, hi) = bounds_of(k);
                     let dex = &dex;
-                    let base = &base;
+                    let base = &arm_base;
                     let pool = pool.clone();
                     let ctx = ctx;
                     scope.spawn(move || run_range(dex, base, &pool, spec, &ctx, lo, hi))
