@@ -67,6 +67,19 @@
 //!     [--iters 30000] [--threads 14] [--no-wake-rule] [--csv FILE] \
 //!     [--foe-perish-stay] [--foe-replacement healthiest|first|<species>]
 //!
+//! Two round-3 (adversarial-verification) additions, both inert by default:
+//!   * `--trace-lo N --trace-hi M` -- print, for trial indices in [N, M), every
+//!     turn's joint action and the engine log slice it produced. This is the
+//!     only way to answer "what is the losing arm actually DOING" without
+//!     inferring it from aggregate diagnostics; run it at `--threads 1` or the
+//!     lines interleave.
+//!   * arms `earthquake-through` (Earthquake on every decision) and
+//!     `eq-then-search` (Earthquake for four decisions, then the tail). These
+//!     exist to separate "the search plays a provably dead move" from "the
+//!     decision under test is wrong": they force the kill the type-immunity
+//!     blind spot refuses. NOTE `--arm-depth` OVERRIDES an arm's own depth, so
+//!     `--arm-depth 1` collapses both of them back onto `as-played`.
+//!
 //! Trials are sharded over `--threads`; every seed is a pure function of the
 //! trial index, so the thread count cannot move a number (checked: identical
 //! output at --threads 1 and 14).
@@ -811,6 +824,8 @@ struct Ctx<'a> {
     iters: u32,
     base_seed: u64,
     max_turns: u16,
+    trace_lo: u64,
+    trace_hi: u64,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -936,6 +951,11 @@ fn run_range(
             .wrapping_add(t)
             .wrapping_add(spec.name.len() as u64);
 
+        let tracing = t >= ctx.trace_lo && t < ctx.trace_hi;
+        if tracing {
+            println!("\n######## TRACE arm={} trial={} ########", spec.name, t);
+        }
+
         let inner: Option<Box<dyn Agent>> = match spec.tail {
             Tail::Search => Some(Box::new(BlindAgent::new(
                 RmConfig { iterations: ctx.iters, ..cfg() },
@@ -1032,7 +1052,64 @@ fn run_range(
                 && start_p2.is_some_and(|id| !b.poke(id).fainted);
 
             let turn_lo = b.log.len();
+            if tracing {
+                let lbl = |c: Option<SearchChoice>| -> String {
+                    match c {
+                        Some(SearchChoice::Move(m)) => format!("move {}", dex.moves.key(m)),
+                        Some(SearchChoice::Switch(p)) => format!(
+                            "switch {p} ({})",
+                            switch_species(dex, &b, 0, p).unwrap_or_default()
+                        ),
+                        Some(SearchChoice::Pass) => "pass".into(),
+                        Some(SearchChoice::Team(t)) => format!("team {t:?}"),
+                        None => "-".into(),
+                    }
+                };
+                let lbl1 = |c: Option<SearchChoice>| -> String {
+                    match c {
+                        Some(SearchChoice::Switch(p)) => format!(
+                            "switch {p} ({})",
+                            switch_species(dex, &b, 1, p).unwrap_or_default()
+                        ),
+                        other => lbl(other),
+                    }
+                };
+                let hp = |s: usize| -> String {
+                    match b.active_id(s) {
+                        Some(id) => {
+                            let p = b.poke(id);
+                            format!(
+                                "{} {}/{}{}",
+                                dex.species.key(p.species),
+                                p.hp,
+                                p.maxhp,
+                                if p.status == Status::None {
+                                    String::new()
+                                } else {
+                                    format!(" {:?}", p.status)
+                                }
+                            )
+                        }
+                        None => "-".into(),
+                    }
+                };
+                println!(
+                    "T{turn_now}  [p1 {}]  [p2 {}]   p1={}  p2={}",
+                    hp(0),
+                    hp(1),
+                    lbl(picks[0]),
+                    lbl1(picks[1])
+                );
+            }
             b.apply_choices(dex, picks).expect("apply");
+            if tracing {
+                for l in &b.log[turn_lo..] {
+                    if l.is_empty() || l.starts_with("|t:|") || l.starts_with("|upkeep") {
+                        continue;
+                    }
+                    println!("      {l}");
+                }
+            }
             scan_log(&mut diag, &b.log[cursor..], turn_now);
             cursor = b.log.len();
 
@@ -1067,6 +1144,9 @@ fn run_range(
             }
         }
 
+        if tracing {
+            println!("######## TRACE end arm={} trial={} outcome={:?} turn={} ########", spec.name, t, result, b.turn);
+        }
         acc.turns_survived += b.turn.saturating_sub(start) as u64;
         match result {
             Some(Outcome::P2Win) => acc.wins += 1,
@@ -1135,6 +1215,8 @@ fn main() {
     let foe_perish_stay = flag(&args, "--foe-perish-stay");
     let dump_recon = flag(&args, "--dump-recon");
     let foe_replacement = parse_replacement(arg(&args, "--foe-replacement").unwrap_or("healthiest"));
+    let trace_lo: u64 = arg(&args, "--trace-lo").unwrap_or("0").parse().unwrap();
+    let trace_hi: u64 = arg(&args, "--trace-hi").unwrap_or("0").parse().unwrap();
     let csv_path = arg(&args, "--csv").map(str::to_string);
     let threads: usize = arg(&args, "--threads")
         .map(|s| s.parse().expect("--threads"))
@@ -1420,6 +1502,22 @@ fn main() {
                     strip_whirlwind: false,
                 });
                 v.push(ArmSpec {
+                    name: "earthquake-through",
+                    script: rep("earthquake"),
+                    depth: 64,
+                    tail,
+                    dead_filter: false,
+                    strip_whirlwind: false,
+                });
+                v.push(ArmSpec {
+                    name: "eq-then-search",
+                    script: rep("earthquake"),
+                    depth: 4,
+                    tail,
+                    dead_filter: false,
+                    strip_whirlwind: false,
+                });
+                v.push(ArmSpec {
                     name: "return",
                     script: vec![Act::Move("return")],
                     depth: 1,
@@ -1521,6 +1619,8 @@ fn main() {
             iters,
             base_seed,
             max_turns,
+            trace_lo,
+            trace_hi,
         };
         // Trials are independent; shard them. Every seed is a pure function
         // of the trial index, so the thread count cannot move a number.
