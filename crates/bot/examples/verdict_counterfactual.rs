@@ -1,0 +1,1174 @@
+//! What the player's 正着 claims (V1-V4, `docs/PLAYER-VERDICTS-4069-4070.md`)
+//! are actually worth, measured instead of argued.
+//!
+//! Same shape as `perish_counterfactual_4040.rs`: reconstruct ONE recorded
+//! decision through the corpus pipeline, then roll it forward N times under
+//! fixed policies and count p2 (= the bot's) wins. Three cases:
+//!
+//!   `--case 4070-endgame`  Suicune alone vs Umbreon + Marowak (V3/V4).
+//!                          Arms: as-played / surf-max / no-dead / ice-max /
+//!                          search. `no-dead` isolates the *mask* fix (only
+//!                          the provably dead picks are replaced) from the
+//!                          whole policy change; `ice-max` is the mirror
+//!                          control — if surf-max does not beat it, V3's
+//!                          reasoning is not what moves the number.
+//!   `--case 4069-lead`     turn 1, Miltank vs the Ghost Misdreavus (V1).
+//!   `--case 4069-trapped`  turn 2, Miltank already Mean Looked (V2).
+//!
+//! Standard counterfactual semantics: the arm script overrides the first
+//! `--arm-depth` decisions and the shipped search plays on from there
+//! (`--tail`). Single-move arms default to depth 1, scripted arms to their
+//! full length.
+//!
+//! Opponent models (`--foe`): `script` is the state-driven model of the human
+//! and is the one to use for counterfactuals; `replay` re-submits the human's
+//! RECORDED action per turn (falling back to `script` when the recording
+//! cannot supply the turn) and is a validation control — paired with
+//! `--arm as-played` it reproduces the actual game, and it degrades to
+//! nonsense once an arm makes the line diverge. `max-damage` and `search` are
+//! the two strength brackets.
+//!
+//! Two deliberate research-only leaks, both switchable and both printed:
+//!   * `--oracle-moves` (DEFAULT ON) runs `complete_active_moves_from_future`
+//!     so the ACTIVE pair carries the moves the full log proves it had. Without
+//!     it the reconstruction hands Umbreon `meanlook/batonpass` instead of
+//!     `rest` and the whole Rest-loop question stops existing. Only the active
+//!     pair is repaired; the opponent's BENCH stays fabricated.
+//!   * `--case 4069-*` defaults to `tmp/corpus-4069-truepicks/battle-4069t.raw.log`,
+//!     the party-order-corrected copy — the plain log imputes Starmie into the
+//!     bench and `switch 2` is then not Zapdos at all (see
+//!     `tmp/verdicts-4069-4070/4069-forensics.md`).
+//!
+//! Usage:
+//!   cargo run --release -p nc2000-bot --example verdict_counterfactual -- \
+//!     --case 4070-endgame [--turn 50] [--trials 20000] [--arm all] \
+//!     [--foe script|replay|max-damage|search] [--rest-at 0.5] [--tail search|...] \
+//!     [--iters 30000] [--threads 14] [--no-wake-rule] [--csv FILE]
+//!
+//! Trials are sharded over `--threads`; every seed is a pure function of the
+//! trial index, so the thread count cannot move a number (checked: identical
+//! output at --threads 1 and 14).
+
+use std::sync::Arc;
+
+use conformance::fixture::repo_root;
+use conformance::load_dex;
+use nc2000_bot::agent::{Agent, MaxDamageAgent};
+use nc2000_bot::blind::BlindAgent;
+use nc2000_bot::corpus::{
+    cfg, complete_active_moves_from_future, load_battle, load_sources, reconstruct, HumanAction,
+};
+use nc2000_bot::preview::{load_meta_pool, MetaPool};
+use nc2000_bot::smmcts::RmConfig;
+use nc2000_engine::battle::{Outcome, SearchChoice};
+use nc2000_engine::dex::Dex;
+use nc2000_engine::prng::{BattleRng, Prng};
+use nc2000_engine::state::{Battle, Status, DK};
+
+// ------------------------------------------------------------------ args
+
+fn arg<'a>(args: &'a [String], key: &str) -> Option<&'a str> {
+    args.iter().position(|a| a == key).and_then(|i| args.get(i + 1)).map(String::as_str)
+}
+
+fn flag(args: &[String], key: &str) -> bool {
+    args.iter().any(|a| a == key)
+}
+
+// -------------------------------------------------------------- choosing
+
+fn pick_move(dex: &Dex, choices: &[SearchChoice], key: &str) -> Option<SearchChoice> {
+    choices.iter().copied().find(|c| match c {
+        SearchChoice::Move(id) => dex.moves.key(*id) == key,
+        _ => false,
+    })
+}
+
+/// Resolve a switch by SPECIES, never by display position: the party order a
+/// reconstruction produces is not the order the live client saw.
+fn pick_switch(
+    dex: &Dex,
+    b: &Battle,
+    side: usize,
+    choices: &[SearchChoice],
+    species: &str,
+) -> Option<SearchChoice> {
+    choices.iter().copied().find(|c| match c {
+        SearchChoice::Switch(pos) => switch_species(dex, b, side, *pos) == Some(species.to_string()),
+        _ => false,
+    })
+}
+
+fn switch_species(dex: &Dex, b: &Battle, side: usize, pos: u8) -> Option<String> {
+    let s = &b.sides[side];
+    let slot = *s.party.get(pos as usize - 1)?;
+    Some(dex.species.key(s.roster[slot as usize].species).to_string())
+}
+
+/// A forced replacement request: nothing but switches (or a pass) on offer.
+fn is_forced_switch(choices: &[SearchChoice]) -> bool {
+    choices
+        .iter()
+        .all(|c| matches!(c, SearchChoice::Switch(_) | SearchChoice::Pass))
+}
+
+fn healthiest_switch(b: &Battle, side: usize, choices: &[SearchChoice]) -> SearchChoice {
+    let mut best = choices[0];
+    let mut best_frac = -1.0f64;
+    for c in choices {
+        if let SearchChoice::Switch(pos) = c {
+            let s = &b.sides[side];
+            let Some(&slot) = s.party.get(*pos as usize - 1) else { continue };
+            let p = &s.roster[slot as usize];
+            if p.fainted {
+                continue;
+            }
+            let frac = p.hp as f64 / p.maxhp.max(1) as f64;
+            if frac > best_frac {
+                best_frac = frac;
+                best = *c;
+            }
+        }
+    }
+    best
+}
+
+/// Sleep counter of `side`'s active. `("slp","onBeforeMove")`
+/// (`conditions.rs:159`) decrements FIRST and cures at `<= 0`, so the mon is
+/// still asleep when its move resolves iff this is >= 2.
+fn stays_asleep(b: &Battle, side: usize) -> bool {
+    b.active_id(side).is_some_and(|id| {
+        let p = b.poke(id);
+        p.status == Status::Slp && p.status_state.get_int(DK::Time) >= 2
+    })
+}
+
+/// The provable no-ops this study is about. Deliberately narrow, and every
+/// arm is decidable from OWN-side information only:
+///   * Sleep Talk while awake — fails at `moveexec.rs:521`, PP already spent.
+///   * Sleep Talk on the wake-up turn (`Time <= 1`) — the sleeper is cured
+///     inside its own onBeforeMove and Sleep Talk then sees an awake user,
+///     so it fails exactly the same way. `wake_rule = false` drops this arm,
+///     which is how the two categories get separated.
+///   * Rest at full HP.
+fn is_dead(b: &Battle, dex: &Dex, side: usize, choice: SearchChoice, wake_rule: bool) -> bool {
+    let SearchChoice::Move(id) = choice else { return false };
+    let Some(active) = b.active_id(side) else { return false };
+    let p = b.poke(active);
+    match dex.moves.key(id) {
+        "sleeptalk" => {
+            p.status != Status::Slp || (wake_rule && p.status_state.get_int(DK::Time) <= 1)
+        }
+        "rest" => p.hp >= p.maxhp,
+        _ => false,
+    }
+}
+
+// ------------------------------------------------------------------ arms
+
+#[derive(Clone, Debug)]
+enum Act {
+    Move(&'static str),
+    SwitchTo(&'static str),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Tail {
+    Search,
+    MaxDamage,
+    FirstLegal,
+    SurfMax,
+    IceMax,
+}
+
+fn parse_tail(s: &str) -> Tail {
+    match s {
+        "search" => Tail::Search,
+        "max-damage" => Tail::MaxDamage,
+        "first-legal" => Tail::FirstLegal,
+        "surf-max" => Tail::SurfMax,
+        "ice-max" => Tail::IceMax,
+        other => panic!("unknown --tail {other}"),
+    }
+}
+
+/// Water-first / Ice-first greedy for the 4070 endgame. Sleep Talk only
+/// while ASLEEP (which is the only state it does anything in), Rest only
+/// below max HP.
+fn heur_suicune(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    choices: &[SearchChoice],
+    prefer_ice: bool,
+) -> SearchChoice {
+    let Some(active) = b.active_id(side) else { return choices[0] };
+    let p = b.poke(active);
+    // Sleep Talk only while the mon is still asleep WHEN ITS MOVE RESOLVES.
+    if stays_asleep(b, side) {
+        if let Some(c) = pick_move(dex, choices, "sleeptalk") {
+            return c;
+        }
+    }
+    let order: [&str; 2] = if prefer_ice { ["icebeam", "surf"] } else { ["surf", "icebeam"] };
+    for key in order {
+        if let Some(c) = pick_move(dex, choices, key) {
+            return c;
+        }
+    }
+    if p.hp < p.maxhp {
+        if let Some(c) = pick_move(dex, choices, "rest") {
+            return c;
+        }
+    }
+    choices[0]
+}
+
+struct ArmAgent {
+    label: String,
+    script: Vec<Act>,
+    depth: usize,
+    tail: Tail,
+    inner: Option<Box<dyn Agent>>,
+    at: usize,
+    /// `no-dead`: scripted picks that were provably dead and got replaced.
+    replaced: usize,
+    scripted: usize,
+    dead_filter: bool,
+    wake_rule: bool,
+}
+
+impl ArmAgent {
+    fn tail_choice(
+        &mut self,
+        b: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        match self.tail {
+            Tail::FirstLegal => choices[0],
+            Tail::SurfMax => heur_suicune(b, dex, side, choices, false),
+            Tail::IceMax => heur_suicune(b, dex, side, choices, true),
+            Tail::Search | Tail::MaxDamage => {
+                let inner = self.inner.as_mut().expect("tail agent built");
+                inner.choose(b, dex, side, choices)
+            }
+        }
+    }
+}
+
+impl Agent for ArmAgent {
+    fn name(&self) -> String {
+        self.label.clone()
+    }
+
+    fn choose(
+        &mut self,
+        b: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        // A forced replacement is not a scripted turn: it does not consume
+        // the script, or every faint would shift the whole line by one.
+        if is_forced_switch(choices) {
+            return match self.tail {
+                Tail::Search | Tail::MaxDamage => self.tail_choice(b, dex, side, choices),
+                _ => healthiest_switch(b, side, choices),
+            };
+        }
+        let n = self.at;
+        self.at += 1;
+        if n < self.depth {
+            if let Some(act) = self.script.get(n).cloned() {
+                let resolved = match act {
+                    Act::Move(k) => pick_move(dex, choices, k),
+                    Act::SwitchTo(sp) => pick_switch(dex, b, side, choices, sp),
+                };
+                if let Some(c) = resolved {
+                    if self.dead_filter && is_dead(b, dex, side, c, self.wake_rule) {
+                        self.replaced += 1;
+                        return heur_suicune(b, dex, side, choices, false);
+                    }
+                    self.scripted += 1;
+                    return c;
+                }
+            }
+        }
+        self.tail_choice(b, dex, side, choices)
+    }
+}
+
+// ------------------------------------------------------------ opponents
+
+/// 4070's Umbreon as it actually played: Rest on waking below `rest_at`,
+/// Toxic an unpoisoned AWAKE target, Charm otherwise, never switch while it
+/// can still Rest. It bails to the bench when Rest is gone and it is low, or
+/// once the foe is out of PP entirely (which is exactly turn 100 in the log).
+struct FoeUmbreon {
+    rest_at: f64,
+    toxic_on_sleeper: bool,
+    inner: Box<dyn Agent>,
+}
+
+fn foe_is_struggling(b: &Battle, dex: &Dex, foe_side: usize) -> bool {
+    let Some(active) = b.active_id(foe_side) else { return false };
+    let _ = dex;
+    b.poke(active).move_slots.iter().all(|m| m.pp == 0)
+}
+
+impl Agent for FoeUmbreon {
+    fn name(&self) -> String {
+        "script-umbreon".into()
+    }
+
+    fn choose(
+        &mut self,
+        b: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        if is_forced_switch(choices) {
+            return healthiest_switch(b, side, choices);
+        }
+        let Some(active) = b.active_id(side) else { return choices[0] };
+        let p = b.poke(active);
+        if dex.species.key(p.species) != "umbreon" {
+            return self.inner.choose(b, dex, side, choices);
+        }
+        let frac = p.hp as f64 / p.maxhp.max(1) as f64;
+        let rest = pick_move(dex, choices, "rest");
+        // bail to the bench: no Rest left and hurt, or the foe can only Struggle
+        if (rest.is_none() && frac <= self.rest_at) || foe_is_struggling(b, dex, 1 - side) {
+            if choices.iter().any(|c| matches!(c, SearchChoice::Switch(_))) {
+                return healthiest_switch(b, side, choices);
+            }
+        }
+        if stays_asleep(b, side) {
+            // still asleep when the move resolves: the pick is invisible
+            return pick_move(dex, choices, "charm").unwrap_or(choices[0]);
+        }
+        if frac <= self.rest_at {
+            if let Some(c) = rest {
+                return c;
+            }
+        }
+        let foe_ok = b
+            .active_id(1 - side)
+            .map(|f| {
+                let fp = b.poke(f);
+                fp.status == Status::None && (self.toxic_on_sleeper || fp.status != Status::Slp)
+            })
+            .unwrap_or(false);
+        if foe_ok {
+            if let Some(c) = pick_move(dex, choices, "toxic") {
+                return c;
+            }
+        }
+        pick_move(dex, choices, "charm").unwrap_or(choices[0])
+    }
+}
+
+/// 4069's Misdreavus as it actually played: Mean Look an untrapped foe,
+/// Perish Song, then Destiny Bond, and leave at perish1 for the healthiest
+/// bench mon (which is what saved it from its own song on turn 5).
+struct FoeMisdreavus {
+    inner: Box<dyn Agent>,
+}
+
+impl Agent for FoeMisdreavus {
+    fn name(&self) -> String {
+        "script-misdreavus".into()
+    }
+
+    fn choose(
+        &mut self,
+        b: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        if is_forced_switch(choices) {
+            return healthiest_switch(b, side, choices);
+        }
+        let Some(active) = b.active_id(side) else { return choices[0] };
+        if dex.species.key(b.poke(active).species) != "misdreavus" {
+            return self.inner.choose(b, dex, side, choices);
+        }
+        let perish = dex
+            .conds_id("perishsong")
+            .and_then(|id| b.poke(active).volatile(id).and_then(|s| s.duration));
+        // perish1 = faints at this turn's residual; the human left instead
+        if perish.is_some_and(|d| d <= 1)
+            && choices.iter().any(|c| matches!(c, SearchChoice::Switch(_)))
+        {
+            return healthiest_switch(b, side, choices);
+        }
+        let foe_trapped = b.active_id(1 - side).map(|f| b.poke(f).trapped).unwrap_or(true);
+        if !foe_trapped {
+            if let Some(c) = pick_move(dex, choices, "meanlook") {
+                return c;
+            }
+        }
+        if perish.is_none() {
+            if let Some(c) = pick_move(dex, choices, "perishsong") {
+                return c;
+            }
+        }
+        if let Some(c) = pick_move(dex, choices, "destinybond") {
+            return c;
+        }
+        let p = b.poke(active);
+        if p.hp * 2 < p.maxhp {
+            if let Some(c) = pick_move(dex, choices, "rest") {
+                return c;
+            }
+        }
+        choices[0]
+    }
+}
+
+// ------------------------------------------------------------ recorded lines
+
+/// p2's submitted action per turn from turn 39 (Suicune's first turn as the
+/// last mon) to turn 102, read off `tmp/corpus-4070/battle-4070.raw.log`.
+/// Sleep-Talk-called moves are not decisions and are not in here.
+const AS_PLAYED_4070: [&str; 64] = [
+    "sleeptalk", "icebeam", "surf", "surf", "surf", "surf", "surf", "rest", "sleeptalk",
+    "sleeptalk", "icebeam", "sleeptalk", "sleeptalk", "rest", "sleeptalk", "sleeptalk", "surf",
+    "surf", "surf", "icebeam", "surf", "surf", "surf", "surf", "surf", "icebeam", "surf",
+    "icebeam", "surf", "surf", "icebeam", "surf", "surf", "surf", "icebeam", "surf", "icebeam",
+    "sleeptalk", "icebeam", "icebeam", "sleeptalk", "icebeam", "sleeptalk", "sleeptalk", "surf",
+    "icebeam", "surf", "icebeam", "icebeam", "icebeam", "rest", "rest", "rest", "rest", "rest",
+    "rest", "rest", "rest", "rest", "rest", "rest", "struggle", "struggle", "struggle",
+];
+const AS_PLAYED_4070_FROM: u16 = 39;
+
+/// p2's submitted action per turn 1..=35 of battle 4069. Forced replacements
+/// (turns 5 and 30) are not decisions and are not in here.
+const AS_PLAYED_4069: [&str; 35] = [
+    "curse", "curse", "return", "return", "return", "thunderbolt", "thunderbolt", "!snorlax",
+    "earthquake", "!zapdos", "!snorlax", "earthquake", "!zapdos", "thunderbolt", "!snorlax",
+    "bodyslam", "!zapdos", "thunderbolt", "!snorlax", "bodyslam", "rest", "!zapdos",
+    "thunderbolt", "!snorlax", "bodyslam", "earthquake", "earthquake", "bodyslam", "bodyslam",
+    "bodyslam", "whirlwind", "thunderwave", "whirlwind", "whirlwind", "whirlwind",
+];
+const AS_PLAYED_4069_FROM: u16 = 1;
+
+/// p1 (the human) as recorded, same indexing as the p2 arrays above. An
+/// empty string = the human owed no visible action that turn (asleep /
+/// frozen); the `replay` foe then falls through to its scripted policy.
+const FOE_PLAYED_4070: [&str; 64] = [
+    "doubleedge", "", "", "", "", "", "", "!umbreon", "!snorlax", "bonemerang", "!umbreon",
+    "toxic", "rest", "charm", "charm", "charm", "rest", "", "", "rest", "", "", "rest", "", "",
+    "rest", "", "", "rest", "", "", "rest", "", "", "rest", "", "", "rest", "", "", "rest", "",
+    "", "rest", "", "", "rest", "", "", "rest", "", "", "charm", "charm", "charm", "charm",
+    "charm", "charm", "charm", "charm", "toxic", "!marowak", "bonemerang", "bonemerang",
+];
+const FOE_PLAYED_4069: [&str; 35] = [
+    "meanlook", "perishsong", "destinybond", "destinybond", "!skarmory", "!blissey", "toxic",
+    "softboiled", "!skarmory", "!blissey", "toxic", "!skarmory", "drillpeck", "!blissey",
+    "toxic", "!skarmory", "rest", "!blissey", "healbell", "!skarmory", "drillpeck", "drillpeck",
+    "!blissey", "toxic", "!misdreavus", "meanlook", "perishsong", "rest", "destinybond",
+    "!skarmory", "!blissey", "perishsong", "rest", "healbell", "destinybond",
+];
+
+/// The human's recorded line, with a scripted policy behind it for every
+/// turn the recording cannot supply (it ran out, the mon is gone, the move
+/// is illegal or out of PP). This is the most faithful opponent available:
+/// the state-driven `script` foe is a MODEL of the human and plays Toxic
+/// far more often than he did.
+struct ReplayFoe {
+    script: Vec<Act>,
+    at: usize,
+    inner: Box<dyn Agent>,
+}
+
+impl Agent for ReplayFoe {
+    fn name(&self) -> String {
+        "replay-foe".into()
+    }
+
+    fn choose(
+        &mut self,
+        b: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        if is_forced_switch(choices) {
+            return healthiest_switch(b, side, choices);
+        }
+        let n = self.at;
+        self.at += 1;
+        if let Some(act) = self.script.get(n).cloned() {
+            let resolved = match act {
+                Act::Move(k) => pick_move(dex, choices, k),
+                Act::SwitchTo(sp) => pick_switch(dex, b, side, choices, sp),
+            };
+            if let Some(c) = resolved {
+                return c;
+            }
+        }
+        self.inner.choose(b, dex, side, choices)
+    }
+}
+
+fn to_acts(keys: &[&'static str]) -> Vec<Act> {
+    keys.iter()
+        .map(|k| match k.strip_prefix('!') {
+            Some(species) => Act::SwitchTo(species),
+            // "" never resolves, so the caller's fallback takes the turn
+            None => Act::Move(k),
+        })
+        .collect()
+}
+
+// ------------------------------------------------------------ diagnostics
+
+#[derive(Default, Clone, Copy)]
+struct Diag {
+    crit_on_p1: bool,
+    surf_uses: u32,
+    surf_hits: u32,
+    p1_faints: u32,
+    p2_faints: u32,
+    first_p2_faint_at: Option<u16>,
+    first_p1_faint_at: Option<u16>,
+    trapped_p2: bool,
+}
+
+fn scan_log(diag: &mut Diag, log: &[String], turn: u16) {
+    let mut pending_surf = false;
+    for l in log {
+        if l.starts_with("|move|p2a") {
+            pending_surf = l.contains("|Surf|");
+            if pending_surf {
+                diag.surf_uses += 1;
+            }
+            continue;
+        }
+        if l.starts_with("|-damage|p1a") && pending_surf {
+            diag.surf_hits += 1;
+            pending_surf = false;
+        }
+        if l.starts_with("|-crit|p1a") {
+            diag.crit_on_p1 = true;
+        }
+        if l.starts_with("|-activate|p2a") && l.ends_with("trapped") {
+            diag.trapped_p2 = true;
+        }
+        if l.starts_with("|faint|p1a") {
+            diag.p1_faints += 1;
+            diag.first_p1_faint_at.get_or_insert(turn);
+        }
+        if l.starts_with("|faint|p2a") {
+            diag.p2_faints += 1;
+            diag.first_p2_faint_at.get_or_insert(turn);
+        }
+    }
+}
+
+fn species_alive(b: &Battle, dex: &Dex, side: usize, species: &str) -> Option<bool> {
+    let s = &b.sides[side];
+    s.party
+        .iter()
+        .map(|&slot| &s.roster[slot as usize])
+        .find(|p| dex.species.key(p.species) == species)
+        .map(|p| !p.fainted && p.hp > 0)
+}
+
+// ------------------------------------------------------------------ main
+
+struct ArmSpec {
+    name: &'static str,
+    script: Vec<Act>,
+    depth: usize,
+    tail: Tail,
+    dead_filter: bool,
+}
+
+// ------------------------------------------------------------- trial loop
+
+/// Everything a trial needs that is not the position, the arm, or the seed.
+#[derive(Clone, Copy)]
+struct Ctx<'a> {
+    case: &'a str,
+    foe_kind: &'a str,
+    turn: u16,
+    depth: usize,
+    rest_at: f64,
+    toxic_on_sleeper: bool,
+    wake_rule: bool,
+    iters: u32,
+    base_seed: u64,
+    max_turns: u16,
+}
+
+#[derive(Default, Clone, Copy)]
+struct Acc {
+    wins: u64,
+    losses: u64,
+    ties: u64,
+    turns_survived: u64,
+    n_crit: u64,
+    n_surf_hits: u64,
+    n_p1_ko: u64,
+    n_traded: u64,
+    n_zapdos_alive: u64,
+    n_replaced: u64,
+}
+
+impl Acc {
+    fn merge(&mut self, o: &Acc) {
+        self.wins += o.wins;
+        self.losses += o.losses;
+        self.ties += o.ties;
+        self.turns_survived += o.turns_survived;
+        self.n_crit += o.n_crit;
+        self.n_surf_hits += o.n_surf_hits;
+        self.n_p1_ko += o.n_p1_ko;
+        self.n_traded += o.n_traded;
+        self.n_zapdos_alive += o.n_zapdos_alive;
+        self.n_replaced += o.n_replaced;
+    }
+}
+
+fn build_foe(
+    dex_pool: &Arc<MetaPool>,
+    spec_seed: u64,
+    ctx: &Ctx,
+) -> Box<dyn Agent> {
+    let script_foe = || -> Box<dyn Agent> {
+        if ctx.case == "4070-endgame" {
+            Box::new(FoeUmbreon {
+                rest_at: ctx.rest_at,
+                toxic_on_sleeper: ctx.toxic_on_sleeper,
+                inner: Box::new(MaxDamageAgent::new()),
+            })
+        } else {
+            Box::new(FoeMisdreavus { inner: Box::new(MaxDamageAgent::new()) })
+        }
+    };
+    match ctx.foe_kind {
+        "max-damage" => Box::new(MaxDamageAgent::new()),
+        "search" => Box::new(BlindAgent::new(
+            RmConfig { iterations: ctx.iters, ..cfg() },
+            dex_pool.clone(),
+            None,
+            spec_seed ^ 0xabcd,
+        )),
+        "script" => script_foe(),
+        "replay" => {
+            let (all, from): (&[&'static str], u16) = if ctx.case == "4070-endgame" {
+                (&FOE_PLAYED_4070, AS_PLAYED_4070_FROM)
+            } else {
+                (&FOE_PLAYED_4069, AS_PLAYED_4069_FROM)
+            };
+            let off = ctx.turn.saturating_sub(from) as usize;
+            let tail: Vec<&'static str> = all.get(off..).map(<[&str]>::to_vec).unwrap_or_default();
+            Box::new(ReplayFoe { script: to_acts(&tail), at: 0, inner: script_foe() })
+        }
+        other => panic!("unknown --foe {other}"),
+    }
+}
+
+fn run_range(
+    dex: &Dex,
+    base: &Battle,
+    pool: &Arc<MetaPool>,
+    spec: &ArmSpec,
+    ctx: &Ctx,
+    lo: u64,
+    hi: u64,
+) -> Acc {
+    let mut acc = Acc::default();
+    for t in lo..hi {
+        let mut b = base.clone();
+        b.set_log_enabled(true);
+        b.prng = BattleRng::seeded(
+            Prng::from_seed_str(&format!(
+                "{},{},{},{}",
+                ctx.base_seed + t,
+                ctx.base_seed + t + 7,
+                ctx.base_seed + t + 13,
+                ctx.base_seed + t + 29
+            ))
+            .expect("seed"),
+        );
+        let start = b.turn;
+        let seed = ctx
+            .base_seed
+            .wrapping_mul(0x9e37_79b9_7f4a_7c15)
+            .wrapping_add(t)
+            .wrapping_add(spec.name.len() as u64);
+
+        let inner: Option<Box<dyn Agent>> = match spec.tail {
+            Tail::Search => Some(Box::new(BlindAgent::new(
+                RmConfig { iterations: ctx.iters, ..cfg() },
+                pool.clone(),
+                None,
+                seed,
+            ))),
+            Tail::MaxDamage => Some(Box::new(MaxDamageAgent::new())),
+            _ => None,
+        };
+        let mut me = ArmAgent {
+            label: spec.name.to_string(),
+            script: spec.script.clone(),
+            depth: ctx.depth,
+            tail: spec.tail,
+            inner,
+            at: 0,
+            replaced: 0,
+            scripted: 0,
+            dead_filter: spec.dead_filter,
+            wake_rule: ctx.wake_rule,
+        };
+        let mut foe = build_foe(pool, seed, ctx);
+
+        let mut diag = Diag::default();
+        // `Battle::log` is NEVER truncated per turn (only `set_log_enabled(false)`
+        // drops it), so the diagnostics must read a moving cursor — scanning
+        // `b.log` whole after every apply would multiply-count every event.
+        let mut cursor = b.log.len();
+        let mut result: Option<Outcome> = None;
+        loop {
+            if let Some(o) = b.outcome() {
+                result = Some(o);
+                break;
+            }
+            if b.turn > ctx.max_turns {
+                break;
+            }
+            let turn_now = b.turn;
+            let mut picks = [None, None];
+            {
+                let agents: [&mut dyn Agent; 2] = [foe.as_mut(), &mut me];
+                for s in 0..2 {
+                    let cs = b.legal_choices(dex, s);
+                    if !cs.is_empty() {
+                        picks[s] = Some(agents[s].choose(&b, dex, s, &cs));
+                    }
+                }
+            }
+            if picks == [None, None] {
+                break;
+            }
+            b.apply_choices(dex, picks).expect("apply");
+            scan_log(&mut diag, &b.log[cursor..], turn_now);
+            cursor = b.log.len();
+        }
+
+        acc.turns_survived += b.turn.saturating_sub(start) as u64;
+        match result {
+            Some(Outcome::P2Win) => acc.wins += 1,
+            Some(Outcome::P1Win) => acc.losses += 1,
+            _ => acc.ties += 1,
+        }
+        if diag.crit_on_p1 {
+            acc.n_crit += 1;
+        }
+        acc.n_surf_hits += diag.surf_hits as u64;
+        acc.n_replaced += me.replaced as u64;
+        if ctx.case == "4070-endgame" {
+            if species_alive(&b, dex, 0, "umbreon") == Some(false) {
+                acc.n_p1_ko += 1;
+            }
+        } else {
+            if species_alive(&b, dex, 1, "zapdos") == Some(true) {
+                acc.n_zapdos_alive += 1;
+            }
+            let traded = match (diag.first_p1_faint_at, diag.first_p2_faint_at) {
+                (Some(a), Some(bb)) => a <= bb,
+                (Some(_), None) => true,
+                _ => false,
+            };
+            if traded {
+                acc.n_traded += 1;
+            }
+        }
+    }
+    acc
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let case = arg(&args, "--case").unwrap_or("4070-endgame").to_string();
+    let trials: u64 = arg(&args, "--trials").unwrap_or("2000").parse().unwrap();
+    let iters: u32 = arg(&args, "--iters").unwrap_or("30000").parse().unwrap();
+    let rest_at: f64 = arg(&args, "--rest-at").unwrap_or("0.5").parse().unwrap();
+    let foe_kind = arg(&args, "--foe").unwrap_or("script").to_string();
+    let max_turns: u16 = arg(&args, "--max-turns").unwrap_or("1000").parse().unwrap();
+    let base_seed: u64 = arg(&args, "--seed").unwrap_or("1").parse().unwrap();
+    let recon_seed: u64 = arg(&args, "--recon-seed").unwrap_or("1").parse().unwrap();
+    let oracle_moves = !flag(&args, "--no-oracle-moves");
+    let toxic_on_sleeper = flag(&args, "--toxic-on-sleeper");
+    // `no-dead` counts a wake-up-turn Sleep Talk as dead too; --no-wake-rule
+    // restricts it to the strictly-awake case so the two can be separated.
+    let wake_rule = !flag(&args, "--no-wake-rule");
+    let csv_path = arg(&args, "--csv").map(str::to_string);
+    let threads: usize = arg(&args, "--threads")
+        .map(|s| s.parse().expect("--threads"))
+        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4))
+        .max(1);
+    let arm_depth_override: Option<usize> =
+        arg(&args, "--arm-depth").map(|s| s.parse().expect("--arm-depth"));
+
+    let root = repo_root();
+    let default_log = match case.as_str() {
+        "4070-endgame" => "tmp/corpus-4070/battle-4070.raw.log",
+        "4069-lead" | "4069-trapped" => "tmp/corpus-4069-truepicks/battle-4069t.raw.log",
+        other => panic!("unknown --case {other}"),
+    };
+    let log = root.join(arg(&args, "--log").unwrap_or(default_log));
+
+    let dex = load_dex();
+    let src = load_sources(&dex, &root);
+    let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
+    let pool: Arc<MetaPool> = Arc::new(load_meta_pool(&pool_path));
+    let battle_log = load_battle(&log);
+
+    // ---- pick the decision
+    let turn: u16 = match arg(&args, "--turn") {
+        Some(t) => t.parse().unwrap(),
+        None => match case.as_str() {
+            // first p2 MOVE decision with Suicune already the last mon
+            "4070-endgame" => {
+                let mut found = None;
+                for d in &battle_log.decisions {
+                    if d.side != 1 || !matches!(d.action, HumanAction::Move(_)) {
+                        continue;
+                    }
+                    let faints = battle_log.lines[..=d.cut]
+                        .iter()
+                        .filter(|l| l.starts_with("|faint|p2a"))
+                        .count();
+                    if faints >= 2 {
+                        found = Some(d.turn);
+                        break;
+                    }
+                }
+                found.expect("no last-mon p2 decision found")
+            }
+            "4069-lead" => 1,
+            _ => 2,
+        },
+    };
+
+    let d = battle_log
+        .decisions
+        .iter()
+        .find(|d| d.side == 1 && d.turn == turn)
+        .unwrap_or_else(|| panic!("no p2 decision at turn {turn}"));
+    let mut base = reconstruct(
+        &dex,
+        &src,
+        &pool_path,
+        &battle_log.lines,
+        &battle_log.evidence,
+        d,
+        recon_seed,
+    )
+    .expect("reconstruction");
+    let oracled = if oracle_moves {
+        complete_active_moves_from_future(&dex, &mut base, &battle_log.lines)
+    } else {
+        [Vec::new(), Vec::new()]
+    };
+
+    println!("case {case}  log {}", log.display());
+    println!(
+        "decision: p2 turn {turn}, played {:?}; oracle-moves={oracle_moves} {:?}",
+        d.action, oracled
+    );
+    for s in 0..2 {
+        let mons: Vec<String> = base.sides[s]
+            .party
+            .iter()
+            .map(|&slot| {
+                let p = &base.sides[s].roster[slot as usize];
+                format!(
+                    "{} {:.0}%{}",
+                    dex.species.key(p.species),
+                    100.0 * p.hp as f64 / p.maxhp.max(1) as f64,
+                    if p.status == Status::None {
+                        String::new()
+                    } else {
+                        format!(" {:?}", p.status)
+                    }
+                )
+            })
+            .collect();
+        println!("  side {s} (left {}): {}", base.sides[s].pokemon_left, mons.join(", "));
+        if let Some(id) = base.active_id(s) {
+            let pp: Vec<String> = base
+                .poke(id)
+                .move_slots
+                .iter()
+                .map(|m| format!("{}({})", dex.moves.key(m.id), m.pp))
+                .collect();
+            println!("    active {}: {}", dex.species.key(base.poke(id).species), pp.join(" "));
+        }
+    }
+
+    // ---- arms
+    let default_tail = match case.as_str() {
+        "4070-endgame" => Tail::FirstLegal,
+        _ => Tail::Search,
+    };
+    let tail = arg(&args, "--tail").map(parse_tail).unwrap_or(default_tail);
+
+    let all_arms: Vec<ArmSpec> = match case.as_str() {
+        "4070-endgame" => {
+            let from = turn.saturating_sub(AS_PLAYED_4070_FROM) as usize;
+            let played: Vec<&'static str> =
+                AS_PLAYED_4070.get(from..).map(<[&str]>::to_vec).unwrap_or_default();
+            let script = to_acts(&played);
+            vec![
+                ArmSpec {
+                    name: "as-played",
+                    depth: script.len(),
+                    script: script.clone(),
+                    tail,
+                    dead_filter: false,
+                },
+                ArmSpec {
+                    name: "no-dead",
+                    depth: script.len(),
+                    script,
+                    tail: Tail::SurfMax,
+                    dead_filter: true,
+                },
+                ArmSpec {
+                    name: "surf-max",
+                    script: Vec::new(),
+                    depth: 0,
+                    tail: Tail::SurfMax,
+                    dead_filter: false,
+                },
+                ArmSpec {
+                    name: "ice-max",
+                    script: Vec::new(),
+                    depth: 0,
+                    tail: Tail::IceMax,
+                    dead_filter: false,
+                },
+                ArmSpec {
+                    name: "search",
+                    script: Vec::new(),
+                    depth: 0,
+                    tail: Tail::Search,
+                    dead_filter: false,
+                },
+            ]
+        }
+        "4069-lead" | "4069-trapped" => {
+            let from = turn.saturating_sub(AS_PLAYED_4069_FROM) as usize;
+            let played: Vec<&'static str> =
+                AS_PLAYED_4069.get(from..).map(<[&str]>::to_vec).unwrap_or_default();
+            let script = to_acts(&played);
+            let rep = |k: &'static str| vec![Act::Move(k); 64];
+            let mut v = vec![ArmSpec {
+                name: "as-played",
+                depth: script.len(),
+                script,
+                tail,
+                dead_filter: false,
+            }];
+            if case == "4069-lead" {
+                v.push(ArmSpec {
+                    name: "switch-zapdos",
+                    script: vec![Act::SwitchTo("zapdos")],
+                    depth: 1,
+                    tail,
+                    dead_filter: false,
+                });
+                v.push(ArmSpec {
+                    name: "switch-snorlax",
+                    script: vec![Act::SwitchTo("snorlax")],
+                    depth: 1,
+                    tail,
+                    dead_filter: false,
+                });
+                v.push(ArmSpec {
+                    name: "curse-through",
+                    script: rep("curse"),
+                    depth: 64,
+                    tail,
+                    dead_filter: false,
+                });
+                v.push(ArmSpec {
+                    name: "return",
+                    script: vec![Act::Move("return")],
+                    depth: 1,
+                    tail,
+                    dead_filter: false,
+                });
+                v.push(ArmSpec {
+                    name: "doubleteam",
+                    script: vec![Act::Move("doubleteam")],
+                    depth: 1,
+                    tail,
+                    dead_filter: false,
+                });
+            } else {
+                for k in ["curse", "doubleteam", "milkdrink", "return"] {
+                    let name: &'static str = match k {
+                        "curse" => "curse-through",
+                        "doubleteam" => "doubleteam-through",
+                        "milkdrink" => "milkdrink-through",
+                        _ => "return-through",
+                    };
+                    v.push(ArmSpec { name, script: rep(k), depth: 64, tail, dead_filter: false });
+                }
+            }
+            v.push(ArmSpec {
+                name: "search",
+                script: Vec::new(),
+                depth: 0,
+                tail: Tail::Search,
+                dead_filter: false,
+            });
+            v
+        }
+        other => panic!("unknown --case {other}"),
+    };
+
+    let want = arg(&args, "--arm").unwrap_or("default");
+    let arms: Vec<ArmSpec> = all_arms
+        .into_iter()
+        .filter(|a| match want {
+            "all" => true,
+            // the search arm costs `--iters` playouts per decision per trial
+            "default" => a.name != "search",
+            list => list.split(',').any(|w| w == a.name),
+        })
+        .collect();
+    assert!(!arms.is_empty(), "--arm selected nothing");
+
+    println!(
+        "\nfoe={foe_kind} rest-at={rest_at:.2} tail={tail:?} iters={iters} trials={trials} \
+         max-turns={max_turns} wake-rule={wake_rule} threads={threads}\n"
+    );
+
+    let mut csv = String::from(
+        "case,turn,arm,foe,trials,wins,losses,ties,winrate,ci95,mean_turns,\
+         p1_ko,crit,surf_hits,replaced,zapdos_alive,traded\n",
+    );
+
+    for spec in &arms {
+        let depth = arm_depth_override.unwrap_or(spec.depth);
+        let started = std::time::Instant::now();
+        let ctx = Ctx {
+            case: &case,
+            foe_kind: &foe_kind,
+            turn,
+            depth,
+            rest_at,
+            toxic_on_sleeper,
+            wake_rule,
+            iters,
+            base_seed,
+            max_turns,
+        };
+        // Trials are independent; shard them. Every seed is a pure function
+        // of the trial index, so the thread count cannot move a number.
+        let bounds_of = |k: usize| -> (u64, u64) {
+            let per = trials / threads as u64;
+            let rem = trials % threads as u64;
+            let k = k as u64;
+            let lo = k * per + k.min(rem);
+            let hi = lo + per + u64::from(k < rem);
+            (lo, hi)
+        };
+        let acc = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..threads)
+                .map(|k| {
+                    let (lo, hi) = bounds_of(k);
+                    let dex = &dex;
+                    let base = &base;
+                    let pool = pool.clone();
+                    let ctx = ctx;
+                    scope.spawn(move || run_range(dex, base, &pool, spec, &ctx, lo, hi))
+                })
+                .collect();
+            handles.into_iter().fold(Acc::default(), |mut a, h| {
+                a.merge(&h.join().expect("trial thread"));
+                a
+            })
+        });
+        let Acc {
+            wins,
+            losses,
+            ties,
+            turns_survived,
+            n_crit,
+            n_surf_hits,
+            n_p1_ko,
+            n_traded,
+            n_zapdos_alive,
+            n_replaced,
+        } = acc;
+
+
+        let p = wins as f64 / trials as f64;
+        let ci = 1.96 * (p * (1.0 - p) / trials as f64).sqrt();
+        println!(
+            "{:<18} win {wins:>6}/{trials} = {p:.4} ± {ci:.4}  (loss {losses}, tie/cap {ties}, \
+             mean turns {:.1}, {:.0}s)",
+            spec.name,
+            turns_survived as f64 / trials as f64,
+            started.elapsed().as_secs_f64()
+        );
+        if case == "4070-endgame" {
+            println!(
+                "                   P(Umbreon KO) {:.4}  P(>=1 crit on p1) {:.4}  \
+                 mean Surf hits {:.2}  dead picks replaced {:.2}",
+                n_p1_ko as f64 / trials as f64,
+                n_crit as f64 / trials as f64,
+                n_surf_hits as f64 / trials as f64,
+                n_replaced as f64 / trials as f64
+            );
+        } else {
+            println!(
+                "                   P(foe faints no later than our first) {:.4}  \
+                 P(Zapdos alive at end) {:.4}  P(>=1 crit on p1) {:.4}",
+                n_traded as f64 / trials as f64,
+                n_zapdos_alive as f64 / trials as f64,
+                n_crit as f64 / trials as f64
+            );
+        }
+        csv.push_str(&format!(
+            "{case},{turn},{},{foe_kind},{trials},{wins},{losses},{ties},{p:.6},{ci:.6},{:.3},\
+             {:.6},{:.6},{:.4},{:.4},{:.6},{:.6}\n",
+            spec.name,
+            turns_survived as f64 / trials as f64,
+            n_p1_ko as f64 / trials as f64,
+            n_crit as f64 / trials as f64,
+            n_surf_hits as f64 / trials as f64,
+            n_replaced as f64 / trials as f64,
+            n_zapdos_alive as f64 / trials as f64,
+            n_traded as f64 / trials as f64,
+        ));
+    }
+
+    if let Some(path) = csv_path {
+        std::fs::write(&path, csv).unwrap_or_else(|e| panic!("write {path}: {e}"));
+        println!("\ncsv -> {path}");
+    }
+}
