@@ -15,6 +15,17 @@
 //! breaks its window on, and the failure markers it does see are
 //! subject-blind. "ENGINE DISAGREED 0" over this rule's firings is therefore
 //! silence, not evidence.
+//!
+//! Both of those holes are now REPAIRED in `noop_census::read_outcome`: the
+//! window follows a `|move|` line tagged `[from] <the masked move>` instead
+//! of breaking on it, and `cant`/`-miss` only count when they name the actor.
+//! Measured over the 570-battle corpus, the repair moved 245 rows out of
+//! "engine confirmed", every one of them credited from a foe `|cant|` line,
+//! and it takes 516 of the 863 real Sleep-Talk windows in that corpus from
+//! "no evidence" to a scoreable DISAGREED. The inline replicas below are
+//! deliberately left as the OLD reader — they are the record of what the
+//! census used to see, and `read_outcome_legacy` is the same code kept in
+//! the harness so the two can be scored side by side on every run.
 
 use nc2000_bot::smmcts::{dominated_actions, dominated_actions_with, MaskRules};
 use nc2000_engine::state::{Battle, DK, PokeId, Status};
