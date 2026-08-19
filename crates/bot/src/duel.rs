@@ -32,12 +32,37 @@ pub struct DuelSpec {
     /// clones always disable the log themselves; log content never affects
     /// battle state, so results stay comparable across this flag.
     pub log_on: bool,
+    /// Give BOTH agents of a side-swap pair the same seed, derived from the
+    /// pair index rather than the game index. Common random numbers in the
+    /// strongest available sense: the two games of a pair then differ only
+    /// in which builder sits on which side, so two builders that produce the
+    /// SAME agent make the pair bit-identical and its score exactly 0.5.
+    ///
+    /// That exactness is the point. It turns "A and B are the same
+    /// configuration" into a null control the harness must return 0.500 and
+    /// zero split pairs on — without it, identical arms still differ by
+    /// agent seed and the null is only 0.5 in expectation, which cannot
+    /// distinguish a working seam from a broken one. Use it for A/B arms
+    /// that differ by config alone (`MaskRules`); leave it off for
+    /// independent-strength duels, where correlating the two sides' seeds
+    /// removes variation that the CI is supposed to see.
+    ///
+    /// `false` is every pre-2026-08-20 harness, bit-identically.
+    pub crn_agent_seeds: bool,
 }
 
 impl DuelSpec {
     pub fn new(games: usize, base_seed: u64) -> Self {
         let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
-        DuelSpec { games, base_seed, threads, max_turns: 500, progress: false, log_on: false }
+        DuelSpec {
+            games,
+            base_seed,
+            threads,
+            max_turns: 500,
+            progress: false,
+            log_on: false,
+            crn_agent_seeds: false,
+        }
     }
 }
 
@@ -172,8 +197,19 @@ pub fn run_duel(
                     }
                     let g = &specs[i];
                     // agent seeds derive from game index only -> thread-count invariant
-                    let sa = spec.base_seed ^ (i as u64).wrapping_mul(0xA24B_AED4_963E_E407);
-                    let sb = spec.base_seed ^ (i as u64).wrapping_mul(0x9FB2_1C65_1E98_DF25);
+                    let (sa, sb) = if spec.crn_agent_seeds {
+                        // …or from the PAIR index, shared by both agents, so
+                        // the two games of a pair are the same battle with
+                        // the builders swapped (see `crn_agent_seeds`).
+                        let s = spec.base_seed
+                            ^ ((i / 2) as u64).wrapping_mul(0xA24B_AED4_963E_E407);
+                        (s, s)
+                    } else {
+                        (
+                            spec.base_seed ^ (i as u64).wrapping_mul(0xA24B_AED4_963E_E407),
+                            spec.base_seed ^ (i as u64).wrapping_mul(0x9FB2_1C65_1E98_DF25),
+                        )
+                    };
                     let mut agent_a = Timed {
                         inner: build_a(sa), ns: 0, moves: 0, samples_ns: Vec::new(),
                     };

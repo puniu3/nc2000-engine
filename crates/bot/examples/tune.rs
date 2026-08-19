@@ -138,6 +138,7 @@ fn main() {
                 max_turns,
                 progress: false,
                 log_on: false,
+                crn_agent_seeds: false,
             },
         );
 
@@ -182,6 +183,7 @@ fn main() {
                 max_turns,
                 progress: true,
                 log_on: false,
+                crn_agent_seeds: false,
             },
         );
         println!(

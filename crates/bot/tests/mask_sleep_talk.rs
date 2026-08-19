@@ -119,7 +119,7 @@ fn no_shadowing_of_downstream_rules() {
     asleep.poke_mut(me).status_state.set_int(DK::Time, 3);
     let shipped = reasons(dominated_actions(&asleep, &dex, 0), &dex, "snore");
     let legacy = reasons(
-        dominated_actions_with(&asleep, &dex, 0, MaskRules { sleep_talk_awake: false }),
+        dominated_actions_with(&asleep, &dex, 0, MaskRules { sleep_talk_awake: false, ..MaskRules::default() }),
         &dex,
         "snore",
     );
@@ -130,7 +130,7 @@ fn no_shadowing_of_downstream_rules() {
     slow.poke_mut(foe).boosts[4] = 6;
     let shipped_s = reasons(dominated_actions(&slow, &dex, 0), &dex, "snore");
     let legacy_s = reasons(
-        dominated_actions_with(&slow, &dex, 0, MaskRules { sleep_talk_awake: false }),
+        dominated_actions_with(&slow, &dex, 0, MaskRules { sleep_talk_awake: false, ..MaskRules::default() }),
         &dex,
         "snore",
     );

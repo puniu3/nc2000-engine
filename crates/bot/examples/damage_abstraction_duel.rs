@@ -282,6 +282,7 @@ fn main() {
             max_turns,
             progress: true,
             log_on: false,
+            crn_agent_seeds: false,
         },
     );
 

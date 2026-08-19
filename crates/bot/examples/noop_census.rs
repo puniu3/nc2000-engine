@@ -30,16 +30,23 @@
 //! protocol line that decided it, grouped by rule. A confirmation count that
 //! falls is a claim that needs its own evidence, not a free win.
 //!
+//! `--rules` measures a NON-default `MaskRules` set — the firing rate and
+//! the engine's verdict for a rule that is not shipped yet. Same token
+//! grammar as arena's blind spec: `NAME` on, `-NAME` off, comma-separated.
+//! With no `--rules` this reports the SHIPPED mask, which is what the ship
+//! gate reads.
+//!
 //! Usage:
 //!   cargo run --release -p nc2000-bot --example noop_census -- \
 //!     [--corpus tmp/corpus-spectator] [--battles 0-99] [--seed 1] [--show N]
+//!     [--rules immunity_all_switchins]
 
 use std::collections::BTreeMap;
 
 use nc2000_bot::corpus::{
     corpus_files, extract_decisions, load_battle, load_sources, reconstruct,
 };
-use nc2000_bot::smmcts::dominated_actions;
+use nc2000_bot::smmcts::{dominated_actions_with, MaskRules};
 use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::dex::{Dex, MoveId};
 use nc2000_engine::state::Battle;
@@ -313,6 +320,38 @@ fn main() {
     // over RAW visits. Every row whose chosen action the mask refuses is a
     // decision where the pruning changes the shipped bot's move.
     let agreement = arg_s(&args, "--agreement", "");
+    // The rule set under test. Default = the shipped mask, so the ship gate
+    // is unaffected by this flag existing.
+    let mut rules = MaskRules::default();
+    for tok in arg_s(&args, "--rules", "").split(',').filter(|t| !t.is_empty()) {
+        let (on, name) = match tok.strip_prefix('-') {
+            Some(rest) => (false, rest),
+            None => (true, tok),
+        };
+        let norm: String =
+            name.chars().map(|c| if c == '-' { '_' } else { c.to_ascii_lowercase() }).collect();
+        match norm.as_str() {
+            "sleep_talk_awake" => rules.sleep_talk_awake = on,
+            "immunity_ignores_switch_read" => rules.immunity_ignores_switch_read = on,
+            "immunity_all_switchins" => rules.immunity_all_switchins = on,
+            other => panic!("unknown mask rule `{other}`"),
+        }
+    }
+    if rules != MaskRules::default() {
+        eprintln!("NON-DEFAULT mask under test: {rules:?}");
+    }
+    if rules.immunity_ignores_switch_read {
+        // The replay below puts the foe on its FIRST legal action, which is
+        // `move 1` — the foe stays in. That is precisely the assumption this
+        // rule makes, so its disagreement count is structurally 0 and is NOT
+        // evidence of soundness. What could falsify it is a replay in which
+        // the foe SWITCHES; `perish_switch_census` measures the proxy (a
+        // vindicated read on 21 of 1,410 class-A decisions).
+        eprintln!(
+            "WARNING: the replay holds the foe still (`legal_choices().first()`), which is \
+             this rule's own assumption -- read its DISAGREED count as vacuous, not as a proof."
+        );
+    }
     let recorded = (!agreement.is_empty()).then(|| load_agreement(&agreement));
     let mut rows_matched = 0usize;
     let mut rows_changed = 0usize;
@@ -362,7 +401,7 @@ fn main() {
                 continue;
             };
             decisions += 1;
-            let dom = dominated_actions(&battle, &dex, d.side);
+            let dom = dominated_actions_with(&battle, &dex, d.side, rules);
             if let Some(rec) = recorded.as_ref() {
                 if let Some(bot) = rec.get(&(bi, d.side, d.turn as usize)) {
                     rows_matched += 1;
