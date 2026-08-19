@@ -337,7 +337,7 @@ impl BlindSearch {
             .iter()
             .map(|&c| {
                 crate::smmcts::certain_self_loss(&base, dex, side, c)
-                    || crate::smmcts::certain_noop(&base, dex, side, c)
+                    || crate::smmcts::certain_noop(&base, dex, side, c, cfg.mask_rules)
             })
             .collect();
         BlindSearch {

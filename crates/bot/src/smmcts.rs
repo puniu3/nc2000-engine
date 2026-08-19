@@ -126,6 +126,10 @@ pub struct RmConfig {
     /// can read them (Counter/Mirror Coat); the search checks that once at
     /// construction and clears this flag if it cannot.
     pub key_no_damage: bool,
+    /// Which optional root-mask rules this agent plays under. Default =
+    /// shipped; an arena arm flips one field to A/B a mask change, which is
+    /// the only harness that can see one at all (see `root_dominated`).
+    pub mask_rules: MaskRules,
 }
 
 impl Default for RmConfig {
@@ -144,6 +148,7 @@ impl Default for RmConfig {
             rollout_m16c: false,
             threshold_key: false,
             key_no_damage: false,
+            mask_rules: MaskRules::default(),
         }
     }
 }
@@ -451,7 +456,9 @@ pub struct SkuctSearch {
     /// **Only [`SkuctSearch::best`] consults this, so only callers that go
     /// through `best()` are masked at all.** [`BlindAgent`](crate::BlindAgent)
     /// does (it keeps its own copy and filters there), and that is the shipped
-    /// ladder client, so play is masked in production. [`RmAgent::choose`]
+    /// ladder client, so play is masked in production; so does
+    /// [`OpenAgent`](crate::OpenAgent), which shares `search_choose` — the web
+    /// product policy is masked too. [`RmAgent::choose`]
     /// does NOT: it picks straight off the visit counts and never calls
     /// `best()`. Every RmAgent consumer is therefore unmasked — `runner`,
     /// `duel`, `eval_ab_duel`, and arena's `skuct`/`rm` specs. Measured over
@@ -460,8 +467,11 @@ pub struct SkuctSearch {
     ///
     /// The consequence that bites: **a duel built on those harnesses cannot
     /// measure a change to [`noop_reason`] and will return a null.** Gate mask
-    /// changes with `arena blind:… blind:…` instead. `best_never_picks_masked_noop`
-    /// covers `best()`, not `choose()`, which is why this stayed invisible.
+    /// changes with arena's blind specs instead — and since both arms are the
+    /// same binary, the two rule sets have to differ by config, which is what
+    /// [`MaskRules`] on [`RmConfig`] and arena's `blindlegacy` spec are for.
+    /// `best_never_picks_masked_noop` covers `best()`, not `choose()`, which
+    /// is why this stayed invisible.
     root_dominated: [Vec<bool>; 2],
 }
 
@@ -488,8 +498,38 @@ pub(crate) fn certain_self_loss(b: &Battle, dex: &Dex, side: usize, c: SearchCho
 /// (2026-07-21 player reports: Reflect re-cast into |-fail|; Sleep Powder
 /// into a Substitute four turns running). Masked like [`certain_self_loss`]:
 /// never argmax'd while any alternative exists.
-pub(crate) fn certain_noop(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> bool {
-    noop_reason(b, dex, side, c).is_some()
+///
+/// `rules` is the A/B seam. The mask is consulted ONLY by `best()`, so no
+/// `RmAgent` harness can see a rule change (`root_dominated`'s doc); the only
+/// way to duel one is to run two `BlindAgent`s in the same process with
+/// different [`MaskRules`], which is what `RmConfig::mask_rules` and arena's
+/// `blindlegacy` spec exist for. Every instrument that reports the SHIPPED
+/// mask passes `MaskRules::default()`.
+pub(crate) fn certain_noop(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    c: SearchChoice,
+    rules: MaskRules,
+) -> bool {
+    noop_reason(b, dex, side, c, rules).is_some()
+}
+
+/// Which of the optional [`noop_reason`] rules are live. Every field defaults
+/// to the SHIPPED value, so `MaskRules::default()` is exactly the mask the
+/// ladder client plays; a field is added here only when an arm is needed to
+/// turn one rule OFF for an A/B, never to ship a rule half-on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MaskRules {
+    /// Sleep Talk / Snore selected by an AWAKE, strictly faster user
+    /// (`moveexec.rs:521`). `false` = the pre-2026-08-19 mask.
+    pub sleep_talk_awake: bool,
+}
+
+impl Default for MaskRules {
+    fn default() -> Self {
+        MaskRules { sleep_talk_awake: true }
+    }
 }
 
 /// Every action the mask would refuse at this root, with the rule that
@@ -497,6 +537,18 @@ pub(crate) fn certain_noop(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) 
 /// hides a *useful* move is a strength bug, so the rules have to be
 /// auditable one by one against real positions, not just unit cases.
 pub fn dominated_actions(b: &Battle, dex: &Dex, side: usize) -> Vec<(SearchChoice, &'static str)> {
+    dominated_actions_with(b, dex, side, MaskRules::default())
+}
+
+/// [`dominated_actions`] under an explicit rule set. `noop_census`,
+/// `analysis::report`, `human_agreement` and the postmortems all call the
+/// default-rules wrapper above, so every instrument reports the SHIPPED mask.
+pub fn dominated_actions_with(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    rules: MaskRules,
+) -> Vec<(SearchChoice, &'static str)> {
     b.clone()
         .legal_choices(dex, side)
         .into_iter()
@@ -504,7 +556,7 @@ pub fn dominated_actions(b: &Battle, dex: &Dex, side: usize) -> Vec<(SearchChoic
             if certain_self_loss(b, dex, side, c) {
                 return Some((c, "self-KO with the last mon"));
             }
-            noop_reason(b, dex, side, c).map(|why| (c, why))
+            noop_reason(b, dex, side, c, rules).map(|why| (c, why))
         })
         .collect()
 }
@@ -561,7 +613,13 @@ fn faster_than_foe(b: &Battle, dex: &Dex, side: usize) -> bool {
 /// or a foe self-cure can make a refused action live before it resolves.
 /// `noop_census` measures that error rate against the engine over corpus
 /// positions; it is the number to re-check whenever a rule is added.
-fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'static str> {
+fn noop_reason(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    c: SearchChoice,
+    rules: MaskRules,
+) -> Option<&'static str> {
     use nc2000_engine::dex::Category;
     use nc2000_engine::state::Status;
     macro_rules! yes {
@@ -644,6 +702,41 @@ fn noop_reason(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> Option<&'
     // of 22 turns on the two that cannot do anything.
     if matches!(key, "perishsong" | "destinybond") && b.sides[side].pokemon_left == 1 {
         yes!("Perish Song and Destiny Bond fail from the last mon");
+    }
+    // ---- Sleep Talk / Snore chosen while AWAKE. `moveexec.rs:521`
+    // (`("sleeptalk","onTry") | ("snore","onTry")` => `RV::from_bool(status ==
+    // Slp)`) hands a false onTry to `moveexec.rs:1799`, which returns
+    // `MoveOutcome::Fail` and — unlike the PrepareHit branch two lines above
+    // it — emits NO `-fail`. The PP is already gone by then
+    // (`moveexec.rs:1492`, before `use_move`), so the turn is spent, nothing
+    // happens, and the protocol says nothing at all: this is the one mask rule
+    // whose firings `noop_census` can only score as SILENT agreement.
+    //
+    // `sleep_usable` is exactly {sleeptalk, snore} in this dex, the same pair
+    // the engine arm covers, so the flag mirrors the engine instead of
+    // transcribing a key list. Checked ABOVE the `category != Status` early
+    // return below, because Snore is physical.
+    //
+    // Needs the speed gate, and nothing else. The proof object is OUR OWN
+    // status, and the one thing that can change it before our move resolves is
+    // a foe that moves first and lands a sleep: `conditions.rs:159`
+    // (slp/onBeforeMove) decrements the counter and then returns `Undef` for a
+    // `sleep_usable` move, so a user put to sleep this very turn still gets a
+    // working Sleep Talk. In-distribution, not theoretical — 15 of the 32
+    // meta-pool teams carry a sleep move. No switch gate: the rule never reads
+    // the foe. A mon that wakes on its OWN turn is untouched by construction:
+    // the sleep counter is hidden, so at the decision its status still reads
+    // `Slp` (24 such Sleep Talks in the 570-battle corpus).
+    //
+    // Found by battle-4070 (2026-08-19): Suicune, alone against a Rest-
+    // stalling Umbreon, spent 6 of its 64 last-mon turns on an awake Sleep
+    // Talk. Corpus rate: 54 of 863 Sleep Talk selections (6.3%) were made by a
+    // plainly awake mon.
+    if rules.sleep_talk_awake && ms.sleep_usable {
+        verdict!(
+            b.poke(att).status != Status::Slp && faster_than_foe(b, dex, side),
+            "Sleep Talk and Snore need the user asleep"
+        );
     }
     // Every rule below that reads the foe is conditioned on the foe being
     // stuck with the mon it has: otherwise the move is aimed at whatever
@@ -911,7 +1004,10 @@ impl SkuctSearch {
         let root_dominated = [0usize, 1].map(|s| {
             nodes[0].acts[s]
                 .iter()
-                .map(|&c| certain_self_loss(&root, dex, s, c) || certain_noop(&root, dex, s, c))
+                .map(|&c| {
+                    certain_self_loss(&root, dex, s, c)
+                        || certain_noop(&root, dex, s, c, cfg.mask_rules)
+                })
                 .collect::<Vec<bool>>()
         });
         SkuctSearch { cfg, rng, root, turn_cap, nodes, table, done: 0, depth_sum: 0, root_dominated }
@@ -1340,6 +1436,14 @@ mod dominated_action_tests {
         SearchChoice::Move(dex.moves.id(key).unwrap())
     }
 
+    /// Every test here asserts the SHIPPED mask, so it reads
+    /// [`super::certain_noop`] at `MaskRules::default()`. This shadows the
+    /// parent item deliberately; the ablation rule set is exercised by name in
+    /// `mask_rules_ablation_isolates_the_sleep_talk_rule`.
+    fn certain_noop(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> bool {
+        super::certain_noop(b, dex, side, c, MaskRules::default())
+    }
+
     #[test]
     fn noop_mask_matches_engine_failures() {
         let (dex, b) = setup();
@@ -1480,6 +1584,203 @@ mod dominated_action_tests {
         // says we are second.
         b.quick_claw_roll = true;
         assert!(!noop(&b, 0, "sleeppowder"), "coin up: the foe is faster outright");
+
+        // Same contract for the awake-Sleep-Talk rule, on the fixture that
+        // carries the pair: a Quick Claw foe can preempt with a sleep move,
+        // and the client cannot see the coin.
+        let (dex, st) = st_setup();
+        let st_noop = |b: &Battle, key: &str| certain_noop(b, &dex, 0, mv(&dex, key));
+        let st_foe = st.active_id(1).unwrap();
+        for key in ["sleeptalk", "snore"] {
+            assert!(st_noop(&st, key), "awake {key}, and we act first");
+        }
+        let mut claw = st.clone();
+        claw.poke_mut(st_foe).item = dex.known_items.quickclaw;
+        for key in ["sleeptalk", "snore"] {
+            assert!(!st_noop(&claw, key), "a Quick Claw foe may sleep us first ({key})");
+        }
+        claw.quick_claw_roll = true;
+        for key in ["sleeptalk", "snore"] {
+            assert!(!st_noop(&claw, key), "coin up: the foe is faster outright ({key})");
+        }
+    }
+
+    // ---- 2026-08-19: Sleep Talk / Snore chosen while awake --------------
+    //
+    // Battle 4070: Suicune, alone against a Rest-stalling Umbreon, spent 6 of
+    // its 64 last-mon turns on a Sleep Talk it was awake for. The engine fails
+    // the move at `moveexec.rs:521` (onTry = `status == Slp`) and — uniquely
+    // among the masked rules — says NOTHING in the protocol while doing it.
+
+    fn st_team() -> Vec<PokemonSet> {
+        // from_fixture does not validate movesets. Snore sits next to Sleep
+        // Talk on purpose: it is PHYSICAL, so refusing it proves the rule is
+        // reached before `noop_reason`'s `category != Status` early return.
+        serde_json::from_str(
+            r#"[
+            {"name":"Suicune","species":"Suicune","item":"","ability":"No Ability",
+             "moves":["Surf","Sleep Talk","Snore","Rest"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"N","level":50},
+            {"name":"Snorlax","species":"Snorlax","item":"","ability":"No Ability",
+             "moves":["Splash","Sleep Powder","Body Slam","Rest"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+            {"name":"Exeggutor","species":"Exeggutor","item":"","ability":"No Ability",
+             "moves":["Splash","Sleep Powder","Psychic","Rest"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50}
+        ]"#,
+        )
+        .unwrap()
+    }
+
+    /// Side 0 leads Suicune (base Spe 85), side 1 leads Snorlax (base Spe 30),
+    /// so the speed proof holds with nothing to argue about.
+    fn st_setup() -> (Dex, Battle) {
+        let dex = conformance::load_dex();
+        let t = st_team();
+        let mut b = Battle::from_fixture(&dex, "7,8,9,10", &t, &t).unwrap();
+        b.set_log_enabled(false);
+        b.choose(&dex, 0, "team 1, 2, 3").unwrap();
+        b.choose(&dex, 1, "team 2, 1, 3").unwrap();
+        (dex, b)
+    }
+
+    #[test]
+    fn noop_mask_covers_awake_sleep_talk() {
+        let (dex, b) = st_setup();
+        let noop = |b: &Battle, key: &str| certain_noop(b, &dex, 0, mv(&dex, key));
+        let me = b.active_id(0).unwrap();
+        let foe = b.active_id(1).unwrap();
+        assert!(
+            b.get_pokemon_action_speed(&dex, me) > b.get_pokemon_action_speed(&dex, foe),
+            "fixture must put side 0 first on speed"
+        );
+
+        // awake and faster ⇒ both halves of the engine's onTry arm are refused
+        assert!(noop(&b, "sleeptalk"), "awake Sleep Talk cannot call anything");
+        assert!(noop(&b, "snore"), "awake Snore, and it is physical");
+        assert!(!noop(&b, "surf"), "the real move stays live");
+
+        // asleep ⇒ exactly what the move is for
+        {
+            let mut b = b.clone();
+            b.set_status(&dex, me, "slp", Some(me), EffectHandle::None, true);
+            assert!(!noop(&b, "sleeptalk"), "asleep: Sleep Talk works");
+            assert!(!noop(&b, "snore"), "asleep: Snore works");
+        }
+
+        // moving second is not a proof: a foe that sleeps us this turn hands
+        // us a working Sleep Talk on the very turn the sleep lands
+        // (`conditions.rs:159` returns Undef for a sleep_usable move after
+        // decrementing). 15 of the 32 meta-pool teams carry a sleep move.
+        {
+            let mut b = b.clone();
+            b.poke_mut(foe).boosts[4] = 6;
+            assert!(!noop(&b, "sleeptalk"), "slower: the foe can sleep us first");
+            assert!(!noop(&b, "snore"), "slower: the foe can sleep us first");
+        }
+
+        // the foe's bench is irrelevant — the rule reads our own status only
+        {
+            let mut stuck = b.clone();
+            strand(&mut stuck, 1);
+            assert!(noop(&stuck, "sleeptalk"), "a stranded foe changes nothing");
+            let mut open = b.clone();
+            open.poke_mut(foe).trapped = false;
+            assert!(noop(&open, "sleeptalk"), "a switchable foe changes nothing");
+        }
+
+        // engine cross-check. Play the turn: the PP is gone, nothing happened,
+        // and — unlike every other masked rule — the log carries NO marker,
+        // so this asserts on state, not on a log string.
+        {
+            let st_id = dex.moves.id("sleeptalk").unwrap();
+            let pp_before = b.poke(me).get_move_slot(st_id).unwrap().pp;
+            let mut after = b.clone();
+            after.set_log_enabled(true);
+            after.choose(&dex, 0, "move sleeptalk").unwrap();
+            after.choose(&dex, 1, "move splash").unwrap();
+            assert_eq!(
+                after.poke(me).get_move_slot(st_id).unwrap().pp,
+                pp_before - 1,
+                "the PP is spent anyway"
+            );
+            assert_eq!(after.poke(me).hp, after.poke(me).maxhp, "no Rest was called");
+            assert_eq!(after.poke(foe).hp, after.poke(foe).maxhp, "no attack was called");
+            assert_eq!(after.poke(me).status, Status::None, "and no self-status");
+            let ms = after.poke_str(me);
+            assert!(
+                !after.log.iter().any(|l| l.starts_with(&format!("|-fail|{ms}"))),
+                "the engine fails it silently, with no -fail: {:?}",
+                after.log
+            );
+        }
+    }
+
+    /// The mask vetoes, it does not forbid: when every legal action is
+    /// refused, `best()` falls back to the unfiltered argmax and still
+    /// submits one. Battle 4070's turns 89-99 are the real instance — Rest at
+    /// full HP was the only move with PP left.
+    #[test]
+    fn best_still_submits_the_masked_noop_when_it_is_the_only_option() {
+        let dex = conformance::load_dex();
+        let t: Vec<PokemonSet> = serde_json::from_str(
+            r#"[
+            {"name":"Suicune","species":"Suicune","item":"","ability":"No Ability",
+             "moves":["Sleep Talk"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"N","level":50},
+            {"name":"Snorlax","species":"Snorlax","item":"","ability":"No Ability",
+             "moves":["Splash","Body Slam","Rest","Sleep Powder"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50},
+            {"name":"Exeggutor","species":"Exeggutor","item":"","ability":"No Ability",
+             "moves":["Splash","Psychic","Rest","Sleep Powder"],
+             "nature":"Serious","evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"gender":"M","level":50}
+        ]"#,
+        )
+        .unwrap();
+        let mut b = Battle::from_fixture(&dex, "7,8,9,10", &t, &t).unwrap();
+        b.set_log_enabled(false);
+        b.choose(&dex, 0, "team 1, 2, 3").unwrap();
+        b.choose(&dex, 1, "team 2, 1, 3").unwrap();
+        strand(&mut b, 0);
+        let acts = b.clone().legal_choices(&dex, 0);
+        assert_eq!(acts.len(), 1, "the fixture must leave exactly one action");
+        assert_eq!(dominated_actions(&b, &dex, 0).len(), 1, "and the mask must refuse it");
+
+        let cfg = RmConfig { rule: SelRule::Ucb, iterations: 200, ..Default::default() };
+        for seed in 1..=5u64 {
+            let mut s = SkuctSearch::new(&b, &dex, cfg.clone(), seed);
+            s.step(&dex, 200);
+            assert_eq!(
+                s.best(0).map(|c| c.to_input(&dex)),
+                Some("move sleeptalk".to_string()),
+                "best() must still submit something (seed {seed})"
+            );
+        }
+    }
+
+    /// The A/B seam: `MaskRules::default()` is the shipped mask, and the
+    /// ablation arm (arena `blindlegacy`) sees exactly one rule fewer.
+    #[test]
+    fn mask_rules_ablation_isolates_the_sleep_talk_rule() {
+        let (dex, b) = st_setup();
+        let legacy = MaskRules { sleep_talk_awake: false };
+        assert!(certain_noop(&b, &dex, 0, mv(&dex, "sleeptalk")), "shipped refuses it");
+        assert!(
+            !super::certain_noop(&b, &dex, 0, mv(&dex, "sleeptalk"), legacy),
+            "the ablation arm does not"
+        );
+        // …and nothing else moves: same position, same other verdicts.
+        let shipped: Vec<&str> =
+            dominated_actions(&b, &dex, 0).into_iter().map(|(_, why)| why).collect();
+        let ablated: Vec<&str> = dominated_actions_with(&b, &dex, 0, legacy)
+            .into_iter()
+            .map(|(_, why)| why)
+            .collect();
+        assert_eq!(
+            shipped.iter().filter(|w| !w.starts_with("Sleep Talk")).count(),
+            ablated.len(),
+            "the flag must move only its own rule: {shipped:?} vs {ablated:?}"
+        );
     }
 
     // ---- 2026-07-27: the same class, everywhere else it occurs -----------

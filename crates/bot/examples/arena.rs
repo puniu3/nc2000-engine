@@ -7,6 +7,7 @@
 //!   cargo run --release -p nc2000-bot --example arena -- \
 //!       mcts:300 maxdamage --games 100 [--seed 1] [--threads N] [--max-turns 500] \
 //!       [--pool fixtures|meta[:LO-HI]] [--tables data/preview-tables-v0]
+//!       [--heal-min N] [--phaze-min N] [--sleeptalk-min N]   a-priori TEAM filters
 //!
 //! Agent specs:
 //!   random | maxdamage
@@ -19,6 +20,12 @@
 //!                                    determinization; baked-table preview when the
 //!                                    opponent's pool identity resolves publicly
 //!                                    (battles run log-ON for its observer)
+//!   blindlegacy[:ITERS[:C[:BUCKETS]]] `blind` with the awake-Sleep-Talk mask rule OFF:
+//!                                    the ABLATION arm for a root-mask A/B. Only `best()`
+//!                                    reads the mask, so RmAgent specs (skuct/rm/mcts)
+//!                                    return an exact null on any mask change; pair this
+//!                                    with `blind` at the same budget, and concentrate the
+//!                                    firing rate with --sleeptalk-min 1
 //!   open[:ITERS[:C[:BUCKETS]]]       M14 open-team-sheet agent (the M12 product
 //!                                    policy): the blind machinery with the opponent's
 //!                                    TRUE sets pinned as a singleton belief — only
@@ -40,7 +47,7 @@ use std::sync::Arc;
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
 use nc2000_bot::preview::{load_meta_pool, MetaPool};
-use nc2000_bot::smmcts::SelRule;
+use nc2000_bot::smmcts::{MaskRules, SelRule};
 use nc2000_bot::{
     run_duel, Agent, BakedPreviewAgent, BlindAgent, BrAgent, CounterPickAgent, DuelSpec,
     EvalWeights, MaxDamageAgent, MctsAgent, MctsConfig, OpenAgent, Playout, PreviewMode,
@@ -63,6 +70,12 @@ enum AgentSpec {
     /// Threshold key + damage-bookkeeping-free key (the full abstraction).
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
     Blind { iterations: u32, c: f64, buckets: i64 },
+    /// `blind` with the awake-Sleep-Talk mask rule OFF — the ABLATION arm for
+    /// a root-mask change. `RmAgent` never calls `best()`, so `skuct`/`rm`
+    /// duels are exactly blind to the mask; two blind agents in one process
+    /// differing only in `RmConfig::mask_rules` is the only CRN-paired A/B
+    /// there is (`smmcts::SkuctSearch::root_dominated`).
+    BlindLegacy { iterations: u32, c: f64, buckets: i64 },
     Open { iterations: u32, c: f64, buckets: i64 },
     Exploit(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
@@ -123,6 +136,11 @@ impl AgentSpec {
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
             }),
+            "blindlegacy" => Ok(AgentSpec::BlindLegacy {
+                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
+                c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
+                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
+            }),
             "open" => Ok(AgentSpec::Open {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
@@ -158,6 +176,7 @@ impl AgentSpec {
             | AgentSpec::SkUct { iterations, .. }
             | AgentSpec::SkUctNs { iterations, .. }
             | AgentSpec::Blind { iterations, .. }
+            | AgentSpec::BlindLegacy { iterations, .. }
             | AgentSpec::Open { iterations, .. } => *iterations,
             AgentSpec::Exploit(inner) => inner.iterations(),
             AgentSpec::Baked { inner, .. } | AgentSpec::Counter { inner, .. } => {
@@ -172,6 +191,7 @@ impl AgentSpec {
             AgentSpec::Baked { .. }
             | AgentSpec::Counter { .. }
             | AgentSpec::Blind { .. }
+            | AgentSpec::BlindLegacy { .. }
             | AgentSpec::Open { .. } => true,
             AgentSpec::Exploit(inner) => inner.needs_tables(),
             _ => false,
@@ -184,7 +204,9 @@ impl AgentSpec {
     /// battle runs log-ON).
     fn is_blind(&self) -> bool {
         match self {
-            AgentSpec::Blind { .. } | AgentSpec::Open { .. } => true,
+            AgentSpec::Blind { .. } | AgentSpec::BlindLegacy { .. } | AgentSpec::Open { .. } => {
+                true
+            }
             AgentSpec::Exploit(inner)
             | AgentSpec::Baked { inner, .. }
             | AgentSpec::Counter { inner, .. } => inner.is_blind(),
@@ -283,6 +305,19 @@ impl AgentSpec {
                 tables.cloned(),
                 seed,
             )),
+            AgentSpec::BlindLegacy { iterations, c, buckets } => Box::new(BlindAgent::new(
+                RmConfig {
+                    iterations: *iterations,
+                    rule: SelRule::Ucb,
+                    c: *c,
+                    hp_buckets: *buckets,
+                    mask_rules: MaskRules { sleep_talk_awake: false },
+                    ..Default::default()
+                },
+                pool.expect("blind agents need the meta pool").clone(),
+                tables.cloned(),
+                seed,
+            )),
             AgentSpec::Open { iterations, c, buckets } => Box::new(OpenAgent::new(
                 RmConfig {
                     iterations: *iterations,
@@ -339,6 +374,9 @@ impl AgentSpec {
             }
             AgentSpec::Blind { iterations, c, buckets } => {
                 format!("blind:{iterations}:{c}:{buckets}")
+            }
+            AgentSpec::BlindLegacy { iterations, c, buckets } => {
+                format!("blindlegacy:{iterations}:{c}:{buckets}")
             }
             AgentSpec::Open { iterations, c, buckets } => {
                 format!("open:{iterations}:{c}:{buckets}")
@@ -579,6 +617,12 @@ fn main() {
         for (name, keys) in [
             ("--heal-min", &["rest", "recover", "softboiled", "milkdrink"][..]),
             ("--phaze-min", &["roar", "whirlwind"][..]),
+            // `--sleeptalk-min 1` selects the teams that can exercise the
+            // awake-Sleep-Talk rule at all. No value GUARANTEES a carrier in
+            // every legal 3-of-6 triple (the meta pool's max is 3 per team, and
+            // 6-h >= 3 needs h >= 4), so this concentrates the firing rate, it
+            // does not force it.
+            ("--sleeptalk-min", &["sleeptalk", "snore"][..]),
         ] {
             if let Some(n) = flag(&args, name).map(|v| v.parse::<usize>().unwrap()) {
                 let before = teams.len();
