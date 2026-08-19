@@ -72,11 +72,51 @@ impl Agent for RandomAgent {
 /// Static damage estimate: base power x STAB x type effectiveness. No
 /// voluntary switches, default team-preview order, healthiest bench on a
 /// forced switch. The classic calibration baseline.
-pub struct MaxDamageAgent;
+///
+/// **Two damage models, and why the broken one is still the default.** The
+/// M5 model above reads the dex's `basePower` field, and in
+/// `data/gen2stadium2.json` nineteen damaging moves carry `basePower` 0
+/// because their power is computed by a callback: return, frustration,
+/// flail, reversal, magnitude, present, counter, mirrorcoat, bide,
+/// superfang, psywave, plain (untyped) hiddenpower, the fixed-damage moves
+/// (seismictoss, nightshade, dragonrage, sonicboom) and the three OHKO
+/// moves. `move_score` scores all of them 0.0 — indistinguishable from a
+/// status move — and `max_by` then falls through to the LAST legal move.
+/// A Return-only Miltank therefore never attacks at all. Measured over the
+/// 570-battle corpus (`greedy_gap`, 20,719 decisions): the acting mon
+/// carries at least one such move on 8.4% of decisions, and this agent
+/// picks a different move from a conformant max-damage agent on 16.1%.
+///
+/// `MaxDamageAgent::conformant()` swaps the scorer for
+/// `eval::expected_hit_fraction` — the same estimate the shipped rollout
+/// policy uses (`mcts::greedy_pick`) and the one `examples/damage_conformance.rs`
+/// gates against the engine's own damage core (38 moves, every mean ratio
+/// inside +/-1.5% as of this commit). It fills in the callback base powers,
+/// resolves plain Hidden Power's real type and power from the attacker's
+/// DVs, halves physical defense for Explosion/Selfdestruct, and multiplies
+/// by the real accuracy-vs-evasion roll.
+///
+/// `new()` keeps the broken model **on purpose**: `maxdamage` is the anchor
+/// of every published strength number in the README ladder and the fixed
+/// opponent in the `skuct:300 vs maxdamage seed 1 = 14W 6L` bit-identity
+/// fingerprint that four milestone entries re-assert. Changing it in place
+/// would silently invalidate all of them. Controls that want an honest
+/// baseline ask for it by name.
+pub struct MaxDamageAgent {
+    /// `false` = the frozen M5 static model. `true` = `eval::expected_hit_fraction`.
+    conformant: bool,
+}
 
 impl MaxDamageAgent {
+    /// The frozen M5 baseline. Do not change its behaviour.
     pub fn new() -> Self {
-        MaxDamageAgent
+        MaxDamageAgent { conformant: false }
+    }
+
+    /// Same policy, damage model replaced by the conformance-gated eval
+    /// estimate. Arena/play spec `greedy`.
+    pub fn conformant() -> Self {
+        MaxDamageAgent { conformant: true }
     }
 
     fn move_score(dex: &Dex, att: &Pokemon, def: &Pokemon, id: MoveId) -> f64 {
@@ -117,7 +157,7 @@ impl Default for MaxDamageAgent {
 
 impl Agent for MaxDamageAgent {
     fn name(&self) -> String {
-        "maxdamage".into()
+        if self.conformant { "greedy".into() } else { "maxdamage".into() }
     }
 
     fn choose(
@@ -150,18 +190,27 @@ impl Agent for MaxDamageAgent {
         }
 
         // move request: strongest static hit; never switch voluntarily
-        let att = battle.active_id(side).map(|id| battle.poke(id));
-        let def = battle.active_id(1 - side).map(|id| battle.poke(id));
-        let (Some(att), Some(def)) = (att, def) else {
+        let (Some(att), Some(def)) = (battle.active_id(side), battle.active_id(1 - side)) else {
             return choices[0];
         };
+        let conformant = self.conformant;
         choices
             .iter()
             .copied()
             .filter(|c| matches!(c, SearchChoice::Move(_)))
             .max_by(|a, b| {
                 let f = |c: &SearchChoice| match c {
-                    SearchChoice::Move(id) => Self::move_score(dex, att, def, *id),
+                    SearchChoice::Move(id) => {
+                        if conformant {
+                            // Ranking by expected fraction of the defender's
+                            // current HP is order-identical to ranking by
+                            // expected damage: the divisor is the same for
+                            // every move at one decision.
+                            crate::eval::expected_hit_fraction(battle, dex, att, def, *id, true)
+                        } else {
+                            Self::move_score(dex, battle.poke(att), battle.poke(def), *id)
+                        }
+                    }
                     _ => -1.0,
                 };
                 f(a).total_cmp(&f(b))

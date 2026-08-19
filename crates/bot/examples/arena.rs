@@ -8,9 +8,10 @@
 //!       mcts:300 maxdamage --games 100 [--seed 1] [--threads N] [--max-turns 500] \
 //!       [--pool fixtures|meta[:LO-HI]] [--tables data/preview-tables-v0]
 //!       [--heal-min N] [--phaze-min N] [--sleeptalk-min N]   a-priori TEAM filters
+//!       [--type-min ghost:1[,ground:1]]                    a-priori TEAM filter
 //!
 //! Agent specs:
-//!   random | maxdamage
+//!   random | maxdamage | greedy
 //!   mcts[:ITERS[:C[:EPS[:TURNS]]]]   M6 heavy playout (ε-greedy + truncated + eval)
 //!   mcts5[:ITERS[:C]]                M5 baseline (uniform full rollouts, HP eval)
 //!   rm[:ITERS[:PROBE[:THRESHOLD[:BUCKETS]]]]  M7 state-keyed MCTS + RM-solved mixed root
@@ -73,6 +74,12 @@ use nc2000_engine::battle::PokemonSet;
 enum AgentSpec {
     Random,
     MaxDamage,
+    /// `MaxDamageAgent::conformant()` — the same greedy policy with the
+    /// dex-`basePower` scorer replaced by `eval::expected_hit_fraction`, the
+    /// model `examples/damage_conformance.rs` gates against the engine. The
+    /// legacy `maxdamage` spec stays frozen because the README ladder and the
+    /// `skuct:300 vs maxdamage seed 1 = 14W 6L` fingerprint are anchored on it.
+    Greedy,
     Mcts { iterations: u32, c: f64, eps: f64, turns: u16 },
     Mcts5 { iterations: u32, c: f64 },
     Rm { iterations: u32, probe: f64, threshold: f64, buckets: i64 },
@@ -174,6 +181,7 @@ impl AgentSpec {
         match parts[0] {
             "random" => Ok(AgentSpec::Random),
             "maxdamage" => Ok(AgentSpec::MaxDamage),
+            "greedy" => Ok(AgentSpec::Greedy),
             "mcts" => Ok(AgentSpec::Mcts {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
@@ -290,6 +298,7 @@ impl AgentSpec {
         match self {
             AgentSpec::Random => Box::new(RandomAgent::new(seed)),
             AgentSpec::MaxDamage => Box::new(MaxDamageAgent::new()),
+            AgentSpec::Greedy => Box::new(MaxDamageAgent::conformant()),
             AgentSpec::Mcts { iterations, c, eps, turns } => Box::new(MctsAgent::new(
                 MctsConfig {
                     iterations: *iterations,
@@ -408,6 +417,7 @@ impl AgentSpec {
         match self {
             AgentSpec::Random => "random".into(),
             AgentSpec::MaxDamage => "maxdamage".into(),
+            AgentSpec::Greedy => "greedy".into(),
             AgentSpec::Mcts { iterations, c, eps, turns } => {
                 format!("mcts:{iterations}:{c}:{eps}:{turns}")
             }
@@ -698,6 +708,50 @@ fn main() {
                 teams.retain(|sets| carries(sets, keys) >= n);
                 eprintln!("{name} {n}: {before} -> {} teams", teams.len());
                 assert!(teams.len() >= 2, "{name} {n} left fewer than 2 teams");
+            }
+        }
+        // `--type-min ghost:1[,ground:1]` is the immunity A/B's analogue of
+        // `--sleeptalk-min`: the type-immunity gate's exposure is a property
+        // of the DEFENDING type (Ghost blanks Normal/Fighting, Ground blanks
+        // Electric, Flying blanks Ground, Steel blanks Poison, Dark blanks
+        // Psychic), so the rule can only fire in a game whose pool can put
+        // such a mon in front. No value GUARANTEES a carrier in every legal
+        // 3-of-6 triple (the meta pool's maximum is 3 immunity-granting mons
+        // per team), so this concentrates the firing rate, it does not force
+        // it. Filtering happens BEFORE `pool_fingerprint`, so a filtered arm
+        // is a distinct pool in the artifact and cannot be misfiled as the
+        // full-pool one.
+        if let Some(spec) = flag(&args, "--type-min") {
+            for term in spec.split(',').filter(|t| !t.is_empty()) {
+                let (ty, n) = term.split_once(':').expect("--type-min TYPE:N");
+                let n: usize = n.parse().expect("--type-min TYPE:N");
+                let ty = ty.to_ascii_lowercase();
+                let before = teams.len();
+                teams.retain(|sets: &Vec<PokemonSet>| {
+                    sets.iter()
+                        .filter(|s| {
+                            let key: String = s
+                                .species
+                                .chars()
+                                .filter(|c| c.is_ascii_alphanumeric())
+                                .flat_map(|c| c.to_lowercase())
+                                .collect();
+                            dex.species
+                                .id(&key)
+                                .map(|id| {
+                                    dex.species
+                                        .get(id)
+                                        .types
+                                        .iter()
+                                        .any(|t| t.to_ascii_lowercase() == ty)
+                                })
+                                .unwrap_or(false)
+                        })
+                        .count()
+                        >= n
+                });
+                eprintln!("--type-min {ty}:{n}: {before} -> {} teams", teams.len());
+                assert!(teams.len() >= 2, "--type-min {ty}:{n} left fewer than 2 teams");
             }
         }
         teams

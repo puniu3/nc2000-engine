@@ -236,3 +236,103 @@ fn eval_weights_roundtrip() {
     let rt = EvalWeights::from_vec(&w.to_vec(), w.scale);
     assert_eq!(w, rt);
 }
+
+// --------------------------------------------- baseline damage-model audit
+
+/// The `maxdamage` baseline scores a move by its dex `basePower`, and the
+/// nineteen callback-powered damaging moves carry `basePower` 0 there. When
+/// a mon's WHOLE damaging kit is callback-powered — the format's Return-only
+/// Miltank, three of the 192 meta-pool mons — every score ties at 0.0 and
+/// `max_by` falls through to the last legal move, so the "max damage"
+/// baseline never attacks. `MaxDamageAgent::conformant()` scores through
+/// `eval::expected_hit_fraction` (the model `examples/damage_conformance.rs`
+/// gates against the engine core) and does.
+///
+/// This test pins BOTH halves: the legacy agent still misses the hit (so the
+/// published ladder numbers and the `skuct:300 vs maxdamage` fingerprint keep
+/// meaning what they meant), and the conformant one finds it.
+#[test]
+fn conformant_baseline_sees_callback_powered_moves() {
+    use nc2000_bot::preview::load_meta_pool;
+    use nc2000_engine::battle::SearchChoice;
+    use nc2000_engine::dex::Category;
+
+    let dex = load_dex();
+    let pool = load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json"));
+    let cap = nc2000_engine::battle::MAX_TOTAL_LEVEL as u32;
+
+    // Find a pool lead whose entire damaging kit is invisible to the static
+    // scorer, and a legal 3-pick that puts it in front.
+    let mut found = 0usize;
+    for i in 0..pool.teams.len() {
+        let a = &pool.teams[i].sets;
+        let b = &pool.teams[(i + 1) % pool.teams.len()].sets;
+        for lead in 0..a.len() {
+            let Some(pick_a) = legal_pick_leading(a, lead, cap) else { continue };
+            let Some(pick_b) = legal_pick_leading(b, 0, cap) else { continue };
+            let mut battle = Battle::from_fixture(&dex, "7,7,7,7", a, b).unwrap();
+            battle.set_log_enabled(false);
+            battle.choose(&dex, 0, &pick_a).unwrap();
+            battle.choose(&dex, 1, &pick_b).unwrap();
+            let Some(att) = battle.active_id(0) else { continue };
+            let Some(def) = battle.active_id(1) else { continue };
+            let slots: Vec<_> = battle.poke(att).move_slots.iter().map(|m| m.id).collect();
+            // "totally blind": at least one damaging move, all of them
+            // callback-powered, and at least one really does damage here.
+            let dmg: Vec<_> = slots
+                .iter()
+                .copied()
+                .filter(|&id| dex.move_static(id).category != Category::Status)
+                .collect();
+            if dmg.is_empty() || dmg.iter().any(|&id| dex.move_static(id).base_power > 0) {
+                continue;
+            }
+            if !dmg
+                .iter()
+                .any(|&id| eval::expected_hit_fraction(&battle, &dex, att, def, id, true) > 0.0)
+            {
+                continue;
+            }
+
+            let choices = battle.legal_choices(&dex, 0);
+            let legacy = MaxDamageAgent::new().choose(&battle, &dex, 0, &choices);
+            let conformant = MaxDamageAgent::conformant().choose(&battle, &dex, 0, &choices);
+            let is_hit = |c: SearchChoice| match c {
+                SearchChoice::Move(id) => {
+                    eval::expected_hit_fraction(&battle, &dex, att, def, id, true) > 0.0
+                }
+                _ => false,
+            };
+            assert!(
+                is_hit(conformant),
+                "conformant baseline must attack (team {i} lead {lead}, picked {conformant:?})"
+            );
+            assert!(
+                !is_hit(legacy),
+                "legacy baseline is expected to stay blind here — if this now attacks, the \
+                 frozen M5 model changed and every published maxdamage number moved with it \
+                 (team {i} lead {lead}, picked {legacy:?})"
+            );
+            assert_eq!(MaxDamageAgent::new().name(), "maxdamage");
+            assert_eq!(MaxDamageAgent::conformant().name(), "greedy");
+            found += 1;
+        }
+    }
+    assert!(found > 0, "no totally-blind pool lead found — the audit lost its subject");
+}
+
+/// First legal 3-pick (1-indexed, `lead` first) within the format's level cap.
+fn legal_pick_leading(sets: &[PokemonSet], lead: usize, cap: u32) -> Option<String> {
+    for j in 0..sets.len() {
+        for k in 0..sets.len() {
+            if j == lead || k == lead || j == k {
+                continue;
+            }
+            let tot = sets[lead].level as u32 + sets[j].level as u32 + sets[k].level as u32;
+            if tot <= cap {
+                return Some(format!("team {},{},{}", lead + 1, j + 1, k + 1));
+            }
+        }
+    }
+    None
+}

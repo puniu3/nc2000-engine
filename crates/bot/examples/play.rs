@@ -437,6 +437,9 @@ enum Spec {
     Human,
     Random,
     MaxDamage,
+    /// `MaxDamageAgent::conformant()`: same policy, damage model swapped for
+    /// the conformance-gated `eval::expected_hit_fraction`.
+    Greedy,
     Mcts { iterations: u32, c: f64, uniform: bool },
     Rm { iterations: u32 },
     Blind { iterations: u32 },
@@ -449,6 +452,7 @@ impl Spec {
             "human" => Spec::Human,
             "random" => Spec::Random,
             "maxdamage" => Spec::MaxDamage,
+            "greedy" => Spec::Greedy,
             // mcts = M6 heavy playout; mcts5 = M5 uniform-rollout baseline
             "mcts" | "mcts5" => Spec::Mcts {
                 iterations: p.get(1).and_then(|v| v.parse().ok()).unwrap_or(1000),
@@ -480,6 +484,7 @@ impl Spec {
             Spec::Human => Box::new(HumanAgent),
             Spec::Random => Box::new(RandomAgent::new(seed)),
             Spec::MaxDamage => Box::new(MaxDamageAgent::new()),
+            Spec::Greedy => Box::new(MaxDamageAgent::conformant()),
             Spec::Mcts { iterations, c, uniform } => {
                 let cfg = if *uniform {
                     MctsConfig::uniform(*iterations, *c)
