@@ -1,0 +1,1090 @@
+|j|☆FreeDrink
+|j|☆puniu3
+|t:|1787114734
+|gametype|singles
+|j| nc2000logger
+|player|p1|FreeDrink|169|
+|player|p2|puniu3|169|
+|gen|2
+|tier|[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict
+|rule|Species Clause: Limit one of each Pokémon
+|rule|Item Clause: Limit 1 of each item
+|rule|Stadium Sleep Clause: Limit one foe put to sleep
+|rule|Freeze Clause Mod: Limit one foe frozen
+|rule|OHKO Clause: OHKO moves are banned
+|rule|HP Percentage Mod: HP is shown in percentages
+|clearpoke
+|poke|p1|Snorlax, L55, M|item
+|poke|p1|Marowak, L50, M|item
+|poke|p1|Umbreon, L50, F|item
+|poke|p1|Gengar, L50, M|item
+|poke|p1|Cloyster, L50, M|item
+|poke|p1|Starmie, L50|item
+|poke|p2|Alakazam, L52, M|item
+|poke|p2|Umbreon, L52, M|item
+|poke|p2|Snorlax, L52, M|item
+|poke|p2|Steelix, L51, M|item
+|poke|p2|Suicune, L51|item
+|poke|p2|Misdreavus, L51, M|item
+|teampreview|3
+|
+|t:|1787115024
+|teamsize|p1|3
+|teamsize|p2|3
+|start
+|switch|p1a: Umbreon|Umbreon, L50, F|100/100
+|switch|p2a: Snorlax|Snorlax, L52, M|100/100
+|turn|1
+|
+|t:|1787115043
+|move|p1a: Umbreon|Toxic|p2a: Snorlax
+|-status|p2a: Snorlax|tox
+|move|p2a: Snorlax|Curse|p2a: Snorlax
+|-unboost|p2a: Snorlax|spe|1
+|-boost|p2a: Snorlax|atk|1
+|-boost|p2a: Snorlax|def|1
+|-damage|p2a: Snorlax|94/100 tox|[from] psn
+|
+|upkeep
+|turn|2
+|
+|t:|1787115061
+|move|p1a: Umbreon|Charm|p2a: Snorlax
+|-unboost|p2a: Snorlax|atk|2
+|move|p2a: Snorlax|Rest|p2a: Snorlax
+|-status|p2a: Snorlax|slp|[from] move: Rest
+|-heal|p2a: Snorlax|100/100 slp|[silent]
+|
+|-enditem|p2a: Snorlax|Mint Berry|[eat]
+|-curestatus|p2a: Snorlax|slp|[msg]
+|upkeep
+|turn|3
+|
+|t:|1787115079
+|move|p1a: Umbreon|Toxic|p2a: Snorlax
+|-status|p2a: Snorlax|tox
+|move|p2a: Snorlax|Curse|p2a: Snorlax
+|-unboost|p2a: Snorlax|spe|1
+|-boost|p2a: Snorlax|atk|1
+|-boost|p2a: Snorlax|def|1
+|-damage|p2a: Snorlax|94/100 tox|[from] psn
+|
+|upkeep
+|turn|4
+|
+|t:|1787115097
+|move|p1a: Umbreon|Charm|p2a: Snorlax
+|-unboost|p2a: Snorlax|atk|2
+|move|p2a: Snorlax|Rest|p2a: Snorlax
+|-status|p2a: Snorlax|slp|[from] move: Rest
+|-heal|p2a: Snorlax|100/100 slp|[silent]
+|
+|upkeep
+|turn|5
+|
+|t:|1787115123
+|switch|p1a: Marowak|Marowak, L50, M|100/100
+|cant|p2a: Snorlax|slp
+|
+|upkeep
+|turn|6
+|
+|t:|1787115141
+|switch|p2a: Suicune|Suicune, L51|100/100
+|move|p1a: Marowak|Swords Dance|p1a: Marowak
+|-boost|p1a: Marowak|atk|2
+|
+|upkeep
+|turn|7
+|
+|t:|1787115160
+|switch|p1a: Snorlax|Snorlax, L55, M|100/100
+|move|p2a: Suicune|Surf|p1a: Snorlax
+|-damage|p1a: Snorlax|83/100
+|
+|-heal|p1a: Snorlax|89/100|[from] item: Leftovers
+|upkeep
+|turn|8
+|
+|t:|1787115179
+|switch|p2a: Steelix|Steelix, L51, M|100/100
+|move|p1a: Snorlax|Double-Edge|p2a: Steelix
+|-resisted|p2a: Steelix
+|-damage|p2a: Steelix|86/100
+|-damage|p1a: Snorlax|87/100|[from] Recoil
+|
+|-heal|p1a: Snorlax|93/100|[from] item: Leftovers
+|-heal|p2a: Steelix|92/100|[from] item: Leftovers
+|upkeep
+|turn|9
+|
+|t:|1787115213
+|move|p1a: Snorlax|Curse|p1a: Snorlax
+|-unboost|p1a: Snorlax|spe|1
+|-boost|p1a: Snorlax|atk|1
+|-boost|p1a: Snorlax|def|1
+|move|p2a: Steelix|Toxic|p1a: Snorlax
+|-status|p1a: Snorlax|tox
+|
+|-heal|p2a: Steelix|98/100|[from] item: Leftovers
+|-heal|p1a: Snorlax|99/100 tox|[from] item: Leftovers
+|upkeep
+|turn|10
+|
+|t:|1787115234
+|move|p1a: Snorlax|Double-Edge|p2a: Steelix
+|-resisted|p2a: Steelix
+|-damage|p2a: Steelix|75/100
+|-damage|p1a: Snorlax|96/100 tox|[from] Recoil
+|-damage|p1a: Snorlax|90/100 tox|[from] psn
+|move|p2a: Steelix|Roar|p1a: Snorlax
+|drag|p1a: Umbreon|Umbreon, L50, F|100/100
+|
+|-heal|p2a: Steelix|81/100|[from] item: Leftovers
+|upkeep
+|turn|11
+|
+|t:|1787115254
+|move|p1a: Umbreon|Charm|p2a: Steelix
+|-unboost|p2a: Steelix|atk|2
+|move|p2a: Steelix|Toxic|p1a: Umbreon
+|-status|p1a: Umbreon|tox
+|
+|-heal|p2a: Steelix|87/100|[from] item: Leftovers
+|upkeep
+|turn|12
+|
+|t:|1787115274
+|switch|p1a: Marowak|Marowak, L50, M|100/100
+|switch|p2a: Snorlax|Snorlax, L52, M|100/100 slp
+|
+|upkeep
+|turn|13
+|
+|t:|1787115293
+|switch|p2a: Suicune|Suicune, L51|100/100
+|move|p1a: Marowak|Bonemerang|p2a: Suicune
+|-damage|p2a: Suicune|76/100
+|-damage|p2a: Suicune|52/100
+|-hitcount|p2a: Suicune|2
+|
+|upkeep
+|turn|14
+|
+|t:|1787115313
+|switch|p1a: Snorlax|Snorlax, L55, M|90/100 tox
+|-status|p1a: Snorlax|psn|[silent]
+|-damage|p1a: Snorlax|77/100 psn|[from] psn
+|move|p2a: Suicune|Surf|p1a: Snorlax
+|-damage|p1a: Snorlax|60/100 psn
+|
+|-heal|p1a: Snorlax|66/100 psn|[from] item: Leftovers
+|upkeep
+|turn|15
+|
+|t:|1787115336
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-status|p2a: Suicune|slp|[from] move: Rest
+|-heal|p2a: Suicune|100/100 slp|[silent]
+|move|p1a: Snorlax|Double-Edge|p2a: Suicune|[miss]
+|-miss|p1a: Snorlax
+|-damage|p1a: Snorlax|54/100 psn|[from] psn|[of] p2a: Suicune
+|
+|-heal|p1a: Snorlax|60/100 psn|[from] item: Leftovers
+|upkeep
+|turn|16
+|
+|t:|1787115357
+|cant|p2a: Suicune|slp
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p2a: Suicune|Rest|p2a: Suicune|[from] Sleep Talk
+|-fail|p2a: Suicune
+|move|p1a: Snorlax|Curse|p1a: Snorlax
+|-unboost|p1a: Snorlax|spe|1
+|-boost|p1a: Snorlax|atk|1
+|-boost|p1a: Snorlax|def|1
+|-damage|p1a: Snorlax|47/100 psn|[from] psn|[of] p2a: Suicune
+|
+|-heal|p1a: Snorlax|54/100 psn|[from] item: Leftovers
+|upkeep
+|turn|17
+|
+|t:|1787115378
+|cant|p2a: Suicune|slp
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p2a: Suicune|Ice Beam|p1a: Snorlax|[from] Sleep Talk
+|-damage|p1a: Snorlax|42/100 psn
+|move|p1a: Snorlax|Double-Edge|p2a: Suicune
+|-damage|p2a: Suicune|42/100 slp
+|-damage|p1a: Snorlax|31/100 psn|[from] Recoil
+|-damage|p1a: Snorlax|19/100 psn|[from] psn|[of] p2a: Suicune
+|
+|-heal|p1a: Snorlax|25/100 psn|[from] item: Leftovers
+|upkeep
+|turn|18
+|
+|t:|1787115401
+|-curestatus|p2a: Suicune|slp|[msg]
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-status|p2a: Suicune|slp|[from] move: Rest
+|-heal|p2a: Suicune|100/100 slp|[silent]
+|move|p1a: Snorlax|Rest|p1a: Snorlax
+|-status|p1a: Snorlax|slp|[from] move: Rest
+|-heal|p1a: Snorlax|100/100 slp|[silent]
+|
+|upkeep
+|turn|19
+|
+|t:|1787115421
+|cant|p2a: Suicune|slp
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p2a: Suicune|Surf|p1a: Snorlax|[from] Sleep Talk
+|-damage|p1a: Snorlax|82/100 slp
+|cant|p1a: Snorlax|slp
+|move|p1a: Snorlax|Sleep Talk|p1a: Snorlax
+|move|p1a: Snorlax|Rest|p1a: Snorlax|[from] Sleep Talk
+|-status|p1a: Snorlax|slp|[from] move: Rest
+|-heal|p1a: Snorlax|100/100 slp|[silent]
+|
+|upkeep
+|turn|20
+|
+|t:|1787115441
+|cant|p2a: Suicune|slp
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p2a: Suicune|Surf|p1a: Snorlax|[from] Sleep Talk
+|-damage|p1a: Snorlax|83/100 slp
+|cant|p1a: Snorlax|slp
+|move|p1a: Snorlax|Sleep Talk|p1a: Snorlax
+|move|p1a: Snorlax|Rest|p1a: Snorlax|[from] Sleep Talk
+|-status|p1a: Snorlax|slp|[from] move: Rest
+|-heal|p1a: Snorlax|100/100 slp|[silent]
+|
+|upkeep
+|turn|21
+|
+|t:|1787115461
+|switch|p2a: Steelix|Steelix, L51, M|87/100
+|cant|p1a: Snorlax|slp
+|move|p1a: Snorlax|Sleep Talk|p1a: Snorlax
+|move|p1a: Snorlax|Double-Edge|p2a: Steelix|[from] Sleep Talk
+|-resisted|p2a: Steelix
+|-damage|p2a: Steelix|65/100
+|-damage|p1a: Snorlax|97/100 slp|[from] Recoil
+|
+|-heal|p2a: Steelix|71/100|[from] item: Leftovers
+|-heal|p1a: Snorlax|100/100 slp|[from] item: Leftovers
+|upkeep
+|turn|22
+|
+|t:|1787115482
+|move|p2a: Steelix|Earthquake|p1a: Snorlax
+|-damage|p1a: Snorlax|84/100 slp
+|cant|p1a: Snorlax|slp
+|move|p1a: Snorlax|Sleep Talk|p1a: Snorlax
+|move|p1a: Snorlax|Curse|p1a: Snorlax|[from] Sleep Talk
+|-unboost|p1a: Snorlax|spe|1
+|-boost|p1a: Snorlax|atk|1
+|-boost|p1a: Snorlax|def|1
+|
+|-heal|p2a: Steelix|77/100|[from] item: Leftovers
+|-heal|p1a: Snorlax|90/100 slp|[from] item: Leftovers
+|upkeep
+|turn|23
+|
+|t:|1787115502
+|move|p2a: Steelix|Earthquake|p1a: Snorlax
+|-damage|p1a: Snorlax|79/100 slp
+|-curestatus|p1a: Snorlax|slp|[msg]
+|move|p1a: Snorlax|Double-Edge|p2a: Steelix
+|-resisted|p2a: Steelix
+|-damage|p2a: Steelix|49/100
+|-damage|p1a: Snorlax|74/100|[from] Recoil
+|
+|-heal|p2a: Steelix|55/100|[from] item: Leftovers
+|-heal|p1a: Snorlax|81/100|[from] item: Leftovers
+|upkeep
+|turn|24
+|
+|t:|1787115522
+|move|p1a: Snorlax|Double-Edge|p2a: Steelix
+|-resisted|p2a: Steelix
+|-damage|p2a: Steelix|23/100
+|-damage|p1a: Snorlax|76/100|[from] Recoil
+|move|p2a: Steelix|Roar|p1a: Snorlax
+|drag|p1a: Marowak|Marowak, L50, M|100/100
+|
+|-heal|p2a: Steelix|29/100|[from] item: Leftovers
+|upkeep
+|turn|25
+|
+|t:|1787115542
+|switch|p2a: Suicune|Suicune, L51|100/100 slp
+|move|p1a: Marowak|Bonemerang|p2a: Suicune
+|-damage|p2a: Suicune|77/100 slp
+|-damage|p2a: Suicune|54/100 slp
+|-hitcount|p2a: Suicune|2
+|
+|upkeep
+|turn|26
+|
+|t:|1787115561
+|switch|p1a: Snorlax|Snorlax, L55, M|76/100
+|-curestatus|p2a: Suicune|slp|[msg]
+|move|p2a: Suicune|Ice Beam|p1a: Snorlax
+|-damage|p1a: Snorlax|65/100
+|-status|p1a: Snorlax|frz
+|
+|-heal|p1a: Snorlax|71/100 frz|[from] item: Leftovers
+|upkeep
+|turn|27
+|
+|t:|1787115582
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-status|p2a: Suicune|slp|[from] move: Rest
+|-heal|p2a: Suicune|100/100 slp|[silent]
+|cant|p1a: Snorlax|frz
+|
+|-heal|p1a: Snorlax|78/100 frz|[from] item: Leftovers
+|-curestatus|p1a: Snorlax|frz|[msg]
+|upkeep
+|turn|28
+|
+|t:|1787115601
+|cant|p2a: Suicune|slp
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p2a: Suicune|Rest|p2a: Suicune|[from] Sleep Talk
+|-fail|p2a: Suicune
+|move|p1a: Snorlax|Curse|p1a: Snorlax
+|-unboost|p1a: Snorlax|spe|1
+|-boost|p1a: Snorlax|atk|1
+|-boost|p1a: Snorlax|def|1
+|
+|-heal|p1a: Snorlax|84/100|[from] item: Leftovers
+|upkeep
+|turn|29
+|
+|t:|1787115620
+|switch|p2a: Steelix|Steelix, L51, M|29/100
+|move|p1a: Snorlax|Curse|p1a: Snorlax
+|-unboost|p1a: Snorlax|spe|1
+|-boost|p1a: Snorlax|atk|1
+|-boost|p1a: Snorlax|def|1
+|
+|-heal|p2a: Steelix|35/100|[from] item: Leftovers
+|-heal|p1a: Snorlax|90/100|[from] item: Leftovers
+|upkeep
+|turn|30
+|
+|t:|1787115640
+|move|p2a: Steelix|Toxic|p1a: Snorlax
+|-status|p1a: Snorlax|tox
+|move|p1a: Snorlax|Double-Edge|p2a: Steelix
+|-resisted|p2a: Steelix
+|-damage|p2a: Steelix|7/100
+|-damage|p1a: Snorlax|85/100 tox|[from] Recoil
+|-damage|p1a: Snorlax|79/100 tox|[from] psn
+|
+|-heal|p2a: Steelix|13/100|[from] item: Leftovers
+|-heal|p1a: Snorlax|85/100 tox|[from] item: Leftovers
+|upkeep
+|turn|31
+|
+|t:|1787115660
+|move|p2a: Steelix|Explosion|p1a: Snorlax
+|-damage|p1a: Snorlax|47/100 tox
+|faint|p2a: Steelix
+|
+|t:|1787115678
+|switch|p2a: Snorlax|Snorlax, L52, M|100/100 slp
+|
+|-heal|p1a: Snorlax|53/100 tox|[from] item: Leftovers
+|upkeep
+|turn|32
+|
+|t:|1787115697
+|cant|p2a: Snorlax|slp
+|move|p1a: Snorlax|Double-Edge|p2a: Snorlax
+|-damage|p2a: Snorlax|11/100 slp
+|-damage|p1a: Snorlax|32/100 tox|[from] Recoil
+|-damage|p1a: Snorlax|20/100 tox|[from] psn
+|
+|-heal|p1a: Snorlax|26/100 tox|[from] item: Leftovers
+|upkeep
+|turn|33
+|
+|t:|1787115716
+|-curestatus|p2a: Snorlax|slp|[msg]
+|move|p2a: Snorlax|Earthquake|p1a: Snorlax
+|-damage|p1a: Snorlax|17/100 tox
+|move|p1a: Snorlax|Rest|p1a: Snorlax
+|-status|p1a: Snorlax|slp|[from] move: Rest
+|-heal|p1a: Snorlax|100/100 slp|[silent]
+|
+|upkeep
+|turn|34
+|
+|t:|1787115733
+|move|p2a: Snorlax|Rest|p2a: Snorlax
+|-status|p2a: Snorlax|slp|[from] move: Rest
+|-heal|p2a: Snorlax|100/100 slp|[silent]
+|cant|p1a: Snorlax|slp
+|move|p1a: Snorlax|Sleep Talk|p1a: Snorlax
+|move|p1a: Snorlax|Double-Edge|p2a: Snorlax|[from] Sleep Talk
+|-damage|p2a: Snorlax|15/100 slp
+|-damage|p1a: Snorlax|81/100 slp|[from] Recoil
+|
+|-heal|p1a: Snorlax|87/100 slp|[from] item: Leftovers
+|upkeep
+|turn|35
+|
+|t:|1787115750
+|cant|p2a: Snorlax|slp
+|cant|p1a: Snorlax|slp
+|move|p1a: Snorlax|Sleep Talk|p1a: Snorlax
+|move|p1a: Snorlax|Rest|p1a: Snorlax|[from] Sleep Talk
+|-status|p1a: Snorlax|slp|[from] move: Rest
+|-heal|p1a: Snorlax|100/100 slp|[silent]
+|
+|upkeep
+|turn|36
+|
+|t:|1787115767
+|cant|p2a: Snorlax|slp
+|cant|p1a: Snorlax|slp
+|move|p1a: Snorlax|Sleep Talk|p1a: Snorlax
+|move|p1a: Snorlax|Rest|p1a: Snorlax|[from] Sleep Talk
+|-fail|p1a: Snorlax
+|
+|upkeep
+|turn|37
+|
+|t:|1787115784
+|-curestatus|p2a: Snorlax|slp|[msg]
+|move|p2a: Snorlax|Rest|p2a: Snorlax
+|-status|p2a: Snorlax|slp|[from] move: Rest
+|-heal|p2a: Snorlax|100/100 slp|[silent]
+|cant|p1a: Snorlax|slp
+|move|p1a: Snorlax|Sleep Talk|p1a: Snorlax
+|move|p1a: Snorlax|Double-Edge|p2a: Snorlax|[from] Sleep Talk
+|-damage|p2a: Snorlax|15/100 slp
+|-damage|p1a: Snorlax|80/100 slp|[from] Recoil
+|
+|-heal|p1a: Snorlax|86/100 slp|[from] item: Leftovers
+|upkeep
+|turn|38
+|
+|t:|1787115800
+|cant|p2a: Snorlax|slp
+|-curestatus|p1a: Snorlax|slp|[msg]
+|move|p1a: Snorlax|Double-Edge|p2a: Snorlax
+|-damage|p2a: Snorlax|0 fnt
+|-damage|p1a: Snorlax|83/100|[from] Recoil
+|faint|p2a: Snorlax
+|
+|t:|1787115800
+|switch|p2a: Suicune|Suicune, L51|100/100 slp
+|
+|-heal|p1a: Snorlax|90/100|[from] item: Leftovers
+|upkeep
+|turn|39
+|
+|t:|1787115814
+|cant|p2a: Suicune|slp
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p2a: Suicune|Rest|p2a: Suicune|[from] Sleep Talk
+|-fail|p2a: Suicune
+|move|p1a: Snorlax|Double-Edge|p2a: Suicune
+|-damage|p2a: Suicune|25/100 slp
+|-damage|p1a: Snorlax|76/100|[from] Recoil
+|
+|-heal|p1a: Snorlax|82/100|[from] item: Leftovers
+|upkeep
+|turn|40
+|
+|t:|1787115830
+|-curestatus|p2a: Suicune|slp|[msg]
+|move|p2a: Suicune|Ice Beam|p1a: Snorlax
+|-damage|p1a: Snorlax|71/100
+|-status|p1a: Snorlax|frz
+|cant|p1a: Snorlax|frz
+|
+|-heal|p1a: Snorlax|77/100 frz|[from] item: Leftovers
+|upkeep
+|turn|41
+|
+|t:|1787115848
+|move|p2a: Suicune|Surf|p1a: Snorlax
+|-damage|p1a: Snorlax|60/100 frz
+|cant|p1a: Snorlax|frz
+|
+|-heal|p1a: Snorlax|66/100 frz|[from] item: Leftovers
+|upkeep
+|turn|42
+|
+|t:|1787115867
+|move|p2a: Suicune|Surf|p1a: Snorlax
+|-damage|p1a: Snorlax|50/100 frz
+|cant|p1a: Snorlax|frz
+|
+|-heal|p1a: Snorlax|57/100 frz|[from] item: Leftovers
+|upkeep
+|turn|43
+|
+|t:|1787115886
+|move|p2a: Suicune|Surf|p1a: Snorlax
+|-damage|p1a: Snorlax|40/100 frz
+|cant|p1a: Snorlax|frz
+|
+|-heal|p1a: Snorlax|46/100 frz|[from] item: Leftovers
+|upkeep
+|turn|44
+|
+|t:|1787115905
+|move|p2a: Suicune|Surf|p1a: Snorlax
+|-crit|p1a: Snorlax
+|-damage|p1a: Snorlax|15/100 frz
+|cant|p1a: Snorlax|frz
+|
+|-heal|p1a: Snorlax|21/100 frz|[from] item: Leftovers
+|upkeep
+|turn|45
+|
+|t:|1787115922
+|move|p2a: Suicune|Surf|p1a: Snorlax
+|-damage|p1a: Snorlax|4/100 frz
+|cant|p1a: Snorlax|frz
+|
+|-heal|p1a: Snorlax|10/100 frz|[from] item: Leftovers
+|upkeep
+|turn|46
+|
+|t:|1787115940
+|switch|p1a: Umbreon|Umbreon, L50, F|100/100 tox
+|-status|p1a: Umbreon|psn|[silent]
+|-damage|p1a: Umbreon|88/100 psn|[from] psn
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-status|p2a: Suicune|slp|[from] move: Rest
+|-heal|p2a: Suicune|100/100 slp|[silent]
+|
+|upkeep
+|turn|47
+|
+|t:|1787115958
+|switch|p1a: Snorlax|Snorlax, L55, M|10/100 frz
+|cant|p2a: Suicune|slp
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p2a: Suicune|Ice Beam|p1a: Snorlax|[from] Sleep Talk
+|-damage|p1a: Snorlax|0 fnt
+|faint|p1a: Snorlax
+|
+|t:|1787115979
+|switch|p1a: Marowak|Marowak, L50, M|100/100
+|
+|upkeep
+|turn|48
+|
+|t:|1787115995
+|cant|p2a: Suicune|slp
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p2a: Suicune|Rest|p2a: Suicune|[from] Sleep Talk
+|-fail|p2a: Suicune
+|move|p1a: Marowak|Bonemerang|p2a: Suicune|[miss]
+|-miss|p1a: Marowak
+|
+|upkeep
+|turn|49
+|
+|t:|1787116011
+|switch|p1a: Umbreon|Umbreon, L50, F|88/100 psn
+|-damage|p1a: Umbreon|76/100 psn|[from] psn
+|-curestatus|p2a: Suicune|slp|[msg]
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|59/100 psn
+|
+|upkeep
+|turn|50
+|
+|t:|1787116028
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p1a: Umbreon|Toxic|p2a: Suicune
+|-status|p2a: Suicune|tox
+|-damage|p1a: Umbreon|47/100 psn|[from] psn|[of] p2a: Suicune
+|
+|upkeep
+|turn|51
+|
+|t:|1787116046
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|-damage|p2a: Suicune|94/100 tox|[from] psn
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|-enditem|p1a: Umbreon|Mint Berry|[eat]
+|-curestatus|p1a: Umbreon|slp|[msg]
+|upkeep
+|turn|52
+|
+|t:|1787116062
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-status|p2a: Suicune|slp|[from] move: Rest
+|-heal|p2a: Suicune|100/100 slp|[silent]
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|-unboost|p2a: Suicune|atk|2
+|
+|upkeep
+|turn|53
+|
+|t:|1787116078
+|cant|p2a: Suicune|slp
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p2a: Suicune|Surf|p1a: Umbreon|[from] Sleep Talk
+|-damage|p1a: Umbreon|77/100
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|-unboost|p2a: Suicune|atk|2
+|
+|upkeep
+|turn|54
+|
+|t:|1787116093
+|cant|p2a: Suicune|slp
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon|[from] Sleep Talk
+|-damage|p1a: Umbreon|62/100
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|-unboost|p2a: Suicune|atk|2
+|
+|upkeep
+|turn|55
+|
+|t:|1787116110
+|-curestatus|p2a: Suicune|slp|[msg]
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|38/100
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|56
+|
+|t:|1787116126
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|75/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|57
+|
+|t:|1787116141
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-crit|p1a: Umbreon
+|-damage|p1a: Umbreon|30/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|58
+|
+|t:|1787116155
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|15/100 slp
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|59
+|
+|t:|1787116171
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|75/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|60
+|
+|t:|1787116186
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|50/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|61
+|
+|t:|1787116201
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|25/100 slp
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|62
+|
+|t:|1787116216
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|76/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|63
+|
+|t:|1787116231
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|51/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|64
+|
+|t:|1787116248
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|35/100 slp
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|65
+|
+|t:|1787116263
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|78/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|66
+|
+|t:|1787116377
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|62/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|67
+|
+|t:|1787116393
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|40/100 slp
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|68
+|
+|t:|1787116409
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-crit|p1a: Umbreon
+|-damage|p1a: Umbreon|56/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|69
+|
+|t:|1787116423
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|40/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|70
+|
+|t:|1787116438
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|18/100 slp
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|71
+|
+|t:|1787116454
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|75/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|72
+|
+|t:|1787116470
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|53/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|73
+|
+|t:|1787116487
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|38/100 slp
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|74
+|
+|t:|1787116504
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|77/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|75
+|
+|t:|1787116521
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|61/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|76
+|
+|t:|1787116539
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|77
+|
+|t:|1787116611
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|86/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|78
+|
+|t:|1787116629
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|69/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|79
+|
+|t:|1787116649
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|80
+|
+|t:|1787116669
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|86/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|81
+|
+|t:|1787116689
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|82
+|
+|t:|1787116709
+|move|p2a: Suicune|Sleep Talk|p2a: Suicune
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|83
+|
+|t:|1787116793
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|76/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|84
+|
+|t:|1787116814
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|59/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|85
+|
+|t:|1787116834
+|move|p2a: Suicune|Surf|p1a: Umbreon
+|-damage|p1a: Umbreon|34/100 slp
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|86
+|
+|t:|1787116854
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|84/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|87
+|
+|t:|1787116874
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|67/100 slp
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|88
+|
+|t:|1787116892
+|move|p2a: Suicune|Ice Beam|p1a: Umbreon
+|-damage|p1a: Umbreon|52/100 slp
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Rest|p1a: Umbreon
+|-status|p1a: Umbreon|slp|[from] move: Rest
+|-heal|p1a: Umbreon|100/100 slp|[silent]
+|
+|upkeep
+|turn|89
+|
+|t:|1787116901
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|90
+|
+|t:|1787116908
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|cant|p1a: Umbreon|slp
+|
+|upkeep
+|turn|91
+|
+|t:|1787116914
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|-curestatus|p1a: Umbreon|slp|[msg]
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|
+|upkeep
+|turn|92
+|
+|t:|1787116922
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|
+|upkeep
+|turn|93
+|
+|t:|1787116928
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|
+|upkeep
+|turn|94
+|
+|t:|1787116933
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|
+|upkeep
+|turn|95
+|
+|t:|1787116939
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|
+|upkeep
+|turn|96
+|
+|t:|1787116944
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|
+|upkeep
+|turn|97
+|
+|t:|1787116949
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|
+|upkeep
+|turn|98
+|
+|t:|1787116955
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|move|p1a: Umbreon|Charm|p2a: Suicune
+|
+|upkeep
+|turn|99
+|
+|t:|1787116960
+|move|p2a: Suicune|Rest|p2a: Suicune
+|-fail|p2a: Suicune
+|move|p1a: Umbreon|Toxic|p2a: Suicune
+|-status|p2a: Suicune|tox
+|
+|upkeep
+|turn|100
+|
+|t:|1787116970
+|switch|p1a: Marowak|Marowak, L50, M|100/100
+|move|p2a: Suicune|Struggle|p1a: Marowak
+|-damage|p1a: Marowak|97/100
+|-damage|p2a: Suicune|99/100 tox|[from] Recoil
+|-damage|p2a: Suicune|94/100 tox|[from] psn
+|
+|upkeep
+|turn|101
+|
+|t:|1787116984
+|move|p2a: Suicune|Struggle|p1a: Marowak
+|-damage|p1a: Marowak|94/100
+|-damage|p2a: Suicune|93/100 tox|[from] Recoil
+|-damage|p2a: Suicune|81/100 tox|[from] psn
+|move|p1a: Marowak|Bonemerang|p2a: Suicune
+|-damage|p2a: Suicune|60/100 tox
+|-damage|p2a: Suicune|37/100 tox
+|-hitcount|p2a: Suicune|2
+|
+|upkeep
+|turn|102
+|
+|t:|1787116998
+|move|p2a: Suicune|Struggle|p1a: Marowak
+|-damage|p1a: Marowak|91/100
+|-damage|p2a: Suicune|37/100 tox|[from] Recoil
+|-damage|p2a: Suicune|18/100 tox|[from] psn
+|move|p1a: Marowak|Bonemerang|p2a: Suicune
+|-damage|p2a: Suicune|0 fnt
+|-hitcount|p2a: Suicune|1
+|faint|p2a: Suicune
+|
+|win|FreeDrink
