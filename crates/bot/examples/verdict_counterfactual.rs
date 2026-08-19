@@ -63,7 +63,7 @@ use nc2000_bot::smmcts::RmConfig;
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::prng::{BattleRng, Prng};
-use nc2000_engine::state::{Battle, Status, DK};
+use nc2000_engine::state::{Battle, PokeId, Status, DK};
 
 // ------------------------------------------------------------------ args
 
@@ -179,6 +179,7 @@ enum Tail {
     FirstLegal,
     SurfMax,
     IceMax,
+    ZapEscape,
 }
 
 fn parse_tail(s: &str) -> Tail {
@@ -188,6 +189,7 @@ fn parse_tail(s: &str) -> Tail {
         "first-legal" => Tail::FirstLegal,
         "surf-max" => Tail::SurfMax,
         "ice-max" => Tail::IceMax,
+        "zap-escape" => Tail::ZapEscape,
         other => panic!("unknown --tail {other}"),
     }
 }
@@ -224,6 +226,44 @@ fn heur_suicune(
     choices[0]
 }
 
+/// V1's claimed escape route, made available as a TAIL so that it can be
+/// measured instead of hoped for. Under `--tail max-damage` a trapped Zapdos
+/// can never pick Whirlwind (0 damage), so the escape cannot occur at all and
+/// V1's mechanism is untestable; this tail plays it deliberately:
+///   * trapped Zapdos -> Whirlwind. Blowing the trapper off the field clears
+///     its volatiles, and Mean Look's linked `trapped` goes with it
+///     (`pokemon.rs:551 remove_linked_volatiles`).
+///   * free Zapdos carrying a Perish Song counter -> switch out, which is the
+///     only way to drop the counter.
+///   * anything else -> max damage.
+/// It is a BEST CASE for V1, not the bot's policy.
+fn heur_zap_escape(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    choices: &[SearchChoice],
+    md: &mut dyn Agent,
+) -> SearchChoice {
+    if let Some(id) = b.active_id(side) {
+        let p = b.poke(id);
+        if dex.species.key(p.species) == "zapdos" && !p.fainted {
+            if p.trapped {
+                if let Some(c) = pick_move(dex, choices, "whirlwind") {
+                    return c;
+                }
+            } else {
+                let perished = dex
+                    .conds_id("perishsong")
+                    .is_some_and(|cid| p.volatile(cid).is_some());
+                if perished && choices.iter().any(|c| matches!(c, SearchChoice::Switch(_))) {
+                    return healthiest_switch(b, side, choices);
+                }
+            }
+        }
+    }
+    md.choose(b, dex, side, choices)
+}
+
 struct ArmAgent {
     label: String,
     script: Vec<Act>,
@@ -236,6 +276,12 @@ struct ArmAgent {
     scripted: usize,
     dead_filter: bool,
     wake_rule: bool,
+    /// Which mon comes in after ours faints. This is a free parameter of the
+    /// harness, not of the position, and in 4069 it is worth more than the
+    /// decision under test: with Zapdos and Snorlax both at 100 % HP,
+    /// `MaxDamageAgent` takes the LAST tie (`agent.rs:142`) = Snorlax, and
+    /// `healthiest_switch` the FIRST = Zapdos. `true` = first-max = Zapdos.
+    replace_first_max: bool,
 }
 
 impl ArmAgent {
@@ -250,6 +296,10 @@ impl ArmAgent {
             Tail::FirstLegal => choices[0],
             Tail::SurfMax => heur_suicune(b, dex, side, choices, false),
             Tail::IceMax => heur_suicune(b, dex, side, choices, true),
+            Tail::ZapEscape => {
+                let inner = self.inner.as_mut().expect("tail agent built");
+                heur_zap_escape(b, dex, side, choices, inner.as_mut())
+            }
             Tail::Search | Tail::MaxDamage => {
                 let inner = self.inner.as_mut().expect("tail agent built");
                 inner.choose(b, dex, side, choices)
@@ -276,8 +326,18 @@ impl Agent for ArmAgent {
         // A forced replacement is not a scripted turn: it does not consume
         // the script, or every faint would shift the whole line by one.
         if is_forced_switch(choices) {
+            if self.replace_first_max {
+                return healthiest_switch(b, side, choices);
+            }
             return match self.tail {
-                Tail::Search | Tail::MaxDamage => self.tail_choice(b, dex, side, choices),
+                // ZapEscape must route here too: `healthiest_switch` breaks
+                // ties on the FIRST maximum and `MaxDamageAgent` on the LAST
+                // (`agent.rs:142`), so leaving it on the other branch made the
+                // two tails differ in replacement ORDER as well as in the
+                // escape -- which is not a controlled comparison.
+                Tail::Search | Tail::MaxDamage | Tail::ZapEscape => {
+                    self.tail_choice(b, dex, side, choices)
+                }
                 _ => healthiest_switch(b, side, choices),
             };
         }
@@ -550,6 +610,19 @@ struct Diag {
     first_p2_faint_at: Option<u16>,
     first_p1_faint_at: Option<u16>,
     trapped_p2: bool,
+    // --- V1/V2 conditional diagnostics. Read from BATTLE STATE, not the log:
+    // `trapped` is recomputed every turn by the TrapPokemon event
+    // (`turn.rs:450`) and the trap's release when the trapper leaves is
+    // SILENT (no `-end` line), so the log cannot answer these.
+    zap_in: bool,
+    zap_trapped: bool,
+    zap_freed: bool,
+    zap_ww_trapped: bool,
+    zap_escaped: bool,
+    zap_fainted: bool,
+    zap_faint_trapped: bool,
+    incoming_seen: bool,
+    incoming_ko: bool,
 }
 
 fn scan_log(diag: &mut Diag, log: &[String], turn: u16) {
@@ -614,6 +687,7 @@ struct Ctx<'a> {
     rest_at: f64,
     toxic_on_sleeper: bool,
     wake_rule: bool,
+    replace_first_max: bool,
     iters: u32,
     base_seed: u64,
     max_turns: u16,
@@ -631,6 +705,15 @@ struct Acc {
     n_traded: u64,
     n_zapdos_alive: u64,
     n_replaced: u64,
+    n_zap_in: u64,
+    n_zap_trapped: u64,
+    n_zap_freed: u64,
+    n_zap_ww: u64,
+    n_zap_escaped: u64,
+    n_zap_fainted: u64,
+    n_zap_faint_trapped: u64,
+    n_incoming: u64,
+    n_incoming_ko: u64,
 }
 
 impl Acc {
@@ -645,6 +728,15 @@ impl Acc {
         self.n_traded += o.n_traded;
         self.n_zapdos_alive += o.n_zapdos_alive;
         self.n_replaced += o.n_replaced;
+        self.n_zap_in += o.n_zap_in;
+        self.n_zap_trapped += o.n_zap_trapped;
+        self.n_zap_freed += o.n_zap_freed;
+        self.n_zap_ww += o.n_zap_ww;
+        self.n_zap_escaped += o.n_zap_escaped;
+        self.n_zap_fainted += o.n_zap_fainted;
+        self.n_zap_faint_trapped += o.n_zap_faint_trapped;
+        self.n_incoming += o.n_incoming;
+        self.n_incoming_ko += o.n_incoming_ko;
     }
 }
 
@@ -700,16 +792,19 @@ fn run_range(
     for t in lo..hi {
         let mut b = base.clone();
         b.set_log_enabled(true);
-        b.prng = BattleRng::seeded(
-            Prng::from_seed_str(&format!(
-                "{},{},{},{}",
-                ctx.base_seed + t,
-                ctx.base_seed + t + 7,
-                ctx.base_seed + t + 13,
-                ctx.base_seed + t + 29
-            ))
-            .expect("seed"),
-        );
+        // The battle seed is a pure function of the trial index, so the
+        // thread count cannot move a number. It must NOT go through
+        // `Prng::from_seed_str`: that parses four 16-bit limbs and rejects
+        // anything above 0xFFFF (`prng.rs:32`), so the string form panics on
+        // every trial index past 65506 and silently caps this harness at ~65k
+        // trials -- below the sample size these questions need. splitmix64
+        // instead, which fills all 64 bits.
+        let mut z = (ctx.base_seed ^ 0x243f_6a88_85a3_08d3)
+            .wrapping_add((t + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15));
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^= z >> 31;
+        b.prng = BattleRng::seeded(Prng::new(z));
         let start = b.turn;
         let seed = ctx
             .base_seed
@@ -724,7 +819,7 @@ fn run_range(
                 None,
                 seed,
             ))),
-            Tail::MaxDamage => Some(Box::new(MaxDamageAgent::new())),
+            Tail::MaxDamage | Tail::ZapEscape => Some(Box::new(MaxDamageAgent::new())),
             _ => None,
         };
         let mut me = ArmAgent {
@@ -738,10 +833,25 @@ fn run_range(
             scripted: 0,
             dead_filter: spec.dead_filter,
             wake_rule: ctx.wake_rule,
+            replace_first_max: ctx.replace_first_max,
         };
         let mut foe = build_foe(pool, seed, ctx);
 
         let mut diag = Diag::default();
+        // V1/V2 anchors: our mon at the decision (Miltank / Suicune) and the
+        // opponent's (Misdreavus / Umbreon), so "the mon that comes in after
+        // the trapper leaves" is identifiable.
+        let start_p2: Option<PokeId> = b.active_id(1);
+        let name_of = |id: Option<PokeId>| -> String {
+            id.map(|i| dex.species.key(b.poke(i).species).to_string()).unwrap_or_default()
+        };
+        let start_p1_name = name_of(b.active_id(0));
+        // V2's own mechanism. The replacement arrives and can die INSIDE one
+        // turn (the trapper leaves at perish1, the new mon eats our attack,
+        // our mon then perishes at the same turn's residual), so this cannot
+        // be read from the between-turn state -- it is read off the turn's
+        // own log slice.
+        let mut incoming_name: Option<String> = None;
         // `Battle::log` is NEVER truncated per turn (only `set_log_enabled(false)`
         // drops it), so the diagnostics must read a moving cursor — scanning
         // `b.log` whole after every apply would multiply-count every event.
@@ -769,9 +879,68 @@ fn run_range(
             if picks == [None, None] {
                 break;
             }
+            // ---- V1: what actually happens to Zapdos (state, pre-apply)
+            let zap = b
+                .active_id(1)
+                .filter(|id| dex.species.key(b.poke(*id).species) == "zapdos");
+            let zap_trapped_now = zap.is_some_and(|id| b.poke(id).trapped);
+            if let Some(id) = zap {
+                if !b.poke(id).fainted {
+                    diag.zap_in = true;
+                    if zap_trapped_now {
+                        diag.zap_trapped = true;
+                        if matches!(picks[1], Some(SearchChoice::Move(m))
+                            if dex.moves.key(m) == "whirlwind")
+                        {
+                            diag.zap_ww_trapped = true;
+                        }
+                    } else if diag.zap_trapped {
+                        // the trap released (the trapper left the field)
+                        diag.zap_freed = true;
+                        if matches!(picks[1], Some(SearchChoice::Switch(_))) {
+                            diag.zap_escaped = true;
+                        }
+                    }
+                }
+            }
+            // ---- V2: is our starter still the one on the field this turn?
+            let p2_still_start = b.active_id(1) == start_p2
+                && start_p2.is_some_and(|id| !b.poke(id).fainted);
+
+            let turn_lo = b.log.len();
             b.apply_choices(dex, picks).expect("apply");
             scan_log(&mut diag, &b.log[cursor..], turn_now);
             cursor = b.log.len();
+
+            if p2_still_start {
+                for l in &b.log[turn_lo..] {
+                    if incoming_name.is_none() {
+                        if let Some(rest) = l
+                            .strip_prefix("|switch|p1a: ")
+                            .or_else(|| l.strip_prefix("|drag|p1a: "))
+                        {
+                            let who = rest.split('|').next().unwrap_or("").trim().to_lowercase();
+                            if !who.is_empty() && who != start_p1_name {
+                                incoming_name = Some(who);
+                                diag.incoming_seen = true;
+                            }
+                        }
+                    }
+                    if let (Some(inc), Some(rest)) =
+                        (incoming_name.as_deref(), l.strip_prefix("|faint|p1a: "))
+                    {
+                        if rest.split('|').next().unwrap_or("").trim().to_lowercase() == inc {
+                            diag.incoming_ko = true;
+                        }
+                    }
+                }
+            }
+            if let Some(id) = zap {
+                if b.poke(id).fainted && !diag.zap_fainted {
+                    diag.zap_fainted = true;
+                    diag.zap_faint_trapped = zap_trapped_now;
+                }
+            }
         }
 
         acc.turns_survived += b.turn.saturating_sub(start) as u64;
@@ -802,6 +971,21 @@ fn run_range(
                 acc.n_traded += 1;
             }
         }
+        for (hit, slot) in [
+            (diag.zap_in, &mut acc.n_zap_in),
+            (diag.zap_trapped, &mut acc.n_zap_trapped),
+            (diag.zap_freed, &mut acc.n_zap_freed),
+            (diag.zap_ww_trapped, &mut acc.n_zap_ww),
+            (diag.zap_escaped, &mut acc.n_zap_escaped),
+            (diag.zap_fainted, &mut acc.n_zap_fainted),
+            (diag.zap_faint_trapped, &mut acc.n_zap_faint_trapped),
+            (diag.incoming_seen, &mut acc.n_incoming),
+            (diag.incoming_ko, &mut acc.n_incoming_ko),
+        ] {
+            if hit {
+                *slot += 1;
+            }
+        }
     }
     acc
 }
@@ -821,6 +1005,7 @@ fn main() {
     // `no-dead` counts a wake-up-turn Sleep Talk as dead too; --no-wake-rule
     // restricts it to the strictly-awake case so the two can be separated.
     let wake_rule = !flag(&args, "--no-wake-rule");
+    let replace_first_max = flag(&args, "--replace-first-max");
     let csv_path = arg(&args, "--csv").map(str::to_string);
     let threads: usize = arg(&args, "--threads")
         .map(|s| s.parse().expect("--threads"))
@@ -1063,12 +1248,15 @@ fn main() {
 
     println!(
         "\nfoe={foe_kind} rest-at={rest_at:.2} tail={tail:?} iters={iters} trials={trials} \
-         max-turns={max_turns} wake-rule={wake_rule} threads={threads}\n"
+         max-turns={max_turns} wake-rule={wake_rule} replace-first-max={replace_first_max} \
+         threads={threads}\n"
     );
 
     let mut csv = String::from(
-        "case,turn,arm,foe,trials,wins,losses,ties,winrate,ci95,mean_turns,\
-         p1_ko,crit,surf_hits,replaced,zapdos_alive,traded\n",
+        "case,turn,arm,foe,tail,iters,trials,wins,losses,ties,winrate,ci95,mean_turns,\
+         p1_ko,crit,surf_hits,replaced,zapdos_alive,traded,\
+         zap_in,zap_meanlooked,zap_ww_trapped,zap_freed,zap_escaped,zap_fainted,\
+         zap_died_trapped,incoming_seen,incoming_ko\n",
     );
 
     for spec in &arms {
@@ -1082,6 +1270,7 @@ fn main() {
             rest_at,
             toxic_on_sleeper,
             wake_rule,
+            replace_first_max,
             iters,
             base_seed,
             max_turns,
@@ -1123,6 +1312,15 @@ fn main() {
             n_traded,
             n_zapdos_alive,
             n_replaced,
+            n_zap_in,
+            n_zap_trapped,
+            n_zap_freed,
+            n_zap_ww,
+            n_zap_escaped,
+            n_zap_fainted,
+            n_zap_faint_trapped,
+            n_incoming,
+            n_incoming_ko,
         } = acc;
 
 
@@ -1145,17 +1343,45 @@ fn main() {
                 n_replaced as f64 / trials as f64
             );
         } else {
+            let f = |n: u64| n as f64 / trials as f64;
             println!(
                 "                   P(foe faints no later than our first) {:.4}  \
                  P(Zapdos alive at end) {:.4}  P(>=1 crit on p1) {:.4}",
-                n_traded as f64 / trials as f64,
-                n_zapdos_alive as f64 / trials as f64,
-                n_crit as f64 / trials as f64
+                f(n_traded),
+                f(n_zapdos_alive),
+                f(n_crit)
+            );
+            println!(
+                "                   zapdos: reached {:.4}  MeanLooked {:.4}  \
+                 WW-while-trapped {:.4}  freed {:.4}  escaped-by-switch {:.4}  \
+                 fainted {:.4}  died-trapped {:.4}",
+                f(n_zap_in),
+                f(n_zap_trapped),
+                f(n_zap_ww),
+                f(n_zap_freed),
+                f(n_zap_escaped),
+                f(n_zap_fainted),
+                f(n_zap_faint_trapped)
+            );
+            let cond = if n_incoming > 0 {
+                n_incoming_ko as f64 / n_incoming as f64
+            } else {
+                f64::NAN
+            };
+            println!(
+                "                   incoming (trapper left, our starter still in): \
+                 seen {:.4}  KO'd {:.4}  P(KO | seen) {:.4}",
+                f(n_incoming),
+                f(n_incoming_ko),
+                cond
             );
         }
+        let arm_tail = if spec.name == "search" { Tail::Search } else { spec.tail };
         csv.push_str(&format!(
-            "{case},{turn},{},{foe_kind},{trials},{wins},{losses},{ties},{p:.6},{ci:.6},{:.3},\
-             {:.6},{:.6},{:.4},{:.4},{:.6},{:.6}\n",
+            "{case},{turn},{},{foe_kind},{arm_tail:?},{iters},{trials},{wins},{losses},{ties},\
+             {p:.6},{ci:.6},{:.3},\
+             {:.6},{:.6},{:.4},{:.4},{:.6},{:.6},\
+             {:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
             spec.name,
             turns_survived as f64 / trials as f64,
             n_p1_ko as f64 / trials as f64,
@@ -1164,6 +1390,15 @@ fn main() {
             n_replaced as f64 / trials as f64,
             n_zapdos_alive as f64 / trials as f64,
             n_traded as f64 / trials as f64,
+            n_zap_in as f64 / trials as f64,
+            n_zap_trapped as f64 / trials as f64,
+            n_zap_ww as f64 / trials as f64,
+            n_zap_freed as f64 / trials as f64,
+            n_zap_escaped as f64 / trials as f64,
+            n_zap_fainted as f64 / trials as f64,
+            n_zap_faint_trapped as f64 / trials as f64,
+            n_incoming as f64 / trials as f64,
+            n_incoming_ko as f64 / trials as f64,
         ));
     }
 
