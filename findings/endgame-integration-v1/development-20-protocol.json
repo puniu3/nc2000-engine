@@ -1,0 +1,22 @@
+{
+  "schema": "nc2000-endgame-matches-v1",
+  "purpose": "Native 10-second development comparison; four frozen allocations against the shipped raw information path, 100 games each, 400 total.",
+  "catalog": "data/team-pool-v2/team-pool.json",
+  "prior": "data/belief-pool-v3/belief-pool.json",
+  "pairs": 50,
+  "candidate": {
+    "information": "public",
+    "solver_fraction": 0.2
+  },
+  "baseline": {
+    "information": "raw",
+    "solver_fraction": 0
+  },
+  "milliseconds": 10000,
+  "calibration_iterations": null,
+  "threads": 1,
+  "seed": 2026100304,
+  "interpretation": "Development only. Four allocations 0/5/10/20% use the same 50 independently drawn team/seed blocks. Each block holds teams and battle seed fixed and swaps the candidate/baseline seats; both seats share the bot seed. Teams draw by shipped drawWeight; opponent belief uses the frozen v3 pool, no custom community prior or baked pairs, as default play. Budget includes observation, synthesis, search, solver, and destruction; forced public moves may return early, while raw search follows the shipped stepped API. No pondering. The four allocations run concurrently in four processes with one thread each; leg execution order alternates by pair. Process RSS is sampled every 10 seconds. Equal wall time is the target; clocks make action paths nondeterministic. The 0% public arm is the solver deletion control, separately compared to the actual shipped raw information path. Select one nonzero allocation by highest complete paired mean score against raw, provided no illegal actions, no new emergency cap, p99 decision time <=110% budget, and solver spend <=allocation plus one measured probe; ties within 0.005 choose the smaller allocation. Lack of development significance is not failure. Freeze the selected candidate for 600 new seed pairs (1200 games) before confirmation. Report all four arms and differences relative to public OFF, with shared schedule blocks as clusters. No strength claim from calls or solved counts. Native results are not Web/device evidence and cannot alone authorize publication. Publication requires separate production-condition confirmation score >=0.52, paired 95% interval lower>0.50, no latency/memory/illegal/cap regression, and independent endgame holdout. No revision, seed, threshold, or allocation changes in response to confirmation outcomes. Intervals use Student t over pair means (normal-limit expansion of the 0.975 quantile); individual games are never treated as independent. Development scores are descriptive and never the publication gate.",
+  "catalog_sha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+  "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+}

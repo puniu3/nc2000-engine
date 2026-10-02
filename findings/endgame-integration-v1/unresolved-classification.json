@@ -1,0 +1,893 @@
+{
+  "source": "tmp/selfplay-endgames-v1/strong-measured.jsonl",
+  "source_sha256": "0f154a001b8608a5afd289a2f4f83dfff827ed03e9827b0e2640e55bd99ccb50",
+  "total_positions": 52,
+  "unresolved": 42,
+  "stop_counts": {
+    "NodeBudget": 14,
+    "TimeBudget": 28
+  },
+  "classes": {
+    "1v2": 7,
+    "2v2": 17,
+    "1v1": 8,
+    "2v1": 10
+  },
+  "recovery_move_present": {
+    "True": 40,
+    "False": 2
+  },
+  "cross_tab": {
+    "NodeBudget / 1v2 / recovery=True": 2,
+    "TimeBudget / 1v2 / recovery=True": 5,
+    "NodeBudget / 2v2 / recovery=True": 5,
+    "TimeBudget / 2v2 / recovery=True": 12,
+    "TimeBudget / 1v1 / recovery=True": 5,
+    "TimeBudget / 2v1 / recovery=True": 5,
+    "NodeBudget / 2v1 / recovery=True": 5,
+    "TimeBudget / 1v1 / recovery=False": 1,
+    "NodeBudget / 1v1 / recovery=False": 1,
+    "NodeBudget / 1v1 / recovery=True": 1
+  },
+  "interpretation": "Historical development corpus, not independent holdout. Recovery means a living party member has PP in a listed recovery/draining move; item-only recovery and actual move usability are not inferred. Stop records are observed first-stop reasons, not counterfactual claims that more memory or time would solve the position. Bounds wider than 0.02 remain unresolved.",
+  "positions": [
+    {
+      "game": 1,
+      "decision": 18,
+      "alive": [
+        1,
+        2
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 0.9081355300766306,
+      "seconds": 7.690051166,
+      "nodes": 120338,
+      "runs": 204376,
+      "root_actions": [
+        1,
+        2
+      ]
+    },
+    {
+      "game": 1,
+      "decision": 19,
+      "alive": [
+        1,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 0.16688851091248735,
+      "seconds": 10.040389584,
+      "nodes": 113033,
+      "runs": 246901,
+      "root_actions": [
+        4,
+        5
+      ]
+    },
+    {
+      "game": 2,
+      "decision": 28,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 6.412722167,
+      "nodes": 121709,
+      "runs": 201191,
+      "root_actions": [
+        2,
+        1
+      ]
+    },
+    {
+      "game": 2,
+      "decision": 37,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 10.050841292,
+      "nodes": 111008,
+      "runs": 322029,
+      "root_actions": [
+        5,
+        5
+      ]
+    },
+    {
+      "game": 2,
+      "decision": 38,
+      "alive": [
+        1,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 0.8828633626574813,
+      "seconds": 10.051130292,
+      "nodes": 113733,
+      "runs": 312861,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 2,
+      "decision": 39,
+      "alive": [
+        1,
+        2
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 0.8470052083689552,
+      "seconds": 1.035802542,
+      "nodes": 120552,
+      "runs": 22593,
+      "root_actions": [
+        4,
+        5
+      ]
+    },
+    {
+      "game": 2,
+      "decision": 40,
+      "alive": [
+        1,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 10.07764825,
+      "nodes": 107824,
+      "runs": 336798,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 4,
+      "decision": 16,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "recover",
+        "rest"
+      ],
+      "width": 0.6016511985895494,
+      "seconds": 10.101621958,
+      "nodes": 115966,
+      "runs": 309624,
+      "root_actions": [
+        1,
+        2
+      ]
+    },
+    {
+      "game": 4,
+      "decision": 17,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "recover",
+        "rest"
+      ],
+      "width": 0.42228636611815973,
+      "seconds": 6.2952455,
+      "nodes": 120470,
+      "runs": 149764,
+      "root_actions": [
+        5,
+        5
+      ]
+    },
+    {
+      "game": 4,
+      "decision": 18,
+      "alive": [
+        2,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "recover",
+        "rest"
+      ],
+      "width": 0.03728077328545143,
+      "seconds": 10.047114792,
+      "nodes": 59225,
+      "runs": 380515,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 4,
+      "decision": 19,
+      "alive": [
+        2,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "recover",
+        "rest"
+      ],
+      "width": 0.024148898200822333,
+      "seconds": 10.019814,
+      "nodes": 100493,
+      "runs": 284581,
+      "root_actions": [
+        5,
+        4
+      ]
+    },
+    {
+      "game": 7,
+      "decision": 7,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "recover",
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 10.072371958,
+      "nodes": 89996,
+      "runs": 438964,
+      "root_actions": [
+        2,
+        2
+      ]
+    },
+    {
+      "game": 7,
+      "decision": 27,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "recover",
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 10.098054,
+      "nodes": 105671,
+      "runs": 360966,
+      "root_actions": [
+        5,
+        5
+      ]
+    },
+    {
+      "game": 7,
+      "decision": 28,
+      "alive": [
+        1,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "recover",
+        "rest"
+      ],
+      "width": 0.9637902088644241,
+      "seconds": 10.040694541,
+      "nodes": 52358,
+      "runs": 324877,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 7,
+      "decision": 31,
+      "alive": [
+        1,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "recover",
+        "rest"
+      ],
+      "width": 0.11794810117123078,
+      "seconds": 10.114461541,
+      "nodes": 50801,
+      "runs": 387705,
+      "root_actions": [
+        4,
+        4
+      ]
+    },
+    {
+      "game": 8,
+      "decision": 19,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "milkdrink",
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 7.503933334,
+      "nodes": 121508,
+      "runs": 251220,
+      "root_actions": [
+        2,
+        1
+      ]
+    },
+    {
+      "game": 8,
+      "decision": 21,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "milkdrink",
+        "rest"
+      ],
+      "width": 0.9856910296267616,
+      "seconds": 10.041813333,
+      "nodes": 119217,
+      "runs": 304261,
+      "root_actions": [
+        5,
+        5
+      ]
+    },
+    {
+      "game": 8,
+      "decision": 22,
+      "alive": [
+        1,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "milkdrink"
+      ],
+      "width": 0.6439320224316512,
+      "seconds": 10.043252709,
+      "nodes": 88479,
+      "runs": 328101,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 9,
+      "decision": 10,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 10.003697291,
+      "nodes": 105779,
+      "runs": 381240,
+      "root_actions": [
+        2,
+        1
+      ]
+    },
+    {
+      "game": 9,
+      "decision": 11,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 4.064125125,
+      "nodes": 120268,
+      "runs": 100910,
+      "root_actions": [
+        5,
+        5
+      ]
+    },
+    {
+      "game": 9,
+      "decision": 12,
+      "alive": [
+        2,
+        1
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 0.033405417,
+      "nodes": 120031,
+      "runs": 0,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 9,
+      "decision": 14,
+      "alive": [
+        2,
+        1
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 8.188027666,
+      "nodes": 120001,
+      "runs": 262546,
+      "root_actions": [
+        5,
+        4
+      ]
+    },
+    {
+      "game": 9,
+      "decision": 15,
+      "alive": [
+        1,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [],
+      "width": 0.6546115673641185,
+      "seconds": 10.07155475,
+      "nodes": 104781,
+      "runs": 304661,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 9,
+      "decision": 16,
+      "alive": [
+        1,
+        1
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [],
+      "width": 0.5488784629591374,
+      "seconds": 2.02366575,
+      "nodes": 120419,
+      "runs": 52804,
+      "root_actions": [
+        4,
+        4
+      ]
+    },
+    {
+      "game": 11,
+      "decision": 17,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "leechseed",
+        "milkdrink",
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 10.000338333,
+      "nodes": 110241,
+      "runs": 295614,
+      "root_actions": [
+        2,
+        1
+      ]
+    },
+    {
+      "game": 11,
+      "decision": 20,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "leechseed",
+        "milkdrink",
+        "rest"
+      ],
+      "width": 0.999997004055474,
+      "seconds": 10.06117325,
+      "nodes": 118714,
+      "runs": 365470,
+      "root_actions": [
+        5,
+        5
+      ]
+    },
+    {
+      "game": 11,
+      "decision": 21,
+      "alive": [
+        2,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "milkdrink",
+        "rest"
+      ],
+      "width": 0.9988610871773625,
+      "seconds": 10.086159917,
+      "nodes": 109181,
+      "runs": 294509,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 11,
+      "decision": 26,
+      "alive": [
+        2,
+        1
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "milkdrink",
+        "rest"
+      ],
+      "width": 0.9925231933593751,
+      "seconds": 7.41409675,
+      "nodes": 120460,
+      "runs": 233513,
+      "root_actions": [
+        5,
+        4
+      ]
+    },
+    {
+      "game": 11,
+      "decision": 27,
+      "alive": [
+        1,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "milkdrink"
+      ],
+      "width": 0.06085071509766349,
+      "seconds": 10.044790833,
+      "nodes": 68271,
+      "runs": 231139,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 11,
+      "decision": 28,
+      "alive": [
+        1,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "milkdrink"
+      ],
+      "width": 0.03678141272749563,
+      "seconds": 10.015194583,
+      "nodes": 91086,
+      "runs": 84348,
+      "root_actions": [
+        4,
+        4
+      ]
+    },
+    {
+      "game": 12,
+      "decision": 4,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 8.821138208,
+      "nodes": 120000,
+      "runs": 221268,
+      "root_actions": [
+        1,
+        2
+      ]
+    },
+    {
+      "game": 12,
+      "decision": 9,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 10.05391525,
+      "nodes": 111947,
+      "runs": 251464,
+      "root_actions": [
+        5,
+        5
+      ]
+    },
+    {
+      "game": 12,
+      "decision": 10,
+      "alive": [
+        2,
+        1
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 5.347854375,
+      "nodes": 120258,
+      "runs": 97033,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 12,
+      "decision": 15,
+      "alive": [
+        2,
+        1
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 7.910360292,
+      "nodes": 121256,
+      "runs": 183912,
+      "root_actions": [
+        5,
+        4
+      ]
+    },
+    {
+      "game": 12,
+      "decision": 16,
+      "alive": [
+        1,
+        1
+      ],
+      "stop": "NodeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 8.445876375,
+      "nodes": 120051,
+      "runs": 184110,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 13,
+      "decision": 8,
+      "alive": [
+        2,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 0.6991218523115024,
+      "seconds": 10.00853325,
+      "nodes": 112410,
+      "runs": 241440,
+      "root_actions": [
+        2,
+        1
+      ]
+    },
+    {
+      "game": 13,
+      "decision": 9,
+      "alive": [
+        2,
+        1
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 0.2794525327812687,
+      "seconds": 10.041605458,
+      "nodes": 68188,
+      "runs": 283402,
+      "root_actions": [
+        5,
+        4
+      ]
+    },
+    {
+      "game": 14,
+      "decision": 4,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest"
+      ],
+      "width": 1.0,
+      "seconds": 10.065762667,
+      "nodes": 100639,
+      "runs": 351234,
+      "root_actions": [
+        2,
+        2
+      ]
+    },
+    {
+      "game": 15,
+      "decision": 20,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "recover",
+        "rest",
+        "softboiled"
+      ],
+      "width": 1.0,
+      "seconds": 10.036568958,
+      "nodes": 94717,
+      "runs": 327331,
+      "root_actions": [
+        1,
+        2
+      ]
+    },
+    {
+      "game": 15,
+      "decision": 86,
+      "alive": [
+        2,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "recover",
+        "rest",
+        "softboiled"
+      ],
+      "width": 0.9999999999999977,
+      "seconds": 10.13493875,
+      "nodes": 69433,
+      "runs": 387717,
+      "root_actions": [
+        5,
+        5
+      ]
+    },
+    {
+      "game": 15,
+      "decision": 87,
+      "alive": [
+        1,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest",
+        "softboiled"
+      ],
+      "width": 0.8643704328356384,
+      "seconds": 10.042455125,
+      "nodes": 119059,
+      "runs": 268751,
+      "root_actions": [
+        1,
+        1
+      ]
+    },
+    {
+      "game": 15,
+      "decision": 89,
+      "alive": [
+        1,
+        2
+      ],
+      "stop": "TimeBudget",
+      "recovering_moves_with_pp": [
+        "rest",
+        "softboiled"
+      ],
+      "width": 0.06961495172000037,
+      "seconds": 10.047626333,
+      "nodes": 100344,
+      "runs": 297800,
+      "root_actions": [
+        2,
+        5
+      ]
+    }
+  ]
+}
