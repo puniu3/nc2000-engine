@@ -18,5 +18,9 @@
 <h2>独立終盤の準備</h2>
 <p>別シードで24局の自己対戦を生成し、各状態キー・合法な棋譜再生・抽出位置・終局結果の一致を確認しました。候補の選択が終わるまで、このコーパスでの候補評価は封印します。継続対局の比較器は別のスモークデータで検証し、同一設定同士は全情報・公開情報とも同じ対局経路とペア得点0.5を再現しました。複数の終盤を取った元対局は1つの統計単位として扱います。</p>
 <p><a href="holdout-integrity.json">独立コーパスの指紋と再生検証</a> ／ <a href="holdout-harness-calibration.json">継続対局の対照検証</a> ／ <a href="holdout-generation-protocol.json">生成条件</a></p>
+<h2>Webの待ち時間</h2>
+<p>このMacのChromiumで、公開中と同じ27,000試行・通常のBotWorkerによる8局を測定しました。強制手以外の617判断で、要求から結果までの平均は890ms、中央値922ms、99パーセンタイル1,452msでした。既存の試験用既定値2.3秒をこの環境の公平な比較に流用しません。測定平均を切り捨てた889msで公開情報OFF対既定botの時間対照を進めています。iPad Safariの性能を示す数字ではありません。</p>
+<p>同じブラウザ対戦経路の対照では、同一設定8局の全ペアが0.5で着手列も一致。中身を空にしたランダム方策との16局は探索側0.9375でした。候補の強化成績とは別の検証です。以後は各workerのWasm確保メモリも測定し、未計測値を0として扱いません。</p>
+<p><a href="web-calibration.json">Webの時間・比較器の対照</a> ／ <a href="web-calibration-records.json.gz">Web測定記録</a> ／ <a href="web-budget-control-protocol.json">凍結した時間対照の条件</a></p>
 <p><a href="audit-summary.json">監査集計</a> ／ <a href="unresolved-classification.json">42局面の分類</a> ／ <a href="calibration.json">比較器の対照</a> ／ <a href="development-10-protocol.json">凍結済み対戦条件</a> ／ <a href="integration-measurements.json.gz">監査・対照の測定記録</a></p>
 </html>
