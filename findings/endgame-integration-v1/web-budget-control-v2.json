@@ -1,0 +1,223 @@
+{
+  "complete": true,
+  "completed_games": 16,
+  "completed_pairs": 8,
+  "expected_games": 16,
+  "score": 0.5,
+  "ci95": [
+    0.2766311846795228,
+    0.7233688153204771
+  ],
+  "pair_scores": [
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0,
+    0.5,
+    0.5,
+    1
+  ],
+  "arms": {
+    "candidate": {
+      "decisions": 280,
+      "forced": 13,
+      "illegal": 0,
+      "nonvisible": 0,
+      "iterations": 4405248,
+      "calls": 0,
+      "cache_hits": 0,
+      "value_certificates": 0,
+      "value_replacements": 0,
+      "unresolved": 0,
+      "solver_ms": 0,
+      "decisions_with_replacements": 0,
+      "peak_solver_entries": 0,
+      "budget_violations": 0,
+      "request_ms": {
+        "count": 280,
+        "mean": 744.2689285704067,
+        "median": 781.2999999523163,
+        "p95": 783.9000000953674,
+        "p99": 791.2999999523163,
+        "max": 809.8999999761581
+      },
+      "search_ms": {
+        "count": 280,
+        "mean": 744.057499997105,
+        "median": 780.9000000357628,
+        "p95": 782.5,
+        "p99": 789.3000000715256,
+        "max": 809.6000000238419
+      },
+      "nonforced_request_ms": {
+        "count": 267,
+        "mean": 780.4438202233797,
+        "median": 781.8000000715256,
+        "p95": 784,
+        "p99": 791.2999999523163,
+        "max": 809.8999999761581
+      },
+      "wasm_memory_bytes": {
+        "count": 280,
+        "mean": 11062242.742857143,
+        "median": 10747904.0,
+        "p95": 14614528,
+        "p99": 14614528,
+        "max": 14614528
+      }
+    },
+    "baseline": {
+      "decisions": 279,
+      "forced": 12,
+      "illegal": 0,
+      "nonvisible": 0,
+      "iterations": 7533000,
+      "request_ms": {
+        "count": 279,
+        "mean": 841.2820788591994,
+        "median": 915.8999999761581,
+        "p95": 1117.7000000476837,
+        "p99": 1198.1000000238419,
+        "max": 1211
+      },
+      "search_ms": {
+        "count": 279,
+        "mean": 838.8293906826273,
+        "median": 912.3999999761581,
+        "p95": 1115.1999999284744,
+        "p99": 1195.5,
+        "max": 1208.3000000715256
+      },
+      "nonforced_request_ms": {
+        "count": 267,
+        "mean": 856.1164794070891,
+        "median": 922.7000000476837,
+        "p95": 1117.7000000476837,
+        "p99": 1198.1000000238419,
+        "max": 1211
+      },
+      "wasm_memory_bytes": {
+        "count": 279,
+        "mean": 14841437.59139785,
+        "median": 14483456,
+        "p95": 17104896,
+        "p99": 17235968,
+        "max": 17235968
+      }
+    }
+  },
+  "engine_caps": 0,
+  "nonforced_time_ratio": 0.911609388437287,
+  "calibration": true,
+  "interpretation": "Paired browser outcomes. Timing and available memory measurements are separate from score; no automatic publication decision. Missing memory is unmeasured, not zero. Local Chromium is not iPad Safari.",
+  "manifest": {
+    "protocol": {
+      "catalog": "data/team-pool-v2/team-pool.json",
+      "catalog_sha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+      "prior": "data/belief-pool-v3/belief-pool.json",
+      "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+      "c": 0.4,
+      "schema": "nc2000-web-matches-v1",
+      "calibration": true,
+      "candidate_selection": null,
+      "threads": 2,
+      "pairs": 8,
+      "iterations": 27000,
+      "milliseconds": 776,
+      "seed": 2026100312,
+      "candidate": {
+        "information": "public",
+        "solver_fraction": 0
+      },
+      "baseline": {
+        "information": "raw",
+        "solver_fraction": 0
+      },
+      "interpretation": "Web timing validation only, using public OFF versus the actual shipped raw 27000-iteration baseline through BotWorker. Candidate deadline is floor(mean nonforced request-to-result ms) from the frozen eight-game timing calibration. Choose any later budget adjustment only from timing, never outcomes; freeze final waiting conditions before solver confirmation. Timing target: nonforced mean request ratio 0.95 to 1.05; shorter waits remain conservative but are reported as unmatched. Record p99, total waits, Wasm linear-memory allocation, legality and caps separately. Allocated Wasm bytes are not process RSS. This is local Chromium, not iPad Safari. Native and Web results must not be pooled. This second timing pilot uses an independent seed and the predeclared timing-only adjustment. Outcomes remain calibration evidence, not candidate strength evidence.",
+      "previous_protocol_sha256": "c441dacc4cfca19e7c96e3fca3349d1246cf885e542934f8b1ac13c63291c625",
+      "budget_rule": "floor(previous deadline / previous measured nonforced request-time ratio); independent new schedule, no outcome-based change"
+    },
+    "protocol_sha256": "1b9e709c386e0ff1fe28bfb46725a26bbb422ca62d0ac1edd32060b4e11c8724",
+    "wasm_sha256": "336b43e60cba98c1864057d98e310f9961c12a0b1e2a1fd091f02a9413194ba2",
+    "revision": "16a3fffbb7bdb761d46da6f7ecae31117b40188c",
+    "dirty": "",
+    "browser": "149.0.7827.55",
+    "platform": "darwin",
+    "arch": "arm64",
+    "schedule": [
+      {
+        "pair": 0,
+        "teams": [
+          21,
+          6
+        ],
+        "seed": "21296,25587,41422,59768",
+        "agentSeed": 1851413950
+      },
+      {
+        "pair": 1,
+        "teams": [
+          22,
+          14
+        ],
+        "seed": "33886,7072,46932,12093",
+        "agentSeed": 3029720590
+      },
+      {
+        "pair": 2,
+        "teams": [
+          16,
+          10
+        ],
+        "seed": "45157,46882,17246,4688",
+        "agentSeed": 2178460516
+      },
+      {
+        "pair": 3,
+        "teams": [
+          23,
+          3
+        ],
+        "seed": "58861,21508,25027,59956",
+        "agentSeed": 1507263892
+      },
+      {
+        "pair": 4,
+        "teams": [
+          10,
+          5
+        ],
+        "seed": "13039,11189,65145,62372",
+        "agentSeed": 2357327200
+      },
+      {
+        "pair": 5,
+        "teams": [
+          19,
+          11
+        ],
+        "seed": "45011,14183,53228,19967",
+        "agentSeed": 3450799237
+      },
+      {
+        "pair": 6,
+        "teams": [
+          7,
+          7
+        ],
+        "seed": "18678,33148,49996,10241",
+        "agentSeed": 3649934658
+      },
+      {
+        "pair": 7,
+        "teams": [
+          17,
+          9
+        ],
+        "seed": "57960,45177,28206,36540",
+        "agentSeed": 255979610
+      }
+    ]
+  }
+}
