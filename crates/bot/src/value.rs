@@ -535,6 +535,32 @@ pub struct ValueNet {
     pub parity: Vec<(Vec<f32>, f32)>,
     #[serde(default)]
     pub meta: serde_json::Value,
+    /// Process-unique id assigned by `prepare`; keys the per-thread
+    /// mon-encoding cache. 0 (unprepared) disables the cache.
+    #[serde(skip)]
+    pub id: u64,
+}
+
+static NEXT_NET_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+thread_local! {
+    /// (net id, 128-bit input hash) -> mon2 output. A mon's encoding depends
+    /// only on its own input slice and the network, and bench mons repeat
+    /// across the leaves of a backup.
+    static MON_CACHE: std::cell::RefCell<HashMap<(u64, u64, u64), Vec<f32>>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+const MON_CACHE_CAP: usize = 50_000;
+
+fn mon_input_hash(parts: [&[f32]; 3], seed: u64) -> u64 {
+    let mut h = seed;
+    for part in parts {
+        for &x in part {
+            h = (h.rotate_left(5) ^ x.to_bits() as u64).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+        }
+    }
+    h
 }
 
 impl ValueNet {
@@ -546,8 +572,10 @@ impl ValueNet {
         Ok(net)
     }
 
-    /// Build the sparse-forward weight copies (`load` does this).
+    /// Build the sparse-forward weight copies and take a cache id (`load`
+    /// does this).
     pub fn prepare(&mut self) {
+        self.id = NEXT_NET_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         for d in [
             &mut self.move_layer,
             &mut self.mon1,
@@ -595,6 +623,22 @@ impl ValueNet {
                 continue;
             }
             let ids = &r[OFF_IDS + (s * MONS + m) * IDS..][..IDS];
+            let mdyn = &r[OFF_MDYN + (s * MONS + m) * MOVES * F_MDYN..][..MOVES * F_MDYN];
+            let key = (self.id != 0).then(|| {
+                (self.id, mon_input_hash([ids, mon, mdyn], 0x243F_6A88_85A3_08D3), mon_input_hash([ids, mon, mdyn], 0x1319_8A2E_0370_7344))
+            });
+            let cached = key.and_then(|k| MON_CACHE.with(|c| c.borrow().get(&k).cloned()));
+            if let Some(v) = cached {
+                h2v.copy_from_slice(&v);
+                if m == 0 {
+                    active.copy_from_slice(&h2v);
+                } else {
+                    for (a, b) in bench.iter_mut().zip(&h2v) {
+                        *a += b;
+                    }
+                }
+                continue;
+            }
             mvec.iter_mut().for_each(|v| *v = 0.0);
             for k in 0..MOVES {
                 let id = ids[2 + k] as usize;
@@ -617,6 +661,15 @@ impl ValueNet {
             monin.extend_from_slice(mon);
             self.mon1.forward(&monin, &mut h1, true);
             self.mon2.forward(&h1, &mut h2v, true);
+            if let Some(k) = key {
+                MON_CACHE.with(|c| {
+                    let mut c = c.borrow_mut();
+                    if c.len() >= MON_CACHE_CAP {
+                        c.clear();
+                    }
+                    c.insert(k, h2v.clone());
+                });
+            }
             if m == 0 {
                 active.copy_from_slice(&h2v);
             } else {

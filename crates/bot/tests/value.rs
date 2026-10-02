@@ -63,6 +63,7 @@ fn random_net(codec: &ValueCodec, rng: &mut SplitMix64) -> ValueNet {
         head3: dense(hh2, 1, &mut w),
         parity: Vec::new(),
         meta: serde_json::Value::Null,
+        id: 0,
     }
 }
 
@@ -162,4 +163,27 @@ fn the_network_is_side_antisymmetric() {
         n += 1;
     });
     assert!(n > 100);
+}
+
+#[test]
+fn the_mon_cache_returns_bit_identical_values() {
+    let dex = conformance::load_dex();
+    let codec = ValueCodec::new(&dex);
+    let mut rng = SplitMix64::new(9);
+    let mut cached = random_net(&codec, &mut rng);
+    cached.prepare();
+    let mut uncached = cached.clone();
+    uncached.id = 0;
+    let mut n = 0;
+    // Two passes over the same states: the second is served from the cache.
+    for _ in 0..2 {
+        random_states(&dex, 20, 13, |b| {
+            let mut r = Vec::new();
+            codec.encode(b, &dex, &mut r);
+            let (a, c) = (cached.logit(&codec, &r), uncached.logit(&codec, &r));
+            assert_eq!(a.to_bits(), c.to_bits(), "cached {a} vs uncached {c}");
+            n += 1;
+        });
+    }
+    assert!(n > 200);
 }
