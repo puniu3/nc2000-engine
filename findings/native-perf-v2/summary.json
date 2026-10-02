@@ -1,0 +1,288 @@
+{
+  "schema": "nc2000-perf-v2",
+  "baseline_commit": "b8db1f21f426b0d021973650d1a39b6869f717cd",
+  "candidate_patch_sha256": "9e82cac51ae3b7059d713cbc721c32c7b9d7d9f887af4f5ef1b1d7fcce01fa40",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01) (Homebrew)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: aarch64-apple-darwin\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+  "changes": [
+    "search-only polynomial word folding",
+    "inline EffectState::hash"
+  ],
+  "preserved": [
+    "state_key",
+    "state_key128",
+    "replay version",
+    "choice order",
+    "random-number consumption"
+  ],
+  "blind": {
+    "baseline": {
+      "median_seconds": 49.820978209,
+      "p95_seconds": {
+        "ordinary": 1.246476292,
+        "perish": 1.0767470829999999,
+        "preview": 1.263183917,
+        "recovery": 1.267304375,
+        "replacement": 1.239279375
+      }
+    },
+    "candidate": {
+      "median_seconds": 44.800154375,
+      "p95_seconds": {
+        "ordinary": 1.130484375,
+        "perish": 1.045615042,
+        "preview": 1.134511834,
+        "recovery": 1.221609417,
+        "replacement": 1.014131166
+      }
+    },
+    "time_reduction": 0.10077730334674584,
+    "p95_ratios": {
+      "ordinary": 0.9069441450716336,
+      "perish": 0.9710869511591704,
+      "preview": 0.8981366994399438,
+      "recovery": 0.9639431861031807,
+      "replacement": 0.8183232824317762
+    },
+    "exact_match": true,
+    "positions": 49,
+    "accepted": true
+  },
+  "skuct": {
+    "baseline": {
+      "median_seconds": 47.948506958,
+      "p95_seconds": {
+        "ordinary": 1.286231916,
+        "perish": 1.154191,
+        "preview": 1.13162975,
+        "recovery": 1.04596775,
+        "replacement": 1.12402175
+      }
+    },
+    "candidate": {
+      "median_seconds": 43.629864917,
+      "p95_seconds": {
+        "ordinary": 1.17494875,
+        "perish": 1.054508375,
+        "preview": 1.0507045,
+        "recovery": 0.983707958,
+        "replacement": 1.002356084
+      }
+    },
+    "time_reduction": 0.0900683319458283,
+    "p95_ratios": {
+      "ordinary": 0.9134812590049274,
+      "perish": 0.9136342035243733,
+      "preview": 0.9284878733525694,
+      "recovery": 0.9404763751081235,
+      "replacement": 0.8917586194395261
+    },
+    "exact_match": true,
+    "positions": 49,
+    "accepted": true
+  },
+  "wasm_node": {
+    "median_ms": {
+      "baseline": 3643.298085000001,
+      "candidate": 3333.946002
+    },
+    "time_reduction": 0.08490990190279768,
+    "exact_match": true,
+    "positions": 31,
+    "runs_ms": {
+      "baseline": [
+        3783.3286240000016,
+        3599.5164179999997,
+        3643.298085000001
+      ],
+      "candidate": [
+        3333.946002,
+        3091.5805030000006,
+        3380.319711
+      ]
+    },
+    "runtime": "v22.23.3"
+  },
+  "screens": {
+    "inline-screen": {
+      "baseline": {
+        "median_seconds": 4.872081834,
+        "p95_seconds": {
+          "ordinary": 0.132485208,
+          "perish": 0.120871917,
+          "preview": 0.118747167,
+          "recovery": 0.119063708,
+          "replacement": 0.130955458
+        }
+      },
+      "candidate": {
+        "median_seconds": 4.735254167,
+        "p95_seconds": {
+          "ordinary": 0.121742667,
+          "perish": 0.112410458,
+          "preview": 0.109412708,
+          "recovery": 0.113866375,
+          "replacement": 0.119096916
+        }
+      },
+      "time_reduction": 0.028084024788981088,
+      "p95_ratios": {
+        "ordinary": 0.9189151667407278,
+        "perish": 0.9299964854532754,
+        "preview": 0.9213921541387172,
+        "recovery": 0.9563483022047323,
+        "replacement": 0.9094459888796693
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "inline-full": {
+      "baseline": {
+        "median_seconds": 47.60874625,
+        "p95_seconds": {
+          "ordinary": 1.182878916,
+          "perish": 1.040769458,
+          "preview": 1.165382375,
+          "recovery": 1.22086325,
+          "replacement": 1.1943087079999999
+        }
+      },
+      "candidate": {
+        "median_seconds": 45.411146834,
+        "p95_seconds": {
+          "ordinary": 1.1779382919999999,
+          "perish": 0.966656083,
+          "preview": 1.174076916,
+          "recovery": 1.199126667,
+          "replacement": 1.078581709
+        }
+      },
+      "time_reduction": 0.046159573378809604,
+      "p95_ratios": {
+        "ordinary": 0.9958232208443556,
+        "perish": 0.9287898252294795,
+        "preview": 1.0074606765869443,
+        "recovery": 0.9821957266712713,
+        "replacement": 0.9031012683531402
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "combined-screen": {
+      "baseline": {
+        "median_seconds": 4.7344937080000005,
+        "p95_seconds": {
+          "ordinary": 0.124317708,
+          "perish": 0.112167917,
+          "preview": 0.111246833,
+          "recovery": 0.111462083,
+          "replacement": 0.122698209
+        }
+      },
+      "candidate": {
+        "median_seconds": 4.810130834,
+        "p95_seconds": {
+          "ordinary": 0.124593125,
+          "perish": 0.111861208,
+          "preview": 0.1111855,
+          "recovery": 0.113073334,
+          "replacement": 0.122881375
+        }
+      },
+      "time_reduction": -0.015975758056704814,
+      "p95_ratios": {
+        "ordinary": 1.0022154285534286,
+        "perish": 0.9972656263198683,
+        "preview": 0.9994486764400745,
+        "recovery": 1.0144555974250005,
+        "replacement": 1.0014928172260444
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "tail-screen": {
+      "baseline": {
+        "median_seconds": 4.69487525,
+        "p95_seconds": {
+          "ordinary": 0.120662333,
+          "perish": 0.1108195,
+          "preview": 0.109392708,
+          "recovery": 0.11114875,
+          "replacement": 0.119674
+        }
+      },
+      "candidate": {
+        "median_seconds": 4.738665541,
+        "p95_seconds": {
+          "ordinary": 0.120411625,
+          "perish": 0.110318625,
+          "preview": 0.107579334,
+          "recovery": 0.111806417,
+          "replacement": 0.120652541
+        }
+      },
+      "time_reduction": -0.009327253370576605,
+      "p95_ratios": {
+        "ordinary": 0.9979222347706471,
+        "perish": 0.9954802629501126,
+        "preview": 0.9834232643733437,
+        "recovery": 1.0059169986167187,
+        "replacement": 1.0081767217607835
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "poly-screen": {
+      "baseline": {
+        "median_seconds": 4.629342083,
+        "p95_seconds": {
+          "ordinary": 0.120262666,
+          "perish": 0.108664041,
+          "preview": 0.107947125,
+          "recovery": 0.108865208,
+          "replacement": 0.118705417
+        }
+      },
+      "candidate": {
+        "median_seconds": 4.324058333,
+        "p95_seconds": {
+          "ordinary": 0.114442792,
+          "perish": 0.104884042,
+          "preview": 0.103519334,
+          "recovery": 0.106559042,
+          "replacement": 0.109657375
+        }
+      },
+      "time_reduction": 0.06594538587266463,
+      "p95_ratios": {
+        "ordinary": 0.95160697668219,
+        "perish": 0.9652138926068468,
+        "preview": 0.9589818533842379,
+        "recovery": 0.9788163175144073,
+        "replacement": 0.923777345392755
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": true
+    }
+  },
+  "verification": {
+    "native_passed": 129,
+    "wasm_suites": [
+      "smoke",
+      "parity",
+      "determinism",
+      "solver",
+      "kifu",
+      "fork"
+    ]
+  },
+  "wasm_bytes": {
+    "baseline": 2541374,
+    "candidate": 2526136
+  },
+  "word_fold_reference": "https://github.com/rust-lang/rustc-hash/blob/master/src/lib.rs"
+}

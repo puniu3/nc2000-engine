@@ -11,21 +11,33 @@ use std::collections::{HashMap, HashSet};
 use std::hash::BuildHasherDefault;
 
 #[derive(Default)]
-pub struct FxHasher(u64);
+pub struct WordHasher<const POLYNOMIAL: bool>(u64);
 
-impl FxHasher {
+pub type FxHasher = WordHasher<false>;
+/// Fixed-width polynomial state hash; persistent fingerprints use `FxHasher`.
+pub type SearchHasher = WordHasher<true>;
+
+impl<const POLYNOMIAL: bool> WordHasher<POLYNOMIAL> {
     const K: u64 = 0x51_7c_c1_b7_27_22_0a_95;
 
     #[inline]
     fn add(&mut self, word: u64) {
-        self.0 = (self.0.rotate_left(5) ^ word).wrapping_mul(Self::K);
+        self.0 = if POLYNOMIAL {
+            self.0.wrapping_add(word).wrapping_mul(0xf1357aea2e62a9c5)
+        } else {
+            (self.0.rotate_left(5) ^ word).wrapping_mul(Self::K)
+        };
     }
 }
 
-impl std::hash::Hasher for FxHasher {
+impl<const POLYNOMIAL: bool> std::hash::Hasher for WordHasher<POLYNOMIAL> {
     #[inline]
     fn finish(&self) -> u64 {
-        self.0
+        if POLYNOMIAL {
+            self.0.rotate_left(26)
+        } else {
+            self.0
+        }
     }
 
     #[inline]

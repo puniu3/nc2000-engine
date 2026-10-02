@@ -4,7 +4,7 @@
 //! Three pieces, each earning its place by measurement (all numbers: 60
 //! games vs maxdamage, seed 11):
 //!
-//! 1. **State-keyed tree.** Nodes are keyed by `Battle::state_key_bucketed`
+//! 1. **State-keyed tree.** Nodes are keyed by `Battle::search_key`
 //!    in a per-decision transposition table, so chance outcomes that differ
 //!    in anything discrete (KOs, status procs, request kinds, volatile
 //!    durations) get their own nodes instead of aliasing into one
@@ -105,7 +105,7 @@ pub struct RmConfig {
     /// renormalized before sampling. Sheds solver dust without flattening
     /// genuine mixing.
     pub threshold: f64,
-    /// HP buckets for the node key (`Battle::state_key_bucketed`); 0 = exact
+    /// HP buckets for the node key (`Battle::search_key`); 0 = exact
     /// keys (measured weaker — see the module doc).
     pub hp_buckets: i64,
     /// Full-width RM+ sweeps over the estimated root matrix.
@@ -299,13 +299,13 @@ pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
 /// descent step. The battle is restored before returning.
 pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     if cfg.hp_buckets <= 0 {
-        return b.state_key();
+        return b.search_key(None, false);
     }
     if !cfg.threshold_key {
         return if cfg.key_no_damage {
-            b.state_key_bucketed_no_damage(cfg.hp_buckets)
+            b.search_key(Some(cfg.hp_buckets), true)
         } else {
-            b.state_key_bucketed(cfg.hp_buckets)
+            b.search_key(Some(cfg.hp_buckets), false)
         };
     }
     // Both classes are read before either mon is edited: Flail/Reversal make
@@ -322,9 +322,9 @@ pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
         }
     }
     let key = if cfg.key_no_damage {
-        b.state_key_bucketed_no_damage(cfg.hp_buckets)
+        b.search_key(Some(cfg.hp_buckets), true)
     } else {
-        b.state_key_bucketed(cfg.hp_buckets)
+        b.search_key(Some(cfg.hp_buckets), false)
     };
     for entry in saved.into_iter().flatten() {
         let (id, hp) = entry;

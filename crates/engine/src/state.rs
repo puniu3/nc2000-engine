@@ -322,6 +322,7 @@ pub struct EffectState {
 
 // Manual Hash (future_damage is f64); used by `Battle::state_key`.
 impl std::hash::Hash for EffectState {
+    #[inline(always)]
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         self.id.hash(h);
         self.has_name.hash(h);

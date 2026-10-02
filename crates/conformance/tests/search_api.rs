@@ -153,3 +153,35 @@ fn random_playouts_terminate() {
         }
     }
 }
+
+#[test]
+fn search_keys_preserve_state_partitions() {
+    use std::collections::HashMap;
+    let dex = load_dex();
+    let mut partitions = HashMap::new();
+    let mut reverse = HashMap::new();
+    for fx in all_fixtures() {
+        let mut battle = ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+        for line in &fx.choices {
+            for buckets in [None, Some(1), Some(16), Some(256)] {
+                for omit in [false, true] {
+                    let stable = match (buckets, omit) {
+                        (None, false) => battle.state_key128(),
+                        (None, true) => battle.state_key128_without_damage_bookkeeping(),
+                        (Some(n), false) => battle.state_key_bucketed(n) as u128,
+                        (Some(n), true) => battle.state_key_bucketed_no_damage(n) as u128,
+                    };
+                    let fast = battle.search_key(buckets, omit);
+                    if let Some(previous) = partitions.insert((buckets, omit, fast), stable) {
+                        assert_eq!(previous, stable, "search key merged distinct states");
+                    }
+                    if let Some(previous) = reverse.insert((buckets, omit, stable), fast) {
+                        assert_eq!(previous, fast, "search key split an existing state class");
+                    }
+                }
+            }
+            battle.choose(&dex, side_index(&line.side), &line.choice).unwrap();
+        }
+    }
+    assert!(partitions.len() > 1000);
+}

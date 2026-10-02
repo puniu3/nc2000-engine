@@ -146,6 +146,15 @@ impl Battle {
         h.finish()
     }
 
+    /// Search-only key with the same field walk as the stable state keys.
+    /// Damage bookkeeping may be omitted only when it cannot affect future play.
+    pub fn search_key(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
+        use std::hash::Hasher;
+        let mut h = crate::fxhash::SearchHasher::default();
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping);
+        h.finish()
+    }
+
     /// Two-independent-hash fingerprint (FxHash ‖ SipHash) for
     /// certificate-grade state identity (M17e): the 64-bit search key
     /// tolerates collisions (mis-aggregated statistics), a proof-carrying
