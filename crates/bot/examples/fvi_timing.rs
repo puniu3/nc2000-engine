@@ -60,6 +60,10 @@ struct Counts {
     degenerate_solves: u64,
     lp_cells: u64,
     max_cells: u64,
+    /// Cells whose first sample consumed no randomness: the remaining k-1
+    /// samples of such a cell repeat the same transition.
+    det_cells: [u64; 4],
+    det_redundant_samples: [u64; 4],
 }
 
 struct Ctx<'a> {
@@ -95,15 +99,20 @@ fn timed_backup(
     for (i, &c0) in actions[0].iter().enumerate() {
         for (j, &c1) in actions[1].iter().enumerate() {
             let mut acc = 0.0;
-            for _ in 0..k {
+            for si in 0..k {
                 x.c.samples += 1;
                 let t = Instant::now();
                 let mut c = b.clone();
                 c.set_log_enabled(false);
-                c.reseed(rng.next());
+                let seed = rng.next();
+                c.reseed(seed);
                 let t1 = Instant::now();
                 c.apply_choices(x.dex, [c0, c1]).expect("legal choices");
                 let t2 = Instant::now();
+                if si == 0 && c.prng.lcg == nc2000_engine::prng::Prng::new(seed) {
+                    x.c.det_cells[depth] += 1;
+                    x.c.det_redundant_samples[depth] += (k - 1) as u64;
+                }
                 let key = (c.state_key(), ks.len());
                 let t3 = Instant::now();
                 let hit = cache.get(&key).copied();
@@ -315,7 +324,10 @@ fn main() {
             "degenerate_solves": c.degenerate_solves as f64 / decisions as f64,
             "mean_lp_cells": if c.lp_solves > 0 { c.lp_cells as f64 / c.lp_solves as f64 } else { 0.0 },
             "max_lp_cells": c.max_cells,
+            "deterministic_cells_by_depth": c.det_cells.iter().map(|&v| v as f64 / decisions as f64).collect::<Vec<_>>(),
+            "redundant_samples_in_deterministic_cells_by_depth": c.det_redundant_samples.iter().map(|&v| v as f64 / decisions as f64).collect::<Vec<_>>(),
         },
+        "deterministic_sample_fraction": c.det_redundant_samples.iter().sum::<u64>() as f64 / c.samples as f64,
         "cache_hit_rate_by_depth": c.lookups.iter().zip(&c.hits).map(|(&l, &h)| rate(h, l)).collect::<Vec<_>>(),
         "cache_hit_rate_all": rate(c.hits.iter().sum(), c.lookups.iter().sum()),
         "per_unit_us": {
