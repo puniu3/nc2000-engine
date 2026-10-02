@@ -221,6 +221,7 @@ fn main() {
     let bounds = last_bounds.expect("at least one call");
     println!();
     match last_stop {
+        Stop::StrategyMet => unreachable!("threshold solves do not request a strategy target"),
         Stop::WidthMet => println!(
             "CONVERGED (width): side0 in [{:.4},{:.4}], p2 in [{:.4},{:.4}] after {cumulative} runs",
             bounds.lo,

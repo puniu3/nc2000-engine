@@ -126,6 +126,7 @@ impl Bounds {
 pub enum Stop {
     /// Root width ≤ eps.
     WidthMet,
+    StrategyMet,
     /// `lo > tau_hi`: the true value is proven above the threshold band.
     ProvenAbove,
     /// `hi < tau_lo`: the true value is proven below the threshold band.
@@ -137,12 +138,53 @@ pub enum Stop {
     NodeBudget,
 }
 
-#[derive(Clone, Copy, Debug)]
+/// Payoffs are from this side's perspective with optimal continuation.
+/// Guarantees apply only to the concrete full-information state.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StrategyCertificate {
+    pub actions: Vec<(Option<SearchChoice>, f64)>,
+    pub guaranteed_value: f64,
+    pub max_loss: f64,
+}
+
+impl StrategyCertificate {
+    pub fn meets(&self, tolerance: f64) -> bool {
+        tolerance.is_finite() && tolerance >= 0.0 && self.max_loss <= tolerance
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SolutionStatus {
+    ClosedValue,
+    GuaranteedStrategies,
+    Unresolved,
+}
+
+#[derive(Clone, Debug)]
 pub struct SolveReport {
     pub bounds: Bounds,
     pub stop: Stop,
     /// Engine runs consumed by THIS call.
     pub runs: usize,
+    pub strategies: Option<[StrategyCertificate; 2]>,
+}
+
+impl SolveReport {
+    pub fn status(&self, tolerance: f64) -> SolutionStatus {
+        if self.bounds.width() <= 1e-12 {
+            SolutionStatus::ClosedValue
+        } else if self.strategies.as_ref().is_some_and(|policies| {
+            policies.iter().all(|policy| policy.meets(tolerance))
+        }) {
+            SolutionStatus::GuaranteedStrategies
+        } else {
+            SolutionStatus::Unresolved
+        }
+    }
+
+    pub fn strategy(&self, side: usize, tolerance: f64) -> Option<&StrategyCertificate> {
+        self.strategies.as_ref()?.get(side).filter(|policy| policy.meets(tolerance))
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -238,6 +280,7 @@ pub struct BoundSolver<'d> {
     pub cfg: BoundConfig,
     nodes: HashMap<NodeKey, Node>,
     closed: HashMap<NodeKey, Bounds>,
+    closed_strategies: HashMap<NodeKey, [StrategyCertificate; 2]>,
     roots: HashSet<NodeKey>,
     active_stall: Option<OneSidedHeal>,
     active_two_sided: Option<TwoSidedHeal>,
@@ -253,6 +296,7 @@ impl<'d> BoundSolver<'d> {
             cfg,
             nodes: HashMap::new(),
             closed: HashMap::new(),
+            closed_strategies: HashMap::new(),
             roots: HashSet::new(),
             active_stall: None,
             active_two_sided: None,
@@ -272,6 +316,20 @@ impl<'d> BoundSolver<'d> {
     /// `tau` = optional threshold band (lo, hi) for certificate mode.
     /// Never discards work: repeated calls resume where the graph stands.
     pub fn solve(&mut self, b: &Battle, tau: Option<(f64, f64)>) -> SolveReport {
+        self.solve_target(b, tau, None)
+    }
+
+    pub fn solve_strategy(&mut self, b: &Battle, side: usize, max_loss: f64) -> SolveReport {
+        assert!(side < 2 && max_loss.is_finite() && (0.0..=1.0).contains(&max_loss));
+        self.solve_target(b, None, Some((side, max_loss)))
+    }
+
+    fn solve_target(
+        &mut self,
+        b: &Battle,
+        tau: Option<(f64, f64)>,
+        strategy_target: Option<(usize, f64)>,
+    ) -> SolveReport {
         let started = self.cfg.time_budget.map(|_| Instant::now());
         self.active_stall = self
             .cfg
@@ -296,12 +354,13 @@ impl<'d> BoundSolver<'d> {
                 bounds,
                 stop: Stop::WidthMet,
                 runs: 0,
+                strategies: self.closed_strategies.get(&lookup).cloned(),
             };
         }
         let root = self.intern(b.clone());
         self.roots.insert(root);
         let start_runs = self.stats.runs;
-        let work_limit = start_runs + self.cfg.work_budget;
+        let work_limit = start_runs.saturating_add(self.cfg.work_budget);
         let mut idle = 0usize;
         loop {
             if self.cfg.fold_closed_nodes && self.nodes.len() >= self.cfg.node_budget {
@@ -309,7 +368,12 @@ impl<'d> BoundSolver<'d> {
             }
             let n = &self.nodes[&root];
             let bounds = Bounds { lo: n.lo, hi: n.hi };
-            let stop = if bounds.width() <= self.cfg.eps {
+            let strategy_met = strategy_target.is_some_and(|(side, loss)| {
+                node_strategies(n).is_some_and(|policies| policies[side].meets(loss))
+            });
+            let stop = if strategy_met {
+                Some(Stop::StrategyMet)
+            } else if bounds.width() <= self.cfg.eps {
                 Some(Stop::WidthMet)
             } else if let Some((tlo, thi)) = tau {
                 if bounds.lo > thi {
@@ -338,9 +402,10 @@ impl<'d> BoundSolver<'d> {
                     bounds,
                     stop,
                     runs: self.stats.runs - start_runs,
+                    strategies: node_strategies(n),
                 };
             }
-            if self.trial(root) {
+            if self.trial(root, work_limit) {
                 idle = 0;
                 if self.cfg.fold_closed_nodes
                     && (self.stats.trials % 4096 == 0
@@ -359,6 +424,7 @@ impl<'d> BoundSolver<'d> {
                         bounds: Bounds { lo: n.lo, hi: n.hi },
                         stop: Stop::WorkExhausted,
                         runs: self.stats.runs - start_runs,
+                        strategies: node_strategies(n),
                     };
                 }
             }
@@ -549,7 +615,7 @@ impl<'d> BoundSolver<'d> {
 
     /// One trial: descend by LP-support × uncertainty, expand one pending
     /// chance script at the frontier, back up along the path.
-    fn trial(&mut self, root: NodeKey) -> bool {
+    fn trial(&mut self, root: NodeKey, work_limit: usize) -> bool {
         self.stats.trials += 1;
         let mut did_work = false;
         let mut path: Vec<NodeKey> = Vec::new();
@@ -564,8 +630,11 @@ impl<'d> BoundSolver<'d> {
             }
             path.push(cur);
             let ci = self.select_cell(cur);
-            if self.try_eager(cur, ci) {
+            if self.try_eager(cur, ci, work_limit) {
                 did_work = true;
+                break;
+            }
+            if self.stats.runs >= work_limit {
                 break;
             }
             let cell = &self.nodes[&cur].cells[ci];
@@ -824,7 +893,11 @@ impl<'d> BoundSolver<'d> {
     /// First visit of a virgin cell: attempt the eager enumerator (range
     /// merge intact) within `cell_cap` runs; on success the whole cell
     /// resolves at once. Returns whether it did the work.
-    fn try_eager(&mut self, key: NodeKey, ci: usize) -> bool {
+    fn try_eager(&mut self, key: NodeKey, ci: usize, work_limit: usize) -> bool {
+        let cap = self.cfg.cell_cap.min(work_limit.saturating_sub(self.stats.runs));
+        if cap == 0 {
+            return false;
+        }
         let (battle, choices) = {
             let node = self.nodes.get_mut(&key).unwrap();
             let cell = &mut node.cells[ci];
@@ -839,11 +912,11 @@ impl<'d> BoundSolver<'d> {
                 [node.acts0[i], node.acts1[j]],
             )
         };
-        let step = enumerate_step(self.dex, &battle, choices, self.cfg.cell_cap);
+        let step = enumerate_step(self.dex, &battle, choices, cap);
         let Some(step) = step else {
             self.nodes.get_mut(&key).unwrap().battle = Some(battle);
-            self.stats.runs += self.cfg.cell_cap; // the aborted probe's cost
-            self.stats.eager_runs += self.cfg.cell_cap;
+            self.stats.runs += cap;
+            self.stats.eager_runs += cap;
             self.stats.eager_failures += 1;
             return false;
         };
@@ -1123,7 +1196,10 @@ impl<'d> BoundSolver<'d> {
             }
         }
         for (key, bounds) in fold {
-            self.nodes.remove(&key);
+            let node = self.nodes.remove(&key).unwrap();
+            if let Some(strategies) = node_strategies(&node) {
+                self.closed_strategies.insert(key, strategies);
+            }
             self.closed.insert(key, bounds);
             self.stats.closed_folds += 1;
         }
@@ -1150,6 +1226,45 @@ impl<'d> BoundSolver<'d> {
             self.stats.two_sided_invalidations += 1;
         }
     }
+}
+
+fn node_strategies(node: &Node) -> Option<[StrategyCertificate; 2]> {
+    let witness = node.strat.as_ref()?;
+    let rows = node.acts0.len();
+    let cols = node.acts1.len();
+    let x = normalized_policy(&witness.xlo)?;
+    let y = normalized_policy(&witness.yhi)?;
+    let floor = (0..cols)
+        .map(|j| (0..rows).map(|i| x[i] * node.cells[i * cols + j].lo).sum::<f64>())
+        .fold(1.0, f64::min);
+    let ceiling = (0..rows)
+        .map(|i| (0..cols).map(|j| y[j] * node.cells[i * cols + j].hi).sum::<f64>())
+        .fold(0.0, f64::max);
+    // Include every opposing action, including pruned actions whose cell bounds
+    // may still be loose. The value certificate alone cannot certify a policy.
+    let pad = 1e-12 * (rows + cols + 1) as f64;
+    let guaranteed = [(floor - pad).max(0.0), (1.0 - ceiling - pad).max(0.0)];
+    let upper = [node.hi, 1.0 - node.lo];
+    Some([
+        StrategyCertificate {
+            actions: node.acts0.iter().copied().zip(x).collect(),
+            guaranteed_value: guaranteed[0],
+            max_loss: (upper[0] - guaranteed[0]).max(0.0),
+        },
+        StrategyCertificate {
+            actions: node.acts1.iter().copied().zip(y).collect(),
+            guaranteed_value: guaranteed[1],
+            max_loss: (upper[1] - guaranteed[1]).max(0.0),
+        },
+    ])
+}
+
+fn normalized_policy(policy: &[f64]) -> Option<Vec<f64>> {
+    if policy.is_empty() || policy.iter().any(|p| !p.is_finite() || *p < 0.0) {
+        return None;
+    }
+    let total = policy.iter().sum::<f64>();
+    (total.is_finite() && total > 0.0).then(|| policy.iter().map(|p| p / total).collect())
 }
 
 struct RestrictedSolution {
@@ -1808,6 +1923,240 @@ mod tests {
             stall_rank: None,
             resource_rank: None,
         }
+    }
+
+    #[test]
+    fn mixed_policy_certificates_and_side_swap_match_best_responses() {
+        for matrix in [[0.9, 0.1, 0.2, 0.8], [0.1, 0.8, 0.9, 0.2]] {
+            let mut node = synthetic_node(0, 0);
+            node.cells = matrix.iter().map(|&v| synthetic_cell(v, v)).collect();
+            let solved = solve_restricted_game(&matrix, 2, 2, &[true; 2], &[true; 2]);
+            node.lo = solved.value - solved.gap * 0.5;
+            node.hi = solved.value + solved.gap * 0.5;
+            node.strat = Some(StageWitness {
+                xlo: solved.x.clone(),
+                ylo: solved.y.clone(),
+                xhi: solved.x,
+                yhi: solved.y,
+                gap_lo: solved.gap,
+                gap_hi: solved.gap,
+            });
+            let policies = super::node_strategies(&node).unwrap();
+            for (side, policy) in policies.iter().enumerate() {
+                assert!(policy.actions.iter().all(|(_, p)| *p > 0.0));
+                assert!(policy.meets(0.02));
+                let floor = (0..2).map(|reply| {
+                    policy.actions.iter().enumerate().map(|(a, (_, p))| {
+                        p * if side == 0 { matrix[a * 2 + reply] }
+                            else { 1.0 - matrix[reply * 2 + a] }
+                    }).sum::<f64>()
+                }).fold(1.0, f64::min);
+                assert!(policy.guaranteed_value <= floor);
+                assert!((policy.guaranteed_value - floor).abs() < 1e-10);
+                assert!(policy.max_loss < 1e-10);
+            }
+        }
+    }
+
+    #[test]
+    fn closed_value_does_not_certify_a_policy_against_unchecked_replies() {
+        let mut node = synthetic_node(0, 0);
+        node.lo = 0.5;
+        node.hi = 0.5;
+        node.active_rows[1] = false;
+        node.active_cols[1] = false;
+        node.cells[0] = synthetic_cell(0.5, 0.5);
+        node.cells[1] = synthetic_cell(0.0, 1.0);
+        let report = super::SolveReport {
+            bounds: super::Bounds { lo: node.lo, hi: node.hi },
+            stop: super::Stop::WidthMet,
+            runs: 0,
+            strategies: super::node_strategies(&node),
+        };
+        assert_eq!(report.status(0.02), super::SolutionStatus::ClosedValue);
+        for side in 0..2 {
+            assert!(report.strategy(side, 0.02).is_none());
+            assert!(report.strategy(side, f64::NAN).is_none());
+            assert!(report.strategy(side, -1.0).is_none());
+        }
+        node.strat.as_mut().unwrap().xlo = vec![f64::NAN, 0.0];
+        assert!(super::node_strategies(&node).is_none());
+    }
+
+    #[test]
+    fn compacted_mixed_policy_survives_while_value_only_cache_has_no_policy() {
+        let dex = conformance::load_dex();
+        let root = battle(&dex, &["Splash"], &["Splash"]);
+        let mut solver = BoundSolver::new(&dex, BoundConfig::default());
+        let key = solver.node_key(&root);
+        let mut node = synthetic_node(0, 0);
+        node.lo = 0.5;
+        node.hi = 0.5;
+        node.cells = [1.0, 0.0, 0.0, 1.0].iter().map(|&v| synthetic_cell(v, v)).collect();
+        let witness = node.strat.as_mut().unwrap();
+        witness.xlo = vec![0.5, 0.5];
+        witness.yhi = vec![0.5, 0.5];
+        let expected = super::node_strategies(&node).unwrap();
+        solver.nodes.insert(key, node);
+        solver.fold_closed_graph();
+        assert!(!solver.nodes.contains_key(&key));
+        assert!(solver.closed.contains_key(&key));
+        let report = solver.solve_strategy(&root, 0, 0.02);
+        assert_eq!(report.runs, 0);
+        assert_eq!(report.strategies.unwrap(), expected);
+        solver.closed_strategies.clear();
+        assert!(solver.solve(&root, None).strategies.is_none());
+    }
+
+    #[test]
+    fn strategy_target_stops_before_value_closure_and_small_budgets_resume() {
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Quick Attack", "Splash"], &["Quick Attack", "Splash"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 1000;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = 1;
+        }
+        let mut solver = BoundSolver::new(&dex, BoundConfig {
+            work_budget: 1,
+            cell_cap: 4096,
+            eps: 0.0,
+            certified_action_pruning: false,
+            ..BoundConfig::default()
+        });
+        for _ in 0..1000 {
+            let report = solver.solve_strategy(&root, 0, 0.51);
+            assert!(report.runs <= 1);
+            if report.stop == super::Stop::StrategyMet {
+                assert!(report.strategy(0, 0.51).is_some());
+                assert!(report.bounds.width() > 1e-10);
+                return;
+            }
+        }
+        panic!("strategy target never reached");
+    }
+
+    fn exhaustive_matrix(dex: &nc2000_engine::dex::Dex, root: &Battle, depth: usize) -> Vec<f64> {
+        assert!(depth > 0);
+        let mut probe = root.clone();
+        let needs = root.needs_choice();
+        let actions = [0, 1].map(|side| {
+            if needs[side] { probe.legal_choices(dex, side).into_iter().map(Some).collect() }
+            else { vec![None] }
+        });
+        let mut values = Vec::new();
+        for &a in &actions[0] {
+            for &b in &actions[1] {
+                let step = enumerate_step(dex, root, [a, b], 100_000).unwrap();
+                values.push(step.leaves.into_iter().map(|leaf| {
+                    let value = super::outcome_value(&leaf.battle).unwrap_or_else(|| {
+                        let matrix = exhaustive_matrix(dex, &leaf.battle, depth - 1);
+                        let mut child = leaf.battle.clone();
+                        let needs = child.needs_choice();
+                        let sizes = [0, 1].map(|s| if needs[s] { child.legal_choices(dex, s).len() } else { 1 });
+                        solve_matrix(&matrix, sizes[0], sizes[1]).0
+                    });
+                    leaf.prob * value
+                }).sum());
+            }
+        }
+        values
+    }
+
+    fn assert_policy_against_exhaustive(dex: &nc2000_engine::dex::Dex, root: &Battle, depth: usize) {
+        let matrix = exhaustive_matrix(dex, root, depth);
+        let mut probe = root.clone();
+        let needs = root.needs_choice();
+        let actions = [0, 1].map(|side| {
+            if needs[side] { probe.legal_choices(dex, side).into_iter().map(Some).collect::<Vec<_>>() }
+            else { vec![None] }
+        });
+        let value = solve_matrix(&matrix, actions[0].len(), actions[1].len()).0;
+        let mut solver = BoundSolver::new(dex, BoundConfig {
+            work_budget: 1,
+            cell_cap: 0,
+            eps: 1e-10,
+            certified_action_pruning: false,
+            ..BoundConfig::default()
+        });
+        let mut previous = super::Bounds { lo: 0.0, hi: 1.0 };
+        for _ in 0..20_000 {
+            let report = solver.solve(root, None);
+            assert!(report.bounds.lo <= value + 1e-10);
+            assert!(report.bounds.hi >= value - 1e-10);
+            assert!(report.bounds.lo >= previous.lo);
+            assert!(report.bounds.hi <= previous.hi);
+            previous = report.bounds;
+            if let Some(policies) = &report.strategies {
+                for side in 0..2 {
+                    let policy = &policies[side];
+                    let floor = (0..actions[1 - side].len()).map(|reply| {
+                        policy.actions.iter().map(|(action, p)| {
+                            let a = actions[side].iter().position(|x| x == action).unwrap();
+                            p * if side == 0 { matrix[a * actions[1].len() + reply] }
+                                else { 1.0 - matrix[reply * actions[1].len() + a] }
+                        }).sum::<f64>()
+                    }).fold(1.0, f64::min);
+                    let optimum = if side == 0 { value } else { 1.0 - value };
+                    assert!(policy.guaranteed_value <= floor + 1e-10);
+                    assert!(policy.max_loss >= optimum - floor - 1e-10);
+                }
+            }
+            if report.bounds.width() <= 1e-10 {
+                assert!(report.strategy(0, 0.02).is_some());
+                assert!(report.strategy(1, 0.02).is_some());
+                let policies = report.strategies.unwrap();
+                solver.roots.clear();
+                solver.fold_closed_graph();
+                let cached = solver.solve(root, None);
+                assert_eq!(cached.runs, 0);
+                assert_eq!(cached.strategies.unwrap(), policies);
+                return;
+            }
+        }
+        panic!("microgame did not close");
+    }
+
+    #[test]
+    fn partial_strategies_cover_random_damage_recovery_and_turn_cap() {
+        let dex = conformance::load_dex();
+        for (moves0, moves1) in [
+            (vec!["Quick Attack", "Splash"], vec!["Quick Attack", "Splash"]),
+            (vec!["Rest", "Seismic Toss"], vec!["Seismic Toss", "Splash"]),
+            (vec!["Seismic Toss", "Splash"], vec!["Rest", "Seismic Toss"]),
+        ] {
+            let mut root = battle(&dex, &moves0, &moves1);
+            let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+            root.apply_choices(&dex, preview).unwrap();
+            root.turn = 1000;
+            for side in 0..2 {
+                let id = root.active_id(side).unwrap();
+                root.poke_mut(id).hp = 1;
+            }
+            assert_policy_against_exhaustive(&dex, &root, 2);
+        }
+    }
+
+    #[test]
+    fn forced_replacement_policy_and_no_choice_opponent_are_certified() {
+        let dex = conformance::load_dex();
+        let mut root = Battle::from_fixture(&dex, "1,2,3,4",
+            &[mon(&["Splash"]), mon(&["Seismic Toss"]), mon(&["Splash"])],
+            &[mon(&["Seismic Toss"])]).unwrap();
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 999;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = 1;
+        }
+        let choices = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, choices).unwrap();
+        assert_eq!(root.needs_choice(), [true, false]);
+        assert!(root.legal_choices(&dex, 0).len() > 1);
+        assert_policy_against_exhaustive(&dex, &root, 3);
     }
 
     #[test]
