@@ -130,6 +130,27 @@ Iteration t generates 20,000 games (K = 16, ε = 0.1) with model t's leaf
 | eval01 | 0.107 | 44 / 5.83 | 0.110 | — |
 | model-1 | 0.081 | 26 / 4.70 | 0.130 | 0.560 ± 0.038 |
 | model-2 | 0.077 | 25 / 3.89 | 0.104 | 0.600 ± 0.040 |
+| model-3 | 0.071 | 26 / 4.16 | 0.116 | 0.603 ± 0.042 |
+| model-4 | 0.073 | 23 / 4.01 | 0.114 | 0.595 ± 0.038 |
+| model-5 | 0.071 | 25 / 3.49 | 0.099 | 0.647 ± 0.040 |
+| model-6 | 0.070 | 22 / 3.33 | 0.086 | 0.583 ± 0.042 |
+| model-7 | 0.073 | 21 / 3.52 | 0.088 | — |
 
-Reference: eval1ply vs skuct:27000 (perfect information, ~720 ms/move) =
-0.340 ± 0.071 over 100 games. model-2 vs model-1 at 1-ply: 0.510 ± 0.039.
+Successive models at 1-ply (400 games each): 2>1 0.510 ± 0.039, 3>2 0.552 ±
+0.043, 4>3 0.515 ± 0.039, 5>4 0.545 ± 0.039, 6>5 0.540 ± 0.038, 7>6 0.487 ±
+0.041. Against the fixed eval1ply reference the 1-ply strength levels off at
+about 0.6 from model-2 on; train and validation loss stay within 0.01, so the
+network is not overfitting.
+
+Against the current search (the clock column is per move, one core):
+
+| A | B | games | score A | ms/move A / B |
+|---|---|---|---|---|
+| eval1ply | skuct:27000 (perfect info) | 100 | 0.340 ± 0.071 | 2 / 723 |
+| netsearch model-1 (UCB, 3000 it., c 1.0) | skuct:27000 | 60 | 0.367 ± 0.114 | 154 / 963 |
+| model-2 depth 2 (8×4) | skuct:27000 | 100 | 0.430 ± 0.084 | 263 / 877 |
+| blindnet model-3 (1-ply, 8 determinizations) | blind:27000:0.4 (shipped) | 200 | 0.400 ± 0.054 | 72 / 1,058 |
+
+UCB with a value leaf did not beat the 1-ply equilibrium player: argmax
+visits is a pure strategy at simultaneous nodes. The matrix-game search is the
+line kept.

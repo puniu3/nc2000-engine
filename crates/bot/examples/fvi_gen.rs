@@ -1,13 +1,14 @@
 //! S1 fitted value iteration — self-play data generator.
 //!
-//! Both sides play the equilibrium of the 1-ply sampled Shapley backup
-//! (`value::sampled_backup`) with ε-uniform exploration; every decision state
+//! Both sides play the equilibrium of the depth-limited sampled Shapley
+//! backup (`value::deep_backup`, `--ks` samples per depth) with ε-uniform
+//! exploration; every decision state
 //! is written with that backup's value as its TD target, and the game's
 //! outcome is attached once it ends (the trainer forms λ-returns from both).
 //! Leaves are `eval01` without `--model` (iteration 0) and the network with it.
 //!
 //!   fvi_gen --describe OUT.json
-//!   fvi_gen --out DIR [--games 2000] [--seed 1] [--threads N] [--k 16]
+//!   fvi_gen --out DIR [--games 2000] [--seed 1] [--threads N] [--ks 16 | 8x4]
 //!           [--eps 0.1] [--model MODEL.json] [--max-turns 300]
 //!           [--pools data/team-pool-v2/team-pool.json,data/belief-pool-v3/belief-pool.json]
 //!   fvi_gen --parity MODEL.json
@@ -23,7 +24,7 @@ use std::time::Instant;
 
 use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::value::{
-    outcome_value, sample_mixed, sampled_backup, Leaf, ValueCodec, ValueNet, RECORD,
+    deep_backup, outcome_value, sample_mixed, Leaf, ValueCodec, ValueNet, RECORD,
 };
 use nc2000_bot::eval::EvalWeights;
 use nc2000_bot::SplitMix64;
@@ -72,6 +73,10 @@ fn main() {
         std::thread::available_parallelism().map(|n| n.get().saturating_sub(1)).unwrap_or(4);
     let threads: usize = arg_s(&args, "--threads", &default_threads.to_string()).parse().unwrap();
     let k: usize = arg_s(&args, "--k", "16").parse().unwrap();
+    let ks: Vec<usize> = arg_s(&args, "--ks", &k.to_string())
+        .split('x')
+        .map(|x| x.parse().unwrap())
+        .collect();
     let eps: f64 = arg_s(&args, "--eps", "0.1").parse().unwrap();
     let max_turns: u16 = arg_s(&args, "--max-turns", "300").parse().unwrap();
     let model_path = arg_s(&args, "--model", "");
@@ -142,7 +147,9 @@ fn main() {
                             b.apply_choices(&dex, picks).expect("preview");
                             continue;
                         }
-                        let Some(bk) = sampled_backup(&b, &dex, &leaf, k, &mut rng, &mut scratch)
+                        let mut cache = std::collections::HashMap::new();
+                        let Some(bk) =
+                            deep_backup(&b, &dex, &leaf, &ks, &mut rng, &mut scratch, &mut cache)
                         else {
                             break;
                         };
@@ -188,7 +195,7 @@ fn main() {
         "records": records.load(Ordering::Relaxed),
         "capped": capped.load(Ordering::Relaxed),
         "seed": seed,
-        "k": k,
+        "ks": ks,
         "eps": eps,
         "max_turns": max_turns,
         "model": model_path,

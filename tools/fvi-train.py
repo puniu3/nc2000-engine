@@ -156,6 +156,8 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--threads", type=int, default=8)
+    ap.add_argument("--dims", default="16,8,16,32,96,64,192,96",
+                    help="ds,di,dm,hm,h1,h2,hh1,hh2 (ignored with --init)")
     args = ap.parse_args()
     torch.manual_seed(args.seed)
     torch.set_num_threads(args.threads)
@@ -185,7 +187,13 @@ def main():
     va = np.flatnonzero(is_val)
     print(f"records {len(X)} (train {len(tr)}, val {len(va)}), games {len(games)}, lam {args.lam}", flush=True)
 
-    net = Net(c)
+    if args.init:
+        doc = json.load(open(args.init))
+        dims = [doc["species"]["dim"], doc["items"]["dim"], doc["moves"]["dim"], doc["move_layer"]["n_out"],
+                doc["mon1"]["n_out"], doc["mon2"]["n_out"], doc["head1"]["n_out"], doc["head2"]["n_out"]]
+    else:
+        dims = [int(x) for x in args.dims.split(",")]
+    net = Net(c, *dims)
     if args.init:
         load_init(net, args.init)
     dev = torch.device(args.device)
@@ -229,7 +237,7 @@ def main():
               + f" ({time.time() - t0:.0f}s)", flush=True)
         best = m
     net.cpu()
-    meta = {"data": args.data, "lam": args.lam, "epochs": args.epochs, "init": args.init,
+    meta = {"data": args.data, "dims": dims, "lam": args.lam, "epochs": args.epochs, "init": args.init,
             "records": int(len(X)), "val": best}
     export(net, args.out, X[va[:64]], meta)
     print(f"wrote {args.out}")

@@ -46,6 +46,7 @@ fn random_net(codec: &ValueCodec, rng: &mut SplitMix64) -> ValueNet {
         n_out,
         w: w(n_in * n_out),
         b: w(n_out),
+        wt: Vec::new(),
     };
     let (ds, di, dm, hm, h1, h2, hh1, hh2) = (8, 4, 8, 12, 16, 12, 24, 12);
     let side = 2 * h2 + F_SIDE + F_VOL;
@@ -148,12 +149,16 @@ fn the_network_is_side_antisymmetric() {
     let codec = ValueCodec::new(&dex);
     let mut rng = SplitMix64::new(3);
     let net = random_net(&codec, &mut rng);
+    let mut sparse = net.clone();
+    sparse.prepare();
     let mut n = 0;
     random_states(&dex, 20, 5, |b| {
         let mut r = Vec::new();
         codec.encode(b, &dex, &mut r);
         let (l, ls) = (net.logit(&codec, &r), net.logit(&codec, &swap_record(&r)));
         assert!((l + ls).abs() < 1e-4, "logit {l} vs swapped {ls}");
+        let lsp = sparse.logit(&codec, &r);
+        assert!((l - lsp).abs() < 1e-4, "dense {l} vs sparse forward {lsp}");
         n += 1;
     });
     assert!(n > 100);

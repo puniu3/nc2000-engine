@@ -450,6 +450,10 @@ pub struct Dense {
     /// Row-major [n_out][n_in].
     pub w: Vec<f32>,
     pub b: Vec<f32>,
+    /// Column-major copy of `w` ([n_in][n_out]) filled by `prepare`: the
+    /// forward pass then skips zero inputs, which most of the record is.
+    #[serde(skip)]
+    pub wt: Vec<f32>,
 }
 
 impl Dense {
@@ -464,12 +468,37 @@ impl Dense {
         Ok(())
     }
 
+    pub fn prepare(&mut self) {
+        let mut wt = vec![0f32; self.w.len()];
+        for o in 0..self.n_out {
+            for k in 0..self.n_in {
+                wt[k * self.n_out + o] = self.w[o * self.n_in + k];
+            }
+        }
+        self.wt = wt;
+    }
+
     #[inline]
     fn forward(&self, x: &[f32], y: &mut [f32], relu: bool) {
         debug_assert_eq!(x.len(), self.n_in);
-        for (o, (row, &bias)) in self.w.chunks_exact(self.n_in).zip(&self.b).enumerate() {
-            let acc = bias + dot(row, x);
-            y[o] = if relu { acc.max(0.0) } else { acc };
+        if self.wt.is_empty() {
+            for (o, (row, &bias)) in self.w.chunks_exact(self.n_in).zip(&self.b).enumerate() {
+                let acc = bias + dot(row, x);
+                y[o] = if relu { acc.max(0.0) } else { acc };
+            }
+            return;
+        }
+        let y = &mut y[..self.n_out];
+        y.copy_from_slice(&self.b);
+        for (&xk, col) in x.iter().zip(self.wt.chunks_exact(self.n_out)) {
+            if xk != 0.0 {
+                for (yo, &w) in y.iter_mut().zip(col) {
+                    *yo += xk * w;
+                }
+            }
+        }
+        if relu {
+            y.iter_mut().for_each(|v| *v = v.max(0.0));
         }
     }
 }
@@ -511,9 +540,24 @@ pub struct ValueNet {
 impl ValueNet {
     pub fn load(path: &std::path::Path) -> Result<Self, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let net: ValueNet = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+        let mut net: ValueNet = serde_json::from_str(&text).map_err(|e| e.to_string())?;
         net.validate()?;
+        net.prepare();
         Ok(net)
+    }
+
+    /// Build the sparse-forward weight copies (`load` does this).
+    pub fn prepare(&mut self) {
+        for d in [
+            &mut self.move_layer,
+            &mut self.mon1,
+            &mut self.mon2,
+            &mut self.head1,
+            &mut self.head2,
+            &mut self.head3,
+        ] {
+            d.prepare();
+        }
     }
 
     fn validate(&self) -> Result<(), String> {
