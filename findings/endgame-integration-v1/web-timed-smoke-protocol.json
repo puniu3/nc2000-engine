@@ -1,0 +1,24 @@
+{
+  "catalog": "data/team-pool-v2/team-pool.json",
+  "catalog_sha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+  "prior": "data/belief-pool-v3/belief-pool.json",
+  "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+  "c": 0.4,
+  "schema": "nc2000-web-matches-v1",
+  "calibration": true,
+  "candidate_selection": null,
+  "threads": 2,
+  "pairs": 1,
+  "iterations": 512,
+  "milliseconds": 10,
+  "seed": 2026100310,
+  "candidate": {
+    "information": "public",
+    "solver_fraction": 0.1
+  },
+  "baseline": {
+    "information": "public",
+    "solver_fraction": 0
+  },
+  "interpretation": "Timed browser smoke with solver ON/OFF. Check legal completion and conditional value semantics; no strength conclusion."
+}

@@ -1,0 +1,24 @@
+{
+  "catalog": "data/team-pool-v2/team-pool.json",
+  "catalog_sha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+  "prior": "data/belief-pool-v3/belief-pool.json",
+  "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+  "c": 0.4,
+  "schema": "nc2000-web-matches-v1",
+  "calibration": true,
+  "candidate_selection": null,
+  "threads": 2,
+  "pairs": 8,
+  "iterations": 512,
+  "milliseconds": 5,
+  "seed": 2026100308,
+  "candidate": {
+    "information": "raw",
+    "solver_fraction": 0
+  },
+  "baseline": {
+    "information": "empty",
+    "solver_fraction": 0
+  },
+  "interpretation": "Browser harness direction control against an intentionally empty uniform legal policy. The score is a calibration outcome, not evidence about the endgame method."
+}
