@@ -2,7 +2,8 @@
 //! pools with a shared team preview (`value::shared_preview`), so only
 //! in-battle play differs between arms.
 //!
-//!   fvi_duel --a net:MODEL.json[:K] --b eval1ply[:K] | skuct:ITERS[:C]
+//!   fvi_duel --a net:MODEL.json[:K[xK2...]] | netsearch:MODEL.json[:ITERS[:C]]
+//!            --b eval1ply[:K] | skuct:ITERS[:C]
 //!            [--games 400] [--seed 1] [--threads N] [--max-turns 500]
 
 use std::sync::Arc;
@@ -12,7 +13,7 @@ use nc2000_bot::duel::{run_duel, DuelSpec};
 use nc2000_bot::eval::EvalWeights;
 use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::smmcts::{RmAgent, RmConfig, SelRule};
-use nc2000_bot::value::{shared_preview, Leaf, ValueAgent, ValueCodec, ValueNet};
+use nc2000_bot::value::{shared_preview, Leaf, NetSearchAgent, ValueAgent, ValueCodec, ValueNet};
 use nc2000_engine::battle::{PokemonSet, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
@@ -42,7 +43,8 @@ impl Agent for SharedPreview {
 }
 
 enum Arm {
-    Net(usize),
+    NetSearch(u32, f64),
+    Net(Vec<usize>),
     Eval(usize),
     Skuct(u32, f64),
 }
@@ -52,7 +54,14 @@ fn parse(spec: &str, nets: &mut Vec<String>) -> Arm {
     match p[0] {
         "net" => {
             nets.push(p[1].to_string());
-            Arm::Net(p.get(2).map_or(16, |k| k.parse().unwrap()))
+            Arm::Net(p.get(2).map_or(vec![16], |k| k.split('x').map(|k| k.parse().unwrap()).collect()))
+        }
+        "netsearch" => {
+            nets.push(p[1].to_string());
+            Arm::NetSearch(
+                p.get(2).map_or(3000, |k| k.parse().unwrap()),
+                p.get(3).map_or(1.0, |c| c.parse().unwrap()),
+            )
         }
         "eval1ply" => Arm::Eval(p.get(1).map_or(16, |k| k.parse().unwrap())),
         "skuct" => Arm::Skuct(
@@ -85,10 +94,17 @@ fn main() {
     spec.progress = true;
     let build = |arm: &Arm, net: Option<Arc<ValueNet>>| -> Box<dyn Fn(u64) -> Box<dyn Agent> + Sync> {
         match *arm {
-            Arm::Net(k) => {
+            Arm::Net(ref ks) => {
+                let (net, codec, ks) = (net.unwrap(), codec.clone(), ks.clone());
+                Box::new(move |s| {
+                    Box::new(ValueAgent::deep(Leaf::Net(net.clone(), codec.clone()), ks.clone(), s))
+                        as Box<dyn Agent>
+                })
+            }
+            Arm::NetSearch(iterations, c) => {
                 let (net, codec) = (net.unwrap(), codec.clone());
                 Box::new(move |s| {
-                    Box::new(ValueAgent::new(Leaf::Net(net.clone(), codec.clone()), k, s)) as Box<dyn Agent>
+                    Box::new(NetSearchAgent::new(net.clone(), codec.clone(), iterations, c, s)) as Box<dyn Agent>
                 })
             }
             Arm::Eval(k) => Box::new(move |s| {
@@ -102,8 +118,8 @@ fn main() {
             }),
         }
     };
-    let net_a = matches!(a, Arm::Net(_)).then(|| nets.next().unwrap());
-    let net_b = matches!(b, Arm::Net(_)).then(|| nets.next().unwrap());
+    let net_a = matches!(a, Arm::Net(_) | Arm::NetSearch(..)).then(|| nets.next().unwrap());
+    let net_b = matches!(b, Arm::Net(_) | Arm::NetSearch(..)).then(|| nets.next().unwrap());
     let ba = build(&a, net_a);
     let bb = build(&b, net_b);
     let st = run_duel(&dex, &teams, &*ba, &*bb, spec);

@@ -775,26 +775,85 @@ pub fn shared_preview(battle: &Battle, side: usize, choices: &[SearchChoice]) ->
     choices[rng.below(choices.len())]
 }
 
-/// Plays the equilibrium mixture of the 1-ply sampled Shapley backup of its
-/// leaf (`eval01` or a network). Team preview: `shared_preview`.
+/// Depth-limited sampled Shapley backup: `ks[0]` successors per joint action
+/// at this node; a successor is valued by the leaf when `ks` has one entry,
+/// otherwise by its own backup over `ks[1..]`. Successor backups are cached
+/// by exact state key for the whole call, since a deterministic transition
+/// reaches the same state from every sample.
+pub fn deep_backup(
+    b: &Battle,
+    dex: &Dex,
+    leaf: &Leaf,
+    ks: &[usize],
+    rng: &mut SplitMix64,
+    scratch: &mut Vec<f32>,
+    cache: &mut HashMap<(u64, usize), f64>,
+) -> Option<Backup> {
+    let actions = legal_actions(b, dex);
+    let (n0, n1) = (actions[0].len(), actions[1].len());
+    if n0 == 0 || n1 == 0 {
+        return None;
+    }
+    let k = ks[0];
+    let mut matrix = vec![0.0; n0 * n1];
+    for (i, &c0) in actions[0].iter().enumerate() {
+        for (j, &c1) in actions[1].iter().enumerate() {
+            let mut acc = 0.0;
+            for _ in 0..k {
+                let mut c = b.clone();
+                c.set_log_enabled(false);
+                c.reseed(rng.next());
+                c.apply_choices(dex, [c0, c1]).expect("legal choices");
+                let key = (c.state_key(), ks.len());
+                let v = match cache.get(&key) {
+                    Some(&v) => v,
+                    None => {
+                        let v = if c.outcome().is_some() || ks.len() == 1 {
+                            leaf.value(&c, dex, scratch)
+                        } else {
+                            deep_backup(&c, dex, leaf, &ks[1..], rng, scratch, cache)
+                                .map_or_else(|| leaf.value(&c, dex, scratch), |bk| bk.value)
+                        };
+                        cache.insert(key, v);
+                        v
+                    }
+                };
+                acc += v;
+            }
+            matrix[i * n1 + j] = acc / k as f64;
+        }
+    }
+    let (value, mix) = solve(&matrix, n0, n1);
+    Some(Backup { actions, matrix, value, mix })
+}
+
+/// Plays the equilibrium mixture of a depth-limited sampled Shapley backup
+/// of its leaf (`eval01` or a network): `ks` = samples per joint action at
+/// each depth (`[16]` = 1-ply). Team preview: `shared_preview`.
 pub struct ValueAgent {
     pub leaf: Leaf,
-    pub k: usize,
+    pub ks: Vec<usize>,
     rng: SplitMix64,
     scratch: Vec<f32>,
 }
 
 impl ValueAgent {
     pub fn new(leaf: Leaf, k: usize, seed: u64) -> Self {
-        ValueAgent { leaf, k, rng: SplitMix64::new(seed), scratch: Vec::new() }
+        Self::deep(leaf, vec![k], seed)
+    }
+
+    pub fn deep(leaf: Leaf, ks: Vec<usize>, seed: u64) -> Self {
+        assert!(!ks.is_empty() && ks.iter().all(|&k| k > 0));
+        ValueAgent { leaf, ks, rng: SplitMix64::new(seed), scratch: Vec::new() }
     }
 }
 
 impl crate::agent::Agent for ValueAgent {
     fn name(&self) -> String {
+        let ks: Vec<String> = self.ks.iter().map(|k| k.to_string()).collect();
         match self.leaf {
-            Leaf::Eval(_) => format!("value-eval01:k{}", self.k),
-            Leaf::Net(..) => format!("value-net:k{}", self.k),
+            Leaf::Eval(_) => format!("value-eval01:k{}", ks.join("x")),
+            Leaf::Net(..) => format!("value-net:k{}", ks.join("x")),
         }
     }
 
@@ -802,11 +861,70 @@ impl crate::agent::Agent for ValueAgent {
         if battle.turn == 0 || choices.len() == 1 {
             return if battle.turn == 0 { shared_preview(battle, side, choices) } else { choices[0] };
         }
-        let bk = sampled_backup(battle, dex, &self.leaf, self.k, &mut self.rng, &mut self.scratch)
+        let mut cache = HashMap::new();
+        let bk = deep_backup(battle, dex, &self.leaf, &self.ks, &mut self.rng, &mut self.scratch, &mut cache)
             .expect("decision state");
         let i = sample_mixed(&bk.mix[side], 0.0, &mut self.rng);
         let pick = bk.actions[side][i].expect("side owes a choice");
         debug_assert!(choices.contains(&pick));
         pick
+    }
+}
+
+/// State-keyed UCB search (`smmcts::SkuctSearch`) whose expansions are valued
+/// by the network instead of a rollout; plays argmax visits. Team preview:
+/// `shared_preview`.
+pub struct NetSearchAgent {
+    pub net: std::sync::Arc<ValueNet>,
+    pub codec: std::sync::Arc<ValueCodec>,
+    pub iterations: u32,
+    pub c: f64,
+    rng: SplitMix64,
+    scratch: Vec<f32>,
+}
+
+impl NetSearchAgent {
+    pub fn new(
+        net: std::sync::Arc<ValueNet>,
+        codec: std::sync::Arc<ValueCodec>,
+        iterations: u32,
+        c: f64,
+        seed: u64,
+    ) -> Self {
+        NetSearchAgent { net, codec, iterations, c, rng: SplitMix64::new(seed), scratch: Vec::new() }
+    }
+}
+
+impl crate::agent::Agent for NetSearchAgent {
+    fn name(&self) -> String {
+        format!("netsearch:{}:{}", self.iterations, self.c)
+    }
+
+    fn choose(&mut self, battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoice]) -> SearchChoice {
+        if battle.turn == 0 {
+            return shared_preview(battle, side, choices);
+        }
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        let cfg = crate::smmcts::RmConfig {
+            iterations: self.iterations,
+            rule: crate::smmcts::SelRule::Ucb,
+            c: self.c,
+            hp_buckets: 16,
+            ..Default::default()
+        };
+        let mut search = crate::smmcts::SkuctSearch::new(battle, dex, cfg, self.rng.next());
+        let (net, codec, scratch) = (&self.net, &self.codec, &mut self.scratch);
+        let mut leaf = |sim: &mut Battle, _: &mut SplitMix64, _: bool| -> f64 {
+            if let Some(o) = sim.outcome() {
+                return outcome_value(o);
+            }
+            scratch.clear();
+            codec.encode(sim, dex, scratch);
+            net.value(codec, scratch)
+        };
+        search.step_with_leaf(dex, self.iterations, &mut leaf);
+        search.best(side).unwrap_or(choices[0])
     }
 }

@@ -1239,6 +1239,40 @@ impl SkuctSearch {
         r
     }
 
+    /// `step` with a caller-supplied value at every expansion and horizon
+    /// cutoff in place of the rollout/eval (`value::NetSearchAgent`).
+    pub fn step_with_leaf(
+        &mut self,
+        dex: &Dex,
+        n: u32,
+        leaf: &mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
+    ) -> u32 {
+        for _ in 0..n {
+            let mut sim = self.root.clone();
+            sim.reseed(self.rng.next());
+            let mut joint = [0usize; 2];
+            let mut depth = 0u32;
+            run_iteration_with_leaf(
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                0,
+                [None, None],
+                &mut joint,
+                &mut depth,
+                leaf,
+                None,
+            );
+            self.depth_sum += depth as u64;
+            self.done += 1;
+        }
+        self.done
+    }
+
     /// Pump `n` iterations, return the total run so far.
     pub fn step(&mut self, dex: &Dex, n: u32) -> u32 {
         for _ in 0..n {

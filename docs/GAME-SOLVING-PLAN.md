@@ -101,3 +101,35 @@ M17e anchor violations. Zero residual would not prove correctness, but this
 much residual proves room.
 
 Verdict: GO; local compute suffices for S1.
+
+### S1 — perfect-information core (in progress)
+
+Tooling (commit 890eab9): `bot::value` (codec, side-antisymmetric network,
+sampled Shapley backup, `ValueAgent` = 1-ply equilibrium player,
+`NetSearchAgent` = state-keyed UCB with the network at expansions),
+`examples/fvi_gen.rs` (self-play records; the move-choice backup is the TD
+target), `tools/fvi-train.py` (PyTorch 2.8 in `tmp/venv`; λ-returns over
+backup values and outcomes; exports a model whose Rust forward pass must match
+within 1e-3 — measured 1e-6), `examples/fvi_eval.rs` (held-out corpus residual
++ certified anchors), `examples/fvi_duel.rs` (seed-paired duels over the
+training pools with one shared team preview, so only in-battle play differs).
+Tests (`tests/value.rs`): volatile/side-condition coverage over 2,000 random
+games, the team-swap mirror of the record, the network's antisymmetry.
+
+Anchors: the July v3 artifact no longer reconstructs (0/72 state keys match
+current reconstruction), so the 72 anchors were re-certified on the current
+engine (`tmp/m17e-merged-v4.json`, three formal shards).
+
+Training pools: `team-pool-v2` (24) + `belief-pool-v3` (103), random picks.
+Iteration t generates 20,000 games (K = 16, ε = 0.1) with model t's leaf
+(eval01 for t = 0) and trains model t+1 warm-started on iterations t−1 and t
+(λ = 0.5). Loop driver: `tmp/fvi/loop.sh`.
+
+| leaf | corpus residual RMS (570 pos.) | anchor violations / margin | tight MAE (n 30) | 1-ply duel vs eval1ply (400) |
+|---|---|---|---|---|
+| eval01 | 0.107 | 44 / 5.83 | 0.110 | — |
+| model-1 | 0.081 | 26 / 4.70 | 0.130 | 0.560 ± 0.038 |
+| model-2 | 0.077 | 25 / 3.89 | 0.104 | 0.600 ± 0.040 |
+
+Reference: eval1ply vs skuct:27000 (perfect information, ~720 ms/move) =
+0.340 ± 0.071 over 100 games. model-2 vs model-1 at 1-ply: 0.510 ± 0.039.
