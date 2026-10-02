@@ -72,6 +72,7 @@ pub struct EndgameStats {
     pub node_stops: usize,
     pub runs: usize,
     pub solver_ms: f64,
+    pub max_probe_ms: f64,
     pub peak_entries: usize,
     pub max_value_error: f64,
 }
@@ -183,7 +184,10 @@ impl EndgameSession {
         side: Option<usize>,
         clock: &mut impl FnMut() -> f64,
     ) -> Option<SolveReport> {
-        if self.cfg.solver_fraction == 0.0 || !self.eligible(battle) {
+        if self.cfg.solver_fraction == 0.0
+            || self.stats.solver_ms >= self.budget_ms * self.cfg.solver_fraction
+            || !self.eligible(battle)
+        {
             return None;
         }
         let start = clock();
@@ -197,11 +201,7 @@ impl EndgameSession {
             .slice_runs
             .min(self.cfg.state_runs.saturating_sub(spent))
             .min(self.cfg.decision_runs.saturating_sub(self.stats.runs));
-        let work = if self.stats.solver_ms >= self.budget_ms * self.cfg.solver_fraction {
-            0
-        } else {
-            allowance
-        };
+        let work = allowance;
         let mut solver = BoundSolver::from_cache(
             dex,
             self.bound_config(work),
@@ -238,7 +238,9 @@ impl EndgameSession {
         }
         self.cache = solver.into_cache();
         self.stats.peak_entries = self.stats.peak_entries.max(self.cache.len());
-        self.stats.solver_ms += (clock() - start).max(0.0);
+        let elapsed = (clock() - start).max(0.0);
+        self.stats.solver_ms += elapsed;
+        self.stats.max_probe_ms = self.stats.max_probe_ms.max(elapsed);
         report
     }
 

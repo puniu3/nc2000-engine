@@ -266,6 +266,27 @@ fn leaf_values_are_replaced_in_native_and_blind_search() {
 }
 
 #[test]
+fn exhausted_solver_share_does_not_keep_probing_cached_states() {
+    let dex = load_dex();
+    let root = position(&dex, &["Splash"], &["Splash"], [1, 1]);
+    let mut session = EndgameSession::new(EndgameConfig::default(), 0.0, 10.0).unwrap();
+    let mut elapsed = 0.0;
+    session.conditional_value(&dex, &root, &mut || {
+        elapsed += 1.0;
+        elapsed
+    });
+    assert!(session.stats.solver_ms >= 1.0);
+    let exhausted = session.stats.clone();
+    for _ in 0..100 {
+        assert!(session.conditional_value(&dex, &root, &mut || 2.0).is_none());
+    }
+    assert_eq!(session.stats, exhausted);
+    session.extend_budget(100.0).unwrap();
+    assert!(session.conditional_value(&dex, &root, &mut || 2.0).is_some());
+    assert!(session.stats.cache_hits > exhausted.cache_hits);
+}
+
+#[test]
 fn budget_and_memory_exhaustion_leave_legal_fallbacks() {
     let dex = load_dex();
     let mut root = position(&dex, &["Rest", "Tackle"], &["Rest", "Tackle"], [1, 1]);
