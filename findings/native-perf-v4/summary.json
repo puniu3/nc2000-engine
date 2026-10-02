@@ -1,0 +1,341 @@
+{
+  "date": "2026-10-03",
+  "baseline": "4cdf0a6",
+  "decision": "Reject both additional candidates: neither met 5% time-reduction threshold in native blind or Node Wasm. Deploy previously validated v2 and v3 optimizations. This is a scoped stopping decision, not proof that no optimization exists.",
+  "shared_effects": {
+    "native": {
+      "baseline": {
+        "median_seconds": 43.276015333,
+        "p95_seconds": {
+          "ordinary": 1.122530708,
+          "perish": 1.011026416,
+          "preview": 1.084889916,
+          "recovery": 1.024432084,
+          "replacement": 1.056753667
+        }
+      },
+      "candidate": {
+        "median_seconds": 42.936201666,
+        "p95_seconds": {
+          "ordinary": 1.114941708,
+          "perish": 0.990308167,
+          "preview": 1.095544959,
+          "recovery": 1.003422167,
+          "replacement": 1.0700853750000001
+        }
+      },
+      "time_reduction": 0.00785224019321551,
+      "p95_ratios": {
+        "ordinary": 0.9932393831670572,
+        "perish": 0.9795077075414418,
+        "preview": 1.0098213125985032,
+        "recovery": 0.9794911567802869,
+        "replacement": 1.0126157196481251
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "wasm": {
+      "median_ms": {
+        "baseline": 3453.0671300000004,
+        "candidate": 3310.39821
+      },
+      "time_reduction": 0.041316578748354815,
+      "exact_match": true,
+      "positions": 31,
+      "runs_ms": {
+        "baseline": [
+          3282.3233749999995,
+          3453.0671300000004,
+          3463.6234980000004
+        ],
+        "candidate": [
+          3041.2914210000004,
+          3329.54292,
+          3310.39821
+        ]
+      },
+      "runtime": "v22.23.3"
+    }
+  },
+  "borrowed_keys": {
+    "native": {
+      "baseline": {
+        "median_seconds": 43.671770958,
+        "p95_seconds": {
+          "ordinary": 1.152926667,
+          "perish": 1.024352709,
+          "preview": 1.100249916,
+          "recovery": 1.030024625,
+          "replacement": 1.021296042
+        }
+      },
+      "candidate": {
+        "median_seconds": 43.496675791,
+        "p95_seconds": {
+          "ordinary": 1.117509417,
+          "perish": 1.0821522080000001,
+          "preview": 1.090484792,
+          "recovery": 1.009895125,
+          "replacement": 1.076612667
+        }
+      },
+      "time_reduction": 0.00400934432378286,
+      "p95_ratios": {
+        "ordinary": 0.9692805700364635,
+        "perish": 1.056425387947112,
+        "preview": 0.9911246309970179,
+        "recovery": 0.9804572633396992,
+        "replacement": 1.0541631639849243
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "wasm": {
+      "median_ms": {
+        "baseline": 3227.7547079999995,
+        "candidate": 3170.6099580000005
+      },
+      "time_reduction": 0.017704179892717886,
+      "exact_match": true,
+      "positions": 31,
+      "runs_ms": {
+        "baseline": [
+          3227.7547079999995,
+          3121.087497999999,
+          3235.676957999999
+        ],
+        "candidate": [
+          3170.6099580000005,
+          3217.862798000001,
+          3133.8111659999986
+        ]
+      },
+      "runtime": "v22.23.3"
+    }
+  },
+  "shared_allocation_before": {
+    "allocator": "System with counters; timing is not measured",
+    "rows": [
+      {
+        "phase": "preview",
+        "measurements": [
+          {
+            "operation": "clone",
+            "repetitions": 128,
+            "allocation_calls": 256,
+            "requested_bytes": 1155072
+          },
+          {
+            "operation": "clone_from",
+            "repetitions": 128,
+            "allocation_calls": 0,
+            "requested_bytes": 0
+          },
+          {
+            "operation": "legal_choices",
+            "repetitions": 128,
+            "allocation_calls": 768,
+            "requested_bytes": 129024
+          },
+          {
+            "operation": "clone_and_step",
+            "repetitions": 128,
+            "allocation_calls": 2176,
+            "requested_bytes": 1224320
+          },
+          {
+            "operation": "blind_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 186331,
+            "requested_bytes": 5900691
+          },
+          {
+            "operation": "skuct_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 188119,
+            "requested_bytes": 5801806
+          }
+        ]
+      },
+      {
+        "phase": "battle",
+        "measurements": [
+          {
+            "operation": "clone",
+            "repetitions": 128,
+            "allocation_calls": 256,
+            "requested_bytes": 1155072
+          },
+          {
+            "operation": "clone_from",
+            "repetitions": 128,
+            "allocation_calls": 0,
+            "requested_bytes": 0
+          },
+          {
+            "operation": "legal_choices",
+            "repetitions": 128,
+            "allocation_calls": 128,
+            "requested_bytes": 3072
+          },
+          {
+            "operation": "clone_and_step",
+            "repetitions": 128,
+            "allocation_calls": 3712,
+            "requested_bytes": 1343232
+          },
+          {
+            "operation": "blind_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 168305,
+            "requested_bytes": 5432102
+          },
+          {
+            "operation": "skuct_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 200906,
+            "requested_bytes": 6280109
+          }
+        ]
+      }
+    ]
+  },
+  "shared_allocation_after": {
+    "allocator": "System with counters; timing is not measured",
+    "rows": [
+      {
+        "phase": "preview",
+        "measurements": [
+          {
+            "operation": "clone",
+            "repetitions": 128,
+            "allocation_calls": 256,
+            "requested_bytes": 1155072
+          },
+          {
+            "operation": "clone_from",
+            "repetitions": 128,
+            "allocation_calls": 0,
+            "requested_bytes": 0
+          },
+          {
+            "operation": "legal_choices",
+            "repetitions": 128,
+            "allocation_calls": 768,
+            "requested_bytes": 129024
+          },
+          {
+            "operation": "clone_and_step",
+            "repetitions": 128,
+            "allocation_calls": 2176,
+            "requested_bytes": 1224320
+          },
+          {
+            "operation": "blind_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 146692,
+            "requested_bytes": 4601975
+          },
+          {
+            "operation": "skuct_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 145003,
+            "requested_bytes": 4315519
+          }
+        ]
+      },
+      {
+        "phase": "battle",
+        "measurements": [
+          {
+            "operation": "clone",
+            "repetitions": 128,
+            "allocation_calls": 256,
+            "requested_bytes": 1155072
+          },
+          {
+            "operation": "clone_from",
+            "repetitions": 128,
+            "allocation_calls": 0,
+            "requested_bytes": 0
+          },
+          {
+            "operation": "legal_choices",
+            "repetitions": 128,
+            "allocation_calls": 128,
+            "requested_bytes": 3072
+          },
+          {
+            "operation": "clone_and_step",
+            "repetitions": 128,
+            "allocation_calls": 1792,
+            "requested_bytes": 1262848
+          },
+          {
+            "operation": "blind_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 121990,
+            "requested_bytes": 3864583
+          },
+          {
+            "operation": "skuct_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 148429,
+            "requested_bytes": 4492520
+          }
+        ]
+      }
+    ]
+  },
+  "deployment": {
+    "commit": "748f5e5",
+    "baseline": "9d3a781",
+    "status": "deployed",
+    "wasm_comparison": {
+      "median_ms": {
+        "baseline": 3452.0098350000003,
+        "candidate": 3048.547543
+      },
+      "time_reduction": 0.11687750362391425,
+      "exact_match": true,
+      "positions": 31,
+      "runs_ms": {
+        "baseline": [
+          3281.3745420000005,
+          3452.0098350000003,
+          3592.3590440000003
+        ],
+        "candidate": [
+          3226.510001,
+          3040.330582000001,
+          3048.547543
+        ]
+      },
+      "runtime": "v22.23.3"
+    },
+    "native_tests": 136,
+    "wasm_suites": 6,
+    "url": "https://puniu3.github.io/nc2000-engine/",
+    "action_run": "https://github.com/puniu3/nc2000-engine/actions/runs/37029752166",
+    "live_smoke": {
+      "result": "PASS",
+      "turn": "Turn 2",
+      "wasm": [
+        "https://puniu3.github.io/nc2000-engine/assets/nc2000_wasm_bg-mNRktwzH.wasm"
+      ]
+    },
+    "live_asset": {
+      "sha256": "a35bf4fb228d0c9bbf123c879f67a35669a72a9b511e15f9e5d4c85db72b13ac",
+      "matches_ci_artifact": true,
+      "url": "https://puniu3.github.io/nc2000-engine/assets/nc2000_wasm_bg-mNRktwzH.wasm"
+    }
+  },
+  "measurement_scope": {
+    "native": "49 generated positions, 27000 iterations each, one thread; three alternating pairs.",
+    "wasm": "Node v22.23.3, 31 decisions at 3000 iterations each; three alternating pairs; search-step time only. Not iPad/Safari measurements.",
+    "allocation": "Two fixed positions; 128 warm-up iterations then 1000 search iterations; System allocator counters. Cumulative requested bytes, not peak memory."
+  }
+}
