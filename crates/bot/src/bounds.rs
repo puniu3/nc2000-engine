@@ -18,6 +18,7 @@
 //! corpus violation mining; width mode remains for numeric anchors.
 
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 use nc2000_engine::battle::enumerate::{enumerate_step, run_scripted};
 use nc2000_engine::battle::{Outcome, SearchChoice};
@@ -32,6 +33,7 @@ use crate::stall::{
 
 #[derive(Clone, Debug)]
 pub struct BoundConfig {
+    pub time_budget: Option<Duration>,
     /// Engine executions per `solve` call.
     pub work_budget: usize,
     /// On a cell's first visit, try the EAGER enumerator (which keeps the
@@ -80,11 +82,13 @@ pub struct BoundConfig {
     /// best responses crossed with the opponent's support. This changes only
     /// frontier order; certification still uses every unpruned action.
     pub support_br_scheduling: bool,
+    pub reuse_unchanged_backups: bool,
 }
 
 impl Default for BoundConfig {
     fn default() -> Self {
         BoundConfig {
+            time_budget: None,
             work_budget: 1_000_000,
             node_budget: 120_000,
             cell_cap: 4096,
@@ -98,6 +102,7 @@ impl Default for BoundConfig {
             two_sided_resource_scheduling: true,
             certified_action_pruning: true,
             support_br_scheduling: true,
+            reuse_unchanged_backups: true,
         }
     }
 }
@@ -128,6 +133,7 @@ pub enum Stop {
     /// Root interval fell entirely inside the threshold band.
     Contained,
     WorkExhausted,
+    TimeBudget,
     NodeBudget,
 }
 
@@ -142,6 +148,10 @@ pub struct SolveReport {
 #[derive(Clone, Debug, Default)]
 pub struct BoundStats {
     pub runs: usize,
+    pub eager_runs: usize,
+    pub eager_failures: usize,
+    pub reused_nodes: usize,
+    pub reused_backups: usize,
     pub expansions: usize,
     pub trials: usize,
     pub lp_solves: usize,
@@ -173,7 +183,7 @@ struct Pending {
 
 /// The tag is part of identity: a raw exact fingerprint and a semantic
 /// fingerprint are never compared even if their 128-bit payloads coincide.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum NodeKey {
     Exact(u128),
     NoDamageBookkeeping(u128),
@@ -262,6 +272,7 @@ impl<'d> BoundSolver<'d> {
     /// `tau` = optional threshold band (lo, hi) for certificate mode.
     /// Never discards work: repeated calls resume where the graph stands.
     pub fn solve(&mut self, b: &Battle, tau: Option<(f64, f64)>) -> SolveReport {
+        let started = self.cfg.time_budget.map(|_| Instant::now());
         self.active_stall = self
             .cfg
             .monotone_stall_scheduling
@@ -313,7 +324,9 @@ impl<'d> BoundSolver<'d> {
             } else {
                 None
             };
-            let stop = stop.or(if self.stats.runs >= work_limit {
+            let stop = stop.or(if started.zip(self.cfg.time_budget).is_some_and(|(start, limit)| start.elapsed() >= limit) {
+                Some(Stop::TimeBudget)
+            } else if self.stats.runs >= work_limit {
                 Some(Stop::WorkExhausted)
             } else if self.nodes.len() >= self.cfg.node_budget {
                 Some(Stop::NodeBudget)
@@ -361,6 +374,48 @@ impl<'d> BoundSolver<'d> {
             .or_else(|| self.closed.get(&key).copied())
     }
 
+    pub fn retain_root(&mut self, b: &Battle) {
+        let root = self.node_key(b);
+        let mut keep = HashSet::new();
+        let mut pending = vec![root];
+        while let Some(key) = pending.pop() {
+            if keep.insert(key) {
+                if let Some(node) = self.nodes.get(&key) {
+                    pending.extend(node.cells.iter().flat_map(|cell| cell.resolved.iter().map(|&(_, k)| k)));
+                }
+            }
+        }
+        self.nodes.retain(|key, _| keep.contains(key));
+        self.roots.clear();
+        self.roots.insert(root);
+    }
+
+    /// Fix this side's first action; the opponent best-responds and both
+    /// sides play optimally thereafter. Values are from `side`'s perspective.
+    pub fn action_bounds(&self, b: &Battle, side: usize) -> Vec<(Option<SearchChoice>, Bounds)> {
+        assert!(side < 2);
+        let Some(node) = self.nodes.get(&self.node_key(b)) else {
+            return Vec::new();
+        };
+        let n1 = node.acts1.len();
+        let actions = if side == 0 { &node.acts0 } else { &node.acts1 };
+        actions
+            .iter()
+            .enumerate()
+            .map(|(a, &action)| {
+                let opponents = if side == 0 { n1 } else { node.acts0.len() };
+                let mut bounds = Bounds { lo: 1.0, hi: 1.0 };
+                for reply in 0..opponents {
+                    let cell = &node.cells[if side == 0 { a * n1 + reply } else { reply * n1 + a }];
+                    let (lo, hi) = if side == 0 { (cell.lo, cell.hi) } else { (1.0 - cell.hi, 1.0 - cell.lo) };
+                    bounds.lo = bounds.lo.min(lo);
+                    bounds.hi = bounds.hi.min(hi);
+                }
+                (action, bounds)
+            })
+            .collect()
+    }
+
     fn node_key(&self, b: &Battle) -> NodeKey {
         if self.cfg.dead_damage_quotient && !b.damage_bookkeeping_observable(self.dex) {
             NodeKey::NoDamageBookkeeping(b.state_key128_without_damage_bookkeeping())
@@ -382,6 +437,7 @@ impl<'d> BoundSolver<'d> {
             })
         });
         if let Some(node) = self.nodes.get_mut(&key) {
+            self.stats.reused_nodes += 1;
             if stall_rank.is_some() {
                 node.stall_rank = stall_rank;
             }
@@ -787,9 +843,12 @@ impl<'d> BoundSolver<'d> {
         let Some(step) = step else {
             self.nodes.get_mut(&key).unwrap().battle = Some(battle);
             self.stats.runs += self.cfg.cell_cap; // the aborted probe's cost
+            self.stats.eager_runs += self.cfg.cell_cap;
+            self.stats.eager_failures += 1;
             return false;
         };
         self.stats.runs += step.runs;
+        self.stats.eager_runs += step.runs;
         self.stats.expansions += 1;
         let mut agg: HashMap<NodeKey, f64> = HashMap::new();
         let mut fixed_lo = 0.0;
@@ -817,6 +876,7 @@ impl<'d> BoundSolver<'d> {
         let node = self.nodes.get_mut(&key).unwrap();
         let cell = &mut node.cells[ci];
         cell.resolved = agg.into_iter().map(|(k, m)| (m, k)).collect();
+        cell.resolved.sort_unstable_by_key(|&(_, key)| key);
         cell.fixed_lo = fixed_lo;
         cell.fixed_hi = fixed_hi;
         cell.pending.clear();
@@ -931,6 +991,22 @@ impl<'d> BoundSolver<'d> {
                 .collect();
             (node.acts0.len(), node.acts1.len(), bounds)
         };
+
+        if self.cfg.reuse_unchanged_backups {
+            let node = self.nodes.get_mut(&key).unwrap();
+            if node.strat.is_some()
+                && node.cells.iter().zip(&cell_bounds).all(|(cell, &(lo, hi))| cell.lo == lo && cell.hi == hi)
+            {
+                let fully_expanded = (0..n0).filter(|&i| node.active_rows[i]).all(|i| {
+                    (0..n1).filter(|&j| node.active_cols[j]).all(|j| node.cells[i * n1 + j].pending.is_empty())
+                });
+                if node.hi - node.lo <= 1e-12 || fully_expanded {
+                    node.battle = None;
+                }
+                self.stats.reused_backups += 1;
+                return false;
+            }
+        }
 
         let mlo: Vec<f64> = cell_bounds.iter().map(|b| b.0).collect();
         let mhi: Vec<f64> = cell_bounds.iter().map(|b| b.1).collect();
@@ -1402,6 +1478,117 @@ mod tests {
         let (vb, gb) = solve_matrix(&mb, ab[0].len(), ab[1].len());
         assert!((va - vb).abs() < 1e-12);
         assert!(ga < 1e-12 && gb < 1e-12);
+    }
+
+    #[test]
+    fn reroot_retains_solved_continuations_and_discards_ancestors() {
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Splash"], &["Splash"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 999;
+        let actions = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        let (child, _) = nc2000_engine::battle::enumerate::run_scripted(&dex, &root, actions, &[]);
+        let cfg = BoundConfig { eps: 0.0, ..BoundConfig::default() };
+        let mut solver = BoundSolver::new(&dex, cfg.clone());
+        assert_eq!(solver.solve(&root, None).bounds.lo, 0.5);
+        let before = solver.node_count();
+        assert!(solver.peek(&child).is_some());
+        solver.retain_root(&child);
+        assert!(solver.node_count() < before);
+        assert!(solver.peek(&root).is_none());
+        let warm = solver.solve(&child, None);
+        let cold = BoundSolver::new(&dex, cfg).solve(&child, None);
+        assert_eq!((warm.bounds.lo, warm.bounds.hi), (cold.bounds.lo, cold.bounds.hi));
+        assert_eq!(warm.runs, 0);
+        assert!(cold.runs > 0);
+    }
+
+    #[test]
+    fn distance_to_turn_limit_changes_certified_value() {
+        let dex = conformance::load_dex();
+        let mut early = battle(&dex, &["Seismic Toss"], &["Splash"]);
+        let preview = [0, 1].map(|s| early.legal_choices(&dex, s).first().copied());
+        early.apply_choices(&dex, preview).unwrap();
+        let foe = early.active_id(1).unwrap();
+        early.poke_mut(foe).hp = 75;
+        early.turn = 999;
+        let mut late = early.clone();
+        late.turn = 1000;
+        assert_ne!(early.state_key128_without_damage_bookkeeping(), late.state_key128_without_damage_bookkeeping());
+        let cfg = BoundConfig { eps: 0.0, ..BoundConfig::default() };
+        let early_value = BoundSolver::new(&dex, cfg.clone()).solve(&early, None).bounds;
+        let late_value = BoundSolver::new(&dex, cfg).solve(&late, None).bounds;
+        assert!(early_value.lo > late_value.hi + 0.4);
+    }
+
+    #[test]
+    fn elapsed_budget_stops_without_discarding_the_interval() {
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Splash"], &["Splash"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 1000;
+        let mut solver = BoundSolver::new(&dex, BoundConfig {
+            time_budget: Some(std::time::Duration::ZERO),
+            ..BoundConfig::default()
+        });
+        let partial = solver.solve(&root, None);
+        assert_eq!(partial.stop, super::Stop::TimeBudget);
+        assert_eq!(partial.runs, 0);
+        assert_eq!((partial.bounds.lo, partial.bounds.hi), (0.0, 1.0));
+        solver.cfg.time_budget = None;
+        let done = solver.solve(&root, None);
+        assert_eq!(done.bounds.lo, 0.5);
+        assert_eq!(done.bounds.hi, 0.5);
+    }
+
+    #[test]
+    fn partial_action_bounds_enclose_exhaustive_first_action_values() {
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Quick Attack", "Splash"], &["Quick Attack", "Splash"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 1000;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = 1;
+        }
+        let acts = [0, 1].map(|s| root.legal_choices(&dex, s));
+        let mut matrix = Vec::new();
+        for &a in &acts[0] {
+            for &b in &acts[1] {
+                let step = enumerate_step(&dex, &root, [Some(a), Some(b)], 100_000).unwrap();
+                matrix.push(step.leaves.iter().map(|leaf| {
+                    leaf.prob * super::outcome_value(&leaf.battle).unwrap()
+                }).sum::<f64>());
+            }
+        }
+        let mut solver = BoundSolver::new(&dex, BoundConfig {
+            work_budget: 1,
+            cell_cap: 0,
+            eps: 0.0,
+            ..BoundConfig::default()
+        });
+        for _ in 0..1000 {
+            let report = solver.solve(&root, None);
+            for side in 0..2 {
+                for (action, bounds) in solver.action_bounds(&root, side) {
+                    let index = acts[side].iter().position(|&a| Some(a) == action).unwrap();
+                    let expected = (0..acts[1 - side].len()).map(|reply| {
+                        if side == 0 { matrix[index * acts[1].len() + reply] }
+                        else { 1.0 - matrix[reply * acts[1].len() + index] }
+                    }).fold(1.0, f64::min);
+                    assert!(bounds.lo <= expected + 1e-10);
+                    assert!(bounds.hi >= expected - 1e-10);
+                }
+            }
+            if report.bounds.width() <= 1e-10 {
+                assert!((report.bounds.mid() - solve_matrix(&matrix, acts[0].len(), acts[1].len()).0).abs() < 1e-10);
+                return;
+            }
+        }
+        panic!("microgame did not close");
     }
 
     #[test]

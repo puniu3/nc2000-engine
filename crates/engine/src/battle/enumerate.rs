@@ -164,6 +164,15 @@ fn leaf(b: Battle, trace: Vec<Draw>) -> LeafRec {
 /// All leaves of the subtree whose draw choices are fixed by `script`.
 fn subtree(ctx: &mut Ctx, script: &mut Vec<usize>) -> Option<Vec<LeafRec>> {
     let (b, trace) = ctx.run(script)?;
+    subtree_from_run(ctx, script, b, trace)
+}
+
+fn subtree_from_run(
+    ctx: &mut Ctx,
+    script: &mut Vec<usize>,
+    b: Battle,
+    trace: Vec<Draw>,
+) -> Option<Vec<LeafRec>> {
     if trace.len() <= script.len() {
         return Some(vec![leaf(b, trace)]);
     }
@@ -171,16 +180,30 @@ fn subtree(ctx: &mut Ctx, script: &mut Vec<usize>) -> Option<Vec<LeafRec>> {
     let d = &trace[p];
     let mut out = Vec::new();
     if d.label.starts_with("dmgvar") {
+        let chosen = d.chosen;
+        let last = d.counts.len() - 1;
         let mut cache: HashMap<usize, Rc<Vec<LeafRec>>> = HashMap::new();
-        droll_ranges(ctx, script, p, 0, d.counts.len() - 1, &mut cache, &mut out)?;
+        script.push(chosen);
+        let known = subtree_from_run(ctx, script, b, trace)?;
+        script.pop();
+        cache.insert(chosen, Rc::new(known));
+        droll_ranges(ctx, script, p, 0, last, &mut cache, &mut out)?;
     } else {
         let counts = d.counts.clone();
+        let chosen = d.chosen;
+        let mut known = Some((b, trace));
         for (c, &cnt) in counts.iter().enumerate() {
             if cnt == 0 {
                 continue;
             }
             script.push(c);
-            out.append(&mut subtree(ctx, script)?);
+            let mut leaves = if c == chosen {
+                let (b, trace) = known.take().unwrap();
+                subtree_from_run(ctx, script, b, trace)?
+            } else {
+                subtree(ctx, script)?
+            };
+            out.append(&mut leaves);
             script.pop();
         }
     }

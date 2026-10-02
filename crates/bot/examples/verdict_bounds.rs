@@ -242,7 +242,7 @@ fn main() {
             "CONTAINED in tau: side0 [{:.4},{:.4}] fits inside the band. {cumulative} runs",
             bounds.lo, bounds.hi
         ),
-        Stop::WorkExhausted | Stop::NodeBudget => println!(
+        Stop::WorkExhausted | Stop::TimeBudget | Stop::NodeBudget => println!(
             "NOT CONVERGED ({last_stop:?}): after {calls} call(s) and {cumulative} engine runs \
              the root interval is still side0 [{:.4},{:.4}] (width {:.4}), p2 [{:.4},{:.4}]. \
              The bound is SOUND but uninformative; do NOT read the midpoint as a value. \
