@@ -3,9 +3,7 @@
 //!
 //! Contract with the rest of the engine: enumeration mirrors the validation
 //! rules of `choices.rs` exactly (same helpers, same order of checks), and
-//! `apply` funnels through `Battle::choose` with the PS-canonical choice
-//! string — one code path shared with fixture replay, so search can never
-//! drift from conformance-verified semantics.
+//! Structured and text choices share validation and commit handling.
 //!
 //! Search usage: `Battle` is a plain deep-clonable value. Typical loop:
 //! ```ignore
@@ -282,13 +280,14 @@ impl Battle {
         let k = self.picked_team_size(side_n).min(3) as u8;
         let mut out = Vec::new();
         let push = |out: &mut Vec<SearchChoice>, slots: [u8; 3]| {
-            let positions: Vec<usize> = slots
-                .iter()
-                .filter(|&&s| s != 0)
-                .map(|&s| s as usize - 1)
-                .collect();
+            let mut positions = [0; 3];
+            let mut len = 0;
+            for slot in slots.into_iter().filter(|&s| s != 0) {
+                positions[len] = slot as usize - 1;
+                len += 1;
+            }
             if self.preview_level_caps[side_n]
-                .is_none_or(|cap| self.picked_total_level(side_n, &positions) <= cap)
+                .is_none_or(|cap| self.picked_total_level(side_n, &positions[..len]) <= cap)
             {
                 out.push(SearchChoice::Team(slots));
             }
@@ -339,17 +338,16 @@ impl Battle {
             return vec![SearchChoice::Move(id)];
         }
 
-        let mut out = Vec::new();
-        let moves = self.pokemon_choosable_moves(active);
-        if moves.is_empty() {
-            out.push(SearchChoice::Move(dex.moves.id("struggle").unwrap()));
-        } else {
-            for (id, disabled) in moves {
-                let choice = SearchChoice::Move(id);
-                if !disabled && !out.contains(&choice) {
-                    out.push(choice);
-                }
+        let moves = &self.poke(active).move_slots;
+        let mut out = Vec::with_capacity(moves.len() + self.sides[side_n].party.len().saturating_sub(1));
+        for slot in moves {
+            let choice = SearchChoice::Move(slot.id);
+            if !slot.disabled && slot.pp > 0 && !out.contains(&choice) {
+                out.push(choice);
             }
+        }
+        if out.is_empty() {
+            out.push(SearchChoice::Move(dex.moves.id("struggle").unwrap()));
         }
 
         // voluntary switches
@@ -393,8 +391,7 @@ impl Battle {
         side_n: usize,
         choice: SearchChoice,
     ) -> Result<(), EngineError> {
-        let input = choice.to_input(dex);
-        self.choose(dex, side_n, &input)
+        self.choose_search(dex, side_n, choice)
     }
 
     /// Submit both sides' choices for this decision point (`None` for a side

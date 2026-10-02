@@ -29,37 +29,69 @@ use super::{EffectHandle, EngineError, RV};
 pub const MAX_TOTAL_LEVEL: u32 = 155;
 
 impl Battle {
-    /// battle.choose(sideid, input). Returns true if the choice committed
-    /// (choices done → turn ran → log likely grew).
     pub fn choose(&mut self, dex: &Dex, side_n: usize, input: &str) -> Result<(), EngineError> {
         let parsed = ParsedChoice::parse(input)
             .map_err(|e| EngineError::InvalidChoice(format!("p{}: {e}", side_n + 1)))?;
+        self.submit_choice(dex, side_n, || input.to_owned(), |battle| {
+            for part in &parsed {
+                match part {
+                    ParsedChoice::Team(slots) => battle.choose_team(dex, side_n, slots)?,
+                    ParsedChoice::MoveById(id) => battle.choose_move(dex, side_n, &toid(id))?,
+                    ParsedChoice::MoveBySlot(slot) => battle.choose_move_slot(dex, side_n, *slot)?,
+                    ParsedChoice::Switch(slot) => battle.choose_switch(dex, side_n, *slot)?,
+                    ParsedChoice::Pass => battle.choose_pass(side_n)?,
+                    ParsedChoice::Default => return Err(EngineError::Unimplemented("choice: default")),
+                    ParsedChoice::Undo => return Err(EngineError::Unimplemented("choice: undo")),
+                }
+            }
+            Ok(())
+        })
+    }
+
+    pub(crate) fn choose_search(
+        &mut self,
+        dex: &Dex,
+        side_n: usize,
+        choice: super::SearchChoice,
+    ) -> Result<(), EngineError> {
+        use super::SearchChoice;
+        if choice == SearchChoice::Team([0; 3]) {
+            return self.choose(dex, side_n, &choice.to_input(dex));
+        }
+        self.submit_choice(dex, side_n, || choice.to_input(dex), |battle| {
+            match choice {
+                SearchChoice::Team(slots) => {
+                    let mut nonzero = [0; 3];
+                    let mut n = 0;
+                    for slot in slots {
+                        if slot != 0 { nonzero[n] = slot; n += 1; }
+                    }
+                    battle.choose_team(dex, side_n, &nonzero[..n])
+                }
+                SearchChoice::Move(id) => battle.choose_move_id(dex, side_n, dex.moves.key(id), Some(id)),
+                SearchChoice::Switch(slot) => battle.choose_switch(dex, side_n, slot),
+                SearchChoice::Pass => battle.choose_pass(side_n),
+            }
+        })
+    }
+
+    fn submit_choice(
+        &mut self,
+        dex: &Dex,
+        side_n: usize,
+        input: impl FnOnce() -> String,
+        choose: impl FnOnce(&mut Self) -> Result<(), EngineError>,
+    ) -> Result<(), EngineError> {
         if self.sides[side_n].request_state().is_none() {
             return Err(EngineError::InvalidChoice(format!(
-                "p{}: no request pending for choice {input:?}",
-                side_n + 1
+                "p{}: no request pending for choice {:?}", side_n + 1, input()
             )));
         }
         self.clear_choice(side_n);
-        for part in &parsed {
-            match part {
-                ParsedChoice::Team(slots) => self.choose_team(dex, side_n, slots)?,
-                ParsedChoice::MoveById(id) => self.choose_move(dex, side_n, &toid(id))?,
-                ParsedChoice::MoveBySlot(slot) => self.choose_move_slot(dex, side_n, *slot)?,
-                ParsedChoice::Switch(slot) => self.choose_switch(dex, side_n, *slot)?,
-                ParsedChoice::Pass => self.choose_pass(side_n)?,
-                ParsedChoice::Default => {
-                    return Err(EngineError::Unimplemented("choice: default"));
-                }
-                ParsedChoice::Undo => {
-                    return Err(EngineError::Unimplemented("choice: undo"));
-                }
-            }
-        }
+        choose(self)?;
         if !self.is_choice_done(side_n) {
             return Err(EngineError::InvalidChoice(format!(
-                "p{}: incomplete choice {input:?}",
-                side_n + 1
+                "p{}: incomplete choice {:?}", side_n + 1, input()
             )));
         }
         if self.all_choices_done() {
@@ -161,6 +193,10 @@ impl Battle {
 
     /// side.chooseMove by id.
     fn choose_move(&mut self, dex: &Dex, side_n: usize, move_id_str: &str) -> Result<(), EngineError> {
+        self.choose_move_id(dex, side_n, move_id_str, None)
+    }
+
+    fn choose_move_id(&mut self, dex: &Dex, side_n: usize, move_id_str: &str, resolved: Option<MoveId>) -> Result<(), EngineError> {
         if self.sides[side_n].request_state() != Some(RequestKind::Move) {
             return Err(EngineError::InvalidChoice(format!(
                 "p{}: move choice without move request",
@@ -192,8 +228,8 @@ impl Battle {
         }
 
         // no valid moves → Struggle
-        let moves = self.pokemon_choosable_moves(pokemon);
-        if moves.is_empty() {
+        let moves = &self.poke(pokemon).move_slots;
+        if !moves.iter().any(|slot| !slot.disabled && slot.pp > 0) {
             let struggle = dex.moves.id("struggle").unwrap();
             self.sides[side_n].choice.actions.push(ChosenAction::Move {
                 pokemon,
@@ -204,18 +240,16 @@ impl Battle {
             return Ok(());
         }
 
-        let move_id = dex
-            .moves
-            .id(move_id_str)
+        let move_id = resolved.or_else(|| dex.moves.id(move_id_str))
             .ok_or_else(|| EngineError::InvalidChoice(format!("unknown move {move_id_str}")))?;
         let mut move_slot = None;
         let mut enabled = false;
-        for (i, (mid, disabled)) in moves.iter().enumerate() {
-            if *mid == move_id {
+        for (i, slot) in moves.iter().enumerate() {
+            if slot.id == move_id {
                 if move_slot.is_none() {
                     move_slot = Some(i);
                 }
-                if !disabled {
+                if !slot.disabled && slot.pp > 0 {
                     enabled = true;
                     break;
                 }
@@ -261,8 +295,8 @@ impl Battle {
         if idx >= moves.len() {
             return Err(EngineError::InvalidChoice(format!("no move slot {slot}")));
         }
-        let key = dex.moves.key(moves[idx].0).to_string();
-        self.choose_move(dex, side_n, &key)
+        let id = moves[idx].0;
+        self.choose_move_id(dex, side_n, dex.moves.key(id), Some(id))
     }
 
     /// pokemon.getMoves() reduced to (id, disabled) pairs; empty if no valid.

@@ -4,6 +4,10 @@ const { writeFileSync } = require("node:fs");
 const { wasm, loadFixture, readData, check, checkEq, finish } = require("./common");
 
 const dex = new wasm.Dex();
+const legacy = require("../../../fixtures/replay/transition-compatible.json");
+const legacyKifu = new wasm.Kifu(dex, legacy.code);
+check(JSON.parse(legacyKifu.scenes()).scenes.length > 0, "frozen replay remains compatible");
+legacyKifu.free();
 const fixture = loadFixture("full/battle-001.json");
 const pool = readData("meta-pool-v0/meta-pool.json");
 for (const team of [fixture.p1team, fixture.p2team]) for (const mon of team) delete mon.gender;

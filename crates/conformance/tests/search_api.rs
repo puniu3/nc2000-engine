@@ -56,6 +56,8 @@ fn legal_choices_cover_corpus() {
                 for choice in &legal {
                     let mut probe = battle.clone();
                     probe.set_log_enabled(false);
+                    let mut text = probe.clone();
+                    text.choose(&dex, side_n, &choice.to_input(&dex)).unwrap();
                     if let Err(e) = probe.apply_choice(&dex, side_n, *choice) {
                         panic!(
                             "fixture {}-{:03} line {i}: enumerated choice {:?} rejected: {e:?}",
@@ -64,6 +66,7 @@ fn legal_choices_cover_corpus() {
                             choice.to_input(&dex),
                         );
                     }
+                    assert_eq!(format!("{probe:?}"), format!("{text:?}"), "structured/text choice diverged: {choice:?}");
                 }
             }
             battle.choose(&dex, side_n, &line.choice).unwrap();

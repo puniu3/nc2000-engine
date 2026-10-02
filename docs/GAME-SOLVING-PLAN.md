@@ -206,7 +206,8 @@ Owner decision 2026-10-02, after the go/no-go gates.
   `origin/claude/bot-reinforcement-learning-potential-bcf77n`: replace the
   rollout and beat 8-turn rollout + eval at equal wall clock). It was reached,
   not cleared. That study was not read before S1 started; the 2026-09
-  imitation/PPO pipeline's outcome is not recorded in the repo.
+  imitation/PPO pipeline also failed to establish a strength improvement
+  (owner confirmation); no numerical result is available.
 
 What stays: `bot::value` (codec, network, Shapley backup, depth-limited matrix
 search, Bayesian root, the value agents), `SkuctSearch::step_with_leaf`, the

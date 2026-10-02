@@ -381,6 +381,7 @@ impl BlindSearch {
     ) -> f64 {
         let pick = belief.sample(&mut self.rng);
         let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut self.rng);
+        std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
@@ -445,6 +446,7 @@ impl BlindSearch {
                 &mut 0,
             )
         };
+        std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         self.record_joint(root, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
@@ -470,6 +472,7 @@ impl BlindSearch {
         );
         let pick = belief.sample(&mut self.rng);
         let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut self.rng);
+        std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
@@ -506,6 +509,7 @@ impl BlindSearch {
             &mut joint,
             &mut 0,
         );
+        std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         self.record_joint(root, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;

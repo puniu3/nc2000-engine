@@ -16,6 +16,23 @@ fn assert_same(a: &Battle, b: &Battle) {
 }
 
 #[test]
+fn frozen_compact_replay_remains_compatible() {
+    let mut dex = load_dex();
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../fixtures/replay/transition-compatible.json"
+    )).unwrap();
+    let code = fixture["code"].as_str().unwrap();
+    let replay = Replay::decode(&dex, code).unwrap();
+    assert_eq!(replay.encode(&dex).unwrap(), code);
+    let battle = replay.at(&dex, replay.rounds.len()).unwrap();
+    assert_eq!(battle.state_key128().to_string(), fixture["state_key128"]);
+    assert_eq!(battle.prng.seed_str(), fixture["prng"]);
+    assert_eq!(battle.turn as u64, fixture["turn"].as_u64().unwrap());
+    dex.replay_fingerprint[0] ^= 1;
+    assert_eq!(Replay::decode(&dex, code).err().as_deref(), Some("incompatible replay version"));
+}
+
+#[test]
 fn numbered_moves_record_the_effective_locked_action() {
     let dex = load_dex();
     let fixture =

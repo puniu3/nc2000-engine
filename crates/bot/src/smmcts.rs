@@ -1193,6 +1193,7 @@ impl SkuctSearch {
     /// action indices — `RmAgent`'s late-tree stage-game seeding needs both.
     pub fn step_one(&mut self, dex: &Dex) -> (f64, [usize; 2]) {
         let mut sim = self.root.clone();
+        std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
         let mut depth = 0u32;
@@ -1209,6 +1210,7 @@ impl SkuctSearch {
             &mut joint,
             &mut depth,
         );
+        std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         self.depth_sum += depth as u64;
         self.done += 1;
         (r, joint)
@@ -1218,6 +1220,7 @@ impl SkuctSearch {
     /// estimation phase).
     fn step_forced(&mut self, dex: &Dex, force: [usize; 2]) -> f64 {
         let mut sim = self.root.clone();
+        std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
         let mut depth = 0u32;
@@ -1234,6 +1237,7 @@ impl SkuctSearch {
             &mut joint,
             &mut depth,
         );
+        std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         self.depth_sum += depth as u64;
         self.done += 1;
         r
@@ -1249,6 +1253,7 @@ impl SkuctSearch {
     ) -> u32 {
         for _ in 0..n {
             let mut sim = self.root.clone();
+            std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
             sim.reseed(self.rng.next());
             let mut joint = [0usize; 2];
             let mut depth = 0u32;
@@ -1267,6 +1272,7 @@ impl SkuctSearch {
                 leaf,
                 None,
             );
+            std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
             self.depth_sum += depth as u64;
             self.done += 1;
         }
