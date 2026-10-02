@@ -46,25 +46,40 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let dex = conformance::load_dex();
     match args.get(1).map(String::as_str) {
-        Some("generate") => {
+        Some("generate") | Some("generate-weighted") => {
             let path = &args[2];
             let games: usize = args[3].parse().unwrap();
             let iterations: u32 = args[4].parse().unwrap();
             let seed: u64 = args[5].parse().unwrap();
             let pool = Arc::new(load_meta_pool(Path::new("data/belief-pool-v3/belief-pool.json")));
             let catalog = load_meta_pool(Path::new("data/team-pool-v2/team-pool.json"));
+            let weighted = args[1] == "generate-weighted";
+            let weights: Vec<f64> = if weighted {
+                let catalog_json: serde_json::Value = serde_json::from_slice(&std::fs::read("data/team-pool-v2/team-pool.json").unwrap()).unwrap();
+                catalog_json["teams"].as_array().unwrap().iter().zip(&catalog.teams).map(|(row, team)| {
+                    assert_eq!(row["id"].as_str().unwrap(), team.id);
+                    row["drawWeight"].as_f64().unwrap()
+                }).collect()
+            } else { Vec::new() };
+            assert!(!weighted || (weights.len() == catalog.teams.len() && weights.iter().all(|w| w.is_finite() && *w >= 0.0) && weights.iter().sum::<f64>() > 0.0));
             let mut rng = SplitMix64::new(seed);
             let mut out = std::io::BufWriter::new(std::fs::File::create_new(path).unwrap());
             for game in 0..games {
                 let start = Instant::now();
-                let teams = [0, 1].map(|_| catalog.teams[rng.below(catalog.teams.len())].sets.clone());
+                let teams = [0, 1].map(|_| {
+                    let index = if weighted {
+                        let mut draw = rng.next_f64() * weights.iter().sum::<f64>();
+                        weights.iter().position(|w| { draw -= w; draw < 0.0 }).unwrap_or(weights.len() - 1)
+                    } else { rng.below(catalog.teams.len()) };
+                    catalog.teams[index].sets.clone()
+                });
                 let battle_seed = rng.battle_seed();
                 let mut b = Battle::from_fixture(&dex, &battle_seed, &teams[0], &teams[1]).unwrap();
                 let cfg = RmConfig { iterations, c: 0.4, rule: SelRule::Ucb, ..Default::default() };
                 let mut agents = [0, 1].map(|_| BlindAgent::new(cfg.clone(), pool.clone(), None, rng.next()));
                 let mut decisions = Vec::new();
                 let mut classes: BTreeMap<[usize; 2], Vec<usize>> = BTreeMap::new();
-                while b.outcome().is_none() && b.turn <= 300 {
+                while b.outcome().is_none() && b.turn <= if weighted { 1000 } else { 300 } {
                     let acts = [0, 1].map(|s| b.legal_choices(&dex, s));
                     let n = alive(&b);
                     if n.iter().all(|&n| (1..=2).contains(&n)) {
