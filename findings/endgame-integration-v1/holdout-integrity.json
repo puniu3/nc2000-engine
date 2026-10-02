@@ -1,0 +1,28 @@
+{
+  "generation": {
+    "protocol_sha256": "c281ffc8d329b4c7f3ba35034509daa20910c8058e9bb29ace50432f01b9bf14",
+    "binary_sha256": "061e47cf5c5a4cf7dfc0ef446d40851c63f896a2bfa1bf8a3a005e930ebd5887",
+    "revision": "b7d3e1fa6d8e10594afea642f74e72fabbd699c0",
+    "dirty": "",
+    "command": [
+      "/Volumes/Work/puniu/nc2000-engine/tmp/endgame-holdout-v1/selfplay_endgames",
+      "generate-weighted",
+      "/Volumes/Work/puniu/nc2000-engine/tmp/endgame-holdout-v1/games.jsonl",
+      "24",
+      "27000",
+      "2026100305"
+    ]
+  },
+  "integrity": {
+    "games": 24,
+    "sha256": "091af45282d2fe7537591d0b060c7d4f428eec530402b69cdb8512967cb8e6ca"
+  },
+  "verification": {
+    "verified_games": 24,
+    "state_keys": true,
+    "legal_replay": true,
+    "sample_selection": true,
+    "outcomes": true
+  },
+  "candidate_evaluation": "sealed_until_development_candidate_is_frozen"
+}

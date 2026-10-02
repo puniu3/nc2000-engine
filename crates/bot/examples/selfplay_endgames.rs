@@ -46,6 +46,35 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let dex = conformance::load_dex();
     match args.get(1).map(String::as_str) {
+        Some("verify") => {
+            let file = std::io::BufReader::new(std::fs::File::open(&args[2]).unwrap());
+            let mut count = 0;
+            for line in file.lines() {
+                let game: Game = serde_json::from_str(&line.unwrap()).unwrap();
+                assert_eq!(game.schema, "nc2000-selfplay-endgames-v1");
+                assert_eq!(game.game, count);
+                let mut battle = Battle::from_fixture(&dex, &game.seed, &game.teams[0], &game.teams[1]).unwrap();
+                let mut classes: BTreeMap<[usize; 2], Vec<usize>> = BTreeMap::new();
+                for (decision, record) in game.decisions.iter().enumerate() {
+                    assert_eq!(battle.state_key128().to_string(), record.key);
+                    let n = alive(&battle);
+                    if n.iter().all(|&n| (1..=2).contains(&n)) { classes.entry(n).or_default().push(decision); }
+                    let choices = [0, 1].map(|s| battle.legal_choices(&dex, s));
+                    let selected = [0, 1].map(|s| {
+                        assert_eq!(record.choices[s].is_none(), choices[s].is_empty());
+                        record.choices[s].map(|i| choices[s][i])
+                    });
+                    battle.apply_choices(&dex, selected).unwrap();
+                }
+                let mut samples: Vec<_> = classes.values().flat_map(|v| [v[0], *v.last().unwrap()]).collect();
+                samples.sort_unstable();
+                samples.dedup();
+                assert_eq!(samples, game.samples);
+                assert_eq!(format!("{:?}", battle.outcome()), game.outcome);
+                count += 1;
+            }
+            println!("{}", json!({"verified_games":count,"state_keys":true,"legal_replay":true,"sample_selection":true,"outcomes":true}));
+        }
         Some("generate") | Some("generate-weighted") => {
             let path = &args[2];
             let games: usize = args[3].parse().unwrap();
