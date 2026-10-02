@@ -1,0 +1,482 @@
+{
+  "05": {
+    "complete": true,
+    "completed_games": 2,
+    "completed_pairs": 1,
+    "expected_games": 2,
+    "score": 0.5,
+    "ci95": null,
+    "pair_scores": [
+      0.5
+    ],
+    "arms": {
+      "candidate": {
+        "decisions": 32,
+        "forced": 1,
+        "illegal": 0,
+        "nonvisible": 0,
+        "iterations": 452302,
+        "calls": 222,
+        "cache_hits": 0,
+        "value_certificates": 0,
+        "value_replacements": 0,
+        "unresolved": 222,
+        "solver_ms": 1191.7000044584274,
+        "decisions_with_replacements": 0,
+        "peak_solver_entries": 256,
+        "budget_violations": 0,
+        "request_ms": {
+          "count": 32,
+          "mean": 756.0874999985099,
+          "median": 781.0999999642372,
+          "p95": 785.5,
+          "p99": 787.7999999523163,
+          "max": 787.7999999523163
+        },
+        "search_ms": {
+          "count": 32,
+          "mean": 755.6375000029802,
+          "median": 780.6499999761581,
+          "p95": 782.7999999523163,
+          "p99": 785.1999999284744,
+          "max": 785.1999999284744
+        },
+        "nonforced_request_ms": {
+          "count": 31,
+          "mean": 780.4387096781885,
+          "median": 781.2999999523163,
+          "p95": 785.5,
+          "p99": 787.7999999523163,
+          "max": 787.7999999523163
+        },
+        "wasm_memory_bytes": {
+          "count": 32,
+          "mean": 15101952,
+          "median": 14811136.0,
+          "p95": 15663104,
+          "p99": 15663104,
+          "max": 15663104
+        }
+      },
+      "baseline": {
+        "decisions": 33,
+        "forced": 1,
+        "illegal": 0,
+        "nonvisible": 0,
+        "iterations": 514398,
+        "calls": 0,
+        "cache_hits": 0,
+        "value_certificates": 0,
+        "value_replacements": 0,
+        "unresolved": 0,
+        "solver_ms": 0,
+        "decisions_with_replacements": 0,
+        "peak_solver_entries": 0,
+        "budget_violations": 0,
+        "request_ms": {
+          "count": 33,
+          "mean": 756.6666666738914,
+          "median": 781.1000000238419,
+          "p95": 783.8999999761581,
+          "p99": 784.7999999523163,
+          "max": 784.7999999523163
+        },
+        "search_ms": {
+          "count": 33,
+          "mean": 756.0727272864544,
+          "median": 779.8000000715256,
+          "p95": 782.1000000238419,
+          "p99": 782.2000000476837,
+          "max": 782.2000000476837
+        },
+        "nonforced_request_ms": {
+          "count": 32,
+          "mean": 780.2687500081956,
+          "median": 781.3000000119209,
+          "p95": 783.8999999761581,
+          "p99": 784.7999999523163,
+          "max": 784.7999999523163
+        },
+        "wasm_memory_bytes": {
+          "count": 33,
+          "mean": 11260276.363636363,
+          "median": 10158080,
+          "p95": 14352384,
+          "p99": 14352384,
+          "max": 14352384
+        }
+      }
+    },
+    "engine_caps": 0,
+    "nonforced_time_ratio": 1.0002178219619728,
+    "calibration": true,
+    "interpretation": "Paired browser outcomes. Timing and available memory measurements are separate from score; no automatic publication decision. Missing memory is unmeasured, not zero. Local Chromium is not iPad Safari.",
+    "manifest": {
+      "protocol": {
+        "catalog": "data/team-pool-v2/team-pool.json",
+        "catalog_sha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+        "prior": "data/belief-pool-v3/belief-pool.json",
+        "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+        "c": 0.4,
+        "schema": "nc2000-web-matches-v1",
+        "calibration": true,
+        "candidate_selection": null,
+        "threads": 1,
+        "pairs": 1,
+        "iterations": 27000,
+        "milliseconds": 776,
+        "seed": 2026100313,
+        "candidate": {
+          "information": "public",
+          "solver_fraction": 0.05
+        },
+        "baseline": {
+          "information": "public",
+          "solver_fraction": 0
+        },
+        "interpretation": "Development memory/cost probe only. Three solver shares use the same team/seed pair and same measured-time setting against public OFF. Inspect allocation, solver budget and actual replacements, not wins, to prepare a pre-confirmation resource gate. Do not select the confirmation solver fraction from this probe; selection remains governed by the frozen native development protocol. Repeated with a 256-entry Web cache cap after observing 29\u2013110 MB allocations with the 12000-entry research cap. Same schedule and deadline; compare resource cost and guarantee use, not outcomes.",
+        "previous_protocol_sha256": "c441dacc4cfca19e7c96e3fca3349d1246cf885e542934f8b1ac13c63291c625",
+        "budget_rule": "floor(previous deadline / previous measured nonforced request-time ratio); independent new schedule, no outcome-based change",
+        "max_nodes": 256
+      },
+      "protocol_sha256": "590adc0d44fcd6f2accb0d048719a68bc16c63b2a5a9dcc5f2406a9bd253a063",
+      "wasm_sha256": "336b43e60cba98c1864057d98e310f9961c12a0b1e2a1fd091f02a9413194ba2",
+      "revision": "2820796ec5048568ca6cf3e4fbab3f0968790927",
+      "dirty": "",
+      "browser": "149.0.7827.55",
+      "platform": "darwin",
+      "arch": "arm64",
+      "schedule": [
+        {
+          "pair": 0,
+          "teams": [
+            23,
+            8
+          ],
+          "seed": "28858,37807,23414,12723",
+          "agentSeed": 2332846107
+        }
+      ]
+    }
+  },
+  "10": {
+    "complete": true,
+    "completed_games": 2,
+    "completed_pairs": 1,
+    "expected_games": 2,
+    "score": 0.5,
+    "ci95": null,
+    "pair_scores": [
+      0.5
+    ],
+    "arms": {
+      "candidate": {
+        "decisions": 28,
+        "forced": 2,
+        "illegal": 0,
+        "nonvisible": 0,
+        "iterations": 429368,
+        "calls": 364,
+        "cache_hits": 0,
+        "value_certificates": 0,
+        "value_replacements": 0,
+        "unresolved": 364,
+        "solver_ms": 1905.8000049591064,
+        "decisions_with_replacements": 0,
+        "peak_solver_entries": 256,
+        "budget_violations": 0,
+        "request_ms": {
+          "count": 28,
+          "mean": 724.9357143044472,
+          "median": 780.9500000476837,
+          "p95": 782.3000000715256,
+          "p99": 783.2000000476837,
+          "max": 783.2000000476837
+        },
+        "search_ms": {
+          "count": 28,
+          "mean": 724.8357142933777,
+          "median": 780.8500000238419,
+          "p95": 782.1000000238419,
+          "p99": 782.7999999523163,
+          "max": 782.7999999523163
+        },
+        "nonforced_request_ms": {
+          "count": 26,
+          "mean": 780.6192307884877,
+          "median": 781.3000000119209,
+          "p95": 782.3000000715256,
+          "p99": 783.2000000476837,
+          "max": 783.2000000476837
+        },
+        "wasm_memory_bytes": {
+          "count": 28,
+          "mean": 15419684.57142857,
+          "median": 14680064.0,
+          "p95": 18087936,
+          "p99": 21495808,
+          "max": 21495808
+        }
+      },
+      "baseline": {
+        "decisions": 28,
+        "forced": 2,
+        "illegal": 0,
+        "nonvisible": 0,
+        "iterations": 512041,
+        "calls": 0,
+        "cache_hits": 0,
+        "value_certificates": 0,
+        "value_replacements": 0,
+        "unresolved": 0,
+        "solver_ms": 0,
+        "decisions_with_replacements": 0,
+        "peak_solver_entries": 0,
+        "budget_violations": 0,
+        "request_ms": {
+          "count": 28,
+          "mean": 724.578571426017,
+          "median": 780.8000000119209,
+          "p95": 782.7999999523163,
+          "p99": 782.8000000715256,
+          "max": 782.8000000715256
+        },
+        "search_ms": {
+          "count": 28,
+          "mean": 724.321428575686,
+          "median": 780.3500000238419,
+          "p95": 782.1000000238419,
+          "p99": 782.5,
+          "max": 782.5
+        },
+        "nonforced_request_ms": {
+          "count": 26,
+          "mean": 780.2538461501782,
+          "median": 781.4499999880791,
+          "p95": 782.7999999523163,
+          "p99": 782.8000000715256,
+          "max": 782.8000000715256
+        },
+        "wasm_memory_bytes": {
+          "count": 28,
+          "mean": 11223040,
+          "median": 10682368.0,
+          "p95": 11993088,
+          "p99": 11993088,
+          "max": 11993088
+        }
+      }
+    },
+    "engine_caps": 0,
+    "nonforced_time_ratio": 1.0004682894420993,
+    "calibration": true,
+    "interpretation": "Paired browser outcomes. Timing and available memory measurements are separate from score; no automatic publication decision. Missing memory is unmeasured, not zero. Local Chromium is not iPad Safari.",
+    "manifest": {
+      "protocol": {
+        "catalog": "data/team-pool-v2/team-pool.json",
+        "catalog_sha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+        "prior": "data/belief-pool-v3/belief-pool.json",
+        "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+        "c": 0.4,
+        "schema": "nc2000-web-matches-v1",
+        "calibration": true,
+        "candidate_selection": null,
+        "threads": 1,
+        "pairs": 1,
+        "iterations": 27000,
+        "milliseconds": 776,
+        "seed": 2026100313,
+        "candidate": {
+          "information": "public",
+          "solver_fraction": 0.1
+        },
+        "baseline": {
+          "information": "public",
+          "solver_fraction": 0
+        },
+        "interpretation": "Development memory/cost probe only. Three solver shares use the same team/seed pair and same measured-time setting against public OFF. Inspect allocation, solver budget and actual replacements, not wins, to prepare a pre-confirmation resource gate. Do not select the confirmation solver fraction from this probe; selection remains governed by the frozen native development protocol. Repeated with a 256-entry Web cache cap after observing 29\u2013110 MB allocations with the 12000-entry research cap. Same schedule and deadline; compare resource cost and guarantee use, not outcomes.",
+        "previous_protocol_sha256": "c441dacc4cfca19e7c96e3fca3349d1246cf885e542934f8b1ac13c63291c625",
+        "budget_rule": "floor(previous deadline / previous measured nonforced request-time ratio); independent new schedule, no outcome-based change",
+        "max_nodes": 256
+      },
+      "protocol_sha256": "e3dfbc90c0500841a23a6cb1febc6e7653eecc3464575748f35dfb476cef35af",
+      "wasm_sha256": "336b43e60cba98c1864057d98e310f9961c12a0b1e2a1fd091f02a9413194ba2",
+      "revision": "2820796ec5048568ca6cf3e4fbab3f0968790927",
+      "dirty": "",
+      "browser": "149.0.7827.55",
+      "platform": "darwin",
+      "arch": "arm64",
+      "schedule": [
+        {
+          "pair": 0,
+          "teams": [
+            23,
+            8
+          ],
+          "seed": "28858,37807,23414,12723",
+          "agentSeed": 2332846107
+        }
+      ]
+    }
+  },
+  "20": {
+    "complete": true,
+    "completed_games": 2,
+    "completed_pairs": 1,
+    "expected_games": 2,
+    "score": 0.5,
+    "ci95": null,
+    "pair_scores": [
+      0.5
+    ],
+    "arms": {
+      "candidate": {
+        "decisions": 32,
+        "forced": 2,
+        "illegal": 0,
+        "nonvisible": 0,
+        "iterations": 414381,
+        "calls": 321,
+        "cache_hits": 0,
+        "value_certificates": 0,
+        "value_replacements": 0,
+        "unresolved": 321,
+        "solver_ms": 3345.19999730587,
+        "decisions_with_replacements": 0,
+        "peak_solver_entries": 256,
+        "budget_violations": 0,
+        "request_ms": {
+          "count": 32,
+          "mean": 732.0843750052154,
+          "median": 781.5,
+          "p95": 784.4000000953674,
+          "p99": 788.3999999761581,
+          "max": 788.3999999761581
+        },
+        "search_ms": {
+          "count": 32,
+          "mean": 731.8218749947846,
+          "median": 781.4499999880791,
+          "p95": 783,
+          "p99": 784.2000000476837,
+          "max": 784.2000000476837
+        },
+        "nonforced_request_ms": {
+          "count": 30,
+          "mean": 780.8100000023842,
+          "median": 781.6000000238419,
+          "p95": 784.4000000953674,
+          "p99": 788.3999999761581,
+          "max": 788.3999999761581
+        },
+        "wasm_memory_bytes": {
+          "count": 32,
+          "mean": 15142912,
+          "median": 14417920.0,
+          "p95": 15597568,
+          "p99": 21626880,
+          "max": 21626880
+        }
+      },
+      "baseline": {
+        "decisions": 31,
+        "forced": 1,
+        "illegal": 0,
+        "nonvisible": 0,
+        "iterations": 555779,
+        "calls": 0,
+        "cache_hits": 0,
+        "value_certificates": 0,
+        "value_replacements": 0,
+        "unresolved": 0,
+        "solver_ms": 0,
+        "decisions_with_replacements": 0,
+        "peak_solver_entries": 0,
+        "budget_violations": 0,
+        "request_ms": {
+          "count": 31,
+          "mean": 755.2322580622089,
+          "median": 781.7000000476837,
+          "p95": 782.5999999046326,
+          "p99": 782.7000000476837,
+          "max": 782.7000000476837
+        },
+        "search_ms": {
+          "count": 31,
+          "mean": 755.0451612933989,
+          "median": 781.7000000476837,
+          "p95": 782.3000000715256,
+          "p99": 782.7000000476837,
+          "max": 782.7000000476837
+        },
+        "nonforced_request_ms": {
+          "count": 30,
+          "mean": 780.3899999976159,
+          "median": 781.8500000238419,
+          "p95": 782.5999999046326,
+          "p99": 782.7000000476837,
+          "max": 782.7000000476837
+        },
+        "wasm_memory_bytes": {
+          "count": 31,
+          "mean": 10335661.41935484,
+          "median": 10158080,
+          "p95": 10551296,
+          "p99": 10551296,
+          "max": 10551296
+        }
+      }
+    },
+    "engine_caps": 0,
+    "nonforced_time_ratio": 1.0005381924483523,
+    "calibration": true,
+    "interpretation": "Paired browser outcomes. Timing and available memory measurements are separate from score; no automatic publication decision. Missing memory is unmeasured, not zero. Local Chromium is not iPad Safari.",
+    "manifest": {
+      "protocol": {
+        "catalog": "data/team-pool-v2/team-pool.json",
+        "catalog_sha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+        "prior": "data/belief-pool-v3/belief-pool.json",
+        "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+        "c": 0.4,
+        "schema": "nc2000-web-matches-v1",
+        "calibration": true,
+        "candidate_selection": null,
+        "threads": 1,
+        "pairs": 1,
+        "iterations": 27000,
+        "milliseconds": 776,
+        "seed": 2026100313,
+        "candidate": {
+          "information": "public",
+          "solver_fraction": 0.2
+        },
+        "baseline": {
+          "information": "public",
+          "solver_fraction": 0
+        },
+        "interpretation": "Development memory/cost probe only. Three solver shares use the same team/seed pair and same measured-time setting against public OFF. Inspect allocation, solver budget and actual replacements, not wins, to prepare a pre-confirmation resource gate. Do not select the confirmation solver fraction from this probe; selection remains governed by the frozen native development protocol. Repeated with a 256-entry Web cache cap after observing 29\u2013110 MB allocations with the 12000-entry research cap. Same schedule and deadline; compare resource cost and guarantee use, not outcomes.",
+        "previous_protocol_sha256": "c441dacc4cfca19e7c96e3fca3349d1246cf885e542934f8b1ac13c63291c625",
+        "budget_rule": "floor(previous deadline / previous measured nonforced request-time ratio); independent new schedule, no outcome-based change",
+        "max_nodes": 256
+      },
+      "protocol_sha256": "85a2be68d49dfdf8345fe7f81667928f7305d699cafa7e4e08a4a8b1e6495883",
+      "wasm_sha256": "336b43e60cba98c1864057d98e310f9961c12a0b1e2a1fd091f02a9413194ba2",
+      "revision": "2820796ec5048568ca6cf3e4fbab3f0968790927",
+      "dirty": "",
+      "browser": "149.0.7827.55",
+      "platform": "darwin",
+      "arch": "arm64",
+      "schedule": [
+        {
+          "pair": 0,
+          "teams": [
+            23,
+            8
+          ],
+          "seed": "28858,37807,23414,12723",
+          "agentSeed": 2332846107
+        }
+      ]
+    }
+  }
+}

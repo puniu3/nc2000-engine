@@ -75,9 +75,13 @@ page = f'''<!doctype html>
 <p>別シードで24局の自己対戦を生成し、各状態キー・合法な棋譜再生・抽出位置・終局結果の一致を確認しました。候補の選択が終わるまで、このコーパスでの候補評価は封印します。継続対局の比較器は別のスモークデータで検証し、同一設定同士は全情報・公開情報とも同じ対局経路とペア得点0.5を再現しました。複数の終盤を取った元対局は1つの統計単位として扱います。</p>
 <p><a href="holdout-integrity.json">独立コーパスの指紋と再生検証</a> ／ <a href="holdout-harness-calibration.json">継続対局の対照検証</a> ／ <a href="holdout-generation-protocol.json">生成条件</a></p>
 <h2>Webの待ち時間</h2>
-<p>このMacのChromiumで、公開中と同じ27,000試行・通常のBotWorkerによる8局を測定しました。強制手以外の617判断で、要求から結果までの平均は890ms、中央値922ms、99パーセンタイル1,452msでした。既存の試験用既定値2.3秒をこの環境の公平な比較に流用しません。測定平均を切り捨てた889msの時間対照では、公開情報OFFが既定botより14.5%多く時間を使ったため、そのまま強さを比較しません。時間比だけから776msへ補正し、別シードで再確認しています。iPad Safariの性能を示す数字ではありません。</p>
+<p>このMacのChromiumで、公開中と同じ27,000試行・通常のBotWorkerによる8局を測定しました。強制手以外の617判断で、要求から結果までの平均は890ms、中央値922ms、99パーセンタイル1,452msでした。既存の試験用既定値2.3秒をこの環境の公平な比較に流用しません。測定平均を切り捨てた889msの時間対照では、公開情報OFFが既定botより14.5%多く時間を使ったため、そのまま強さを比較しません。時間比だけから776msへ補正した別シード16局では、逆に8.8%短くなりました。両試行の待ち時間だけを合算し、要求処理の実測上乗せを引いた814msで、新しい32局を検証中です。勝敗による時間調整はしていません。iPad Safariの性能を示す数字ではありません。</p>
 <p>同じブラウザ対戦経路の対照では、同一設定8局の全ペアが0.5で着手列も一致。中身を空にしたランダム方策との16局は探索側0.9375でした。候補の強化成績とは別の検証です。以後は各workerのWasm確保メモリも測定し、未計測値を0として扱いません。</p>
-<p><a href="web-calibration.json">Webの時間・比較器の対照</a> ／ <a href="web-calibration-records.json.gz">Web測定記録</a> ／ <a href="web-budget-control.json">初回時間対照の結果</a> ／ <a href="web-budget-control-v2-protocol.json">補正後の時間対照条件</a></p>
+<p><a href="web-calibration.json">Webの時間・比較器の対照</a> ／ <a href="web-calibration-records.json.gz">Web測定記録</a> ／ <a href="web-budget-control.json">初回時間対照の結果</a> ／ <a href="web-budget-control-v2.json">2回目の時間対照結果</a> ／ <a href="web-budget-control-v3-protocol.json">814msの検証条件</a></p>
+<h2>Webのメモリ予備測定</h2>
+<p>同じチーム・乱数の1ペアを5／10／20%で測定しました。12,000エントリ上限では候補workerのWasm確保メモリの最大値が29.3／60.8／110.2MB（対照10.8／11.2／13.2MB）。256エントリ上限での再測定では15.7／21.5／21.6MB（対照14.4／12.0／10.6MB）でした。ここでのMBは10⁶バイトで、プロセス全体のRSSではありません。対局経路も変わるため、この差を同一局面の厳密な費用差とは扱いません。</p>
+<p>256エントリ版の6局は全て合法手・可視ページ・配分＋最後の1バッチ以内で、キャッシュは256以下でした。ただし証明済みの葉の置換は0回。大きい上限でも0／1／0回です。小さい上限はメモリ負担を抑えましたが、強さやメモリ回帰なしの証明ではありません。配分の選択は引き続き凍結済みnative開発計画に従い、これらの予備対局の勝敗では選びません。Web確認戦の資源条件は開始前に別途固定します。</p>
+<p><a href="web-memory-research-cap.json">12,000エントリの測定</a> ／ <a href="web-memory-bounded.json">256エントリの測定</a> ／ <a href="web-memory-records.json.gz">全メモリ予備測定の記録</a></p>
 <p><a href="audit-summary.json">監査集計</a> ／ <a href="unresolved-classification.json">42局面の分類</a> ／ <a href="calibration.json">比較器の対照</a> ／ <a href="development-10-protocol.json">凍結済み対戦条件</a> ／ <a href="integration-measurements.json.gz">監査・対照の測定記録</a></p>
 </html>'''
 (destination / "index.html").write_text(page)
