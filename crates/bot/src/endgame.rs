@@ -117,6 +117,14 @@ impl EndgameSession {
             || now_ms - self.started_ms >= self.budget_ms
     }
 
+    pub fn extend_budget(&mut self, budget_ms: f64) -> Result<(), String> {
+        if !budget_ms.is_finite() || budget_ms < self.budget_ms || budget_ms > 60_000.0 {
+            return Err("extended endgame budget must increase and remain at most 60000 ms".into());
+        }
+        self.budget_ms = budget_ms;
+        Ok(())
+    }
+
     pub fn eligible(&self, battle: &Battle) -> bool {
         battle.turn > 0
             && battle.outcome().is_none()
@@ -409,6 +417,8 @@ pub struct EndgameAgent {
     search_config: RmConfig,
     milliseconds: f64,
     pub stats: EndgameStats,
+    pub search_iterations: u32,
+    pub search_nodes: usize,
     rng: SplitMix64,
     session: Option<EndgameSession>,
     committed: Option<(u128, [u8; 16], usize, SearchChoice)>,
@@ -429,6 +439,8 @@ impl EndgameAgent {
             search_config,
             milliseconds,
             stats: EndgameStats::default(),
+            search_iterations: 0,
+            search_nodes: 0,
             rng: SplitMix64::new(seed),
             session: None,
             committed: None,
@@ -463,6 +475,14 @@ impl crate::agent::Agent for EndgameAgent {
                 return choice;
             }
         }
+        if choices.len() == 1 {
+            self.stats = EndgameStats::default();
+            self.search_iterations = 0;
+            self.search_nodes = 0;
+            self.policy = vec![(choices[0], 1.0)];
+            self.committed = Some((key, dex.replay_fingerprint, side, choices[0]));
+            return choices[0];
+        }
         let start = std::time::Instant::now();
         let mut clock = || start.elapsed().as_secs_f64() * 1000.0;
         let mut session = self.session.take().unwrap_or_else(|| {
@@ -493,6 +513,8 @@ impl crate::agent::Agent for EndgameAgent {
             })
             .unwrap_or_else(|| vec![(choice, 1.0)]);
         self.stats = search.session.stats.clone();
+        self.search_iterations = search.search().iterations();
+        self.search_nodes = search.search().node_count();
         self.session = Some(search.session);
         self.committed = Some((key, dex.replay_fingerprint, side, choice));
         choice

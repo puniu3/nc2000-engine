@@ -2,11 +2,13 @@
 
 import type { WorkerRequest, WorkerResponse } from "./bot-worker";
 import type { BeliefInfo, PriorInfo, PriorReport, RootPolicy } from "./types";
+import { endgameSettings, type EndgameSettings } from "./endgame-settings";
 
 export interface SearchOutcome {
   best: string | null;
   policy: RootPolicy;
   ms: number;
+  endgame?: string;
   /** Where the pick came from (preview: "table" | "search"). */
   src?: "table" | "search";
 }
@@ -53,6 +55,7 @@ export class BotWorker {
               best: m.best,
               policy: JSON.parse(m.policy) as RootPolicy,
               ms: m.ms,
+              endgame: m.endgame,
               src: m.src,
             });
           }
@@ -91,10 +94,11 @@ export class BotWorker {
       side: number;
       seed: number;
       priorJson?: string;
+      endgame?: EndgameSettings;
     },
   ): Promise<void> {
     await this.ready;
-    this.send({ t: "battle", p1, p2, seed, searcher });
+    this.send({ t: "battle", p1, p2, seed, searcher: { ...searcher, endgame: searcher.endgame ?? endgameSettings() } });
   }
 
   /** Start a forked battle (`?fork`): the worker's mirror is
@@ -108,10 +112,11 @@ export class BotWorker {
       side: number;
       seed: number;
       mode: "open" | "blind";
+      endgame?: EndgameSettings;
     },
   ): Promise<void> {
     await this.ready;
-    this.send({ t: "fork", fork, seed, searcher });
+    this.send({ t: "fork", fork, seed, searcher: { ...searcher, endgame: searcher.endgame ?? endgameSettings() } });
   }
 
   /** Keep the mirror battle in lockstep (same picks, same order). */

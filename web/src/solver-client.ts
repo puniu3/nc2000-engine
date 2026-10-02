@@ -4,12 +4,14 @@
 import type { SolverRequest, SolverResponse } from "./solver-worker";
 import type { AnalysisReport } from "./position";
 import type { StateView } from "./types";
+import { endgameSettings } from "./endgame-settings";
 
 export interface SolveResult {
   report: AnalysisReport;
   /** The board the solver read — shown back to the user. */
   state: StateView;
   ms: number;
+  endgame?: string;
 }
 
 export interface SolveOptions {
@@ -62,6 +64,7 @@ export class SolverWorker {
               report: JSON.parse(m.json) as AnalysisReport,
               state: JSON.parse(m.state) as StateView,
               ms: m.ms,
+              endgame: m.endgame,
             });
           }
           break;
@@ -97,6 +100,7 @@ export class SolverWorker {
       spec: o.spec,
       poolJson: o.poolJson,
       priorJson: o.priorJson,
+      endgame: endgameSettings(),
       seed: o.seed,
       budget: o.budget,
       plies: o.plies,

@@ -1,0 +1,13 @@
+{
+  "schema": "nc2000-endgame-integration-audit-v1",
+  "purpose": "Development-only integration exposure and cost audit, not a strength test or confirmation.",
+  "corpus": "tmp/selfplay-endgames-v1/strong.jsonl",
+  "corpus_sha256": "c3d6a37ffdd1b5baf5d2ab464182c99f83b65ff7b9d059279e3e8e8c6f8038ed",
+  "prior": "data/belief-pool-v3/belief-pool.json",
+  "per_class": 3,
+  "fractions": [0, 0.05, 0.1, 0.2],
+  "milliseconds": 10000,
+  "threads": 4,
+  "seed": 2026100301,
+  "interpretation": "First three chronological states per alive-count class, both actionable sides. Full-information and public-protocol searches are separate arms. Arm order is shuffled with the frozen seed. Shared source games are clusters, not independent samples. Calls, certificates, actual replacements, root overrides, chosen actions, exact elapsed time and graph counts are reported separately. OFF is the removal control; exhaustive microgames and intentionally wrong/right policies are the quality controls in crates/bot/tests/endgame.rs and bounds.rs. Maximizing solver calls or solved count is not evidence of strength. Use this audit only to identify wasted work and integration failures; selecting or publishing a stronger bot requires independent paired-game evaluation under the endgame plan's score and confidence gates. The public-protocol OFF arm isolates solver effects; comparison against the shipped raw BlindSearch remains required in the strength experiment. No GPU or human match learning. No Web strength conclusion is permitted from these native timings."
+}

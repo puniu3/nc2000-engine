@@ -16,6 +16,8 @@
 
 import init, { Dex, ProtocolSearcher } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import { searchProfile } from "./search-profile";
+import type { EndgameSettings } from "./endgame-settings";
+import { runEndgameSearch } from "./endgame-search";
 
 export type SolverRequest =
   | {
@@ -28,6 +30,7 @@ export type SolverRequest =
       /** Optional community belief prior (M18), governing the fallback
        * imputation when no pool team fits. */
       priorJson?: string;
+      endgame?: EndgameSettings;
       seed: number;
       budget: number;
       /** Plies of searched line to report (0 = none). */
@@ -51,6 +54,7 @@ export type SolverResponse =
        * visible rather than silently analyzed. */
       state: string;
       ms: number;
+      endgame?: string;
     }
   /** The position was refused — `message` names the field. */
   | { t: "rejected"; id: number; message: string }
@@ -71,6 +75,7 @@ let gen = 0;
 let stopping = false;
 let plies = 0;
 let seed = 1;
+let endgame: EndgameSettings | undefined;
 
 self.onmessage = (e: MessageEvent<SolverRequest>) => {
   void handle(e.data).catch((err) => post({ t: "error", message: String(err) }));
@@ -88,6 +93,7 @@ async function handle(m: SolverRequest): Promise<void> {
     case "solve": {
       gen += 1;
       stopping = false;
+      endgame = m.endgame;
       searcher?.free();
       searcher = null;
       seed = m.seed >>> 0;
@@ -125,6 +131,16 @@ async function run(id: number, budget: number, myGen: number): Promise<void> {
   const s = searcher;
   if (!s) return;
   const t0 = performance.now();
+  if (endgame) {
+    const current = await runEndgameSearch(s, endgame, {
+      cancelled: () => gen !== myGen,
+      stop: () => stopping,
+      progress: done => post({ t: "progress", id, done, budget }),
+    }, t0);
+    if (!current) return;
+    post({ t: "report", id, json: s.report(plies, seed), state: s.stateView(), ms: performance.now() - t0, endgame: s.endgameStats() });
+    return;
+  }
   let done = s.iterations();
   while (done < budget && gen === myGen && !stopping) {
     const n = Math.min(slice, budget - done);

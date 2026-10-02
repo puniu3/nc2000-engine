@@ -987,6 +987,12 @@ impl WasmProtocolSearcher {
         }).to_string())
     }
 
+    #[wasm_bindgen(js_name = extendEndgame)]
+    pub fn extend_endgame(&mut self, milliseconds: f64) -> Result<(), JsError> {
+        self.endgame.as_mut().ok_or_else(|| JsError::new("extendEndgame before beginEndgame"))?
+            .extend_budget(milliseconds).map_err(|e| JsError::new(&e))
+    }
+
     pub fn iterations(&self) -> u32 {
         self.agent.iterations()
     }

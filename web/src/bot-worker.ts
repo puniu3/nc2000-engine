@@ -40,6 +40,8 @@ import init, {
   ProtocolSearcher,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import { searchProfile } from "./search-profile";
+import type { EndgameSettings } from "./endgame-settings";
+import { runEndgameSearch } from "./endgame-search";
 
 export type WorkerRequest =
   | {
@@ -54,6 +56,7 @@ export type WorkerRequest =
         side: number;
         seed: number;
         priorJson?: string;
+        endgame?: EndgameSettings;
       };
     }
   /** A forked battle (`?fork`): the mirror is `Battle.fromFork(fork, seed)`
@@ -68,6 +71,7 @@ export type WorkerRequest =
         side: number;
         seed: number;
         mode: "open" | "blind";
+        endgame?: EndgameSettings;
       };
     }
   | { t: "apply"; picks: [number, string][] }
@@ -91,6 +95,7 @@ export type WorkerResponse =
       best: string | null;
       policy: string;
       ms: number;
+      endgame?: string;
       /** Where the pick came from (always the live search). */
       src?: "search";
     }
@@ -117,6 +122,8 @@ let forked: {
   channel: PlayerChannel;
   searcher: ProtocolSearcher;
   positioned: boolean;
+  endgame?: EndgameSettings;
+  live?: boolean;
 } | null = null;
 
 function dropForked() {
@@ -147,6 +154,13 @@ async function handle(m: WorkerRequest): Promise<void> {
       // Keep the protocol log ON — the observer's trace-free reveal
       // channel (Leftovers / Focus Band / Sleep Talk) reads it.
       battle.setLogEnabled(true);
+      if (m.searcher.endgame) {
+        const ps = new ProtocolSearcher(dex, m.searcher.side, m.searcher.poolJson, m.searcher.seed >>> 0, searchProfile("blind").c);
+        ps.setOwnTeam(m.searcher.side === 0 ? m.p1 : m.p2);
+        if (m.searcher.priorJson) post({ t: "prior", report: ps.setBeliefPrior(m.searcher.priorJson) });
+        forked = { channel: new PlayerChannel(m.searcher.side), searcher: ps, positioned: false, live: true, endgame: m.searcher.endgame };
+        break;
+      }
       searcher = new BlindSearcher(
         battle,
         m.searcher.side,
@@ -190,6 +204,7 @@ async function handle(m: WorkerRequest): Promise<void> {
         channel: new PlayerChannel(m.searcher.side),
         searcher: ps,
         positioned: true,
+        endgame: m.searcher.endgame,
       };
       break;
     }
@@ -280,6 +295,7 @@ async function runSearch(m: SearchMsg): Promise<void> {
 // since its last decision, then the same ponder loop. At the fork itself the
 // searcher is already installed from the position and no line has arrived.
 async function runForkSearch(m: SearchMsg): Promise<void> {
+  const t0 = performance.now();
   const myGen = gen;
   flushed = false;
   const f = forked!;
@@ -294,7 +310,20 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
     if (!f.searcher.onRequest(JSON.stringify(frame.request)))
       throw new Error("fork: search requested on a wait request");
   }
-  const t0 = performance.now();
+  if (f.live) post({ t: "belief", info: f.searcher.beliefInfo(), prior: f.searcher.beliefPriorInfo() });
+  if (f.endgame) {
+    const current = await runEndgameSearch(f.searcher, f.endgame, {
+      cancelled: () => gen !== myGen,
+      stop: () => flushed,
+      ponder: m.ponder,
+      progress: done => post({ t: "progress", id: m.id, done, budget: m.budget }),
+    }, t0);
+    if (!current) return;
+    const best = f.searcher.best();
+    post({ t: "result", id: m.id, best: best === undefined ? null : (battle!.resolveChoice(m.side, best) ?? null),
+      policy: f.searcher.rootPolicy(), ms: performance.now() - t0, src: "search", endgame: f.searcher.endgameStats() });
+    return;
+  }
   const cap = m.budget * PONDER_CAP;
   let done = 0;
   for (;;) {

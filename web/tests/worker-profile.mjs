@@ -8,7 +8,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const server = createHttpServer();
 let browser, vite;
 try {
-  await new Promise((resolve) => server.listen(0, "0.0.0.0", resolve));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   vite = await createServer({
     root,
     server: { middlewareMode: true, hmr: { server, clientPort: server.address().port } },
@@ -67,6 +67,74 @@ try {
         } finally {
           worker.terminate();
         }
+      }
+    }
+    for (const scenario of ["fixed", "early-flush", "late-flush", "ponder-cap", "cancel"]) {
+      const worker = new BotWorker();
+      const truth = new wasm.Battle(dex, teams[0], teams[1], "1,2,3,4");
+      try {
+        await worker.newBattle(teams[0], teams[1], "1,2,3,4", {
+          poolJson, side: 1, seed, endgame: { solverFraction: 0.1, milliseconds: 50 },
+        });
+        const budget = 512;
+        const promise = worker.search(1, budget, seed, scenario !== "fixed");
+        if (scenario === "early-flush") worker.flush();
+        if (scenario === "late-flush") setTimeout(() => worker.flush(), 125);
+        if (scenario === "cancel") {
+          worker.cancelAll();
+          const result = await Promise.race([promise.then(() => "stale-result"), new Promise(resolve => setTimeout(() => resolve("cancelled"), 200))]);
+          if (result !== "cancelled") throw new Error("cancelled endgame search posted a stale result");
+          continue;
+        }
+        const result = await Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("timed worker hung")), 10000))]);
+        const stats = JSON.parse(result.endgame);
+        if (stats.scope !== "conditional-determinized" || stats.stats.root_overrides !== 0) throw new Error("blind worker reported a full-information policy");
+        if (result.ms > 2000 || result.ms < 45) throw new Error(`timed worker duration ${result.ms}`);
+        if (scenario === "late-flush" && result.ms < 100) throw new Error("ponder stopped before flush");
+        if (scenario === "ponder-cap" && result.ms < 490) throw new Error("ponder failed to extend its budget");
+        const own = JSON.parse(truth.legalChoices(0))[0].input;
+        truth.applyChoice(0, own);
+        truth.applyChoice(1, result.best);
+        worker.apply([[0, own], [1, result.best]]);
+        const next = await worker.search(1, budget, seed + 1, false);
+        if (!JSON.parse(truth.legalChoices(1)).some(choice => choice.input === next.best)) throw new Error(`illegal endgame move ${next.best}`);
+      } finally {
+        truth.free();
+        worker.terminate();
+      }
+    }
+    {
+      const fork = await (await fetch("/data/forks/4296-t11.json")).text();
+      const record = JSON.parse(fork);
+      const worker = new BotWorker();
+      const truth = wasm.Battle.fromFork(dex, fork, 11);
+      try {
+        await worker.newFork(fork, 11, { poolJson, side: record.position.side, seed, mode: "blind", endgame: { solverFraction: 0.1, milliseconds: 100 } });
+        const result = await worker.search(record.position.side, 512, seed, false);
+        if (!JSON.parse(truth.legalChoices(record.position.side)).some(choice => choice.input === result.best)) throw new Error("illegal timed fork move");
+        if (JSON.parse(result.endgame).scope !== "conditional-determinized") throw new Error("fork bypassed the conditional solver");
+      } finally {
+        truth.free();
+        worker.terminate();
+      }
+    }
+    {
+      const { SolverWorker } = await import("/src/solver-client.ts");
+      const previous = location.search;
+      history.replaceState({}, "", "?solver&endgame=10&endgame-ms=100");
+      const worker = new SolverWorker();
+      try {
+        const own = { name: "Pikachu", species: "Pikachu", level: 50, gender: "M", item: "", ability: "", moves: ["Splash", "Seismic Toss"] };
+        const foe = { ...own, moves: ["Splash"] };
+        const mon = { species: "Pikachu", level: 50, gender: "M", item_flag: false, hp_num: 100, hp_den: 100, appeared: true, active: true };
+        const spec = JSON.stringify({ schema: "nc2000-position-v1", side: 0, turn: 999, own_sets: [own], sides: [0, 1].map(side => ({ mons: [{ ...mon, ...(side === 0 ? { hp_num: 1, hp_den: 125, hp_exact: 1 } : {}) }], active: 0, party: [0] })) });
+        const result = await worker.solve({ spec, poolJson: JSON.stringify({ teams: [{ id: "foe", sets: [foe] }] }), seed: 73, budget: 512, plies: 0 });
+        if (JSON.parse(result.endgame).stats.value_replacements < 1) throw new Error("analysis worker did not use solved values");
+        const extended = await worker.extend(1024, 0);
+        if (extended.report.iterations <= result.report.iterations) throw new Error("timed analysis did not extend");
+      } finally {
+        worker.dispose();
+        history.replaceState({}, "", previous || "/");
       }
     }
     dex.free();
