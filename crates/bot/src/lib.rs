@@ -57,6 +57,7 @@ pub mod smmcts;
 pub mod shared_search;
 pub mod stall;
 pub mod teamgen;
+pub mod value;
 
 pub use agent::{Agent, MaxDamageAgent, RandomAgent};
 pub use belief::{Belief, FallbackPolicy, FallbackSource};
