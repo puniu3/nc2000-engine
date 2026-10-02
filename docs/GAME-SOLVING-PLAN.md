@@ -1,7 +1,8 @@
 # Solving the battle game
 
-Status: **S0 done (GO), S1 next.** Owner direction 2026-10-02. This is the
-authoritative plan and handoff for the game-solving program; update it in place.
+Status: **CUT by the owner on 2026-10-02** after S1 reached but did not clear
+the current search (see [Verdict](#verdict-cut)). Kept as the record of what
+was built and measured; the code stays in-tree, inert.
 
 ## Owner decisions (2026-10-02)
 
@@ -188,3 +189,29 @@ Order and dependencies:
 Duels against the 27k searches spend 75–90% of their time in the reference
 arm, which none of the above speeds up; only fewer games (sequential
 stopping) shortens them.
+
+## Verdict: CUT
+
+Owner decision 2026-10-02, after the go/no-go gates.
+
+- Depth-2 targets did not break the 1-ply plateau: d1/d2/d3 vs model-9 at
+  1-ply = 0.522 ± 0.042 / 0.472 ± 0.041 / 0.472 ± 0.039; residual 0.075 →
+  0.073; anchors 21–22 violations.
+- Against the current perfect-information search, model-d3 at depth 2 scored
+  0.465 ± 0.041 at 8×4 samples (153 vs 949 ms/move) and **0.495 ± 0.042 at
+  matched time** (32×10, 781 vs 1,114 ms/move), 400 games each, seed 31.
+  Fivefold sampling bought ~+0.03; the value function is the binding limit.
+- This is exactly the bar the 2026-08-14 RL-headroom study set for a learned
+  value (`docs/EXP-rl-headroom.md` on the unmerged branch
+  `origin/claude/bot-reinforcement-learning-potential-bcf77n`: replace the
+  rollout and beat 8-turn rollout + eval at equal wall clock). It was reached,
+  not cleared. That study was not read before S1 started; the 2026-09
+  imitation/PPO pipeline's outcome is not recorded in the repo.
+
+What stays: `bot::value` (codec, network, Shapley backup, depth-limited matrix
+search, Bayesian root, the value agents), `SkuctSearch::step_with_leaf`, the
+`fvi_*` examples, `tools/fvi-train.py`, `tests/value.rs`, and the re-certified
+v4 anchors (`tmp/m17e-merged-v4.json`, gitignored). None is on a product path.
+Models (`tmp/fvi/model-*.json`), logs and gate outputs remain in `tmp/fvi/`;
+the training records were deleted (reproducible from `fvi_gen` and the seeds in
+the loop scripts).
