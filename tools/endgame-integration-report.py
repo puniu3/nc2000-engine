@@ -1,0 +1,77 @@
+import gzip
+import hashlib
+import html
+import json
+import pathlib
+
+root = pathlib.Path(__file__).resolve().parents[1]
+source = root / "tmp/endgame-integration-v1"
+destination = root / "findings/endgame-integration-v1"
+
+
+def read_rows(path):
+    return [json.loads(line) for line in path.read_text().splitlines()]
+
+
+summaries = {}
+for name in ("audit", "audit-budget-fix"):
+    path = source / f"{name}.jsonl"
+    metadata, *rows = read_rows(path)
+    assert len(rows) == metadata["jobs"] == 144
+    assert len({row["job"] for row in rows}) == 144
+    assert all(row["legal"] for row in rows)
+    groups = []
+    for information in ("full", "public-protocol"):
+        for fraction in (0, 0.05, 0.1, 0.2):
+            group = [r for r in rows if r["information"] == information and r["solver_fraction"] == fraction]
+            assert len(group) == 18
+            groups.append({
+                "information": information, "solver_fraction": fraction, "decisions": len(group),
+                "source_games": len({r["game"] for r in group}),
+                "calls": sum(r["stats"]["calls"] for r in group),
+                "replacements": sum(r["stats"]["value_replacements"] for r in group),
+                "decisions_with_replacements": sum(r["stats"]["value_replacements"] > 0 for r in group),
+                "root_overrides": sum(r["stats"]["root_overrides"] for r in group),
+                "solver_ms": sum(r["stats"]["solver_ms"] for r in group),
+                "max_decision_ms": max(r["elapsed_ms"] for r in group),
+                "peak_solver_entries": max(r["stats"]["peak_entries"] for r in group),
+                "max_probe_ms": max(r["stats"].get("max_probe_ms", 0) for r in group) if name != "audit" else None,
+                "within_share_plus_one_probe": all(r["stats"]["solver_ms"] <= r["budget_ms"] * fraction + r["stats"]["max_probe_ms"] + 0.1 for r in group) if name != "audit" else None,
+            })
+    summaries[name] = {"revision": metadata["revision"], "dirty": metadata["dirty"], "binary_sha256": metadata["binary_sha256"], "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "groups": groups}
+assert all(g["within_share_plus_one_probe"] for g in summaries["audit-budget-fix"]["groups"])
+(destination / "audit-summary.json").write_text(json.dumps(summaries, indent=2) + "\n")
+archive = {}
+for name in ("strong.jsonl", "strong-measured.jsonl"):
+    archive[f"inputs/{name}"] = (root / "tmp/selfplay-endgames-v1" / name).read_text()
+for path in sorted(source.rglob("*")):
+    if path.is_file() and path.suffix in (".json", ".jsonl", ".log"):
+        archive[str(path.relative_to(source))] = path.read_text()
+with gzip.GzipFile(filename=str(destination / "integration-measurements.json.gz"), mode="wb", mtime=0) as out:
+    out.write(json.dumps(archive).encode())
+classification = json.loads((destination / "unresolved-classification.json").read_text())
+table = "".join(
+    f'<tr><td>{html.escape(g["information"])}</td><td>{g["solver_fraction"]:.0%}</td><td>{g["calls"]}</td><td>{g["replacements"]} / {g["decisions_with_replacements"]}局面</td><td>{g["root_overrides"]}</td><td>{g["solver_ms"]/1000:.2f}</td><td>{g["max_decision_ms"]:.0f}</td></tr>'
+    for g in summaries["audit-budget-fix"]["groups"]
+)
+page = f'''<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NC2000 終盤ソルバー接続の検証</title>
+<style>body{{margin:2rem auto;padding:0 1rem;max-width:68rem;background:#eee9df;color:#302c25;font:17px/1.7 system-ui}}h1{{font-size:1.6rem}}h2{{font-size:1.15rem;margin-top:2rem}}table{{border-collapse:collapse;width:100%;font-size:.85rem}}th,td{{padding:.45rem;border-bottom:1px solid #c8c0b3;text-align:left}}a{{color:#6b4826}}.scroll{{overflow-x:auto}}</style>
+<h1>NC2000 終盤ソルバー接続の検証</h1>
+<p>証明付き混合戦略を全情報botの実際の着手へ、証明幅0.02以内の局面値をblind探索の葉へ接続しました。Webの通常対局・局面解析・分岐対局でも試験経路を動かしています。<strong>強化の採否は未判定です。公開botの既定設定は変更していません。</strong></p>
+<h2>何が判断に使われるか</h2>
+<p>全情報では最悪損失0.02以内の証明付き混合戦略から一度だけ着手を抽選します。blindでは、プレイヤーに届く公開情報と自身のチームから作った仮説局面だけを解析します。その値はその仮説に条件付けられた値であり、隠れた真の状態や情報集合全体の解とは扱いません。blindの実戦ルートを全情報戦略へ直接切り替える処理はありません。</p>
+<h2>10秒の接続監査</h2>
+<p>過去の開発用コーパスから各残存数区分の先頭3局面、行動可能な18視点を使用。全情報／公開情報と0／5／10／20%配分を組み合わせた144件です。同一対局からの局面は独立標本ではありません。以下は強さの比較ではなく、実際に値や戦略が使われたかの監査です。</p>
+<div class="scroll"><table><tr><th>情報</th><th>配分</th><th>solve呼出</th><th>葉の置換回数 / 発動局面</th><th>戦略採用</th><th>solve計・秒</th><th>最長判断・ms</th></tr>{table}</table></div>
+<p>初回監査では予算消化後もキャッシュ照会を繰り返し、5%指定でも数秒を費やす不具合を検出しました。予算到達時に照会を止め、回帰テストと同一プロトコルの再監査を実施。全件で配分＋最後の1バッチ以内でした。外部時計を各バッチ間で確認するため厳密な時間上限ではなく、最長バッチは{max(g['max_probe_ms'] for g in summaries['audit-budget-fix']['groups']):.0f}msでした。Webの実機応答時間の証明には使いません。</p>
+<h2>未解決42局面の分類</h2>
+<p>時間上限28件、メモリ上限14件。1対1が8件、1対2が7件、2対1が10件、2対2が17件。40件で生存ポケモンにPPの残る回復・吸収技がありました。これは最初に到達した停止条件の分類で、上限を増やせば解けるという推定ではありません。道具による回復はこの分類に含めていません。</p>
+<h2>対戦評価</h2>
+<p>nativeの1手10秒で400局の開発計画を凍結しました。公開情報経路の0／5／10／20%各100局を、既定のraw blind経路と比較します。実際のdrawWeightとv3 priorを使い、同じチーム・乱数の対局でbotの席を交替。0%はソルバーを除いた対照です。同一bot同士の8局は全ペア0.5で対局経路も一致し、意図的に探索を空にしたランダム方策との16局は探索側が0.75でした。</p>
+<p>開発結果で一案を固定した後、別シード1,200局の確認戦、独立終盤、Web条件の評価が必要です。採用条件は本番条件で得点0.52以上、対局ペア単位95%区間の下端0.50超、時間・メモリ・無効手・打ち切りの回帰なし。呼出数や全情報版の改善だけでは採用しません。</p>
+<p><a href="audit-summary.json">監査集計</a> ／ <a href="unresolved-classification.json">42局面の分類</a> ／ <a href="calibration.json">比較器の対照</a> ／ <a href="development-10-protocol.json">凍結済み対戦条件</a> ／ <a href="integration-measurements.json.gz">監査・対照の測定記録</a></p>
+</html>'''
+(destination / "index.html").write_text(page)
+print(destination / "index.html")
