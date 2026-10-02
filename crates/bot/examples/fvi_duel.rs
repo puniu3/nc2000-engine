@@ -3,7 +3,10 @@
 //! in-battle play differs between arms.
 //!
 //!   fvi_duel --a net:MODEL.json[:K[xK2...]] | netsearch:MODEL.json[:ITERS[:C]]
-//!            --b eval1ply[:K] | skuct:ITERS[:C]
+//!            | blindnet:MODEL.json[:KS[:DETS]]
+//!            --b eval1ply[:K] | skuct:ITERS[:C] | blind:ITERS[:C]
+//! Blind arms (`blind` = the shipped agent, `blindnet` = `BlindValueAgent`)
+//! read `belief-pool-v3` as their prior and run the outer battle log-on.
 //!            [--games 400] [--seed 1] [--threads N] [--max-turns 500]
 
 use std::sync::Arc;
@@ -13,7 +16,10 @@ use nc2000_bot::duel::{run_duel, DuelSpec};
 use nc2000_bot::eval::EvalWeights;
 use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::smmcts::{RmAgent, RmConfig, SelRule};
-use nc2000_bot::value::{shared_preview, Leaf, NetSearchAgent, ValueAgent, ValueCodec, ValueNet};
+use nc2000_bot::blind::BlindAgent;
+use nc2000_bot::value::{
+    shared_preview, BlindValueAgent, Leaf, NetSearchAgent, ValueAgent, ValueCodec, ValueNet,
+};
 use nc2000_engine::battle::{PokemonSet, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
@@ -26,8 +32,10 @@ fn arg_s(args: &[String], k: &str, d: &str) -> String {
         .unwrap_or_else(|| d.to_string())
 }
 
-/// A search agent with the duel's shared preview instead of its own.
-struct SharedPreview(Box<dyn Agent>);
+/// A search agent with the duel's shared preview instead of its own. With
+/// `consult`, the inner agent still sees the preview call (a blind agent
+/// builds its observer and belief there) and its pick is discarded.
+struct SharedPreview(Box<dyn Agent>, bool);
 
 impl Agent for SharedPreview {
     fn name(&self) -> String {
@@ -35,6 +43,9 @@ impl Agent for SharedPreview {
     }
     fn choose(&mut self, b: &Battle, dex: &Dex, side: usize, choices: &[SearchChoice]) -> SearchChoice {
         if b.turn == 0 {
+            if self.1 {
+                self.0.choose(b, dex, side, choices);
+            }
             shared_preview(b, side, choices)
         } else {
             self.0.choose(b, dex, side, choices)
@@ -43,6 +54,8 @@ impl Agent for SharedPreview {
 }
 
 enum Arm {
+    Blind(u32, f64),
+    BlindNet(Vec<usize>, usize),
     NetSearch(u32, f64),
     Net(Vec<usize>),
     Eval(usize),
@@ -61,6 +74,17 @@ fn parse(spec: &str, nets: &mut Vec<String>) -> Arm {
             Arm::NetSearch(
                 p.get(2).map_or(3000, |k| k.parse().unwrap()),
                 p.get(3).map_or(1.0, |c| c.parse().unwrap()),
+            )
+        }
+        "blind" => Arm::Blind(
+            p.get(1).map_or(27000, |k| k.parse().unwrap()),
+            p.get(2).map_or(0.4, |c| c.parse().unwrap()),
+        ),
+        "blindnet" => {
+            nets.push(p[1].to_string());
+            Arm::BlindNet(
+                p.get(2).map_or(vec![16], |k| k.split('x').map(|k| k.parse().unwrap()).collect()),
+                p.get(3).map_or(8, |d| d.parse().unwrap()),
             )
         }
         "eval1ply" => Arm::Eval(p.get(1).map_or(16, |k| k.parse().unwrap())),
@@ -92,6 +116,9 @@ fn main() {
     spec.threads = arg_s(&args, "--threads", "10").parse().unwrap();
     spec.max_turns = arg_s(&args, "--max-turns", "500").parse().unwrap();
     spec.progress = true;
+    let blind = |arm: &Arm| matches!(arm, Arm::Blind(..) | Arm::BlindNet(..));
+    spec.log_on = blind(&a) || blind(&b);
+    let belief_pool = Arc::new(load_meta_pool(&root.join("data/belief-pool-v3/belief-pool.json")));
     let build = |arm: &Arm, net: Option<Arc<ValueNet>>| -> Box<dyn Fn(u64) -> Box<dyn Agent> + Sync> {
         match *arm {
             Arm::Net(ref ks) => {
@@ -111,15 +138,44 @@ fn main() {
                 Box::new(ValueAgent::new(Leaf::Eval(EvalWeights::default()), k, s)) as Box<dyn Agent>
             }),
             Arm::Skuct(iterations, c) => Box::new(move |s| {
-                Box::new(SharedPreview(Box::new(RmAgent::new(
-                    RmConfig { iterations, rule: SelRule::Ucb, c, hp_buckets: 16, ..Default::default() },
-                    s,
-                )))) as Box<dyn Agent>
+                Box::new(SharedPreview(
+                    Box::new(RmAgent::new(
+                        RmConfig { iterations, rule: SelRule::Ucb, c, hp_buckets: 16, ..Default::default() },
+                        s,
+                    )),
+                    false,
+                )) as Box<dyn Agent>
             }),
+            Arm::Blind(iterations, c) => {
+                let pool = belief_pool.clone();
+                Box::new(move |s| {
+                    Box::new(SharedPreview(
+                        Box::new(BlindAgent::new(
+                            RmConfig { iterations, rule: SelRule::Ucb, c, ..Default::default() },
+                            pool.clone(),
+                            None,
+                            s,
+                        )),
+                        true,
+                    )) as Box<dyn Agent>
+                })
+            }
+            Arm::BlindNet(ref ks, dets) => {
+                let (net, codec, ks, pool) = (net.unwrap(), codec.clone(), ks.clone(), belief_pool.clone());
+                Box::new(move |s| {
+                    Box::new(BlindValueAgent::new(
+                        Leaf::Net(net.clone(), codec.clone()),
+                        ks.clone(),
+                        dets,
+                        pool.clone(),
+                        s,
+                    )) as Box<dyn Agent>
+                })
+            }
         }
     };
-    let net_a = matches!(a, Arm::Net(_) | Arm::NetSearch(..)).then(|| nets.next().unwrap());
-    let net_b = matches!(b, Arm::Net(_) | Arm::NetSearch(..)).then(|| nets.next().unwrap());
+    let net_a = matches!(a, Arm::Net(_) | Arm::NetSearch(..) | Arm::BlindNet(..)).then(|| nets.next().unwrap());
+    let net_b = matches!(b, Arm::Net(_) | Arm::NetSearch(..) | Arm::BlindNet(..)).then(|| nets.next().unwrap());
     let ba = build(&a, net_a);
     let bb = build(&b, net_b);
     let st = run_duel(&dex, &teams, &*ba, &*bb, spec);

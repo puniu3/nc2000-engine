@@ -138,7 +138,7 @@ def lambda_targets(rows, record, lam):
         tgt[i] = (1 - lam) * y[i] + lam * g_next
         nxt = tgt[i]
         i -= 1
-    return tgt
+    return np.clip(tgt, 0.0, 1.0)
 
 
 def main():

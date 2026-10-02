@@ -677,7 +677,7 @@ pub fn legal_actions(b: &Battle, dex: &Dex) -> [Vec<Option<SearchChoice>>; 2] {
 pub fn solve(m: &[f64], n0: usize, n1: usize) -> (f64, [Vec<f64>; 2]) {
     if n0 > 1 && n1 > 1 {
         let s = solve_matrix_full(m, n0, n1);
-        return (s.value, [s.x, s.y]);
+        return (s.value.clamp(0.0, 1.0), [s.x, s.y]);
     }
     let pick = |n: usize, better: &dyn Fn(f64, f64) -> bool| {
         let mut best = 0;
@@ -926,5 +926,188 @@ impl crate::agent::Agent for NetSearchAgent {
         };
         search.step_with_leaf(dex, self.iterations, &mut leaf);
         search.best(side).unwrap_or(choices[0])
+    }
+}
+
+// ------------------------------------------------------------ blind (S2)
+
+/// Root of a one-shot Bayesian game: `us[t]` is our payoff matrix against an
+/// opponent of type t (rows = our actions, shared by every type; columns =
+/// that type's actions), `w[t]` the belief weight. Each type best-responds
+/// knowing itself; we maximize Σ_t w_t min_j (x·U_t)_j. Solved by RM+
+/// against per-type best responses (the averaged strategy converges to the
+/// maximizer of this concave objective). Returns (x̄, objective at x̄).
+pub fn bayesian_root(us: &[Vec<f64>], cols: &[usize], w: &[f64], rows: usize, iters: usize) -> (Vec<f64>, f64) {
+    let objective = |x: &[f64]| -> f64 {
+        us.iter()
+            .zip(cols)
+            .zip(w)
+            .map(|((u, &nc), &wt)| {
+                let worst = (0..nc)
+                    .map(|j| (0..rows).map(|i| x[i] * u[i * nc + j]).sum::<f64>())
+                    .fold(f64::INFINITY, f64::min);
+                wt * worst
+            })
+            .sum()
+    };
+    let mut regret = vec![0.0; rows];
+    let mut avg = vec![0.0; rows];
+    let mut x = vec![1.0 / rows as f64; rows];
+    for it in 1..=iters {
+        let mut g = vec![0.0; rows];
+        for ((u, &nc), &wt) in us.iter().zip(cols).zip(w) {
+            let j = (0..nc)
+                .min_by(|&a, &b| {
+                    let va: f64 = (0..rows).map(|i| x[i] * u[i * nc + a]).sum();
+                    let vb: f64 = (0..rows).map(|i| x[i] * u[i * nc + b]).sum();
+                    va.total_cmp(&vb)
+                })
+                .unwrap();
+            for i in 0..rows {
+                g[i] += wt * u[i * nc + j];
+            }
+        }
+        let ev: f64 = (0..rows).map(|i| x[i] * g[i]).sum();
+        for i in 0..rows {
+            regret[i] = (regret[i] + g[i] - ev).max(0.0);
+            avg[i] += it as f64 * x[i];
+        }
+        let total: f64 = regret.iter().sum();
+        if total > 0.0 {
+            for i in 0..rows {
+                x[i] = regret[i] / total;
+            }
+        } else {
+            x.iter_mut().for_each(|v| *v = 1.0 / rows as f64);
+        }
+    }
+    let s: f64 = avg.iter().sum();
+    avg.iter_mut().for_each(|v| *v /= s);
+    let obj = objective(&avg);
+    (avg, obj)
+}
+
+struct BlindGame {
+    side: usize,
+    last_turn: u16,
+    observer: crate::observe::Observer,
+    belief: crate::belief::Belief,
+}
+
+/// Blind counterpart of `ValueAgent`: the shipped belief/observer lifecycle,
+/// `dets` determinizations per decision, a depth-`ks` backup on each, and the
+/// Bayesian root over them. Team preview: `shared_preview`.
+pub struct BlindValueAgent {
+    pub leaf: Leaf,
+    pub ks: Vec<usize>,
+    pub dets: usize,
+    pool: std::sync::Arc<crate::preview::MetaPool>,
+    rng: SplitMix64,
+    scratch: Vec<f32>,
+    game: Option<BlindGame>,
+}
+
+impl BlindValueAgent {
+    pub fn new(
+        leaf: Leaf,
+        ks: Vec<usize>,
+        dets: usize,
+        pool: std::sync::Arc<crate::preview::MetaPool>,
+        seed: u64,
+    ) -> Self {
+        assert!(dets > 0 && !ks.is_empty());
+        BlindValueAgent { leaf, ks, dets, pool, rng: SplitMix64::new(seed), scratch: Vec::new(), game: None }
+    }
+}
+
+impl crate::agent::Agent for BlindValueAgent {
+    fn name(&self) -> String {
+        let ks: Vec<String> = self.ks.iter().map(|k| k.to_string()).collect();
+        format!("blindvalue:k{}:d{}", ks.join("x"), self.dets)
+    }
+
+    fn choose(&mut self, battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoice]) -> SearchChoice {
+        let is_preview = matches!(choices[0], SearchChoice::Team(_));
+        let stale = match &self.game {
+            None => true,
+            Some(g) => g.side != side || is_preview || battle.turn < g.last_turn,
+        };
+        if stale {
+            let observer = crate::observe::Observer::new(battle, side);
+            let belief = crate::belief::Belief::new(dex, &self.pool, &observer);
+            self.game = Some(BlindGame { side, last_turn: battle.turn, observer, belief });
+        }
+        let g = self.game.as_mut().unwrap();
+        g.last_turn = battle.turn;
+        g.observer.observe(battle, dex);
+        g.belief.sync(dex, &g.observer);
+        if is_preview {
+            return shared_preview(battle, side, choices);
+        }
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        let mut base = battle.clone();
+        base.set_log_enabled(false);
+        let mut us = Vec::new();
+        let mut cols = Vec::new();
+        for _ in 0..self.dets {
+            let pick = g.belief.sample(&mut self.rng);
+            let det = g.belief.determinize_with(dex, &base, &g.observer, pick, &mut self.rng);
+            let mut cache = HashMap::new();
+            let Some(bk) = deep_backup(&det, dex, &self.leaf, &self.ks, &mut self.rng, &mut self.scratch, &mut cache)
+            else {
+                continue;
+            };
+            let own: Vec<SearchChoice> = bk.actions[side].iter().map(|c| c.expect("own choice")).collect();
+            if own != choices {
+                continue;
+            }
+            let (n0, n1) = (bk.actions[0].len(), bk.actions[1].len());
+            let u: Vec<f64> = if side == 0 {
+                bk.matrix.clone()
+            } else {
+                let mut t = vec![0.0; n1 * n0];
+                for i in 0..n1 {
+                    for j in 0..n0 {
+                        t[i * n0 + j] = 1.0 - bk.matrix[j * n1 + i];
+                    }
+                }
+                t
+            };
+            us.push(u);
+            cols.push(if side == 0 { n1 } else { n0 });
+        }
+        if us.is_empty() {
+            return choices[self.rng.below(choices.len())];
+        }
+        let w = vec![1.0 / us.len() as f64; us.len()];
+        let (x, _) = bayesian_root(&us, &cols, &w, choices.len(), 2000);
+        choices[sample_mixed(&x, 0.0, &mut self.rng)]
+    }
+}
+
+#[cfg(test)]
+mod bayesian_tests {
+    use super::bayesian_root;
+
+    #[test]
+    fn one_type_reduces_to_the_matrix_game() {
+        // Matching pennies: value 0.5, mixture (0.5, 0.5).
+        let (x, v) = bayesian_root(&[vec![1.0, 0.0, 0.0, 1.0]], &[2], &[1.0], 2, 20000);
+        assert!((v - 0.5).abs() < 1e-2, "{v}");
+        assert!((x[0] - 0.5).abs() < 2e-2, "{x:?}");
+    }
+
+    #[test]
+    fn the_mixture_hedges_across_types() {
+        // Type A is matching pennies; type B has one reply, against which
+        // row 1 is far better. f(x) = .5·min(x0, x1) + .5·(.2·x0 + x1) peaks
+        // at x1 = .5 with value .55: B pulls toward row 1, A's punishment
+        // caps the pull at an even split.
+        let us = vec![vec![1.0, 0.0, 0.0, 1.0], vec![0.2, 1.0]];
+        let (x, v) = bayesian_root(&us, &[2, 1], &[0.5, 0.5], 2, 20000);
+        assert!((v - 0.55).abs() < 5e-3, "{v}");
+        assert!((x[1] - 0.5).abs() < 3e-2, "{x:?}");
     }
 }
