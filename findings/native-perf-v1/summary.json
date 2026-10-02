@@ -1,0 +1,374 @@
+{
+  "provenance": {
+    "baseline_commit": "f37bf285dcfc5c35415f1638c52e263f889f8af6",
+    "candidate_diff_sha256": "f7149b0dcf27d41a67d23d81f40566525faeb05a6431b1c7484f040e60af03cc",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01) (Homebrew)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: aarch64-apple-darwin\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+    "files": {
+      "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+      "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+      "data/search-profiles.json": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862",
+      "crates/bot/examples/perf_probe.rs": "0478028e25b024d15b27050d1b2a3774586022d129f5f1f425f4c598ab8b6a7f"
+    },
+    "candidate_source_commit": "39f665c021f6632b9681c1f2f6ee6b60e9784235",
+    "post_measurement_change": "Replay-fingerprint alias only; fixed-work search statistics rechecked after alias."
+  },
+  "results": {
+    "blind": {
+      "baseline": {
+        "median_seconds": 54.642216083,
+        "p95_seconds": {
+          "ordinary": 1.367327625,
+          "perish": 1.274170292,
+          "preview": 1.383984625,
+          "recovery": 1.288185125,
+          "replacement": 1.328332583
+        }
+      },
+      "candidate": {
+        "median_seconds": 51.312366375,
+        "p95_seconds": {
+          "ordinary": 1.298957333,
+          "perish": 1.1658610409999999,
+          "preview": 1.27650775,
+          "recovery": 1.319846791,
+          "replacement": 1.271129875
+        }
+      },
+      "time_reduction": 0.06093914095544828,
+      "p95_ratios": {
+        "ordinary": 0.9499971398588543,
+        "perish": 0.9149962515371531,
+        "preview": 0.9223424357044427,
+        "recovery": 1.0245785061366859,
+        "replacement": 0.9569364564777826
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": true
+    },
+    "skuct": {
+      "baseline": {
+        "median_seconds": 52.381403416,
+        "p95_seconds": {
+          "ordinary": 1.4066427080000001,
+          "perish": 1.275793292,
+          "preview": 1.257868,
+          "recovery": 1.206883792,
+          "replacement": 1.359892917
+        }
+      },
+      "candidate": {
+        "median_seconds": 47.95251375,
+        "p95_seconds": {
+          "ordinary": 1.29048425,
+          "perish": 1.107640417,
+          "preview": 1.115625166,
+          "recovery": 1.005718,
+          "replacement": 1.138929334
+        }
+      },
+      "time_reduction": 0.08455080194829567,
+      "p95_ratios": {
+        "ordinary": 0.9174214906604413,
+        "perish": 0.8681973983917138,
+        "preview": 0.8869175191673531,
+        "recovery": 0.833318010123712,
+        "replacement": 0.8375139834631552
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": true
+    },
+    "clone": {
+      "baseline": {
+        "median_seconds": 0.174193083,
+        "p95_seconds": {
+          "ordinary": 0.002600333,
+          "perish": 0.002687042,
+          "preview": 0.0025875,
+          "recovery": 0.001603208,
+          "replacement": 0.002554125
+        }
+      },
+      "candidate": {
+        "median_seconds": 0.176232042,
+        "p95_seconds": {
+          "ordinary": 0.002638958,
+          "perish": 0.002601709,
+          "preview": 0.002589791,
+          "recovery": 0.001646708,
+          "replacement": 0.002631375
+        }
+      },
+      "time_reduction": -0.01170516627230267,
+      "p95_ratios": {
+        "ordinary": 1.0148538667932145,
+        "perish": 0.9682427740243731,
+        "preview": 1.0008854106280194,
+        "recovery": 1.0271330981382327,
+        "replacement": 1.0302451916018207
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "hash": {
+      "baseline": {
+        "median_seconds": 0.60950525,
+        "p95_seconds": {
+          "ordinary": 0.012539458,
+          "perish": 0.012523542,
+          "preview": 0.012434833,
+          "recovery": 0.0066745,
+          "replacement": 0.012456167
+        }
+      },
+      "candidate": {
+        "median_seconds": 0.597282583,
+        "p95_seconds": {
+          "ordinary": 0.01245425,
+          "perish": 0.01234,
+          "preview": 0.012324709,
+          "recovery": 0.006367041,
+          "replacement": 0.012241625
+        }
+      },
+      "time_reduction": 0.02005342365795859,
+      "p95_ratios": {
+        "ordinary": 0.9932048099686606,
+        "perish": 0.9853442420682583,
+        "preview": 0.9911439100147144,
+        "recovery": 0.9539352760506405,
+        "replacement": 0.9827762424829404
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "step": {
+      "baseline": {
+        "median_seconds": 0.496734917,
+        "p95_seconds": {
+          "ordinary": 0.012468791,
+          "perish": 0.011806875,
+          "preview": 0.006836417,
+          "recovery": 0.011883125,
+          "replacement": 0.005706709
+        }
+      },
+      "candidate": {
+        "median_seconds": 0.44889675,
+        "p95_seconds": {
+          "ordinary": 0.011313125,
+          "perish": 0.0107125,
+          "preview": 0.005770625,
+          "recovery": 0.011201917,
+          "replacement": 0.005348875
+        }
+      },
+      "time_reduction": 0.09630522309346734,
+      "p95_ratios": {
+        "ordinary": 0.907315312286492,
+        "perish": 0.9073103594304166,
+        "preview": 0.8441007913940884,
+        "recovery": 0.9426743386104245,
+        "replacement": 0.9372959090782447
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": true
+    },
+    "determinize": {
+      "baseline": {
+        "median_seconds": 0.231475042,
+        "p95_seconds": {
+          "ordinary": 0.003856667,
+          "perish": 0.003828459,
+          "preview": 0.003570167,
+          "recovery": 0.002204416,
+          "replacement": 0.003860666
+        }
+      },
+      "candidate": {
+        "median_seconds": 0.227969459,
+        "p95_seconds": {
+          "ordinary": 0.003801166,
+          "perish": 0.003795833,
+          "preview": 0.003524125,
+          "recovery": 0.002267167,
+          "replacement": 0.003828958
+        }
+      },
+      "time_reduction": 0.015144539859290651,
+      "p95_ratios": {
+        "ordinary": 0.9856090764382821,
+        "perish": 0.9914780333288146,
+        "preview": 0.9871036845055147,
+        "recovery": 1.0284660427070027,
+        "replacement": 0.9917869093052857
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "rollout": {
+      "baseline": {
+        "median_seconds": 3.096410791,
+        "p95_seconds": {
+          "ordinary": 0.086633208,
+          "perish": 0.081867,
+          "preview": 0.094372042,
+          "recovery": 0.083286041,
+          "replacement": 0.059982458
+        }
+      },
+      "candidate": {
+        "median_seconds": 2.687861334,
+        "p95_seconds": {
+          "ordinary": 0.076593583,
+          "perish": 0.070492,
+          "preview": 0.076341375,
+          "recovery": 0.072481541,
+          "replacement": 0.051590958
+        }
+      },
+      "time_reduction": 0.1319429121573552,
+      "p95_ratios": {
+        "ordinary": 0.8841134337308623,
+        "perish": 0.861055125997044,
+        "preview": 0.8089405864503811,
+        "recovery": 0.8702723785369987,
+        "replacement": 0.8601007647936001
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": true
+    }
+  },
+  "metal": {
+    "device": "Apple M6",
+    "rows": [
+      {
+        "batch": 1,
+        "checksum": "6629662655319208083",
+        "cpu_median_ns": 0,
+        "exact": true,
+        "gpu_command_median_ns": 3749.9703466892242,
+        "gpu_e2e_median_ns": 129875,
+        "gpu_e2e_min_ns": 78250,
+        "gpu_e2e_p95_ns": 195375
+      },
+      {
+        "batch": 32,
+        "checksum": "8097926149853668224",
+        "cpu_median_ns": 0,
+        "exact": true,
+        "gpu_command_median_ns": 3749.9703466892242,
+        "gpu_e2e_median_ns": 128250,
+        "gpu_e2e_min_ns": 79792,
+        "gpu_e2e_p95_ns": 198291
+      },
+      {
+        "batch": 256,
+        "checksum": "12738333346284387328",
+        "cpu_median_ns": 83,
+        "exact": true,
+        "gpu_command_median_ns": 3833.3237171173096,
+        "gpu_e2e_median_ns": 122250,
+        "gpu_e2e_min_ns": 74709,
+        "gpu_e2e_p95_ns": 166750
+      },
+      {
+        "batch": 4096,
+        "checksum": "6093505664850837504",
+        "cpu_median_ns": 1083,
+        "exact": true,
+        "gpu_command_median_ns": 4125.060513615608,
+        "gpu_e2e_median_ns": 129959,
+        "gpu_e2e_min_ns": 87500,
+        "gpu_e2e_p95_ns": 199833
+      },
+      {
+        "batch": 65536,
+        "checksum": "6852172349039181824",
+        "cpu_median_ns": 16125,
+        "exact": true,
+        "gpu_command_median_ns": 8458.271622657776,
+        "gpu_e2e_median_ns": 155042,
+        "gpu_e2e_min_ns": 111875,
+        "gpu_e2e_p95_ns": 229292
+      }
+    ],
+    "schema": "nc2000-metal-launch-v1",
+    "workload": "8 exact Gen5 LCG draws per lane; launch lower-bound probe, not a battle engine",
+    "utilization_before": 0,
+    "utilization_after": 0,
+    "host_idle_screen_passed": true
+  },
+  "profile": {
+    "worker_samples": 41469,
+    "state_hash_inclusive_samples": 14978,
+    "state_hash_fraction": 0.36118546384045913,
+    "free_state_hash_speedup_ceiling": 1.5653995696651692
+  },
+  "parallel": [
+    {
+      "threads": 1,
+      "seconds": 47.822604166,
+      "rss_mib": 47.265625
+    },
+    {
+      "threads": 4,
+      "seconds": 11.154703542,
+      "rss_mib": 112.109375
+    },
+    {
+      "threads": 8,
+      "seconds": 7.094289,
+      "rss_mib": 163.65625
+    },
+    {
+      "threads": 11,
+      "seconds": 5.84322475,
+      "rss_mib": 215.015625
+    }
+  ],
+  "budgets": [
+    {
+      "seconds": 10.000961834,
+      "iterations": 242752,
+      "state": "18080454720402234667",
+      "rss_mib": 121.171875
+    },
+    {
+      "seconds": 60.001940375,
+      "iterations": 1342720,
+      "state": "18080454720402234667",
+      "rss_mib": 626.15625
+    }
+  ],
+  "gpu_decision": {
+    "serial_iteration_us": 38.78485742630385,
+    "roundtrip_median_us": 129.875,
+    "observed_roundtrip_min_us": 78.25,
+    "measured_serial_dispatch_gate": "NO-GO",
+    "full_batched_engine": "unmeasured; not adopted"
+  },
+  "verification": {
+    "native_cases": 128,
+    "wasm_suites": [
+      "smoke",
+      "parity",
+      "determinism",
+      "solver",
+      "kifu"
+    ],
+    "legacy_replay_compatible": true,
+    "post_alias_search_control": {
+      "positions": 49,
+      "iterations": 27000,
+      "exact": true
+    },
+    "timed_build_note": "The timed executable precedes the replay-fingerprint alias only. Post-alias search control is exact."
+  }
+}
