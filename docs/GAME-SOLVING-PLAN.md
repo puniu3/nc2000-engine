@@ -154,3 +154,37 @@ Against the current search (the clock column is per move, one core):
 UCB with a value leaf did not beat the 1-ply equilibrium player: argmax
 visits is a pure strategy at simultaneous nodes. The matrix-game search is the
 line kept.
+
+### Throughput: where the time goes and what depends on what
+
+Measured by `examples/fvi_timing.rs` (instrumented copy of `deep_backup`,
+overhead 1.0–1.7%, values equal to the library's). Self-play at ks 6x3 with
+the sparse forward: 124.8 ms per decision under a concurrent 10-thread loop —
+network forward 56%, state hash 17%, engine step 12%, encode 8%, clone 5%,
+equilibrium solve 0.03%; cache hit rate 46% at the root and 38% one ply down;
+3,685 network evaluations per decision, ~48 per depth-1 node; 97% of samples
+are spent in the depth-1 child backups. A free forward pass would make
+generation at most 2.3x faster. Cells whose first sample consumes no
+randomness hold 0.5% of samples, so skipping them is not worth doing.
+
+Order and dependencies:
+
+1. Mon-encoding cache — no dependencies, bit-identical values; DONE
+   (7aa9f32, forward 19.9 → 15.0 µs per evaluation), live from deep iteration d2.
+2. Smaller network — needs a same-data duel; the half-width head played even
+   (0.505 ± 0.040) at 24% less forward time, the all-half network 0.477 ±
+   0.039 at 49% less (equivalence not shown). An architecture change starts a
+   new lineage, so it is adopted only at an experiment boundary.
+3. Sample allocation in child backups — depends on whether depth-2 generation
+   is kept (the running d-series decides; 1-ply generation is 17x cheaper and
+   its profile differs: hash 24%, forward 46%).
+4. Batched leaf evaluation — designed with item 1's cache; prerequisite for
+   any GPU path, which is re-decided only after items 1–3 lower the forward
+   share.
+5. Engine-level state hash / step / clone — needs an audit of every
+   `state_key` consumer (duel preview seeds, search trees, wasm determinism
+   tests) and the conformance suite; last.
+
+Duels against the 27k searches spend 75–90% of their time in the reference
+arm, which none of the above speeds up; only fewer games (sequential
+stopping) shortens them.
