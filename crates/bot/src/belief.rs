@@ -703,6 +703,20 @@ impl Belief {
         pick: Option<usize>,
         rng: &mut SplitMix64,
     ) -> Battle {
+        let mut out = battle.clone();
+        self.determinize_in_place(dex, &mut out, obs, pick, rng);
+        out
+    }
+
+    /// The input must be reset to the observed battle before imputation.
+    pub(crate) fn determinize_in_place(
+        &self,
+        dex: &Dex,
+        out: &mut Battle,
+        obs: &Observer,
+        pick: Option<usize>,
+        rng: &mut SplitMix64,
+    ) {
         // M18: with a prior installed, the fallback roster's *unrevealed*
         // slots are resampled per determinization instead of being the one
         // fixed nearest-set filler. `None` on every other path — including
@@ -720,9 +734,8 @@ impl Belief {
                 .as_deref()
                 .expect("determinize_with: fallback roster not built (call sync first)"),
         };
-        audit_battle_hidden(battle);
+        audit_battle_hidden(out);
 
-        let mut out = battle.clone();
         out.set_log_enabled(false);
         // chance is hidden: the search resamples it anyway, but the artifact
         // must not carry the true RNG stream
@@ -812,10 +825,9 @@ impl Belief {
         }
 
         // ---- pending opponent Move in the queue: chosen but unannounced
-        self.scrub_pending_move(dex, &mut out, opp, rng);
+        self.scrub_pending_move(dex, out, opp, rng);
 
         out.battle_mask = out.recompute_battle_mask(dex);
-        out
     }
 
     /// A not-yet-executed opponent `Move` action (mid-turn Baton Pass

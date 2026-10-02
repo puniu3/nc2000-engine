@@ -1425,7 +1425,7 @@ fn dispatch_cond(
         ("stall", "onStallMove") => {
             let counter = b
                 .state_at(state)
-                .and_then(|s| s.get(crate::state::DK::Counter).cloned())
+                .and_then(|s| s.get(crate::state::DK::Counter))
                 .map(|v| v.as_f64())
                 .unwrap_or(0.0);
             let mut c = counter.floor() as u32;
@@ -1690,7 +1690,7 @@ fn dispatch_cond(
                 (
                     st.get_int(crate::state::DK::EndingTurn),
                     st.get(crate::state::DK::TargetSlot).and_then(|v| match v {
-                        Scalar::Slot(a, b) => Some((*a, *b)),
+                        Scalar::Slot(a, b) => Some((a, b)),
                         _ => None,
                     }),
                 )

@@ -342,8 +342,8 @@ impl Battle {
         id.side as usize + 2 * self.poke(id).position as usize
     }
 
-    pub fn get_all_active(&self, include_fainted: bool) -> Vec<PokeId> {
-        let mut out = Vec::new();
+    pub fn get_all_active(&self, include_fainted: bool) -> smallvec::SmallVec<[PokeId; 2]> {
+        let mut out = smallvec::SmallVec::new();
         for side in 0..2 {
             if let Some(id) = self.active_id(side) {
                 if include_fainted || !self.poke(id).fainted {
@@ -401,22 +401,22 @@ impl Battle {
     }
 
     /// The active move's display name (synthetic moves have none).
-    pub fn active_move_name(&self, dex: &Dex) -> String {
+    pub fn active_move_name<'a>(&self, dex: &'a Dex) -> &'a str {
         self.active_move
             .as_ref()
             .and_then(|m| m.id)
-            .map(|m| dex.move_static(m).name.clone())
+            .map(|m| dex.move_static(m).name.as_str())
             .unwrap_or_default()
     }
 
     /// PS `effect.name`.
-    pub fn effect_name(&self, dex: &Dex, effect: EffectHandle) -> String {
+    pub fn effect_name<'a>(&self, dex: &'a Dex, effect: EffectHandle) -> &'a str {
         match effect {
-            EffectHandle::Cond(c) => dex.cond_display_name(c).to_string(),
-            EffectHandle::MoveEff(m) => dex.move_static(m).name.clone(),
-            EffectHandle::Item(i) => dex.items.get(i).name.clone(),
-            EffectHandle::Format => "[Gen 2] NC 2000".to_string(),
-            EffectHandle::None => String::new(),
+            EffectHandle::Cond(c) => dex.cond_display_name(c),
+            EffectHandle::MoveEff(m) => dex.move_static(m).name.as_str(),
+            EffectHandle::Item(i) => dex.items.get(i).name.as_str(),
+            EffectHandle::Format => "[Gen 2] NC 2000",
+            EffectHandle::None => "",
         }
     }
 

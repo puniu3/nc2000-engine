@@ -524,6 +524,7 @@ pub struct SkuctSearch {
     cfg: RmConfig,
     rng: SplitMix64,
     root: Battle,
+    scratch: Option<Box<Battle>>,
     turn_cap: u16,
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
@@ -1185,14 +1186,20 @@ impl SkuctSearch {
                 })
                 .collect::<Vec<bool>>()
         });
-        SkuctSearch { cfg, rng, root, turn_cap, nodes, table, done: 0, depth_sum: 0, root_dominated }
+        SkuctSearch { cfg, rng, root, scratch: None, turn_cap, nodes, table, done: 0, depth_sum: 0, root_dominated }
     }
 
-    /// One UCB iteration (clone root, fresh chance seed, select/expand/
+    /// One UCB iteration (reset root, fresh chance seed, select/expand/
     /// rollout/backprop). Returns the side-0 reward and the root joint's
     /// action indices — `RmAgent`'s late-tree stage-game seeding needs both.
     pub fn step_one(&mut self, dex: &Dex) -> (f64, [usize; 2]) {
-        let mut sim = self.root.clone();
+        let mut sim = match self.scratch.take() {
+            Some(mut sim) => {
+                sim.as_mut().clone_from(&self.root);
+                sim
+            }
+            None => Box::new(self.root.clone()),
+        };
         std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
@@ -1211,6 +1218,7 @@ impl SkuctSearch {
             &mut depth,
         );
         std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
+        self.scratch = Some(sim);
         self.depth_sum += depth as u64;
         self.done += 1;
         (r, joint)
@@ -1219,7 +1227,13 @@ impl SkuctSearch {
     /// One probe iteration with the root joint forced (`RmAgent`'s matrix
     /// estimation phase).
     fn step_forced(&mut self, dex: &Dex, force: [usize; 2]) -> f64 {
-        let mut sim = self.root.clone();
+        let mut sim = match self.scratch.take() {
+            Some(mut sim) => {
+                sim.as_mut().clone_from(&self.root);
+                sim
+            }
+            None => Box::new(self.root.clone()),
+        };
         std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
@@ -1238,6 +1252,7 @@ impl SkuctSearch {
             &mut depth,
         );
         std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
+        self.scratch = Some(sim);
         self.depth_sum += depth as u64;
         self.done += 1;
         r
@@ -1252,7 +1267,13 @@ impl SkuctSearch {
         leaf: &mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
     ) -> u32 {
         for _ in 0..n {
-            let mut sim = self.root.clone();
+            let mut sim = match self.scratch.take() {
+                Some(mut sim) => {
+                    sim.as_mut().clone_from(&self.root);
+                    sim
+                }
+                None => Box::new(self.root.clone()),
+            };
             std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
             sim.reseed(self.rng.next());
             let mut joint = [0usize; 2];
@@ -1273,6 +1294,7 @@ impl SkuctSearch {
                 None,
             );
             std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
+            self.scratch = Some(sim);
             self.depth_sum += depth as u64;
             self.done += 1;
         }

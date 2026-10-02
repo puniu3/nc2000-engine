@@ -269,10 +269,9 @@ fn sample_mixed(p: &[f64], rng: &mut SplitMix64) -> usize {
 pub struct BlindSearch {
     cfg: RmConfig,
     rng: SplitMix64,
-    /// Log-off base clone: the outer battle may run log-ON for the
-    /// observer, and determinize clones its input — don't pay for cloning
-    /// the whole protocol log every iteration.
+    /// Search resets omit the observer's protocol log.
     base: Battle,
+    scratch: Option<Box<Battle>>,
     turn_cap: u16,
     side: usize,
     /// The public own-side choice list — the information-set root.
@@ -347,6 +346,7 @@ impl BlindSearch {
             cfg,
             rng,
             base,
+            scratch: None,
             turn_cap,
             side,
             my_n: vec![0; my_acts.len()],
@@ -380,7 +380,14 @@ impl BlindSearch {
         trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
     ) -> f64 {
         let pick = belief.sample(&mut self.rng);
-        let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut self.rng);
+        let mut sim = match self.scratch.take() {
+            Some(mut sim) => {
+                sim.as_mut().clone_from(&self.base);
+                sim
+            }
+            None => Box::new(self.base.clone()),
+        };
+        belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
@@ -447,6 +454,7 @@ impl BlindSearch {
             )
         };
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+        self.scratch = Some(sim);
         self.record_joint(root, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
@@ -471,7 +479,14 @@ impl BlindSearch {
             "forced root action is masked"
         );
         let pick = belief.sample(&mut self.rng);
-        let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut self.rng);
+        let mut sim = match self.scratch.take() {
+            Some(mut sim) => {
+                sim.as_mut().clone_from(&self.base);
+                sim
+            }
+            None => Box::new(self.base.clone()),
+        };
+        belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
@@ -510,6 +525,7 @@ impl BlindSearch {
             &mut 0,
         );
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+        self.scratch = Some(sim);
         self.record_joint(root, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;

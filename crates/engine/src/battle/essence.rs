@@ -49,7 +49,7 @@ fn scal(dex: &Dex, state: &EffectState) -> Value {
         out.insert("duration".into(), json!(d));
     }
     for (k, v) in state.data.iter() {
-        out.insert(k.as_str().to_string(), scalar_json(dex, v));
+        out.insert(k.as_str().to_string(), scalar_json(dex, &v));
     }
     Value::Object(out)
 }

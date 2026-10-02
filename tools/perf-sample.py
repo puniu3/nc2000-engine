@@ -30,8 +30,20 @@ def main():
     threads = [int(m.group(1)) for line in graph.splitlines()
                if (m := re.match(r"^\s*(\d+) Thread_", line)) and "com.apple.main-thread" not in line]
     assert len(threads) == 1, threads
-    hashes = sum(int(m.group(1)) for line in graph.splitlines()
-                 if "state_hash_into" in line and (m := re.match(r"^[ +!:|]*(\d+) ", line)))
+    hashes = 0
+    ancestor_depth = None
+    for line in graph.splitlines():
+        match = re.match(r"^([ +!:|]*)(\d+) ", line)
+        if not match:
+            continue
+        depth = len(match.group(1))
+        if ancestor_depth is not None and depth <= ancestor_depth:
+            ancestor_depth = None
+        if ancestor_depth is None and ("state_hash_into" in line or "10search_key " in line):
+            hashes += int(match.group(2))
+            ancestor_depth = depth
+    if not hashes:
+        raise RuntimeError("No hash frame found; inspect inlined frames before attributing cost")
     fraction = hashes / threads[0]
     assert 0 <= fraction <= 1
     result = {"worker_samples": threads[0], "state_hash_inclusive_samples": hashes,

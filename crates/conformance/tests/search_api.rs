@@ -185,3 +185,19 @@ fn search_keys_preserve_state_partitions() {
     }
     assert!(partitions.len() > 1000);
 }
+
+#[test]
+fn reusable_battle_clone_resets_every_field() {
+    let dex = load_dex();
+    let mut reused = None;
+    for fx in all_fixtures() {
+        let mut battle = ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+        for line in &fx.choices {
+            battle.choose(&dex, side_index(&line.side), &line.choice).unwrap();
+            let target = reused.get_or_insert_with(|| battle.clone());
+            target.clone_from(&battle);
+            assert_eq!(format!("{target:?}"), format!("{:?}", battle.clone()));
+            assert_eq!(target.state_key128(), battle.state_key128());
+        }
+    }
+}

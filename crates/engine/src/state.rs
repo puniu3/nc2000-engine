@@ -17,6 +17,24 @@ use crate::dex::{
 use crate::prng::BattleRng;
 use std::collections::BTreeMap;
 
+macro_rules! clone_reusing_fields {
+    ($name:ident { $($field:ident),* $(,)? }) => {
+        impl Clone for $name {
+            #[inline]
+            fn clone(&self) -> Self {
+                let Self { $($field),* } = self;
+                Self { $($field: $field.clone()),* }
+            }
+
+            #[inline]
+            fn clone_from(&mut self, source: &Self) {
+                let Self { $($field),* } = source;
+                $(self.$field.clone_from($field);)*
+            }
+        }
+    };
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PokeId {
     pub side: u8,
@@ -186,51 +204,140 @@ impl DK {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+#[repr(u8)]
+enum ScalarTag {
+    #[default]
+    Int,
+    Float,
+    Bool,
+    Move,
+    Cond,
+    Slot,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct PackedScalar {
+    bits: [u8; 8],
+    tag: ScalarTag,
+}
+
+impl std::hash::Hash for PackedScalar {
+    #[inline(always)]
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        let bits = u64::from_le_bytes(self.bits);
+        match self.tag {
+            ScalarTag::Int => (0u8, bits as i64).hash(h),
+            ScalarTag::Float => (1u8, bits).hash(h),
+            ScalarTag::Bool => (2u8, bits != 0).hash(h),
+            ScalarTag::Move => (3u8, bits as u16).hash(h),
+            ScalarTag::Cond => (4u8, bits as u16).hash(h),
+            ScalarTag::Slot => (5u8, bits as u8, (bits >> 8) as u8).hash(h),
+        }
+    }
+}
+
+impl PackedScalar {
+    fn new(value: Scalar) -> Self {
+        let (tag, bits) = match value {
+            Scalar::Int(v) => (ScalarTag::Int, v as u64),
+            Scalar::Float(v) => (ScalarTag::Float, v.to_bits()),
+            Scalar::Bool(v) => (ScalarTag::Bool, v as u64),
+            Scalar::MoveK(v) => (ScalarTag::Move, v.0 as u64),
+            Scalar::CondK(v) => (ScalarTag::Cond, v.0 as u64),
+            Scalar::Slot(a, b) => (ScalarTag::Slot, (a as u64) | ((b as u64) << 8)),
+        };
+        Self { bits: bits.to_le_bytes(), tag }
+    }
+
+    fn value(self) -> Scalar {
+        let bits = u64::from_le_bytes(self.bits);
+        match self.tag {
+            ScalarTag::Int => Scalar::Int(bits as i64),
+            ScalarTag::Float => Scalar::Float(f64::from_bits(bits)),
+            ScalarTag::Bool => Scalar::Bool(bits != 0),
+            ScalarTag::Move => Scalar::MoveK(crate::dex::MoveId(bits as u16)),
+            ScalarTag::Cond => Scalar::CondK(crate::dex::CondId(bits as u16)),
+            ScalarTag::Slot => Scalar::Slot(bits as u8, (bits >> 8) as u8),
+        }
+    }
+}
+
 /// What PS stores in `EffectState`: scalar keys (serialized into the fixture
 /// essence) plus non-scalar references (dropped from the essence but needed
 /// at runtime: source Pokemon, sourceEffect).
 /// Fixed-capacity scalar bag (Copy — the whole EffectState memcpy-clones).
 /// Capacity 4 covers every condition in this format (rollout: hitCount +
 /// contactHitCount + multiplier is the widest); overflow asserts loudly.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Hash)]
+#[derive(Clone, Copy)]
 pub struct DataBag {
-    entries: [Option<(DK, Scalar)>; 4],
+    values: [PackedScalar; 4],
+    keys: [DK; 4],
     n: u8,
 }
 
+impl Default for DataBag {
+    fn default() -> Self {
+        Self { values: [PackedScalar::default(); 4], keys: [DK::BoundDivisor; 4], n: 0 }
+    }
+}
+
+impl PartialEq for DataBag {
+    fn eq(&self, other: &Self) -> bool {
+        self.iter().eq(other.iter())
+    }
+}
+
+impl std::fmt::Debug for DataBag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let entries: [_; 4] = std::array::from_fn(|i| self.entry(i));
+        f.debug_struct("DataBag").field("entries", &entries).field("n", &self.n).finish()
+    }
+}
+
+impl std::hash::Hash for DataBag {
+    #[inline(always)]
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.values.len().hash(h);
+        for i in 0..self.n as usize {
+            Some(()).hash(h);
+            self.keys[i].hash(h);
+            self.values[i].hash(h);
+        }
+        for _ in self.n as usize..self.values.len() {
+            None::<()>.hash(h);
+        }
+        self.n.hash(h);
+    }
+}
+
 impl DataBag {
-    pub fn iter(&self) -> impl Iterator<Item = &(DK, Scalar)> {
-        self.entries[..self.n as usize]
-            .iter()
-            .map(|e| e.as_ref().unwrap())
+    fn entry(&self, index: usize) -> Option<(DK, Scalar)> {
+        (index < self.n as usize).then(|| (self.keys[index], self.values[index].value()))
     }
 
-    fn iter_mut(&mut self) -> impl Iterator<Item = &mut (DK, Scalar)> {
-        self.entries[..self.n as usize]
-            .iter_mut()
-            .map(|e| e.as_mut().unwrap())
+    pub fn iter(&self) -> impl Iterator<Item = (DK, Scalar)> + '_ {
+        (0..self.n as usize).map(|i| (self.keys[i], self.values[i].value()))
     }
 
     pub fn push(&mut self, key: DK, value: Scalar) {
-        assert!(
-            (self.n as usize) < self.entries.len(),
-            "DataBag overflow at {key:?}"
-        );
-        self.entries[self.n as usize] = Some((key, value));
+        let index = self.n as usize;
+        assert!(index < self.values.len(), "DataBag overflow at {key:?}");
+        self.keys[index] = key;
+        self.values[index] = PackedScalar::new(value);
         self.n += 1;
     }
 
     pub fn retain(&mut self, mut keep: impl FnMut(DK) -> bool) {
-        let mut out: [Option<(DK, Scalar)>; 4] = Default::default();
-        let mut m = 0u8;
-        for e in self.entries[..self.n as usize].iter().flatten() {
-            if keep(e.0) {
-                out[m as usize] = Some(*e);
-                m += 1;
+        let mut n = 0;
+        for i in 0..self.n as usize {
+            if keep(self.keys[i]) {
+                self.keys[n] = self.keys[i];
+                self.values[n] = self.values[i];
+                n += 1;
             }
         }
-        self.entries = out;
-        self.n = m;
+        self.n = n as u8;
     }
 }
 
@@ -341,7 +448,7 @@ impl std::hash::Hash for EffectState {
 }
 
 impl EffectState {
-    pub fn get(&self, key: DK) -> Option<&Scalar> {
+    pub fn get(&self, key: DK) -> Option<Scalar> {
         self.data.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
     }
 
@@ -350,13 +457,10 @@ impl EffectState {
     }
 
     pub fn set(&mut self, key: DK, value: Scalar) {
-        let existing = self.data.iter_mut().find(|(k, _)| *k == key).is_some();
-        if existing {
-            for e in self.data.iter_mut() {
-                if e.0 == key {
-                    e.1 = value;
-                    return;
-                }
+        for i in 0..self.data.n as usize {
+            if self.data.keys[i] == key {
+                self.data.values[i] = PackedScalar::new(value);
+                return;
             }
         }
         self.data.push(key, value);
@@ -551,7 +655,7 @@ pub struct Attacker {
     pub damage_value: Option<i64>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Pokemon {
     // ----- set-derived, fixed for the battle
     pub species: SpeciesId,
@@ -633,6 +737,19 @@ pub struct Pokemon {
 
     pub speed: i32,
 }
+
+clone_reusing_fields!(Pokemon {
+    species, base_species, name, level, gender, happiness,
+    set_ivs, set_evs, base_move_slots, hp_type, hp_power, base_hp_type,
+    base_hp_power, base_stored_stats, stored_stats, base_maxhp, maxhp, hp,
+    status, status_state, boosts, move_slots, item, last_item,
+    item_state, types, volatiles, handler_mask, transformed, fainted,
+    faint_queued, is_active, is_started, position, active_turns, active_move_actions,
+    newly_switched, being_called_back, dragged_in, previously_switched_in, switch_flag, force_switch_flag,
+    skip_before_switch_out, trapped, maybe_trapped, last_move, last_move_encore, last_move_used,
+    last_move_target_loc, move_this_turn, move_this_turn_result, move_last_turn_result, hurt_this_turn, stats_raised_this_turn,
+    stats_lowered_this_turn, used_item_this_turn, last_damage, attacked_by, times_attacked, speed,
+});
 
 impl std::hash::Hash for Pokemon {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
@@ -874,7 +991,7 @@ pub enum RequestKind {
     Wait,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Side {
     pub name: &'static str,
     /// All constructed pokemon in construction order — never reordered.
@@ -900,6 +1017,12 @@ pub struct Side {
     pub request: Option<RequestKind>,
     pub choice: Choice,
 }
+
+clone_reusing_fields!(Side {
+    name, roster, party, active, pokemon_left, total_fainted,
+    side_conditions, slot_conditions, handler_mask, last_move, fainted_this_turn, fainted_last_turn,
+    request, choice,
+});
 
 impl std::hash::Hash for Side {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
@@ -1195,7 +1318,7 @@ impl ActiveMove {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Battle {
     pub preview_level_caps: [Option<u32>; 2],
     pub prng: BattleRng,
@@ -1245,6 +1368,15 @@ pub struct Battle {
     /// collection when the event's callbacks miss this mask entirely.
     pub battle_mask: crate::dex::CbMask,
 }
+
+clone_reusing_fields!(Battle {
+    preview_level_caps, prng, turn, request_state, mid_turn, started,
+    ended, winner, field, sides, queue, faint_queue,
+    log, log_enabled, effect_order, event_depth, last_move_line, last_successful_move_this_turn,
+    last_damage, quick_claw_roll, speed_order, format_data, sent_log_pos, event_stack,
+    effect_stack, active_move, active_pokemon, active_target, last_move_id, pending_boosts,
+    listener_pool, battle_mask,
+});
 
 /// Sparse boosts as an ordered list (PS object iteration order).
 pub type SparseBoostsOwned = Vec<(usize, i8)>;

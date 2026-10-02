@@ -27,7 +27,7 @@ fn main() {
     // Only this exact source digest shares the transition version checked by
     // frozen_compact_replay_remains_compatible; other edits invalidate it.
     let fingerprint = match source {
-        [47, 208, 254, 68, 144, 101, 192, 74, 66, 198, 148, 83, 178, 174, 130, 133] =>
+        [117, 211, 24, 4, 76, 93, 238, 6, 250, 127, 46, 79, 153, 197, 157, 214] =>
             [41, 101, 229, 191, 83, 13, 34, 22, 119, 166, 40, 224, 139, 210, 186, 231],
         _ => source,
     };

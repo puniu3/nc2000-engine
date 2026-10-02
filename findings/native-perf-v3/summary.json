@@ -1,0 +1,511 @@
+{
+  "date": "2026-10-03",
+  "baseline_commit": "35fcc95",
+  "machine": "Apple M6, 12 CPU cores, 24 GB",
+  "native_blind": {
+    "baseline": {
+      "median_seconds": 40.508116709,
+      "p95_seconds": {
+        "ordinary": 1.021141417,
+        "perish": 0.925141541,
+        "preview": 1.00718025,
+        "recovery": 1.063105875,
+        "replacement": 0.999269042
+      }
+    },
+    "candidate": {
+      "median_seconds": 38.711056792,
+      "p95_seconds": {
+        "ordinary": 1.011904,
+        "perish": 0.894363375,
+        "preview": 0.961328333,
+        "recovery": 0.901158291,
+        "replacement": 0.971412833
+      }
+    },
+    "time_reduction": 0.04436295890795461,
+    "p95_ratios": {
+      "ordinary": 0.990953831813875,
+      "perish": 0.966731397698636,
+      "preview": 0.9544749641387428,
+      "recovery": 0.847665610915752,
+      "replacement": 0.9721234143867333
+    },
+    "exact_match": true,
+    "positions": 49,
+    "accepted": false
+  },
+  "native_skuct": {
+    "baseline": {
+      "median_seconds": 38.964029416,
+      "p95_seconds": {
+        "ordinary": 1.040220333,
+        "perish": 0.928661833,
+        "preview": 0.913056042,
+        "recovery": 0.86964075,
+        "replacement": 0.907101625
+      }
+    },
+    "candidate": {
+      "median_seconds": 36.767884,
+      "p95_seconds": {
+        "ordinary": 1.004437083,
+        "perish": 0.882901083,
+        "preview": 0.871762459,
+        "recovery": 0.845343208,
+        "replacement": 0.900600375
+      }
+    },
+    "time_reduction": 0.056363406170158226,
+    "p95_ratios": {
+      "ordinary": 0.9656003167167471,
+      "perish": 0.9507239897518217,
+      "preview": 0.9547743171278418,
+      "recovery": 0.9720602536162203,
+      "replacement": 0.9928329419539955
+    },
+    "exact_match": true,
+    "positions": 49,
+    "accepted": true
+  },
+  "wasm_node_blind": {
+    "median_ms": {
+      "baseline": 3530.670793,
+      "candidate": 3283.4007949999987
+    },
+    "time_reduction": 0.07003484960711859,
+    "exact_match": true,
+    "positions": 31,
+    "runs_ms": {
+      "baseline": [
+        3668.120623999999,
+        3521.3451669999995,
+        3530.670793
+      ],
+      "candidate": [
+        3283.4007949999987,
+        3239.3447529999994,
+        3340.6229589999994
+      ]
+    },
+    "runtime": "v22.23.3"
+  },
+  "layout_before": {
+    "Status": 1,
+    "Scalar": 16,
+    "DataBag": 104,
+    "EffectState": 184,
+    "Pokemon": 880,
+    "Side": 792,
+    "Battle": 4024
+  },
+  "layout_after": {
+    "Status": 1,
+    "Scalar": 16,
+    "DataBag": 41,
+    "EffectState": 120,
+    "Pokemon": 752,
+    "Side": 600,
+    "Battle": 3256
+  },
+  "allocation_before": {
+    "allocator": "System with counters; timing is not measured",
+    "rows": [
+      {
+        "phase": "preview",
+        "measurements": [
+          {
+            "operation": "clone",
+            "repetitions": 128,
+            "allocation_calls": 256,
+            "requested_bytes": 1351680
+          },
+          {
+            "operation": "clone_from",
+            "repetitions": 128,
+            "allocation_calls": 256,
+            "requested_bytes": 1351680
+          },
+          {
+            "operation": "legal_choices",
+            "repetitions": 128,
+            "allocation_calls": 768,
+            "requested_bytes": 129024
+          },
+          {
+            "operation": "clone_and_step",
+            "repetitions": 128,
+            "allocation_calls": 2432,
+            "requested_bytes": 1422976
+          },
+          {
+            "operation": "blind_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 213115,
+            "requested_bytes": 17863598
+          },
+          {
+            "operation": "skuct_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 215116,
+            "requested_bytes": 17743564
+          }
+        ]
+      },
+      {
+        "phase": "battle",
+        "measurements": [
+          {
+            "operation": "clone",
+            "repetitions": 128,
+            "allocation_calls": 256,
+            "requested_bytes": 1351680
+          },
+          {
+            "operation": "clone_from",
+            "repetitions": 128,
+            "allocation_calls": 256,
+            "requested_bytes": 1351680
+          },
+          {
+            "operation": "legal_choices",
+            "repetitions": 128,
+            "allocation_calls": 128,
+            "requested_bytes": 3072
+          },
+          {
+            "operation": "clone_and_step",
+            "repetitions": 128,
+            "allocation_calls": 3968,
+            "requested_bytes": 1542528
+          },
+          {
+            "operation": "blind_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 194041,
+            "requested_bytes": 17783592
+          },
+          {
+            "operation": "skuct_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 230514,
+            "requested_bytes": 19342791
+          }
+        ]
+      }
+    ]
+  },
+  "allocation_after": {
+    "allocator": "System with counters; timing is not measured",
+    "rows": [
+      {
+        "phase": "preview",
+        "measurements": [
+          {
+            "operation": "clone",
+            "repetitions": 128,
+            "allocation_calls": 256,
+            "requested_bytes": 1155072
+          },
+          {
+            "operation": "clone_from",
+            "repetitions": 128,
+            "allocation_calls": 0,
+            "requested_bytes": 0
+          },
+          {
+            "operation": "legal_choices",
+            "repetitions": 128,
+            "allocation_calls": 768,
+            "requested_bytes": 129024
+          },
+          {
+            "operation": "clone_and_step",
+            "repetitions": 128,
+            "allocation_calls": 2176,
+            "requested_bytes": 1224320
+          },
+          {
+            "operation": "blind_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 186331,
+            "requested_bytes": 5900691
+          },
+          {
+            "operation": "skuct_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 188119,
+            "requested_bytes": 5801806
+          }
+        ]
+      },
+      {
+        "phase": "battle",
+        "measurements": [
+          {
+            "operation": "clone",
+            "repetitions": 128,
+            "allocation_calls": 256,
+            "requested_bytes": 1155072
+          },
+          {
+            "operation": "clone_from",
+            "repetitions": 128,
+            "allocation_calls": 0,
+            "requested_bytes": 0
+          },
+          {
+            "operation": "legal_choices",
+            "repetitions": 128,
+            "allocation_calls": 128,
+            "requested_bytes": 3072
+          },
+          {
+            "operation": "clone_and_step",
+            "repetitions": 128,
+            "allocation_calls": 3712,
+            "requested_bytes": 1343232
+          },
+          {
+            "operation": "blind_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 168305,
+            "requested_bytes": 5432102
+          },
+          {
+            "operation": "skuct_iteration",
+            "repetitions": 1000,
+            "allocation_calls": 200906,
+            "requested_bytes": 6280109
+          }
+        ]
+      }
+    ]
+  },
+  "baseline_profile": {
+    "worker_samples": 34531,
+    "state_hash_inclusive_samples": 10496,
+    "state_hash_fraction": 0.30395876169239233,
+    "free_state_hash_speedup_ceiling": 1.4366964842937382
+  },
+  "screening": {
+    "bag": {
+      "baseline": {
+        "median_seconds": 4.293256084,
+        "p95_seconds": {
+          "ordinary": 0.111676167,
+          "perish": 0.103635625,
+          "preview": 0.102169084,
+          "recovery": 0.103483709,
+          "replacement": 0.107748125
+        }
+      },
+      "candidate": {
+        "median_seconds": 4.277889875,
+        "p95_seconds": {
+          "ordinary": 0.111179459,
+          "perish": 0.103050291,
+          "preview": 0.102074084,
+          "recovery": 0.104458,
+          "replacement": 0.106302333
+        }
+      },
+      "time_reduction": 0.0035791503463460383,
+      "p95_ratios": {
+        "ordinary": 0.9955522470609148,
+        "perish": 0.9943520000964919,
+        "preview": 0.9990701688193662,
+        "recovery": 1.0094149215312722,
+        "replacement": 0.9865817433017976
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "packed": {
+      "baseline": {
+        "median_seconds": 4.592136125,
+        "p95_seconds": {
+          "ordinary": 0.120883375,
+          "perish": 0.108403541,
+          "preview": 0.111184917,
+          "recovery": 0.112611458,
+          "replacement": 0.115769084
+        }
+      },
+      "candidate": {
+        "median_seconds": 4.484521084,
+        "p95_seconds": {
+          "ordinary": 0.117828958,
+          "perish": 0.110083083,
+          "preview": 0.107935792,
+          "recovery": 0.11001175,
+          "replacement": 0.110877542
+        }
+      },
+      "time_reduction": 0.023434636533123165,
+      "p95_ratios": {
+        "ordinary": 0.9747325304244691,
+        "perish": 1.0154934237803173,
+        "preview": 0.9707772862752598,
+        "recovery": 0.9769143562638183,
+        "replacement": 0.957747424174143
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "reuse": {
+      "baseline": {
+        "median_seconds": 4.567842875,
+        "p95_seconds": {
+          "ordinary": 0.118987208,
+          "perish": 0.110669833,
+          "preview": 0.108102459,
+          "recovery": 0.112786792,
+          "replacement": 0.112852958
+        }
+      },
+      "candidate": {
+        "median_seconds": 4.416540625,
+        "p95_seconds": {
+          "ordinary": 0.114271125,
+          "perish": 0.110237458,
+          "preview": 0.11069675,
+          "recovery": 0.139861333,
+          "replacement": 0.106704875
+        }
+      },
+      "time_reduction": 0.03312334818434415,
+      "p95_ratios": {
+        "ordinary": 0.9603647898016062,
+        "perish": 0.9960931087697584,
+        "preview": 1.023998445770785,
+        "recovery": 1.240050634652327,
+        "replacement": 0.9455212950643261
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "alloccuts": {
+      "baseline": {
+        "median_seconds": 4.301008292,
+        "p95_seconds": {
+          "ordinary": 0.111475333,
+          "perish": 0.103655791,
+          "preview": 0.102114958,
+          "recovery": 0.10526025,
+          "replacement": 0.105876209
+        }
+      },
+      "candidate": {
+        "median_seconds": 4.108379,
+        "p95_seconds": {
+          "ordinary": 0.106794209,
+          "perish": 0.097626958,
+          "preview": 0.110235292,
+          "recovery": 0.096584958,
+          "replacement": 0.10121325
+        }
+      },
+      "time_reduction": 0.04478700781821221,
+      "p95_ratios": {
+        "ordinary": 0.9580075351737232,
+        "perish": 0.9418379528838866,
+        "preview": 1.0795214938050506,
+        "recovery": 0.9175824492151595,
+        "replacement": 0.9559583872142609
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "cbs": {
+      "baseline": {
+        "median_seconds": 4.535787792,
+        "p95_seconds": {
+          "ordinary": 0.119321458,
+          "perish": 0.109034625,
+          "preview": 0.107743833,
+          "recovery": 0.111284333,
+          "replacement": 0.114518125
+        }
+      },
+      "candidate": {
+        "median_seconds": 4.3782155,
+        "p95_seconds": {
+          "ordinary": 0.11316625,
+          "perish": 0.103476416,
+          "preview": 0.115130333,
+          "recovery": 0.105274,
+          "replacement": 0.106464833
+        }
+      },
+      "time_reduction": 0.03473978484573692,
+      "p95_ratios": {
+        "ordinary": 0.9484149112559452,
+        "perish": 0.9490234501196295,
+        "preview": 1.0685561279409839,
+        "recovery": 0.9459912025531932,
+        "replacement": 0.9296767040151941
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    },
+    "direct": {
+      "baseline": {
+        "median_seconds": 4.538994958,
+        "p95_seconds": {
+          "ordinary": 0.119532291,
+          "perish": 0.10920675,
+          "preview": 0.109028,
+          "recovery": 0.111756,
+          "replacement": 0.111975542
+        }
+      },
+      "candidate": {
+        "median_seconds": 4.396057084,
+        "p95_seconds": {
+          "ordinary": 0.112439208,
+          "perish": 0.108532542,
+          "preview": 0.118284417,
+          "recovery": 0.105912125,
+          "replacement": 0.108839667
+        }
+      },
+      "time_reduction": 0.031491084551233395,
+      "p95_ratios": {
+        "ordinary": 0.9406596916978693,
+        "perish": 0.9938263156810361,
+        "preview": 1.0848994478482592,
+        "recovery": 0.9477086241454598,
+        "replacement": 0.9719950004796584
+      },
+      "exact_match": true,
+      "positions": 49,
+      "accepted": false
+    }
+  },
+  "tests": {
+    "native-tests": 108,
+    "bot-tests": 30
+  },
+  "scope": {
+    "allocation_probe": "Two fixed positions, 128 warm-up iterations then 1000 search iterations; System allocator counters; includes tree growth. Requested bytes are cumulative, not peak memory.",
+    "native": "49 generated positions, 27000 iterations each, one thread, alternating arm order. Default mimalloc.",
+    "wasm": "Node, 31 decisions at 3000 iterations; search step timing only. Not measured on iPad/Safari.",
+    "deployment": "Local candidate; not deployed."
+  },
+  "remaining_allocations": [
+    "New search nodes and their action/statistic vectors",
+    "Move execution and temporary effect payloads",
+    "Other legal-action and event buffers"
+  ],
+  "decision": {
+    "retain": true,
+    "reason": "Reduced requested allocation bytes, with 7.0% lower Node Wasm search time and 5.6% lower native skuct time. Native blind improved 4.4% but did not meet the 5% time gate.",
+    "deployment": "Not deployed; runtime changes remain local."
+  }
+}
