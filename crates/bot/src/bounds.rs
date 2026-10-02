@@ -287,6 +287,26 @@ pub struct BoundSolver<'d> {
     pub stats: BoundStats,
 }
 
+#[derive(Default)]
+pub struct BoundCache {
+    dex_fingerprint: Option<[u8; 16]>,
+    nodes: HashMap<NodeKey, Node>,
+    closed: HashMap<NodeKey, Bounds>,
+    closed_strategies: HashMap<NodeKey, [StrategyCertificate; 2]>,
+    roots: HashSet<NodeKey>,
+    stats: BoundStats,
+}
+
+impl BoundCache {
+    pub fn len(&self) -> usize {
+        self.nodes.len() + self.closed.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 const TOTAL: f64 = (1u64 << 32) as f64;
 
 impl<'d> BoundSolver<'d> {
@@ -301,6 +321,34 @@ impl<'d> BoundSolver<'d> {
             active_stall: None,
             active_two_sided: None,
             stats: BoundStats::default(),
+        }
+    }
+
+    pub fn from_cache(dex: &'d Dex, cfg: BoundConfig, cache: BoundCache) -> Self {
+        if cache.dex_fingerprint != Some(dex.replay_fingerprint) {
+            return Self::new(dex, cfg);
+        }
+        Self {
+            dex,
+            cfg,
+            nodes: cache.nodes,
+            closed: cache.closed,
+            closed_strategies: cache.closed_strategies,
+            roots: cache.roots,
+            active_stall: None,
+            active_two_sided: None,
+            stats: cache.stats,
+        }
+    }
+
+    pub fn into_cache(self) -> BoundCache {
+        BoundCache {
+            dex_fingerprint: Some(self.dex.replay_fingerprint),
+            nodes: self.nodes,
+            closed: self.closed,
+            closed_strategies: self.closed_strategies,
+            roots: self.roots,
+            stats: self.stats,
         }
     }
 
@@ -452,6 +500,8 @@ impl<'d> BoundSolver<'d> {
             }
         }
         self.nodes.retain(|key, _| keep.contains(key));
+        self.closed.retain(|key, _| keep.contains(key));
+        self.closed_strategies.retain(|key, _| keep.contains(key));
         self.roots.clear();
         self.roots.insert(root);
     }

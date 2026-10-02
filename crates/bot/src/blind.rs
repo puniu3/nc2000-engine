@@ -727,6 +727,26 @@ impl BlindSearch {
         self.done
     }
 
+    pub fn step_with_endgame(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        n: u32,
+        session: &mut crate::endgame::EndgameSession,
+        clock: &mut impl FnMut() -> f64,
+    ) -> u32 {
+        let cfg = self.cfg.clone();
+        let turn_cap = self.turn_cap;
+        for _ in 0..n {
+            if session.expired(clock()) { break; }
+            self.step_with_leaf(dex, belief, obs, 1, &mut |sim, rng, rollout| {
+                session.leaf(dex, &cfg, turn_cap, sim, rng, rollout, clock)
+            });
+        }
+        self.done
+    }
+
     pub fn step_observed(
         &mut self,
         dex: &Dex,

@@ -764,6 +764,20 @@ pub struct WasmProtocolSearcher {
     /// `setBeliefPrior` can refuse out loud instead of relying on the agent's
     /// internal "never onto a pinned belief" guard.
     pinned: bool,
+    endgame: Option<nc2000_bot::endgame::EndgameSession>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = ["globalThis", "performance"], js_name = now)]
+    fn endgame_now_ms() -> f64;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn endgame_now_ms() -> f64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START.get_or_init(std::time::Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
 /// M18 `setBeliefPrior` report: `{applied, species, meanMoveSum, skipped,
@@ -803,7 +817,7 @@ impl WasmProtocolSearcher {
         let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
         let cfg = skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets);
         let agent = ProtocolAgent::new(&dex.dex, side, pool, cfg, seed as u64);
-        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: false })
+        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: false, endgame: None })
     }
 
     /// `c` defaults to the profile of the information policy the fork was
@@ -815,7 +829,7 @@ impl WasmProtocolSearcher {
         let recorded = if fork.info == nc2000_bot::fork::Info::Open { "open" } else { "blind" };
         let c = c.unwrap_or_else(|| profile_c(recorded));
         let agent = fork.bot_agent(&dex.dex, pool, skuct_config(c, None), seed as u64).map_err(|e| JsError::new(&e))?;
-        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: fork.info == nc2000_bot::fork::Info::Open })
+        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: fork.info == nc2000_bot::fork::Info::Open, endgame: None })
     }
 
     /// Our exact team, as submitted to PS (same JSON array shape as the
@@ -934,6 +948,7 @@ impl WasmProtocolSearcher {
     /// (the searcher is then ready to `step`/`best`).
     #[wasm_bindgen(js_name = onRequest)]
     pub fn on_request(&mut self, request_json: &str) -> Result<bool, JsError> {
+        self.endgame = None;
         self.agent.on_request(&self.dex, request_json).map_err(|e| JsError::new(&e))
     }
 
@@ -943,11 +958,33 @@ impl WasmProtocolSearcher {
         self.agent.baked_preview(&self.dex)
     }
 
-    /// Pump `n` blind iterations (fresh belief determinization each) on the
-    /// synthesized battle. No-op when a baked preview / forced choice
-    /// already decided.
+    /// Pump at most `n` blind iterations. An enabled endgame session yields
+    /// after one iteration; callers use the returned cumulative count.
     pub fn step(&mut self, n: u32) -> Result<u32, JsError> {
+        if let Some(session) = self.endgame.as_mut() {
+            return self.agent.step_with_endgame(&self.dex, n.min(1), session, &mut endgame_now_ms).map_err(|e| JsError::new(&e));
+        }
         self.agent.step(&self.dex, n).map_err(|e| JsError::new(&e))
+    }
+
+    #[wasm_bindgen(js_name = beginEndgame)]
+    pub fn begin_endgame(&mut self, config_json: Option<String>, milliseconds: f64) -> Result<(), JsError> {
+        let started = endgame_now_ms();
+        self.endgame = None;
+        if let Some(json) = config_json {
+            if self.agent.search().is_none() { return Err(JsError::new("beginEndgame requires a decision")); }
+            let cfg = serde_json::from_str(&json).map_err(js_err)?;
+            self.endgame = Some(nc2000_bot::endgame::EndgameSession::new(cfg, started, milliseconds).map_err(|e| JsError::new(&e))?);
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = endgameStats)]
+    pub fn endgame_stats(&self) -> String {
+        self.endgame.as_ref().map_or_else(|| "null".into(), |session| serde_json::json!({
+            "scope": "conditional-determinized", "stats": session.stats,
+            "expired": session.expired(endgame_now_ms()),
+        }).to_string())
     }
 
     pub fn iterations(&self) -> u32 {
@@ -994,6 +1031,7 @@ impl WasmProtocolSearcher {
     /// failure this feature cannot afford.
     #[wasm_bindgen(js_name = setPosition)]
     pub fn set_position(&mut self, spec_json: &str) -> Result<(), JsError> {
+        self.endgame = None;
         let spec = PositionSpec::parse(spec_json).map_err(|e| JsError::new(&e))?;
         self.agent.set_position(&self.dex, &spec).map_err(|e| JsError::new(&e))
     }

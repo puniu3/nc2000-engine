@@ -2159,6 +2159,20 @@ impl ProtocolAgent {
         self.search.as_ref().map_or(0, |s| s.iterations())
     }
 
+    pub fn step_with_endgame(
+        &mut self,
+        dex: &Dex,
+        n: u32,
+        session: &mut crate::endgame::EndgameSession,
+        clock: &mut impl FnMut() -> f64,
+    ) -> Result<u32, String> {
+        let search = self.search.as_mut().ok_or("step before on_request")?;
+        if self.baked.is_some() || self.forced.is_some() { return Ok(search.iterations()); }
+        let belief = self.belief.as_ref().ok_or("no belief")?;
+        let obs = self.observer.as_ref().ok_or("no observer")?;
+        Ok(search.step_with_endgame(dex, belief, obs, n, session, clock))
+    }
+
     pub fn step_observed(
         &mut self,
         dex: &Dex,

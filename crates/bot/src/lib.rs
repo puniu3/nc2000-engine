@@ -35,6 +35,7 @@ pub mod corpus;
 pub mod damage_search;
 pub mod duel;
 pub mod eval;
+pub mod endgame;
 pub mod exact;
 pub mod exploit;
 pub mod fork;

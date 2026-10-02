@@ -389,11 +389,7 @@ pub(crate) fn run_iteration(
     run_iteration_with_leaf(
         cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root,
         root_joint, depth_out, &mut |sim, rng, rollout| {
-            if rollout {
-                playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_rules())
-            } else {
-                leaf_eval(cfg, sim, dex)
-            }
+            default_leaf(cfg, sim, dex, turn_cap, rng, rollout)
         }, None,
     )
 }
@@ -505,6 +501,14 @@ fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
         Playout::Heavy { weights, .. } => crate::eval::eval_leaf(sim, dex, weights),
+    }
+}
+
+pub(crate) fn default_leaf(cfg: &RmConfig, sim: &mut Battle, dex: &Dex, turn_cap: u16, rng: &mut SplitMix64, rollout: bool) -> f64 {
+    if rollout {
+        playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_rules())
+    } else {
+        leaf_eval(cfg, sim, dex)
     }
 }
 
