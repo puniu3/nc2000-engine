@@ -1,0 +1,47 @@
+{
+  "schema": "nc2000-endgame-confirmation-design-v1",
+  "status": "frozen before native development completion and before confirmation outcomes",
+  "candidate_selection": {
+    "source": "complete four-arm native development report",
+    "rule": "Use the already frozen development eligibility, paired-score and smaller-allocation tie rules. Do not use timing or memory probe outcomes to select the solver fraction. If no candidate is eligible, record the failed development gate; do not silently substitute another selection rule."
+  },
+  "web": {
+    "pairs": 600,
+    "games": 1200,
+    "seed": 2026100315,
+    "threads": 1,
+    "candidate_information": "public",
+    "baseline_information": "raw",
+    "baseline_iterations": 27000,
+    "solver_fraction": "selected native development fraction",
+    "max_nodes": 256,
+    "milliseconds_rule": "After the complete 814 ms timing validation, freeze min(814, floor(baseline nonforced request mean - (candidate nonforced request mean - 814))). Use timing only, and no later adjustment from confirmation data.",
+    "resource_choice": "The Web-specific 256-entry cap is chosen from allocation evidence. Native selection retains its research cap of 12000. This is an explicitly different production resource condition and must earn its own result; native strength is not transferred to it.",
+    "controls": "Same shipped drawWeight catalog and v3 belief prior as development; same team and battle seed within each pair, swapped candidate seats; alternating leg order; actual BotWorker for both seats; no pondering. Preserve all 600 pairs, including ties and engine-cap outcomes.",
+    "analysis": "Mean of 600 pair means, Student-t 95% interval using the existing reporter. No early score-based stopping, sample extension, seed change, allocation change, threshold change or pooling with development/calibration.",
+    "publication_gates": {
+      "complete_games": 1200,
+      "minimum_score": 0.52,
+      "strict_ci95_lower_above": 0.5,
+      "latency": "Candidate nonforced mean request time and overall p99 request time must each be no greater than the corresponding measured raw-baseline value. Report full distributions and forced-move differences.",
+      "memory": "Candidate peak allocated Wasm memory must be no greater than baseline peak allocated Wasm memory. Report distributions and retain the limitation that linear-memory allocation is not total browser RSS. Missing resource evidence does not pass.",
+      "correctness": "No illegal actions, invisible-page measurements, emergency stops, public full-information root overrides, cache-cap violations, or solver budget violations beyond the last measured indivisible probe. Report engine caps separately; an unresolved cap regression does not pass.",
+      "scope": "Local Chromium establishes only the tested Web condition. Native or full-information improvements alone cannot authorize publication. Any unresolved material performance or information-boundary limitation blocks adoption."
+    },
+    "attribution": "The production comparison includes the public-information path change. It does not isolate solver contribution by itself. Report native public OFF comparisons and independent public ON/OFF continuations separately; never label a path-only gain as an isolated solver gain."
+  },
+  "independent_endgames": {
+    "corpus": "tmp/endgame-holdout-v1/games.jsonl",
+    "corpus_sha256": "091af45282d2fe7537591d0b060c7d4f428eec530402b69cdb8512967cb8e6ca",
+    "selection": "all-recorded-samples",
+    "milliseconds": 10000,
+    "reference_ms": 60000,
+    "seed": 2026100316,
+    "threads": 4,
+    "solver_fraction": "selected native development fraction",
+    "max_nodes": 12000,
+    "comparison": "Both full-information and pure-public continuations, ON versus OFF, both candidate seats at every recorded sample. Restore public observation history by replaying the source prefix. Source games, not positions or individual continuations, are independent clusters.",
+    "analysis": "Retain unresolved references and unmeasurable mixed-policy loss as such. Report certified policy loss and error-correction classifications only for full-information positions; report public continuation score, replacements, unresolved rate and cost separately. No selection or tuning from this corpus."
+  },
+  "completion": "After all required evaluations, record adoption or rejection of this actual method and its measured failure points. Adoption additionally requires the plan\u2019s full regression and selective-publication workflow. Incomplete measurements are not a completed strengthening result."
+}
