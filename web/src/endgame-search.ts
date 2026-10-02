@@ -23,7 +23,7 @@ export async function runEndgameSearch(
   const setup = begun - started;
   let allowance = settings.milliseconds;
   const cap = Math.min(60_000, allowance * (control.ponder ? 10 : 1));
-  searcher.beginEndgame(JSON.stringify({ solver_fraction: settings.solverFraction }), Math.max(0, allowance - setup));
+  searcher.beginEndgame(JSON.stringify({ solver_fraction: settings.solverFraction, max_nodes: settings.maxNodes ?? 12000 }), Math.max(0, allowance - setup));
   let done = searcher.iterations();
   while (!control.cancelled()) {
     const elapsed = performance.now() - started;

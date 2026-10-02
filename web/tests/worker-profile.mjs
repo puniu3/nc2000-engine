@@ -123,7 +123,7 @@ try {
     {
       const { SolverWorker } = await import("/src/solver-client.ts");
       const previous = location.search;
-      history.replaceState({}, "", "?solver&endgame=10&endgame-ms=100");
+      history.replaceState({}, "", "?solver&endgame=10&endgame-ms=100&endgame-nodes=16");
       const worker = new SolverWorker();
       try {
         const own = { name: "Pikachu", species: "Pikachu", level: 50, gender: "M", item: "", ability: "", moves: ["Splash", "Seismic Toss"] };
@@ -132,6 +132,7 @@ try {
         const spec = JSON.stringify({ schema: "nc2000-position-v1", side: 0, turn: 999, own_sets: [own], sides: [0, 1].map(side => ({ mons: [{ ...mon, ...(side === 0 ? { hp_num: 1, hp_den: 125, hp_exact: 1 } : {}) }], active: 0, party: [0] })) });
         const result = await worker.solve({ spec, poolJson: JSON.stringify({ teams: [{ id: "foe", sets: [foe] }] }), seed: 73, budget: 512, plies: 0 });
         if (JSON.parse(result.endgame).stats.value_replacements < 1) throw new Error("analysis worker did not use solved values");
+        if (JSON.parse(result.endgame).stats.peak_entries > 16) throw new Error("analysis worker exceeded its configured cache cap");
         const extended = await worker.extend(1024, 0);
         if (extended.report.iterations <= result.report.iterations) throw new Error("timed analysis did not extend");
       } finally {

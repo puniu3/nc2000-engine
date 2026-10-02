@@ -107,7 +107,7 @@ try {
             try {
               for (let side = 0; side < 2; side++) if (workers[side]) await workers[side].newBattle(encoded[0], encoded[1], job.seed,
                 { poolJson: prior, side, seed: job.agentSeed,
-                  ...(arms[side].information === "public" ? { endgame: { solverFraction: arms[side].solver_fraction, milliseconds: protocol.milliseconds } } : {}) });
+                  ...(arms[side].information === "public" ? { endgame: { solverFraction: arms[side].solver_fraction, milliseconds: protocol.milliseconds, maxNodes: protocol.max_nodes ?? 12000 } } : {}) });
               let decision = 0;
               while (!battle.outcome()) {
                 const needs = JSON.parse(battle.needsChoice());
