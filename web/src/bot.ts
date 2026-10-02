@@ -8,6 +8,7 @@ export interface SearchOutcome {
   best: string | null;
   policy: RootPolicy;
   ms: number;
+  wasmMemoryBytes: number;
   endgame?: string;
   /** Where the pick came from (preview: "table" | "search"). */
   src?: "table" | "search";
@@ -55,6 +56,7 @@ export class BotWorker {
               best: m.best,
               policy: JSON.parse(m.policy) as RootPolicy,
               ms: m.ms,
+              wasmMemoryBytes: m.wasmMemoryBytes,
               endgame: m.endgame,
               src: m.src,
             });

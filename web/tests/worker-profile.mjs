@@ -58,6 +58,7 @@ try {
             new Promise((_, reject) => setTimeout(() => reject(new Error("worker search timed out")), 60000)),
           ]);
           const iterations = scenario === "ponder-cap" ? budget * 10 : budget;
+          if (result.wasmMemoryBytes <= 0 || result.wasmMemoryBytes % 65536 !== 0) throw new Error("missing Wasm memory measurement");
           const profile = searchProfile("blind");
           results.push({ scenario, c: profile.c, iterations: result.policy.iterations,
             expectedIterations: iterations,
@@ -88,6 +89,7 @@ try {
         }
         const result = await Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("timed worker hung")), 10000))]);
         const stats = JSON.parse(result.endgame);
+        if (result.wasmMemoryBytes <= 0 || result.wasmMemoryBytes % 65536 !== 0) throw new Error("missing timed Wasm memory measurement");
         if (stats.scope !== "conditional-determinized" || stats.stats.root_overrides !== 0) throw new Error("blind worker reported a full-information policy");
         if (result.ms > 2000 || result.ms < 45) throw new Error(`timed worker duration ${result.ms}`);
         if (scenario === "late-flush" && result.ms < 100) throw new Error("ponder stopped before flush");

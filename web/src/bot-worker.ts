@@ -95,6 +95,7 @@ export type WorkerResponse =
       best: string | null;
       policy: string;
       ms: number;
+      wasmMemoryBytes: number;
       endgame?: string;
       /** Where the pick came from (always the live search). */
       src?: "search";
@@ -111,7 +112,9 @@ export type WorkerResponse =
 const post = (m: WorkerResponse) => self.postMessage(m);
 
 let dex: Dex;
-const ready = init().then(() => {
+let wasmMemory: WebAssembly.Memory;
+const ready = init().then(exports => {
+  wasmMemory = exports.memory;
   dex = new Dex();
   post({ t: "ready" });
 });
@@ -287,6 +290,7 @@ async function runSearch(m: SearchMsg): Promise<void> {
     best: s.best() ?? null,
     policy: s.rootPolicy(),
     ms: performance.now() - t0,
+    wasmMemoryBytes: wasmMemory.buffer.byteLength,
     src: "search",
   });
 }
@@ -321,7 +325,7 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
     if (!current) return;
     const best = f.searcher.best();
     post({ t: "result", id: m.id, best: best === undefined ? null : (battle!.resolveChoice(m.side, best) ?? null),
-      policy: f.searcher.rootPolicy(), ms: performance.now() - t0, src: "search", endgame: f.searcher.endgameStats() });
+      policy: f.searcher.rootPolicy(), ms: performance.now() - t0, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "search", endgame: f.searcher.endgameStats() });
     return;
   }
   const cap = m.budget * PONDER_CAP;
@@ -344,6 +348,7 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
     best: best === undefined ? null : (battle!.resolveChoice(m.side, best) ?? null),
     policy: f.searcher.rootPolicy(),
     ms: performance.now() - t0,
+    wasmMemoryBytes: wasmMemory.buffer.byteLength,
     src: "search",
   });
 }
