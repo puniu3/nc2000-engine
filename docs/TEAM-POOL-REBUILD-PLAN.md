@@ -1,7 +1,7 @@
 # Blind product and team-pool rebuild
 
-Status: **implemented and validated locally (2026-10-02), not pushed or
-deployed** — see [§Progress](#progress). Owner
+Status: **implemented, validated and deployed (2026-10-02, owner-approved
+push of 157a556)** — see [§Progress](#progress). Owner
 direction updated 2026-09-30. This is the authoritative plan and handoff; update it in place.
 The starting implementation is local `master` at `d3b7059`, 18 commits ahead
 of the locally recorded `origin/master` (`23168bb`); the working tree was clean.
@@ -432,8 +432,9 @@ history and say so.
 
 ### Limits and open owner decisions
 
-- **Publication**: branch `blind-rebuild` (local). Push = Pages deploy, which
-  needs explicit owner approval.
+- **Publication**: pushed and deployed 2026-10-02 on owner approval; the live
+  site was checked after the Pages run (blind door, catalog, Nash draw
+  choice, evaluator at 27,000).
 - **sample-16** is pending (0.531 ± 0.020 SE at 27k; lower look bound 0.485
   at z = 2.241), so it is not in the catalog; its Bright Powder original and
   its source ポニョ are.

@@ -616,8 +616,7 @@ Milestones:
   `a_dead_opponent_bench_stays_dead`). Live play was never affected: a real tracker sets both on the
   same switch line.
 
-- **Blind product and team-pool rebuild: DONE locally (2026-10-02), not
-  deployed.** Live play is blind at c = 0.4 on every door and the ladder; the
+- **Blind product and team-pool rebuild: DONE and deployed (2026-10-02).** Live play is blind at c = 0.4 on every door and the ladder; the
   open sheet is retired. Under a protocol frozen before any score, 103
   candidates were measured at blind:27000:0.4 against a fixed 78-team
   human-source panel: **24 selected** (fresh-seed lower bound above 0.50, no
