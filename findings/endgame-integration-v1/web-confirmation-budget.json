@@ -1,0 +1,10 @@
+{
+  "schema": "nc2000-web-confirmation-budget-v1",
+  "milliseconds": 796,
+  "timing_result_sha256": "cb22ddab01ad261c5a0b6e10711a0513a2b3cea598c1af8462ef67714f4a514d",
+  "design_sha256": "06285e65fd17df326613b78542ca78ee79120e1b7e1a94db9e343bf2ca8d4c7b",
+  "rule": "min(814, floor(baseline nonforced request mean - (candidate nonforced request mean - 814)))",
+  "candidate_nonforced_request_mean_ms": 818.4048433038923,
+  "baseline_nonforced_request_mean_ms": 800.7253581662916,
+  "interpretation": "Frozen from the completed timing-only validation before native candidate selection or confirmation outcomes. Confirmation still measures actual waits and must pass its resource gates; this estimate does not establish matched time in the future run."
+}
