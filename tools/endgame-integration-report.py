@@ -56,6 +56,17 @@ table = "".join(
 )
 development = json.loads((destination / "native-development.json").read_text())
 assert development["complete"]
+development_source = root / "tmp/endgame-development-v1"
+development_records = {}
+for path in sorted(development_source.rglob("*")):
+    if path.is_file() and path.suffix in (".json", ".jsonl", ".log"):
+        development_records[str(path.relative_to(development_source))] = path.read_text()
+for name, arm in development["arms"].items():
+    games = [text for path, text in development_records.items() if path.startswith(f"{name}/pair-")]
+    assert len(games) == arm["completed_games"] == 100
+    assert all(json.loads(text.splitlines()[-1])["type"] == "result" for text in games)
+with gzip.GzipFile(filename=str(destination / "native-development-records.json.gz"), mode="wb", mtime=0) as out:
+    out.write(json.dumps(development_records).encode())
 development_table = "".join(
     f'<tr><td>{arm["protocol"]["candidate"]["solver_fraction"]:.0%}</td><td>{arm["completed_games"]}</td><td>{arm["score"]:.1%}</td><td>{arm["ci95"][0]:.1%}–{arm["ci95"][1]:.1%}</td><td>{arm["difference_vs_public_off"]["mean"]:+.1%}</td><td>{arm["metrics"]["candidate"]["p99_ms"]:.1f}</td></tr>'
     for arm in development["arms"].values()
@@ -79,6 +90,7 @@ page = f'''<!doctype html>
 <p>nativeの1手10秒で、凍結済みの開発400局が完了しました。公開情報経路の0／5／10／20%各100局を、既定のraw blind経路と比較。実際のdrawWeightとv3 priorを使い、同じチーム・乱数の対局でbotの席を交替しました。0%はソルバーを除いた対照です。同一bot同士の8局は全ペア0.5で対局経路も一致し、意図的に探索を空にしたランダム方策との16局は探索側が0.75でした。</p>
 <div class="scroll"><table><tr><th>配分</th><th>局数</th><th>対raw得点</th><th>ペア単位95%区間</th><th>公開情報OFFとの差</th><th>判断p99・ms</th></tr>{development_table}</table></div>
 <p>事前の選択規則により{selected['protocol']['candidate']['solver_fraction']:.0%}配分を確認候補へ固定しました。全4群で無効手・配分＋最後の1バッチを超える予算違反・キャッシュ上限違反・エンジン打ち切りは0でした。10%と公開情報OFFとの差は9.0ポイント、共有50ペアを単位とした95%区間は0.06～17.94ポイントです。複数候補から選んだ開発結果であり、強化の確証や公開の根拠には使いません。プロセスRSS最大は0／5／10／20%で454,496／623,744／661,456／725,184KiB。両席とアロケータ保持を含み、候補単体のメモリ差ではありません。<a href="native-development.json">全4群の開発結果と選択記録</a></p>
+<p><a href="native-development-records.json.gz">開発400局の全判断・対局結果・実行条件・RSS記録</a></p>
 <p>固定した10%候補で、別シード1,200局のWeb確認戦と独立終盤評価を開始しました。採用条件は本番条件で得点0.52以上、対局ペア単位95%区間の下端0.50超、時間・メモリ・無効手・打ち切りの回帰なし。呼出数や全情報版の改善だけでは採用しません。</p>
 <p>確認戦はWebの公開中botを相手に新しい600ペア・1,200局。Webのキャッシュは資源予備測定に基づき256エントリ、待ち時間は32局の時間対照と事前の固定式から796msへ固定しました。nativeの12,000エントリとは異なる資源条件であり、nativeの得点を移し替えません。結果を見た再調整や標本追加はしません。<a href="confirmation-design.json">事前固定条件と採否基準</a> ／ <a href="web-confirmation-protocol.json">実行中のWeb確認条件</a></p>
 <h2>独立終盤の評価</h2>
