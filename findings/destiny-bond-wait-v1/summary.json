@@ -1,0 +1,312 @@
+{
+  "schema": "nc2000-destiny-bond-wait-v1",
+  "baseline_commit": "f1669d492c26722be4254bf374c601b11148e330",
+  "deployment": "local_only_not_published",
+  "comparison": "Same engine and search; only MaskRules.destiny_bond_wait differs. Baseline is the local source revision, not an audit of deployed browser files.",
+  "config": {
+    "iterations": 27000,
+    "c": 0.4,
+    "prior": "data/belief-pool-v3/belief-pool.json",
+    "seeds": [
+      71001,
+      71002,
+      71003,
+      71004,
+      71005,
+      71006,
+      71007,
+      71008
+    ]
+  },
+  "cohorts": {
+    "blind/bond_with_curse": {
+      "seeds": 8,
+      "changed": 8,
+      "statistics_identical": true,
+      "transitions": [
+        {
+          "before": "move shadowball",
+          "after": "move return",
+          "n": 3
+        },
+        {
+          "before": "move shadowball",
+          "after": "move curse",
+          "n": 5
+        }
+      ]
+    },
+    "blind/bond_without_residual": {
+      "seeds": 8,
+      "changed": 8,
+      "statistics_identical": true,
+      "transitions": [
+        {
+          "before": "move shadowball",
+          "after": "move return",
+          "n": 8
+        }
+      ]
+    },
+    "pinned/bond_with_curse": {
+      "seeds": 8,
+      "changed": 8,
+      "statistics_identical": true,
+      "transitions": [
+        {
+          "before": "move shadowball",
+          "after": "move return",
+          "n": 8
+        }
+      ]
+    },
+    "pinned/bond_without_residual": {
+      "seeds": 8,
+      "changed": 8,
+      "statistics_identical": true,
+      "transitions": [
+        {
+          "before": "move shadowball",
+          "after": "move return",
+          "n": 8
+        }
+      ]
+    },
+    "initial-blind/bond_with_curse": {
+      "seeds": 4,
+      "changed": 0,
+      "statistics_identical": true,
+      "transitions": [
+        {
+          "before": "move shadowball",
+          "after": "move shadowball",
+          "n": 4
+        }
+      ]
+    },
+    "initial-blind/bond_without_residual": {
+      "seeds": 4,
+      "changed": 0,
+      "statistics_identical": true,
+      "transitions": [
+        {
+          "before": "move psychic",
+          "after": "move psychic",
+          "n": 3
+        },
+        {
+          "before": "move shadowball",
+          "after": "move shadowball",
+          "n": 1
+        }
+      ]
+    }
+  },
+  "proofs": {
+    "bond_with_curse": {
+      "side": 0,
+      "terminal": false,
+      "work_budget": 100000,
+      "runs": 1862,
+      "enumeration_runs": 8,
+      "solver_runs": 1854,
+      "unique_successors": 5,
+      "actions": [
+        {
+          "action": "move curse",
+          "lo": 1.0,
+          "hi": 1.0
+        },
+        {
+          "action": "move shadowball",
+          "lo": 0.0,
+          "hi": 0.0
+        },
+        {
+          "action": "move return",
+          "lo": 1.0,
+          "hi": 1.0
+        }
+      ],
+      "cells": [
+        {
+          "joint": [
+            "move curse",
+            "move haze"
+          ],
+          "complete": true,
+          "enumeration_runs": 2,
+          "successors": 2,
+          "lo": 1.0,
+          "hi": 1.0
+        },
+        {
+          "joint": [
+            "move shadowball",
+            "move haze"
+          ],
+          "complete": true,
+          "enumeration_runs": 4,
+          "successors": 1,
+          "lo": 0.0,
+          "hi": 0.0
+        },
+        {
+          "joint": [
+            "move return",
+            "move haze"
+          ],
+          "complete": true,
+          "enumeration_runs": 2,
+          "successors": 2,
+          "lo": 1.0,
+          "hi": 1.0
+        }
+      ],
+      "solver_stops": [
+        {
+          "state": 0,
+          "stop": "WidthMet",
+          "runs": 1279
+        },
+        {
+          "state": 1,
+          "stop": "WidthMet",
+          "runs": 3
+        },
+        {
+          "state": 3,
+          "stop": "WidthMet",
+          "runs": 562
+        },
+        {
+          "state": 4,
+          "stop": "WidthMet",
+          "runs": 10
+        }
+      ]
+    },
+    "bond_without_residual": {
+      "side": 0,
+      "terminal": false,
+      "work_budget": 100000,
+      "runs": 8875,
+      "enumeration_runs": 10,
+      "solver_runs": 8865,
+      "unique_successors": 4,
+      "actions": [
+        {
+          "action": "move psychic",
+          "lo": 0.0,
+          "hi": 0.0
+        },
+        {
+          "action": "move shadowball",
+          "lo": 0.0,
+          "hi": 0.0
+        },
+        {
+          "action": "move return",
+          "lo": 0.9802280215536603,
+          "hi": 1.0
+        }
+      ],
+      "cells": [
+        {
+          "joint": [
+            "move psychic",
+            "move haze"
+          ],
+          "complete": true,
+          "enumeration_runs": 4,
+          "successors": 1,
+          "lo": 0.0,
+          "hi": 0.0
+        },
+        {
+          "joint": [
+            "move shadowball",
+            "move haze"
+          ],
+          "complete": true,
+          "enumeration_runs": 4,
+          "successors": 1,
+          "lo": 0.0,
+          "hi": 0.0
+        },
+        {
+          "joint": [
+            "move return",
+            "move haze"
+          ],
+          "complete": true,
+          "enumeration_runs": 2,
+          "successors": 2,
+          "lo": 0.9802280215536603,
+          "hi": 1.0
+        }
+      ],
+      "solver_stops": [
+        {
+          "state": 2,
+          "stop": "WidthMet",
+          "runs": 8832
+        },
+        {
+          "state": 3,
+          "stop": "WidthMet",
+          "runs": 33
+        }
+      ]
+    }
+  },
+  "corpus": {
+    "type": "corpus_summary",
+    "files": 570,
+    "decisions": 20809,
+    "bond_files": 53,
+    "reconstructed_in_bond_files": 1925,
+    "active_bond": 46,
+    "mask_changed": 2,
+    "choice_changed": 0
+  },
+  "validation": {
+    "tests_passed": 147,
+    "test_groups": [
+      132,
+      2,
+      3,
+      2,
+      4,
+      4
+    ],
+    "workspace_all_targets": "passed",
+    "fixture_continuation": "Both pinned and blind choices; 8 continuation seeds per case and arm, independent of search seeds; fixed legal opponent continuations.",
+    "proof_scope": "Reduced two-mon tactical fixtures with legal sets checked on complete six-mon sheets; no claim about general match win rate.",
+    "test_log_sha256": "bc71329597a2157f676ad97a22aca7f4c5d9d71dc3ba68e5d76a0a83fd99dc8b",
+    "check_log_sha256": "a8f43737dc5da090a56b27a9eccdc5fc1024d75b83d245ddeec5f96e103f71e2"
+  },
+  "source_sha256": {
+    "crates/bot/src/smmcts.rs": "db9b765e856ee60d6f8d61a9f432afbaef4863e8e58fe2cae8d3e30c52329fb3",
+    "crates/bot/examples/arena.rs": "532a7bad6269e406d85f19263ab149ae0bf839a9261a9e6b4068ec3db02f230e",
+    "crates/bot/examples/noop_census.rs": "5f0628819dc6fc31f2c7fbc55845f38dd0371d25efcd7a17d9e5f019f8a10a6d",
+    "crates/bot/examples/destiny_bond_gate.rs": "b253861d3292011c50a5702a087bc90496f30bbb47f2b4e36f6563d47f8ef191",
+    "crates/bot/tests/destiny_bond_wait.rs": "b3b6791f98c60ec3c12a2fba4588243b715559c5cfa21b7078cec15b734ccf7d",
+    "crates/bot/tests/support/destiny_bond_wait.rs": "114af5f6ad5bfe04447585c66ec15f2f56bf3e92428b1b012373042c1fe1224b",
+    "tools/bond-check.sh": "34940e89732728e283c0f5add19e85b34240932957ea2d51143b6e050fecf9ca"
+  },
+  "artifact_sha256": {
+    "pinned.jsonl": "bd4b24eaf7c62983a6282a68104c6caea4981c1fc0f67d39332fbdefea8c37ae",
+    "corpus.jsonl": "8a58721cd257aee883de1c9a3e5ad5dc3cd4e59d0dbf4adb65f6ebec709c20fd",
+    "blind.jsonl": "40e68dd39e31b849df9f2b13cde762310148259137f58c5935efd0348645a228",
+    "initial-blind.jsonl": "fc7094698f9173f6c35f933370f06d4cb0b552c413ad9e83a02eef2b875bfb66"
+  },
+  "binary_sha256": "2612d8706d14006ba4c7724ff544fd616e5a54789c3f2d0052ebe6a7cb67a053",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01) (Homebrew)",
+  "input_sha256": {
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "data/learnsets-gen2.json": "8f288150ce10b2698c2100381c3daed6a3a56389bb4fe7169cf3b54407d0d0c4",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+  },
+  "preview_verified": true
+}
