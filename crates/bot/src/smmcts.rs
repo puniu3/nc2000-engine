@@ -566,6 +566,7 @@ pub(crate) fn certain_noop(
 /// turn one rule OFF for an A/B, never to ship a rule half-on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MaskRules {
+    pub destiny_bond_wait: bool,
     /// Sleep Talk / Snore selected by an AWAKE, strictly faster user
     /// (`moveexec.rs:521`). `false` = the pre-2026-08-19 mask.
     pub sleep_talk_awake: bool,
@@ -601,6 +602,7 @@ pub struct MaskRules {
 impl Default for MaskRules {
     fn default() -> Self {
         MaskRules {
+            destiny_bond_wait: true,
             sleep_talk_awake: true,
             immunity_ignores_switch_read: false,
             immunity_all_switchins: false,
@@ -648,6 +650,13 @@ pub(crate) fn dominated_reason(
         {
             return Some("inflicting sleep would forfeit under Sleep Clause");
         }
+    }
+    if rules.destiny_bond_wait
+        && b.active_id(1 - side).is_some_and(|id| {
+            dex.conds_id("destinybond").is_some_and(|cond| b.poke(id).has_volatile(cond))
+        })
+    {
+        return None;
     }
     if b.active_id(1 - side)
         .and_then(|id| {

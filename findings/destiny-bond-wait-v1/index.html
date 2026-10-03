@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NC2000：みちづれ待機手の修正</title>
+<style>
+:root{color-scheme:light dark;font-family:system-ui,sans-serif;background:#f5f2eb;color:#282722}body{max-width:880px;margin:auto;padding:28px 20px 70px;line-height:1.85}h1{font-size:1.65rem;line-height:1.5}h2{font-size:1.2rem;margin-top:2em}a{color:#496846}table{border-collapse:collapse;width:100%;font-size:.95rem}th,td{text-align:left;border-bottom:1px solid #ccc7bd;padding:10px 8px;vertical-align:top}.lead{background:#e1e8d9;padding:18px;border-radius:8px}.scroll{overflow:auto}code{overflow-wrap:anywhere}@media(prefers-color-scheme:dark){:root{background:#242521;color:#eeeade}.lead{background:#344031}a{color:#bdd4ad}th,td{border-color:#62645a}}
+</style>
+<body>
+<h1>NC2000：みちづれ待機手の修正</h1>
+<p class="lead"><strong>勝てる待機手を最後の除外処理が消し、確定負けの攻撃を選ばせる欠陥を修正。</strong><br>2種類の再現局面で、現行blind設定の各8シードすべてが改善。局面単位の改善は証明できたが、通常対戦全体の勝率向上は未確認。変更はローカルに保存し、公開版への配信は行っていない。</p>
+<h2>何が間違っていたか</h2>
+<p>相手がみちづれ中なら、相手に効かない技で待つことに意味がある。このルールでは、失敗した技でも行動が終わると相手のみちづれが切れる。しかし既存の最終選択処理は「タイプ相性で無効」「既に同じ状態変化がある」技を無条件に除外し、探索が最善と判断した待機手まで捨てていた。ほろびのうたの残り1ターンだけにあった例外では、この状況を救えなかった。</p>
+<p>修正は、<strong>相手の場のポケモンにみちづれが有効な間、無効果を理由とした最終選択の除外を解除する</strong>もの。待機を強制せず、探索の最善手に任せる。最後の1体での自爆と、睡眠条項による反則負けの除外は先に評価し、維持する。</p>
+<h2>証明できた改善</h2>
+<p>自分の最後のゲンガーLv55と、捕まえた相手のゲンガーLv50。相手はみちづれを使い切った直後で、後ろにコイキングがいる。自分のくろいまなざしもPP切れ。双方のHP・PP・状態は、通常の技選択をエンジンで順に実行して作った。決断時点のHPや状態を直接書き換えていない。</p>
+<div class="scroll"><table><thead><tr><th>局面</th><th>修正前の攻撃</th><th>修正後の待機</th><th>現行blindでの変更</th></tr></thead><tbody>
+<tr><td>相手にのろいが有効</td><td>シャドーボール：勝率区間 [0, 0]</td><td>おんがえし／のろい再使用：[1, 1]</td><td>8 / 8 シード</td></tr>
+<tr><td>継続ダメージなし</td><td>サイコキネシス／シャドーボール：[0, 0]</td><td>おんがえし：[0.980228, 1]</td><td>8 / 8 シード</td></tr>
+</tbody></table></div>
+<p>区間は実勝率の標本推定ではなく、相手の全合法応手・乱数分岐を列挙した後、残りを既存の証明付きソルバーで解析した保証。未解決分岐は未知区間のまま残している。2例目の下限が1に届かないのは、幅0.02で解析を止める設定による。これは削減した2体対2体の戦術例であり、通常の6体登録・3体選出の分布を代表するものではない。各ポケモンの型は、6体の完全な登録表に載せて合法性を検証した。</p>
+<h2>探索は正しく、出力だけが壊れていた</h2>
+<p>現行blindの設定を使用：事前分布v3、UCB係数0.4、27,000試行。相手の型を真値に固定せず、観測から残りを推定した。前後で全行動の訪問数・平均評価が完全に一致することを毎回確認した。</p>
+<div class="scroll"><table><thead><tr><th>のろいあり・シード71001</th><th>訪問数</th><th>探索の平均評価</th></tr></thead><tbody>
+<tr><td>おんがえし</td><td>26,907</td><td>0.887613</td></tr>
+<tr><td>のろい再使用</td><td>90</td><td>0.588889</td></tr>
+<tr><td>シャドーボール</td><td>3</td><td>0</td></tr>
+</tbody></table></div>
+<p>従来は上の2手を除外し、3回しか選ばれず評価0のシャドーボールを提出した。修正後はおんがえしを提出する。相手の型を固定した対照でも、各8シードすべてが負ける攻撃から待機へ変わった。</p>
+<h2>頻度と限界</h2>
+<p>570対局・20,809決断を索引し、みちづれを含む53対局から1,925決断を再構成。相手のみちづれが有効な46決断のうち、除外集合が変わったのは2件、実際の着手が変わったのは0件だった。この棋譜集合から総合勝率の改善や頻繁な発生は主張できない。再構成には自分の型・選出の補完が含まれ、その由来は全記録に残している。</p>
+<p>最初のムウマの予備例では、相手の型を固定すると改善したが、blindでは8例とも着手が変わらなかった。実際の相手の低い素早さを事前分布が再現しないため、探索自体が攻撃を高く見積もる別問題が残った。上のゲンガー例は、レベル差から通常の相手推定でも先に動ける条件で、最終除外処理の欠陥を切り分けている。今回の修正はその情報推定の問題まで解決したとは扱わない。</p>
+<h2>検証と再現</h2>
+<p>比較元はローカルの作業ツリー <code>f1669d4</code>。公開中の配信ファイルとの比較ではない。修正の有無は同じエンジン・探索に対して切り替えた。</p>
+<p>botライブラリ、blind、import、既存のほろび待機・ねごと除外、新規テストの計147件が成功。新規テストは全乱数での攻撃即敗北、待機後の継続対戦、両席での条件境界、自爆・睡眠条項ガードの維持、型の合法性を確認した。workspace全ターゲットの型検査も成功。Wasmの配信ビルド・公開は実施していない。</p>
+<p>短い再現コマンド：<code>bash tools/bond-check.sh</code>。手元の非公開棋譜集合も調べる場合は <code>--corpus</code> を付ける。</p>
+<p><a href="summary.json">条件・集計・ソース指紋</a> ／ <a href="blind.jsonl">現行blindの全記録と証明</a> ／ <a href="pinned.jsonl">型を固定した対照</a> ／ <a href="corpus.jsonl">匿名化した棋譜走査の結果</a> ／ <a href="initial-blind.jsonl">ムウマ予備例のblind未改善記録</a></p>
+</body></html>
