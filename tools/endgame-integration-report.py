@@ -78,12 +78,26 @@ holdout_table = "".join(
     f'<tr><td>{information}</td><td>{result["score"]:.2%}</td><td>{result["ci95"][0]:.2%}–{result["ci95"][1]:.2%}</td><td>{result["candidate"]["replacements"]} / {result["candidate"]["decisions_with_replacements"]}判断</td><td>{result["candidate"]["unresolved_calls"]/result["candidate"]["calls"]:.2%}</td><td>{result["candidate"]["p99_ms"]:.1f} / {result["baseline"]["p99_ms"]:.1f}</td></tr>'
     for information, result in holdout["results"].items()
 )
+web = json.loads((destination / "web-evaluation.json").read_text())
+web_audit = json.loads((destination / "web-confirmation-audit.json").read_text())
+assert web["complete"] and web["completed_games"] == 1200
+assert web_audit["complete"] and web_audit["measured_gate_decision"] == "reject"
+web_table = "".join(
+    f'<tr><td>{name}</td><td>{arm["decisions"]:,}</td><td>{arm["nonforced_request_ms"]["mean"]:.1f}</td><td>{arm["request_ms"]["p99"]:.1f}</td><td>{arm["wasm_memory_bytes"]["max"]/1e6:.2f}</td><td>{web_audit["forced_request_ms"][name]["mean"]:.1f}</td></tr>'
+    for name, arm in web["arms"].items()
+)
+completion = json.loads((destination / "completion-audit.json").read_text())
+assert completion["outcome"] == "completed_rejection_branch"
+completion_table = "".join(
+    f'<tr><td>{item["step"]}</td><td>{html.escape(item["requirement_ja"])}</td><td>{html.escape(item["finding_ja"])}</td></tr>'
+    for item in completion["requirements"]
+)
 page = f'''<!doctype html>
 <html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NC2000 終盤ソルバー接続の検証</title>
 <style>body{{margin:2rem auto;padding:0 1rem;max-width:68rem;background:#eee9df;color:#302c25;font:17px/1.7 system-ui}}h1{{font-size:1.6rem}}h2{{font-size:1.15rem;margin-top:2rem}}table{{border-collapse:collapse;width:100%;font-size:.85rem}}th,td{{padding:.45rem;border-bottom:1px solid #c8c0b3;text-align:left}}a{{color:#6b4826}}.scroll{{overflow-x:auto}}</style>
 <h1>NC2000 終盤ソルバー接続の検証</h1>
-<p>証明付き混合戦略を全情報botの実際の着手へ、証明幅0.02以内の局面値をblind探索の葉へ接続しました。Webの通常対局・局面解析・分岐対局でも試験経路を動かしています。<strong>強化の採否は未判定です。公開botの既定設定は変更していません。</strong></p>
+<p>証明付き混合戦略を全情報botの実際の着手へ、証明幅0.02以内の局面値をblind探索の葉へ接続し、native開発400局・独立終盤288局・Web確認1,200局を完了しました。<strong>今回の固定案は不採用です。Web得点45.75%、ペア単位95%区間43.10～48.40%で、現行botを下回りました。平均待ち時間とメモリにも回帰があり、公開botの既定設定は変更していません。</strong></p>
 <h2>何が判断に使われるか</h2>
 <p>全情報では最悪損失0.02以内の証明付き混合戦略から一度だけ着手を抽選します。blindでは、プレイヤーに届く公開情報と自身のチームから作った仮説局面だけを解析します。その値はその仮説に条件付けられた値であり、隠れた真の状態や情報集合全体の解とは扱いません。blindの実戦ルートを全情報戦略へ直接切り替える処理はありません。</p>
 <h2>10秒の接続監査</h2>
@@ -97,13 +111,20 @@ page = f'''<!doctype html>
 <div class="scroll"><table><tr><th>配分</th><th>局数</th><th>対raw得点</th><th>ペア単位95%区間</th><th>公開情報OFFとの差</th><th>判断p99・ms</th></tr>{development_table}</table></div>
 <p>事前の選択規則により{selected['protocol']['candidate']['solver_fraction']:.0%}配分を確認候補へ固定しました。全4群で無効手・配分＋最後の1バッチを超える予算違反・キャッシュ上限違反・エンジン打ち切りは0でした。10%と公開情報OFFとの差は9.0ポイント、共有50ペアを単位とした95%区間は0.06～17.94ポイントです。複数候補から選んだ開発結果であり、強化の確証や公開の根拠には使いません。プロセスRSS最大は0／5／10／20%で454,496／623,744／661,456／725,184KiB。両席とアロケータ保持を含み、候補単体のメモリ差ではありません。<a href="native-development.json">全4群の開発結果と選択記録</a></p>
 <p><a href="native-development-records.json.gz">開発400局の全判断・対局結果・実行条件・RSS記録</a></p>
-<p>固定した10%候補で、別シード1,200局のWeb確認戦と独立終盤評価を開始しました。採用条件は本番条件で得点0.52以上、対局ペア単位95%区間の下端0.50超、時間・メモリ・無効手・打ち切りの回帰なし。呼出数や全情報版の改善だけでは採用しません。</p>
-<p>確認戦はWebの公開中botを相手に新しい600ペア・1,200局。Webのキャッシュは資源予備測定に基づき256エントリ、待ち時間は32局の時間対照と事前の固定式から796msへ固定しました。nativeの12,000エントリとは異なる資源条件であり、nativeの得点を移し替えません。結果を見た再調整や標本追加はしません。<a href="confirmation-design.json">事前固定条件と採否基準</a> ／ <a href="web-confirmation-protocol.json">実行中のWeb確認条件</a></p>
+<p>固定した10%候補で、別シード1,200局のWeb確認戦と独立終盤評価を完了しました。採用条件は本番条件で得点0.52以上、対局ペア単位95%区間の下端0.50超、時間・メモリ・無効手・打ち切りの回帰なし。呼出数や全情報版の改善だけでは採用しません。</p>
+<p>確認戦はWebの公開中botと同じraw blind・27,000試行を相手に、新しい600ペア・1,200局。Webのキャッシュは資源予備測定に基づき256エントリ、待ち時間は32局の時間対照と事前の固定式から796msへ固定しました。nativeの12,000エントリとは異なる資源条件であり、nativeの得点を移し替えません。結果を見た再調整や標本追加は行っていません。<a href="confirmation-design.json">事前固定条件と採否基準</a> ／ <a href="web-confirmation-protocol.json">Web確認条件</a></p>
+<h2>Web確認戦：固定案を不採用</h2>
+<p>全600ペアで549勝651敗、引き分け0。得点{web['score']:.2%}、ペアを単位とした95%区間{web['ci95'][0]:.2%}～{web['ci95'][1]:.2%}でした。得点52%以上と区間下端50%超の両条件を満たさず、区間上端も50%未満です。このWeb構成は現行経路より弱いという結果でした。</p>
+<div class="scroll"><table><tr><th>経路</th><th>判断数</th><th>非強制手の平均待ち・ms</th><th>全判断p99・ms</th><th>最大Wasm確保・MB</th><th>強制手の平均待ち・ms</th></tr>{web_table}</table></div>
+<p>候補の非強制手平均は対照より{(web_audit['nonforced_time_ratio']-1)*100:.1f}%長く、最大Wasm確保量も{(web_audit['peak_wasm_allocation_ratio']-1)*100:.1f}%増えました。全判断p99は改善しましたが、平均待ちとメモリの採用条件は失敗です。事前の時間校正では確認戦の平均待ち時間を一致させられませんでした。候補は実測で多くの時間を使っても負けており、ここから厳密な同時間での効果量は主張しません。MBは10⁶バイト、Wasm確保量はブラウザ全体のRSSではありません。</p>
+<p>候補は198,430回呼び出され、2,355回の葉の置換が537判断で発生しました。未解決呼出率{web_audit['unresolved_call_fraction']:.2%}、置換が起きた判断は全候補判断の{web_audit['decisions_with_replacements_fraction']:.2%}です。solve時間は計1,595.4秒、最長不可分バッチは{web_audit['maximum_indivisible_probe_ms']:.1f}ms。実際の利用は確認できましたが、対局成績の改善には結びつきませんでした。</p>
+<p>全57,796判断でメモリ記録を確認しました。無効手・非可視ページ・緊急停止・公開経路の全情報ルート採用・キャッシュ上限違反・許容値誤差違反・配分＋最後の1バッチを超える予算違反・エンジン打ち切りは0。600組すべてで席交替、同一チームと乱数を確認し、凍結した284入力の指紋も一致しました。</p>
+<p><a href="web-evaluation.json">Web確認戦の全結果・分布・ペア得点</a> ／ <a href="web-confirmation-audit.json">採否基準と全記録の監査</a> ／ <a href="web-confirmation-records.json.gz">1,200局の全判断・条件・実行記録</a></p>
 <h2>独立終盤の評価</h2>
 <p>独立コーパスの全288継続対局が完了しました。別シードの24自己対戦中、6局には抽出対象の終盤がなく、18局から72局面を使用。全情報・公開情報それぞれでON／OFFを比較し、両席を評価しました。判断10秒、参照解析60秒、配分10%、キャッシュ12,000エントリ。元対局を等重みの18統計単位とし、同じ対局からの複数局面を独立標本とは数えません。公開情報の履歴は元の棋譜から復元しました。<a href="holdout-evaluation-protocol.json">独立終盤の実行条件</a></p>
 <div class="scroll"><table><tr><th>情報</th><th>ONの対OFF得点</th><th>元対局単位95%区間</th><th>葉の置換 / 発動判断</th><th>未解決呼出率</th><th>判断p99・ms ON / OFF</th></tr>{holdout_table}</table></div>
 <p>両方の得点区間が50%をまたぎ、独立終盤での改善は確認できませんでした。全情報の初手115視点では、証明付きの誤り修正は0、既に正しかった方策の維持は33、未解決比較は82でした。参照解析72件中19件が幅0.02以内、53件は外部時間上限で終了。未解決や混合方策の測定不能な損失を0とは扱いません。全情報の戦略採用は継続対局全体で77回、公開情報では0回です。</p>
-<p>全288局で無効手・エンジン打ち切り・キャッシュ上限違反・配分＋最後の1バッチを超える予算違反は0。ソルバー時間の合計は全情報621.8秒、公開情報706.9秒、最長の不可分バッチは55.8／125.3msでした。参照解析は最後のバッチを含め最大60,370.6ms。呼出や置換が発生しても、この標本では勝率改善や誤り修正の証明には結びついていません。Web確認戦の採否は全1,200局の完了後に別途判断します。</p>
+<p>全288局で無効手・エンジン打ち切り・キャッシュ上限違反・配分＋最後の1バッチを超える予算違反は0。ソルバー時間の合計は全情報621.8秒、公開情報706.9秒、最長の不可分バッチは55.8／125.3msでした。参照解析は最後のバッチを含め最大60,370.6ms。呼出や置換が発生しても、この標本では勝率改善や誤り修正の証明には結びついていません。Web確認戦の不採用判定とは別の、独立終盤での結果です。</p>
 <p><a href="holdout-evaluation.json">独立終盤の全結果と方策損失分類</a> ／ <a href="holdout-cost-audit.json">予算・上限・参照解析の監査</a> ／ <a href="holdout-evaluation-records.json.gz">全288継続対局と72参照解析の記録</a></p>
 <p><a href="holdout-integrity.json">独立コーパスの指紋と再生検証</a> ／ <a href="holdout-harness-calibration.json">継続対局の対照検証</a> ／ <a href="holdout-generation-protocol.json">生成条件</a></p>
 <h2>Webの待ち時間</h2>
@@ -112,9 +133,18 @@ page = f'''<!doctype html>
 <p><a href="web-calibration.json">Webの時間・比較器の対照</a> ／ <a href="web-calibration-records.json.gz">Web測定記録</a> ／ <a href="web-budget-control.json">初回時間対照の結果</a> ／ <a href="web-budget-control-v2.json">2回目の時間対照結果</a> ／ <a href="web-budget-control-v3.json">814ms・32局の検証結果</a> ／ <a href="web-confirmation-budget.json">796msの確定根拠</a> ／ <a href="web-budget-control-records.json.gz">全時間対照の記録</a></p>
 <h2>Webのメモリ予備測定</h2>
 <p>同じチーム・乱数の1ペアを5／10／20%で測定しました。12,000エントリ上限では候補workerのWasm確保メモリの最大値が29.3／60.8／110.2MB（対照10.8／11.2／13.2MB）。256エントリ上限での再測定では15.7／21.5／21.6MB（対照14.4／12.0／10.6MB）でした。ここでのMBは10⁶バイトで、プロセス全体のRSSではありません。対局経路も変わるため、この差を同一局面の厳密な費用差とは扱いません。</p>
-<p>256エントリ版の6局は全て合法手・可視ページ・配分＋最後の1バッチ以内で、キャッシュは256以下でした。ただし証明済みの葉の置換は0回。大きい上限でも0／1／0回です。小さい上限はメモリ負担を抑えましたが、強さやメモリ回帰なしの証明ではありません。配分は凍結済みnative開発計画に従って選び、これらの予備対局の勝敗では選んでいません。Web確認戦では事前に固定した256エントリ上限を使用しています。</p>
+<p>256エントリ版の6局は全て合法手・可視ページ・配分＋最後の1バッチ以内で、キャッシュは256以下でした。ただし証明済みの葉の置換は0回。大きい上限でも0／1／0回です。小さい上限はメモリ負担を抑えましたが、強さやメモリ回帰なしの証明ではありません。配分は凍結済みnative開発計画に従って選び、これらの予備対局の勝敗では選んでいません。Web確認戦では事前に固定した256エントリ上限を使用し、その条件でもメモリ回帰が残りました。</p>
 <p><a href="web-memory-research-cap.json">12,000エントリの測定</a> ／ <a href="web-memory-bounded.json">256エントリの測定</a> ／ <a href="web-memory-records.json.gz">全メモリ予備測定の記録</a></p>
 <p><a href="audit-summary.json">監査集計</a> ／ <a href="unresolved-classification.json">42局面の分類</a> ／ <a href="calibration.json">比較器の対照</a> ／ <a href="development-10-protocol.json">凍結済み対戦条件</a> ／ <a href="integration-measurements.json.gz">監査・対照の測定記録</a></p>
+<h2>この方式で失敗した点と判定の範囲</h2>
+<p>接続と証明の保証は検証できましたが、限られたWeb予算では呼出の98.81%が未解決で、値を置換できた判断も1.86%でした。小さいキャッシュでもメモリ回帰が残り、時間校正は確認戦で非強制手平均を一致させられず、候補はより長く考えても成績が低下しました。native開発の上昇は独立終盤や本番経路の確認戦で裏付けられませんでした。</p>
+<p>今回のWeb比較には公開情報経路への変更も含まれるため、成績低下の原因をソルバーだけに帰属しません。solver ON/OFFの独立終盤評価でも全情報・公開情報とも改善未確認です。全情報の利得がblindで消えたという証拠もないため、原因を情報集合の不整合と断定せず、情報集合サブゲームの追加開発は行いません。iPad Safariの性能は未計測であり、このMacのChromiumの数字を実機性能とは扱いません。</p>
+<p>キャッシュの局面間再利用は全情報経路で実装・検証しました。今回の公開情報／Wasm経路は判断ごとにソルバーを作り直すため、判断をまたぐ再利用は未実装です。これは固定案の限界として残し、確認結果を見て新方式へ変更した扱いにはしません。計画の「保証を増やすか安く得る」「同じ待ち時間で強くする」という性能目標は達成していません。</p>
+<h2>計画との照合・最終回帰検証</h2>
+<div class="scroll"><table><tr><th>段階</th><th>要件</th><th>確認結果</th></tr>{completion_table}</table></div>
+<p>最終検証はnative全体341テスト成功・失敗0・doc-test除外1件、Node Wasmのendgame／parity／determinism／kifu／fork／solver全6スイート成功、実際のChromium workerテスト成功、TypeScript検査とWeb本番ビルド成功でした。Node用Wasmもreleaseで再ビルドしました。Wasmのparity検証は凍結された対局fixtureとの一致であり、今回オプションのnative twin実行は行っていません。評価に使ったWeb Wasmと284入力の指紋は最終検証後も一致しています。</p>
+<p><a href="completion-audit.json">要件別の判定・実装と証拠の対応</a> ／ <a href="final-verification.json">最終検証の集計と指紋</a> ／ <a href="final-verification-records.json.gz">全検証ログ</a></p>
+<p>固定した方式・条件の不採用を記録し、実験のON/OFF設定と全測定記録を残しました。採用案に必要な公開用ブランチへの選択的取り込み・デプロイは、不採用のため実施しません。追加評価や別方式の開発は、今回の確認結果で閾値や配分を調整せず、別の事前固定計画で扱う必要があります。</p>
 </html>'''
 (destination / "index.html").write_text(page)
 print(destination / "index.html")

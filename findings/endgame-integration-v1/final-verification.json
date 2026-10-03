@@ -1,0 +1,44 @@
+{
+  "schema": "nc2000-endgame-final-verification-v1",
+  "source_revision": "beac647994a7f70fd18de969e4ce410178eb35ae",
+  "core_and_web_inputs_unchanged": true,
+  "frozen_inputs_checked": 284,
+  "native": {
+    "command": "cargo test --workspace",
+    "passed": 341,
+    "failed": 0,
+    "ignored_doctests": 1,
+    "result_groups": 46
+  },
+  "wasm": {
+    "release_node_rebuild": "passed",
+    "suites": [
+      "endgame",
+      "parity",
+      "determinism",
+      "kifu",
+      "fork",
+      "solver"
+    ],
+    "result": "passed",
+    "parity_scope": "Frozen battle fixtures; optional NC2000_NATIVE_PARITY twin executions were not requested."
+  },
+  "worker": {
+    "command": "npm run test:worker",
+    "directory": "web",
+    "result": "passed"
+  },
+  "web_build": {
+    "command": "npm run build",
+    "directory": "web",
+    "result": "passed"
+  },
+  "web_wasm_sha256": "336b43e60cba98c1864057d98e310f9961c12a0b1e2a1fd091f02a9413194ba2",
+  "logs_sha256": {
+    "native-tests.log": "f640c5ddec516f2381a8fd45bb1191d6781d3f50b27667855d8f81dde218c310",
+    "worker-tests.log": "f5840da96adb10acdece88b5da28f40b32b44bb5e90f0370eaa8d2cdbd302561",
+    "web-build.log": "a9060695a0d9b549987b4f52df38c3a6178eb9f8b91fbe4570f1b23eb0e45dec",
+    "node-build.log": "2a3b8862654269674df5c2aa7c50496179aab74fc2dfcfb5ae42a23d2ed5e3d4",
+    "wasm-tests.log": "68e9403b68e48e87eb00716925a7316158c9ef6c9bafa75724bacf2689d00f6a"
+  }
+}
