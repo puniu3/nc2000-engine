@@ -72,6 +72,12 @@ development_table = "".join(
     for arm in development["arms"].values()
 )
 selected = development["arms"][development["selected_for_confirmation"]]
+holdout = json.loads((destination / "holdout-evaluation.json").read_text())
+assert holdout["complete"]
+holdout_table = "".join(
+    f'<tr><td>{information}</td><td>{result["score"]:.2%}</td><td>{result["ci95"][0]:.2%}–{result["ci95"][1]:.2%}</td><td>{result["candidate"]["replacements"]} / {result["candidate"]["decisions_with_replacements"]}判断</td><td>{result["candidate"]["unresolved_calls"]/result["candidate"]["calls"]:.2%}</td><td>{result["candidate"]["p99_ms"]:.1f} / {result["baseline"]["p99_ms"]:.1f}</td></tr>'
+    for information, result in holdout["results"].items()
+)
 page = f'''<!doctype html>
 <html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NC2000 終盤ソルバー接続の検証</title>
@@ -94,7 +100,11 @@ page = f'''<!doctype html>
 <p>固定した10%候補で、別シード1,200局のWeb確認戦と独立終盤評価を開始しました。採用条件は本番条件で得点0.52以上、対局ペア単位95%区間の下端0.50超、時間・メモリ・無効手・打ち切りの回帰なし。呼出数や全情報版の改善だけでは採用しません。</p>
 <p>確認戦はWebの公開中botを相手に新しい600ペア・1,200局。Webのキャッシュは資源予備測定に基づき256エントリ、待ち時間は32局の時間対照と事前の固定式から796msへ固定しました。nativeの12,000エントリとは異なる資源条件であり、nativeの得点を移し替えません。結果を見た再調整や標本追加はしません。<a href="confirmation-design.json">事前固定条件と採否基準</a> ／ <a href="web-confirmation-protocol.json">実行中のWeb確認条件</a></p>
 <h2>独立終盤の評価</h2>
-<p>別シードで24局の自己対戦を生成し、各状態キー・合法な棋譜再生・抽出位置・終局結果の一致を確認しました。開発結果による候補固定後、このコーパスで全情報・公開情報それぞれのON／OFF継続対局を開始しました。判断10秒、参照解析60秒、全記録局面と両席を対象にしています。継続対局の比較器は別のスモークデータで検証し、同一設定同士は全情報・公開情報とも同じ対局経路とペア得点0.5を再現しました。複数の終盤を取った元対局は1つの統計単位として扱います。<a href="holdout-evaluation-protocol.json">実行中の独立終盤条件</a></p>
+<p>独立コーパスの全288継続対局が完了しました。別シードの24自己対戦中、6局には抽出対象の終盤がなく、18局から72局面を使用。全情報・公開情報それぞれでON／OFFを比較し、両席を評価しました。判断10秒、参照解析60秒、配分10%、キャッシュ12,000エントリ。元対局を等重みの18統計単位とし、同じ対局からの複数局面を独立標本とは数えません。公開情報の履歴は元の棋譜から復元しました。<a href="holdout-evaluation-protocol.json">独立終盤の実行条件</a></p>
+<div class="scroll"><table><tr><th>情報</th><th>ONの対OFF得点</th><th>元対局単位95%区間</th><th>葉の置換 / 発動判断</th><th>未解決呼出率</th><th>判断p99・ms ON / OFF</th></tr>{holdout_table}</table></div>
+<p>両方の得点区間が50%をまたぎ、独立終盤での改善は確認できませんでした。全情報の初手115視点では、証明付きの誤り修正は0、既に正しかった方策の維持は33、未解決比較は82でした。参照解析72件中19件が幅0.02以内、53件は外部時間上限で終了。未解決や混合方策の測定不能な損失を0とは扱いません。全情報の戦略採用は継続対局全体で77回、公開情報では0回です。</p>
+<p>全288局で無効手・エンジン打ち切り・キャッシュ上限違反・配分＋最後の1バッチを超える予算違反は0。ソルバー時間の合計は全情報621.8秒、公開情報706.9秒、最長の不可分バッチは55.8／125.3msでした。参照解析は最後のバッチを含め最大60,370.6ms。呼出や置換が発生しても、この標本では勝率改善や誤り修正の証明には結びついていません。Web確認戦の採否は全1,200局の完了後に別途判断します。</p>
+<p><a href="holdout-evaluation.json">独立終盤の全結果と方策損失分類</a> ／ <a href="holdout-cost-audit.json">予算・上限・参照解析の監査</a> ／ <a href="holdout-evaluation-records.json.gz">全288継続対局と72参照解析の記録</a></p>
 <p><a href="holdout-integrity.json">独立コーパスの指紋と再生検証</a> ／ <a href="holdout-harness-calibration.json">継続対局の対照検証</a> ／ <a href="holdout-generation-protocol.json">生成条件</a></p>
 <h2>Webの待ち時間</h2>
 <p>このMacのChromiumで、公開中と同じ27,000試行・通常のBotWorkerによる8局を測定しました。強制手以外の617判断で、要求から結果までの平均は890ms、中央値922ms、99パーセンタイル1,452msでした。既存の試験用既定値2.3秒をこの環境の公平な比較に流用しません。測定平均を切り捨てた889msの時間対照では、公開情報OFFが既定botより14.5%多く時間を使ったため、そのまま強さを比較しません。時間比だけから776msへ補正した別シード16局では、逆に8.8%短くなりました。両試行の待ち時間だけを合算し、要求処理の実測上乗せを引いた814msで新しい32局を検証。強制手以外の要求時間は候補平均818.4ms、既定bot平均800.7msで、候補が2.2%長くなりました。事前に定めた式から確認戦は796msへ固定。実際の確認戦でも時間回帰がないことを別途確認します。勝敗による時間調整はしていません。iPad Safariの性能を示す数字ではありません。</p>
