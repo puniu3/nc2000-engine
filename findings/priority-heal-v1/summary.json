@@ -1,0 +1,107 @@
+{
+  "status": "correctness_fix_validated_locally_not_deployed",
+  "baseline": "a1e0047",
+  "production_revision": "fa6b58f",
+  "change": "Keep full-HP healing when public species learnsets admit a priority attack; copied moves and missing learnsets also preserve healing. Hidden opposing moves and PP are not consulted.",
+  "native_tests": 158,
+  "workspace_all_targets": "passed",
+  "wasm": {
+    "mask_integration_probes": 8,
+    "integration_probe_iterations": 0,
+    "integration_scope": "Zero-iteration tie-break probes only check exported mask wiring, not strength. Actual priority damage/heal is then executed.",
+    "own_recovery_continuations": 4,
+    "residual_cases": 16,
+    "bond_cases": 4,
+    "smoke": "passed"
+  },
+  "search": {
+    "paired_searches": 16,
+    "iterations": 27000,
+    "c": 0.4,
+    "statistics_identical": true,
+    "choices_changed": 0,
+    "pinned": "Psychic leads in all 8 seeds",
+    "blind": "All 8 roots tie both actions at 13500 visits and mean 1.0; slot-order tie breaking keeps Psychic. This is not a high-confidence ranking."
+  },
+  "targeted": {
+    "pairs": 16,
+    "baseline_wins": 16,
+    "fixed_wins": 16,
+    "identical_traces": 16,
+    "per_arm": {
+      "decisions": 113,
+      "mask_exposed": 51,
+      "newly_allowed_chosen": 0
+    }
+  },
+  "broad": {
+    "null_control": false,
+    "iterations": 27000,
+    "teams": 24,
+    "games": 32,
+    "score": 0.5,
+    "ci95_halfwidth": 0.0,
+    "pair_scores": [
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5
+    ],
+    "wins": 16,
+    "losses": 16,
+    "ties": 0,
+    "caps": 0,
+    "seconds": 116.528574917,
+    "a": {
+      "decisions": 510,
+      "mask_exposed": 0,
+      "newly_allowed_chosen": 0
+    },
+    "b": {
+      "decisions": 510,
+      "mask_exposed": 0,
+      "newly_allowed_chosen": 0
+    }
+  },
+  "strength_claim": null,
+  "limits": [
+    "The original constructed one-turn defect is fixed, but no measured strength gain was found.",
+    "Targeted continuations use one reduced 1v1 position and a scripted opponent; 16 seeds do not establish prevalence.",
+    "Broad sampling uses the 24-party catalog uniformly, not production-weighted opponents.",
+    "Both screens selected zero newly allowed moves. The broad score of 0.5 with zero observed dispersion is inactive treatment, not an equivalence or safety bound.",
+    "A species can admit priority attacks even when its actual set has none; this conservative relaxation preserves hidden-information invariance."
+  ],
+  "sha256": {
+    "crates/bot/src/smmcts.rs": "fcecf226f80cdc5f9fc945d03c029bf6caee367c32f7029474b2cb15ea50d3a1",
+    "crates/bot/src/belief.rs": "7fa1bc60527857e888408db6f1b39fc17a520094cb2fbb03ce8d2bbc66fd2d97",
+    "crates/bot/examples/priority_heal_audit.rs": "0f48057f51a1bb601a8e0a03c21225222edd88eb4c61f5c768187156b661de55",
+    "crates/bot/examples/priority_heal_search.rs": "52da1015df2dfae2d82eaeb474f979d5f5ce388ec5c729c7a9c76daa708820cb",
+    "crates/bot/examples/priority_heal_gate.rs": "a46e3fd0000658da04729d3891907d81af0e5c2880f08d2c6a1326804368e3b7",
+    "crates/bot/examples/priority_heal_support/mod.rs": "8ff0666992f18dc8007ff0b034a1f621424aca09777d56b280c19642d9bd3690",
+    "crates/bot/tests/priority_heal.rs": "dbbb0ec0ba23e99ff4ab2bab8c4a8770f5841ec6a3d5a4acd39c89570faf4b2b",
+    "crates/wasm/tests-node/priority-heal.js": "55972571a1299c552dc60e2e7af4d1ef967a73678ea2f74253130723eb21695f",
+    "tools/priority-heal-audit": "ee61e2174e64aa1c647715b382be2385e4a934c02d9d8a0eb99b6333c1494c14",
+    "data/learnsets-gen2.json": "8f288150ce10b2698c2100381c3daed6a3a56389bb4fe7169cf3b54407d0d0c4",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "data/team-pool-v2/team-pool.json": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+    "findings/priority-heal-v1/broad.json": "6957b747e10b373510b539cea15283276f260f8943607dce6eafda0a8da21f23",
+    "findings/priority-heal-v1/checks.txt": "89bb264b60c8b905476865398ca806fc385b5cf7e2066532b35fb24740ca0b93",
+    "findings/priority-heal-v1/fixed.jsonl": "ff5b32ae802d57813b1a2a6749fc1a0e739654432d23872bf632b217200c675b",
+    "findings/priority-heal-v1/protocol.json": "59a0748659280c5d8b19bc4cc6dea05cfc45b5d97831c0c7c4197fd78330cc79",
+    "findings/priority-heal-v1/search.jsonl": "4c526213c0b466503fb6b77888e76375b9af432e807e209ef8ed1a9d0e7bba90",
+    "findings/priority-heal-v1/targeted.jsonl": "34e63169ffed92100a46bebedd38fef5404d535acb00a310d9a0fa8ae643219e",
+    "findings/priority-heal-v1/wasm-priority-heal.txt": "07b74d06940fdd9df11ddbbcfcc414e3b87ef8757521e70615f30bda52f0c0fe"
+  }
+}

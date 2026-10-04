@@ -3,6 +3,9 @@ set -eu
 cd "$(dirname "$0")/.."
 export NC2000_REPO_ROOT="$PWD"
 mkdir -p tmp/priority-heal-audit
-cargo run --release -p nc2000-bot --example priority_heal_audit > tmp/priority-heal-audit/measurements.jsonl
-cmp findings/own-recovery-wait-v1/next-priority-heal.jsonl tmp/priority-heal-audit/measurements.jsonl
-printf 'Priority-heal probe reproduces all 8 rows.\n'
+cargo build --release -p nc2000-bot --example priority_heal_audit
+target/release/examples/priority_heal_audit --baseline > tmp/priority-heal-audit/baseline.jsonl
+cmp findings/own-recovery-wait-v1/next-priority-heal.jsonl tmp/priority-heal-audit/baseline.jsonl
+target/release/examples/priority_heal_audit > tmp/priority-heal-audit/fixed.jsonl
+cmp findings/priority-heal-v1/fixed.jsonl tmp/priority-heal-audit/fixed.jsonl
+printf 'Priority-heal baseline and fix reproduce all 8 rows.\n'

@@ -1,0 +1,366 @@
+=== tests ===
+   Compiling nc2000-bot v0.1.0 (<repo>/crates/bot)
+warning: function `argmax_visits` is never used
+    --> crates/bot/src/blind.rs:1172:4
+     |
+1172 | fn argmax_visits(visits: &[u32], dominated: Option<&[bool]>) -> usize {
+     |    ^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nc2000-bot` (lib) generated 1 warning
+warning: `nc2000-bot` (lib test) generated 1 warning (1 duplicate)
+    Finished `release` profile [optimized] target(s) in 48.34s
+     Running unittests src/lib.rs (target/release/deps/nc2000_bot-64908959f5686f2c)
+
+running 132 tests
+test belief::fallback_tests::candidate_sampling_follows_weights_and_equal_weights_draw_as_before ... ok
+test belief::fallback_tests::a_pinned_open_sheet_belief_never_samples ... ok
+test belief::fallback_tests::a_weighted_prior_falls_back_to_the_heaviest_loadout ... ok
+test belief::fallback_tests::legacy_control_reproduces_meta_only_then_implicit_struggle ... ok
+test belief::fallback_tests::pinned_sheet_rejects_a_later_move_contradiction ... ok
+test bounds::tests::closed_value_does_not_certify_a_policy_against_unchecked_replies ... ok
+test belief::fallback_tests::pinned_sheet_rejects_illegal_and_preview_mismatched_teams ... ok
+test bounds::tests::cross_bounds_certify_iterated_row_and_column_dominance ... ok
+test belief::fallback_tests::a_fully_revealed_mon_is_left_alone ... ok
+test belief::fallback_tests::fallback_priority_is_reveal_then_pool_then_rental_then_legal_default ... ok
+test belief::fallback_tests::sampled_slots_carry_the_same_pp_as_a_set_built_from_json ... ok
+test belief::fallback_tests::the_prior_samples_only_legal_unrevealed_moves_and_reveals_always_survive ... ok
+test bounds::tests::mixed_policy_certificates_and_side_swap_match_best_responses ... ok
+test belief::fallback_tests::the_rental_pool_takes_only_teams_the_format_accepts ... ok
+test bounds::tests::compacted_mixed_policy_survives_while_value_only_cache_has_no_policy ... ok
+test belief::fallback_tests::heavier_marginals_are_drawn_more_often ... ok
+test bounds::tests::closed_sweep_preserves_root_bounds_and_compacts_exact_children ... ok
+test bounds::tests::elapsed_budget_stops_without_discarding_the_interval ... ok
+test belief::fallback_tests::without_a_prior_the_determinization_is_bit_identical ... ok
+test bounds::tests::distance_to_turn_limit_changes_certified_value ... ok
+test bounds::tests::observer_guard_covers_direct_and_generated_counter_moves ... ok
+test bounds::tests::restricted_game_embeds_policies_in_original_action_space ... ok
+test bounds::tests::partial_action_bounds_enclose_exhaustive_first_action_values ... ok
+test belief::fallback_tests::fallback_moves_are_seed_and_thread_deterministic ... ok
+test bounds::tests::solver_tracks_a_two_sided_resource_root_without_invariant_failure ... ok
+test bounds::tests::semantic_key_omits_only_damage_history_payload ... ok
+test bounds::tests::pruning_and_support_br_preserve_a_closed_game_value ... ok
+test bounds::tests::strategy_target_stops_before_value_closure_and_small_budgets_resume ... ok
+test bounds::tests::support_br_scheduler_visits_tied_pure_response_and_fair_cursor ... ok
+test corpus::tests::evidence_excludes_generic_called_moves_but_keeps_sleep_talk_calls ... ok
+test corpus::tests::evidence_excludes_plain_release_of_called_two_turn_moves ... ok
+test bounds::tests::safe_states_have_identical_semantic_successor_distributions ... ok
+test corpus::tests::failed_called_two_turn_marker_does_not_hide_a_later_real_move ... ok
+test bounds::tests::reroot_retains_solved_continuations_and_discards_ancestors ... ok
+test corpus::tests::transformed_moves_are_not_submitted_set_evidence_and_switch_or_replace_clears_it ... ok
+test damage_search::tests::best_response_audit_crosses_every_action_with_current_support ... ok
+test bounds::tests::tagged_solver_key_merges_safe_states_but_not_observer_states ... ok
+test damage_search::tests::audit_refines_only_actions_that_can_break_the_incumbent ... ok
+test corpus::tests::equal_candidate_scores_keep_the_earlier_source ... ok
+test damage_search::tests::probe_refine_selects_only_cells_above_threshold ... ok
+test damage_search::tests::support_refine_includes_support_and_pure_best_responses ... ok
+test damage_search::tests::support_refine_margin_adds_near_best_responses ... ok
+test corpus::tests::ditto_transform_corpus_excerpt_does_not_leak_copied_move_to_future_oracle ... ok
+test duel::tests::confidence_interval_uses_block_samples ... ok
+test bounds::tests::terminal_folding_preserves_bounds_and_releases_leaf_nodes ... ok
+test duel::tests::one_block_has_no_fake_confidence_interval ... ok
+test corpus::tests::full_log_own_moves_select_the_matching_set_and_item_is_time_aware ... ok
+test duel::tests::percentile_uses_nearest_rank ... ok
+test corpus::tests::future_move_oracle_counts_sleep_talk_calls_but_not_other_called_moves ... ok
+test endgame::tests::mixture_is_sampled_without_purification ... ok
+test exact::tests::asymmetric_2x3 ... ok
+test exact::tests::dominant_row ... ok
+test exact::tests::matching_pennies ... ok
+test exact::tests::rps_like ... ok
+test frozen::tests::extraction_is_invariant_to_visit_scale_and_has_no_unvisited_value ... ok
+test frozen::tests::execution_does_not_credit_exploratory_opponent_losses ... ok
+test import::m17a_tests::imputed_hp_re_announces_to_the_number_the_stream_printed ... ok
+test corpus::tests::tracker_does_not_retain_transformed_move_as_base_set_evidence ... ok
+test m17e_artifact::tests::merged_rejects_cross_shard_state_duplicate ... ok
+test m17e_artifact::tests::merged_requires_complete_ranges_and_summaries ... ok
+test damage_search::tests::transition_cache_evicts_the_least_recent_entry ... ok
+test m17e_artifact::tests::serde_json_roundtrips_real_fingerprint_float_bits ... ok
+test import::m17a_tests::diagnostic_policy_uses_ps_canonical_hidden_power ... ok
+test import::m17a_tests::transformed_moves_keep_charge_and_lock_lifecycle_without_base_pp_evidence ... ok
+test mcts::perish_rollout_tests::perish_rules_draw_the_same_rng_as_the_ordinary_pick ... ok
+test bounds::tests::partial_strategies_cover_random_damage_recovery_and_turn_cap ... ok
+test damage_search::tests::transition_cache_survives_a_real_reroot ... ok
+test observe::tests::a_self_named_from_tag_is_a_reveal ... ok
+test mcts::perish_rollout_tests::rollout_trapper_traps_sings_and_escapes ... ok
+test mcts::perish_rollout_tests::no_combo_from_the_last_mon_or_with_a_kill_on_the_board ... ok
+test mcts::perish_rollout_tests::trapped_victim_phazes_while_it_still_has_time ... ok
+test observe::tests::an_uncalled_two_turn_move_still_reveals ... ok
+test pick_prior::tests::posterior_conditions_the_smoothed_joint_distribution_on_public_reveals ... ok
+test pick_prior::tests::preview_sampling_retains_the_lead_and_never_forces_an_illegal_choice ... ok
+test observe::tests::a_mimic_overlay_dies_with_the_mons_stay ... ok
+test pick_prior::tests::public_signature_is_order_invariant_and_unknown_matchups_fall_back ... ok
+test observe::tests::an_interrupted_charge_does_not_suppress_forever ... ok
+test preview::tests::action_space_is_canonical ... ok
+test pick_prior::tests::sparse_matchups_mix_with_team_tendencies_and_unknown_matchups_use_them ... ok
+test preview::tests::dominant_action_purifies ... ok
+test prior::tests::a_missing_file_is_the_empty_table_not_an_error ... ok
+test prior::tests::a_well_formed_table_round_trips ... ok
+test preview::tests::matching_pennies_mixes ... ok
+test observe::tests::called_two_turn_release_is_not_a_reveal ... ok
+test prior::tests::duplicate_spellings_keep_the_stronger_claim ... ok
+test prior::tests::garbage_bytes_degrade_to_the_empty_table_instead_of_panicking ... ok
+test prior::tests::overlay_is_per_species_and_wholesale_within_one ... ok
+test prior::tests::probabilities_are_clamped_never_renormalised ... ok
+test prior::tests::the_conventional_path_is_absent_so_the_default_stays_unchanged ... ok
+test prior::tests::unknown_keys_are_ignored_including_the_counters_per_species_n ... ok
+test regret::tests::best_action_uses_equal_weight_per_search_seed ... ok
+test regret::tests::one_pair_has_no_fake_confidence_interval ... ok
+test regret::tests::paired_regret_uses_differences_not_independent_errors ... ok
+test observe::tests::mimic_suppresses_only_the_copied_slot ... ok
+test observe::tests::transform_still_suppresses_every_slot ... ok
+test prior::tests::the_shipped_reference_table_parses_clean ... ok
+test belief::fallback_tests::every_format_species_gets_one_to_four_legal_moves_at_zero_reveal ... ok
+test preview::tests::duplicate_pair_input_is_rejected ... ok
+test bounds::tests::forced_replacement_policy_and_no_choice_opponent_are_certified ... ok
+test smmcts::dominated_action_tests::immunity_all_switchins_admits_unrevealed_picks ... ok
+test smmcts::dominated_action_tests::mask_rules_ablation_isolates_the_sleep_talk_rule ... ok
+test smmcts::dominated_action_tests::immunity_all_switchins_needs_every_switch_in_immune ... ok
+test smmcts::dominated_action_tests::immunity_ignores_switch_read_refuses_the_mon_in_front ... ok
+test smmcts::dominated_action_tests::noop_mask_covers_phaze_with_no_bench ... ok
+test smmcts::dominated_action_tests::noop_mask_covers_awake_sleep_talk ... ok
+test smmcts::dominated_action_tests::noop_mask_covers_last_mon_perish_song_and_destiny_bond ... ok
+test smmcts::dominated_action_tests::noop_mask_covers_capped_boosts_and_weak_substitute ... ok
+test damage_search::tests::transition_cache_reuses_identical_root_expansions_without_value_drift ... ok
+test smmcts::dominated_action_tests::sleep_forfeit_is_masked_as_risk_including_rest_sleep ... ok
+test shared_search::tests::sampled_unrevealed_benches_share_own_statistics ... ok
+test smmcts::dominated_action_tests::noop_mask_matches_engine_failures ... ok
+test smmcts::dominated_action_tests::switchable_foe_disarms_every_foe_state_rule ... ok
+test stall::tests::classifies_last_mon_one_sided_rest_and_builds_rank ... ok
+test smmcts::dominated_action_tests::noop_mask_covers_substitute_safeguard_and_mist ... ok
+test stall::tests::edge_rejects_identity_drift ... ok
+test stall::tests::edge_requires_componentwise_monotonicity_and_strict_rank_progress ... ok
+test damage_search::tests::probe_refinement_keeps_the_approximate_policy_when_exact_work_exhausts ... ok
+test smmcts::dominated_action_tests::quick_claw_voids_the_speed_proof ... ok
+test stall::tests::existing_leech_seed_assigns_healing_to_its_active_source ... ok
+test stall::tests::classifies_rest_vs_rest_and_leftovers_vs_rest ... ok
+test value::bayesian_tests::one_type_reduces_to_the_matrix_game ... ok
+test value::bayesian_tests::the_mixture_hedges_across_types ... ok
+test smmcts::dominated_action_tests::noop_mask_covers_type_and_status_immunities ... ok
+test stall::tests::rejects_nonquiescent_and_non_last_mon_states ... ok
+test stall::tests::two_sided_edge_allows_both_hp_to_rise_and_rank_decreases ... ok
+test stall::tests::two_sided_edge_rejects_pp_increase_and_same_turn ... ok
+test smmcts::dominated_action_tests::best_still_submits_the_masked_noop_when_it_is_the_only_option ... ok
+test stall::tests::two_sided_classifier_rejects_pp_and_slot_mutation_roots ... ok
+test stall::tests::rejects_mystery_berry_but_allows_sleep_talk ... ok
+test stall::tests::rejects_two_healers_and_nonhealer_healing_item ... ok
+test stall::tests::rejects_mutation_call_copy_and_hp_transfer_moves ... ok
+test smmcts::dominated_action_tests::best_never_picks_masked_noop ... ok
+
+test result: ok. 132 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/blind.rs (target/release/deps/blind-70b21ecd324e93f0)
+
+running 2 tests
+test blind_lifecycle_and_reset ... ok
+test no_psychic_tells_on_the_collision_pair ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/destiny_bond_wait.rs (target/release/deps/destiny_bond_wait-76443f367a48864a)
+
+running 3 tests
+test only_the_opposing_active_bond_relaxes_noop_exclusions ... ok
+test fixture_sets_are_legal_on_complete_team_sheets ... ok
+test final_mask_preserves_the_winning_wait_without_changing_search ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/import.rs (target/release/deps/import-3b9d93817bb12cbd)
+
+running 2 tests
+test imported_trapping_preserves_both_sides_switch_legality ... ok
+test corpus_replay_both_modes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.49s
+
+     Running tests/mask_sleep_talk.rs (target/release/deps/mask_sleep_talk-20d80cfa6550b5b2)
+
+running 4 tests
+test census_window_cannot_see_a_working_sleep_talk ... ok
+test wake_turn_sleep_talk_is_dead_and_deliberately_unmasked ... ok
+test no_shadowing_of_downstream_rules ... ok
+test census_engine_confirmed_comes_from_the_foes_cant_line ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/own_recovery_wait.rs (target/release/deps/own_recovery_wait-a6583d6471f67dd3)
+
+running 2 tests
+test only_a_living_injured_active_holder_relaxes_noops_and_never_forfeit_guards ... ok
+test recovery_wait_preserves_search_and_removes_retaliation_loss ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+     Running tests/perish_deadline.rs (target/release/deps/perish_deadline-a70626843eb11da5)
+
+running 4 tests
+test waiting_is_retained_only_at_the_opposing_actives_deadline ... ok
+test an_opponents_deadline_does_not_allow_self_ko_or_sleep_forfeits ... ok
+test waits_without_attacking_into_a_faster_destiny_bond ... ok
+test waits_without_attacking_into_an_active_destiny_bond ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/priority_heal.rs (target/release/deps/priority_heal-46ee9e7cf4dd4488)
+
+running 4 tests
+test copied_moves_and_unknown_learnsets_keep_recovery_available ... ok
+test full_hp_exclusion_survives_when_the_species_cannot_preempt ... ok
+test priority_damage_makes_full_hp_recovery_work_on_both_sides ... ok
+test hidden_moves_and_pp_do_not_change_exclusions ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/residual_wait.rs (target/release/deps/residual_wait-1cfb2df0bafbb006)
+
+running 2 tests
+test public_residual_effects_relax_only_noop_exclusions ... ok
+test preserves_a_certified_winning_wait_without_changing_search ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/sleep_clause.rs (target/release/deps/sleep_clause-ed97372806a272fe)
+
+running 3 tests
+test freeze_does_not_trigger_the_sleep_forfeit_mask ... ok
+test search_scores_an_unmasked_second_sleep_as_a_terminal_loss ... ok
+test final_choices_avoid_sleep_forfeits_for_both_sleep_sources ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+=== check ===
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+warning: function `argmax_visits` is never used
+    --> crates/bot/src/blind.rs:1172:4
+     |
+1172 | fn argmax_visits(visits: &[u32], dominated: Option<&[bool]>) -> usize {
+     |    ^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nc2000-bot` (lib) generated 1 warning
+    Checking nc2000-bot v0.1.0 (<repo>/crates/bot)
+warning: variable does not need to be mutable
+   --> crates/bot/examples/perish_counterfactual_4040.rs:205:17
+    |
+205 |             let mut agents: [&mut dyn Agent; 2] = [foe.as_mut(), me.as_mut()];
+    |                 ----^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nc2000-bot` (example "perish_counterfactual_4040") generated 1 warning (run `cargo fix --example "perish_counterfactual_4040" -p nc2000-bot` to apply 1 suggestion)
+warning: struct `Forced` is never constructed
+   --> crates/bot/examples/combo_common/mod.rs:267:12
+    |
+267 | pub struct Forced {
+    |            ^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nc2000-bot` (example "combo_census") generated 1 warning
+warning: struct `CountAlloc` is never constructed
+  --> crates/bot/examples/allocation_probe.rs:10:8
+   |
+10 | struct CountAlloc;
+   |        ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `record` is never used
+  --> crates/bot/examples/allocation_probe.rs:15:4
+   |
+15 | fn record(bytes: usize) {
+   |    ^^^^^^
+
+warning: `nc2000-bot` (example "allocation_probe") generated 2 warnings
+warning: function `hypothesis_key` is never used
+    --> crates/bot/examples/regret_mining.rs:1508:4
+     |
+1508 | fn hypothesis_key(row: &serde_json::Value, live: bool) -> String {
+     |    ^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `same_hypothesis_payload` is never used
+    --> crates/bot/examples/regret_mining.rs:1564:4
+     |
+1564 | fn same_hypothesis_payload(a: &serde_json::Value, b: &serde_json::Value, live: bool) -> bool {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `dedupe_hypotheses` is never used
+    --> crates/bot/examples/regret_mining.rs:1575:4
+     |
+1575 | fn dedupe_hypotheses(
+     |    ^^^^^^^^^^^^^^^^^
+
+warning: `nc2000-bot` (example "regret_mining") generated 3 warnings
+warning: value assigned to `how` is never read
+   --> crates/bot/examples/greedy_gap_adv.rs:480:23
+    |
+480 |         let mut how = "";
+    |                       ^^ this value is reassigned later and never used
+...
+485 |                         how = "win";
+    |                         ----------- `how` is overwritten here before the previous value is read
+    |
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nc2000-bot` (example "greedy_gap_adv") generated 1 warning
+warning: function `diff_stats` is never used
+   --> crates/bot/examples/exp_siv.rs:419:4
+    |
+419 | fn diff_stats(x: &[f64], y: &[f64]) -> (f64, f64, usize) {
+    |    ^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nc2000-bot` (example "exp_siv") generated 1 warning
+warning: `nc2000-bot` (lib test) generated 1 warning (1 duplicate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.32s
+
+=== reproduction ===
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+warning: function `argmax_visits` is never used
+    --> crates/bot/src/blind.rs:1172:4
+     |
+1172 | fn argmax_visits(visits: &[u32], dominated: Option<&[bool]>) -> usize {
+     |    ^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nc2000-bot` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.33s
+Priority-heal baseline and fix reproduce all 8 rows.
+
+=== wasm-priority-heal ===
+[{"side":0,"species":"Scizor","reply":"quickattack","healed":true,"scope":"zero-iteration mask integration probe; no strength claim"},{"side":0,"species":"Hitmonchan","reply":"machpunch","healed":true,"scope":"zero-iteration mask integration probe; no strength claim"},{"side":0,"species":"Arcanine","reply":"extremespeed","healed":true,"scope":"zero-iteration mask integration probe; no strength claim"},{"side":0,"species":"Snorlax","reply":"return","healed":false,"scope":"zero-iteration mask integration probe; no strength claim"},{"side":1,"species":"Scizor","reply":"quickattack","healed":true,"scope":"zero-iteration mask integration probe; no strength claim"},{"side":1,"species":"Hitmonchan","reply":"machpunch","healed":true,"scope":"zero-iteration mask integration probe; no strength claim"},{"side":1,"species":"Arcanine","reply":"extremespeed","healed":true,"scope":"zero-iteration mask integration probe; no strength claim"},{"side":1,"species":"Snorlax","reply":"return","healed":false,"scope":"zero-iteration mask integration probe; no strength claim"}]
+priority-heal: OK
+
+=== wasm-recovery ===
+[{"seed":94001,"choices":["move toxic","move thunderwave","move thunderwave","move thunderwave","move toxic","move return","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move bodyslam"],"outcome":"p1"},{"seed":94002,"choices":["move toxic","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move return"],"outcome":"p1"},{"seed":94003,"choices":["move toxic","move toxic","move thunderwave","move thunderwave","move thunderwave","move return","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move bodyslam"],"outcome":"p1"},{"seed":94004,"choices":["move toxic","move toxic","move thunderwave","move toxic","move thunderwave","move return","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move thunderwave","move bodyslam"],"outcome":"p1"}]
+own-recovery-wait: OK
+
+=== wasm-residual ===
+[{"seed":82001,"reply":"counter","best":"move thunderwave","outcome":"p1"},{"seed":82001,"reply":"mirrorcoat","best":"move thunderwave","outcome":"p1"},{"seed":82001,"reply":"safeguard","best":"move thunderwave","outcome":"p1"},{"seed":82001,"reply":"destinybond","best":"move thunderwave","outcome":"p1"},{"seed":82002,"reply":"counter","best":"move toxic","outcome":"p1"},{"seed":82002,"reply":"mirrorcoat","best":"move toxic","outcome":"p1"},{"seed":82002,"reply":"safeguard","best":"move toxic","outcome":"p1"},{"seed":82002,"reply":"destinybond","best":"move toxic","outcome":"p1"},{"seed":82003,"reply":"counter","best":"move toxic","outcome":"p1"},{"seed":82003,"reply":"mirrorcoat","best":"move toxic","outcome":"p1"},{"seed":82003,"reply":"safeguard","best":"move toxic","outcome":"p1"},{"seed":82003,"reply":"destinybond","best":"move toxic","outcome":"p1"},{"seed":82004,"reply":"counter","best":"move thunderwave","outcome":"p1"},{"seed":82004,"reply":"mirrorcoat","best":"move thunderwave","outcome":"p1"},{"seed":82004,"reply":"safeguard","best":"move thunderwave","outcome":"p1"},{"seed":82004,"reply":"destinybond","best":"move thunderwave","outcome":"p1"}]
+residual-wait: OK
+
+=== wasm-bond ===
+[{"plain":false,"seed":71001,"best":"move curse"},{"plain":false,"seed":71002,"best":"move curse"},{"plain":true,"seed":71001,"best":"move return"},{"plain":true,"seed":71002,"best":"move return"}]
+destiny-bond: OK
+
+=== wasm-smoke ===
+  full game: outcome p1 in 123 turns, 126 decisions, 1344 log lines
+  tables: resolved hc75-1st-show vs hc75-2nd-toriyama, mixed support 2, value 0.417
+  blind game: outcome p2 in 49 turns, 54 decisions, preview via baked table
+  blind fallback: belief fallback vs off-pool team, best "team 6, 5, 4"
+  open-sheet game: outcome p1 in 14 turns, 19 decisions, preview via signature-resolved table
+  open-sheet custom: pinned singleton, live preview "team 6, 5, 4"
+smoke: OK
