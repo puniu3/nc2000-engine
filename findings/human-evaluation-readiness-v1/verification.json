@@ -1,0 +1,10 @@
+{
+  "preview": "http://mini-usb.local:18080/nc2000-human-evaluation/",
+  "hub_link_verified": true,
+  "page_and_links_verified": 2,
+  "source_hashes_verified": true,
+  "artifact_sha256": {
+    "summary.json": "f1836c023913f89026bf027d9f0f8073e6bbb0381cf523f44e983028c2916750",
+    "index.html": "97d7a3a1c31eaf52ceea1d1008408b00a6f35fd03e75f2a370f55f3f329d6ffb"
+  }
+}

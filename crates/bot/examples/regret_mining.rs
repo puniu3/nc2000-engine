@@ -513,6 +513,7 @@ fn tags(b: &Battle, dex: &Dex, side: usize) -> Vec<String> {
 #[allow(dead_code)]
 struct LiveLogRow {
     version: u32,
+    provenance: Option<serde_json::Value>,
     #[serde(rename = "type")]
     kind: String,
     room: String,
@@ -2787,6 +2788,35 @@ mod live_tests {
             "embedded_community_rentals":"fnv1a64:3333333333333333",
             "embedded_learnsets":"fnv1a64:4444444444444444",
         })
+    }
+
+    #[test]
+    fn live_logs_accept_optional_provenance_without_relaxing_unknown_fields() {
+        let pool: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        )).unwrap();
+        let mut value = serde_json::json!({
+            "version":3,"type":"decision","room":"battle-test","battle":0,
+            "decision":1,"rqid":1,"side":0,"turn":1,"server":"ws://fixture.invalid/",
+            "format":"gen2nintendocup2000noohkostadium2strict","mode":"blind",
+            "driver":"search","searchC":0.4,"iterations":27000,"seed":1,
+            "teamLabel":"fixture","ownTeam":pool["teams"][0]["sets"],
+            "request":{"rqid":1,"side":{"id":"p1"}},"protocolReset":false,
+            "protocolDelta":["|turn|1"],"submitted":"move rest","rootPolicy":null,
+            "stateViewKind":"diagnostic-imputed","stateView":null
+        });
+        for version in [2,3] {
+            value["version"] = version.into();
+            let old: LiveLogRow = serde_json::from_value(value.clone()).unwrap();
+            validate_live_row("fixture",1,&old);
+            assert!(old.provenance.is_none());
+        }
+        value["provenance"] = serde_json::json!({"schema":"nc2000-client-provenance-v1","id":"fixture"});
+        let current: LiveLogRow = serde_json::from_value(value.clone()).unwrap();
+        validate_live_row("fixture",1,&current);
+        assert_eq!(current.provenance.unwrap()["id"], "fixture");
+        value["unrecognized"] = true.into();
+        assert!(serde_json::from_value::<LiveLogRow>(value).is_err());
     }
 
     #[test]

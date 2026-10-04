@@ -44,6 +44,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { provenance } = require('./ps-log-provenance');
 const WebSocket = require('ws');
 const { sim, FORMAT } = require('./ps');
 const { Teams } = sim;
@@ -102,7 +103,8 @@ if (args.help || args.h) {
   --decision-log F  append private (mode 0600) JSONL for regret replay:
                     request, incremental visible protocol, exact own team,
                     submitted action,
-                    diagnostic state, root policy/config
+                    diagnostic state, root policy/config, build hashes;
+                    completed matches go to F.matches.jsonl
   --quiet           per-game lines only`);
 	process.exit(0);
 }
@@ -129,7 +131,8 @@ for (const retired of ['mode', 'opp-team-file', 'no-tables']) {
 		process.exit(2);
 	}
 }
-const PROFILE = require('../data/search-profiles.json').blind;
+const profileText = fs.readFileSync(path.join(REPO, 'data/search-profiles.json'), 'utf8');
+const PROFILE = JSON.parse(profileText).blind;
 const ITERS = parseInt(args.iters || String(PROFILE.iterations), 10);
 const SEED = parseInt(args.seed || '1', 10);
 const RANDOM = !!args.random;
@@ -137,15 +140,16 @@ const TIMER = !!args.timer;
 const QUIET = !!args.quiet;
 const DECISION_LOG = args['decision-log'] && args['decision-log'] !== true ?
 	path.resolve(String(args['decision-log'])) : '';
+const MATCH_LOG = DECISION_LOG ? `${DECISION_LOG}.matches.jsonl` : '';
 const BELIEF_PRIOR_FILE = args['belief-prior'] && args['belief-prior'] !== true ?
 	path.resolve(String(args['belief-prior'])) : '';
 const DEBOUNCE_MS = 100; // network analogue of the M15a stream-quiescence wait
 const RECONNECT_MS = 500;
 
-if (DECISION_LOG) {
-	fs.mkdirSync(path.dirname(DECISION_LOG), { recursive: true });
-	if (!fs.existsSync(DECISION_LOG)) fs.closeSync(fs.openSync(DECISION_LOG, 'a', 0o600));
-	fs.chmodSync(DECISION_LOG, 0o600);
+for (const file of [DECISION_LOG, MATCH_LOG].filter(Boolean)) {
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	if (!fs.existsSync(file)) fs.closeSync(fs.openSync(file, 'a', 0o600));
+	fs.chmodSync(file, 0o600);
 }
 
 function appendDecision(row) {
@@ -177,7 +181,8 @@ const wsUrl = (() => {
 
 // ------------------------------------------------------------------ teams
 // Own team and opponent belief are separate files (docs/TEAM-POOL-REBUILD-PLAN.md).
-const ownPool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/team-pool-v2/team-pool.json'), 'utf8'));
+const ownPoolText = fs.readFileSync(path.join(REPO, 'data/team-pool-v2/team-pool.json'), 'utf8');
+const ownPool = JSON.parse(ownPoolText);
 const poolJson = fs.readFileSync(path.join(REPO, 'data/belief-pool-v3/belief-pool.json'), 'utf8');
 
 let rngState = (SEED ^ 0x9e3779b9) >>> 0;
@@ -264,6 +269,18 @@ if (BELIEF_PRIOR_FILE) {
 	reportPrior(probe.setBeliefPrior(priorText), m => console.log(`[${NAME}] ${m}`));
 	if (typeof probe.free === 'function') probe.free();
 }
+
+const logProvenance = DECISION_LOG ? provenance({
+	client: fs.readFileSync(__filename),
+	provenance: fs.readFileSync(path.join(__dirname, 'ps-log-provenance.js')),
+	wasm: RANDOM ? null : fs.readFileSync(path.join(REPO, 'crates/wasm/pkg-node/nc2000_wasm_bg.wasm')),
+	wasmGlue: RANDOM ? null : fs.readFileSync(path.join(REPO, 'crates/wasm/pkg-node/nc2000_wasm.js')),
+	beliefPool: poolJson,
+	ownPool: ownPoolText,
+	searchProfiles: profileText,
+	beliefPrior: BELIEF_PRIOR_FILE ? priorText : null,
+}, { node: process.version, driver: RANDOM ? 'random' : 'search', mode: 'blind',
+	format: FORMATID, searchC: PROFILE.c, iterations: RANDOM ? 0 : ITERS, seed: SEED }) : null;
 
 // ------------------------------------------------------------- drop specs
 // one entry per battle index; `null` = no drop for that battle
@@ -612,6 +629,7 @@ class BattleDriver {
 		appendDecision({
 			version: 3,
 			type: 'decision',
+			provenance: logProvenance,
 			room: this.room,
 			battle: this.battleIdx,
 			decision: this.decisions,
@@ -663,10 +681,19 @@ class BattleDriver {
 
 	finalize() {
 		if (this.ended) return;
+		if (!['W', 'L', 'T'].includes(this.result)) throw new Error('cannot finalize without a terminal result');
 		this.ended = true;
+		if (MATCH_LOG) fs.appendFileSync(MATCH_LOG, `${JSON.stringify({
+			version: 1, type: 'match', room: this.room, battle: this.battleIdx,
+			server: safeServer(SERVER_RAW), recordedAt: new Date().toISOString(),
+			side: this.side, result: this.result, terminal: true, turns: this.turn,
+			decisions: this.decisions, provenance: logProvenance,
+			ownTeam: this.client.currentTeam.sets,
+			protocolReset: this.protocolReset, protocolTail: this.visibleLines.slice(this.loggedLineCount),
+		})}\n`, { mode: 0o600 });
 		if (this.actTimer) clearTimeout(this.actTimer);
 		stats.games++;
-		stats[this.result || 'T']++;
+		stats[this.result]++;
 		stats.turns += this.turn;
 		console.log(
 			`game ${stats.games}/${GAMES}: ${this.result} in ${this.turn} turns, ` +
