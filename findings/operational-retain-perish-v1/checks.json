@@ -1,0 +1,26 @@
+{
+  "implementation_revision": "1161f7d",
+  "tests": {
+    "bot_unit": 138,
+    "belief_integration": 6,
+    "blind_integration": 2,
+    "failed": 0
+  },
+  "workspace_all_targets_check": "passed",
+  "root_probe_searches": 182,
+  "original_roots_reproduced": 11,
+  "root_intervention_other_state_fields": "identical after replacing only moves with baseline",
+  "history": {
+    "positions": 62,
+    "samples_per_position": 64,
+    "changed_positions": 16,
+    "baseline_kits_match_original": true,
+    "rng_consumption_identical": true,
+    "non_move_state_fields_identical": true,
+    "source": "tools/operational-combo-audit output with retained position specs",
+    "command": "NC2000_REPO_ROOT=\"$PWD\" target/release/examples/operational_retain_perish_history tmp/operational-audit/search-model.jsonl findings/operational-retain-perish-v1/history.jsonl",
+    "recorded_baseline_sha256": "2145c8c141cc9da316f0f9380e3dde5c1feaaede5c346ee2790c8cfb74e44caf"
+  },
+  "default_policy": "Layered (unchanged)",
+  "deployed": false
+}
