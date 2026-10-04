@@ -4,6 +4,8 @@ cd "$(dirname "$0")/.."
 export NC2000_REPO_ROOT="$PWD"
 mkdir -p tmp/mask-reply-audit
 cargo build --release -p nc2000-bot --example own_recovery_audit
+target/release/examples/own_recovery_audit --baseline > tmp/mask-reply-audit/baseline.jsonl
+cmp findings/own-recovery-wait-v1/measurements.jsonl tmp/mask-reply-audit/baseline.jsonl
 target/release/examples/own_recovery_audit > tmp/mask-reply-audit/reproduced.jsonl
-cmp findings/own-recovery-wait-v1/measurements.jsonl tmp/mask-reply-audit/reproduced.jsonl
-printf 'Own-recovery fixture, chance outcomes, continuations, controls and 24 decisions reproduce exactly.\n'
+cmp findings/own-recovery-wait-v1/fixed-measurements.jsonl tmp/mask-reply-audit/reproduced.jsonl
+printf 'Own-recovery baseline and fix reproduce exactly, including all 24 decisions.\n'

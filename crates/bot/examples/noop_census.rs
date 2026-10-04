@@ -298,6 +298,7 @@ fn main() {
         match norm.as_str() {
             "destiny_bond_wait" => rules.destiny_bond_wait = on,
             "residual_damage_wait" => rules.residual_damage_wait = on,
+            "own_recovery_wait" => rules.own_recovery_wait = on,
             "sleep_talk_awake" => rules.sleep_talk_awake = on,
             "immunity_ignores_switch_read" => rules.immunity_ignores_switch_read = on,
             "immunity_all_switchins" => rules.immunity_all_switchins = on,

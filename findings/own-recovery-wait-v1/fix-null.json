@@ -1,0 +1,1 @@
+{"null_control":true,"iterations":3000,"teams":24,"games":16,"score":0.5,"ci95_halfwidth":0.0,"pair_scores":[0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5],"wins":8,"losses":8,"ties":0,"caps":0,"seconds":9.133073583,"a":{"decisions":352,"mask_exposed":13,"newly_allowed_chosen":0},"b":{"decisions":352,"mask_exposed":13,"newly_allowed_chosen":0}}

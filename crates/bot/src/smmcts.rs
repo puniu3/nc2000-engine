@@ -568,6 +568,7 @@ pub(crate) fn certain_noop(
 pub struct MaskRules {
     pub destiny_bond_wait: bool,
     pub residual_damage_wait: bool,
+    pub own_recovery_wait: bool,
     /// Sleep Talk / Snore selected by an AWAKE, strictly faster user
     /// (`moveexec.rs:521`). `false` = the pre-2026-08-19 mask.
     pub sleep_talk_awake: bool,
@@ -605,6 +606,7 @@ impl Default for MaskRules {
         MaskRules {
             destiny_bond_wait: true,
             residual_damage_wait: true,
+            own_recovery_wait: true,
             sleep_talk_awake: true,
             immunity_ignores_switch_read: false,
             immunity_all_switchins: false,
@@ -669,6 +671,15 @@ pub(crate) fn dominated_reason(
         return None;
     }
     if rules.residual_damage_wait && foe_has_residual_damage(b, dex, side) {
+        return None;
+    }
+    if rules.own_recovery_wait
+        && b.active_id(side).is_some_and(|id| {
+            let me = b.poke(id);
+            !me.fainted && me.hp > 0 && me.hp < me.maxhp
+                && me.item.is_some() && me.item == dex.items.id("leftovers")
+        })
+    {
         return None;
     }
     noop_reason(b, dex, side, c, rules)

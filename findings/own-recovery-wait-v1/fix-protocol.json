@@ -1,0 +1,17 @@
+{
+  "schema": "nc2000-own-recovery-fix-protocol-v1",
+  "baseline_revision": "d455c54",
+  "candidate": "Preserve no-op actions while the living active holds Leftovers and HP is below max HP. Keep self-KO and sleep-forfeit exclusions. No search-policy or evaluator change.",
+  "before_results": true,
+  "checks": [
+    "Archived baseline output reproduces byte for byte with the candidate disabled.",
+    "All 24 discovery decisions choose a wait after the patch; action visits and means are identical across the ablation.",
+    "Controls: both sides, full HP, no item, other item, benched holder, fainted holder, and self-KO/sleep-forfeit exclusions.",
+    "32 paired continuations from the exposed position, 27000 iterations, prior v3, fixed Counter opponent, seeds 95001..95032, 100-turn cap. Compare full bot continuations, not a hand-coded recovery policy.",
+    "Identical-arm duel null control: 16 games at 3000 iterations, seed 96001, current 24-party catalog and prior v3.",
+    "64 side-swapped games at 27000 iterations, seed 97001, current 24-party catalog drawn uniformly, prior v3, CRN seeds, 500-turn cap. Record relaxation exposure and newly allowed choices. Diagnostic regression screen, not powered proof of overall strength.",
+    "Focused native tests, workspace all-targets check, rebuilt Wasm bridge test and existing waiting/sleep/self-KO regressions."
+  ],
+  "decision": "Require baseline identity, discovery corrections, safety controls, strictly positive paired targeted score improvement with its descriptive 95% interval above zero, and no clear broad regression (broad paired 95% interval entirely below 0.5). If broad exposure is zero, report it as uninformative. No extension or tuning based on scores.",
+  "limitations": "One constructed position is the targeted unit. Seeds are repeated continuations, not independent position prevalence. The broad uniform-catalog screen is not the production weighted matchup distribution."
+}

@@ -1,0 +1,98 @@
+[
+  {
+    "seed": 82001,
+    "reply": "counter",
+    "best": "move thunderwave",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82001,
+    "reply": "mirrorcoat",
+    "best": "move thunderwave",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82001,
+    "reply": "safeguard",
+    "best": "move thunderwave",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82001,
+    "reply": "destinybond",
+    "best": "move thunderwave",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82002,
+    "reply": "counter",
+    "best": "move toxic",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82002,
+    "reply": "mirrorcoat",
+    "best": "move toxic",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82002,
+    "reply": "safeguard",
+    "best": "move toxic",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82002,
+    "reply": "destinybond",
+    "best": "move toxic",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82003,
+    "reply": "counter",
+    "best": "move toxic",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82003,
+    "reply": "mirrorcoat",
+    "best": "move toxic",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82003,
+    "reply": "safeguard",
+    "best": "move toxic",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82003,
+    "reply": "destinybond",
+    "best": "move toxic",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82004,
+    "reply": "counter",
+    "best": "move thunderwave",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82004,
+    "reply": "mirrorcoat",
+    "best": "move thunderwave",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82004,
+    "reply": "safeguard",
+    "best": "move thunderwave",
+    "outcome": "p1"
+  },
+  {
+    "seed": 82004,
+    "reply": "destinybond",
+    "best": "move thunderwave",
+    "outcome": "p1"
+  }
+]
