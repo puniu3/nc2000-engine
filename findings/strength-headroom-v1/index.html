@@ -1,0 +1,148 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NC2000 — strength headroom</title>
+<style>body{font:18px/1.6 system-ui,sans-serif;background:#f4f0e6;color:#28271f;max-width:940px;margin:32px auto;padding:0 20px}h1,h2{line-height:1.2}h2{margin-top:2em}a{color:#684928}table{border-collapse:collapse;font-size:15px;width:100%;font-variant-numeric:tabular-nums}th,td{padding:9px;text-align:left;border-bottom:1px solid #c7c2b6}.table{overflow-x:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;padding:16px;background:#e7e1d4}strong{color:#3b4931}.lead{font-size:22px}.note{color:#635e51}</style>
+<h1>There is still room to improve</h1><p class="lead">The current bot can search out a certain win, then discard it at the final action filter. This is a proven local defect. Its effect on average playing strength is not yet measured.</p>
+<h2>The counterexample</h2><p>Turn 8: Jolteon has 9/171 HP. Wobbuffet has 71/296 HP, Leftovers, and escalating poison. Its next poison tick deals 108 HP. Jolteon is faster, and neither side has a bench.</p>
+<p>Using Toxic or Thunder Wave fails to add another status, but safely waits for poison to win. Return risks Counter; Thunder Shock risks Mirror Coat. The opponent cannot save itself with Safeguard or last-mon Destiny Bond.</p>
+<p>This is an adversarial, reduced one-mon-per-side endgame built by seven legal engine turns. No HP, status, PP or clock was injected into the proof position. It is not a recorded ladder game or a six-mon preview fixture. The construction log is below.</p>
+<h2>Exhaustive terminal outcomes</h2><p>All chance outcomes of all 16 joint actions end the game within this turn. The table gives Jolteon’s win probability, not an evaluation score or a sampled win rate.</p><div class="table"><table><tr><th>Jolteon</th><th>Counter</th><th>Mirror Coat</th><th>Safeguard</th><th>Destiny Bond</th><th>Fixed 50/50 Counter–Mirror Coat</th></tr><tr><th>return</th><td>6.250%</td><td>100.000%</td><td>100.000%</td><td>100.000%</td><td>53.125%</td></tr><tr><th>thundershock</th><td>100.000%</td><td>3.686%</td><td>100.000%</td><td>100.000%</td><td>51.843%</td></tr><tr><th>toxic</th><td>100.000%</td><td>100.000%</td><td>100.000%</td><td>100.000%</td><td>100.000%</td></tr><tr><th>thunderwave</th><td>100.000%</td><td>100.000%</td><td>100.000%</td><td>100.000%</td><td>100.000%</td></tr></table></div>
+<p>The last column uses an opponent who chooses its reply independently, before seeing Jolteon’s move. It does not grant the opponent knowledge of the current action. Every mixture restricted to attacks scores at most 53.125% against this opponent. Waiting scores 100%.</p>
+<h2>The search already knows</h2><p>At the live budget of 27,000 iterations and c = 0.4, more than 99.8% of visits go to the two waiting moves, both with search mean 1.0. The action filter labels both “the target already carries a major status” and excludes them. All 24 searches select an attack.</p>
+<div class="table"><table><tr><th>Input path</th><th>Seeds</th><th>Current expected score against fixed reply mix</th><th>Same visits, no exclusions</th></tr><tr><td>pinned</td><td>8</td><td>52.48%</td><td>100%</td></tr><tr><td>blind_v3</td><td>8</td><td>52.32%</td><td>100%</td></tr><tr><td>public_protocol</td><td>8</td><td>52.32%</td><td>100%</td></tr></table></div>
+<p>The public-protocol test feeds only Jolteon’s player stream, its own set, and its request into ProtocolAgent with the shipped v3 prior. It repeats the defect on eight fresh seeds. The other sixteen searches cover pinned and blind direct search. These are repetitions of one position, not 24 independent games.</p>
+<p>Simply reading the highest visit count before this filter chooses a proven winning wait in every run, at zero extra search cost. That is a causal ablation for this position, not a validated recommendation to disable every mask globally.</p>
+<h2>Why the existing gate misses it</h2><p><code>noop_census</code> checks whether a move itself succeeds. Toxic really does fail here, so that gate would confirm the no-op classification. What is false is the inference from “no direct effect” to “safe to remove from the policy.” Turn timing and the opponent’s response have value.</p>
+<p>The recent Destiny Bond and Perish Song exceptions already protect two forms of waiting. Poison plus retaliation exposes the same underlying assumption outside those exceptions.</p>
+<h2>How large is the opportunity?</h2><p>The archive contains 570 games: none with Wobbuffet, eight with Counter, seven with Mirror Coat, and eight with a retaliation move plus toxic status somewhere in the same game. These are exposure counts, not affected-position counts. This example refutes a blanket optimality claim; it does not establish a large ladder win-rate gain.</p>
+<p>The useful next experiment is to retain strategically useful waiting actions, starting with this exact failure, then measure affected decisions across broader residual-damage and retaliation positions. Require terminal-outcome checks, unchanged self-KO/sleep-forfeit protection, and independent blind match results before promoting a general rule. Do not infer strength from a zero no-op disagreement count.</p>
+<h2>What the saturation evidence actually says</h2><div class="table"><table><tr><th>Experiment</th><th>Reported score</th><th>Conclusion</th></tr><tr><td>Learned value at matched time, 400 games</td><td>49.5% ± 4.2%</td><td>No demonstrated gain for that candidate</td></tr><tr><td>Endgame blind holdout, 18 source-game clusters</td><td>50.23%, 95% interval 48.42–52.04%</td><td>No demonstrated gain for that integration</td></tr><tr><td>Endgame Web confirmation, 1,200 games</td><td>45.75%, 95% interval 43.10–48.40%</td><td>Candidate rejected; observed wait and memory gates also failed</td></tr></table></div>
+<p>These reject particular approaches under their test conditions. None bounds the benefit of every possible policy change. The new counterexample shows a defect that persists regardless of search budget.</p>
+<h2>Checks and reproduction</h2><p>Removing poison in a control removes the immediate winning certificate: waiting becomes unresolved, not falsely labelled losing. Reducing Wobbuffet to 1 HP makes all attacks win too, and the waiting advantage vanishes. These controls change one field deliberately; the main proof is reached only through moves.</p>
+<p>Production code and deployment are unchanged. The new research harness, complete chance matrix, search records, source hashes, and prior experiment references are archived here. Reproduce from the repository with <code>tools/strength-audit</code>; the script checks exact output equality.</p>
+<p><a href="summary.json">Summary and provenance</a> · <a href="measurements.jsonl">Raw measurements</a></p>
+<details><summary>Seven-turn construction log</summary><pre>|gametype|singles
+|player|p1|P1||
+|player|p2|P2||
+|gen|2
+|tier|[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict
+|rule|Species Clause: Limit one of each Pokémon
+|rule|Item Clause: Limit 1 of each item
+|rule|Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle
+|rule|Freeze Clause Mod: Limit one foe frozen
+|rule|OHKO Clause: OHKO moves are banned
+|rule|HP Percentage Mod: HP is shown in percentages
+|clearpoke
+|poke|p1|Jolteon, L50, M|
+|poke|p2|Wobbuffet, L50, F|item
+|teampreview|3
+|
+|teamsize|p1|1
+|teamsize|p2|1
+|start
+|split|p1
+|switch|p1a: Jolteon|Jolteon, L50, M|171/171
+|switch|p1a: Jolteon|Jolteon, L50, M|100/100
+|split|p2
+|switch|p2a: Wobbuffet|Wobbuffet, L50, F|296/296
+|switch|p2a: Wobbuffet|Wobbuffet, L50, F|100/100
+|turn|1
+|
+|move|p1a: Jolteon|Return|p2a: Wobbuffet
+|split|p2
+|-damage|p2a: Wobbuffet|249/296
+|-damage|p2a: Wobbuffet|85/100
+|move|p2a: Wobbuffet|Counter|p1a: Jolteon
+|split|p1
+|-damage|p1a: Jolteon|77/171
+|-damage|p1a: Jolteon|46/100
+|
+|split|p2
+|-heal|p2a: Wobbuffet|267/296|[from] item: Leftovers
+|-heal|p2a: Wobbuffet|91/100|[from] item: Leftovers
+|upkeep
+|turn|2
+|
+|move|p1a: Jolteon|Thunder Shock|p2a: Wobbuffet
+|split|p2
+|-damage|p2a: Wobbuffet|233/296
+|-damage|p2a: Wobbuffet|79/100
+|move|p2a: Wobbuffet|Mirror Coat|p1a: Jolteon
+|split|p1
+|-damage|p1a: Jolteon|9/171
+|-damage|p1a: Jolteon|6/100
+|
+|split|p2
+|-heal|p2a: Wobbuffet|251/296|[from] item: Leftovers
+|-heal|p2a: Wobbuffet|85/100|[from] item: Leftovers
+|upkeep
+|turn|3
+|
+|move|p1a: Jolteon|Toxic|p2a: Wobbuffet
+|-status|p2a: Wobbuffet|tox
+|move|p2a: Wobbuffet|Mirror Coat|p1a: Jolteon
+|-fail|p1a: Jolteon
+|split|p2
+|-damage|p2a: Wobbuffet|233/296 tox|[from] psn
+|-damage|p2a: Wobbuffet|79/100 tox|[from] psn
+|
+|split|p2
+|-heal|p2a: Wobbuffet|251/296 tox|[from] item: Leftovers
+|-heal|p2a: Wobbuffet|85/100 tox|[from] item: Leftovers
+|upkeep
+|turn|4
+|
+|move|p1a: Jolteon|Thunder Wave||[still]
+|-fail|p1a: Jolteon
+|move|p2a: Wobbuffet|Mirror Coat|p1a: Jolteon
+|-fail|p1a: Jolteon
+|split|p2
+|-damage|p2a: Wobbuffet|215/296 tox|[from] psn
+|-damage|p2a: Wobbuffet|73/100 tox|[from] psn
+|
+|split|p2
+|-heal|p2a: Wobbuffet|233/296 tox|[from] item: Leftovers
+|-heal|p2a: Wobbuffet|79/100 tox|[from] item: Leftovers
+|upkeep
+|turn|5
+|
+|move|p1a: Jolteon|Thunder Wave||[still]
+|-fail|p1a: Jolteon
+|move|p2a: Wobbuffet|Mirror Coat|p1a: Jolteon
+|-fail|p1a: Jolteon
+|split|p2
+|-damage|p2a: Wobbuffet|179/296 tox|[from] psn
+|-damage|p2a: Wobbuffet|61/100 tox|[from] psn
+|
+|split|p2
+|-heal|p2a: Wobbuffet|197/296 tox|[from] item: Leftovers
+|-heal|p2a: Wobbuffet|67/100 tox|[from] item: Leftovers
+|upkeep
+|turn|6
+|
+|move|p1a: Jolteon|Thunder Wave||[still]
+|-fail|p1a: Jolteon
+|move|p2a: Wobbuffet|Mirror Coat|p1a: Jolteon
+|-fail|p1a: Jolteon
+|split|p2
+|-damage|p2a: Wobbuffet|125/296 tox|[from] psn
+|-damage|p2a: Wobbuffet|43/100 tox|[from] psn
+|
+|split|p2
+|-heal|p2a: Wobbuffet|143/296 tox|[from] item: Leftovers
+|-heal|p2a: Wobbuffet|49/100 tox|[from] item: Leftovers
+|upkeep
+|turn|7
+|
+|move|p1a: Jolteon|Thunder Wave||[still]
+|-fail|p1a: Jolteon
+|move|p2a: Wobbuffet|Mirror Coat|p1a: Jolteon
+|-fail|p1a: Jolteon
+|split|p2
+|-damage|p2a: Wobbuffet|53/296 tox|[from] psn
+|-damage|p2a: Wobbuffet|18/100 tox|[from] psn
+|
+|split|p2
+|-heal|p2a: Wobbuffet|71/296 tox|[from] item: Leftovers
+|-heal|p2a: Wobbuffet|24/100 tox|[from] item: Leftovers
+|upkeep
+|turn|8</pre></details>
+</html>

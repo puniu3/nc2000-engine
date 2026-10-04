@@ -1,0 +1,130 @@
+{
+  "schema": "nc2000-strength-headroom-v1",
+  "source_revision": "3145d7eae574885d2e4d79669e95398e767f2d44",
+  "production_changed": false,
+  "conclusion": "A reachable reduced endgame disproves optimality of the current action filter. General average strength headroom remains unquantified.",
+  "config": {
+    "iterations": 27000,
+    "c": 0.4,
+    "search_seeds": [
+      81001,
+      81002,
+      81003,
+      81004,
+      81005,
+      81006,
+      81007,
+      81008
+    ],
+    "protocol_seeds": [
+      82001,
+      82002,
+      82003,
+      82004,
+      82005,
+      82006,
+      82007,
+      82008
+    ],
+    "selection_rule": "Ucb"
+  },
+  "proof": {
+    "hp": [
+      9,
+      71
+    ],
+    "all_16_cells_terminal": true,
+    "wait_minimum_win_probability": 1,
+    "attack_score_vs_equal_counter_mirror_mix": {
+      "move return": 0.53125,
+      "move thundershock": 0.5184294871723978,
+      "move toxic": 1.0,
+      "move thunderwave": 1.0
+    },
+    "exact_engine_runs": 244,
+    "construction": "One-mon-per-side reduced endgame. Seven legal engine turns, no direct state mutation. Not a recorded ladder match or a six-mon team-preview fixture.",
+    "discovery": "Hand-designed adversarial case. Initial no-item variant failed to establish a gap; adding Leftovers yields this fixed seed-1 fixture. Search seeds assess reproduction, not independent game prevalence."
+  },
+  "cohorts": {
+    "pinned": {
+      "n": 8,
+      "current_expected_score_vs_fixed_reply_mix": 0.5248397435861989,
+      "unfiltered_expected_score": 1.0,
+      "wait_visit_fraction_range": [
+        0.9980370370370371,
+        0.9995925925925926
+      ]
+    },
+    "blind_v3": {
+      "n": 8,
+      "current_expected_score_vs_fixed_reply_mix": 0.5232371794827486,
+      "unfiltered_expected_score": 1.0,
+      "wait_visit_fraction_range": [
+        0.9987037037037036,
+        0.9997777777777778
+      ]
+    },
+    "public_protocol": {
+      "n": 8,
+      "current_expected_score_vs_fixed_reply_mix": 0.5232371794827486,
+      "unfiltered_expected_score": 1.0,
+      "wait_visit_fraction_range": [
+        0.9991481481481481,
+        0.9996666666666667
+      ]
+    }
+  },
+  "corpus_exposure": {
+    "games": 570,
+    "wobbuffet_games": 0,
+    "counter_games": 8,
+    "mirror_coat_games": 7,
+    "retaliation_and_toxic_same_game": 8,
+    "interpretation": "Text exposure counts, not counts of affected positions or estimated incidence of the defect."
+  },
+  "controls": {
+    "no_poison": "Waiting has zero immediate win probability and all successor mass remains unresolved; this is not classified as a loss.",
+    "attack_also_kills": "With opponent HP set to 1, every action wins with probability 1; no waiting advantage.",
+    "scope": "Controls deliberately mutate one field; the main proof uses only legal moves."
+  },
+  "prior_evidence": {
+    "learned_value_matched_time": {
+      "score": 0.495,
+      "reported_95_halfwidth": 0.042,
+      "games": 400,
+      "source": "docs/GAME-SOLVING-PLAN.md"
+    },
+    "endgame_blind_holdout": {
+      "score": 0.5023148148148148,
+      "ci95": [
+        0.484234323885825,
+        0.5203953057438045
+      ],
+      "source_games": 18,
+      "source": "findings/endgame-integration-v1/holdout-evaluation.json"
+    },
+    "endgame_web_confirmation": {
+      "score": 0.4575,
+      "ci95": [
+        0.4309534203507283,
+        0.4840465796492717
+      ],
+      "games": 1200,
+      "source": "findings/endgame-integration-v1/web-evaluation.json",
+      "limitation": "Candidate failed matched observed wait and memory gates too; not an isolated equal-time solver effect."
+    }
+  },
+  "sha256": {
+    "crates/bot/src/smmcts.rs": "db9b765e856ee60d6f8d61a9f432afbaef4863e8e58fe2cae8d3e30c52329fb3",
+    "crates/bot/src/blind.rs": "e2bb7ea52041be9edce0489b7b3198b87b6990f2e4b7172f1d1493e0e22a796d",
+    "crates/bot/src/import.rs": "accfffb779cb1164fe7ee03976d80fd1b633fbd11646f63ceb984bf0279b5779",
+    "crates/bot/examples/poison_wait_audit.rs": "a1f5a0075d7e71467783b5e42b15f8b3f5eb29ae6de18b03ed284ca19c66886d",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "findings/endgame-integration-v1/web-evaluation.json": "e3fb20f3f33587d77919c3543ec431b9f82073b4f5ec6194fceaa39afa556cca",
+    "findings/endgame-integration-v1/holdout-evaluation.json": "81d19e86636ab257a08338400d6fa413314f521f7ab90765e5065f1e84168c8c",
+    "docs/GAME-SOLVING-PLAN.md": "f93a600430aded50d97488c812f56811726f689bc933c4e5b25221cffe074bd4"
+  },
+  "measurements_sha256": "c24b1e1ff09b5bec3038f653658d565050482db4a4b49a3c0d7c25e760bac354",
+  "corpus_sha256": "523c65cbc4d9439c5aab1f17c664d881a8d67c307bef27de7fd7a46f2cd86bf1"
+}
