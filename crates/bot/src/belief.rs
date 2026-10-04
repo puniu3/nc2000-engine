@@ -31,8 +31,8 @@
 //! a filter dead-end mid-game degrades, never panics.
 //!
 //! **M18 — community marginal prior** (`set_prior`, opt-in). With a
-//! `prior::BeliefPrior` installed, the fallback's fixed nearest-set filler is
-//! replaced by a *weighted draw without replacement* over the species'
+//! `prior::BeliefPrior` installed, slots without a loadout draw use a
+//! *weighted draw without replacement* over the species'
 //! per-move carry-marginals, redrawn on `determinize`'s per-iteration rng —
 //! so ISMCTS averages over the belief instead of over-committing to one MAP
 //! set. Revealed moves still lead and are never resampled, legality is still
@@ -193,15 +193,13 @@ struct Candidate {
     refs: Option<Vec<Pokemon>>,
 }
 
-/// Hidden-set synthesis policy used after every meta-pool candidate has
-/// been rejected. `Layered` is the shipped policy. `LegacyMetaOnly` exists
-/// only as an evaluation control: it reproduces the old revealed -> pool ->
-/// empty-set/implicit-Struggle path without changing the production default.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FallbackPolicy {
     LegacyMetaOnly,
-    #[default]
     Layered,
+    RetainPerish,
+    #[default]
+    EarlyPerish,
 }
 
 impl FallbackPolicy {
@@ -209,6 +207,8 @@ impl FallbackPolicy {
         match self {
             Self::LegacyMetaOnly => "legacy-meta-only-v1",
             Self::Layered => "layered-meta-rentals-learnset-v1",
+            Self::RetainPerish => "retain-perish-v1",
+            Self::EarlyPerish => "early-perish-v1",
         }
     }
 }
@@ -291,6 +291,27 @@ impl MoveDraw {
     }
 }
 
+struct LoadoutDraw {
+    entries: Vec<(Pokemon, f64)>,
+    total: f64,
+}
+
+impl LoadoutDraw {
+    fn draw(&self, rng: &mut SplitMix64) -> &Pokemon {
+        if self.entries.len() == 1 {
+            return &self.entries[0].0;
+        }
+        let mut u = rng.next_f64() * self.total;
+        for (mon, weight) in &self.entries {
+            u -= weight;
+            if u < 0.0 {
+                return mon;
+            }
+        }
+        &self.entries.last().unwrap().0
+    }
+}
+
 pub struct Belief {
     cands: Vec<Candidate>,
     /// Pool indices of the candidates consistent with all observations so
@@ -313,11 +334,8 @@ pub struct Belief {
     /// M18: the community belief prior, when the owner loaded one.
     prior: Option<Arc<BeliefPrior>>,
     pick_draws: Option<(u64, Vec<Option<PickDistribution>>)>,
-    /// M18: per-fallback-slot draw plans, rebuilt alongside `fallback`.
-    /// `None` whenever no prior governs any slot — which is the shipped
-    /// default and keeps `determinize` bit-identical to pre-M18, rng draws
-    /// included.
     draws: Option<Vec<Option<MoveDraw>>>,
+    loadout_draws: Option<Vec<Option<LoadoutDraw>>>,
     synced: Option<u64>,
 }
 
@@ -325,7 +343,7 @@ impl Belief {
     /// Build the candidate set and apply the preview filter. Call at team
     /// preview, right after `Observer::new`.
     pub fn new(dex: &Dex, pool: &MetaPool, obs: &Observer) -> Belief {
-        Self::with_fallback_policy(dex, pool, obs, FallbackPolicy::Layered)
+        Self::with_fallback_policy(dex, pool, obs, FallbackPolicy::default())
     }
 
     /// Evaluation surface for comparing fallback synthesis policies. Live
@@ -359,6 +377,7 @@ impl Belief {
             prior: None,
             pick_draws: None,
             draws: None,
+            loadout_draws: None,
             synced: None,
         };
         b.refilter(dex, obs);
@@ -426,6 +445,7 @@ impl Belief {
             prior: None,
             pick_draws: None,
             draws: None,
+            loadout_draws: None,
             synced: Some(obs.revision()),
         })
     }
@@ -454,6 +474,7 @@ impl Belief {
             prior: None,
             pick_draws: None,
             draws: None,
+            loadout_draws: None,
             synced: Some(obs.revision()),
         }
     }
@@ -717,12 +738,7 @@ impl Belief {
         pick: Option<usize>,
         rng: &mut SplitMix64,
     ) {
-        // M18: with a prior installed, the fallback roster's *unrevealed*
-        // slots are resampled per determinization instead of being the one
-        // fixed nearest-set filler. `None` on every other path — including
-        // every pinned/open-sheet call — and `None` consumes no rng, so the
-        // no-prior default stays bit-identical.
-        let sampled = self.sample_fallback_refs(pick, rng);
+        let sampled = self.sample_fallback_refs(pick, rng, out, obs.opp());
         let refs: &[Pokemon] = match (sampled.as_deref(), pick) {
             (Some(r), _) => r,
             (None, Some(i)) => self.cands[i]
@@ -908,20 +924,17 @@ impl Belief {
         if self.alive.is_empty() {
             let roster = self.build_fallback(dex, obs);
             self.draws = self.build_draws(dex, obs, &roster);
+            self.loadout_draws = self.build_loadout_draws(dex, obs, &roster);
             self.fallback = Some(roster);
         } else {
             self.draws = None;
+            self.loadout_draws = None;
         }
         self.synced = Some(obs.revision());
     }
 
     // ------------------------------------------------- M18 marginal sampling
 
-    /// Build the per-slot draw plans against the freshly-rebuilt fallback
-    /// roster. `None` (the shipped default) when no prior is installed, the
-    /// table is empty, or it says nothing about any species on this roster —
-    /// in which case `determinize_with` never enters the sampling branch at
-    /// all.
     fn build_draws(
         &self,
         dex: &Dex,
@@ -1007,31 +1020,109 @@ impl Belief {
         Some(MoveDraw { revealed, pool })
     }
 
+    fn early_perish_draw(&self, dex: &Dex, mo: &MonObs, mon: &Pokemon) -> Option<LoadoutDraw> {
+        let trap = dex.moves.id("meanlook")?;
+        let perish = dex.moves.id("perishsong")?;
+        if !mo.appeared
+            || !self.pool_set_for(dex, mo.species).is_some_and(|s| s.moves.iter().any(|m| toid(m) == "perishsong"))
+            || [trap, perish].iter().all(|&id| mon.base_move_slots.iter().any(|m| m.id == id))
+            || !format_move_legal_at_level(dex.species.key(mo.species), "meanlook", mo.level)
+            || !format_move_legal_at_level(dex.species.key(mo.species), "perishsong", mo.level)
+        {
+            return None;
+        }
+        let mut total = 0.0;
+        let mut joint = 0.0;
+        for candidate in &self.cands {
+            for source in &candidate.sets {
+                if dex.species.id(&toid(&source.species)) != Some(mo.species) {
+                    continue;
+                }
+                let moves: Vec<_> = source.moves.iter().filter_map(|m| dex.moves.id(&toid(m))).collect();
+                if !mo.revealed_moves.iter().all(|&r| moves.iter().any(|&m| move_matches(dex, m, r))) {
+                    continue;
+                }
+                let weight = candidate.weight.unwrap_or(1.0);
+                total += weight;
+                if moves.contains(&trap) && moves.contains(&perish) {
+                    joint += weight;
+                }
+            }
+        }
+        if joint <= 0.0 {
+            return None;
+        }
+        let mut trapped = mon.clone();
+        for id in [perish, trap] {
+            if trapped.base_move_slots.iter().any(|m| m.id == id) {
+                continue;
+            }
+            if trapped.base_move_slots.len() < 4 {
+                trapped.base_move_slots.push(fresh_move_slot(dex, id));
+            } else {
+                let slot = trapped.base_move_slots.iter().enumerate().rev().find(|(_, m)| {
+                    m.id != perish && m.id != trap && !mo.revealed_moves.iter().any(|&r| move_matches(dex, m.id, r))
+                })?.0;
+                trapped.base_move_slots[slot] = fresh_move_slot(dex, id);
+            }
+        }
+        trapped.move_slots = trapped.base_move_slots;
+        let mut entries = vec![(trapped, joint)];
+        if total > joint {
+            entries.push((mon.clone(), total - joint));
+        }
+        Some(LoadoutDraw { entries, total })
+    }
+
+    fn build_loadout_draws(&self, dex: &Dex, obs: &Observer, roster: &[Pokemon]) -> Option<Vec<Option<LoadoutDraw>>> {
+        if self.fallback_policy != FallbackPolicy::EarlyPerish || self.pinned {
+            return None;
+        }
+        let draws: Vec<_> = obs
+            .mons()
+            .iter()
+            .zip(roster)
+            .map(|(mo, mon)| self.early_perish_draw(dex, mo, mon))
+            .collect();
+        draws.iter().any(Option::is_some).then_some(draws)
+    }
+
     /// The per-determinization fallback roster, or `None` to use the stored
     /// one unchanged. Consumes rng **only** when it actually samples.
     fn sample_fallback_refs(
         &self,
         pick: Option<usize>,
         rng: &mut SplitMix64,
+        battle: &Battle,
+        opp: usize,
     ) -> Option<Vec<Pokemon>> {
         if pick.is_some() || self.pinned {
             return None;
         }
-        let draws = self.draws.as_deref()?;
-        let base = self.fallback.as_deref()?;
-        let mut roster = base.to_vec();
-        for (mon, draw) in roster.iter_mut().zip(draws) {
-            let Some(draw) = draw else { continue };
-            let slots = draw.draw(rng);
-            if slots.is_empty() {
-                continue; // never regress to the empty-set/implicit-Struggle
+        let active = |slot: usize| self.fallback_policy != FallbackPolicy::EarlyPerish
+            || !battle.sides[opp].roster[slot].fainted;
+        if self.draws.is_none() && self.loadout_draws.as_ref().is_none_or(|plans| {
+            !plans.iter().enumerate().any(|(slot, plan)| plan.is_some() && active(slot))
+        }) {
+            return None;
+        }
+        let mut roster = self.fallback.as_deref()?.to_vec();
+        for (slot, mon) in roster.iter_mut().enumerate() {
+            if !active(slot) {
+                continue;
             }
-            mon.base_move_slots = slots;
-            mon.move_slots = slots;
+            if let Some(draw) = self.loadout_draws.as_ref().and_then(|d| d[slot].as_ref()) {
+                *mon = draw.draw(rng).clone();
+            } else if let Some(draw) = self.draws.as_ref().and_then(|d| d[slot].as_ref()) {
+                let slots = draw.draw(rng);
+                if !slots.is_empty() {
+                    mon.base_move_slots = slots;
+                    mon.move_slots = slots;
+                }
+            }
         }
         Some(roster)
     }
-
     // ----------------------------------------------------------- fallback
 
     /// Per-mon synthesized imputation roster for a non-pool opponent.
@@ -1057,7 +1148,7 @@ impl Belief {
                     .iter()
                     .map(|mo| match self.fallback_policy {
                         FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-                        FallbackPolicy::Layered => base_set(dex, mo),
+                        FallbackPolicy::Layered | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish => base_set(dex, mo),
                     })
                     .collect();
                 Battle::from_fixture(dex, "1,2,3,4", &minimal, &minimal)
@@ -1079,14 +1170,14 @@ impl Belief {
         }
         match self.fallback_policy {
             FallbackPolicy::LegacyMetaOnly => FallbackSource::LegacyEmpty,
-            FallbackPolicy::Layered
+            FallbackPolicy::Layered | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish
                 if community_rental_sets(dex)
                     .iter()
                     .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species)) =>
             {
                 FallbackSource::CommunityRental
             }
-            FallbackPolicy::Layered => FallbackSource::Learnset,
+            FallbackPolicy::Layered | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish => FallbackSource::Learnset,
         }
     }
 
@@ -1107,7 +1198,7 @@ impl Belief {
             // Deliberately empty: the engine safely enumerates implicit
             // Struggle, matching the pre-M17d control without a fake move.
             FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-            FallbackPolicy::Layered => base_set(dex, mo),
+            FallbackPolicy::Layered | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish => base_set(dex, mo),
         });
         set.level = mo.level;
         set.gender = Some(match mo.gender.as_str() {
@@ -1134,10 +1225,22 @@ impl Belief {
                 moves.push(name);
             }
         }
-        if moves.is_empty() && self.fallback_policy == FallbackPolicy::Layered {
+        if moves.is_empty() && self.fallback_policy != FallbackPolicy::LegacyMetaOnly {
             moves.push(legal_fallback_move(dex, mo));
         }
         moves.truncate(4); // hard cap: >4 slots would assert in construction
+        if matches!(self.fallback_policy, FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish)
+            && mo.revealed_moves.iter().any(|&m| dex.moves.key(m) == "meanlook")
+            && mo.revealed_moves.len() < 4
+            && !moves.iter().any(|m| toid(m) == "perishsong")
+            && prior.is_some_and(|s| s.moves.iter().any(|m| toid(m) == "perishsong"))
+            && format_move_legal_at_level(dex.species.key(mo.species), "perishsong", mo.level)
+        {
+            if moves.len() == 4 {
+                moves.pop();
+            }
+            moves.push("perishsong".into());
+        }
         set.moves = moves;
         // item: revealed original > pool set's (when preview showed one) > none
         let pool_item = std::mem::take(&mut set.item);
@@ -1525,6 +1628,7 @@ mod fallback_tests {
             prior: None,
             pick_draws: None,
             draws: None,
+            loadout_draws: None,
             synced: None,
         }
     }
@@ -1550,6 +1654,221 @@ mod fallback_tests {
             id
         }
     }
+
+    fn loadout_fixture() -> (Dex, MetaPool, Battle, Observer) {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let mut set = pool
+            .teams
+            .iter()
+            .flat_map(|t| &t.sets)
+            .find(|s| {
+                toid(&s.species) == "misdreavus" && s.moves.iter().any(|m| toid(m) == "meanlook")
+            })
+            .unwrap()
+            .clone();
+        set.name = "Misdreavus".into();
+        let battle = Battle::from_fixture(&dex, "1,2,3,4", &[set.clone()], &[set]).unwrap();
+        let obs = Observer::new(&battle, 0);
+        (dex, pool, battle, obs)
+    }
+
+    #[test]
+    fn default_policy_anticipates_perish() {
+        let (dex, pool, mut battle, mut obs) = loadout_fixture();
+        assert_eq!(FallbackPolicy::default(), FallbackPolicy::EarlyPerish);
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        assert_eq!(belief.fallback_policy, FallbackPolicy::EarlyPerish);
+        battle.sides[1].roster[0].is_active = true;
+        obs.observe(&battle, &dex);
+        belief.sync(&dex, &obs);
+        assert!(belief.loadout_draws.as_ref().unwrap()[0].is_some());
+    }
+
+    #[test]
+    fn early_perish_activates_on_first_public_appearance() {
+        let (dex, pool, mut battle, mut obs) = loadout_fixture();
+        let mut belief = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::EarlyPerish);
+        assert!(belief.loadout_draws.is_none());
+        let revision = obs.revision();
+        battle.sides[1].roster[0].is_active = true;
+        obs.observe(&battle, &dex);
+        assert!(obs.revision() > revision);
+        belief.sync(&dex, &obs);
+        assert!(belief.loadout_draws.as_ref().unwrap()[0].is_some());
+        let revision = obs.revision();
+        obs.observe(&battle, &dex);
+        assert_eq!(obs.revision(), revision);
+    }
+
+    #[test]
+    fn early_perish_draws_joint_threat_without_changing_metadata() {
+        let (dex, pool, battle, mut obs) = loadout_fixture();
+        obs.set_name(0, "Misdreavus");
+        let base = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::RetainPerish);
+        let mut candidate = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::EarlyPerish);
+        let plan = candidate.loadout_draws.as_ref().unwrap()[0].as_ref().unwrap();
+        assert_eq!(plan.entries.len(), 2);
+        let expected = plan.entries[0].1 / plan.total;
+        assert!((expected - 15.499999 / 20.499999).abs() < 1e-9);
+        let mut traps = 0;
+        for seed in 0..4000 {
+            let mut ra = SplitMix64::new(seed);
+            let mut rb = ra.clone();
+            ra.next();
+            let a = base.determinize(&dex, &battle, &obs, &mut ra);
+            let mut b = candidate.determinize(&dex, &battle, &obs, &mut rb);
+            assert_eq!(ra.0, rb.0);
+            let p = &mut b.sides[1].roster[0];
+            assert_eq!(p.move_slots.len(), 4);
+            assert!(p.move_slots.iter().any(|m| dex.moves.key(m.id) == "perishsong"));
+            traps += usize::from(p.move_slots.iter().any(|m| dex.moves.key(m.id) == "meanlook"));
+            p.move_slots = a.sides[1].roster[0].move_slots;
+            p.base_move_slots = a.sides[1].roster[0].base_move_slots;
+            assert_eq!(a.state_key128(), b.state_key128());
+        }
+        assert!((traps as f64 / 4000.0 - expected).abs() < 0.03);
+        let mut fainted = battle.clone();
+        fainted.sides[1].roster[0].fainted = true;
+        fainted.sides[1].roster[0].hp = 0;
+        for seed in 0..16 {
+            let mut ra = SplitMix64::new(seed);
+            let mut rb = ra.clone();
+            assert_eq!(base.determinize(&dex, &fainted, &obs, &mut ra).state_key128(),
+                candidate.determinize(&dex, &fainted, &obs, &mut rb).state_key128());
+            assert_eq!(ra.0, rb.0);
+        }
+        obs.ingest_line("|move|p2a: Misdreavus|Protect|p1a: Target", &dex);
+        candidate.sync(&dex, &obs);
+        for seed in 0..16 {
+            let b = candidate.determinize(&dex, &battle, &obs, &mut SplitMix64::new(seed));
+            let moves: Vec<_> = b.sides[1].roster[0].move_slots.iter().map(|m| dex.moves.key(m.id)).collect();
+            for key in ["protect", "meanlook", "perishsong"] {
+                assert!(moves.contains(&key));
+            }
+        }
+    }
+
+    #[test]
+    fn early_perish_preserves_unseen_revealed_and_unsupported_paths() {
+        let (dex, pool, battle, mut obs) = loadout_fixture();
+        for moves in [vec![], vec!["Mean Look"], vec!["Toxic", "Confuse Ray", "Pain Split"]] {
+            for name in moves {
+                obs.set_name(0, "Misdreavus");
+                obs.ingest_line(&format!("|move|p2a: Misdreavus|{name}|p1a: Target"), &dex);
+            }
+            let a = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::RetainPerish);
+            let b = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::EarlyPerish);
+            assert!(b.loadout_draws.is_none());
+            for seed in 0..16 {
+                let mut ra = SplitMix64::new(seed);
+                let mut rb = ra.clone();
+                assert_eq!(a.determinize(&dex, &battle, &obs, &mut ra).state_key128(),
+                    b.determinize(&dex, &battle, &obs, &mut rb).state_key128());
+                assert_eq!(ra.0, rb.0);
+            }
+        }
+        let mut observed = mon(&dex, "misdreavus", 50, &["toxic"]);
+        observed.appeared = true;
+        let belief = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::EarlyPerish);
+        let reference = &belief.fallback.as_ref().unwrap()[0];
+        assert!(belief.early_perish_draw(&dex, &observed, reference).is_none());
+    }
+
+    #[test]
+    fn retain_perish_changes_only_last_unrevealed_filler() {
+        let (dex, pool, _, obs) = loadout_fixture();
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        for revealed in [
+            vec!["meanlook"],
+            vec!["meanlook", "protect"],
+            vec!["rest", "meanlook", "protect"],
+            vec![],
+            vec!["protect"],
+            vec!["meanlook", "perishsong"],
+            vec!["meanlook", "toxic", "confuseray", "painsplit"],
+        ] {
+            for original in [None, Some(None), Some(dex.items.id("leftovers"))] {
+                let mut observed = mon(&dex, "misdreavus", 50, &revealed);
+                observed.preview_has_item = true;
+                observed.item.original = original;
+                belief.fallback_policy = FallbackPolicy::Layered;
+                let mut expected = belief.fallback_set(&dex, &observed);
+                if revealed.contains(&"meanlook")
+                    && !revealed.contains(&"perishsong")
+                    && revealed.len() < 4
+                {
+                    assert_eq!(expected.moves.len(), 4);
+                    assert!(!expected.moves.iter().any(|m| toid(m) == "perishsong"));
+                    expected.moves[3] = "perishsong".into();
+                }
+                belief.fallback_policy = FallbackPolicy::RetainPerish;
+                let actual = belief.fallback_set(&dex, &observed);
+                assert_eq!(
+                    serde_json::to_value(actual).unwrap(),
+                    serde_json::to_value(expected).unwrap()
+                );
+            }
+        }
+        for species in ["gengar", "snorlax", "umbreon"] {
+            let observed = mon(&dex, species, 50, &["meanlook"]);
+            belief.fallback_policy = FallbackPolicy::Layered;
+            let expected = belief.fallback_set(&dex, &observed);
+            assert!(!belief.pool_set_for(&dex, observed.species).unwrap().moves.iter()
+                .any(|m| toid(m) == "perishsong"));
+            belief.fallback_policy = FallbackPolicy::RetainPerish;
+            assert_eq!(serde_json::to_value(belief.fallback_set(&dex, &observed)).unwrap(),
+                serde_json::to_value(expected).unwrap());
+        }
+    }
+
+    #[test]
+    fn retain_perish_determinization_preserves_other_fields_and_rng() {
+        let (dex, pool, battle, mut obs) = loadout_fixture();
+        let mut hidden = battle.clone();
+        let p = &mut hidden.sides[1].roster[0];
+        p.item = dex.items.id("leftovers");
+        p.stored_stats = [1; 5];
+        p.base_stored_stats = [1; 5];
+        for slot in &mut p.base_move_slots {
+            if dex.moves.key(slot.id) != "meanlook" {
+                *slot = fresh_move_slot(&dex, dex.moves.id("splash").unwrap());
+            }
+        }
+        p.move_slots = p.base_move_slots;
+        for reveals in [vec![], vec!["Mean Look"], vec!["Protect", "Rest", "Destiny Bond"]] {
+            for name in reveals {
+                obs.ingest_line(&format!("|move|p2a: Misdreavus|{name}|p1a: Target"), &dex);
+            }
+            let a = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::Layered);
+            let b = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::RetainPerish);
+            assert!(a.is_fallback() && b.is_fallback());
+            for seed in 0..16 {
+                let mut ra = SplitMix64::new(seed);
+                let mut rb = ra.clone();
+                let mut da = a.determinize(&dex, &battle, &obs, &mut ra);
+                let db = b.determinize(&dex, &battle, &obs, &mut rb);
+                assert_eq!(ra.0, rb.0);
+                if obs.mons()[0].revealed_moves.len() == 1 {
+                    let pa = &mut da.sides[1].roster[0];
+                    let pb = &db.sides[1].roster[0];
+                    assert_eq!(dex.moves.key(pb.move_slots[3].id), "perishsong");
+                    for i in 0..3 {
+                        assert_eq!(pa.move_slots[i], pb.move_slots[i]);
+                    }
+                    pa.move_slots = pb.move_slots;
+                    pa.base_move_slots = pb.base_move_slots;
+                }
+                assert_eq!(da.state_key128(), db.state_key128());
+                assert_eq!(db.state_key128(), b.determinize(&dex, &hidden, &obs,
+                    &mut SplitMix64::new(seed)).state_key128());
+            }
+        }
+    }
+
 
     #[test]
     fn every_format_species_gets_one_to_four_legal_moves_at_zero_reveal() {

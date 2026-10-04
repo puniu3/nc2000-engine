@@ -88,10 +88,10 @@ pub struct BlindAgent {
     rng: SplitMix64,
     pool: Arc<MetaPool>,
     tables: Option<Arc<TableSet>>,
-    fallback_policy: FallbackPolicy,
     /// M18 community belief prior. `None` (the default) leaves the fallback
     /// imputation exactly as shipped.
     prior: Option<Arc<BeliefPrior>>,
+    fallback_policy: FallbackPolicy,
     game: Option<GameState>,
 }
 
@@ -110,12 +110,10 @@ impl BlindAgent {
             pool,
             tables,
             seed,
-            FallbackPolicy::Layered,
+            FallbackPolicy::default(),
         )
     }
 
-    /// Evaluation control for fallback-policy A/B tests. The ordinary
-    /// constructor remains permanently bound to the shipped layered policy.
     pub fn new_with_fallback_policy(
         cfg: RmConfig,
         pool: Arc<MetaPool>,
