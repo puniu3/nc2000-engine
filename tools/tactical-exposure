@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+import datetime
+import gzip
+import hashlib
+import json
+import pathlib
+import shutil
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+source = root / "findings/tactical-exposure-v1"
+run = root / "tmp/tactical-exposure-v1" / datetime.datetime.now().strftime("run-%Y%m%d-%H%M%S")
+run.mkdir(parents=True)
+report = run / "report"
+report.mkdir()
+shutil.copyfile(source / "protocol.json", report / "protocol.json")
+subprocess.run(["cargo", "build", "--release", "-p", "nc2000-bot", "--example", "tactical_exposure", "--example", "tactical_continuation", "--example", "tactical_continuation_verify", "--example", "selfplay_endgames"], cwd=root, check=True)
+subprocess.run(["target/release/examples/tactical_exposure", str(report / "protocol.json"), str(run / "exposure")], cwd=root, check=True)
+subprocess.run(["python3", "tools/tactical-exposure-report.py", str(run / "exposure"), str(report)], cwd=root, check=True)
+protocol = json.loads((source / "continuation-protocol.json").read_text())
+for case in protocol["cases"]:
+    data = gzip.decompress((source / "sources" / (case["id"] + ".json.gz")).read_bytes())
+    assert hashlib.sha256(data).hexdigest() == case["game_sha256"]
+    path = run / (case["id"] + ".json")
+    path.write_bytes(data)
+    case["game"] = str(path.relative_to(root))
+(report / "continuation-protocol.json").write_text(json.dumps(protocol, indent=2) + "\n")
+subprocess.run(["target/release/examples/tactical_continuation", str(report / "continuation-protocol.json"), str(run / "continuations")], cwd=root, check=True)
+subprocess.run(["python3", "tools/tactical-continuation-report.py", str(run / "continuations"), str(report)], cwd=root, check=True)
+subprocess.run(["target/release/examples/tactical_exposure", str(source / "encore-protocol.json"), str(run / "encore")], cwd=root, check=True)
+encore_report = report / "encore"
+encore_report.mkdir()
+shutil.copyfile(source / "encore-protocol.json", encore_report / "protocol.json")
+subprocess.run(["python3", "tools/tactical-exposure-report.py", str(run / "encore"), str(encore_report)], cwd=root, check=True)
+protocol = json.loads((source / "encore-continuation-protocol.json").read_text())
+for case in protocol["cases"]:
+    data = gzip.decompress((source / "sources" / (case["id"] + ".json.gz")).read_bytes())
+    assert hashlib.sha256(data).hexdigest() == case["game_sha256"]
+    path = run / (case["id"] + ".json")
+    path.write_bytes(data)
+    case["game"] = str(path.relative_to(root))
+(encore_report / "continuation-protocol.json").write_text(json.dumps(protocol, indent=2) + "\n")
+subprocess.run(["target/release/examples/tactical_continuation", str(encore_report / "continuation-protocol.json"), str(run / "encore-continuations")], cwd=root, check=True)
+subprocess.run(["python3", "tools/tactical-continuation-report.py", str(run / "encore-continuations"), str(encore_report)], cwd=root, check=True)
+print(f"Report: {report}")

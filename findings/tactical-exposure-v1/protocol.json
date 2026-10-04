@@ -1,0 +1,49 @@
+{
+  "schema": "nc2000-tactical-exposure-v1",
+  "catalog": "data/team-pool-v2/team-pool.json",
+  "prior": "data/belief-pool-v3/belief-pool.json",
+  "families": [
+    {
+      "id": "encore",
+      "team": "sample-11",
+      "lead": 1,
+      "required": [
+        1
+      ]
+    },
+    {
+      "id": "toxic",
+      "team": "sample-06",
+      "lead": 1,
+      "required": [
+        1
+      ]
+    },
+    {
+      "id": "batonpass",
+      "team": "mjj-2010-garap-a",
+      "lead": 2,
+      "required": [
+        1,
+        2
+      ]
+    }
+  ],
+  "opponents": [
+    "sample-07",
+    "sample-08"
+  ],
+  "seed": 2026100513,
+  "repetitions": 1,
+  "iterations": 27000,
+  "c": 0.4,
+  "max_turns": 250,
+  "threads": 3,
+  "arms": [
+    "ordinary",
+    "specialist"
+  ],
+  "interpretation": "Exploratory tactical exposure: six paired blocks, each comparing ordinary blind play and a public-state scripted specialist on identical full legal catalog teams, forced source lead, battle and agent seeds. Both sides remain blind; scripts only use own state and public opposing status/types/last move/volatiles. Opponent previews are autonomous; source preview chooses a legal triple with required lead and maximum overlap with its autonomous triple. No hidden moves, items, future random numbers, or opposing simultaneous action may guide the script. Script policies: Encore after public setup/heal/screen/hazard moves while not already Encored; Toxic on an unstatused non-Poison/non-Steel foe without Substitute; up to two Substitute attempts above half HP then Baton Pass while Substitute survives. Other decisions use unchanged blind bot. Capped outcomes remain unknown, never converted to draws. Scores compare two source policies against one fixed bot family on six selected blocks; they are not exploitability, overall strength, or prevalence. This first screen nominates concrete cases only; any candidate requires fresh independent continuation evidence.",
+  "catalog_sha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+  "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+}

@@ -1,0 +1,42 @@
+{
+  "schema": "nc2000-tactical-continuation-v1",
+  "prior": "data/belief-pool-v3/belief-pool.json",
+  "cases": [
+    {
+      "id": "alakazam-recover",
+      "game": "tmp/tactical-exposure-v1/run/game-001-ordinary.json",
+      "decision": 2,
+      "side": 1,
+      "arms": [
+        "move recover",
+        "move psychic"
+      ],
+      "game_sha256": "c01c50cc27f0a60946a19ce19aedffba20e107b90bdf56de704817c1308d6d3c"
+    },
+    {
+      "id": "baton-recipient",
+      "game": "tmp/tactical-exposure-v1/run/game-004-ordinary.json",
+      "decision": 4,
+      "side": 0,
+      "arms": [
+        "switch 3",
+        "switch 2"
+      ],
+      "game_sha256": "9a3c0acba4585660af443afeb79d906756fc64b323d40a33ece6fa06106fd984"
+    }
+  ],
+  "iterations": 27000,
+  "c": 0.4,
+  "trials": 8,
+  "seed": 2026100517,
+  "max_turns": 250,
+  "threads": 4,
+  "root_budgets": [
+    27000,
+    108000,
+    432000
+  ],
+  "root_seeds": 4,
+  "interpretation": "Exploratory conditional first-action comparisons from two observed legal-game states. Reconstruct both information histories and exactly reproduce the archived blind choice before proceeding. Both continuations remain blind with prior v3, independent root future battle RNG and paired per-decision search seed streams. All arms share each trial seed; cap remains unknown. The forced first action is followed by unchanged BlindSearch on both sides. This measures a particular continuation policy against the same one, not minimax policy loss or full-information optimality. Cases selected after inspecting the initial exposure matches; eight fresh trials are a screen, not confirmation. Four-seed root budget ladders are separate from outcome trials and do not establish action quality.",
+  "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+}

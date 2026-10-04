@@ -1,0 +1,267 @@
+{
+  "schema": "nc2000-tactical-continuation-report-v1",
+  "cases": [
+    {
+      "id": "alakazam-recover",
+      "arms": [
+        "move recover",
+        "move psychic"
+      ],
+      "pairs": [
+        {
+          "trial": 0,
+          "baseline": 1.0,
+          "alternative": 0.0,
+          "delta": -1.0
+        },
+        {
+          "trial": 1,
+          "baseline": 1.0,
+          "alternative": 0.0,
+          "delta": -1.0
+        },
+        {
+          "trial": 2,
+          "baseline": 1.0,
+          "alternative": 1.0,
+          "delta": 0.0
+        },
+        {
+          "trial": 3,
+          "baseline": 1.0,
+          "alternative": 1.0,
+          "delta": 0.0
+        },
+        {
+          "trial": 4,
+          "baseline": 1.0,
+          "alternative": 1.0,
+          "delta": 0.0
+        },
+        {
+          "trial": 5,
+          "baseline": 0.0,
+          "alternative": 0.0,
+          "delta": 0.0
+        },
+        {
+          "trial": 6,
+          "baseline": 1.0,
+          "alternative": 1.0,
+          "delta": 0.0
+        },
+        {
+          "trial": 7,
+          "baseline": 0.0,
+          "alternative": 1.0,
+          "delta": 1.0
+        }
+      ],
+      "arm_scores": {
+        "move recover": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "move psychic": [
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          1.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "paired_delta_bounds": {
+        "lo": -0.125,
+        "hi": -0.125
+      },
+      "root_ladder": {
+        "27000": {
+          "move recover": 3,
+          "move psychic": 1
+        },
+        "108000": {
+          "move recover": 4
+        },
+        "432000": {
+          "move recover": 4
+        }
+      },
+      "archived_reproduced_choice": "move recover"
+    },
+    {
+      "id": "baton-recipient",
+      "arms": [
+        "switch 3",
+        "switch 2"
+      ],
+      "pairs": [
+        {
+          "trial": 0,
+          "baseline": 1.0,
+          "alternative": 0.0,
+          "delta": -1.0
+        },
+        {
+          "trial": 1,
+          "baseline": 0.0,
+          "alternative": 0.0,
+          "delta": 0.0
+        },
+        {
+          "trial": 2,
+          "baseline": 0.0,
+          "alternative": 1.0,
+          "delta": 1.0
+        },
+        {
+          "trial": 3,
+          "baseline": 1.0,
+          "alternative": 0.0,
+          "delta": -1.0
+        },
+        {
+          "trial": 4,
+          "baseline": 0.0,
+          "alternative": 0.0,
+          "delta": 0.0
+        },
+        {
+          "trial": 5,
+          "baseline": 0.0,
+          "alternative": 0.0,
+          "delta": 0.0
+        },
+        {
+          "trial": 6,
+          "baseline": 0.0,
+          "alternative": 0.0,
+          "delta": 0.0
+        },
+        {
+          "trial": 7,
+          "baseline": 0.0,
+          "alternative": 0.0,
+          "delta": 0.0
+        }
+      ],
+      "arm_scores": {
+        "switch 3": [
+          1.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "switch 2": [
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "paired_delta_bounds": {
+        "lo": -0.125,
+        "hi": -0.125
+      },
+      "root_ladder": {
+        "27000": {
+          "switch 3": 4
+        },
+        "108000": {
+          "switch 3": 4
+        },
+        "432000": {
+          "switch 3": 4
+        }
+      },
+      "archived_reproduced_choice": "switch 3"
+    }
+  ],
+  "games": 32,
+  "terminal_games": 32,
+  "manifest": {
+    "protocol": {
+      "schema": "nc2000-tactical-continuation-v1",
+      "prior": "data/belief-pool-v3/belief-pool.json",
+      "cases": [
+        {
+          "id": "alakazam-recover",
+          "game": "tmp/tactical-exposure-v1/run/game-001-ordinary.json",
+          "decision": 2,
+          "side": 1,
+          "arms": [
+            "move recover",
+            "move psychic"
+          ],
+          "game_sha256": "c01c50cc27f0a60946a19ce19aedffba20e107b90bdf56de704817c1308d6d3c"
+        },
+        {
+          "id": "baton-recipient",
+          "game": "tmp/tactical-exposure-v1/run/game-004-ordinary.json",
+          "decision": 4,
+          "side": 0,
+          "arms": [
+            "switch 3",
+            "switch 2"
+          ],
+          "game_sha256": "9a3c0acba4585660af443afeb79d906756fc64b323d40a33ece6fa06106fd984"
+        }
+      ],
+      "iterations": 27000,
+      "c": 0.4,
+      "trials": 8,
+      "seed": 2026100517,
+      "max_turns": 250,
+      "threads": 4,
+      "root_budgets": [
+        27000,
+        108000,
+        432000
+      ],
+      "root_seeds": 4,
+      "interpretation": "Exploratory conditional first-action comparisons from two observed legal-game states. Reconstruct both information histories and exactly reproduce the archived blind choice before proceeding. Both continuations remain blind with prior v3, independent root future battle RNG and paired per-decision search seed streams. All arms share each trial seed; cap remains unknown. The forced first action is followed by unchanged BlindSearch on both sides. This measures a particular continuation policy against the same one, not minimax policy loss or full-information optimality. Cases selected after inspecting the initial exposure matches; eight fresh trials are a screen, not confirmation. Four-seed root budget ladders are separate from outcome trials and do not establish action quality.",
+      "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+    },
+    "protocol_sha256": "1ab446753e4abc8833c1d38245f41618d43d734dbae5275c8190e5aea84c4732",
+    "source_sha256": "6ee5dc6bd95c89f52f6de1de1265cf7ec078f27236006a389cb65c30baf58816",
+    "binary_sha256": "213fa3561e8405fd824471c8c6c94abcf283046b64417f4ea73d5ea7427d8dd1"
+  },
+  "replay_verification": {
+    "verified_games": 32,
+    "verified_decisions": 1340,
+    "state_keys": true,
+    "legal_replay": true,
+    "outcomes": true
+  },
+  "checks": {
+    "paired_future_seeds": true,
+    "paired_root_state_keys": true,
+    "same_uninformed_first_reply": true,
+    "forced_first_actions": true,
+    "complete_trials_and_root_seeds": true
+  },
+  "limits": [
+    "Eight fresh paired trials per selected state are exploratory; no confidence or noninferiority claim.",
+    "Delta bounds only retain censored outcomes; they are not population confidence intervals.",
+    "Subsequent blind policies are fixed at 27,000 iterations, not optimal continuations.",
+    "Source games and cases were selected before these trial outcomes, but after reviewing the exposure games.",
+    "The actual hidden opponent team is fixed across trials; this is conditional on that team's truth."
+  ],
+  "records_sha256": "43bdb1ce8c4e25fe5623cdfb8fe4908ed27a460710a7ef4192cd79aa41020c43"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "nc2000-tactical-continuation-v1",
+  "prior": "data/belief-pool-v3/belief-pool.json",
+  "cases": [
+    {
+      "id": "encore-opportunity",
+      "game": "tmp/tactical-exposure-v1/encore/game-000-ordinary.json",
+      "game_sha256": "81d5e9281645dd2521239f75148fa74fa4d144f5a45597a3958ea3202524ae79",
+      "decision": 2,
+      "side": 0,
+      "arms": [
+        "move psychic",
+        "move encore"
+      ]
+    }
+  ],
+  "iterations": 27000,
+  "c": 0.4,
+  "trials": 8,
+  "seed": 2026100521,
+  "max_turns": 250,
+  "threads": 2,
+  "root_budgets": [
+    27000,
+    108000,
+    432000
+  ],
+  "root_seeds": 4,
+  "interpretation": "Exploratory fresh-seed first-action comparison for the sole winning specialist screen. Selected after the constructed legal Encore opportunity: first Encore failed against a switch, yet the full game won while Psychic lost. Do not attribute that single paired outcome to Encore quality. Reconstruct and reproduce the archived ordinary blind choice; compare Psychic versus Encore for eight fresh paired future seeds with unchanged blind continuations. This conditional continuation-policy effect is neither certified policy loss nor whole-game exploitability. Root ladders are separate descriptive measurements.",
+  "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+}
