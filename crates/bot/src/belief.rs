@@ -82,7 +82,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 use nc2000_engine::battle::{tr, PokemonSet};
-use nc2000_engine::dex::{toid, Dex, MoveId, SpeciesId};
+use nc2000_engine::dex::{toid, Dex, MoveId};
 use nc2000_engine::state::{
     ActionKind, Battle, EffId, EffectState, MoveSlot, MoveSlots, PokeId, Pokemon,
 };
@@ -202,6 +202,7 @@ pub enum FallbackPolicy {
     LegacyMetaOnly,
     #[default]
     Layered,
+    RevealedLoadout,
 }
 
 impl FallbackPolicy {
@@ -209,6 +210,7 @@ impl FallbackPolicy {
         match self {
             Self::LegacyMetaOnly => "legacy-meta-only-v1",
             Self::Layered => "layered-meta-rentals-learnset-v1",
+            Self::RevealedLoadout => "revealed-loadout-mode-v1",
         }
     }
 }
@@ -644,18 +646,29 @@ impl Belief {
         self.cands.iter().any(|c| c.weight.is_some())
     }
 
-    /// The pool's set for `species`: first in file order, or in a weighted
-    /// prior the weighted-mode loadout (see the module doc).
-    fn pool_set_for(&self, dex: &Dex, species: SpeciesId) -> Option<&PokemonSet> {
+    fn pool_set_for(&self, dex: &Dex, mo: &MonObs) -> Option<&PokemonSet> {
         let carriers = self.cands.iter().filter_map(|c| {
             c.sets
                 .iter()
-                .find(|s| dex.species.id(&toid(&s.species)) == Some(species))
+                .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
                 .map(|s| (c, s))
         });
         if !self.is_weighted_prior() {
             return carriers.map(|(_, s)| s).next();
         }
+        let matches_reveals = |s: &PokemonSet| {
+            mo.revealed_moves.iter().all(|&revealed| {
+                s.moves
+                    .iter()
+                    .filter_map(|m| dex.moves.id(&toid(m)))
+                    .any(|m| move_matches(dex, m, revealed))
+            }) && match mo.item.original {
+                Some(item) => dex.items.id(&toid(&s.item)) == item,
+                None => true,
+            }
+        };
+        let condition = self.fallback_policy == FallbackPolicy::RevealedLoadout
+            && carriers.clone().any(|(_, s)| matches_reveals(s));
         let loadout = |s: &PokemonSet| {
             let mut moves: Vec<String> = s.moves.iter().map(|m| toid(m)).collect();
             moves.sort();
@@ -663,6 +676,9 @@ impl Belief {
         };
         let mut tally: Vec<((String, Vec<String>), f64, &PokemonSet)> = Vec::new();
         for (c, s) in carriers {
+            if condition && !matches_reveals(s) {
+                continue;
+            }
             let key = loadout(s);
             let w = c.weight.unwrap_or(1.0);
             match tally.iter_mut().find(|(k, _, _)| *k == key) {
@@ -1057,7 +1073,7 @@ impl Belief {
                     .iter()
                     .map(|mo| match self.fallback_policy {
                         FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-                        FallbackPolicy::Layered => base_set(dex, mo),
+                        FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout => base_set(dex, mo),
                     })
                     .collect();
                 Battle::from_fixture(dex, "1,2,3,4", &minimal, &minimal)
@@ -1079,19 +1095,19 @@ impl Belief {
         }
         match self.fallback_policy {
             FallbackPolicy::LegacyMetaOnly => FallbackSource::LegacyEmpty,
-            FallbackPolicy::Layered
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout
                 if community_rental_sets(dex)
                     .iter()
                     .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species)) =>
             {
                 FallbackSource::CommunityRental
             }
-            FallbackPolicy::Layered => FallbackSource::Learnset,
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout => FallbackSource::Learnset,
         }
     }
 
     fn fallback_set(&self, dex: &Dex, mo: &MonObs) -> PokemonSet {
-        let pool_set = self.pool_set_for(dex, mo.species);
+        let pool_set = self.pool_set_for(dex, mo);
         // A separate prior, not a pool candidate: it can fill hidden fields
         // without pretending an exact rental-team identity survived the
         // preview filter. Pool pedigree remains first, preserving existing
@@ -1107,7 +1123,7 @@ impl Belief {
             // Deliberately empty: the engine safely enumerates implicit
             // Struggle, matching the pre-M17d control without a fake move.
             FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-            FallbackPolicy::Layered => base_set(dex, mo),
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout => base_set(dex, mo),
         });
         set.level = mo.level;
         set.gender = Some(match mo.gender.as_str() {
@@ -1134,7 +1150,7 @@ impl Belief {
                 moves.push(name);
             }
         }
-        if moves.is_empty() && self.fallback_policy == FallbackPolicy::Layered {
+        if moves.is_empty() && self.fallback_policy != FallbackPolicy::LegacyMetaOnly {
             moves.push(legal_fallback_move(dex, mo));
         }
         moves.truncate(4); // hard cap: >4 slots would assert in construction
@@ -1539,6 +1555,59 @@ mod fallback_tests {
             revealed_moves: revealed.iter().map(|m| dex.moves.id(m).unwrap()).collect(),
             item: ItemObs::default(),
             appeared: false,
+        }
+    }
+
+    #[test]
+    fn revealed_loadout_retains_perish_after_mean_look() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let mut belief = test_belief();
+        belief.cands = pool
+            .teams
+            .into_iter()
+            .map(|t| Candidate {
+                id: t.id,
+                weight: t.weight,
+                sets: t.sets,
+                refs: None,
+            })
+            .collect();
+        for revealed in [
+            vec!["meanlook"],
+            vec!["meanlook", "protect"],
+            vec!["meanlook", "rest"],
+        ] {
+            let observed = mon(&dex, "misdreavus", 50, &revealed);
+            belief.fallback_policy = FallbackPolicy::Layered;
+            let old = belief.fallback_set(&dex, &observed);
+            assert!(!old.moves.iter().any(|m| toid(m) == "perishsong"));
+            belief.fallback_policy = FallbackPolicy::RevealedLoadout;
+            let new = belief.fallback_set(&dex, &observed);
+            assert!(new.moves.iter().any(|m| toid(m) == "perishsong"));
+            assert_eq!(new.moves.len(), 4);
+            for m in revealed {
+                assert!(new.moves.iter().any(|n| toid(n) == m));
+            }
+        }
+        let mut observed = mon(&dex, "misdreavus", 50, &["meanlook"]);
+        observed.item.original = Some(dex.items.id("leftovers"));
+        belief.fallback_policy = FallbackPolicy::RevealedLoadout;
+        let set = belief.fallback_set(&dex, &observed);
+        assert_eq!(toid(&set.item), "leftovers");
+        assert!(set.moves.iter().any(|m| toid(m) == "perishsong"));
+        for revealed in [vec![], vec!["thief", "psychic", "attract"]] {
+            let observed = mon(&dex, "misdreavus", 50, &revealed);
+            belief.fallback_policy = FallbackPolicy::Layered;
+            let old = serde_json::to_value(belief.fallback_set(&dex, &observed)).unwrap();
+            belief.fallback_policy = FallbackPolicy::RevealedLoadout;
+            assert_eq!(
+                old,
+                serde_json::to_value(belief.fallback_set(&dex, &observed)).unwrap()
+            );
         }
     }
 
