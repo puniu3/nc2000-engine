@@ -31,7 +31,7 @@
   "same_control": "4/4 pairs identical across every trajectory and counter",
   "onpool_control": "8/8 pairs identical across every trajectory and counter",
   "natural_control": "32/32 pairs identical across every trajectory and counter; no target exposure",
-  "promotion": "not adopted: primary improvement unproven; secondary stress tied",
+  "promotion": "retained as a continuing candidate; frozen primary superiority criterion remains unmet; production unchanged",
   "artifact_sha256": {
     "history.jsonl": "c3483236b53e7ddbdb90fcc157fe60ab4796076a915445715443c4f56261b611",
     "fork-summary.json": "29d80c00611cb51ec55e2526bd480a01bd5ced3e36e4c2827829e2a46387a34b",
@@ -41,11 +41,20 @@
   "browser_report": {
     "hub_entry": "nc2000-retain-perish",
     "url": "http://mini-usb.local:18080/nc2000-retain-perish/",
-    "links_http_200": 25,
+    "links_http_200": 31,
     "widths": [
       820,
       390
     ],
     "page_errors": []
+  },
+  "loss_review": {
+    "reproduced_games": 8,
+    "root_searches": 70,
+    "same_seed_roots_identical": "27/27 paired seeds across cases 22, 39, 46; case 63 changes choices",
+    "probe_source_sha256": "cb2a53bf9bb655adca396f1dbe07c4551db4a4b790eb5448ed85566842720287",
+    "probe_binary_sha256": "bd37d8a909d8a3bb0f96a2d44416f8317f54715d1d01a84afba474c25099519e",
+    "aggregate_outcome_changes": false,
+    "workspace_all_targets_check": "passed"
   }
 }

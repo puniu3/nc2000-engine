@@ -24,7 +24,7 @@ for cell in ['adaptive', 'stress', 'natural', 'onpool', 'same']:
 
 primary = r['results']['adaptive']
 verdict = ('主試験の事前基準を通過。副試験と合わせて採否を判断する。' if r['primary_passed'] else
-           '滅びの歌の見落としは解消したが、勝率改善の事前基準を通過しなかった。本番採用は見送る。')
+           '継続候補として保持する。実戦由来の見落としは解消し、主試験は48勝から50勝。ただし勝率改善の確証はまだない。')
 moves = {'move icebeam': 'れいとうビーム', 'move curse': 'のろい', 'move earthquake': 'じしん',
          'move rockslide': 'いわなだれ', 'move crunch': 'かみくだく', 'move fireblast': 'だいもんじ',
          'move swordsdance': 'つるぎのまい', 'move hydropump': 'ハイドロポンプ', 'move psychic': 'サイコキネシス',
@@ -41,6 +41,20 @@ caps = sum(x[a]['capped'] for x in r['results'].values() for a in ['a', 'b'])
 ordinary = (f'通常戦は{natural["same_trajectory_pairs"]}/{natural["pairs"]}組で対戦履歴まで一致した。'
             f'対象局面の出現は現行{natural["a"]["exposed_games"]}試合、候補{natural["b"]["exposed_games"]}試合。'
             '対象が出なかった場合の一致は、影響範囲が狭いことの確認であり、実戦勝率の向上を示すものではない。')
+review = json.loads((p / 'loss-review/summary.json').read_text())
+loss_rows = ''.join(f'<tr><td>{c["job"]}</td><td>{c["turn"]}</td><td>' +
+                    ' → '.join(html.escape(moves.get(m, m)) for m in c['original_choices']) +
+                    f'</td><td>{c["identical_roots"]}/{c["paired_seeds"]}</td><td><a href="loss-review/{c["job"]}-probe.jsonl">再探索</a></td></tr>'
+                    for c in review['cases'])
+review_html = f'''<h2>打ち切らずに残す理由と、悪化4組の再調査</h2>
+<p>事前基準の未達は「強さの優越を確認できなかった」という結果として維持する。一方、実戦で確認した欠落を狭い変更で直し、主試験の点推定はプラス、固定手順は同点、通常戦と登録対照は履歴まで一致している。候補を打ち切る根拠としては弱く、継続候補に位置づけ直した。本番への反映と、改善の確証を得たという主張は分けて判断する。</p>
+<p>悪化した4組・8戦を全履歴まで再現し、最初に着手が割れた局面を、両方策で同じ探索乱数に揃えて計{review['root_searches']}回探索した。3組では9通りすべて、着手だけでなく訪問数と評価平均まで一致した。</p>
+<div class="scroll"><table><tr><th>今回の主試験の組</th><th>ターン</th><th>元の分岐</th><th>乱数を揃えた探索の完全一致</th><th>根拠</th></tr>{loss_rows}</table></div>
+<p>22・46では歌がすでに公開されていて、その時点の補完内容も一致する。39ではムウマがすでに倒れており、残る技情報の差は再探索結果に影響しなかった。これらの元の分岐には、それ以前の探索で消費した乱数の違いが寄与している。</p>
+<p>63だけは歌を補完する段階で技の選択が変わる。8乱数で現行はかみくだく6回・いわなだれ2回、候補は各4回。実際の相手の返しは道連れで、この一手の全確率列挙では、かみくだくは相打ち100%、いわなだれは89.45%。命中して倒す利益と相打ちの損失があり、この1敗だけでは技選択の優劣を断定できない。</p>
+<p>この調査を理由に負けを差し引かない。主試験は改善6組・悪化4組のままで、勝った6組にも乱数の影響はあり得る。ここで分かったのは、悪化4件を一律に共通の判断退行と説明する根拠がない、ということ。</p>
+<p>小さい利益を判定するには64組では足りない可能性が高い。仮に真の効果が+3.1ポイントで、今回と同程度のばらつきなら、両側5%・検出力80%の単純な正規近似で約{review['planning_scenario']['normal_approximation_pairs']:,}組になる。これは粗い計画用の例示で、候補の真の効果や必要数の保証ではない。追加試験を行う際は、試合を足す前に目的と停止条件を決める。</p>
+<p><a href="loss-review/summary.json">悪化例の診断集計</a>・<a href="loss-review/games.jsonl">再現した8戦</a></p>'''
 report = f'''<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NC2000 — 滅びの歌だけを保持する補完</title>
 <style>body{{font:18px/1.75 system-ui,sans-serif;background:#f4f0e6;color:#28271f;max-width:1040px;margin:32px auto;padding:0 20px}}h1,h2{{line-height:1.35}}h2{{margin-top:2em}}a{{color:#684928}}table{{border-collapse:collapse;width:100%;font-size:16px}}th,td{{padding:10px;text-align:left;vertical-align:top;border-bottom:1px solid #c7c2b6}}.scroll{{overflow-x:auto}}.lead{{font-size:22px}}code{{overflow-wrap:anywhere}}</style>
@@ -54,6 +68,7 @@ report = f'''<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="vi
 <p>主試験は初手ロック後自由行動の64組。ムウマ先発と最初の黒い眼差しだけを固定し、その後の滅びの歌・道連れ・交代などは相手botが自由に選ぶ。相手の道連れは現行側{primary['a']['opponent_bond_games']}/64試合、候補側{primary['b']['opponent_bond_games']}/64試合で実際に使われた。</p>
 <p>双方27,000探索反復、UCB c=0.4。同一方策対照は両側とも現行で、3,000反復。パーティ・陣営・対戦乱数・双方の探索乱数を対応させ、相手8構成ごとに層別した対応差のbootstrapを10,000回実行した。事前の主試験合格条件は95%区間の下限が0より大きく、勝敗不一致ペアの両側正確検定pが0.05未満。さらに副試験の未解消の退行がないことを求める。</p>
 <p>500ターン上限の到達は{caps}戦。長い試合を除外していない。上限に達した場合は便宜上0.5点とし、最悪・最良の差の範囲も集計JSONへ保存する。相手は実戦で観測された2つの見せ合い構成と4つのムウマ型を組み合わせた合法な8構成で、実際の非公開チームの復元ではない。対人勝率への換算はできない。</p>
+{review_html}
 <h2>狙った見落としに届いたか</h2><div class="scroll"><table><tr><th>条件</th><th>現行の対象局面</th><th>候補の対象局面</th><th>履歴まで一致</th></tr>{''.join(details)}</table></div>
 <p>対象局面は、相手の場のムウマが黒い眼差しを公開し、まだ滅びの歌を公開していない補完局面。両方策は途中から別の対戦経過になるため、対象判断数が異なる。{ordinary}</p>
 <h2>実戦ログへの適用範囲</h2><p>既存の実戦再構成{len(history)}局面を各64サンプルで照合した。現行の技補完は元の記録とすべて一致。候補で変わったのは、黒い眼差しの後に歌を見落としていた{len(changed)}局面だけで、全サンプルで歌を保持した。他の{len(history) - len(changed)}局面は乱数消費を含めた状態が一致した。変わった局面も、相手の技以外の状態が一致することを検査した。</p>

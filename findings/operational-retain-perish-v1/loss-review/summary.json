@@ -1,0 +1,149 @@
+{
+  "selection": "All four worsened pairs in the frozen adaptive trial; post-outcome diagnosis, not new win-rate evidence.",
+  "full_games_reproduced": 8,
+  "root_searches": 70,
+  "cases": [
+    {
+      "job": 22,
+      "turn": 5,
+      "original_choices": [
+        "move explosion",
+        "move icebeam"
+      ],
+      "original_seeds_equal": false,
+      "paired_seeds": 9,
+      "identical_roots": 9,
+      "choices": {
+        "baseline": {
+          "move explosion": 7,
+          "move icebeam": 1,
+          "move spikes": 1
+        },
+        "retain-perish": {
+          "move explosion": 7,
+          "move icebeam": 1,
+          "move spikes": 1
+        }
+      },
+      "model_keys": {
+        "baseline": [
+          "040097bed8cce534f8114689c2e635b0"
+        ],
+        "retain-perish": [
+          "040097bed8cce534f8114689c2e635b0"
+        ]
+      },
+      "actual_opponent_reply": [
+        "move protect"
+      ]
+    },
+    {
+      "job": 39,
+      "turn": 6,
+      "original_choices": [
+        "switch 2",
+        "move psychic"
+      ],
+      "original_seeds_equal": false,
+      "paired_seeds": 9,
+      "identical_roots": 9,
+      "choices": {
+        "baseline": {
+          "switch 2": 1,
+          "move psychic": 7,
+          "move leechseed": 1
+        },
+        "retain-perish": {
+          "switch 2": 1,
+          "move psychic": 7,
+          "move leechseed": 1
+        }
+      },
+      "model_keys": {
+        "baseline": [
+          "4c968b3b24e82568187a6729b7ebdbc0"
+        ],
+        "retain-perish": [
+          "15970c5e2c8f2bf887949a7722b5ddec"
+        ]
+      },
+      "actual_opponent_reply": [
+        "switch 3"
+      ]
+    },
+    {
+      "job": 46,
+      "turn": 4,
+      "original_choices": [
+        "move psychic",
+        "move hydropump"
+      ],
+      "original_seeds_equal": false,
+      "paired_seeds": 9,
+      "identical_roots": 9,
+      "choices": {
+        "baseline": {
+          "move psychic": 4,
+          "move hydropump": 5
+        },
+        "retain-perish": {
+          "move psychic": 4,
+          "move hydropump": 5
+        }
+      },
+      "model_keys": {
+        "baseline": [
+          "bb17275022aed25e8f7cc9c299abd006"
+        ],
+        "retain-perish": [
+          "bb17275022aed25e8f7cc9c299abd006"
+        ]
+      },
+      "actual_opponent_reply": [
+        "move protect"
+      ]
+    },
+    {
+      "job": 63,
+      "turn": 2,
+      "original_choices": [
+        "move crunch",
+        "move rockslide"
+      ],
+      "original_seeds_equal": true,
+      "paired_seeds": 8,
+      "identical_roots": 0,
+      "choices": {
+        "baseline": {
+          "move crunch": 6,
+          "move rockslide": 2
+        },
+        "retain-perish": {
+          "move rockslide": 4,
+          "move crunch": 4
+        }
+      },
+      "model_keys": {
+        "baseline": [
+          "d5e899958e5a4595ff0bbb32faa3986e"
+        ],
+        "retain-perish": [
+          "9ae70d8decba8956f4d2c454c5c77766"
+        ]
+      },
+      "actual_opponent_reply": [
+        "move destinybond"
+      ]
+    }
+  ],
+  "outcome_accounting": "Keep all 6 improved and 4 worsened pairs; do not discount losses based on this diagnosis.",
+  "candidate_status": "retained for further evaluation; superiority unproven; production unchanged",
+  "planning_scenario": {
+    "assumed_true_delta": 0.03125,
+    "assumed_variance": 0.15773809523809523,
+    "two_sided_alpha": 0.05,
+    "power": 0.8,
+    "normal_approximation_pairs": 1268,
+    "limitation": "Illustrative independent-pair normal approximation using a noisy pilot estimate; not a power guarantee or a new stopping rule."
+  }
+}

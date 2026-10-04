@@ -31,10 +31,17 @@ fn norm(s: &str) -> String {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let job: usize = args[1].parse().unwrap();
+    let retain_review = args.get(4).is_some_and(|s| s == "--retain-loss-review");
+    let candidate_name = if retain_review { "retain-perish" } else { "conditioned" };
+    let candidate_policy = if retain_review {
+        FallbackPolicy::RetainPerish
+    } else {
+        FallbackPolicy::RevealedLoadout
+    };
     let dir = Path::new(&args[2]);
     let mut out = std::io::BufWriter::new(std::fs::File::create(&args[3]).unwrap());
     let a = lines(dir.join(format!("{job}-layered-meta-rentals-learnset-v1.jsonl")));
-    let z = lines(dir.join(format!("{job}-revealed-loadout-mode-v1.jsonl")));
+    let z = lines(dir.join(format!("{job}-{}.jsonl", candidate_policy.id())));
     let (old, new) = a
         .iter()
         .zip(&z)
@@ -100,12 +107,12 @@ fn main() {
             FallbackPolicy::Layered,
         ),
         (
-            "conditioned".to_string(),
+            candidate_name.to_string(),
             pool.clone(),
-            FallbackPolicy::RevealedLoadout,
+            candidate_policy,
         ),
     ];
-    if b.turn == 2 {
+    if b.turn == 2 && !retain_review {
         let base = pool
             .teams
             .iter()
@@ -207,6 +214,14 @@ fn main() {
             let id = patched.active_id(1 - side).unwrap();
             patched.poke_mut(id).move_slots = reference.poke(id).move_slots.clone();
             patched.poke_mut(id).base_move_slots = reference.poke(id).base_move_slots.clone();
+            if retain_review {
+                for (p, r) in patched.sides[1 - side].roster.iter_mut()
+                    .zip(&reference.sides[1 - side].roster)
+                {
+                    p.move_slots = r.move_slots;
+                    p.base_move_slots = r.base_move_slots;
+                }
+            }
             if name.ends_with("-miracle") {
                 patched.poke_mut(id).item = reference.poke(id).item;
                 patched.poke_mut(id).item_state = reference.poke(id).item_state.clone();
@@ -215,7 +230,7 @@ fn main() {
             assert_eq!(
                 patched.state_key128(),
                 reference.state_key128(),
-                "intervention must only alter the active foe's moves and explicitly probed item: {name}"
+                "intervention must only alter the probed moves and item: {name}"
             );
         }
         for &seed in &seeds {
@@ -225,13 +240,13 @@ fn main() {
             let choice = search.best().unwrap().to_input(&dex);
             let root:Vec<Value>=search.actions().iter().enumerate().map(|(i,c)|json!({"action":c.to_input(&dex),"visits":search.visits()[i],"mean":search.means()[i],"dominated":search.dominated()[i]})).collect();
             if (name == "baseline" && seed == old["seed"].as_u64().unwrap())
-                || (name == "conditioned" && seed == new["seed"].as_u64().unwrap())
+                || (name == candidate_name && seed == new["seed"].as_u64().unwrap())
             {
                 let original = if name == "baseline" { old } else { new };
                 assert_eq!(choice, original["choice"]);
                 assert_eq!(json!(root), original["root"], "root must exactly replay");
             }
-            writeln!(out,"{}",json!({"kind":"root","job":job,"turn":b.turn,"side":side,"key":old["state_key"],"variant":name,"seed":seed,"choice":choice,"root":root,"model_moves":foe.move_slots.iter().map(|m|dex.moves.key(m.id)).collect::<Vec<_>>(),"model_item":foe.item.map(|i|dex.items.key(i)),"elapsed_seconds":started.elapsed().as_secs_f64(),"reply_availability":search.root_replies().iter().map(|(a,n)|json!({"action":a.to_input(&dex),"iterations":n})).collect::<Vec<_>>()})).unwrap();
+            writeln!(out,"{}",json!({"kind":"root","job":job,"turn":b.turn,"side":side,"key":old["state_key"],"variant":name,"seed":seed,"choice":choice,"root":root,"model_key":format!("{:032x}",sim.state_key128()),"model_moves":foe.move_slots.iter().map(|m|dex.moves.key(m.id)).collect::<Vec<_>>(),"model_item":foe.item.map(|i|dex.items.key(i)),"elapsed_seconds":started.elapsed().as_secs_f64(),"reply_availability":search.root_replies().iter().map(|(a,n)|json!({"action":a.to_input(&dex),"iterations":n})).collect::<Vec<_>>()})).unwrap();
             out.flush().unwrap();
         }
     }
