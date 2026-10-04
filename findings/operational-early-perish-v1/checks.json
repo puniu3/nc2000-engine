@@ -9,5 +9,25 @@
     "c": 43
   },
   "observer_fix_controls": "A/B match pre-fix full trajectory and all counters",
-  "default_changed": false
+  "default_changed": false,
+  "bot_unit_tests": 141,
+  "belief_integration_tests": 6,
+  "blind_integration_tests": 2,
+  "final_workspace_all_targets": "passed",
+  "fresh_games": 564,
+  "all_terminal": true,
+  "gain_review_full_games": 12,
+  "gain_review_root_searches": 102,
+  "fresh_cluster_full_games": 4,
+  "fresh_cluster_root_searches": 36,
+  "browser": {
+    "hub_entry": "nc2000-early-perish",
+    "links_http_200": 15,
+    "widths": [
+      820,
+      390
+    ],
+    "page_errors": [],
+    "page_overflow": false
+  }
 }

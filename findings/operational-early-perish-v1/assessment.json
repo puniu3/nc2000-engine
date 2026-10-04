@@ -1,0 +1,21 @@
+{
+  "verdict": "先回り版へ調整し、主試験は95勝から101勝。継続候補として残す。勝率向上の確証はまだない。",
+  "interpretation": "新しい128組では現行95勝、限定修正97勝、先回り版101勝。先回り版は現行比+4.7ポイント、95%区間−3.9〜+13.3。固定手順は27勝から29勝、通常戦16組と登録対照8組は全履歴まで一致した。全564戦が終局。強化を証明できなかったことを無用の証明と扱わず、限定修正と先回り版を保持する。両候補とも事前の採用基準は未達で、本番は変更していない。",
+  "status": "retained_not_default",
+  "primary_passed": {
+    "b-a": false,
+    "c-a": false
+  },
+  "primary_c_minus_a": {
+    "paired_delta": 0.046875,
+    "stratified_bootstrap95": [
+      -0.0390625,
+      0.1328125
+    ],
+    "terminal_exact_two_sided_p": 0.39152830513194203,
+    "holm_two_comparisons_p": 0.7830566102638841
+  },
+  "candidate_committed_before_outcomes": "a442134",
+  "diagnostic_limit": "First-action changes and post-outcome case reviews are mechanism evidence, not additional independent wins. All observed losses remain in the outcome totals.",
+  "next_discriminator": "If continuing, distinguish action-value changes from cross-decision search RNG drift before another implementation adjustment; do not gate policy by the six observed losses or tune the joint probability on this trial."
+}

@@ -31,9 +31,12 @@ fn norm(s: &str) -> String {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let job: usize = args[1].parse().unwrap();
-    let retain_review = args.get(4).is_some_and(|s| s == "--retain-loss-review");
-    let candidate_name = if retain_review { "retain-perish" } else { "conditioned" };
-    let candidate_policy = if retain_review {
+    let early_review = args.get(4).is_some_and(|s| s == "--early-review");
+    let retain_review = early_review || args.get(4).is_some_and(|s| s == "--retain-loss-review");
+    let candidate_name = if early_review { "early-perish" } else if retain_review { "retain-perish" } else { "conditioned" };
+    let candidate_policy = if early_review {
+        FallbackPolicy::EarlyPerish
+    } else if retain_review {
         FallbackPolicy::RetainPerish
     } else {
         FallbackPolicy::RevealedLoadout
@@ -200,7 +203,7 @@ fn main() {
         let belief = model(&p, policy);
         let sim = belief.determinize(&dex, &b, &obs, &mut SplitMix64::new(771));
         let foe = sim.poke(sim.active_id(1 - side).unwrap());
-        if name.starts_with("perish-drop-") || name.starts_with("conditioned-") || name == "retain-perish" {
+        if name.starts_with("perish-drop-") || name.starts_with("conditioned-") || name == "retain-perish" || name == "early-perish" {
             let reference = model(
                 &pool,
                 if name.starts_with("conditioned-") {
