@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+import datetime
+import gzip
+import hashlib
+import json
+import pathlib
+import shutil
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+source = root / "findings/headroom-cases-v1"
+scratch = root / "tmp/headroom-cases-v1"
+scratch.mkdir(exist_ok=True)
+run = scratch / datetime.datetime.now().strftime("run-%Y%m%d-%H%M%S")
+run.mkdir()
+report = run / "report"
+report.mkdir()
+for name in ["protocol.json", "case-notes.json"]:
+    shutil.copyfile(source / name, report / name)
+corpus = gzip.decompress((root / "findings/policy-gap-v1/corpus.jsonl.gz").read_bytes())
+(run / "corpus.jsonl").write_bytes(corpus)
+reference_states = {(2, 11), (11, 15), (17, 20), (17, 21), (19, 17), (23, 17)}
+games = [json.loads(line) for line in corpus.decode().splitlines()]
+for game in games:
+    game["samples"] = [d for d in game["samples"] if (game["game"], d) in reference_states]
+reference_corpus = "".join(json.dumps(g) + "\n" for g in games).encode()
+(run / "reference-corpus.jsonl").write_bytes(reference_corpus)
+protocol = json.loads((source / "reference-protocol.json").read_text())
+assert hashlib.sha256(reference_corpus).hexdigest() == protocol["corpus_sha256"]
+protocol["corpus"] = str((run / "reference-corpus.jsonl").relative_to(root))
+(report / "reference-protocol.json").write_text(json.dumps(protocol, indent=2) + "\n")
+subprocess.run(["cargo", "build", "--release", "-p", "nc2000-bot", "--example", "endgame_case_audit", "--example", "endgame_policy_audit"], cwd=root, check=True)
+binary = root / "target/release/examples/endgame_case_audit"
+for name, args in [("states", []), ("coverage", ["--coverage"])]:
+    with (run / f"{name}.jsonl").open("w") as output:
+        subprocess.run([str(binary), str(run / "corpus.jsonl"), *args], cwd=root, stdout=output, check=True)
+commands = [
+    [str(binary), str(run / "corpus.jsonl"), str(report / "protocol.json"), str(run / "search")],
+    [str(root / "target/release/examples/endgame_policy_audit"), str(report / "reference-protocol.json"), str(run / "reference")],
+]
+processes = [subprocess.Popen(cmd, cwd=root) for cmd in commands]
+codes = [process.wait() for process in processes]
+assert codes == [0, 0], codes
+subprocess.run(["python3", "tools/headroom-cases-report.py", str(run), str(report)], cwd=root, check=True)
+print(f"Report: {report}")

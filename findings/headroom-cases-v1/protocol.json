@@ -1,0 +1,116 @@
+{
+  "schema": "nc2000-headroom-cases-v1",
+  "source": "findings/policy-gap-v1",
+  "selection": [
+    {
+      "game": 1,
+      "decision": 19,
+      "side": 0
+    },
+    {
+      "game": 2,
+      "decision": 11,
+      "side": 0
+    },
+    {
+      "game": 5,
+      "decision": 8,
+      "side": 0
+    },
+    {
+      "game": 6,
+      "decision": 7,
+      "side": 0
+    },
+    {
+      "game": 8,
+      "decision": 46,
+      "side": 0
+    },
+    {
+      "game": 11,
+      "decision": 13,
+      "side": 0
+    },
+    {
+      "game": 12,
+      "decision": 15,
+      "side": 0
+    },
+    {
+      "game": 13,
+      "decision": 19,
+      "side": 1
+    },
+    {
+      "game": 15,
+      "decision": 16,
+      "side": 0
+    },
+    {
+      "game": 16,
+      "decision": 24,
+      "side": 0
+    },
+    {
+      "game": 17,
+      "decision": 21,
+      "side": 1
+    },
+    {
+      "game": 18,
+      "decision": 11,
+      "side": 0
+    },
+    {
+      "game": 19,
+      "decision": 17,
+      "side": 1
+    },
+    {
+      "game": 21,
+      "decision": 36,
+      "side": 0
+    },
+    {
+      "game": 23,
+      "decision": 17,
+      "side": 1
+    },
+    {
+      "game": 2,
+      "decision": 7,
+      "side": 0
+    },
+    {
+      "game": 6,
+      "decision": 30,
+      "side": 0
+    },
+    {
+      "game": 11,
+      "decision": 15,
+      "side": 1
+    },
+    {
+      "game": 17,
+      "decision": 20,
+      "side": 1
+    },
+    {
+      "game": 23,
+      "decision": 16,
+      "side": 1
+    }
+  ],
+  "selection_reason": "Exploratory manual selection after reviewing all 36 unresolved states: one state from each of 15 games, plus five replacement, sleeping, and narrow-reference cases. Not a prevalence sample or an unseen holdout. Frozen before new searches.",
+  "iterations": [
+    27000,
+    108000,
+    432000
+  ],
+  "search_seeds": 4,
+  "seed": 2026100507,
+  "threads": 3,
+  "scope": "Full-information empirical choice frequencies and per-seed root visit shares/means. Means are search estimates, not ground truth. New independent seeds from the prior audit. A change of action is not a strength improvement."
+}

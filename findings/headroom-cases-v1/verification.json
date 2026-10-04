@@ -1,0 +1,94 @@
+{
+  "checks": {
+    "all_replayed_keys_match": true,
+    "all_reference_assessments_independently_checked": true,
+    "reference_intersections_nonempty": true,
+    "all_probe_actions_and_visits_checked": true,
+    "known_matrix_ceiling_uniform_ablated_controls": true,
+    "hidden_mixture_and_unknown_forced_controls": true
+  },
+  "instrumentation_equivalence": {
+    "position": [
+      2,
+      11
+    ],
+    "seeds": 4,
+    "budgets": [
+      27000,
+      108000,
+      432000
+    ],
+    "identical": [
+      "snapshot",
+      "choices",
+      "actions",
+      "visits",
+      "means",
+      "mean_depth",
+      "nodes"
+    ],
+    "excluded": "elapsed_ms",
+    "final_source_sha256": "94b56ff167209322b94e575347e1593f28d409b66bf9dd21907e57b996502550",
+    "final_manifest": {
+      "protocol": {
+        "schema": "nc2000-headroom-cases-v1",
+        "source": "findings/policy-gap-v1",
+        "selection": [
+          {
+            "game": 2,
+            "decision": 11,
+            "side": 0
+          }
+        ],
+        "selection_reason": "Instrumentation equivalence check after adding the separate --coverage exporter; no search code changes.",
+        "iterations": [
+          27000,
+          108000,
+          432000
+        ],
+        "search_seeds": 4,
+        "seed": 2026100507,
+        "threads": 3,
+        "scope": "Full-information empirical choice frequencies and per-seed root visit shares/means. Means are search estimates, not ground truth. New independent seeds from the prior audit. A change of action is not a strength improvement."
+      },
+      "corpus_sha256": "091af45282d2fe7537591d0b060c7d4f428eec530402b69cdb8512967cb8e6ca",
+      "protocol_sha256": "ae91f785fb8e0e5fec264155454d989c3cfd246f3cdfca5e3ca6af5e027b339f",
+      "binary_sha256": "369041e2b9360c32c3dc34f3013ff23de685315a297cfbf20f8d811d3a2f5ec0",
+      "source_hashes": [
+        [
+          "crates/bot/examples/endgame_case_audit.rs",
+          "94b56ff167209322b94e575347e1593f28d409b66bf9dd21907e57b996502550"
+        ],
+        [
+          "crates/bot/src/smmcts.rs",
+          "fcecf226f80cdc5f9fc945d03c029bf6caee367c32f7029474b2cb15ea50d3a1"
+        ],
+        [
+          "data/gen2stadium2.json",
+          "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+        ]
+      ],
+      "expected_states": 1
+    }
+  },
+  "preview": {
+    "entry": "http://mini-usb.local:18080/nc2000-headroom-cases/",
+    "hub_entry_present": true,
+    "case_details": 20,
+    "links_http_200": [
+      "summary.json",
+      "records.json.gz",
+      "protocol.json",
+      "reference-protocol.json",
+      "case-notes.json"
+    ]
+  },
+  "validation": [
+    "release example build",
+    "rustfmt check",
+    "Python compilation",
+    "all state keys and legal replay choices",
+    "independent archived/refined matrix assessment checks",
+    "known matrix calibration controls"
+  ]
+}
