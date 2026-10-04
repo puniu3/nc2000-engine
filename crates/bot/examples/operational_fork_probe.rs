@@ -178,6 +178,10 @@ fn main() {
             FallbackPolicy::RevealedLoadoutDraw,
         ));
     }
+    if args.get(4).is_some_and(|s| s == "--retain-perish-probe") {
+        variants.retain(|(name, _, _)| name == "baseline");
+        variants.push(("retain-perish".into(), pool.clone(), FallbackPolicy::RetainPerish));
+    }
     let mut seeds = vec![old["seed"].as_u64().unwrap()];
     if new["seed"] != old["seed"] {
         seeds.push(new["seed"].as_u64().unwrap());
@@ -189,7 +193,7 @@ fn main() {
         let belief = model(&p, policy);
         let sim = belief.determinize(&dex, &b, &obs, &mut SplitMix64::new(771));
         let foe = sim.poke(sim.active_id(1 - side).unwrap());
-        if name.starts_with("perish-drop-") || name.starts_with("conditioned-") {
+        if name.starts_with("perish-drop-") || name.starts_with("conditioned-") || name == "retain-perish" {
             let reference = model(
                 &pool,
                 if name.starts_with("conditioned-") {

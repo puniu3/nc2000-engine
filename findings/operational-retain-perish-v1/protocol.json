@@ -1,0 +1,74 @@
+{
+  "status": "frozen_before_outcomes",
+  "candidate": "RetainPerish: keep Layered source selection, item, stats, gender and move ordering. Only when Mean Look is revealed, fewer than four moves are revealed, the source contains level-legal Perish Song, and normal filling would omit it: replace the last unrevealed filler with Perish Song. No compatible-set conditioning or sampling.",
+  "default_changed": false,
+  "arms": {
+    "a": "layered-meta-rentals-learnset-v1",
+    "b": "retain-perish-v1"
+  },
+  "iterations": 27000,
+  "ucb_c": 0.4,
+  "max_turns": 500,
+  "cells": {
+    "same": {
+      "games": 4,
+      "iterations": 3000,
+      "seed": 202610060
+    },
+    "adaptive": {
+      "games": 64,
+      "seed": 202610061
+    },
+    "stress": {
+      "games": 32,
+      "seed": 202610062
+    },
+    "natural": {
+      "games": 32,
+      "seed": 202610063
+    },
+    "onpool": {
+      "games": 8,
+      "seed": 202610064
+    }
+  },
+  "primary_endpoint": "Paired terminal outcome B-A in adaptive. Stratified paired bootstrap95 across the eight fixed opponent fixtures (10000 draws) and exact two-sided discordant-pair sign test.",
+  "promotion_requirement": "Primary lower95 > 0 and exact p < 0.05, with no unresolved stress or ordinary-play regression. Coverage and root changes alone never justify promotion.",
+  "adaptive_opponent": "Force Misdreavus lead and initial Mean Look only; then let the unchanged blind opponent freely choose all legal moves and switches. It never observes own agent choices or hidden enemy sets.",
+  "other_opponents": "same 8 explicit legal historical-core scenarios as previous experiment; stress retains fixed Perish script; natural free preview/play; onpool weighted product catalog",
+  "pairing": [
+    "teams",
+    "battle seed",
+    "agent seeds",
+    "side"
+  ],
+  "cap_handling": "0.5 conventional score, separately report caps and worst/best paired delta bounds; do not remove long games",
+  "limitations": [
+    "Fixed bot opponents and eight constructed teams do not estimate human ladder gains.",
+    "The fallback still models a synthetic set, and may omit other useful combinations.",
+    "The previous Porygon2 root cases motivated this hypothesis; their replay is diagnostic only. New battle seeds are used for the terminal-outcome gate.",
+    "No ordinary-play exposure implies an invariance control, not evidence of strength in ordinary play."
+  ],
+  "inputs": {
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "data/team-pool-v2/team-pool.json": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+    "findings/operational-combo-validation-v1/opponents.json": "fde4502fef84e9da9c3680326ccda0dea2d17d38828283c5f00f40b5fd805550"
+  },
+  "diagnostic_roots": {
+    "jobs": [
+      5,
+      10,
+      19,
+      21,
+      23,
+      25,
+      29,
+      35,
+      41,
+      49,
+      57
+    ],
+    "source": "findings/operational-combo-validation-v1/forks",
+    "flag": "--retain-perish-probe"
+  }
+}

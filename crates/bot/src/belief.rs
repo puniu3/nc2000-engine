@@ -204,6 +204,7 @@ pub enum FallbackPolicy {
     Layered,
     RevealedLoadout,
     RevealedLoadoutDraw,
+    RetainPerish,
 }
 
 impl FallbackPolicy {
@@ -213,6 +214,7 @@ impl FallbackPolicy {
             Self::Layered => "layered-meta-rentals-learnset-v1",
             Self::RevealedLoadout => "revealed-loadout-mode-v1",
             Self::RevealedLoadoutDraw => "revealed-loadout-draw-v1",
+            Self::RetainPerish => "retain-perish-v1",
         }
     }
 }
@@ -1159,7 +1161,7 @@ impl Belief {
                     .iter()
                     .map(|mo| match self.fallback_policy {
                         FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-                        FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw => base_set(dex, mo),
+                        FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish => base_set(dex, mo),
                     })
                     .collect();
                 Battle::from_fixture(dex, "1,2,3,4", &minimal, &minimal)
@@ -1181,14 +1183,14 @@ impl Belief {
         }
         match self.fallback_policy {
             FallbackPolicy::LegacyMetaOnly => FallbackSource::LegacyEmpty,
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish
                 if community_rental_sets(dex)
                     .iter()
                     .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species)) =>
             {
                 FallbackSource::CommunityRental
             }
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw => FallbackSource::Learnset,
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish => FallbackSource::Learnset,
         }
     }
 
@@ -1209,7 +1211,7 @@ impl Belief {
             // Deliberately empty: the engine safely enumerates implicit
             // Struggle, matching the pre-M17d control without a fake move.
             FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw => base_set(dex, mo),
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish => base_set(dex, mo),
         });
         set.level = mo.level;
         set.gender = Some(match mo.gender.as_str() {
@@ -1217,7 +1219,6 @@ impl Belief {
             g => g.to_string(),
         });
         set.name = String::new();
-        // moves: revealed first, empirical-prior filler after
         let mut moves: Vec<String> =
             mo.revealed_moves.iter().map(|&m| dex.moves.key(m).to_string()).collect();
         for name in prior.map(|s| s.moves.clone()).unwrap_or_default() {
@@ -1239,9 +1240,20 @@ impl Belief {
         if moves.is_empty() && self.fallback_policy != FallbackPolicy::LegacyMetaOnly {
             moves.push(legal_fallback_move(dex, mo));
         }
-        moves.truncate(4); // hard cap: >4 slots would assert in construction
+        moves.truncate(4);
+        if self.fallback_policy == FallbackPolicy::RetainPerish
+            && mo.revealed_moves.iter().any(|&m| dex.moves.key(m) == "meanlook")
+            && mo.revealed_moves.len() < 4
+            && !moves.iter().any(|m| toid(m) == "perishsong")
+            && prior.is_some_and(|s| s.moves.iter().any(|m| toid(m) == "perishsong"))
+            && format_move_legal_at_level(dex.species.key(mo.species), "perishsong", mo.level)
+        {
+            if moves.len() == 4 {
+                moves.pop();
+            }
+            moves.push("perishsong".into());
+        }
         set.moves = moves;
-        // item: revealed original > pool set's (when preview showed one) > none
         let pool_item = std::mem::take(&mut set.item);
         set.item = match mo.item.original {
             Some(Some(x)) => dex.items.key(x).to_string(),
@@ -1717,6 +1729,97 @@ mod fallback_tests {
         let battle = Battle::from_fixture(&dex, "1,2,3,4", &[set.clone()], &[set]).unwrap();
         let obs = Observer::new(&battle, 0);
         (dex, pool, battle, obs)
+    }
+
+    #[test]
+    fn retain_perish_changes_only_last_unrevealed_filler() {
+        let (dex, pool, _, obs) = loadout_fixture();
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        for revealed in [
+            vec!["meanlook"],
+            vec!["meanlook", "protect"],
+            vec!["rest", "meanlook", "protect"],
+            vec![],
+            vec!["protect"],
+            vec!["meanlook", "perishsong"],
+            vec!["meanlook", "toxic", "confuseray", "painsplit"],
+        ] {
+            for original in [None, Some(None), Some(dex.items.id("leftovers"))] {
+                let mut observed = mon(&dex, "misdreavus", 50, &revealed);
+                observed.preview_has_item = true;
+                observed.item.original = original;
+                belief.fallback_policy = FallbackPolicy::Layered;
+                let mut expected = belief.fallback_set(&dex, &observed);
+                if revealed.contains(&"meanlook")
+                    && !revealed.contains(&"perishsong")
+                    && revealed.len() < 4
+                {
+                    assert_eq!(expected.moves.len(), 4);
+                    assert!(!expected.moves.iter().any(|m| toid(m) == "perishsong"));
+                    expected.moves[3] = "perishsong".into();
+                }
+                belief.fallback_policy = FallbackPolicy::RetainPerish;
+                let actual = belief.fallback_set(&dex, &observed);
+                assert_eq!(
+                    serde_json::to_value(actual).unwrap(),
+                    serde_json::to_value(expected).unwrap()
+                );
+            }
+        }
+        for species in ["gengar", "snorlax", "umbreon"] {
+            let observed = mon(&dex, species, 50, &["meanlook"]);
+            belief.fallback_policy = FallbackPolicy::Layered;
+            let expected = belief.fallback_set(&dex, &observed);
+            assert!(!belief.pool_set_for(&dex, &observed).unwrap().moves.iter()
+                .any(|m| toid(m) == "perishsong"));
+            belief.fallback_policy = FallbackPolicy::RetainPerish;
+            assert_eq!(serde_json::to_value(belief.fallback_set(&dex, &observed)).unwrap(),
+                serde_json::to_value(expected).unwrap());
+        }
+    }
+
+    #[test]
+    fn retain_perish_determinization_preserves_other_fields_and_rng() {
+        let (dex, pool, battle, mut obs) = loadout_fixture();
+        let mut hidden = battle.clone();
+        let p = &mut hidden.sides[1].roster[0];
+        p.item = dex.items.id("leftovers");
+        p.stored_stats = [1; 5];
+        p.base_stored_stats = [1; 5];
+        for slot in &mut p.base_move_slots {
+            if dex.moves.key(slot.id) != "meanlook" {
+                *slot = fresh_move_slot(&dex, dex.moves.id("splash").unwrap());
+            }
+        }
+        p.move_slots = p.base_move_slots;
+        for reveals in [vec![], vec!["Mean Look"], vec!["Protect", "Rest", "Destiny Bond"]] {
+            for name in reveals {
+                obs.ingest_line(&format!("|move|p2a: Misdreavus|{name}|p1a: Target"), &dex);
+            }
+            let a = Belief::new(&dex, &pool, &obs);
+            let b = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::RetainPerish);
+            assert!(a.is_fallback() && b.is_fallback());
+            for seed in 0..16 {
+                let mut ra = SplitMix64::new(seed);
+                let mut rb = ra.clone();
+                let mut da = a.determinize(&dex, &battle, &obs, &mut ra);
+                let db = b.determinize(&dex, &battle, &obs, &mut rb);
+                assert_eq!(ra.0, rb.0);
+                if obs.mons()[0].revealed_moves.len() == 1 {
+                    let pa = &mut da.sides[1].roster[0];
+                    let pb = &db.sides[1].roster[0];
+                    assert_eq!(dex.moves.key(pb.move_slots[3].id), "perishsong");
+                    for i in 0..3 {
+                        assert_eq!(pa.move_slots[i], pb.move_slots[i]);
+                    }
+                    pa.move_slots = pb.move_slots;
+                    pa.base_move_slots = pb.base_move_slots;
+                }
+                assert_eq!(da.state_key128(), db.state_key128());
+                assert_eq!(db.state_key128(), b.determinize(&dex, &hidden, &obs,
+                    &mut SplitMix64::new(seed)).state_key128());
+            }
+        }
     }
 
     #[test]

@@ -247,10 +247,13 @@ fn main() {
         .map(|i| args[i + 1].split(',').map(|s| s.parse().unwrap()).collect());
     let candidate = if args.iter().any(|a| a == "--same") {
         FallbackPolicy::Layered
+    } else if args.iter().any(|a| a == "--retain-perish") {
+        FallbackPolicy::RetainPerish
     } else {
         FallbackPolicy::RevealedLoadout
     };
     let triad = args.iter().any(|a| a == "--triad");
+    assert!(!(triad && args.iter().any(|a| a == "--retain-perish")));
     let only_arm = arg("--arm", "");
     assert!(["", "a", "b", "c"].contains(&only_arm.as_str()));
     let mut policies = if triad {
@@ -258,7 +261,7 @@ fn main() {
         else { vec![FallbackPolicy::Layered,FallbackPolicy::RevealedLoadout,FallbackPolicy::RevealedLoadoutDraw] }
     } else { vec![FallbackPolicy::Layered,candidate] };
     if !only_arm.is_empty() {
-        assert!(triad);
+        assert!(only_arm != "c" || triad);
         policies = vec![policies[(only_arm.as_bytes()[0] - b'a') as usize]];
     }
     let prior = Arc::new(load_meta_pool(
@@ -334,7 +337,7 @@ fn main() {
                     };
                     arms.push(json!({"elapsed_seconds":started.elapsed().as_secs_f64(),"policy":policy.id(),"score":if side==0 {score}else{1.0-score},"turns":turns,"terminal":battle.outcome().is_some(),"trajectory":format!("{:016x}",digest(&battle.log)),"decisions":me.decisions,"fallback":me.fallback,"exposed":me.exposed,"missing":me.missing,"own":tally[side].json(),"opponent":tally[1-side].json(),"opponent_bond_moves":battle.log.iter().filter(|l| l.starts_with(&format!("|move|p{}",2-side)) && l.contains("|Destiny Bond|")).count(),"opponent_switch_events":battle.log.iter().filter(|l|l.starts_with(&format!("|switch|p{}",2-side))).count()}));
                 }
-                let mut row=json!({"implementation":"compatible-gender-v1","job":job,"mode":mode,"iterations":iterations,"c":0.4,"seed":seed,"battle_seed":battle_seed,"bot_seed":bot_seed,"opp_seed":opp_seed,"side":side,"own_team":own.teams[own_i].id,"opponent_team":opponents.teams[opp_i].id,"a":arms.first(),"b":arms.get(1)});
+                let mut row=json!({"implementation":if args.iter().any(|a|a=="--retain-perish") {"retain-perish-v1"} else {"compatible-gender-v1"},"job":job,"mode":mode,"iterations":iterations,"c":0.4,"seed":seed,"battle_seed":battle_seed,"bot_seed":bot_seed,"opp_seed":opp_seed,"side":side,"own_team":own.teams[own_i].id,"opponent_team":opponents.teams[opp_i].id,"a":arms.first(),"b":arms.get(1)});
                 if !only_arm.is_empty() {
                     row.as_object_mut().unwrap().remove("a");row.as_object_mut().unwrap().remove("b");
                     row[&only_arm]=arms[0].clone();
