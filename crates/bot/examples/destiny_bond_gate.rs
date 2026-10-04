@@ -14,6 +14,7 @@ fn config(enabled: bool) -> RmConfig {
         mask_rules: MaskRules {
             destiny_bond_wait: enabled,
             residual_damage_wait: false,
+            own_recovery_wait: false,
             ..MaskRules::default()
         },
         ..RmConfig::default()

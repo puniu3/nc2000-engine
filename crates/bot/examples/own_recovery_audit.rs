@@ -1,6 +1,6 @@
 use conformance::{fixture::repo_root, load_dex};
 use nc2000_bot::{
-    smmcts::{dominated_actions, SelRule},
+    smmcts::{dominated_actions_with, MaskRules, SelRule},
     Belief, BlindSearch, Observer, ProtocolAgent, RmConfig,
 };
 use nc2000_engine::{
@@ -14,12 +14,16 @@ mod fixture;
 
 fn main() {
     let dex = load_dex();
+    let rules = MaskRules {
+        own_recovery_wait: !std::env::args().any(|a| a == "--baseline"),
+        ..Default::default()
+    };
     let (preview, b, teams) = fixture::position(&dex);
     println!(
         "{}",
         json!({"type":"fixture","teams":teams,"log":b.log,
         "hp":[b.poke(b.active_id(0).unwrap()).hp,b.poke(b.active_id(1).unwrap()).hp],
-        "mask":dominated_actions(&b,&dex,0).iter().map(|(a,r)|json!([a.to_input(&dex),r])).collect::<Vec<_>>()})
+        "mask":dominated_actions_with(&b,&dex,0,rules).iter().map(|(a,r)|json!([a.to_input(&dex),r])).collect::<Vec<_>>()})
     );
     if std::env::args().any(|s| s == "--fixture") {
         return;
@@ -126,6 +130,7 @@ fn main() {
                 RmConfig {
                     c: 0.4,
                     rule: SelRule::Ucb,
+                    mask_rules: rules,
                     ..Default::default()
                 },
                 0,
@@ -153,6 +158,7 @@ fn main() {
             RmConfig {
                 c: 0.4,
                 rule: SelRule::Ucb,
+                mask_rules: rules,
                 ..Default::default()
             },
             seed,

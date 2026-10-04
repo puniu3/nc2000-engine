@@ -1,0 +1,22 @@
+[
+  {
+    "plain": false,
+    "seed": 71001,
+    "best": "move curse"
+  },
+  {
+    "plain": false,
+    "seed": 71002,
+    "best": "move curse"
+  },
+  {
+    "plain": true,
+    "seed": 71001,
+    "best": "move return"
+  },
+  {
+    "plain": true,
+    "seed": 71002,
+    "best": "move return"
+  }
+]

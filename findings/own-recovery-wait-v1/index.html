@@ -1,15 +1,29 @@
-<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NC2000 — 自分の回復を待つ手の誤除外</title><style>body{font:18px/1.6 system-ui,sans-serif;background:#f4f0e6;color:#28271f;max-width:940px;margin:32px auto;padding:0 20px}h1,h2{line-height:1.2}h2{margin-top:2em}a{color:#684928}table{border-collapse:collapse;font-size:15px;width:100%;font-variant-numeric:tabular-nums}th,td{padding:9px;text-align:left;border-bottom:1px solid #c7c2b6}.table{overflow-x:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;padding:16px;background:#e7e1d4}strong{color:#3b4931}.lead{font-size:22px}.note{color:#635e51}</style>
-<h1>自分の回復を待つ手が消される</h1>
-<p class="lead">改善候補を1件確認。探索は待機を選べているが、最終フィルタが攻撃へ差し替え、カウンターで負ける。</p>
-<p>現行コード <code>63f8317</code> を調査。検証用コードと記録のみ追加し、bot本体は変更していない。</p>
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NC2000 — 回復待機の誤除外を修正</title><style>body{font:18px/1.6 system-ui,sans-serif;background:#f4f0e6;color:#28271f;max-width:940px;margin:32px auto;padding:0 20px}h1,h2{line-height:1.2}h2{margin-top:2em}a{color:#684928}table{border-collapse:collapse;font-size:15px;width:100%;font-variant-numeric:tabular-nums}th,td{padding:9px;text-align:left;border-bottom:1px solid #c7c2b6}.table{overflow-x:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;padding:16px;background:#e7e1d4}strong{color:#3b4931}.lead{font-size:22px}.note{color:#635e51}</style>
+<h1>回復待機の誤除外を修正</h1>
+<p class="lead">自分がたべのこしで回復できる間、待機手を最終フィルタが消さないよう修正。再現局面の継続対戦は7勝25敗から32勝0敗になった。</p>
+<p>ローカル実装・検証が完了。本番サイトへのデプロイは未実施。以下の修正前診断は <code>63f8317</code> を対象にした。</p>
+<h2>修正と確認結果</h2>
+<p>場にいる自分が生存し、たべのこしを持ち、HPが減っている場合だけ、直接効果のない技を待機として残す。自滅・睡眠ルール違反の除外を先に適用する。満タン、持ち物なし、別の持ち物、控えの所持者ではこの例外を適用しない。</p>
+<div class="table"><table><tr><th>検査</th><th>結果</th></tr>
+<tr><td>修正前の再現</td><td>例外をオフにすると全出力が保存済みの診断結果とバイト一致</td></tr>
+<tr><td>27,000反復の24判断</td><td>24/24で待機を選択。訪問数・平均評価は修正前と同一</td></tr>
+<tr><td>bot自身による32組の継続対戦</td><td>修正前7勝25敗 → 修正後32勝0敗。途中の回復待ち・攻撃もbotが選択</td></tr>
+<tr><td>継続対戦の対応差</td><td>+78.1ポイント、記述的95%区間 +63.6〜+92.7ポイント。同一の作成局面とカウンター固定の相手に限る</td></tr>
+<tr><td>現行24パーティ・prior v3で64戦</td><td>全32組で勝敗同一。片腕1,337判断中、除外緩和14回、解禁手の選択0回</td></tr>
+<tr><td>同一設定同士の対照16戦</td><td>全8組で得点0.5</td></tr>
+<tr><td>ネイティブ</td><td>150テスト、workspace全ターゲットの型検査が成功</td></tr>
+<tr><td>Wasm・Web</td><td>回復待機4継続戦全勝、毒待機16例・みちづれ4例、smoke、エンジンparity、実Web worker、Web buildが成功</td></tr></table></div>
+<p><strong>64戦では実際の着手が変わっていない。</strong> この結果を「全体勝率が同等」「副作用がない」という証明には使わない。全体への効果は未測定のまま。64戦は現行カタログの一様抽選であり、本番の重み付き分布とも区別する。試行数・乱数・採否条件は実行前に固定し、結果を見て延長していない。</p>
+<p><a href="fix-verification.json">修正の検証結果・指紋</a> · <a href="fix-protocol.json">実行前の検証条件</a> · <a href="fix-targeted.jsonl">bot継続対戦の全着手</a> · <a href="fix-broad.json">64戦と発火数</a> · <a href="fixed-measurements.jsonl">修正後の24判断</a> · <a href="fix-checks.txt">検査ログ</a> · <a href="wasm-own-recovery.json">Wasmの継続対戦</a></p>
+<h2>修正前に確認した欠陥</h2>
 <h2>再現局面</h2>
 <p>サンダース HP 55/171、たべのこし。技は「おんがえし・のしかかり・どくどく・でんじは」。相手は HP 73/296 のソーナンス、まひ状態、持ち物なし。両者最後の1匹。</p>
-<p>どくどく・でんじは自体は失敗する。しかし、その間にたべのこしで毎ターン10回復でき、攻撃しなければカウンターも失敗する。現在のフィルタは「相手は既に状態異常」という理由で待機2手を除外する。直近の修正が救った相手側の毒・呪い等はなく、能動中のみちづれも、ほろびのうたもない。</p>
+<p>どくどく・でんじは自体は失敗する。しかし、その間にたべのこしで毎ターン10回復でき、攻撃しなければカウンターも失敗する。修正前のフィルタは「相手は既に状態異常」という理由で待機2手を除外する。直近の修正が救った相手側の毒・呪い等はなく、能動中のみちづれも、ほろびのうたもない。</p>
 <p>初期化後6ターンの合法操作だけで到達。HPや状態を直接書き換えて作った主実験ではない。ただし、調査用に作成した1対1の縮小局面であり、記録対局や6匹からの選出ではない。技はリポジトリの種族別習得リストで確認した。</p>
 <h2>探索量を増やしてもフィルタの誤除外は直らない</h2>
 <p>27,000反復、UCB、c=0.4。全情報・blind prior v3・公開プロトコル経由を各8シードで測定。</p>
 <div class="table"><table><tr><th>入口</th><th>実際の最終着手</th><th>探索の首位</th><th>待機への訪問割合の最小値</th></tr><tr><td>全情報</td><td>攻撃 8/8</td><td>待機 8/8</td><td>99.60%</td></tr><tr><td>blind v3</td><td>攻撃 8/8</td><td>待機 8/8</td><td>99.34%</td></tr><tr><td>公開ProtocolAgent</td><td>攻撃 8/8</td><td>待機 8/8</td><td>99.69%</td></tr></table></div>
-<p>24/24で探索の首位は待機、最終着手は攻撃。公開プロトコル経由でも8/8で再現した。手の評価を作り直す前に、探索の答えを捨てるこの処理が修正対象になる。</p>
+<p>修正前は24/24で探索の首位は待機、最終着手は攻撃。公開プロトコル経由でも8/8で再現した。手の評価を作り直す前に、探索の答えを捨てるこの処理が修正対象になる。</p>
 <h2>勝敗への影響</h2>
 <p>相手がカウンターを選ぶ次の1ターンを、エンジンの乱数分岐を全列挙して計算した。その後の表の継続試行は、相手をカウンター固定、こちらを「初手後は満タンまで待ち、以後おんがえし」という全候補共通の方針にした。</p>
 <div class="table"><table><tr><th>初手</th><th>次の1ターンの敗北確率（列挙）</th><th>継続1,024試行の勝敗</th></tr><tr><td>おんがえし</td><td>70.31%</td><td>301勝 / 723敗</td></tr><tr><td>のしかかり</td><td>72.24%</td><td>284勝 / 740敗</td></tr><tr><td>どくどく（待機）</td><td>0.00%</td><td>1024勝 / 0敗</td></tr><tr><td>でんじは（待機）</td><td>0.00%</td><td>1024勝 / 0敗</td></tr></table></div>
@@ -19,13 +33,13 @@
 <p>既存の <code>noop_census</code> は相手の先頭の合法手だけを試していた。全応手を試すオプションを足し、現行priorで570戦・20,765判断を再構築。除外5,038手に対して22,886組を試した。</p>
 <p>「効果が出た」5件は全て同じ対局のアンコールによる技の置き換えだった。元のほえるが有効になった証拠でも、除外を外すと強くなる証拠でもないため、修正理由にはしない。1組につき乱数経路は1本で、推定セットも含む。この検査でゼロ件だった規則の完全性も主張しない。</p>
 <p>みやぶる・ゆめくいは570戦で使用例ゼロ。机上で見つかった例外だけを次の大型開発の理由にしない。</p>
-<h2>採用候補と未測定の範囲</h2>
-<p><strong>自分の継続回復が進む間も、失敗する技を待機として選べるようにする。</strong> 自滅・睡眠ルール違反の防止は維持する。今回の局面では探索本体を変更せずに首位の手を返せばよい。</p>
-<p>平均勝率の改善は未測定。コーパスにはソーナンスが0戦、カウンターが8戦、ミラーコートが7戦で、この損失の頻度は分からない。修正採用には、回復待機が生じる対局を明示的に含むblind対戦で、既存の待機修正と併せて改善・副作用を測る必要がある。</p>
-<p>過去の評価項追加・汎用rollout・学習器・終盤ソルバの不採用結果を読み直した。本件はそれらの再挑戦ではなく、現行探索が見つけた有効な手の誤除外という具体的な欠陥を測っている。今回Wasmや実機の再検証・本番変更・公開は行っていない。</p>
+<h2>修正の範囲と残る限界</h2>
+<p><strong>自分の継続回復が進む間も、失敗する技を待機として選べるようにする。</strong> 自滅・睡眠ルール違反の防止は維持する。今回の修正は探索本体を変更せず、この局面で首位の手を返す。</p>
+<p>平均勝率の改善は未測定。コーパスにはソーナンスが0戦、カウンターが8戦、ミラーコートが7戦で、この損失の頻度は分からない。回復待機が生じる固定局面で改善を確認した。自然対局でこの機会がどの程度現れるかは未確定。</p>
+<p>過去の評価項追加・汎用rollout・学習器・終盤ソルバの不採用結果を読み直した。本件はそれらの再挑戦ではなく、現行探索が見つけた有効な手の誤除外という具体的な欠陥を測っている。WasmとWeb workerは修正後に再検証した。実機の性能測定・本番へのデプロイは行っていない。</p>
 <h2>証拠と再現</h2>
-<p><a href="summary.json">条件・限界・ソース指紋</a> · <a href="measurements.jsonl">全測定行</a> · <a href="corpus-all-replies.txt">全応手監査の出力</a></p>
-<p>リポジトリで <code>tools/recovery-audit</code> を実行すると、局面・列挙結果・継続試行・対照・24判断の出力一致を確認する。初期構成はSafeguardで麻痺できず失敗し、次のTackle構成では一部シードで待機を選択。未使用Tackleを習得可能なBody Slamへ替えた最終構成をここに示した。設計済み局面の反復測定を独立な実戦頻度と数えない。</p>
+<p><a href="summary.json">修正前の条件・限界・ソース指紋</a> · <a href="measurements.jsonl">全測定行</a> · <a href="corpus-all-replies.txt">全応手監査の出力</a></p>
+<p>リポジトリで <code>tools/recovery-audit</code> を実行すると、修正前アブレーションと修正後の両方で、局面・列挙結果・継続試行・対照・24判断の出力一致を確認する。初期構成はSafeguardで麻痺できず失敗し、次のTackle構成では一部シードで待機を選択。未使用Tackleを習得可能なBody Slamへ替えた最終構成をここに示した。設計済み局面の反復測定を独立な実戦頻度と数えない。</p>
 <details><summary>6ターンの生成ログ</summary><pre>|gametype|singles
 |player|p1|P1||
 |player|p2|P2||

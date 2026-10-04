@@ -1,0 +1,96 @@
+[
+  {
+    "seed": 94001,
+    "choices": [
+      "move toxic",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move toxic",
+      "move return",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move bodyslam"
+    ],
+    "outcome": "p1"
+  },
+  {
+    "seed": 94002,
+    "choices": [
+      "move toxic",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move return"
+    ],
+    "outcome": "p1"
+  },
+  {
+    "seed": 94003,
+    "choices": [
+      "move toxic",
+      "move toxic",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move return",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move bodyslam"
+    ],
+    "outcome": "p1"
+  },
+  {
+    "seed": 94004,
+    "choices": [
+      "move toxic",
+      "move toxic",
+      "move thunderwave",
+      "move toxic",
+      "move thunderwave",
+      "move return",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move thunderwave",
+      "move bodyslam"
+    ],
+    "outcome": "p1"
+  }
+]
