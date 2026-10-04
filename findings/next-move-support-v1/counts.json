@@ -1,0 +1,10 @@
+{
+  "already_revealed": 41,
+  "already_used": 9200,
+  "direct_move_decisions": 15961,
+  "excluded_copy_game": 10,
+  "included_game": 560,
+  "novel_labels": 6701,
+  "reconstruction_failed": 9,
+  "synthetic_move": 10
+}

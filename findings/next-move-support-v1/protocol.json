@@ -1,0 +1,24 @@
+{
+  "schema": "nc2000-next-move-support-v1",
+  "corpus": "tmp/corpus-spectator",
+  "samples": 64,
+  "seed": 2026100530,
+  "threads": 4,
+  "policies": [
+    "early-perish-v1",
+    "layered-meta-rentals-learnset-v1",
+    "revealed-loadout-draw-v1"
+  ],
+  "pool": "data/belief-pool-v3/belief-pool.json",
+  "pool_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+  "selection": "Every first ordinary directly selected previously unrevealed move of the active opponent at turn-open. Entire games involving Mimic, Metronome, Mirror Move or Transform excluded conservatively. Own-side reconstruction may use full own-set evidence; opponent information uses only the prefix. Reconstruction failures remain reported. Struggle/recharge excluded.",
+  "interpretation": "Positive labels only: measures sampled support for newly selected moves, not carry probabilities, precision, calibration, optimality or strength. Existing frozen priors may overlap corpus sources: no out-of-training-sample claim. Unknown never-used moves are not negatives. No tuning or adoption from coverage alone. Compare existing policies as diagnostics; no new policy training.",
+  "inputs_sha256": {
+    "crates/bot/src/belief.rs": "91f72b4068f557eb5ebbe31d4dd9a67ace3171e1127fc194dbe39a6f5c16cf3e",
+    "crates/bot/src/corpus.rs": "31aadb638f009e5ec3f79910edb334d3dbea8e2543a33ff34942d86017f03ce2",
+    "crates/bot/src/import.rs": "21b4355c9db958aa8635c3ca8c8524801a85bf5f9241bbf04cbae665c9edf166",
+    "crates/bot/src/observe.rs": "eeb0d45d0ff366484bcde0979f3426602e99a39949dabc99aa6e1a726e7d9e07",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "data/community-rentals-v0/teams.json": "d081ac265f64370fd4a6790cf0eb54c806e8b7bf5ec789c37f9409254f1b50dd"
+  }
+}

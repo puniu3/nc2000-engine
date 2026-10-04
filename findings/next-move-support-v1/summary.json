@@ -1,0 +1,3269 @@
+{
+  "labels": 6701,
+  "games": 560,
+  "arms": [
+    {
+      "policy": "early-perish-v1",
+      "sampled_support": 3548,
+      "sampled_support_fraction": 0.5294732129532905,
+      "mean_sample_inclusion": 0.5263160349201612
+    },
+    {
+      "policy": "layered-meta-rentals-learnset-v1",
+      "sampled_support": 3443,
+      "sampled_support_fraction": 0.5138039098641993,
+      "mean_sample_inclusion": 0.513694318012237
+    },
+    {
+      "policy": "revealed-loadout-draw-v1",
+      "sampled_support": 4304,
+      "sampled_support_fraction": 0.642292195194747,
+      "mean_sample_inclusion": 0.5530144754514251
+    }
+  ],
+  "schema": "nc2000-next-move-support-v1",
+  "counts": {
+    "already_revealed": 41,
+    "already_used": 9200,
+    "direct_move_decisions": 15961,
+    "excluded_copy_game": 10,
+    "included_game": 560,
+    "novel_labels": 6701,
+    "reconstruction_failed": 9,
+    "synthetic_move": 10
+  },
+  "by_revealed_count": {
+    "0": {
+      "labels": 3011,
+      "games": 560,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 1770,
+          "sampled_support_fraction": 0.5878445699103287,
+          "mean_sample_inclusion": 0.5834388492195284
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 1728,
+          "sampled_support_fraction": 0.5738957157090667,
+          "mean_sample_inclusion": 0.5738023082032547
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 1776,
+          "sampled_support_fraction": 0.589837263367652,
+          "mean_sample_inclusion": 0.573631061109266
+        }
+      ]
+    },
+    "1": {
+      "labels": 2136,
+      "games": 555,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 1114,
+          "sampled_support_fraction": 0.5215355805243446,
+          "mean_sample_inclusion": 0.5184705641385767
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 1071,
+          "sampled_support_fraction": 0.5014044943820225,
+          "mean_sample_inclusion": 0.5011923572097379
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 1544,
+          "sampled_support_fraction": 0.7228464419475655,
+          "mean_sample_inclusion": 0.5381188553370787
+        }
+      ]
+    },
+    "2": {
+      "labels": 1174,
+      "games": 487,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 526,
+          "sampled_support_fraction": 0.44804088586030666,
+          "mean_sample_inclusion": 0.44689629471890974
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 506,
+          "sampled_support_fraction": 0.43100511073253833,
+          "mean_sample_inclusion": 0.43100511073253833
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 775,
+          "sampled_support_fraction": 0.6601362862010222,
+          "mean_sample_inclusion": 0.5495235306643952
+        }
+      ]
+    },
+    "3": {
+      "labels": 380,
+      "games": 274,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 138,
+          "sampled_support_fraction": 0.3631578947368421,
+          "mean_sample_inclusion": 0.3631578947368421
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 138,
+          "sampled_support_fraction": 0.3631578947368421,
+          "mean_sample_inclusion": 0.3631578947368421
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 209,
+          "sampled_support_fraction": 0.55,
+          "mean_sample_inclusion": 0.48416940789473684
+        }
+      ]
+    }
+  },
+  "by_source": {
+    "Learnset": {
+      "labels": 683,
+      "games": 221,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 3,
+          "sampled_support_fraction": 0.004392386530014641,
+          "mean_sample_inclusion": 0.004392386530014641
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 3,
+          "sampled_support_fraction": 0.004392386530014641,
+          "mean_sample_inclusion": 0.004392386530014641
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 3,
+          "sampled_support_fraction": 0.004392386530014641,
+          "mean_sample_inclusion": 0.004392386530014641
+        }
+      ]
+    },
+    "Meta": {
+      "labels": 6018,
+      "games": 559,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 3545,
+          "sampled_support_fraction": 0.5890661349285476,
+          "mean_sample_inclusion": 0.5855506397474244
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 3440,
+          "sampled_support_fraction": 0.5716184778996344,
+          "mean_sample_inclusion": 0.5714964481555334
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 4301,
+          "sampled_support_fraction": 0.7146892655367232,
+          "mean_sample_inclusion": 0.6152791625124626
+        }
+      ]
+    }
+  },
+  "by_move": {
+    "acidarmor": {
+      "labels": 3,
+      "games": 3,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "agility": {
+      "labels": 9,
+      "games": 9,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 6,
+          "sampled_support_fraction": 0.6666666666666666,
+          "mean_sample_inclusion": 0.6666666666666666
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 6,
+          "sampled_support_fraction": 0.6666666666666666,
+          "mean_sample_inclusion": 0.6666666666666666
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 6,
+          "sampled_support_fraction": 0.6666666666666666,
+          "mean_sample_inclusion": 0.6666666666666666
+        }
+      ]
+    },
+    "attract": {
+      "labels": 64,
+      "games": 63,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 7,
+          "sampled_support_fraction": 0.109375,
+          "mean_sample_inclusion": 0.109375
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 7,
+          "sampled_support_fraction": 0.109375,
+          "mean_sample_inclusion": 0.109375
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 7,
+          "sampled_support_fraction": 0.109375,
+          "mean_sample_inclusion": 0.109375
+        }
+      ]
+    },
+    "aurorabeam": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "batonpass": {
+      "labels": 60,
+      "games": 58,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 11,
+          "sampled_support_fraction": 0.18333333333333332,
+          "mean_sample_inclusion": 0.18333333333333332
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 11,
+          "sampled_support_fraction": 0.18333333333333332,
+          "mean_sample_inclusion": 0.18333333333333332
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 20,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.3333333333333333
+        }
+      ]
+    },
+    "bellydrum": {
+      "labels": 54,
+      "games": 52,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 7,
+          "sampled_support_fraction": 0.12962962962962962,
+          "mean_sample_inclusion": 0.12962962962962962
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 7,
+          "sampled_support_fraction": 0.12962962962962962,
+          "mean_sample_inclusion": 0.12962962962962962
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 15,
+          "sampled_support_fraction": 0.2777777777777778,
+          "mean_sample_inclusion": 0.20052083333333334
+        }
+      ]
+    },
+    "bind": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "bite": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "blizzard": {
+      "labels": 6,
+      "games": 6,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.6666666666666666,
+          "mean_sample_inclusion": 0.6666666666666666
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.6666666666666666,
+          "mean_sample_inclusion": 0.6666666666666666
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.6666666666666666,
+          "mean_sample_inclusion": 0.6666666666666666
+        }
+      ]
+    },
+    "bodyslam": {
+      "labels": 289,
+      "games": 244,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 273,
+          "sampled_support_fraction": 0.9446366782006921,
+          "mean_sample_inclusion": 0.9446366782006921
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 273,
+          "sampled_support_fraction": 0.9446366782006921,
+          "mean_sample_inclusion": 0.9446366782006921
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 270,
+          "sampled_support_fraction": 0.9342560553633218,
+          "mean_sample_inclusion": 0.7923875432525952
+        }
+      ]
+    },
+    "bonemerang": {
+      "labels": 84,
+      "games": 79,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.047619047619047616,
+          "mean_sample_inclusion": 0.044270833333333336
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.047619047619047616,
+          "mean_sample_inclusion": 0.044270833333333336
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 24,
+          "sampled_support_fraction": 0.2857142857142857,
+          "mean_sample_inclusion": 0.13262648809523808
+        }
+      ]
+    },
+    "bonerush": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "charm": {
+      "labels": 32,
+      "games": 32,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 29,
+          "sampled_support_fraction": 0.90625,
+          "mean_sample_inclusion": 0.90625
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 29,
+          "sampled_support_fraction": 0.90625,
+          "mean_sample_inclusion": 0.90625
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 27,
+          "sampled_support_fraction": 0.84375,
+          "mean_sample_inclusion": 0.84375
+        }
+      ]
+    },
+    "confuseray": {
+      "labels": 139,
+      "games": 123,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 102,
+          "sampled_support_fraction": 0.7338129496402878,
+          "mean_sample_inclusion": 0.7324640287769785
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 105,
+          "sampled_support_fraction": 0.7553956834532374,
+          "mean_sample_inclusion": 0.7553956834532374
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 104,
+          "sampled_support_fraction": 0.7482014388489209,
+          "mean_sample_inclusion": 0.7033498201438849
+        }
+      ]
+    },
+    "conversion": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "conversion2": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "counter": {
+      "labels": 8,
+      "games": 8,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.125,
+          "mean_sample_inclusion": 0.125
+        }
+      ]
+    },
+    "crosschop": {
+      "labels": 33,
+      "games": 33,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 25,
+          "sampled_support_fraction": 0.7575757575757576,
+          "mean_sample_inclusion": 0.7575757575757576
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 25,
+          "sampled_support_fraction": 0.7575757575757576,
+          "mean_sample_inclusion": 0.7575757575757576
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 25,
+          "sampled_support_fraction": 0.7575757575757576,
+          "mean_sample_inclusion": 0.7575757575757576
+        }
+      ]
+    },
+    "crunch": {
+      "labels": 31,
+      "games": 30,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 12,
+          "sampled_support_fraction": 0.3870967741935484,
+          "mean_sample_inclusion": 0.21118951612903225
+        }
+      ]
+    },
+    "curse": {
+      "labels": 348,
+      "games": 262,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 239,
+          "sampled_support_fraction": 0.6867816091954023,
+          "mean_sample_inclusion": 0.6867816091954023
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 239,
+          "sampled_support_fraction": 0.6867816091954023,
+          "mean_sample_inclusion": 0.6867816091954023
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 289,
+          "sampled_support_fraction": 0.8304597701149425,
+          "mean_sample_inclusion": 0.6957165948275862
+        }
+      ]
+    },
+    "defensecurl": {
+      "labels": 15,
+      "games": 15,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 2,
+          "sampled_support_fraction": 0.13333333333333333,
+          "mean_sample_inclusion": 0.041666666666666664
+        }
+      ]
+    },
+    "destinybond": {
+      "labels": 53,
+      "games": 52,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.018867924528301886,
+          "mean_sample_inclusion": 0.018867924528301886
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.018867924528301886,
+          "mean_sample_inclusion": 0.018867924528301886
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 29,
+          "sampled_support_fraction": 0.5471698113207547,
+          "mean_sample_inclusion": 0.3785377358490566
+        }
+      ]
+    },
+    "disable": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "dizzypunch": {
+      "labels": 3,
+      "games": 3,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "doubleedge": {
+      "labels": 184,
+      "games": 162,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 25,
+          "sampled_support_fraction": 0.1358695652173913,
+          "mean_sample_inclusion": 0.1358695652173913
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 25,
+          "sampled_support_fraction": 0.1358695652173913,
+          "mean_sample_inclusion": 0.1358695652173913
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 106,
+          "sampled_support_fraction": 0.5760869565217391,
+          "mean_sample_inclusion": 0.35122282608695654
+        }
+      ]
+    },
+    "doublekick": {
+      "labels": 3,
+      "games": 3,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "doubleteam": {
+      "labels": 79,
+      "games": 73,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.05063291139240506,
+          "mean_sample_inclusion": 0.05063291139240506
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.05063291139240506,
+          "mean_sample_inclusion": 0.05063291139240506
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.05063291139240506,
+          "mean_sample_inclusion": 0.05063291139240506
+        }
+      ]
+    },
+    "dragonbreath": {
+      "labels": 15,
+      "games": 15,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "dragonrage": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "drillpeck": {
+      "labels": 101,
+      "games": 96,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 87,
+          "sampled_support_fraction": 0.8613861386138614,
+          "mean_sample_inclusion": 0.8613861386138614
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 87,
+          "sampled_support_fraction": 0.8613861386138614,
+          "mean_sample_inclusion": 0.8613861386138614
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 89,
+          "sampled_support_fraction": 0.8811881188118812,
+          "mean_sample_inclusion": 0.8629331683168316
+        }
+      ]
+    },
+    "dynamicpunch": {
+      "labels": 115,
+      "games": 109,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 33,
+          "sampled_support_fraction": 0.28695652173913044,
+          "mean_sample_inclusion": 0.28695652173913044
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 33,
+          "sampled_support_fraction": 0.28695652173913044,
+          "mean_sample_inclusion": 0.28695652173913044
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 50,
+          "sampled_support_fraction": 0.43478260869565216,
+          "mean_sample_inclusion": 0.34116847826086955
+        }
+      ]
+    },
+    "earthquake": {
+      "labels": 291,
+      "games": 238,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 242,
+          "sampled_support_fraction": 0.8316151202749141,
+          "mean_sample_inclusion": 0.8316151202749141
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 242,
+          "sampled_support_fraction": 0.8316151202749141,
+          "mean_sample_inclusion": 0.8316151202749141
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 248,
+          "sampled_support_fraction": 0.852233676975945,
+          "mean_sample_inclusion": 0.7480133161512027
+        }
+      ]
+    },
+    "encore": {
+      "labels": 57,
+      "games": 56,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 22,
+          "sampled_support_fraction": 0.38596491228070173,
+          "mean_sample_inclusion": 0.38596491228070173
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 22,
+          "sampled_support_fraction": 0.38596491228070173,
+          "mean_sample_inclusion": 0.38596491228070173
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 22,
+          "sampled_support_fraction": 0.38596491228070173,
+          "mean_sample_inclusion": 0.3793859649122807
+        }
+      ]
+    },
+    "endure": {
+      "labels": 16,
+      "games": 16,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "explosion": {
+      "labels": 237,
+      "games": 214,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 198,
+          "sampled_support_fraction": 0.8354430379746836,
+          "mean_sample_inclusion": 0.8354430379746836
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 198,
+          "sampled_support_fraction": 0.8354430379746836,
+          "mean_sample_inclusion": 0.8354430379746836
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 222,
+          "sampled_support_fraction": 0.9367088607594937,
+          "mean_sample_inclusion": 0.8666930379746836
+        }
+      ]
+    },
+    "extremespeed": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "fireblast": {
+      "labels": 88,
+      "games": 86,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 21,
+          "sampled_support_fraction": 0.23863636363636365,
+          "mean_sample_inclusion": 0.23863636363636365
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 21,
+          "sampled_support_fraction": 0.23863636363636365,
+          "mean_sample_inclusion": 0.23863636363636365
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 35,
+          "sampled_support_fraction": 0.3977272727272727,
+          "mean_sample_inclusion": 0.29332386363636365
+        }
+      ]
+    },
+    "firepunch": {
+      "labels": 12,
+      "games": 12,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 10,
+          "sampled_support_fraction": 0.8333333333333334,
+          "mean_sample_inclusion": 0.8333333333333334
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 10,
+          "sampled_support_fraction": 0.8333333333333334,
+          "mean_sample_inclusion": 0.8333333333333334
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 9,
+          "sampled_support_fraction": 0.75,
+          "mean_sample_inclusion": 0.6705729166666666
+        }
+      ]
+    },
+    "flail": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "flamethrower": {
+      "labels": 27,
+      "games": 27,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 6,
+          "sampled_support_fraction": 0.2222222222222222,
+          "mean_sample_inclusion": 0.2222222222222222
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 6,
+          "sampled_support_fraction": 0.2222222222222222,
+          "mean_sample_inclusion": 0.2222222222222222
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 9,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.2349537037037037
+        }
+      ]
+    },
+    "flash": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "focusenergy": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "frustration": {
+      "labels": 12,
+      "games": 11,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 3,
+          "sampled_support_fraction": 0.25,
+          "mean_sample_inclusion": 0.07161458333333333
+        }
+      ]
+    },
+    "gigadrain": {
+      "labels": 7,
+      "games": 7,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "glare": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "growth": {
+      "labels": 5,
+      "games": 5,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "harden": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "haze": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "healbell": {
+      "labels": 15,
+      "games": 15,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 14,
+          "sampled_support_fraction": 0.9333333333333333,
+          "mean_sample_inclusion": 0.9333333333333333
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 14,
+          "sampled_support_fraction": 0.9333333333333333,
+          "mean_sample_inclusion": 0.9333333333333333
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 14,
+          "sampled_support_fraction": 0.9333333333333333,
+          "mean_sample_inclusion": 0.8239583333333333
+        }
+      ]
+    },
+    "hiddenpower": {
+      "labels": 215,
+      "games": 176,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 108,
+          "sampled_support_fraction": 0.5023255813953489,
+          "mean_sample_inclusion": 0.5023255813953489
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 108,
+          "sampled_support_fraction": 0.5023255813953489,
+          "mean_sample_inclusion": 0.5023255813953489
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 125,
+          "sampled_support_fraction": 0.5813953488372093,
+          "mean_sample_inclusion": 0.5231831395348837
+        }
+      ]
+    },
+    "hydropump": {
+      "labels": 76,
+      "games": 74,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 14,
+          "sampled_support_fraction": 0.18421052631578946,
+          "mean_sample_inclusion": 0.18421052631578946
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 14,
+          "sampled_support_fraction": 0.18421052631578946,
+          "mean_sample_inclusion": 0.18421052631578946
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 37,
+          "sampled_support_fraction": 0.4868421052631579,
+          "mean_sample_inclusion": 0.2876233552631579
+        }
+      ]
+    },
+    "hyperbeam": {
+      "labels": 7,
+      "games": 7,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.5714285714285714,
+          "mean_sample_inclusion": 0.5714285714285714
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.5714285714285714,
+          "mean_sample_inclusion": 0.5714285714285714
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 6,
+          "sampled_support_fraction": 0.8571428571428571,
+          "mean_sample_inclusion": 0.6830357142857143
+        }
+      ]
+    },
+    "hypnosis": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "icebeam": {
+      "labels": 180,
+      "games": 161,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 148,
+          "sampled_support_fraction": 0.8222222222222222,
+          "mean_sample_inclusion": 0.8222222222222222
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 148,
+          "sampled_support_fraction": 0.8222222222222222,
+          "mean_sample_inclusion": 0.8222222222222222
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 151,
+          "sampled_support_fraction": 0.8388888888888889,
+          "mean_sample_inclusion": 0.7822048611111111
+        }
+      ]
+    },
+    "icepunch": {
+      "labels": 31,
+      "games": 31,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 20,
+          "sampled_support_fraction": 0.6451612903225806,
+          "mean_sample_inclusion": 0.6451612903225806
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 20,
+          "sampled_support_fraction": 0.6451612903225806,
+          "mean_sample_inclusion": 0.6451612903225806
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 24,
+          "sampled_support_fraction": 0.7741935483870968,
+          "mean_sample_inclusion": 0.7368951612903226
+        }
+      ]
+    },
+    "icywind": {
+      "labels": 6,
+      "games": 5,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "irontail": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "kinesis": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "leechseed": {
+      "labels": 110,
+      "games": 99,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 100,
+          "sampled_support_fraction": 0.9090909090909091,
+          "mean_sample_inclusion": 0.9090909090909091
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 100,
+          "sampled_support_fraction": 0.9090909090909091,
+          "mean_sample_inclusion": 0.9090909090909091
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 100,
+          "sampled_support_fraction": 0.9090909090909091,
+          "mean_sample_inclusion": 0.8603693181818182
+        }
+      ]
+    },
+    "leer": {
+      "labels": 4,
+      "games": 4,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "lightscreen": {
+      "labels": 21,
+      "games": 21,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 5,
+          "sampled_support_fraction": 0.23809523809523808,
+          "mean_sample_inclusion": 0.23809523809523808
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 5,
+          "sampled_support_fraction": 0.23809523809523808,
+          "mean_sample_inclusion": 0.23809523809523808
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 5,
+          "sampled_support_fraction": 0.23809523809523808,
+          "mean_sample_inclusion": 0.21354166666666666
+        }
+      ]
+    },
+    "lovelykiss": {
+      "labels": 4,
+      "games": 4,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 1.0,
+          "mean_sample_inclusion": 1.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 1.0,
+          "mean_sample_inclusion": 1.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 1.0,
+          "mean_sample_inclusion": 1.0
+        }
+      ]
+    },
+    "meanlook": {
+      "labels": 96,
+      "games": 84,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 63,
+          "sampled_support_fraction": 0.65625,
+          "mean_sample_inclusion": 0.5125325520833334
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 2,
+          "sampled_support_fraction": 0.020833333333333332,
+          "mean_sample_inclusion": 0.020833333333333332
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 27,
+          "sampled_support_fraction": 0.28125,
+          "mean_sample_inclusion": 0.2255859375
+        }
+      ]
+    },
+    "meditate": {
+      "labels": 3,
+      "games": 3,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.3333333333333333
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.3333333333333333
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.3333333333333333
+        }
+      ]
+    },
+    "megahorn": {
+      "labels": 57,
+      "games": 56,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 57,
+          "sampled_support_fraction": 1.0,
+          "mean_sample_inclusion": 1.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 57,
+          "sampled_support_fraction": 1.0,
+          "mean_sample_inclusion": 1.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 57,
+          "sampled_support_fraction": 1.0,
+          "mean_sample_inclusion": 1.0
+        }
+      ]
+    },
+    "megakick": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "milkdrink": {
+      "labels": 17,
+      "games": 17,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 5,
+          "sampled_support_fraction": 0.29411764705882354,
+          "mean_sample_inclusion": 0.29411764705882354
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 5,
+          "sampled_support_fraction": 0.29411764705882354,
+          "mean_sample_inclusion": 0.29411764705882354
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 10,
+          "sampled_support_fraction": 0.5882352941176471,
+          "mean_sample_inclusion": 0.5882352941176471
+        }
+      ]
+    },
+    "minimize": {
+      "labels": 6,
+      "games": 6,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "mirrorcoat": {
+      "labels": 7,
+      "games": 7,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "moonlight": {
+      "labels": 5,
+      "games": 5,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.2,
+          "mean_sample_inclusion": 0.2
+        }
+      ]
+    },
+    "morningsun": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "mudslap": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "nightmare": {
+      "labels": 3,
+      "games": 3,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "nightshade": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "octazooka": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "painsplit": {
+      "labels": 49,
+      "games": 48,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 44,
+          "sampled_support_fraction": 0.8979591836734694,
+          "mean_sample_inclusion": 0.7665816326530612
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 44,
+          "sampled_support_fraction": 0.8979591836734694,
+          "mean_sample_inclusion": 0.8979591836734694
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 43,
+          "sampled_support_fraction": 0.8775510204081632,
+          "mean_sample_inclusion": 0.8360969387755102
+        }
+      ]
+    },
+    "perishsong": {
+      "labels": 113,
+      "games": 106,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 94,
+          "sampled_support_fraction": 0.831858407079646,
+          "mean_sample_inclusion": 0.831858407079646
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 47,
+          "sampled_support_fraction": 0.415929203539823,
+          "mean_sample_inclusion": 0.415929203539823
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 102,
+          "sampled_support_fraction": 0.9026548672566371,
+          "mean_sample_inclusion": 0.895049778761062
+        }
+      ]
+    },
+    "present": {
+      "labels": 24,
+      "games": 23,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 18,
+          "sampled_support_fraction": 0.75,
+          "mean_sample_inclusion": 0.75
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 18,
+          "sampled_support_fraction": 0.75,
+          "mean_sample_inclusion": 0.75
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 18,
+          "sampled_support_fraction": 0.75,
+          "mean_sample_inclusion": 0.6165364583333334
+        }
+      ]
+    },
+    "protect": {
+      "labels": 37,
+      "games": 37,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.02702702702702703,
+          "mean_sample_inclusion": 0.02702702702702703
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.02702702702702703,
+          "mean_sample_inclusion": 0.02702702702702703
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 13,
+          "sampled_support_fraction": 0.35135135135135137,
+          "mean_sample_inclusion": 0.30996621621621623
+        }
+      ]
+    },
+    "psychic": {
+      "labels": 183,
+      "games": 159,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 110,
+          "sampled_support_fraction": 0.6010928961748634,
+          "mean_sample_inclusion": 0.6010928961748634
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 110,
+          "sampled_support_fraction": 0.6010928961748634,
+          "mean_sample_inclusion": 0.6010928961748634
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 135,
+          "sampled_support_fraction": 0.7377049180327869,
+          "mean_sample_inclusion": 0.6757172131147541
+        }
+      ]
+    },
+    "pursuit": {
+      "labels": 21,
+      "games": 20,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 17,
+          "sampled_support_fraction": 0.8095238095238095,
+          "mean_sample_inclusion": 0.8095238095238095
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 17,
+          "sampled_support_fraction": 0.8095238095238095,
+          "mean_sample_inclusion": 0.8095238095238095
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 17,
+          "sampled_support_fraction": 0.8095238095238095,
+          "mean_sample_inclusion": 0.6532738095238095
+        }
+      ]
+    },
+    "raindance": {
+      "labels": 13,
+      "games": 13,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "rapidspin": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "razorleaf": {
+      "labels": 42,
+      "games": 38,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 42,
+          "sampled_support_fraction": 1.0,
+          "mean_sample_inclusion": 1.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 42,
+          "sampled_support_fraction": 1.0,
+          "mean_sample_inclusion": 1.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 42,
+          "sampled_support_fraction": 1.0,
+          "mean_sample_inclusion": 1.0
+        }
+      ]
+    },
+    "recover": {
+      "labels": 74,
+      "games": 70,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 13,
+          "sampled_support_fraction": 0.17567567567567569,
+          "mean_sample_inclusion": 0.17567567567567569
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 13,
+          "sampled_support_fraction": 0.17567567567567569,
+          "mean_sample_inclusion": 0.17567567567567569
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 50,
+          "sampled_support_fraction": 0.6756756756756757,
+          "mean_sample_inclusion": 0.613597972972973
+        }
+      ]
+    },
+    "reflect": {
+      "labels": 87,
+      "games": 84,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 40,
+          "sampled_support_fraction": 0.45977011494252873,
+          "mean_sample_inclusion": 0.4577945402298851
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 40,
+          "sampled_support_fraction": 0.45977011494252873,
+          "mean_sample_inclusion": 0.4577945402298851
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 55,
+          "sampled_support_fraction": 0.632183908045977,
+          "mean_sample_inclusion": 0.38882902298850575
+        }
+      ]
+    },
+    "rest": {
+      "labels": 436,
+      "games": 284,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 123,
+          "sampled_support_fraction": 0.28211009174311924,
+          "mean_sample_inclusion": 0.28211009174311924
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 123,
+          "sampled_support_fraction": 0.28211009174311924,
+          "mean_sample_inclusion": 0.28211009174311924
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 315,
+          "sampled_support_fraction": 0.7224770642201835,
+          "mean_sample_inclusion": 0.5396000573394495
+        }
+      ]
+    },
+    "return": {
+      "labels": 55,
+      "games": 54,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 12,
+          "sampled_support_fraction": 0.21818181818181817,
+          "mean_sample_inclusion": 0.21818181818181817
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 12,
+          "sampled_support_fraction": 0.21818181818181817,
+          "mean_sample_inclusion": 0.21818181818181817
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 28,
+          "sampled_support_fraction": 0.509090909090909,
+          "mean_sample_inclusion": 0.2988636363636364
+        }
+      ]
+    },
+    "reversal": {
+      "labels": 16,
+      "games": 16,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.0625,
+          "mean_sample_inclusion": 0.0625
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.0625,
+          "mean_sample_inclusion": 0.0625
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.0625,
+          "mean_sample_inclusion": 0.0625
+        }
+      ]
+    },
+    "roar": {
+      "labels": 49,
+      "games": 45,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 16,
+          "sampled_support_fraction": 0.32653061224489793,
+          "mean_sample_inclusion": 0.32653061224489793
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 16,
+          "sampled_support_fraction": 0.32653061224489793,
+          "mean_sample_inclusion": 0.32653061224489793
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 28,
+          "sampled_support_fraction": 0.5714285714285714,
+          "mean_sample_inclusion": 0.3979591836734694
+        }
+      ]
+    },
+    "rockslide": {
+      "labels": 117,
+      "games": 114,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 110,
+          "sampled_support_fraction": 0.9401709401709402,
+          "mean_sample_inclusion": 0.9401709401709402
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 110,
+          "sampled_support_fraction": 0.9401709401709402,
+          "mean_sample_inclusion": 0.9401709401709402
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 109,
+          "sampled_support_fraction": 0.9316239316239316,
+          "mean_sample_inclusion": 0.9145299145299145
+        }
+      ]
+    },
+    "rollout": {
+      "labels": 8,
+      "games": 7,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 2,
+          "sampled_support_fraction": 0.25,
+          "mean_sample_inclusion": 0.25
+        }
+      ]
+    },
+    "sacredfire": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "sandattack": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "sandstorm": {
+      "labels": 33,
+      "games": 33,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.12121212121212122,
+          "mean_sample_inclusion": 0.01231060606060606
+        }
+      ]
+    },
+    "scaryface": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "screech": {
+      "labels": 35,
+      "games": 35,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.02857142857142857,
+          "mean_sample_inclusion": 0.005357142857142857
+        }
+      ]
+    },
+    "seismictoss": {
+      "labels": 6,
+      "games": 6,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "selfdestruct": {
+      "labels": 172,
+      "games": 167,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 167,
+          "sampled_support_fraction": 0.9709302325581395,
+          "mean_sample_inclusion": 0.9709302325581395
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 167,
+          "sampled_support_fraction": 0.9709302325581395,
+          "mean_sample_inclusion": 0.9709302325581395
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 166,
+          "sampled_support_fraction": 0.9651162790697675,
+          "mean_sample_inclusion": 0.790515988372093
+        }
+      ]
+    },
+    "shadowball": {
+      "labels": 9,
+      "games": 9,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 2,
+          "sampled_support_fraction": 0.2222222222222222,
+          "mean_sample_inclusion": 0.2222222222222222
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 2,
+          "sampled_support_fraction": 0.2222222222222222,
+          "mean_sample_inclusion": 0.2222222222222222
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 3,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.2361111111111111
+        }
+      ]
+    },
+    "sing": {
+      "labels": 8,
+      "games": 8,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.5,
+          "mean_sample_inclusion": 0.11328125
+        }
+      ]
+    },
+    "sleeppowder": {
+      "labels": 133,
+      "games": 124,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 122,
+          "sampled_support_fraction": 0.9172932330827067,
+          "mean_sample_inclusion": 0.9151785714285714
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 122,
+          "sampled_support_fraction": 0.9172932330827067,
+          "mean_sample_inclusion": 0.9151785714285714
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 121,
+          "sampled_support_fraction": 0.9097744360902256,
+          "mean_sample_inclusion": 0.8383458646616542
+        }
+      ]
+    },
+    "sleeptalk": {
+      "labels": 8,
+      "games": 8,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 3,
+          "sampled_support_fraction": 0.375,
+          "mean_sample_inclusion": 0.166015625
+        }
+      ]
+    },
+    "sludgebomb": {
+      "labels": 24,
+      "games": 23,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 8,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.3333333333333333
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 8,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.3333333333333333
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 8,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.3333333333333333
+        }
+      ]
+    },
+    "softboiled": {
+      "labels": 41,
+      "games": 40,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 17,
+          "sampled_support_fraction": 0.4146341463414634,
+          "mean_sample_inclusion": 0.4146341463414634
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 17,
+          "sampled_support_fraction": 0.4146341463414634,
+          "mean_sample_inclusion": 0.4146341463414634
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 22,
+          "sampled_support_fraction": 0.5365853658536586,
+          "mean_sample_inclusion": 0.5365853658536586
+        }
+      ]
+    },
+    "solarbeam": {
+      "labels": 5,
+      "games": 5,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 3,
+          "sampled_support_fraction": 0.6,
+          "mean_sample_inclusion": 0.6
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 3,
+          "sampled_support_fraction": 0.6,
+          "mean_sample_inclusion": 0.6
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 3,
+          "sampled_support_fraction": 0.6,
+          "mean_sample_inclusion": 0.6
+        }
+      ]
+    },
+    "spikes": {
+      "labels": 151,
+      "games": 140,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 143,
+          "sampled_support_fraction": 0.9470198675496688,
+          "mean_sample_inclusion": 0.9470198675496688
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 143,
+          "sampled_support_fraction": 0.9470198675496688,
+          "mean_sample_inclusion": 0.9470198675496688
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 147,
+          "sampled_support_fraction": 0.9735099337748344,
+          "mean_sample_inclusion": 0.9735099337748344
+        }
+      ]
+    },
+    "spore": {
+      "labels": 6,
+      "games": 6,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 5,
+          "sampled_support_fraction": 0.8333333333333334,
+          "mean_sample_inclusion": 0.8333333333333334
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 5,
+          "sampled_support_fraction": 0.8333333333333334,
+          "mean_sample_inclusion": 0.8333333333333334
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 5,
+          "sampled_support_fraction": 0.8333333333333334,
+          "mean_sample_inclusion": 0.8333333333333334
+        }
+      ]
+    },
+    "steelwing": {
+      "labels": 10,
+      "games": 10,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "stunspore": {
+      "labels": 17,
+      "games": 17,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 3,
+          "sampled_support_fraction": 0.17647058823529413,
+          "mean_sample_inclusion": 0.02022058823529412
+        }
+      ]
+    },
+    "substitute": {
+      "labels": 191,
+      "games": 174,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 22,
+          "sampled_support_fraction": 0.11518324607329843,
+          "mean_sample_inclusion": 0.11518324607329843
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 22,
+          "sampled_support_fraction": 0.11518324607329843,
+          "mean_sample_inclusion": 0.11518324607329843
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 32,
+          "sampled_support_fraction": 0.16753926701570682,
+          "mean_sample_inclusion": 0.13956151832460734
+        }
+      ]
+    },
+    "sunnyday": {
+      "labels": 12,
+      "games": 12,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.3333333333333333
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 4,
+          "sampled_support_fraction": 0.3333333333333333,
+          "mean_sample_inclusion": 0.3333333333333333
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 6,
+          "sampled_support_fraction": 0.5,
+          "mean_sample_inclusion": 0.3515625
+        }
+      ]
+    },
+    "superfang": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "surf": {
+      "labels": 142,
+      "games": 129,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 72,
+          "sampled_support_fraction": 0.5070422535211268,
+          "mean_sample_inclusion": 0.5070422535211268
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 72,
+          "sampled_support_fraction": 0.5070422535211268,
+          "mean_sample_inclusion": 0.5070422535211268
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 104,
+          "sampled_support_fraction": 0.7323943661971831,
+          "mean_sample_inclusion": 0.5407130281690141
+        }
+      ]
+    },
+    "swagger": {
+      "labels": 52,
+      "games": 50,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 2,
+          "sampled_support_fraction": 0.038461538461538464,
+          "mean_sample_inclusion": 0.038461538461538464
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 2,
+          "sampled_support_fraction": 0.038461538461538464,
+          "mean_sample_inclusion": 0.038461538461538464
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 16,
+          "sampled_support_fraction": 0.3076923076923077,
+          "mean_sample_inclusion": 0.2842548076923077
+        }
+      ]
+    },
+    "sweetkiss": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "swordsdance": {
+      "labels": 113,
+      "games": 110,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 61,
+          "sampled_support_fraction": 0.5398230088495575,
+          "mean_sample_inclusion": 0.5398230088495575
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 61,
+          "sampled_support_fraction": 0.5398230088495575,
+          "mean_sample_inclusion": 0.5398230088495575
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 69,
+          "sampled_support_fraction": 0.6106194690265486,
+          "mean_sample_inclusion": 0.5904314159292036
+        }
+      ]
+    },
+    "synthesis": {
+      "labels": 28,
+      "games": 27,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 16,
+          "sampled_support_fraction": 0.5714285714285714,
+          "mean_sample_inclusion": 0.5714285714285714
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 16,
+          "sampled_support_fraction": 0.5714285714285714,
+          "mean_sample_inclusion": 0.5714285714285714
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 23,
+          "sampled_support_fraction": 0.8214285714285714,
+          "mean_sample_inclusion": 0.6768973214285714
+        }
+      ]
+    },
+    "thief": {
+      "labels": 4,
+      "games": 4,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "thunder": {
+      "labels": 111,
+      "games": 100,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 9,
+          "sampled_support_fraction": 0.08108108108108109,
+          "mean_sample_inclusion": 0.08108108108108109
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 9,
+          "sampled_support_fraction": 0.08108108108108109,
+          "mean_sample_inclusion": 0.08108108108108109
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 34,
+          "sampled_support_fraction": 0.3063063063063063,
+          "mean_sample_inclusion": 0.22255067567567569
+        }
+      ]
+    },
+    "thunderbolt": {
+      "labels": 180,
+      "games": 163,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 118,
+          "sampled_support_fraction": 0.6555555555555556,
+          "mean_sample_inclusion": 0.6555555555555556
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 118,
+          "sampled_support_fraction": 0.6555555555555556,
+          "mean_sample_inclusion": 0.6555555555555556
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 115,
+          "sampled_support_fraction": 0.6388888888888888,
+          "mean_sample_inclusion": 0.6144965277777777
+        }
+      ]
+    },
+    "thunderpunch": {
+      "labels": 11,
+      "games": 9,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 6,
+          "sampled_support_fraction": 0.5454545454545454,
+          "mean_sample_inclusion": 0.21164772727272727
+        }
+      ]
+    },
+    "thunderwave": {
+      "labels": 129,
+      "games": 122,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 97,
+          "sampled_support_fraction": 0.751937984496124,
+          "mean_sample_inclusion": 0.751937984496124
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 97,
+          "sampled_support_fraction": 0.751937984496124,
+          "mean_sample_inclusion": 0.751937984496124
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 98,
+          "sampled_support_fraction": 0.7596899224806202,
+          "mean_sample_inclusion": 0.6793846899224806
+        }
+      ]
+    },
+    "toxic": {
+      "labels": 251,
+      "games": 201,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 80,
+          "sampled_support_fraction": 0.3187250996015936,
+          "mean_sample_inclusion": 0.3187250996015936
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 80,
+          "sampled_support_fraction": 0.3187250996015936,
+          "mean_sample_inclusion": 0.3187250996015936
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 93,
+          "sampled_support_fraction": 0.3705179282868526,
+          "mean_sample_inclusion": 0.3053411354581673
+        }
+      ]
+    },
+    "triattack": {
+      "labels": 1,
+      "games": 1,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "whirlwind": {
+      "labels": 64,
+      "games": 64,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 59,
+          "sampled_support_fraction": 0.921875,
+          "mean_sample_inclusion": 0.921875
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 59,
+          "sampled_support_fraction": 0.921875,
+          "mean_sample_inclusion": 0.921875
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 59,
+          "sampled_support_fraction": 0.921875,
+          "mean_sample_inclusion": 0.77978515625
+        }
+      ]
+    },
+    "wingattack": {
+      "labels": 2,
+      "games": 2,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 0,
+          "sampled_support_fraction": 0.0,
+          "mean_sample_inclusion": 0.0
+        }
+      ]
+    },
+    "zapcannon": {
+      "labels": 46,
+      "games": 44,
+      "arms": [
+        {
+          "policy": "early-perish-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.021739130434782608,
+          "mean_sample_inclusion": 0.021739130434782608
+        },
+        {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "sampled_support": 1,
+          "sampled_support_fraction": 0.021739130434782608,
+          "mean_sample_inclusion": 0.021739130434782608
+        },
+        {
+          "policy": "revealed-loadout-draw-v1",
+          "sampled_support": 7,
+          "sampled_support_fraction": 0.15217391304347827,
+          "mean_sample_inclusion": 0.04551630434782609
+        }
+      ]
+    }
+  },
+  "loadout_draw_support_gained": 833,
+  "loadout_draw_support_lost": 77,
+  "product_changed": false,
+  "limitations": [
+    "Only positive, newly selected move labels. Not P(carries), a probability calibration test, or a strength score.",
+    "64-sample absence is not proof of zero distribution support. Samples within a decision and decisions within games are dependent.",
+    "Existing priors may share sources with these human games. No held-out training-distribution claim.",
+    "Selection excludes entire games with copying mechanics and only includes ordinary direct move decisions.",
+    "Own submitted sets are reconstructed with full own-side evidence; opponent knowledge is prefix-only.",
+    "Future actual moves label predictions, never enter opponent model construction. Never-used moves cannot be treated as absent.",
+    "Larger candidate unions can improve this diagnostic without stronger decisions. Existing whole-loadout sampler did not pass strength evaluation."
+  ]
+}

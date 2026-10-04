@@ -1,0 +1,22 @@
+{
+  "novel_labels": 6701,
+  "reconstructed_games": 560,
+  "sampled_mons": 1286592,
+  "checks": [
+    "all labels absent from prefix reveals",
+    "one label per game/side/species/move",
+    "reveals retained in every sampled kit",
+    "four-slot cap",
+    "sample and inclusion counts recomputed",
+    "revealed-only floor and label-added ceiling"
+  ],
+  "artifacts_sha256": {
+    "summary.json": "bca6f658b9c819031d3928247a792c62fa3ad4d826654ca7dac36579603da14a",
+    "index.html": "7b2e966727fb558ca3a579e2cee922158830e7fa342d2bd38b8977d62bd18075",
+    "records.json.gz": "4808ace65df77c93e8a8dbc11340c8092b6818d9d5fa27b6ac5a4a5e43f01694",
+    "README.md": "6f5ff042ab5f4e83abc87aced64a7ea9d969ab8b58330189c66c571bb9f342a6",
+    "manifest.json": "399f325805b457b8c23bd8f4e353b7d7ebb9d6c2ee6f9b6d16f21056ae8f2551",
+    "protocol.json": "4be1cb6e27ec70c36009d8bd8568faef9bf11ebdd2781d509bc21fba0cefc725",
+    "counts.json": "131b2d9cacd74ad59d7bfbe2b7b3ee852b2d4a5a6f09eef4a48109611167af75"
+  }
+}

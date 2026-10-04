@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+import datetime
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+run = root / 'tmp/next-move-support-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'next_move_support'], cwd=root, check=True)
+subprocess.run(['target/release/examples/next_move_support', 'findings/next-move-support-v1/protocol.json', str(run)], cwd=root, check=True)
+subprocess.run(['python3', 'tools/next-move-support-report.py', str(run), str(run / 'report')], cwd=root, check=True)
+print('Report:', run / 'report')
