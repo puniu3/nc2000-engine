@@ -22,11 +22,17 @@
   },
   "browser_report": {
     "hub_entry": "nc2000-perish-bayes",
-    "links_http_200": 6,
+    "links_http_200": 7,
     "widths": [
       820,
       390
     ],
+    "page_errors": []
+  },
+  "live_site": {
+    "artifact_assets_matched": 12,
+    "initial_turn": "Turn 1",
+    "next_turn": "Turn 2",
     "page_errors": []
   }
 }
