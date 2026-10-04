@@ -54,11 +54,15 @@ fn main() {
         serde_json::to_vec_pretty(&metadata).unwrap(),
     )
     .unwrap();
-    let policies = [
-        FallbackPolicy::default(),
-        FallbackPolicy::Layered,
-        FallbackPolicy::RevealedLoadoutDraw,
-    ];
+    assert_eq!(protocol["policies"].as_array().unwrap().len(), 3);
+    let policies: [FallbackPolicy; 3] =
+        std::array::from_fn(|i| match protocol["policies"][i].as_str().unwrap() {
+            "early-perish-v1" => FallbackPolicy::EarlyPerish,
+            "layered-meta-rentals-learnset-v1" => FallbackPolicy::Layered,
+            "revealed-loadout-draw-v1" => FallbackPolicy::RevealedLoadoutDraw,
+            "early-rest-v1" => FallbackPolicy::EarlyRest,
+            other => panic!("unsupported policy {other}"),
+        });
     let next = AtomicUsize::new(0);
     let outputs = Mutex::new(Vec::<(usize, Vec<Value>, BTreeMap<&str, usize>)>::new());
     let samples = protocol["samples"].as_u64().unwrap() as usize;

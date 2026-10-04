@@ -1,0 +1,13 @@
+{
+  "change": "Exclude Mean Look and Perish Song from Rest replacement, preserving RetainPerish when EarlyPerish draws are inactive. Made before inspecting pilot outcomes.",
+  "pilot_equivalence": "Only the evaluated side uses EarlyRest. Every fixed selected opposing species exists in the meta pool; none of its source sets or actual sets carries either protected move. Therefore references and reveals cannot contain them, and the early/retained Perish insertion conditions are absent. Unselected opposing species never appear, so the appearance guard suppresses their Rest plans. The common opponent stays EarlyPerish. Every activated Rest plan in these fixed fixtures consequently uses the same replacement path.",
+  "selected_opponent_species": [
+    "machamp",
+    "marowak",
+    "skarmory",
+    "snorlax",
+    "zapdos"
+  ],
+  "checked_source_sets": 189,
+  "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+}

@@ -1,0 +1,25 @@
+{
+  "status": "written while pilot is running, before inspecting any pilot outcomes",
+  "estimand": "Equal-weight mean paired score difference across the eight pre-frozen Rest/no-Rest cases (four families each); on-pool controls excluded. Equal Rest/no-Rest weighting is a stress-benchmark assumption, not human frequency.",
+  "model": "Independent symmetric Dirichlet joint paired outcome model in each case over nine (A,B) scores in {0,0.5,1} squared, total prior mass per case. Average case posterior expected scores with equal weights.",
+  "prior_mass": [
+    0.5,
+    1,
+    4,
+    16,
+    64
+  ],
+  "primary_prior_mass": 1,
+  "draws": 200000,
+  "seed": 2026100532,
+  "outputs": [
+    "posterior probability delta > 0",
+    "posterior mean delta",
+    "95% credible interval",
+    "probability delta < -0.01",
+    "paired better/worse/same",
+    "Rest/no-Rest groups separately"
+  ],
+  "caps": "Unknown; do not discard or impute as draws. Report empirical worst/best difference bounds. Posterior declared incomplete when any analyzed case has a cap.",
+  "screen": "No adoption from this pilot. A positive primary pilot mean allows fresh independent confirmation; any candidate adoption still requires the previously accepted model-conditional 80% improvement probability rule and consideration of non-Rest/control outcomes and prior sensitivity. Retain the default if support is absent. No human-superiority claim."
+}

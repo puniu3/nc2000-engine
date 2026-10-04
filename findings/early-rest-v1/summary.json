@@ -1,0 +1,392 @@
+{
+  "schema": "nc2000-early-rest-results-v1",
+  "default_changed": false,
+  "cases": [
+    {
+      "case": "snorlax-umbreon-rest",
+      "actual_rest": true,
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        3.0,
+        2.0
+      ],
+      "better": 0,
+      "worse": 1,
+      "same": 3,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        -0.25,
+        -0.25
+      ],
+      "changed_pairs": 4
+    },
+    {
+      "case": "snorlax-umbreon-no-rest",
+      "actual_rest": false,
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        1.0,
+        0.0
+      ],
+      "better": 0,
+      "worse": 1,
+      "same": 3,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        -0.25,
+        -0.25
+      ],
+      "changed_pairs": 4
+    },
+    {
+      "case": "snorlax-marowak-rest",
+      "actual_rest": true,
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "better": 0,
+      "worse": 0,
+      "same": 4,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.0,
+        0.0
+      ],
+      "changed_pairs": 2
+    },
+    {
+      "case": "snorlax-marowak-no-rest",
+      "actual_rest": false,
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        1.0,
+        3.0
+      ],
+      "better": 2,
+      "worse": 0,
+      "same": 2,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.5,
+        0.5
+      ],
+      "changed_pairs": 4
+    },
+    {
+      "case": "skarmory-marowak-rest",
+      "actual_rest": true,
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        2.0,
+        2.0
+      ],
+      "better": 0,
+      "worse": 0,
+      "same": 4,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.0,
+        0.0
+      ],
+      "changed_pairs": 4
+    },
+    {
+      "case": "skarmory-marowak-no-rest",
+      "actual_rest": false,
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        3.0,
+        3.0
+      ],
+      "better": 1,
+      "worse": 1,
+      "same": 2,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.0,
+        0.0
+      ],
+      "changed_pairs": 4
+    },
+    {
+      "case": "zapdos-snorlax-rest",
+      "actual_rest": true,
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        1.0,
+        2.0
+      ],
+      "better": 1,
+      "worse": 0,
+      "same": 3,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.25,
+        0.25
+      ],
+      "changed_pairs": 3
+    },
+    {
+      "case": "zapdos-snorlax-no-rest",
+      "actual_rest": false,
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        1.0,
+        1.0
+      ],
+      "better": 0,
+      "worse": 0,
+      "same": 4,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.0,
+        0.0
+      ],
+      "changed_pairs": 2
+    },
+    {
+      "case": "onpool-control",
+      "actual_rest": null,
+      "pairs": 2,
+      "complete_pairs": 2,
+      "scores": [
+        2.0,
+        2.0
+      ],
+      "better": 0,
+      "worse": 0,
+      "same": 2,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.0,
+        0.0
+      ],
+      "changed_pairs": 0
+    }
+  ],
+  "stress": {
+    "pairs": 32,
+    "complete_pairs": 32,
+    "scores": [
+      12.0,
+      13.0
+    ],
+    "better": 4,
+    "worse": 3,
+    "same": 25,
+    "caps_by_arm": [
+      0,
+      0
+    ],
+    "delta_bounds": [
+      0.03125,
+      0.03125
+    ],
+    "changed_pairs": 27
+  },
+  "groups": {
+    "rest": {
+      "pairs": 16,
+      "complete_pairs": 16,
+      "scores": [
+        6.0,
+        6.0
+      ],
+      "better": 1,
+      "worse": 1,
+      "same": 14,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.0,
+        0.0
+      ],
+      "changed_pairs": 13
+    },
+    "no_rest": {
+      "pairs": 16,
+      "complete_pairs": 16,
+      "scores": [
+        6.0,
+        7.0
+      ],
+      "better": 3,
+      "worse": 2,
+      "same": 11,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.0625,
+        0.0625
+      ],
+      "changed_pairs": 14
+    }
+  },
+  "posterior": {
+    "0.5": {
+      "probability_improved": 0.66744,
+      "mean_delta": 0.02793118031180693,
+      "analytic_mean_delta": 0.027777777777777776,
+      "credible95": [
+        -0.10145295701603911,
+        0.15512740625444915
+      ],
+      "probability_loss_gt_1pp": 0.27971
+    },
+    "1": {
+      "probability_improved": 0.651885,
+      "mean_delta": 0.0251284873786974,
+      "analytic_mean_delta": 0.025,
+      "credible95": [
+        -0.10497653844619993,
+        0.15337396061726555
+      ],
+      "probability_loss_gt_1pp": 0.293365
+    },
+    "4": {
+      "probability_improved": 0.60324,
+      "mean_delta": 0.015528962709227762,
+      "analytic_mean_delta": 0.015625,
+      "credible95": [
+        -0.10297068401800591,
+        0.1340203361633287
+      ],
+      "probability_loss_gt_1pp": 0.334585
+    },
+    "16": {
+      "probability_improved": 0.55914,
+      "mean_delta": 0.006356913395524732,
+      "analytic_mean_delta": 0.00625,
+      "credible95": [
+        -0.07789958584055488,
+        0.09062597308688727
+      ],
+      "probability_loss_gt_1pp": 0.351655
+    },
+    "64": {
+      "probability_improved": 0.530325,
+      "mean_delta": 0.0018961335324185296,
+      "analytic_mean_delta": 0.001838235294117647,
+      "credible95": [
+        -0.045495533352430735,
+        0.049587619690925074
+      ],
+      "probability_loss_gt_1pp": 0.312255
+    }
+  },
+  "posterior_calibration": {
+    "null": {
+      "probability_improved": 0.50156,
+      "mean_delta": 0.0003615854037709725,
+      "analytic_mean_delta": 0.0,
+      "credible95": [
+        -0.11778867592391284,
+        0.11856296102960945
+      ],
+      "probability_loss_gt_1pp": 0.42686
+    },
+    "positive": {
+      "probability_improved": 1.0,
+      "mean_delta": 0.8001842275605568,
+      "analytic_mean_delta": 0.7999999999999999,
+      "credible95": [
+        0.6468022505937833,
+        0.9129805290344208
+      ],
+      "probability_loss_gt_1pp": 0.0
+    },
+    "negative": {
+      "probability_improved": 0.0,
+      "mean_delta": -0.7997927733415984,
+      "analytic_mean_delta": -0.7999999999999999,
+      "credible95": [
+        -0.9129415809038436,
+        -0.6494255019871817
+      ],
+      "probability_loss_gt_1pp": 1.0
+    }
+  },
+  "support": {
+    "all": {
+      "labels": 6701,
+      "any_sample": [
+        3548,
+        3746
+      ],
+      "mean_inclusion": [
+        0.5263160349201612,
+        0.5242267945082824
+      ]
+    },
+    "rest": {
+      "labels": 436,
+      "any_sample": [
+        123,
+        332
+      ],
+      "mean_inclusion": [
+        0.28211009174311924,
+        0.5813503440366973
+      ]
+    }
+  },
+  "default_corpus_reproduced_labels": 6701,
+  "replay": {
+    "games": 68,
+    "decisions": 1775,
+    "legal_replay": true,
+    "state_keys": true,
+    "public_masks": true,
+    "seeds": true,
+    "outcomes": true
+  },
+  "reproduced_first_divergence_searches": 54,
+  "limitations": [
+    "Fixed synthetic opponent teams and common bot; no expert-human comparison.",
+    "Equal Rest/no-Rest weighting is a stress scenario assumption, not human prevalence.",
+    "Exploratory pilot only. No adoption without fresh confirmation.",
+    "Support diagnostic uses positive labels that motivated the candidate; it is not independent strength evidence.",
+    "Pilot preceded the final Perish-slot guard. Fixture-level equivalence is recorded, and all first-divergence choices are rechecked with final code."
+  ]
+}

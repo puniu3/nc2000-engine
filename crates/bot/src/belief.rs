@@ -202,6 +202,7 @@ pub enum FallbackPolicy {
     RetainPerish,
     #[default]
     EarlyPerish,
+    EarlyRest,
 }
 
 impl FallbackPolicy {
@@ -213,6 +214,7 @@ impl FallbackPolicy {
             Self::RevealedLoadoutDraw => "revealed-loadout-draw-v1",
             Self::RetainPerish => "retain-perish-v1",
             Self::EarlyPerish => "early-perish-v1",
+            Self::EarlyRest => "early-rest-v1",
         }
     }
 }
@@ -1152,18 +1154,65 @@ impl Belief {
         Some(LoadoutDraw { entries, total })
     }
 
+    fn early_rest_draw(&self, dex: &Dex, mo: &MonObs, mon: &Pokemon) -> Option<LoadoutDraw> {
+        let rest = dex.moves.id("rest")?;
+        if !mo.appeared || mon.base_move_slots.iter().any(|m| m.id == rest)
+            || !format_move_legal_at_level(dex.species.key(mo.species), "rest", mo.level)
+        {
+            return None;
+        }
+        let mut total = 0.0;
+        let mut healing = 0.0;
+        for candidate in &self.cands {
+            for source in &candidate.sets {
+                if dex.species.id(&toid(&source.species)) != Some(mo.species) {
+                    continue;
+                }
+                let item = dex.items.id(&toid(&source.item));
+                let moves: Vec<_> = source.moves.iter().filter_map(|m| dex.moves.id(&toid(m))).collect();
+                if item.is_some() != mo.preview_has_item
+                    || mo.item.original.is_some_and(|known| known != item)
+                    || moves.len() != source.moves.len() || moves.is_empty() || moves.len() > 4
+                    || !moves.iter().all(|&m| format_move_legal_at_level(dex.species.key(mo.species), dex.moves.key(m), mo.level))
+                    || !mo.revealed_moves.iter().all(|&r| moves.iter().any(|&m| move_matches(dex, m, r)))
+                {
+                    continue;
+                }
+                let weight = candidate.weight.unwrap_or(1.0);
+                total += weight;
+                if moves.contains(&rest) { healing += weight; }
+            }
+        }
+        if healing <= 0.0 { return None; }
+        let mut healed = mon.clone();
+        if healed.base_move_slots.len() < 4 {
+            healed.base_move_slots.push(fresh_move_slot(dex, rest));
+        } else {
+            let slot = healed.base_move_slots.iter().enumerate().rev().find(|(_, m)| {
+                !matches!(dex.moves.key(m.id), "meanlook" | "perishsong")
+                    && !mo.revealed_moves.iter().any(|&r| move_matches(dex, m.id, r))
+            })?.0;
+            healed.base_move_slots[slot] = fresh_move_slot(dex, rest);
+        }
+        healed.move_slots = healed.base_move_slots;
+        let mut entries = vec![(healed, healing)];
+        if total > healing { entries.push((mon.clone(), total - healing)); }
+        Some(LoadoutDraw { entries, total })
+    }
+
     fn build_loadout_draws(&self, dex: &Dex, obs: &Observer, roster: &[Pokemon]) -> Option<Vec<Option<LoadoutDraw>>> {
-        if !matches!(self.fallback_policy, FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::EarlyPerish) || self.pinned {
+        if !matches!(self.fallback_policy, FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest) || self.pinned {
             return None;
         }
         let draws: Vec<_> = obs
             .mons()
             .iter()
             .zip(roster)
-            .map(|(mo, mon)| if self.fallback_policy == FallbackPolicy::EarlyPerish {
-                self.early_perish_draw(dex, mo, mon)
-            } else {
-                self.loadout_draw(dex, mo)
+            .map(|(mo, mon)| match self.fallback_policy {
+                FallbackPolicy::EarlyPerish => self.early_perish_draw(dex, mo, mon),
+                FallbackPolicy::EarlyRest => self.early_perish_draw(dex, mo, mon)
+                    .or_else(|| self.early_rest_draw(dex, mo, mon)),
+                _ => self.loadout_draw(dex, mo),
             })
             .collect();
         draws.iter().any(Option::is_some).then_some(draws)
@@ -1181,7 +1230,7 @@ impl Belief {
         if pick.is_some() || self.pinned {
             return None;
         }
-        let active = |slot: usize| self.fallback_policy != FallbackPolicy::EarlyPerish
+        let active = |slot: usize| !matches!(self.fallback_policy, FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest)
             || !battle.sides[opp].roster[slot].fainted;
         if self.draws.is_none() && self.loadout_draws.as_ref().is_none_or(|plans| {
             !plans.iter().enumerate().any(|(slot, plan)| plan.is_some() && active(slot))
@@ -1230,7 +1279,7 @@ impl Belief {
                     .iter()
                     .map(|mo| match self.fallback_policy {
                         FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-                        FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish => base_set(dex, mo),
+                        FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest => base_set(dex, mo),
                     })
                     .collect();
                 Battle::from_fixture(dex, "1,2,3,4", &minimal, &minimal)
@@ -1252,14 +1301,14 @@ impl Belief {
         }
         match self.fallback_policy {
             FallbackPolicy::LegacyMetaOnly => FallbackSource::LegacyEmpty,
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest
                 if community_rental_sets(dex)
                     .iter()
                     .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species)) =>
             {
                 FallbackSource::CommunityRental
             }
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish => FallbackSource::Learnset,
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest => FallbackSource::Learnset,
         }
     }
 
@@ -1280,7 +1329,7 @@ impl Belief {
             // Deliberately empty: the engine safely enumerates implicit
             // Struggle, matching the pre-M17d control without a fake move.
             FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish => base_set(dex, mo),
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest => base_set(dex, mo),
         });
         set.level = mo.level;
         set.gender = Some(match mo.gender.as_str() {
@@ -1310,7 +1359,7 @@ impl Belief {
             moves.push(legal_fallback_move(dex, mo));
         }
         moves.truncate(4);
-        if matches!(self.fallback_policy, FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish)
+        if matches!(self.fallback_policy, FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest)
             && mo.revealed_moves.iter().any(|&m| dex.moves.key(m) == "meanlook")
             && mo.revealed_moves.len() < 4
             && !moves.iter().any(|m| toid(m) == "perishsong")
@@ -1863,6 +1912,104 @@ mod fallback_tests {
         let battle = Battle::from_fixture(&dex, "1,2,3,4", &[set.clone()], &[set]).unwrap();
         let obs = Observer::new(&battle, 0);
         (dex, pool, battle, obs)
+    }
+
+    #[test]
+    fn early_rest_samples_only_an_unrevealed_slot_and_preserves_metadata() {
+        let dex = test_dex();
+        let plain: PokemonSet = serde_json::from_value(serde_json::json!({"species":"snorlax","name":"Snorlax","level":50,"gender":"M","item":"leftovers","moves":["bodyslam","earthquake","selfdestruct","curse"]})).unwrap();
+        let mut healing = plain.clone(); healing.moves[3] = "rest".into();
+        let pool = MetaPool { teams:vec![
+            crate::preview::MetaTeam {id:"plain".into(),sets:vec![plain.clone()],weight:Some(3.0)},
+            crate::preview::MetaTeam {id:"healing".into(),sets:vec![healing],weight:Some(1.0)},
+        ]};
+        let mut actual = plain; actual.level = 53;
+        let mut battle = Battle::from_fixture(&dex,"1,2,3,4",&[actual.clone()],&[actual]).unwrap();
+        let mut obs = Observer::new(&battle,0);
+        let candidate = Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::EarlyRest);
+        assert!(candidate.is_fallback() && candidate.loadout_draws.is_none());
+        obs.set_name(0,"Snorlax");
+        for name in ["Body Slam","Earthquake","Self-Destruct"] {
+            obs.ingest_line(&format!("|move|p2a: Snorlax|{name}|p1a: Target"),&dex);
+        }
+        battle.sides[1].roster[0].base_move_slots[0].pp-=3;
+        battle.sides[1].roster[0].move_slots=battle.sides[1].roster[0].base_move_slots;
+        let base = Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::EarlyPerish);
+        let candidate = Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::EarlyRest);
+        let plan = candidate.loadout_draws.as_ref().unwrap()[0].as_ref().unwrap();
+        assert_eq!(plan.entries[0].1 / plan.total,0.25);
+        let mut heals = 0;
+        for seed in 0..2000 {
+            let mut ra=SplitMix64::new(seed); let mut rb=ra.clone(); ra.next();
+            let a=base.determinize(&dex,&battle,&obs,&mut ra);
+            let mut b=candidate.determinize(&dex,&battle,&obs,&mut rb);
+            assert_eq!(ra.0,rb.0);
+            let mon=&mut b.sides[1].roster[0];
+            assert_eq!(mon.base_move_slots[0].pp,battle.sides[1].roster[0].base_move_slots[0].pp);
+            assert!(obs.mons()[0].revealed_moves.iter().all(|r| mon.base_move_slots.iter().any(|m|move_matches(&dex,m.id,*r))));
+            assert_eq!(mon.base_move_slots.len(),4);
+            heals+=usize::from(mon.base_move_slots.iter().any(|m|dex.moves.key(m.id)=="rest"));
+            mon.base_move_slots=a.sides[1].roster[0].base_move_slots;
+            mon.move_slots=a.sides[1].roster[0].move_slots;
+            assert_eq!(a.state_key128(),b.state_key128());
+        }
+        assert!((heals as f64/2000.0-0.25).abs()<0.04);
+        let mut fainted=battle.clone(); fainted.sides[1].roster[0].fainted=true; fainted.sides[1].roster[0].hp=0;
+        for seed in 0..16 {
+            let mut a=SplitMix64::new(seed); let mut b=a.clone();
+            assert_eq!(base.determinize(&dex,&fainted,&obs,&mut a).state_key128(),candidate.determinize(&dex,&fainted,&obs,&mut b).state_key128());
+            assert_eq!(a.0,b.0);
+        }
+        for addition in ["Curse","Rest","Counter"] {
+            let mut observed=obs.clone();
+            observed.ingest_line(&format!("|move|p2a: Snorlax|{addition}|p1a: Target"),&dex);
+            let b=Belief::with_fallback_policy(&dex,&pool,&observed,FallbackPolicy::EarlyRest);
+            assert!(b.loadout_draws.is_none());
+        }
+        let mut observed=obs.clone();
+        observed.ingest_line("|-item|p2a: Snorlax|Magnet",&dex);
+        assert!(Belief::with_fallback_policy(&dex,&pool,&observed,FallbackPolicy::EarlyRest).loadout_draws.is_none());
+    }
+
+    #[test]
+    fn early_rest_cannot_displace_a_retained_perish_combo() {
+        let dex = test_dex();
+        let plain: PokemonSet = serde_json::from_value(serde_json::json!({"species":"misdreavus","name":"Misdreavus","level":50,"gender":"M","item":"leftovers","moves":["meanlook","protect","painsplit","perishsong"]})).unwrap();
+        let mut healing=plain.clone(); healing.moves[3]="rest".into();
+        let pool=MetaPool {teams:vec![
+            crate::preview::MetaTeam {id:"perish".into(),sets:vec![plain.clone()],weight:Some(3.0)},
+            crate::preview::MetaTeam {id:"healing".into(),sets:vec![healing],weight:Some(1.0)},
+        ]};
+        let mut actual=plain; actual.level=53;
+        let battle=Battle::from_fixture(&dex,"1,2,3,4",&[actual.clone()],&[actual]).unwrap();
+        let mut obs=Observer::new(&battle,0); obs.set_name(0,"Misdreavus");
+        for name in ["Mean Look","Protect","Pain Split"] {
+            obs.ingest_line(&format!("|move|p2a: Misdreavus|{name}|p1a: Target"),&dex);
+        }
+        let base=Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::EarlyPerish);
+        let candidate=Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::EarlyRest);
+        assert!(base.loadout_draws.is_none() && candidate.loadout_draws.is_none());
+        for seed in 0..32 {
+            let mut a=SplitMix64::new(seed); let mut b=a.clone();
+            let x=base.determinize(&dex,&battle,&obs,&mut a);
+            let y=candidate.determinize(&dex,&battle,&obs,&mut b);
+            assert_eq!(x.state_key128(),y.state_key128()); assert_eq!(a.0,b.0);
+            assert!(y.sides[1].roster[0].base_move_slots.iter().any(|m|dex.moves.key(m.id)=="perishsong"));
+        }
+    }
+
+    #[test]
+    fn early_rest_keeps_existing_perish_draw_bit_identical() {
+        let (dex,pool,battle,mut obs)=loadout_fixture();
+        obs.set_name(0,"Misdreavus");
+        let a=Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::EarlyPerish);
+        let b=Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::EarlyRest);
+        assert!(a.loadout_draws.as_ref().unwrap()[0].is_some());
+        for seed in 0..128 {
+            let mut ra=SplitMix64::new(seed); let mut rb=ra.clone();
+            assert_eq!(a.determinize(&dex,&battle,&obs,&mut ra).state_key128(),b.determinize(&dex,&battle,&obs,&mut rb).state_key128());
+            assert_eq!(ra.0,rb.0);
+        }
     }
 
     #[test]

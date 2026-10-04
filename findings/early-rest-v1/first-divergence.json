@@ -1,0 +1,1293 @@
+[
+  {
+    "case": "snorlax-umbreon-rest",
+    "trial": 0,
+    "decision": 9,
+    "turn": 9,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move charm",
+      "move pursuit"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      201,
+      201
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      266,
+      266
+    ],
+    "true_foe_moves": [
+      "bodyslam",
+      "earthquake",
+      "curse",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,rest,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,rest,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-umbreon-rest",
+    "trial": 1,
+    "decision": 5,
+    "turn": 5,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move toxic",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      146,
+      201
+    ],
+    "foe": "machamp",
+    "foe_hp": [
+      196,
+      196
+    ],
+    "true_foe_moves": [
+      "crosschop",
+      "earthquake",
+      "rockslide",
+      "hiddenpower"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 45,
+          "crosschop,earthquake,rockslide,rest:Bug:70": 19
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-umbreon-rest",
+    "trial": 2,
+    "decision": 5,
+    "turn": 5,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move pursuit",
+      "move toxic"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      75,
+      201
+    ],
+    "foe": "machamp",
+    "foe_hp": [
+      196,
+      196
+    ],
+    "true_foe_moves": [
+      "crosschop",
+      "earthquake",
+      "rockslide",
+      "hiddenpower"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 45,
+          "crosschop,earthquake,rockslide,rest:Bug:70": 19
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-umbreon-rest",
+    "trial": 3,
+    "decision": 4,
+    "turn": 4,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move toxic",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      146,
+      201
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      266,
+      266
+    ],
+    "true_foe_moves": [
+      "bodyslam",
+      "earthquake",
+      "curse",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,curse,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,curse,earthquake,rest:Dark:70": 12,
+          "bodyslam,curse,earthquake,selfdestruct:Dark:70": 52
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-umbreon-no-rest",
+    "trial": 0,
+    "decision": 3,
+    "turn": 3,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move pursuit",
+      "move toxic"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      148,
+      201
+    ],
+    "foe": "machamp",
+    "foe_hp": [
+      196,
+      196
+    ],
+    "true_foe_moves": [
+      "crosschop",
+      "earthquake",
+      "rockslide",
+      "hiddenpower"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 45,
+          "crosschop,earthquake,rockslide,rest:Bug:70": 19
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-umbreon-no-rest",
+    "trial": 1,
+    "decision": 2,
+    "turn": 2,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move rest",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      92,
+      201
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      266,
+      266
+    ],
+    "true_foe_moves": [
+      "bodyslam",
+      "earthquake",
+      "curse",
+      "selfdestruct"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 33,
+          "bodyslam,earthquake,selfdestruct,rest:Dark:70": 31
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-umbreon-no-rest",
+    "trial": 2,
+    "decision": 3,
+    "turn": 3,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move toxic",
+      "move pursuit"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      149,
+      201
+    ],
+    "foe": "machamp",
+    "foe_hp": [
+      196,
+      196
+    ],
+    "true_foe_moves": [
+      "crosschop",
+      "earthquake",
+      "rockslide",
+      "hiddenpower"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 45,
+          "crosschop,earthquake,rockslide,rest:Bug:70": 19
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-umbreon-no-rest",
+    "trial": 3,
+    "decision": 4,
+    "turn": 4,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move charm",
+      "move toxic"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      19,
+      201
+    ],
+    "foe": "zapdos",
+    "foe_hp": [
+      215,
+      215
+    ],
+    "true_foe_moves": [
+      "thunder",
+      "hiddenpower",
+      "swagger",
+      "whirlwind"
+    ],
+    "true_hp_type": "Ice",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,rest:Ice:70": 21,
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 43
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-marowak-rest",
+    "trial": 0,
+    "decision": 8,
+    "turn": 7,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move toxic",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      201,
+      201
+    ],
+    "foe": "machamp",
+    "foe_hp": [
+      196,
+      196
+    ],
+    "true_foe_moves": [
+      "crosschop",
+      "earthquake",
+      "rockslide",
+      "hiddenpower"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 45,
+          "crosschop,earthquake,rockslide,rest:Bug:70": 19
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-marowak-rest",
+    "trial": 3,
+    "decision": 17,
+    "turn": 15,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move rest",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      61,
+      201
+    ],
+    "foe": "zapdos",
+    "foe_hp": [
+      215,
+      215
+    ],
+    "true_foe_moves": [
+      "thunder",
+      "hiddenpower",
+      "swagger",
+      "whirlwind"
+    ],
+    "true_hp_type": "Ice",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "swagger,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "swagger,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-marowak-no-rest",
+    "trial": 0,
+    "decision": 13,
+    "turn": 11,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move toxic",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      75,
+      201
+    ],
+    "foe": "zapdos",
+    "foe_hp": [
+      176,
+      215
+    ],
+    "true_foe_moves": [
+      "thunder",
+      "hiddenpower",
+      "swagger",
+      "whirlwind"
+    ],
+    "true_hp_type": "Ice",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,swagger,thunder,whirlwind:Ice:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,swagger,thunder,whirlwind:Ice:70": 64
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-marowak-no-rest",
+    "trial": 1,
+    "decision": 4,
+    "turn": 3,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move fireblast",
+      "move earthquake"
+    ],
+    "own": "marowak",
+    "own_hp": [
+      11,
+      166
+    ],
+    "foe": "machamp",
+    "foe_hp": [
+      196,
+      196
+    ],
+    "true_foe_moves": [
+      "crosschop",
+      "earthquake",
+      "rockslide",
+      "hiddenpower"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 45,
+          "crosschop,earthquake,rockslide,rest:Bug:70": 19
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-marowak-no-rest",
+    "trial": 2,
+    "decision": 9,
+    "turn": 8,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "move pursuit",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      138,
+      201
+    ],
+    "foe": "machamp",
+    "foe_hp": [
+      196,
+      196
+    ],
+    "true_foe_moves": [
+      "crosschop",
+      "earthquake",
+      "rockslide",
+      "hiddenpower"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 45,
+          "crosschop,earthquake,rockslide,rest:Bug:70": 19
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "snorlax-marowak-no-rest",
+    "trial": 3,
+    "decision": 13,
+    "turn": 10,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "move rest",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      132,
+      201
+    ],
+    "foe": "machamp",
+    "foe_hp": [
+      160,
+      196
+    ],
+    "true_foe_moves": [
+      "crosschop",
+      "earthquake",
+      "rockslide",
+      "hiddenpower"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 45,
+          "crosschop,earthquake,rockslide,rest:Bug:70": 19
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "skarmory-marowak-rest",
+    "trial": 0,
+    "decision": 9,
+    "turn": 7,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move toxic",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      201,
+      201
+    ],
+    "foe": "marowak",
+    "foe_hp": [
+      166,
+      166
+    ],
+    "true_foe_moves": [
+      "earthquake",
+      "fireblast",
+      "rockslide",
+      "swordsdance"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,rockslide,hiddenpowerbug,swordsdance:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,rockslide,hiddenpowerbug,rest:Bug:70": 7,
+          "earthquake,rockslide,hiddenpowerbug,swordsdance:Bug:70": 57
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "skarmory-marowak-rest",
+    "trial": 1,
+    "decision": 9,
+    "turn": 6,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move toxic",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      201,
+      201
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "curse",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,rest:Dark:70": 27,
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 37
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "skarmory-marowak-rest",
+    "trial": 2,
+    "decision": 8,
+    "turn": 6,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move toxic",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      201,
+      201
+    ],
+    "foe": "marowak",
+    "foe_hp": [
+      166,
+      166
+    ],
+    "true_foe_moves": [
+      "earthquake",
+      "fireblast",
+      "rockslide",
+      "swordsdance"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,rockslide,hiddenpowerbug,swordsdance:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,rockslide,hiddenpowerbug,rest:Bug:70": 7,
+          "earthquake,rockslide,hiddenpowerbug,swordsdance:Bug:70": 57
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "skarmory-marowak-rest",
+    "trial": 3,
+    "decision": 7,
+    "turn": 5,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "switch 2",
+      "switch 3"
+    ],
+    "own": "marowak",
+    "own_hp": [
+      0,
+      166
+    ],
+    "foe": "marowak",
+    "foe_hp": [
+      166,
+      166
+    ],
+    "true_foe_moves": [
+      "earthquake",
+      "fireblast",
+      "rockslide",
+      "swordsdance"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,rockslide,hiddenpowerbug,swordsdance:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,rockslide,hiddenpowerbug,rest:Bug:70": 7,
+          "earthquake,rockslide,hiddenpowerbug,swordsdance:Bug:70": 57
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "skarmory-marowak-no-rest",
+    "trial": 0,
+    "decision": 17,
+    "turn": 14,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move toxic",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      40,
+      201
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "curse",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 25,
+          "bodyslam,earthquake,selfdestruct,rest:Dark:70": 39
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "skarmory-marowak-no-rest",
+    "trial": 1,
+    "decision": 7,
+    "turn": 5,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move toxic",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      201,
+      201
+    ],
+    "foe": "marowak",
+    "foe_hp": [
+      166,
+      166
+    ],
+    "true_foe_moves": [
+      "earthquake",
+      "fireblast",
+      "rockslide",
+      "swordsdance"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,rockslide,hiddenpowerbug,swordsdance:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,rockslide,hiddenpowerbug,rest:Bug:70": 7,
+          "earthquake,rockslide,hiddenpowerbug,swordsdance:Bug:70": 57
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "skarmory-marowak-no-rest",
+    "trial": 2,
+    "decision": 9,
+    "turn": 6,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "switch 2",
+      "move curse"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      163,
+      292
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "curse",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 25,
+          "bodyslam,earthquake,selfdestruct,rest:Dark:70": 39
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "skarmory-marowak-no-rest",
+    "trial": 3,
+    "decision": 15,
+    "turn": 12,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move rest",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      62,
+      201
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "curse",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "curse,doubleedge,bodyslam,earthquake:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "curse,doubleedge,bodyslam,earthquake:Dark:70": 28,
+          "curse,doubleedge,bodyslam,rest:Dark:70": 36
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "zapdos-snorlax-rest",
+    "trial": 0,
+    "decision": 3,
+    "turn": 3,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "switch 3",
+      "switch 2"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      192,
+      292
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      152,
+      266
+    ],
+    "true_foe_moves": [
+      "bodyslam",
+      "earthquake",
+      "selfdestruct",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 25,
+          "bodyslam,earthquake,selfdestruct,rest:Dark:70": 39
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "zapdos-snorlax-rest",
+    "trial": 1,
+    "decision": 6,
+    "turn": 6,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move doubleedge",
+      "move curse"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      202,
+      292
+    ],
+    "foe": "zapdos",
+    "foe_hp": [
+      144,
+      215
+    ],
+    "true_foe_moves": [
+      "thunder",
+      "hiddenpower",
+      "swagger",
+      "rest"
+    ],
+    "true_hp_type": "Ice",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "zapdos-snorlax-rest",
+    "trial": 2,
+    "decision": 8,
+    "turn": 8,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "move drillpeck",
+      "move rest"
+    ],
+    "own": "skarmory",
+    "own_hp": [
+      69,
+      171
+    ],
+    "foe": "machamp",
+    "foe_hp": [
+      196,
+      196
+    ],
+    "true_foe_moves": [
+      "crosschop",
+      "earthquake",
+      "rockslide",
+      "hiddenpower"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 45,
+          "crosschop,earthquake,rockslide,rest:Bug:70": 19
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "zapdos-snorlax-no-rest",
+    "trial": 2,
+    "decision": 8,
+    "turn": 8,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move drillpeck",
+      "move rest"
+    ],
+    "own": "skarmory",
+    "own_hp": [
+      93,
+      171
+    ],
+    "foe": "machamp",
+    "foe_hp": [
+      196,
+      196
+    ],
+    "true_foe_moves": [
+      "crosschop",
+      "earthquake",
+      "rockslide",
+      "hiddenpower"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "crosschop,earthquake,rockslide,hiddenpowerbug:Bug:70": 45,
+          "crosschop,earthquake,rockslide,rest:Bug:70": 19
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "zapdos-snorlax-no-rest",
+    "trial": 3,
+    "decision": 5,
+    "turn": 5,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "switch 2",
+      "move toxic"
+    ],
+    "own": "skarmory",
+    "own_hp": [
+      148,
+      171
+    ],
+    "foe": "zapdos",
+    "foe_hp": [
+      144,
+      215
+    ],
+    "true_foe_moves": [
+      "thunder",
+      "hiddenpower",
+      "swagger",
+      "whirlwind"
+    ],
+    "true_hp_type": "Ice",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        },
+        "choice_reproduced": true
+      }
+    ]
+  }
+]
