@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+import gzip
+import hashlib
+import importlib.util
+import json
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+out = root / 'findings/early-rest-natural-v1'
+run = root / 'tmp/early-rest-natural-v1'
+games = run / 'games'
+read = lambda path: json.loads(path.read_text())
+protocol = read(out / 'protocol.json')
+plan = read(out / 'analysis-plan.json')
+manifest = read(games / 'manifest.json')
+assert manifest['protocol'] == protocol
+assert manifest['protocol_sha256'] == hashlib.sha256((out / 'protocol.json').read_bytes()).hexdigest()
+assert manifest['binary_sha256'] == hashlib.sha256((root / 'target/release/examples/early_rest_duel').read_bytes()).hexdigest()
+for name, digest in read(out / 'source-sha256.json').items():
+    assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name
+assert len(list(games.glob('*-a*.json'))) == 2 * sum(c['pairs'] for c in protocol['cases'])
+for option, filename in [('--verify', 'replay.json'), ('--audit', 'first-divergence.json')]:
+    with (out / filename).open('w') as f:
+        subprocess.run(['target/release/examples/early_rest_duel', str(out / 'protocol.json'), str(games), option], cwd=root, stdout=f, check=True)
+spec = importlib.util.spec_from_file_location('rest_report', root / 'tools/early-rest-report.py')
+report = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(report)
+pairs, records, cases, groups = [], [], [], []
+for case in protocol['cases']:
+    group = []
+    assert case['prefix'] == []
+    for trial in range(case['pairs']):
+        arms = [read(games / f"{case['id']}-t{trial:03}-a{arm}.json") for arm in range(2)]
+        assert arms[0]['battle_seed'] == arms[1]['battle_seed']
+        assert arms[0]['agent_seeds'] == arms[1]['agent_seeds']
+        first = next((i for i, (a, b) in enumerate(zip(arms[0]['decisions'], arms[1]['decisions'])) if a['choices'] != b['choices']), None)
+        for a, b in zip(arms[0]['decisions'][:first], arms[1]['decisions'][:first]):
+            assert a == b
+        if first is None:
+            assert arms[0]['decisions'] == arms[1]['decisions']
+            assert arms[0]['score'] == arms[1]['score']
+        else:
+            a, b = [arm['decisions'][first] for arm in arms]
+            assert a['key'] == b['key'] and a['search_seeds'] == b['search_seeds']
+            opponent = 1 - arms[0]['side']
+            assert a['choices'][opponent] == b['choices'][opponent]
+        if case['family'] == 'onpool-control':
+            assert first is None
+        row = {'case': case['id'], 'trial': trial, 'scores': [a['score'] for a in arms], 'first_difference': first}
+        group.append(row)
+        pairs.append(row)
+        records.extend(arms)
+    cases.append({'case': case['id'], **report.outcome_summary(group)})
+    if case['family'] != 'onpool-control':
+        groups.append(group)
+audit = read(out / 'first-divergence.json')
+assert len(audit) == sum(p['first_difference'] is not None for p in pairs)
+assert all(m['choice_reproduced'] for row in audit for m in row['models'])
+posterior = report.posterior(groups, plan)
+calibration = {**plan, 'draws': 50000, 'prior_mass': [1]}
+null = report.posterior([[{'scores': [0, 0]}, {'scores': [1, 1]}] for _ in groups], calibration)['1']['probability_improved']
+positive = report.posterior([[{'scores': [0, 1]}] * 4 for _ in groups], calibration)['1']['probability_improved']
+negative = report.posterior([[{'scores': [1, 0]}] * 4 for _ in groups], calibration)['1']['probability_improved']
+assert .48 < null < .52 and positive > .99 and negative < .01
+summary = {'cases': cases, 'screen': report.outcome_summary([p for group in groups for p in group]),
+           'posterior': posterior, 'replay': read(out / 'replay.json'), 'reproduced_searches': 2 * len(audit),
+           'calibration': {'null': null, 'positive': positive, 'negative': negative},
+           'scope': protocol['interpretation']}
+primary = posterior.get('1')
+reverse = primary is not None and 1 - primary['probability_improved'] >= .8
+decision = {'stage': 'revert_local_adoption' if reverse else 'incomplete' if primary is None else 'no_reversal_trigger',
+            'probability_worse': 1 - primary['probability_improved'] if primary else None,
+            'threshold': .8, 'reversal_required': reverse,
+            'scope': 'This screen cannot establish general noninferiority or human superiority.'}
+for name, value in [('summary.json', summary), ('decision.json', decision), ('manifest.json', manifest)]:
+    (out / name).write_text(json.dumps(value, indent=2) + '\n')
+(out / 'records.json.gz').write_bytes(gzip.compress(json.dumps({'pairs': pairs, 'games': records}, separators=(',', ':')).encode(), mtime=0))
+print(json.dumps({'screen': summary['screen'], 'decision': decision}, indent=2))

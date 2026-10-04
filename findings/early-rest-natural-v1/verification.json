@@ -1,0 +1,9 @@
+{
+  "artifact_sha256": {
+    "index.html": "6508663bcf6831b4500a984073da1a610aa594e5029c56c0c4fc4f3312836118",
+    "inventory-audit.json": "b7607c6f4d65f945b417235d042164fe09a4ee095260eaa77ff2d7d9aee2e051",
+    "source-sha256.json": "4011049dd380ccb3c8d29b34191a8b590f170542d6e7f11efee7df2c8d1d0360",
+    "protocol.json": "710381004e6b611832c3105d50003ebebd5572f2341bd4e3e3c99cf9ae771f49",
+    "analysis-plan.json": "466c508e9b1d0ba358be6f750ab17c12a34e875e5f1997511597180dc8ae5195"
+  }
+}
