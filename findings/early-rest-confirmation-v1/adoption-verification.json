@@ -1,0 +1,20 @@
+{
+  "tests": {
+    "bot_unit": 152,
+    "position": 10,
+    "belief": 6,
+    "blind": 2,
+    "workspace_all_targets": "passed"
+  },
+  "candidate_runtime_unchanged_except_default": true,
+  "default_policy": "early-rest-v1",
+  "source_sha256": "1baa263326811fbea58c8178a6ec2e7297f7999aa147c453c18ce5921b95cf92",
+  "default_matches_explicit_candidate_seeds": 2000,
+  "entrypoints": {
+    "Belief::new": "FallbackPolicy::default",
+    "BlindAgent::new": "FallbackPolicy::default",
+    "WASM constructor": "Belief::new",
+    "position/import default": "Belief::new"
+  },
+  "deployment": "source default only; public deployment unchanged"
+}

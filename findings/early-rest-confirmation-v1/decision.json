@@ -1,5 +1,5 @@
 {
-  "stage": "review_passed_pending_local_checks",
+  "stage": "adopted_locally",
   "criterion_met": true,
   "threshold": 0.8,
   "primary": {
@@ -13,7 +13,7 @@
     "probability_loss_gt_1pp": 0.1583
   },
   "data": "independent 64 stress pairs only; pilot not pooled",
-  "default_changed": false,
+  "default_changed": true,
   "secondary_review_required": false,
   "scope": "fixed equal-weight eight-case benchmark; not a human-strength probability",
   "review": {
@@ -23,5 +23,7 @@
     "caps": 0,
     "prior_sensitivity": "P(improve) ranges from 81.03% at mass 0.5 to 61.41% at mass 64; mass 4 is 76.53%. Adoption uses only the frozen mass-1 criterion.",
     "mechanism": "Four improved Snorlax/Umbreon no-Rest pairs first change Pursuit to Toxic against Machamp. This is a whole-policy benchmark improvement, not isolated evidence for anticipating the lead Rest move."
-  }
+  },
+  "local_checks": "adoption-verification.json",
+  "deployment": "not deployed; published version remains EarlyPerish"
 }

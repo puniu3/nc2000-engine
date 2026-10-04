@@ -7,7 +7,7 @@
   "default_model_rows_reproduced": 6701,
   "first_divergence_searches_reproduced": 54,
   "final_source_sha256": {
-    "crates/bot/src/belief.rs": "6596eb28b41261c0f9715e3601dcbf43b0fbbebadfe6d9de32a1874e00cab936",
+    "crates/bot/src/belief.rs": "1baa263326811fbea58c8178a6ec2e7297f7999aa147c453c18ce5921b95cf92",
     "crates/bot/examples/early_rest_duel.rs": "5db6a081bb02d388453af7cf814f72d69a5e61482b60a1267ff919596211ba8b",
     "crates/bot/examples/next_move_support.rs": "2d5ec1820625ff89c58279e12c966f9c092a7d82df6777fed45e68861b9aa7f0"
   },
@@ -15,11 +15,11 @@
     "pilot-manifest.json": "a7f8fe295ff194abd98f5217e3028ae45470cca7f9ee9f9e4ed3875e3d392e1d",
     "summary.json": "6d7d25e04cd77a748f440aa6fabc45fe05d1b9dde50ef68aa6ddb787aac44083",
     "corpus-protocol.json": "79911d58608e5e59196d3360044d06d82483c2a0f6cc5a4569e905827b4782b1",
-    "index.html": "e6b51de81ba6fb0c8c809b8c5705d3ef5c7509ee2e984d3b446addbd25d84353",
+    "index.html": "567342adbdddf0c91224f7759cd967ab7d4e6d01756cefa799d88f5c60ef164d",
     "first-divergence.json": "497fc82a1995e8a6110eafae32880385fc5173b43973ee759933781ec545a0f7",
     "pilot-source-sha256.json": "6c7eaaf99779516026789951ea848eb06c7628723350a3c2b8e3c1b558aaf0e2",
     "records.json.gz": "fc1ed79886414958e32dc9f37e878ba662d4bf56fa65038aa3606628e3e91489",
-    "README.md": "484b5162f283b0a8e2fb641e8b3f6e72eb1294397f2891b148c7d8afef88777c",
+    "README.md": "3f2535278e35d03ad5eb4c90f29809658a957a7236637b4f3682cd551e7be62e",
     "protocol.json": "1ab93e13afd4059c7fd11bb7d4d4ce919d7b83f7054baf306b73699e0a392e3a",
     "pilot-verification.json": "7e8bb2e3bfbd7766f07339361d33c936a67f40a8e3f5130071af2636c5308b9e",
     "analysis-plan.json": "197aa1a27b5049cf637cc0d44a9e51407a9aeb127bccbfce9ef1b3a1e9b47ba9",

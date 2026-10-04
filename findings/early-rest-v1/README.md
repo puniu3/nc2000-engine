@@ -1,6 +1,6 @@
 # Narrow unrevealed Rest candidate
 
-The production policy remains EarlyPerish. EarlyRest is opt-in through
+At pilot time the production policy remained EarlyPerish. EarlyRest was opt-in through
 `Belief::with_fallback_policy` and the research driver. It keeps the existing
 Perish draw when present. Otherwise, for an appeared living fallback mon
 without modeled Rest, it samples a Rest-inserted version of the same
@@ -68,3 +68,10 @@ pilot outcomes are not pooled into the primary confirmation analysis.
 The fixed half-Rest/half-no-Rest mixture is a stress benchmark, not a human
 population estimate. Raw spectator logs and player handles are excluded.
 The archive contains anonymous diagnostic rows and generated match traces.
+
+## Independent confirmation completed
+
+The fresh 64-pair sample scored 36 versus 40, with primary P(improvement)
+80.197%. The local source default is now EarlyRest after regression checks;
+the public deployment remains EarlyPerish. See ../early-rest-confirmation-v1
+for the frozen protocol, prior sensitivity, limitations and adoption record.

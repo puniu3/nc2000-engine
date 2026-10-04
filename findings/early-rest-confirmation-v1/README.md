@@ -23,9 +23,14 @@ whole-game wins.
 
 The secondary review found no no-Rest regression, capped outcome or
 control mismatch. The fixed primary criterion passed without adding
-trials, changing priors or pooling the 32-pair pilot. Local default
-adoption proceeds through constructor wiring and regression checks;
-see decision.json for current status. Public deployment is separate.
+trials, changing priors or pooling the 32-pair pilot. EarlyRest is now the local source default. All 170 relevant tests and
+workspace/all-targets compilation pass. A source comparison confirms the
+runtime implementation differs from the frozen candidate only in which
+enum variant is default. The constructor matches the explicit candidate
+on 2,000 sampling seeds. Public deployment remains unchanged.
+
+summary.json records default_changed=false at experiment time;
+decision.json and adoption-verification.json record subsequent adoption.
 
 ## Reproduction
 

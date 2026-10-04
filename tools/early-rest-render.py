@@ -13,7 +13,7 @@ a,b = s['stress']['scores']
 (out / 'index.html').write_text(f'''<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>未公開のねむるを想定する予備試験</title>
 <style>body{{font:17px/1.8 system-ui;background:#f7f5ef;color:#292820;max-width:1050px;margin:30px auto;padding:0 20px}}h1{{font-size:1.6em}}h2{{font-size:1.2em}}table{{border-collapse:collapse;width:100%;font-size:.9em}}td,th{{padding:9px;border-bottom:1px solid #ccc6b6;text-align:left}}.scroll{{overflow-x:auto}}a{{color:#4e643e}}</style>
 <h1>未公開のねむる：予備試験ではまだ採用できない</h1>
-<p>人間の対局で多かった回復技の見落としを受け、未公開の「ねむる」だけを候補へ加える試験版を作りました。既存の事前分布から出現頻度を取り、公開済みの技・残りPP・個体値・能力値は保持。既存のほろび対策も維持します。通常版の既定設定は変更していません。</p>
+<p>人間の対局で多かった回復技の見落としを受け、未公開の「ねむる」だけを候補へ加える試験版を作りました。既存の事前分布から出現頻度を取り、公開済みの技・残りPP・個体値・能力値は保持。既存のほろび対策も維持します。この予備試験の時点では通常版の既定設定を変更していません。</p>
 <p>4種類の対戦状況で、相手がねむるを持つ／持たない構成を同数用意。各4組の共通乱数による比較では、通常版{a:g}勝／32局、試験版{b:g}勝／32局でした。同じ乱数の組で改善{s['stress']['better']}・悪化{s['stress']['worse']}・同点{s['stress']['same']}です。別途2組の既知編成対照は手順まで一致しました。</p>
 <div class="scroll"><table><tr><th>対戦状況</th><th>組</th><th>通常版の得点</th><th>試験版の得点</th><th>着手変更</th></tr>{rows}</table></div>
 <p>ねむる有りの相手では6勝対6勝、無しでは6勝対7勝。狙った回復対策の効果はまだ確認できません。固定した混合条件と弱い事前分布による改善確率は{probability}で、以前採用した80%基準には届きません。これは人間に勝てる確率でも、一般的な強さの改善確率でもありません。</p>
