@@ -1,0 +1,1148 @@
+{
+  "rows": [
+    {
+      "team": "hc75-1st-show",
+      "family": "hc75-top8",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "hc75-1st-show"
+      ],
+      "full_move_item_support": [
+        "hc75-1st-show"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "hc75-2nd-toriyama",
+      "family": "hc75-top8",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "hc75-2nd-toriyama"
+      ],
+      "full_move_item_support": [
+        "hc75-2nd-toriyama"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "hc75-3rd-bean",
+      "family": "hc75-top8",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-08",
+        "hc75-3rd-bean",
+        "rental-cban-6"
+      ],
+      "full_move_item_support": [
+        "hc75-3rd-bean"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "hc75-top8-tezan",
+      "family": "hc75-top8",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "hc75-top8-tezan"
+      ],
+      "full_move_item_support": [
+        "hc75-top8-tezan"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "hc75-top8-tsuru",
+      "family": "hc75-top8",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "hc75-top8-tsuru"
+      ],
+      "full_move_item_support": [
+        "hc75-top8-tsuru"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-08",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-08",
+        "hc75-3rd-bean",
+        "rental-cban-6"
+      ],
+      "full_move_item_support": [
+        "sample-08"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-15",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-15",
+        "sample-15-orig"
+      ],
+      "full_move_item_support": [
+        "sample-15"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-15-orig",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-15",
+        "sample-15-orig"
+      ],
+      "full_move_item_support": [
+        "sample-15-orig"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-04",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-04"
+      ],
+      "full_move_item_support": [
+        "sample-04"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-14",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-14-orig",
+        "sample-14"
+      ],
+      "full_move_item_support": [
+        "sample-14"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-14-orig",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-14-orig",
+        "sample-14"
+      ],
+      "full_move_item_support": [
+        "sample-14-orig"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-13",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-13",
+        "nb-sample-13-0"
+      ],
+      "full_move_item_support": [
+        "sample-13"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-03",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-03"
+      ],
+      "full_move_item_support": [
+        "sample-03"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-17",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-17-orig",
+        "sample-17"
+      ],
+      "full_move_item_support": [
+        "sample-17"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-17-orig",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-17-orig",
+        "sample-17"
+      ],
+      "full_move_item_support": [
+        "sample-17-orig"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-10",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-8",
+        "sample-10"
+      ],
+      "full_move_item_support": [
+        "sample-10"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-23",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-20",
+        "sample-23"
+      ],
+      "full_move_item_support": [
+        "sample-23"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-07",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-07",
+        "rental-cban-3",
+        "mjj-2013-mario",
+        "lineage-fine-s07"
+      ],
+      "full_move_item_support": [
+        "sample-07"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-06",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-06"
+      ],
+      "full_move_item_support": [
+        "sample-06"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-12",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-12",
+        "nb-sample-12-0"
+      ],
+      "full_move_item_support": [
+        "sample-12"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-18",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-18"
+      ],
+      "full_move_item_support": [
+        "sample-18"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-20",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-20",
+        "rental-cban-17"
+      ],
+      "full_move_item_support": [
+        "sample-20"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-05",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-05"
+      ],
+      "full_move_item_support": [
+        "sample-05"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-01",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-01"
+      ],
+      "full_move_item_support": [
+        "sample-01"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-19",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-19"
+      ],
+      "full_move_item_support": [
+        "sample-19"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-26",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-26"
+      ],
+      "full_move_item_support": [
+        "sample-26"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-02",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-02"
+      ],
+      "full_move_item_support": [
+        "sample-02"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-11",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-11",
+        "sample-11-orig"
+      ],
+      "full_move_item_support": [
+        "sample-11"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-11-orig",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-11",
+        "sample-11-orig"
+      ],
+      "full_move_item_support": [
+        "sample-11-orig"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-21",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-21"
+      ],
+      "full_move_item_support": [
+        "sample-21"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-25",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-25",
+        "sample-25-orig"
+      ],
+      "full_move_item_support": [
+        "sample-25"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-25-orig",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-25",
+        "sample-25-orig"
+      ],
+      "full_move_item_support": [
+        "sample-25-orig"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-24",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-24"
+      ],
+      "full_move_item_support": [
+        "sample-24"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-09",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-09-orig",
+        "sample-09"
+      ],
+      "full_move_item_support": [
+        "sample-09"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-09-orig",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-09-orig",
+        "sample-09"
+      ],
+      "full_move_item_support": [
+        "sample-09-orig"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-16",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-16-orig",
+        "sample-16"
+      ],
+      "full_move_item_support": [
+        "sample-16"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-16-orig",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-16-orig",
+        "sample-16"
+      ],
+      "full_move_item_support": [
+        "sample-16-orig"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-22",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-22-orig",
+        "sample-22"
+      ],
+      "full_move_item_support": [
+        "sample-22"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-22-orig",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-22-orig",
+        "sample-22"
+      ],
+      "full_move_item_support": [
+        "sample-22-orig"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "sample-27",
+      "family": "smogon-hub-samples",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-27"
+      ],
+      "full_move_item_support": [
+        "sample-27"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-1",
+      "family": "community-rentals",
+      "id_in_prior": false,
+      "preview_candidates": [],
+      "full_move_item_support": [],
+      "fallback_at_preview": true,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-2",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-2"
+      ],
+      "full_move_item_support": [
+        "rental-cban-2"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-3",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-07",
+        "rental-cban-3",
+        "mjj-2013-mario",
+        "lineage-fine-s07"
+      ],
+      "full_move_item_support": [
+        "rental-cban-3"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-4",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-4"
+      ],
+      "full_move_item_support": [
+        "rental-cban-4"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-5",
+      "family": "community-rentals",
+      "id_in_prior": false,
+      "preview_candidates": [
+        "sample-06"
+      ],
+      "full_move_item_support": [
+        "sample-06"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-6",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-08",
+        "hc75-3rd-bean",
+        "rental-cban-6"
+      ],
+      "full_move_item_support": [
+        "rental-cban-6"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-7",
+      "family": "community-rentals",
+      "id_in_prior": false,
+      "preview_candidates": [
+        "sample-09-orig",
+        "sample-09"
+      ],
+      "full_move_item_support": [
+        "sample-09-orig"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-8",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-8",
+        "sample-10"
+      ],
+      "full_move_item_support": [
+        "rental-cban-8"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-9",
+      "family": "community-rentals",
+      "id_in_prior": false,
+      "preview_candidates": [],
+      "full_move_item_support": [],
+      "fallback_at_preview": true,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-10",
+      "family": "community-rentals",
+      "id_in_prior": false,
+      "preview_candidates": [],
+      "full_move_item_support": [],
+      "fallback_at_preview": true,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-11",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-11"
+      ],
+      "full_move_item_support": [
+        "rental-cban-11"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-12",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-12"
+      ],
+      "full_move_item_support": [
+        "rental-cban-12"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-13",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-13"
+      ],
+      "full_move_item_support": [
+        "rental-cban-13"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-14",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-14"
+      ],
+      "full_move_item_support": [
+        "rental-cban-14"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-15",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-15"
+      ],
+      "full_move_item_support": [
+        "rental-cban-15"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-17",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-20",
+        "rental-cban-17"
+      ],
+      "full_move_item_support": [
+        "rental-cban-17"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-18",
+      "family": "community-rentals",
+      "id_in_prior": false,
+      "preview_candidates": [
+        "sample-21"
+      ],
+      "full_move_item_support": [
+        "sample-21"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-19",
+      "family": "community-rentals",
+      "id_in_prior": false,
+      "preview_candidates": [
+        "sample-22-orig",
+        "sample-22"
+      ],
+      "full_move_item_support": [
+        "sample-22-orig"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "rental-cban-20",
+      "family": "community-rentals",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "rental-cban-20",
+        "sample-23"
+      ],
+      "full_move_item_support": [
+        "rental-cban-20"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2025-hapim",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2025-hapim"
+      ],
+      "full_move_item_support": [
+        "mjj-2025-hapim"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2024-kabiliz",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2024-kabiliz"
+      ],
+      "full_move_item_support": [
+        "mjj-2024-kabiliz"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2023-ukethdr",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2023-ukethdr"
+      ],
+      "full_move_item_support": [
+        "mjj-2023-ukethdr"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2023-vakabi",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2023-vakabi"
+      ],
+      "full_move_item_support": [
+        "mjj-2023-vakabi"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2022-ukekent",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2022-ukekent"
+      ],
+      "full_move_item_support": [
+        "mjj-2022-ukekent"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2020-kb-2022",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2020-kb-2022",
+        "mjj-2020-kb-2020"
+      ],
+      "full_move_item_support": [
+        "mjj-2020-kb-2022"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2021-crage",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2021-crage"
+      ],
+      "full_move_item_support": [
+        "mjj-2021-crage"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2021-q10con",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2021-q10con"
+      ],
+      "full_move_item_support": [
+        "mjj-2021-q10con"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2020-ukenta",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2020-ukenta"
+      ],
+      "full_move_item_support": [
+        "mjj-2020-ukenta"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2020-kb-2020",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2020-kb-2022",
+        "mjj-2020-kb-2020"
+      ],
+      "full_move_item_support": [
+        "mjj-2020-kb-2020"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2012-goinkyo-2020",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2012-goinkyo-2020"
+      ],
+      "full_move_item_support": [
+        "mjj-2012-goinkyo-2020"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2020-rraikou",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2020-rraikou"
+      ],
+      "full_move_item_support": [
+        "mjj-2020-rraikou"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2019-dojo",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2019-dojo"
+      ],
+      "full_move_item_support": [
+        "mjj-2019-dojo"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2015-ayagen",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2015-ayagen"
+      ],
+      "full_move_item_support": [
+        "mjj-2015-ayagen"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2014-thdrcomb",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2014-thdrcomb"
+      ],
+      "full_move_item_support": [
+        "mjj-2014-thdrcomb"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2013-mario",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "sample-07",
+        "rental-cban-3",
+        "mjj-2013-mario",
+        "lineage-fine-s07"
+      ],
+      "full_move_item_support": [
+        "mjj-2013-mario"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2013-bakabi",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2013-bakabi"
+      ],
+      "full_move_item_support": [
+        "mjj-2013-bakabi"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2013-venom",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2013-venom"
+      ],
+      "full_move_item_support": [
+        "mjj-2013-venom"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2012-ibmthdr",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2012-ibmthdr"
+      ],
+      "full_move_item_support": [
+        "mjj-2012-ibmthdr"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2012-goinkyo-2012",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2012-goinkyo-2012"
+      ],
+      "full_move_item_support": [
+        "mjj-2012-goinkyo-2012"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2011-garatank",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2011-garatank"
+      ],
+      "full_move_item_support": [
+        "mjj-2011-garatank"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2010-semistar",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2010-semistar"
+      ],
+      "full_move_item_support": [
+        "mjj-2010-semistar"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2010-garap-a",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2010-garap-a"
+      ],
+      "full_move_item_support": [
+        "mjj-2010-garap-a"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2010-garap-b",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2010-garap-b"
+      ],
+      "full_move_item_support": [
+        "mjj-2010-garap-b"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2009-chourou",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2009-chourou"
+      ],
+      "full_move_item_support": [
+        "mjj-2009-chourou"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    },
+    {
+      "team": "mjj-2011-frozenhell-2008",
+      "family": "majinjima",
+      "id_in_prior": true,
+      "preview_candidates": [
+        "mjj-2011-frozenhell-2008"
+      ],
+      "full_move_item_support": [
+        "mjj-2011-frozenhell-2008"
+      ],
+      "fallback_at_preview": false,
+      "paired_preview_samples_equal": true
+    }
+  ],
+  "inputs_sha256": {
+    "data/team-inventory-v1/inventory.json": "4f70792e967bdce605d5c5a172d02c79e808fcf07e754b0ddc5101999b6b95d8",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "crates/bot/src/belief.rs": "1baa263326811fbea58c8178a6ec2e7297f7999aa147c453c18ce5921b95cf92",
+    "crates/bot/examples/rest_holdout_audit.rs": "34e63d5254402e77c85a71fcb9868c47f0b9d664c4c544b7ff42c25a2ebc6fae"
+  },
+  "scope": "Eligible human-origin inventory only. Native preview filter; maximal move/item support is a set-compatibility check, not a legal game trajectory. Plain Hidden Power reveals do not identify type. No human performance or independent holdout claim."
+}

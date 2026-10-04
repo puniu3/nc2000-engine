@@ -1,0 +1,7 @@
+{
+  "data/team-inventory-v1/inventory.json": "4f70792e967bdce605d5c5a172d02c79e808fcf07e754b0ddc5101999b6b95d8",
+  "data/team-pool-v2/team-pool.json": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+  "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+  "crates/bot/src/belief.rs": "1baa263326811fbea58c8178a6ec2e7297f7999aa147c453c18ce5921b95cf92",
+  "crates/bot/examples/early_rest_duel.rs": "d3e39c88e2607ad8d102f2377d372b43eb43c9b3b91e34cbfc53c184873d7c32"
+}

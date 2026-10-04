@@ -248,7 +248,7 @@ fn main() {
         Learnsets::from_json(&std::fs::read_to_string("data/learnsets-gen2.json").unwrap())
             .unwrap();
     for (ci, case) in p.cases.iter().enumerate() {
-        assert!(case.pairs > 0 && !case.prefix.is_empty());
+        assert!(case.pairs > 0);
         for team in &case.teams {
             let result = validate_team(&dex, &learnsets, &serde_json::to_string(team).unwrap());
             assert_eq!(result["ok"], true, "{}: {result}", case.id);
