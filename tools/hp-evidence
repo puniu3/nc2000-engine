@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+import datetime,json,pathlib,subprocess
+root=pathlib.Path(__file__).resolve().parents[1]
+run=root/'tmp/hp-evidence-v1'/datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+run.mkdir(parents=True)
+(run/'probe-protocol.json').write_bytes((root/'findings/hp-evidence-v1/probe-protocol.json').read_bytes())
+subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','hp_evidence_audit','--example','hp_evidence_probe'],cwd=root,check=True)
+subprocess.run(['python3','tools/hp-evidence-census.py','tmp/corpus-spectator',str(run)],cwd=root,check=True)
+subprocess.run(['target/release/examples/hp_evidence_audit',str(run/'cases.json'),str(run/'models.jsonl')],cwd=root,check=True)
+subprocess.run(['target/release/examples/hp_evidence_probe',str(run/'probe-protocol.json'),str(run/'probe.jsonl')],cwd=root,check=True)
+subprocess.run(['python3','tools/hp-evidence-report.py',str(run),str(run/'report')],cwd=root,check=True)
+print('Report:',run/'report')

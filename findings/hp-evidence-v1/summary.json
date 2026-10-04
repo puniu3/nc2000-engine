@@ -1,0 +1,228 @@
+{
+  "schema": "nc2000-hp-evidence-v1",
+  "census": {
+    "games": 570,
+    "counts": {
+      "direct_hp_uses": 503,
+      "effectiveness_events": 255,
+      "constraint_reductions": 152,
+      "excluded_typechanging_games": 3
+    },
+    "next_turn_cases": 127,
+    "species": {
+      "magneton": 1,
+      "scizor": 6,
+      "aerodactyl": 6,
+      "heracross": 11,
+      "entei": 2,
+      "exeggutor": 13,
+      "zapdos": 27,
+      "misdreavus": 1,
+      "raikou": 12,
+      "jolteon": 2,
+      "forretress": 2,
+      "machamp": 4,
+      "kadabra": 1,
+      "marowak": 11,
+      "bellossom": 1,
+      "dugtrio": 1,
+      "dragonite": 2,
+      "omastar": 1,
+      "kabutops": 3,
+      "venusaur": 4,
+      "gyarados": 1,
+      "kingler": 1,
+      "tyranitar": 2,
+      "umbreon": 3,
+      "suicune": 1,
+      "dragonair": 2,
+      "tauros": 1,
+      "articuno": 1,
+      "venomoth": 1,
+      "dodrio": 1,
+      "espeon": 1,
+      "arcanine": 1
+    },
+    "constraint_sizes": {
+      "7": 15,
+      "3": 26,
+      "2": 17,
+      "1": 16,
+      "6": 8,
+      "4": 23,
+      "8": 7,
+      "5": 15
+    },
+    "corpus_sha256": "d304c9e6af3c0c7a61b253c88774d0d1c7c2ac4e7073935e2efc0f8c7726b34f",
+    "typechart_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+  },
+  "reconstructed": 101,
+  "skips": {
+    "no ordinary decision": 26
+  },
+  "contradictory_cases": 35,
+  "contradictory_games": 35,
+  "singleton_contradictions": 4,
+  "probes": [
+    {
+      "battle": 10,
+      "changed": 2,
+      "pairs": [
+        {
+          "seed": 2026100525,
+          "baseline": "move toxic",
+          "known_type": "move earthquake"
+        },
+        {
+          "seed": 2026100526,
+          "baseline": "move toxic",
+          "known_type": "move toxic"
+        },
+        {
+          "seed": 2026100527,
+          "baseline": "move toxic",
+          "known_type": "move earthquake"
+        },
+        {
+          "seed": 2026100528,
+          "baseline": "move earthquake",
+          "known_type": "move earthquake"
+        }
+      ],
+      "choices": {
+        "baseline": {
+          "move toxic": 3,
+          "move earthquake": 1
+        },
+        "known_type": {
+          "move earthquake": 3,
+          "move toxic": 1
+        }
+      }
+    },
+    {
+      "battle": 346,
+      "changed": 4,
+      "pairs": [
+        {
+          "seed": 2026100525,
+          "baseline": "move softboiled",
+          "known_type": "move icebeam"
+        },
+        {
+          "seed": 2026100526,
+          "baseline": "move softboiled",
+          "known_type": "switch 3"
+        },
+        {
+          "seed": 2026100527,
+          "baseline": "move softboiled",
+          "known_type": "move icebeam"
+        },
+        {
+          "seed": 2026100528,
+          "baseline": "move softboiled",
+          "known_type": "switch 3"
+        }
+      ],
+      "choices": {
+        "baseline": {
+          "move softboiled": 4
+        },
+        "known_type": {
+          "move icebeam": 2,
+          "switch 3": 2
+        }
+      }
+    },
+    {
+      "battle": 395,
+      "changed": 4,
+      "pairs": [
+        {
+          "seed": 2026100525,
+          "baseline": "move rest",
+          "known_type": "switch 3"
+        },
+        {
+          "seed": 2026100526,
+          "baseline": "move rest",
+          "known_type": "switch 3"
+        },
+        {
+          "seed": 2026100527,
+          "baseline": "move rest",
+          "known_type": "switch 2"
+        },
+        {
+          "seed": 2026100528,
+          "baseline": "move doubleedge",
+          "known_type": "switch 3"
+        }
+      ],
+      "choices": {
+        "baseline": {
+          "move rest": 3,
+          "move doubleedge": 1
+        },
+        "known_type": {
+          "switch 3": 3,
+          "switch 2": 1
+        }
+      }
+    },
+    {
+      "battle": 559,
+      "changed": 2,
+      "pairs": [
+        {
+          "seed": 2026100525,
+          "baseline": "move thunder",
+          "known_type": "move thunder"
+        },
+        {
+          "seed": 2026100526,
+          "baseline": "move thunder",
+          "known_type": "move thunder"
+        },
+        {
+          "seed": 2026100527,
+          "baseline": "move drillpeck",
+          "known_type": "move thunder"
+        },
+        {
+          "seed": 2026100528,
+          "baseline": "move thunder",
+          "known_type": "move drillpeck"
+        }
+      ],
+      "choices": {
+        "baseline": {
+          "move thunder": 3,
+          "move drillpeck": 1
+        },
+        "known_type": {
+          "move thunder": 3,
+          "move drillpeck": 1
+        }
+      }
+    }
+  ],
+  "product_changed": false,
+  "parser_controls": {
+    "normal": true,
+    "critical_weather": true,
+    "called": true,
+    "typechanged": true,
+    "unrelated": true,
+    "intersection": true
+  },
+  "limits": [
+    "Cases are selected by observed informative Hidden Power uses, not a representative population.",
+    "Reconstruction imputes unrevealed own sets and sometimes own selections; probes recover selection from full own-side log.",
+    "Effective type constraints use past public messages only and exclude games with type changes, Transform, or Foresight.",
+    "Sampling contradiction and changed choices do not establish a win-rate gain or action optimality.",
+    "Typed probe retains the assumed 70 power; actual Hidden Power power remains unknown."
+  ],
+  "records_sha256": "efaff0854a780411a5cd57a9d5b3c8bb3aa705a92975a7960024c94f91890c99"
+}

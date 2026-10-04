@@ -1,0 +1,42 @@
+{
+  "normal": {
+    "log": "|switch|p1a: A|Dragonair, L50|100/100\n|switch|p2a: B|Blissey, L50|100/100\n|turn|1\n|move|p1a: A|Hidden Power|p2a: B\n|-supereffective|p2a: B\n|turn|2\n",
+    "expected_allowed_types": [
+      [
+        "Fighting"
+      ]
+    ]
+  },
+  "critical_weather": {
+    "log": "|switch|p1a: A|Dragonair, L50|100/100\n|switch|p2a: B|Blissey, L50|100/100\n|turn|1\n|move|p1a: A|Hidden Power|p2a: B\n|-crit|p2a: B\n|-weather|RainDance\n|-supereffective|p2a: B\n|turn|2\n",
+    "expected_allowed_types": [
+      [
+        "Fighting"
+      ]
+    ]
+  },
+  "called": {
+    "log": "|switch|p1a: A|Dragonair, L50|100/100\n|switch|p2a: B|Blissey, L50|100/100\n|turn|1\n|move|p1a: A|Hidden Power|p2a: B|[from] Metronome\n|-supereffective|p2a: B\n|turn|2\n",
+    "expected_allowed_types": []
+  },
+  "typechanged": {
+    "log": "|switch|p1a: A|Dragonair, L50|100/100\n|switch|p2a: B|Blissey, L50|100/100\n|move|p2a: B|Conversion|p2a: B\n|turn|1\n|move|p1a: A|Hidden Power|p2a: B\n|-supereffective|p2a: B\n|turn|2\n",
+    "expected_allowed_types": []
+  },
+  "unrelated": {
+    "log": "|switch|p1a: A|Dragonair, L50|100/100\n|switch|p2a: B|Blissey, L50|100/100\n|turn|1\n|move|p1a: A|Hidden Power|p2a: B\n|move|p2a: B|Psychic|p1a: A\n|-supereffective|p2a: B\n|turn|2\n",
+    "expected_allowed_types": []
+  },
+  "intersection": {
+    "log": "|switch|p1a: A|Aerodactyl, L50|100/100\n|switch|p2a: B|Zapdos, L50|100/100\n|turn|1\n|move|p1a: A|Hidden Power|p2a: B\n|-supereffective|p2a: B\n|turn|2\n|switch|p2a: C|Steelix, L50|100/100\n|move|p1a: A|Hidden Power|p2a: C\n|-resisted|p2a: C\n|turn|3\n",
+    "expected_allowed_types": [
+      [
+        "Ice",
+        "Rock"
+      ],
+      [
+        "Rock"
+      ]
+    ]
+  }
+}

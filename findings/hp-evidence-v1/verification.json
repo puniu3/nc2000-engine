@@ -1,0 +1,40 @@
+{
+  "schema": "nc2000-hp-evidence-verification-v1",
+  "created_at": "2026-10-04T20:07:28.107127+00:00",
+  "product_revision": "0406adddb5a0689adccfab45f58295456c3a1308",
+  "full_reproduction_exact": true,
+  "reproduced_model_rows": 127,
+  "reproduced_root_searches": 32,
+  "parser_controls": {
+    "normal": true,
+    "critical_weather": true,
+    "called": true,
+    "typechanged": true,
+    "unrelated": true,
+    "intersection": true
+  },
+  "corpus_sha256": "d304c9e6af3c0c7a61b253c88774d0d1c7c2ac4e7073935e2efc0f8c7726b34f",
+  "typechart_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "rustfmt_check": true,
+  "python_compile_check": true,
+  "preview_hub_entry": "nc2000-hp-evidence",
+  "preview_status": 200,
+  "preview_links_checked": 3,
+  "artifact_sha256": {
+    "crates/bot/examples/hp_evidence_audit.rs": "c04fcc9334f82b5e9c47e212ca5ea65fc72d6ceafaf9a9b6f42d423ee580e54b",
+    "crates/bot/examples/hp_evidence_probe.rs": "5e6c98e8bd8a2b287fff3898488771d581263b551d968138d8eaa4b67801e8ef",
+    "findings/hp-evidence-v1/README.md": "29278d12106dcb354cdf08711ed1acc340d7f063d071879b78515aad107f0d72",
+    "findings/hp-evidence-v1/calibration.json": "befb58306e2c7e16351d63115af9121be87b3c243febe7232ea79244237299e2",
+    "findings/hp-evidence-v1/index.html": "8283aa8f629ce260e66a05604dbe721215e895f1459e6766e1cf5af2bbb8ca58",
+    "findings/hp-evidence-v1/probe-protocol.json": "6899e9a30e2d8019af3455010f61b234bfddb6b7d7d35f21895abb0740f666ce",
+    "findings/hp-evidence-v1/records.json.gz": "f826b0ca7534b1c9a18528f87bbdc1ca6cde74f8b81448796cb5b86859f2f28c",
+    "findings/hp-evidence-v1/summary.json": "d2edeeef1591248d657ef2efcb7e734256edbaf11209e6703aee58df87b0809d",
+    "tools/hp-evidence": "fbace08b93c39f8a82f363bd760c74fc2fa91c555b6e8bae299e5368ecbcd379",
+    "tools/hp-evidence-census.py": "74204350825be91e5ad80b3514c1e6504f6076ec125e0d397a1dc610203e2bfb",
+    "tools/hp-evidence-report.py": "808591d5bcab03a8655f25ac791074cfa3d03491efef8e4f40492c33f564bbb6"
+  },
+  "binary_sha256": {
+    "hp_evidence_audit": "279c3687448d17f29319fd3620436172b3dc1e6c7df6eff50ffa2a9f7618804a",
+    "hp_evidence_probe": "812281b490861bbe606bf2923b79ee65b5a4044ff6e69cbb7a6e50a0d72986bf"
+  }
+}
