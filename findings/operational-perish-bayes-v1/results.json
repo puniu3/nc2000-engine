@@ -1,0 +1,529 @@
+{
+  "estimand": "equal-weight average win-probability difference over the eight frozen adaptive opponent scenarios, not human-ladder win probability",
+  "data_sha256": "2557fb762047794de09f94a2e755a948ed18402de292426f200775deb2ceb217",
+  "patterns": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      1
+    ],
+    [
+      0,
+      1,
+      0
+    ],
+    [
+      0,
+      1,
+      1
+    ],
+    [
+      1,
+      0,
+      0
+    ],
+    [
+      1,
+      0,
+      1
+    ],
+    [
+      1,
+      1,
+      0
+    ],
+    [
+      1,
+      1,
+      1
+    ]
+  ],
+  "counts_by_opponent": {
+    "kingdra-kit1": [
+      3,
+      1,
+      0,
+      1,
+      0,
+      2,
+      1,
+      8
+    ],
+    "kingdra-kit2": [
+      1,
+      0,
+      2,
+      0,
+      4,
+      1,
+      2,
+      6
+    ],
+    "kingdra-kit3": [
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      14
+    ],
+    "kingdra-kit4": [
+      0,
+      3,
+      0,
+      2,
+      0,
+      0,
+      1,
+      10
+    ],
+    "quagsire-kit1": [
+      1,
+      0,
+      0,
+      3,
+      1,
+      0,
+      0,
+      11
+    ],
+    "quagsire-kit2": [
+      2,
+      2,
+      1,
+      1,
+      0,
+      0,
+      1,
+      9
+    ],
+    "quagsire-kit3": [
+      0,
+      1,
+      1,
+      2,
+      2,
+      1,
+      1,
+      8
+    ],
+    "quagsire-kit4": [
+      1,
+      1,
+      0,
+      2,
+      0,
+      2,
+      1,
+      9
+    ]
+  },
+  "primary_prior_mass": 1,
+  "primary": {
+    "comparisons": {
+      "b-a": {
+        "probability_improved": 0.643536,
+        "monte_carlo_se": 0.0006773439550243288,
+        "posterior_mean_delta": 0.01477838880355061,
+        "credible95": [
+          -0.06224699475101759,
+          0.09342614694710673
+        ],
+        "probability_loss_gt_1pp": 0.265906,
+        "probability_loss_gt_3pp": 0.1271,
+        "expected_downside": 0.009419236501963689
+      },
+      "c-a": {
+        "probability_improved": 0.855596,
+        "monte_carlo_se": 0.0004970945277992908,
+        "posterior_mean_delta": 0.04415863474863857,
+        "credible95": [
+          -0.037457093900152866,
+          0.12654723226675219
+        ],
+        "probability_loss_gt_1pp": 0.096834,
+        "probability_loss_gt_3pp": 0.03737,
+        "expected_downside": 0.003090939528491336
+      },
+      "c-b": {
+        "probability_improved": 0.780922,
+        "monte_carlo_se": 0.0005849492797089334,
+        "posterior_mean_delta": 0.02938024594508796,
+        "credible95": [
+          -0.04560951477128169,
+          0.10496372230079876
+        ],
+        "probability_loss_gt_1pp": 0.149482,
+        "probability_loss_gt_3pp": 0.059576,
+        "expected_downside": 0.004819349716839795
+      }
+    },
+    "arms": {
+      "a": {
+        "posterior_mean_win_probability": 0.7279008804717132,
+        "probability_best": 0.103162,
+        "expected_regret": 0.050813266885567705
+      },
+      "b": {
+        "posterior_mean_win_probability": 0.7426792692752636,
+        "probability_best": 0.184832,
+        "expected_regret": 0.036034878082017094
+      },
+      "c": {
+        "posterior_mean_win_probability": 0.7720595152203517,
+        "probability_best": 0.712006,
+        "expected_regret": 0.006654632136929137
+      }
+    }
+  },
+  "dirichlet_sensitivity": {
+    "0.5": {
+      "comparisons": {
+        "b-a": {
+          "probability_improved": 0.648496,
+          "monte_carlo_se": 0.0006752021000915208,
+          "posterior_mean_delta": 0.015117942382313197,
+          "credible95": [
+            -0.06168195146505995,
+            0.09335444271574538
+          ],
+          "probability_loss_gt_1pp": 0.26135,
+          "probability_loss_gt_3pp": 0.124484,
+          "expected_downside": 0.009227202179523752
+        },
+        "c-a": {
+          "probability_improved": 0.863648,
+          "monte_carlo_se": 0.00048530430061148236,
+          "posterior_mean_delta": 0.0454201252375948,
+          "credible95": [
+            -0.03597886514076231,
+            0.12751990413267764
+          ],
+          "probability_loss_gt_1pp": 0.090616,
+          "probability_loss_gt_3pp": 0.03461,
+          "expected_downside": 0.002875859409105763
+        },
+        "c-b": {
+          "probability_improved": 0.788322,
+          "monte_carlo_se": 0.0005777030799917896,
+          "posterior_mean_delta": 0.0303021828552816,
+          "credible95": [
+            -0.043965424191387235,
+            0.10541731868556847
+          ],
+          "probability_loss_gt_1pp": 0.143024,
+          "probability_loss_gt_3pp": 0.055192,
+          "expected_downside": 0.004545321151658801
+        }
+      },
+      "arms": {
+        "a": {
+          "posterior_mean_win_probability": 0.7348935429383094,
+          "probability_best": 0.0976,
+          "expected_regret": 0.05167511381364469
+        },
+        "b": {
+          "posterior_mean_win_probability": 0.7500114853206228,
+          "probability_best": 0.17951,
+          "expected_regret": 0.03655717143133149
+        },
+        "c": {
+          "posterior_mean_win_probability": 0.7803136681759043,
+          "probability_best": 0.72289,
+          "expected_regret": 0.006254988576049889
+        }
+      }
+    },
+    "1": {
+      "comparisons": {
+        "b-a": {
+          "probability_improved": 0.643536,
+          "monte_carlo_se": 0.0006773439550243288,
+          "posterior_mean_delta": 0.01477838880355061,
+          "credible95": [
+            -0.06224699475101759,
+            0.09342614694710673
+          ],
+          "probability_loss_gt_1pp": 0.265906,
+          "probability_loss_gt_3pp": 0.1271,
+          "expected_downside": 0.009419236501963689
+        },
+        "c-a": {
+          "probability_improved": 0.855596,
+          "monte_carlo_se": 0.0004970945277992908,
+          "posterior_mean_delta": 0.04415863474863857,
+          "credible95": [
+            -0.037457093900152866,
+            0.12654723226675219
+          ],
+          "probability_loss_gt_1pp": 0.096834,
+          "probability_loss_gt_3pp": 0.03737,
+          "expected_downside": 0.003090939528491336
+        },
+        "c-b": {
+          "probability_improved": 0.780922,
+          "monte_carlo_se": 0.0005849492797089334,
+          "posterior_mean_delta": 0.02938024594508796,
+          "credible95": [
+            -0.04560951477128169,
+            0.10496372230079876
+          ],
+          "probability_loss_gt_1pp": 0.149482,
+          "probability_loss_gt_3pp": 0.059576,
+          "expected_downside": 0.004819349716839795
+        }
+      },
+      "arms": {
+        "a": {
+          "posterior_mean_win_probability": 0.7279008804717132,
+          "probability_best": 0.103162,
+          "expected_regret": 0.050813266885567705
+        },
+        "b": {
+          "posterior_mean_win_probability": 0.7426792692752636,
+          "probability_best": 0.184832,
+          "expected_regret": 0.036034878082017094
+        },
+        "c": {
+          "posterior_mean_win_probability": 0.7720595152203517,
+          "probability_best": 0.712006,
+          "expected_regret": 0.006654632136929137
+        }
+      }
+    },
+    "4": {
+      "comparisons": {
+        "b-a": {
+          "probability_improved": 0.621662,
+          "monte_carlo_se": 0.0006858547335347332,
+          "posterior_mean_delta": 0.012475423845083966,
+          "credible95": [
+            -0.06559360600412653,
+            0.09112143336555827
+          ],
+          "probability_loss_gt_1pp": 0.28719,
+          "probability_loss_gt_3pp": 0.143256,
+          "expected_downside": 0.010445095739962398
+        },
+        "c-a": {
+          "probability_improved": 0.817436,
+          "monte_carlo_se": 0.0005463229555931179,
+          "posterior_mean_delta": 0.03755570951940466,
+          "credible95": [
+            -0.04407842009008596,
+            0.11939321651578644
+          ],
+          "probability_loss_gt_1pp": 0.125648,
+          "probability_loss_gt_3pp": 0.051698,
+          "expected_downside": 0.004140439775155564
+        },
+        "c-b": {
+          "probability_improved": 0.740638,
+          "monte_carlo_se": 0.0006198279647708709,
+          "posterior_mean_delta": 0.025080285674320687,
+          "credible95": [
+            -0.051325821847284195,
+            0.1017017397871458
+          ],
+          "probability_loss_gt_1pp": 0.183692,
+          "probability_loss_gt_3pp": 0.07868,
+          "expected_downside": 0.006121212585164161
+        }
+      },
+      "arms": {
+        "a": {
+          "posterior_mean_win_probability": 0.6937509737115921,
+          "probability_best": 0.128146,
+          "expected_regret": 0.04606825624553806
+        },
+        "b": {
+          "posterior_mean_win_probability": 0.7062263975566762,
+          "probability_best": 0.214232,
+          "expected_regret": 0.03359283240045409
+        },
+        "c": {
+          "posterior_mean_win_probability": 0.7313066832309968,
+          "probability_best": 0.657622,
+          "expected_regret": 0.0085125467261334
+        }
+      }
+    },
+    "16": {
+      "comparisons": {
+        "b-a": {
+          "probability_improved": 0.584686,
+          "monte_carlo_se": 0.000696890639058956,
+          "posterior_mean_delta": 0.007823311709109736,
+          "credible95": [
+            -0.064189418164861,
+            0.07981821687338284
+          ],
+          "probability_loss_gt_1pp": 0.312992,
+          "probability_loss_gt_3pp": 0.150736,
+          "expected_downside": 0.01104128933676497
+        },
+        "c-a": {
+          "probability_improved": 0.73298,
+          "monte_carlo_se": 0.0006256521710982869,
+          "posterior_mean_delta": 0.023362823834269634,
+          "credible95": [
+            -0.05030358457516601,
+            0.09708569244530255
+          ],
+          "probability_loss_gt_1pp": 0.187602,
+          "probability_loss_gt_3pp": 0.07799,
+          "expected_downside": 0.006127212066877997
+        },
+        "c-b": {
+          "probability_improved": 0.66625,
+          "monte_carlo_se": 0.0006668747071227098,
+          "posterior_mean_delta": 0.0155395121251599,
+          "credible95": [
+            -0.055660769099964605,
+            0.08679066165280634
+          ],
+          "probability_loss_gt_1pp": 0.240432,
+          "probability_loss_gt_3pp": 0.104654,
+          "expected_downside": 0.008009750827739155
+        }
+      },
+      "arms": {
+        "a": {
+          "posterior_mean_win_probability": 0.6211407858489331,
+          "probability_best": 0.182378,
+          "expected_regret": 0.034754533027215616
+        },
+        "b": {
+          "posterior_mean_win_probability": 0.6289640975580427,
+          "probability_best": 0.262438,
+          "expected_regret": 0.02693122131810588
+        },
+        "c": {
+          "posterior_mean_win_probability": 0.6445036096832025,
+          "probability_best": 0.555184,
+          "expected_regret": 0.01139170919294598
+        }
+      }
+    },
+    "64": {
+      "comparisons": {
+        "b-a": {
+          "probability_improved": 0.548316,
+          "monte_carlo_se": 0.0007037976472594946,
+          "posterior_mean_delta": 0.0031276343706198068,
+          "credible95": [
+            -0.04833839019021523,
+            0.05428461001754163
+          ],
+          "probability_loss_gt_1pp": 0.30748,
+          "probability_loss_gt_3pp": 0.103314,
+          "expected_downside": 0.008956919839354077
+        },
+        "c-a": {
+          "probability_improved": 0.638902,
+          "monte_carlo_se": 0.0006792734860069249,
+          "posterior_mean_delta": 0.009397744066749734,
+          "credible95": [
+            -0.04231263452977297,
+            0.06116393738161857
+          ],
+          "probability_loss_gt_1pp": 0.231618,
+          "probability_loss_gt_3pp": 0.067908,
+          "expected_downside": 0.006505718155372091
+        },
+        "c-b": {
+          "probability_improved": 0.594982,
+          "monte_carlo_se": 0.0006942311137884847,
+          "posterior_mean_delta": 0.006270109696129927,
+          "credible95": [
+            -0.044851156841968186,
+            0.05751204252734683
+          ],
+          "probability_loss_gt_1pp": 0.26649,
+          "probability_loss_gt_3pp": 0.082096,
+          "expected_downside": 0.0075705859730055385
+        }
+      },
+      "arms": {
+        "a": {
+          "posterior_mean_win_probability": 0.5484047169722486,
+          "probability_best": 0.242804,
+          "expected_regret": 0.020398961565117894
+        },
+        "b": {
+          "posterior_mean_win_probability": 0.5515323513428685,
+          "probability_best": 0.299286,
+          "expected_regret": 0.017271327194498087
+        },
+        "c": {
+          "posterior_mean_win_probability": 0.5578024610389983,
+          "probability_best": 0.45791,
+          "expected_regret": 0.011001217498368162
+        }
+      }
+    }
+  },
+  "normal_approximation_sensitivity": {
+    "b-a": {
+      "observed_mean": 0.015625,
+      "estimated_sampling_se": 0.04163410185773196,
+      "priors": {
+        "0.01": {
+          "posterior_mean_delta": 0.000852242462980718,
+          "posterior_sd": 0.009723458656101922,
+          "probability_improved": 0.5349218057753624
+        },
+        "0.03": {
+          "posterior_mean_delta": 0.005340057850626715,
+          "posterior_sd": 0.024339528914995485,
+          "probability_improved": 0.5868302082602562
+        },
+        "0.05": {
+          "posterior_mean_delta": 0.00922722029988466,
+          "posterior_sd": 0.031994448768785724,
+          "probability_improved": 0.6134799706095138
+        },
+        "0.1": {
+          "posterior_mean_delta": 0.013316687473990844,
+          "posterior_sd": 0.03843592091580296,
+          "probability_improved": 0.6355032228475155
+        }
+      }
+    },
+    "c-a": {
+      "observed_mean": 0.046875,
+      "estimated_sampling_se": 0.044102006520867806,
+      "priors": {
+        "0.01": {
+          "posterior_mean_delta": 0.002292190633854382,
+          "posterior_sd": 0.009752435250461496,
+          "probability_improved": 0.5929102910203449
+        },
+        "0.03": {
+          "posterior_mean_delta": 0.0148287146158951,
+          "posterior_sd": 0.02480501319037775,
+          "probability_improved": 0.7250170405345107
+        },
+        "0.05": {
+          "posterior_mean_delta": 0.026363969242035885,
+          "posterior_sd": 0.03307448624581723,
+          "probability_improved": 0.7873061226548836
+        },
+        "0.1": {
+          "posterior_mean_delta": 0.03924240359722034,
+          "posterior_sd": 0.04035204124444012,
+          "probability_improved": 0.8345993354975054
+        }
+      }
+    }
+  },
+  "draws": 500000,
+  "seed": 202610091
+}

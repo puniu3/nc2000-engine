@@ -59,6 +59,7 @@ report = f'''<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="vi
 <title>NC2000 — 滅びの歌だけを保持する補完</title>
 <style>body{{font:18px/1.75 system-ui,sans-serif;background:#f4f0e6;color:#28271f;max-width:1040px;margin:32px auto;padding:0 20px}}h1,h2{{line-height:1.35}}h2{{margin-top:2em}}a{{color:#684928}}table{{border-collapse:collapse;width:100%;font-size:16px}}th,td{{padding:10px;text-align:left;vertical-align:top;border-bottom:1px solid #c7c2b6}}.scroll{{overflow-x:auto}}.lead{{font-size:22px}}code{{overflow-wrap:anywhere}}</style>
 <p><a href="/">プレビューハブ</a>・<a href="/nc2000-loadout-draw/">前回の型抽選試験</a>・<a href="/nc2000-operational-combo-validation/fork-analysis.html">分岐の原因調査</a></p>
+<p>このページは採用判断前の試験記録。<a href="/nc2000-perish-bayes/">後続のベイズ判断と採用状況</a>を参照。</p>
 <h1>滅びの歌だけを保持する補完</h1><p class="lead">{verdict}</p>
 <p>本番の既定方策はLayeredのまま。候補RetainPerishを評価専用で実装し、新しい対戦乱数で140組・280戦を比較した。</p>
 <h2>今回の変更範囲</h2><p>未登録パーティの補完で、黒い眼差しが公開済み・公開技が4つ未満・選ばれた補完元に合法な滅びの歌がある、という条件を満たし、通常の4技への切り詰めで歌が消える場合だけ、最後の未公開技を歌に置き換える。補完元の選択、道具、能力値、性別、残りの技順は現行を保つ。</p>

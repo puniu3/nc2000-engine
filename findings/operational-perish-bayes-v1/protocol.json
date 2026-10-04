@@ -1,0 +1,33 @@
+{
+  "status": "analysis_plan_recorded_before_posterior_calculation_after_observing_outcomes",
+  "data": "fresh 128 adaptive triplets only; previous 64-pair pilot and stress not pooled into primary",
+  "estimand": "equal-weight average win-probability difference over the eight frozen adaptive opponent scenarios, not human-ladder win probability",
+  "primary_model": "For each opponent scenario, categorical joint outcomes of A/B/C (8 binary patterns), independent symmetric Dirichlet prior with total mass 1 per scenario. Average posterior win probabilities with equal 1/8 scenario weights. Retain cross-arm dependence within a triplet.",
+  "sensitivity_prior_mass_per_scenario": [
+    0.5,
+    1,
+    4,
+    16,
+    64
+  ],
+  "normal_sensitivity": "Descriptive normal-likelihood approximation to paired stratified mean, zero-centered Normal priors with SD 1,3,5,10 percentage points; report as sensitivity, not replace primary after seeing results.",
+  "outputs": [
+    "P(B>A)",
+    "P(C>A)",
+    "P(C>B)",
+    "probability each arm is best",
+    "posterior mean differences",
+    "95% credible intervals",
+    "P(loss exceeds 1pp or 3pp)",
+    "expected downside relative to A",
+    "expected regret against best A/B/C"
+  ],
+  "draws": 500000,
+  "seed": 202610091,
+  "decision": "Use owner threshold; if no reply after a reasonable opportunity, use proposed 80%. Choose largest posterior expected win probability among candidates meeting primary P(candidate>A) threshold; assess all secondary results and disclose prior sensitivity. No claim of prospective preregistration or frequentist significance.",
+  "limitations": [
+    "The model treats seeded matches as independent within each fixed opponent scenario; it does not model generalization beyond these teams and this opponent bot.",
+    "Prior sensitivity is part of the decision; an improvement probability is conditional on the model, not an unconditional probability that the deployed bot is stronger.",
+    "The adoption criterion is revised after the previous results at the owner request; the original failed frequentist gate remains recorded."
+  ]
+}

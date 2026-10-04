@@ -110,12 +110,10 @@ impl BlindAgent {
             pool,
             tables,
             seed,
-            FallbackPolicy::Layered,
+            FallbackPolicy::default(),
         )
     }
 
-    /// Evaluation control for fallback-policy A/B tests. The ordinary
-    /// constructor remains permanently bound to the shipped layered policy.
     pub fn new_with_fallback_policy(
         cfg: RmConfig,
         pool: Arc<MetaPool>,

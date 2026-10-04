@@ -1,0 +1,32 @@
+{
+  "local_tests": 150,
+  "production_tests": 133,
+  "workspace_all_targets": "passed",
+  "wasm_release": "passed",
+  "web_production_build": "passed",
+  "production_vs_frozen_early_perish": {
+    "jobs": [
+      0,
+      5,
+      45,
+      52
+    ],
+    "iterations": 27000,
+    "seed": 202610081,
+    "full_trajectory_and_all_counters_identical": true
+  },
+  "full_history_secrets_scan": {
+    "commits": 389,
+    "new_findings": 0,
+    "reviewed_exact_false_positives": 3
+  },
+  "browser_report": {
+    "hub_entry": "nc2000-perish-bayes",
+    "links_http_200": 6,
+    "widths": [
+      820,
+      390
+    ],
+    "page_errors": []
+  }
+}

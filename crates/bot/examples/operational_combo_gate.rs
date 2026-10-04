@@ -337,7 +337,7 @@ fn main() {
                     let mut battle=Battle::from_fixture(&dex,&battle_seed,teams[0],teams[1]).unwrap();battle.set_log_enabled(true);
                     let trace=if trace_dir.is_empty() {None} else {Some(std::io::BufWriter::new(std::fs::File::create(format!("{trace_dir}/{job}-{}.jsonl",policy.id())).unwrap()))};
                     let mut me=Measured {trace,cfg:cfg.clone(),inner:BlindAgent::new_with_fallback_policy(cfg.clone(),prior.clone(),None,bot_seed,policy),decisions:0,fallback:0,exposed:0,missing:0,early_exposed:0,early_combo_samples:0};
-                    let mut opp=Opponent {inner:BlindAgent::new(cfg.clone(),prior.clone(),None,opp_seed),forced:mode=="stress"||mode=="adaptive",adaptive:mode=="adaptive",opened:false};
+                    let mut opp=Opponent {inner:BlindAgent::new_with_fallback_policy(cfg.clone(),prior.clone(),None,opp_seed,FallbackPolicy::Layered),forced:mode=="stress"||mode=="adaptive",adaptive:mode=="adaptive",opened:false};
                     let inputs=Arc::new(Mutex::new(Vec::new()));
                     let (score,turns,tally)=if trace_dir.is_empty() {
                         let agents:[&mut dyn Agent;2]=if side==0 {[&mut me,&mut opp]} else {[&mut opp,&mut me]};

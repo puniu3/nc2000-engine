@@ -1,0 +1,13 @@
+{
+  "owner_threshold": 0.8,
+  "selected_arm": "c",
+  "selected_policy": "early-perish-v1",
+  "criterion_met": true,
+  "probability_improved": 0.855596,
+  "stage": "default_changed_deployment_validation",
+  "model_dependence": "The 80% threshold is met by the stated weak-prior primary model, not by every plausible prior. Normal SD 3pp and 5pp sensitivity gives 72.5% and 78.7%; stronger shrinkage below 80% is disclosed.",
+  "scope": "Probability of stronger play in the fixed adaptive trap benchmark. General human-ladder improvement probability is not identifiable from these tests.",
+  "frequentist_gate": "Original gate remains failed. Owner explicitly adopted a different decision criterion after outcomes.",
+  "comparison_reason": "EarlyPerish meets 80% and has highest posterior expected win probability; RetainPerish alone does not meet 80%.",
+  "shipping_scope": "EarlyPerish and its RetainPerish base, appearance cache refresh, default constructor wiring, focused tests. Excludes conditional full-loadout and whole-set sampling experiments."
+}

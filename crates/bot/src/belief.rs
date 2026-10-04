@@ -31,8 +31,8 @@
 //! a filter dead-end mid-game degrades, never panics.
 //!
 //! **M18 — community marginal prior** (`set_prior`, opt-in). With a
-//! `prior::BeliefPrior` installed, the fallback's fixed nearest-set filler is
-//! replaced by a *weighted draw without replacement* over the species'
+//! `prior::BeliefPrior` installed, slots without a loadout draw use a
+//! *weighted draw without replacement* over the species'
 //! per-move carry-marginals, redrawn on `determinize`'s per-iteration rng —
 //! so ISMCTS averages over the belief instead of over-committing to one MAP
 //! set. Revealed moves still lead and are never resampled, legality is still
@@ -193,18 +193,14 @@ struct Candidate {
     refs: Option<Vec<Pokemon>>,
 }
 
-/// Hidden-set synthesis policy used after every meta-pool candidate has
-/// been rejected. `Layered` is the shipped policy. `LegacyMetaOnly` exists
-/// only as an evaluation control: it reproduces the old revealed -> pool ->
-/// empty-set/implicit-Struggle path without changing the production default.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FallbackPolicy {
     LegacyMetaOnly,
-    #[default]
     Layered,
     RevealedLoadout,
     RevealedLoadoutDraw,
     RetainPerish,
+    #[default]
     EarlyPerish,
 }
 
@@ -342,10 +338,6 @@ pub struct Belief {
     /// M18: the community belief prior, when the owner loaded one.
     prior: Option<Arc<BeliefPrior>>,
     pick_draws: Option<(u64, Vec<Option<PickDistribution>>)>,
-    /// M18: per-fallback-slot draw plans, rebuilt alongside `fallback`.
-    /// `None` whenever no prior governs any slot — which is the shipped
-    /// default and keeps `determinize` bit-identical to pre-M18, rng draws
-    /// included.
     draws: Option<Vec<Option<MoveDraw>>>,
     loadout_draws: Option<Vec<Option<LoadoutDraw>>>,
     synced: Option<u64>,
@@ -355,7 +347,7 @@ impl Belief {
     /// Build the candidate set and apply the preview filter. Call at team
     /// preview, right after `Observer::new`.
     pub fn new(dex: &Dex, pool: &MetaPool, obs: &Observer) -> Belief {
-        Self::with_fallback_policy(dex, pool, obs, FallbackPolicy::Layered)
+        Self::with_fallback_policy(dex, pool, obs, FallbackPolicy::default())
     }
 
     /// Evaluation surface for comparing fallback synthesis policies. Live
@@ -961,11 +953,6 @@ impl Belief {
 
     // ------------------------------------------------- M18 marginal sampling
 
-    /// Build the per-slot draw plans against the freshly-rebuilt fallback
-    /// roster. `None` (the shipped default) when no prior is installed, the
-    /// table is empty, or it says nothing about any species on this roster —
-    /// in which case `determinize_with` never enters the sampling branch at
-    /// all.
     fn build_draws(
         &self,
         dex: &Dex,
@@ -1728,6 +1715,18 @@ mod fallback_tests {
     }
 
     #[test]
+    fn default_policy_anticipates_perish() {
+        let (dex, pool, mut battle, mut obs) = loadout_fixture();
+        assert_eq!(FallbackPolicy::default(), FallbackPolicy::EarlyPerish);
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        assert_eq!(belief.fallback_policy, FallbackPolicy::EarlyPerish);
+        battle.sides[1].roster[0].is_active = true;
+        obs.observe(&battle, &dex);
+        belief.sync(&dex, &obs);
+        assert!(belief.loadout_draws.as_ref().unwrap()[0].is_some());
+    }
+
+    #[test]
     fn revealed_loadout_retains_perish_after_mean_look() {
         let dex = test_dex();
         let pool: MetaPool = serde_json::from_str(include_str!(
@@ -1956,7 +1955,7 @@ mod fallback_tests {
             for name in reveals {
                 obs.ingest_line(&format!("|move|p2a: Misdreavus|{name}|p1a: Target"), &dex);
             }
-            let a = Belief::new(&dex, &pool, &obs);
+            let a = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::Layered);
             let b = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::RetainPerish);
             assert!(a.is_fallback() && b.is_fallback());
             for seed in 0..16 {
@@ -2036,7 +2035,7 @@ mod fallback_tests {
                     obs.ingest_line(&format!("|move|p2a: Misdreavus|{key}|p1a: Target"), &dex);
                 }
             }
-            let a = Belief::new(&dex, &pool, &obs);
+            let a = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::Layered);
             let b = Belief::with_fallback_policy(
                 &dex,
                 &pool,
