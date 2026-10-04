@@ -22,5 +22,30 @@
     "recorded_baseline_sha256": "2145c8c141cc9da316f0f9380e3dde5c1feaaede5c346ee2790c8cfb74e44caf"
   },
   "default_policy": "Layered (unchanged)",
-  "deployed": false
+  "deployed": false,
+  "game_binary_sha256": "40618beeb8319e31d713e23ac4fb6ea3cdacafc8c78adb4a8c6454e712119a06",
+  "history_probe_revision": "77e834e",
+  "final_pairs": 140,
+  "final_games": 280,
+  "all_games_terminal": true,
+  "same_control": "4/4 pairs identical across every trajectory and counter",
+  "onpool_control": "8/8 pairs identical across every trajectory and counter",
+  "natural_control": "32/32 pairs identical across every trajectory and counter; no target exposure",
+  "promotion": "not adopted: primary improvement unproven; secondary stress tied",
+  "artifact_sha256": {
+    "history.jsonl": "c3483236b53e7ddbdb90fcc157fe60ab4796076a915445715443c4f56261b611",
+    "fork-summary.json": "29d80c00611cb51ec55e2526bd480a01bd5ced3e36e4c2827829e2a46387a34b",
+    "results.json": "390627a1a2394d8e1c89501d4ca4a29d16d23ece082f27c8f72dd1eb40662fb3",
+    "execution.json": "35eddbcd2b7bf8252c92feaf69b96392db0bdd0b905faea198e72eb1d285e6bb"
+  },
+  "browser_report": {
+    "hub_entry": "nc2000-retain-perish",
+    "url": "http://mini-usb.local:18080/nc2000-retain-perish/",
+    "links_http_200": 25,
+    "widths": [
+      820,
+      390
+    ],
+    "page_errors": []
+  }
 }
