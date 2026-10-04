@@ -203,6 +203,7 @@ pub enum FallbackPolicy {
     #[default]
     Layered,
     RevealedLoadout,
+    RevealedLoadoutDraw,
 }
 
 impl FallbackPolicy {
@@ -211,6 +212,7 @@ impl FallbackPolicy {
             Self::LegacyMetaOnly => "legacy-meta-only-v1",
             Self::Layered => "layered-meta-rentals-learnset-v1",
             Self::RevealedLoadout => "revealed-loadout-mode-v1",
+            Self::RevealedLoadoutDraw => "revealed-loadout-draw-v1",
         }
     }
 }
@@ -293,6 +295,25 @@ impl MoveDraw {
     }
 }
 
+struct LoadoutDraw {
+    entries: Vec<(Pokemon, f64)>,
+    total: f64,
+}
+
+impl LoadoutDraw {
+    fn draw(&self, rng: &mut SplitMix64) -> &Pokemon {
+        if self.entries.len() == 1 {
+            return &self.entries[0].0;
+        }
+        let mut u = rng.next_f64() * self.total;
+        for (mon, weight) in &self.entries {
+            u -= weight;
+            if u < 0.0 { return mon; }
+        }
+        &self.entries.last().unwrap().0
+    }
+}
+
 pub struct Belief {
     cands: Vec<Candidate>,
     /// Pool indices of the candidates consistent with all observations so
@@ -320,6 +341,7 @@ pub struct Belief {
     /// default and keeps `determinize` bit-identical to pre-M18, rng draws
     /// included.
     draws: Option<Vec<Option<MoveDraw>>>,
+    loadout_draws: Option<Vec<Option<LoadoutDraw>>>,
     synced: Option<u64>,
 }
 
@@ -361,6 +383,7 @@ impl Belief {
             prior: None,
             pick_draws: None,
             draws: None,
+            loadout_draws: None,
             synced: None,
         };
         b.refilter(dex, obs);
@@ -428,6 +451,7 @@ impl Belief {
             prior: None,
             pick_draws: None,
             draws: None,
+            loadout_draws: None,
             synced: Some(obs.revision()),
         })
     }
@@ -456,6 +480,7 @@ impl Belief {
             prior: None,
             pick_draws: None,
             draws: None,
+            loadout_draws: None,
             synced: Some(obs.revision()),
         }
     }
@@ -733,11 +758,6 @@ impl Belief {
         pick: Option<usize>,
         rng: &mut SplitMix64,
     ) {
-        // M18: with a prior installed, the fallback roster's *unrevealed*
-        // slots are resampled per determinization instead of being the one
-        // fixed nearest-set filler. `None` on every other path — including
-        // every pinned/open-sheet call — and `None` consumes no rng, so the
-        // no-prior default stays bit-identical.
         let sampled = self.sample_fallback_refs(pick, rng);
         let refs: &[Pokemon] = match (sampled.as_deref(), pick) {
             (Some(r), _) => r,
@@ -924,9 +944,11 @@ impl Belief {
         if self.alive.is_empty() {
             let roster = self.build_fallback(dex, obs);
             self.draws = self.build_draws(dex, obs, &roster);
+            self.loadout_draws = self.build_loadout_draws(dex, obs);
             self.fallback = Some(roster);
         } else {
             self.draws = None;
+            self.loadout_draws = None;
         }
         self.synced = Some(obs.revision());
     }
@@ -1023,6 +1045,51 @@ impl Belief {
         Some(MoveDraw { revealed, pool })
     }
 
+    fn loadout_draw(&self, dex: &Dex, mo: &MonObs) -> Option<LoadoutDraw> {
+        if mo.revealed_moves.is_empty() && mo.item.original.is_none() {
+            return None;
+        }
+        let mut entries = Vec::new();
+        for candidate in &self.cands {
+            for source in &candidate.sets {
+                if dex.species.id(&toid(&source.species)) != Some(mo.species) {
+                    continue;
+                }
+                let item = dex.items.id(&toid(&source.item));
+                if item.is_some() != mo.preview_has_item
+                    || mo.item.original.is_some_and(|known| known != item)
+                    || !mo.revealed_moves.iter().all(|&revealed| {
+                        source.moves.iter().filter_map(|m| dex.moves.id(&toid(m)))
+                            .any(|m| move_matches(dex, m, revealed))
+                    })
+                    || source.moves.is_empty() || source.moves.len() > 4
+                    || !source.moves.iter().all(|m| format_move_legal_at_level(
+                        dex.species.key(mo.species), &toid(m), mo.level))
+                {
+                    continue;
+                }
+                let mut set = source.clone();
+                set.level = mo.level;
+                set.gender = Some(if mo.gender.as_str().is_empty() { "N" } else { mo.gender.as_str() }.into());
+                set.name.clear();
+                let Ok(built) = Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set]) else { continue };
+                let weight = candidate.weight.unwrap_or(1.0);
+                entries.push((built.sides[0].roster[0].clone(), weight));
+            }
+        }
+        if entries.is_empty() { return None; }
+        let total = entries.iter().map(|(_, w)| *w).sum();
+        Some(LoadoutDraw { entries, total })
+    }
+
+    fn build_loadout_draws(&self, dex: &Dex, obs: &Observer) -> Option<Vec<Option<LoadoutDraw>>> {
+        if self.fallback_policy != FallbackPolicy::RevealedLoadoutDraw || self.pinned {
+            return None;
+        }
+        let draws: Vec<_> = obs.mons().iter().map(|mo| self.loadout_draw(dex, mo)).collect();
+        draws.iter().any(Option::is_some).then_some(draws)
+    }
+
     /// The per-determinization fallback roster, or `None` to use the stored
     /// one unchanged. Consumes rng **only** when it actually samples.
     fn sample_fallback_refs(
@@ -1033,17 +1100,20 @@ impl Belief {
         if pick.is_some() || self.pinned {
             return None;
         }
-        let draws = self.draws.as_deref()?;
-        let base = self.fallback.as_deref()?;
-        let mut roster = base.to_vec();
-        for (mon, draw) in roster.iter_mut().zip(draws) {
-            let Some(draw) = draw else { continue };
-            let slots = draw.draw(rng);
-            if slots.is_empty() {
-                continue; // never regress to the empty-set/implicit-Struggle
+        if self.draws.is_none() && self.loadout_draws.is_none() {
+            return None;
+        }
+        let mut roster = self.fallback.as_deref()?.to_vec();
+        for (slot, mon) in roster.iter_mut().enumerate() {
+            if let Some(draw) = self.loadout_draws.as_ref().and_then(|d| d[slot].as_ref()) {
+                *mon = draw.draw(rng).clone();
+            } else if let Some(draw) = self.draws.as_ref().and_then(|d| d[slot].as_ref()) {
+                let slots = draw.draw(rng);
+                if !slots.is_empty() {
+                    mon.base_move_slots = slots;
+                    mon.move_slots = slots;
+                }
             }
-            mon.base_move_slots = slots;
-            mon.move_slots = slots;
         }
         Some(roster)
     }
@@ -1073,7 +1143,7 @@ impl Belief {
                     .iter()
                     .map(|mo| match self.fallback_policy {
                         FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-                        FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout => base_set(dex, mo),
+                        FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw => base_set(dex, mo),
                     })
                     .collect();
                 Battle::from_fixture(dex, "1,2,3,4", &minimal, &minimal)
@@ -1095,14 +1165,14 @@ impl Belief {
         }
         match self.fallback_policy {
             FallbackPolicy::LegacyMetaOnly => FallbackSource::LegacyEmpty,
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw
                 if community_rental_sets(dex)
                     .iter()
                     .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species)) =>
             {
                 FallbackSource::CommunityRental
             }
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout => FallbackSource::Learnset,
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw => FallbackSource::Learnset,
         }
     }
 
@@ -1123,7 +1193,7 @@ impl Belief {
             // Deliberately empty: the engine safely enumerates implicit
             // Struggle, matching the pre-M17d control without a fake move.
             FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout => base_set(dex, mo),
+            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw => base_set(dex, mo),
         });
         set.level = mo.level;
         set.gender = Some(match mo.gender.as_str() {
@@ -1541,6 +1611,7 @@ mod fallback_tests {
             prior: None,
             pick_draws: None,
             draws: None,
+            loadout_draws: None,
             synced: None,
         }
     }
@@ -1609,6 +1680,98 @@ mod fallback_tests {
                 serde_json::to_value(belief.fallback_set(&dex, &observed)).unwrap()
             );
         }
+    }
+
+    fn loadout_fixture() -> (Dex, MetaPool, Battle, Observer) {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        )).unwrap();
+        let mut set = pool.teams.iter().flat_map(|t| &t.sets)
+            .find(|s| toid(&s.species) == "misdreavus" && s.moves.iter().any(|m| toid(m) == "meanlook"))
+            .unwrap().clone();
+        set.name = "Misdreavus".into();
+        let battle = Battle::from_fixture(&dex, "1,2,3,4", &[set.clone()], &[set]).unwrap();
+        let obs = Observer::new(&battle, 0);
+        (dex, pool, battle, obs)
+    }
+
+    #[test]
+    fn loadout_draw_preserves_combo_and_empirical_mass() {
+        let (dex, pool, battle, mut obs) = loadout_fixture();
+        obs.ingest_line("|move|p2a: Misdreavus|Mean Look|p1a: Target", &dex);
+        let belief = Belief::with_fallback_policy(&dex, &pool, &obs, FallbackPolicy::RevealedLoadoutDraw);
+        assert!(belief.is_fallback());
+        let support = belief.loadout_draws.as_ref().unwrap()[0].as_ref().unwrap();
+        let carries = |p: &Pokemon, key| p.base_move_slots.iter().any(|m| dex.moves.key(m.id) == key);
+        let expected = support.entries.iter().filter(|(p,_)| carries(p,"destinybond"))
+            .map(|(_,w)|w).sum::<f64>() / support.total;
+        assert!((0.4..0.55).contains(&expected));
+        let mut bonds = 0;
+        for seed in 0..4000 {
+            let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(seed));
+            let p = &det.sides[1].roster[0];
+            assert!(carries(p,"meanlook") && carries(p,"perishsong"));
+            assert_eq!(p.base_move_slots.len(),4);
+            let mut keys: Vec<_> = p.base_move_slots.iter().map(|m|m.id).collect();keys.sort_by_key(|m|m.0);
+            assert!(support.entries.iter().any(|(q,_)| {
+                let mut qs:Vec<_> = q.base_move_slots.iter().map(|m|m.id).collect();qs.sort_by_key(|m|m.0);
+                qs == keys && q.item == p.item && q.stored_stats == p.stored_stats
+            }));
+            bonds += usize::from(carries(p,"destinybond"));
+        }
+        assert!((bonds as f64 / 4000.0 - expected).abs() < 0.03);
+        obs.ingest_line("|move|p2a: Misdreavus|Protect|p1a: Target", &dex);
+        let mut belief = belief;belief.sync(&dex,&obs);
+        for seed in 0..32 {
+            let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(seed));
+            assert!(carries(&det.sides[1].roster[0],"protect"));
+        }
+    }
+
+    #[test]
+    fn loadout_draw_preserves_unaffected_paths_and_rng() {
+        let (dex, pool, battle, mut obs) = loadout_fixture();
+        for impossible in [false,true] {
+            if impossible {
+                for key in ["Thief","Psychic","Attract"] {
+                    obs.ingest_line(&format!("|move|p2a: Misdreavus|{key}|p1a: Target"), &dex);
+                }
+            }
+            let a = Belief::new(&dex,&pool,&obs);
+            let b = Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::RevealedLoadoutDraw);
+            assert!(b.loadout_draws.is_none());
+            for seed in 0..16 {
+                let mut ra=SplitMix64::new(seed);let mut rb=ra.clone();
+                assert_eq!(a.determinize(&dex,&battle,&obs,&mut ra).state_key128(),
+                           b.determinize(&dex,&battle,&obs,&mut rb).state_key128());
+                assert_eq!(ra.0,rb.0);
+            }
+        }
+    }
+
+    #[test]
+    fn loadout_draw_respects_item_reveals_and_hidden_state_independence() {
+        let (dex, pool, battle, mut obs) = loadout_fixture();
+        obs.ingest_line("|move|p2a: Misdreavus|Mean Look|p1a: Target", &dex);
+        let mut belief = Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::RevealedLoadoutDraw);
+        let mut hidden = battle.clone();
+        let p = &mut hidden.sides[1].roster[0];
+        p.item = dex.items.id("leftovers");p.stored_stats=[1;5];p.base_stored_stats=[1;5];
+        for slot in &mut p.base_move_slots {
+            if dex.moves.key(slot.id) != "meanlook" { *slot = fresh_move_slot(&dex,dex.moves.id("splash").unwrap()); }
+        }
+        p.move_slots=p.base_move_slots;
+        for seed in 0..16 {
+            assert_eq!(belief.determinize(&dex,&battle,&obs,&mut SplitMix64::new(seed)).state_key128(),
+                       belief.determinize(&dex,&hidden,&obs,&mut SplitMix64::new(seed)).state_key128());
+        }
+        obs.ingest_line("|-heal|p2a: Misdreavus|100/100|[from] item: Leftovers", &dex);
+        belief.sync(&dex,&obs);
+        let support = belief.loadout_draws.as_ref().unwrap()[0].as_ref().unwrap();
+        assert!(support.entries.iter().all(|(p,_)|p.item==dex.items.id("leftovers")));
+        let mut no_item=obs.mons()[0].clone();no_item.preview_has_item=false;no_item.item.original=Some(None);
+        assert!(belief.loadout_draw(&dex,&no_item).is_none());
     }
 
     fn base_move_id(name: &str) -> String {

@@ -106,6 +106,8 @@ impl Agent for Recorder<'_> {
 struct Opponent {
     inner: BlindAgent,
     forced: bool,
+    adaptive: bool,
+    opened: bool,
 }
 impl Agent for Opponent {
     fn name(&self) -> String {
@@ -129,6 +131,14 @@ impl Agent for Opponent {
                     _ => 0,
                 })
                 .unwrap();
+        }
+        if self.adaptive {
+            if !self.opened {
+                self.opened = true;
+                let lock = dex.moves.id("meanlook").map(SearchChoice::Move);
+                if let Some(lock) = lock.filter(|c| cs.contains(c)) { return lock; }
+            }
+            return ordinary();
         }
         let Some(id) = b.active_id(side) else {
             return ordinary();
@@ -226,7 +236,7 @@ fn main() {
     let start: usize = arg("--start", "0").parse().unwrap();
     let seed: u64 = arg("--seed", "202610041").parse().unwrap();
     let mode = arg("--mode", "stress");
-    assert!(["stress", "natural", "onpool"].contains(&mode.as_str()));
+    assert!(["stress", "adaptive", "natural", "onpool"].contains(&mode.as_str()));
     let trace_dir = arg("--trace-dir", "");
     if !trace_dir.is_empty() {
         std::fs::create_dir_all(&trace_dir).unwrap();
@@ -240,6 +250,11 @@ fn main() {
     } else {
         FallbackPolicy::RevealedLoadout
     };
+    let triad = args.iter().any(|a| a == "--triad");
+    let policies = if triad {
+        if args.iter().any(|a| a == "--same") { vec![FallbackPolicy::Layered;3] }
+        else { vec![FallbackPolicy::Layered,FallbackPolicy::RevealedLoadout,FallbackPolicy::RevealedLoadoutDraw] }
+    } else { vec![FallbackPolicy::Layered,candidate] };
     let prior = Arc::new(load_meta_pool(
         &root.join("data/belief-pool-v3/belief-pool.json"),
     ));
@@ -293,12 +308,12 @@ fn main() {
                 let side=(job/opponents.teams.len()+job)%2;
                 let teams:[&[PokemonSet];2]=if side==0 {[&own.teams[own_i].sets,&opponents.teams[opp_i].sets]} else {[&opponents.teams[opp_i].sets,&own.teams[own_i].sets]};
                 let mut arms=Vec::new();
-                for policy in [FallbackPolicy::Layered,candidate] {
+                for &policy in &policies {
                     let started=std::time::Instant::now();
                     let mut battle=Battle::from_fixture(&dex,&battle_seed,teams[0],teams[1]).unwrap();battle.set_log_enabled(true);
                     let trace=if trace_dir.is_empty() {None} else {Some(std::io::BufWriter::new(std::fs::File::create(format!("{trace_dir}/{job}-{}.jsonl",policy.id())).unwrap()))};
                     let mut me=Measured {trace,cfg:cfg.clone(),inner:BlindAgent::new_with_fallback_policy(cfg.clone(),prior.clone(),None,bot_seed,policy),decisions:0,fallback:0,exposed:0,missing:0};
-                    let mut opp=Opponent {inner:BlindAgent::new(cfg.clone(),prior.clone(),None,opp_seed),forced:mode=="stress"};
+                    let mut opp=Opponent {inner:BlindAgent::new(cfg.clone(),prior.clone(),None,opp_seed),forced:mode=="stress"||mode=="adaptive",adaptive:mode=="adaptive",opened:false};
                     let inputs=Arc::new(Mutex::new(Vec::new()));
                     let (score,turns,tally)=if trace_dir.is_empty() {
                         let agents:[&mut dyn Agent;2]=if side==0 {[&mut me,&mut opp]} else {[&mut opp,&mut me]};
@@ -311,9 +326,10 @@ fn main() {
                         std::fs::write(format!("{trace_dir}/{job}-{}-replay.json",policy.id()),serde_json::to_string(&json!({"teams":teams,"battle_seed":battle_seed,"inputs":*inputs.lock().unwrap(),"log":battle.log})).unwrap()).unwrap();
                         result
                     };
-                    arms.push(json!({"elapsed_seconds":started.elapsed().as_secs_f64(),"policy":policy.id(),"score":if side==0 {score}else{1.0-score},"turns":turns,"terminal":battle.outcome().is_some(),"trajectory":format!("{:016x}",digest(&battle.log)),"decisions":me.decisions,"fallback":me.fallback,"exposed":me.exposed,"missing":me.missing,"own":tally[side].json(),"opponent":tally[1-side].json()}));
+                    arms.push(json!({"elapsed_seconds":started.elapsed().as_secs_f64(),"policy":policy.id(),"score":if side==0 {score}else{1.0-score},"turns":turns,"terminal":battle.outcome().is_some(),"trajectory":format!("{:016x}",digest(&battle.log)),"decisions":me.decisions,"fallback":me.fallback,"exposed":me.exposed,"missing":me.missing,"own":tally[side].json(),"opponent":tally[1-side].json(),"opponent_bond_moves":battle.log.iter().filter(|l| l.starts_with(&format!("|move|p{}",2-side)) && l.contains("|Destiny Bond|")).count(),"opponent_switch_events":battle.log.iter().filter(|l|l.starts_with(&format!("|switch|p{}",2-side))).count()}));
                 }
-                let row=json!({"job":job,"mode":mode,"iterations":iterations,"c":0.4,"seed":seed,"battle_seed":battle_seed,"bot_seed":bot_seed,"opp_seed":opp_seed,"side":side,"own_team":own.teams[own_i].id,"opponent_team":opponents.teams[opp_i].id,"a":arms[0],"b":arms[1]});
+                let mut row=json!({"job":job,"mode":mode,"iterations":iterations,"c":0.4,"seed":seed,"battle_seed":battle_seed,"bot_seed":bot_seed,"opp_seed":opp_seed,"side":side,"own_team":own.teams[own_i].id,"opponent_team":opponents.teams[opp_i].id,"a":arms[0],"b":arms[1]});
+                if triad {row["c"]=arms[2].clone();}
                 let mut f=out.lock().unwrap();writeln!(f,"{row}").unwrap();f.flush().unwrap();eprintln!("completed {job}");
             });
         }
