@@ -48,7 +48,8 @@ def posterior(groups, plan):
     return result
 
 
-def main(run, out):
+def main(run, out, stage='pilot'):
+    assert stage in {'pilot', 'confirmation'}
     protocol = read(out / 'protocol.json')
     plan = read(out / 'analysis-plan.json')
     proof = read(out / 'perish-guard-equivalence.json')
@@ -131,9 +132,12 @@ def main(run, out):
         'default_corpus_reproduced_labels':len(valid),'replay':verification,'reproduced_first_divergence_searches':len(audit)*2,
         'limitations':['Fixed synthetic opponent teams and common bot; no expert-human comparison.',
             'Equal Rest/no-Rest weighting is a stress scenario assumption, not human prevalence.',
-            'Exploratory pilot only. No adoption without fresh confirmation.',
+            ('Exploratory pilot only. No adoption without fresh confirmation.' if stage == 'pilot'
+             else 'Independent fixed-size confirmation only; pilot outcomes are not pooled.'),
             'Support diagnostic uses positive labels that motivated the candidate; it is not independent strength evidence.',
-            'Pilot preceded the final Perish-slot guard. Fixture-level equivalence is recorded, and all first-divergence choices are rechecked with final code.']}
+            ('Pilot preceded the final Perish-slot guard. Fixture-level equivalence is recorded, and all first-divergence choices are rechecked with final code.' if stage == 'pilot'
+             else 'Confirmation used the frozen final Perish-slot guard throughout; all first-divergence choices are rechecked.')],
+        'stage':stage}
     (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
     for src,dest in [(run/'pilot/manifest.json','pilot-manifest.json'),(run/'pilot-verification.json','pilot-verification.json'),(run/'first-divergence.json','first-divergence.json'),(run/'pilot-source-sha256.json','pilot-source-sha256.json')]:
         (out/dest).write_bytes(src.read_bytes())
@@ -142,4 +146,4 @@ def main(run, out):
 
 
 if __name__=='__main__':
-    main(*map(pathlib.Path,sys.argv[1:]))
+    main(pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), *sys.argv[3:])

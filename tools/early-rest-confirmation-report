@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+import hashlib
+import json
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+out = root / 'findings/early-rest-confirmation-v1'
+run = root / 'tmp/early-rest-confirmation-v1'
+games = root / 'tmp/early-rest-v1/confirmation'
+run.mkdir(parents=True, exist_ok=True)
+for name, target in [('pilot', games), ('corpus', root / 'tmp/early-rest-v1/corpus')]:
+    link = run / name
+    if not link.exists():
+        link.symlink_to(target, target_is_directory=True)
+    assert link.resolve() == target.resolve(), name
+(run / 'pilot-source-sha256.json').write_bytes((out / 'candidate-source-sha256.json').read_bytes())
+protocol = json.loads((out / 'protocol.json').read_text())
+expected = sum(c['pairs'] for c in protocol['cases']) * 2
+assert len(list(games.glob('*-a*.json'))) == expected, 'confirmation is not complete'
+for name, digest in json.loads((out / 'candidate-source-sha256.json').read_text()).items():
+    assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name
+for option, filename in [('--verify','pilot-verification.json'),('--audit','first-divergence.json')]:
+    with (run / filename).open('w') as f:
+        subprocess.run(['target/release/examples/early_rest_duel',str(out / 'protocol.json'),str(games),option],cwd=root,stdout=f,check=True)
+subprocess.run(['python3','tools/early-rest-report.py',str(run),str(out),'confirmation'],cwd=root,check=True)
+summary = json.loads((out / 'summary.json').read_text())
+primary = summary['posterior'].get('1')
+passed = primary is not None and primary['probability_improved'] >= .8
+v = {'stage':'eligible_for_review' if passed else 'not_adopted', 'criterion_met':passed,
+     'threshold':.8,'primary':primary,'data':'independent 64 stress pairs only; pilot not pooled',
+     'default_changed':False,'secondary_review_required':passed,
+     'scope':'fixed equal-weight eight-case benchmark; not a human-strength probability'}
+(out / 'decision.json').write_text(json.dumps(v,indent=2)+'\n')
+print(json.dumps(v,indent=2))
