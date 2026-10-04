@@ -11,6 +11,12 @@ protocol = read('protocol.json')
 count = sum(c['pairs'] for c in protocol['cases']) * 2
 result = '<p>固定した52局の試験を実行中です。結果の判定と再生照合は完了後に行います。</p>'
 links = ['protocol.json', 'analysis-plan.json', 'inventory-audit.json', 'source-sha256.json']
+human_html = ''
+if (out / 'human-evidence-audit.json').exists():
+    human = read('human-evidence-audit.json')
+    counts = human['results']
+    human_html = f"<h2>人間対戦の既存記録</h2><p>保存されている190局は{counts.get('win',0)}勝・{counts.get('loss',0)}敗・終局記録なし{counts.get('incomplete',0)}局です。相手は{human['distinct_opponent_accounts']}アカウントですが、人数や上級者の人数とは同一視できません。記録には認識可能なビルド識別子がなく、今回のEarlyRestの対人実績を示す資料にはなりません。対人評価には版を特定できる新しい対戦記録が必要です。</p>"
+    links.append('human-evidence-audit.json')
 if (out / 'summary.json').exists():
     summary = read('summary.json')
     decision = read('decision.json')
@@ -18,9 +24,11 @@ if (out / 'summary.json').exists():
     rows = ''.join(f"<tr><td>{html.escape(c['case'])}</td><td>{c['pairs']}</td><td>{c['scores'][0]:g}</td><td>{c['scores'][1]:g}</td></tr>" for c in summary['cases'])
     p = decision['probability_worse']
     probability = f'{p:.2%}' if p is not None else '未算出（未決着あり）'
+    sensitivity = ''.join(f"<tr><td>{mass}</td><td>{1-v['probability_improved']:.2%}</td><td>{100*v['mean_delta']:+.2f}ポイント</td></tr>" for mass, v in summary['posterior'].items() if isinstance(v, dict) and 'probability_improved' in v)
     result = f'''<p>旧設定{screen['scores'][0]:g}点、新設定{screen['scores'][1]:g}点／各24局。同じ乱数の組で改善{screen['better']}・悪化{screen['worse']}・同点{screen['same']}。未決着は旧設定{screen['caps_by_arm'][0]}局、新設定{screen['caps_by_arm'][1]}局です。</p>
 <p>固定モデルでの悪化確率は{probability}。事前の取り消し基準は80%です。判定状態：{html.escape(decision['stage'])}。この小規模試験だけでは一般的な非劣性や人間上級者への優位は証明できません。</p>
 <div class="scroll"><table><tr><th>相手／こちら</th><th>組</th><th>旧設定</th><th>新設定</th></tr>{rows}</table></div>
+<table><tr><th>各条件の事前質量</th><th>悪化確率</th><th>平均差</th></tr>{sensitivity}</table>
 <p>{summary['replay']['games']}局・{summary['replay']['decisions']}判断を再生照合し、着手が分かれた{summary['reproduced_searches']}探索を再現しました。</p>'''
     links += ['summary.json', 'decision.json', 'replay.json', 'first-divergence.json', 'records.json.gz']
 links_html = ' · '.join(f'<a href="{name}">{name}</a>' for name in links)
@@ -34,6 +42,6 @@ unmatched_html = '、'.join(html.escape(r['team']) for r in unmatched)
 <p>85件すべてで、見せ合い時の64標本は旧設定・新設定で一致しました。新設定は相手の登場後に作用するため、これだけで対戦中の不変性は保証しません。全技・持ち物の整合性は集合の照合であり、その公開順を実際の対戦で再現したものではありません。</p>
 <h2>固定した条件</h2><p>相手3編成×こちら2編成×4組＝24組と、既知編成同士の対照2組、計{count}局。こちらの2編成はカタログの配布比重上位から元の並び順で選びました。旧設定EarlyPerishと新設定EarlyRestを、同じ相手EarlyPerish・同じ乱数で比較します。各判断27,000探索、c=0.4、上限300ターン。選出や初手の強制はありません。</p>
 <p>6条件を等重みで集計し、各条件の対応勝敗に対する対称ディリクレ分布（主判定の事前質量1）で悪化確率80%以上なら暫定的なローカル採用を取り消します。事前質量0.5・4・16・64も併記。未決着は引き分けに置き換えず判定を未完了とします。従来の作成局面の試験と合算せず、結果による試行数の追加もしません。</p>
-<p>{links_html}</p></html>''')
+{human_html}<p>{links_html}</p></html>''')
 hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in out.iterdir() if p.is_file() and p.name != 'verification.json'}
 (out / 'verification.json').write_text(json.dumps({'artifact_sha256': hashes}, indent=2) + '\n')

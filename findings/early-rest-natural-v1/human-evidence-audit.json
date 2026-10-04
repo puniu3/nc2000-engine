@@ -1,0 +1,37 @@
+{
+  "games": 190,
+  "results": {
+    "loss": 96,
+    "win": 88,
+    "incomplete": 6
+  },
+  "distinct_opponent_accounts": 21,
+  "games_per_opponent_account": [
+    54,
+    25,
+    21,
+    20,
+    10,
+    8,
+    8,
+    7,
+    7,
+    6,
+    5,
+    4,
+    4,
+    3,
+    2,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "games_with_recognized_build_marker": 0,
+  "rated_marker_games": 0,
+  "raw_content_fingerprint": "5bd57c2749d1830946e60fec6aa72e2c1445a7e980a1dcf2890e560a153c4f08",
+  "audit_source_sha256": "3031126bf1dc89904d96940a8f8ad4ebdbae0e5a821f83421d8104b3dc7377ad",
+  "scope": "Archived configured bot-account protocol logs only. Empty player records on disconnect do not erase identity. Account count is not a count of distinct people or verified experts. Missing recognized build markers do not exclude external version mappings. These logs do not establish current EarlyRest human performance. No raw logs, identifiers or per-game rows are exported."
+}

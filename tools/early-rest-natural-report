@@ -63,7 +63,15 @@ null = report.posterior([[{'scores': [0, 0]}, {'scores': [1, 1]}] for _ in group
 positive = report.posterior([[{'scores': [0, 1]}] * 4 for _ in groups], calibration)['1']['probability_improved']
 negative = report.posterior([[{'scores': [1, 0]}] * 4 for _ in groups], calibration)['1']['probability_improved']
 assert .48 < null < .52 and positive > .99 and negative < .01
-summary = {'cases': cases, 'screen': report.outcome_summary([p for group in groups for p in group]),
+screen_pairs = [p for group in groups for p in group]
+roster_groups = {}
+for name, flag in [('rest', True), ('no_rest', False)]:
+    ids = {c['id'] for c in protocol['cases'] if c['actual_rest'] is flag}
+    selected = [p for p in screen_pairs if p['case'] in ids]
+    roster_groups[name] = report.outcome_summary(selected) if selected else {'pairs': 0, 'estimable': False}
+summary = {'cases': cases, 'screen': report.outcome_summary(screen_pairs),
+           'roster_rest_groups': roster_groups,
+           'roster_rest_group_scope': 'Rest in a six-mon roster, not actual selection or use; no Rest-absent roster is in this screen.',
            'posterior': posterior, 'replay': read(out / 'replay.json'), 'reproduced_searches': 2 * len(audit),
            'calibration': {'null': null, 'positive': positive, 'negative': negative},
            'scope': protocol['interpretation']}
