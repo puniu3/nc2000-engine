@@ -2,6 +2,9 @@
 set -eu
 cd "$(dirname "$0")/.."
 mkdir -p tmp
-cargo run --release -p nc2000-bot --example poison_wait_audit > tmp/strength-headroom-reproduction.jsonl
-cmp findings/strength-headroom-v1/measurements.jsonl tmp/strength-headroom-reproduction.jsonl
-printf 'Proof, controls, and 24 search decisions reproduce exactly.\n'
+cargo build --release -p nc2000-bot --example poison_wait_audit
+target/release/examples/poison_wait_audit --baseline > tmp/strength-headroom-baseline.jsonl
+cmp findings/strength-headroom-v1/measurements.jsonl tmp/strength-headroom-baseline.jsonl
+target/release/examples/poison_wait_audit > tmp/strength-headroom-reproduction.jsonl
+cmp findings/strength-headroom-v1/fixed-measurements.jsonl tmp/strength-headroom-reproduction.jsonl
+printf 'Proof, controls, and all 24 before/after decisions reproduce exactly.\n'

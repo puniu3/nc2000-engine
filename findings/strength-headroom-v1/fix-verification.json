@@ -1,0 +1,151 @@
+{
+  "schema": "nc2000-residual-wait-fix-v1",
+  "base_revision": "a63373b2f7ba145dcadb1dd1b7b6d2b8a5ebc037",
+  "deployment": "not_published",
+  "change": "Preserve no-op choices while the opposing active has public residual damage; retain self-KO and sleep-forfeit exclusions.",
+  "effects": [
+    "poison",
+    "toxic poison",
+    "burn",
+    "curse",
+    "leechseed",
+    "partiallytrapped",
+    "nightmare while asleep",
+    "sandstorm unless type-immune"
+  ],
+  "baseline_reproduces_archived_bytes": true,
+  "native_choices_corrected": 24,
+  "native_search_statistics_identical": true,
+  "winning_choice_certified_against_all_replies": true,
+  "native_library_tests": 132,
+  "focused_integration_tests": 16,
+  "workspace_all_targets_check": "passed",
+  "wasm_residual_cases": [
+    {
+      "seed": 82001,
+      "reply": "counter",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82001,
+      "reply": "mirrorcoat",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82001,
+      "reply": "safeguard",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82001,
+      "reply": "destinybond",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82002,
+      "reply": "counter",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82002,
+      "reply": "mirrorcoat",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82002,
+      "reply": "safeguard",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82002,
+      "reply": "destinybond",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82003,
+      "reply": "counter",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82003,
+      "reply": "mirrorcoat",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82003,
+      "reply": "safeguard",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82003,
+      "reply": "destinybond",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82004,
+      "reply": "counter",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82004,
+      "reply": "mirrorcoat",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82004,
+      "reply": "safeguard",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82004,
+      "reply": "destinybond",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    }
+  ],
+  "wasm_destiny_bond_cases": [
+    {
+      "plain": false,
+      "seed": 71001,
+      "best": "move curse"
+    },
+    {
+      "plain": false,
+      "seed": 71002,
+      "best": "move curse"
+    },
+    {
+      "plain": true,
+      "seed": 71001,
+      "best": "move return"
+    },
+    {
+      "plain": true,
+      "seed": 71002,
+      "best": "move return"
+    }
+  ],
+  "general_strength_gain": "not measured",
+  "sha256": {
+    "crates/bot/src/smmcts.rs": "1bdd20a363edb4fa1b1dbee6b8fc2070482890a6c2c89a5504e97f5cf2a06193",
+    "crates/bot/tests/residual_wait.rs": "52876756f6dc76efc72d0ff421dcd8ba5316f2995235048c8f22c2164bf69c95",
+    "crates/bot/tests/support/residual_wait.rs": "ac4ae0aab28b0044f728c4849a55011e6b6d5fe2049f5706c7c7bc1dbff0f0dd",
+    "crates/wasm/tests-node/residual-wait.js": "bf4b26421d39205ee7b412df617441c5d1303b10e80ec2e17ca395dde181efd6",
+    "findings/strength-headroom-v1/fixed-measurements.jsonl": "5d55aa4ff3ab3a8dbd21243ef8440c58ccc19d556d8f16e09cec032bd65c3306"
+  }
+}
