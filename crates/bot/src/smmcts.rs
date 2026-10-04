@@ -567,6 +567,7 @@ pub(crate) fn certain_noop(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MaskRules {
     pub destiny_bond_wait: bool,
+    pub residual_damage_wait: bool,
     /// Sleep Talk / Snore selected by an AWAKE, strictly faster user
     /// (`moveexec.rs:521`). `false` = the pre-2026-08-19 mask.
     pub sleep_talk_awake: bool,
@@ -603,6 +604,7 @@ impl Default for MaskRules {
     fn default() -> Self {
         MaskRules {
             destiny_bond_wait: true,
+            residual_damage_wait: true,
             sleep_talk_awake: true,
             immunity_ignores_switch_read: false,
             immunity_all_switchins: false,
@@ -666,7 +668,28 @@ pub(crate) fn dominated_reason(
     {
         return None;
     }
+    if rules.residual_damage_wait && foe_has_residual_damage(b, dex, side) {
+        return None;
+    }
     noop_reason(b, dex, side, c, rules)
+}
+
+fn foe_has_residual_damage(b: &Battle, dex: &Dex, side: usize) -> bool {
+    use nc2000_engine::state::Status;
+    let Some(id) = b.active_id(1 - side) else { return false };
+    let foe = b.poke(id);
+    if foe.fainted || foe.hp == 0 {
+        return false;
+    }
+    // A failing move can avoid retaliation while public residual effects advance.
+    matches!(foe.status, Status::Psn | Status::Tox | Status::Brn)
+        || ["curse", "leechseed", "partiallytrapped"].iter().any(|key| {
+            dex.conds_id(key).is_some_and(|cond| foe.has_volatile(cond))
+        })
+        || (foe.status == Status::Slp
+            && dex.conds_id("nightmare").is_some_and(|cond| foe.has_volatile(cond)))
+        || (dex.conds_id("sandstorm").is_some_and(|cond| b.field.weather == Some(cond))
+            && !foe.types.iter().any(|t| dex.status_key_immune("sandstorm", t)))
 }
 
 /// Whether the foe can leave before the move lands. **Switches resolve before
