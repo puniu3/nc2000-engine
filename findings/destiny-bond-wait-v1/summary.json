@@ -1,7 +1,7 @@
 {
   "schema": "nc2000-destiny-bond-wait-v1",
   "baseline_commit": "f1669d492c26722be4254bf374c601b11148e330",
-  "deployment": "local_only_not_published",
+  "deployment": "published_and_verified",
   "comparison": "Same engine and search; only MaskRules.destiny_bond_wait differs. Baseline is the local source revision, not an audit of deployed browser files.",
   "config": {
     "iterations": 27000,
@@ -308,5 +308,6 @@
     "data/learnsets-gen2.json": "8f288150ce10b2698c2100381c3daed6a3a56389bb4fe7169cf3b54407d0d0c4",
     "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
   },
-  "preview_verified": true
+  "preview_verified": true,
+  "deployment_evidence": "deployment.json"
 }
