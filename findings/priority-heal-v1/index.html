@@ -1,0 +1,28 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NC2000 — 先制技と回復技の誤除外</title>
+<style>body{font:18px/1.65 system-ui,sans-serif;background:#f4f0e6;color:#28271f;max-width:940px;margin:32px auto;padding:0 20px}h1,h2{line-height:1.25}h2{margin-top:2em}a{color:#684928}table{border-collapse:collapse;width:100%;font-size:16px}th,td{padding:10px;text-align:left;border-bottom:1px solid #c7c2b6}.table{overflow-x:auto}code{overflow-wrap:anywhere}.lead{font-size:22px}strong{color:#3b4931}</style>
+<h1>先制技と回復技の誤除外</h1>
+<p class="lead">先制攻撃を受けてから回復できる技を、満タンという理由で除外する欠陥を修正した。勝率の改善は確認できなかった。</p>
+<p>ローカル実装・検証済み。本番は前回の回復待機修正 <code>fa6b58f</code> のまま。</p>
+<h2>修正した判定</h2>
+<p>フーディンが満タンでも、ハッサムの「でんこうせっか」が先に当たれば、その後の「じこさいせい」は成功する。従来は素早さだけを根拠に回復技を除外していた。</p>
+<p>相手の種族が先制攻撃を習得できる場合は回復技を残す。相手の隠れた技構成やPPを参照しない。コピー技がある場合や習得表がない場合も、回復できる可能性を残す。先制攻撃を否定できる相手への満タン回復の除外と、自滅・睡眠ルール違反の防止は維持する。</p>
+<p>これは保守的な判定なので、実際の相手が先制攻撃を持っていなくても、その種族が習得可能なら回復技を残す場合がある。</p>
+<h2>正しさと強さを分けて確認</h2>
+<div class="table"><table><tr><th>検査</th><th>結果</th></tr>
+<tr><td>先制攻撃→回復</td><td>でんこうせっか・マッハパンチ・しんそく × じこさいせい・ねむる × 両陣営で成功</td></tr>
+<tr><td>隠れた技・PPの変更</td><td>除外判定は不変。先制攻撃を習得できない種族では従来の除外を維持</td></tr>
+<tr><td>27,000反復、16組の探索比較</td><td>修正前後で訪問数・平均値・最終着手が同一</td></tr>
+<tr><td>固定局面から16組の継続対戦</td><td>両者16勝0敗、全着手同一。片腕113判断、除外緩和51回、新たに許可した手の選択0回</td></tr>
+<tr><td>現行24パーティから32戦</td><td>全16組の勝敗が同一。片腕510判断、除外緩和0回、新たに許可した手の選択0回</td></tr>
+<tr><td>回帰検査</td><td>native 158テスト、workspace全ターゲット検査が成功。Wasmの判定8例、回復待機4継続戦、毒待機16例、みちづれ4例、smokeが成功</td></tr>
+</table></div>
+<p>探索比較は既存のフーディン対ハッサムの1対1局面を固定し、全情報8シード・blind prior v3で8シードを測定した。全情報では攻撃が首位。blindでは両手が13,500訪問・平均1.0で完全に並び、技の並び順で攻撃が選ばれた。この同率を回復不要の確信とは扱わない。</p>
+<p>継続対戦の相手は「でんこうせっか、PP切れ後はおんがえし」の固定方針。一般対戦はカタログの一様抽選で、本番の重み付き分布ではない。Wasmの判定8例は探索0回の同率選択を使って最終フィルタの接続を確認したもので、強さの測定ではない。</p>
+<h2>この結果から言えること</h2>
+<p><strong>正しさの欠陥は直ったが、今回の測定では強化になった証拠はない。</strong> 一般対戦は変更が発火していないので、得点0.5や分散ゼロを同等性・副作用なしの証明には使わない。固定した試行数を、結果が出るまで延長していない。</p>
+<p>この候補の勝率測定はいったん終える。次に強化を探すなら、残る除外で高い訪問割合の手が消える実局面を先に特定する。今回のような低頻度の正しさの反例だけで、学習器・評価項・汎用rolloutを再開しない。</p>
+<h2>証拠と再現</h2>
+<p><a href="protocol.json">実行前の条件と停止条件</a> · <a href="summary.json">集計・限界・ソース指紋</a> · <a href="fixed.jsonl">修正後の1ターン実験</a> · <a href="search.jsonl">全探索統計</a> · <a href="targeted.jsonl">継続対戦の全着手</a> · <a href="broad.json">一般対戦と発火数</a> · <a href="checks.txt">検査ログ</a></p>
+<p><code>tools/priority-heal-audit</code> で、元の8例と修正後の8例を保存済み出力と照合できる。</p>
+<p><a href="/nc2000-recovery-wait/">前回の回復待機修正と本番検証</a> · <a href="/">共有プレビューハブ</a></p>
+</html>

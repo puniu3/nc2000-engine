@@ -128,11 +128,12 @@ fn legacy_mask() -> MaskRules {
 /// One place, so a new rule cannot be parseable but unprintable (or the
 /// reverse) — an arm whose label does not say what it ran is how an A/B gets
 /// misfiled.
-fn mask_fields(m: &MaskRules) -> [(&'static str, bool); 6] {
+fn mask_fields(m: &MaskRules) -> [(&'static str, bool); 7] {
     [
         ("destiny_bond_wait", m.destiny_bond_wait),
         ("residual_damage_wait", m.residual_damage_wait),
         ("own_recovery_wait", m.own_recovery_wait),
+        ("priority_heal", m.priority_heal),
         ("sleep_talk_awake", m.sleep_talk_awake),
         ("immunity_ignores_switch_read", m.immunity_ignores_switch_read),
         ("immunity_all_switchins", m.immunity_all_switchins),
@@ -150,6 +151,7 @@ fn apply_mask_token(m: &mut MaskRules, tok: &str) -> Result<(), String> {
         "destiny_bond_wait" => m.destiny_bond_wait = on,
         "residual_damage_wait" => m.residual_damage_wait = on,
         "own_recovery_wait" => m.own_recovery_wait = on,
+        "priority_heal" => m.priority_heal = on,
         "sleep_talk_awake" => m.sleep_talk_awake = on,
         "immunity_ignores_switch_read" => m.immunity_ignores_switch_read = on,
         "immunity_all_switchins" => m.immunity_all_switchins = on,

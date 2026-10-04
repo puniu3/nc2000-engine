@@ -569,6 +569,7 @@ pub struct MaskRules {
     pub destiny_bond_wait: bool,
     pub residual_damage_wait: bool,
     pub own_recovery_wait: bool,
+    pub priority_heal: bool,
     /// Sleep Talk / Snore selected by an AWAKE, strictly faster user
     /// (`moveexec.rs:521`). `false` = the pre-2026-08-19 mask.
     pub sleep_talk_awake: bool,
@@ -607,6 +608,7 @@ impl Default for MaskRules {
             destiny_bond_wait: true,
             residual_damage_wait: true,
             own_recovery_wait: true,
+            priority_heal: true,
             sleep_talk_awake: true,
             immunity_ignores_switch_read: false,
             immunity_all_switchins: false,
@@ -747,6 +749,24 @@ fn faster_than_foe(b: &Battle, dex: &Dex, side: usize) -> bool {
     b.get_pokemon_action_speed(dex, me) > b.get_pokemon_action_speed(dex, foe)
 }
 
+fn foe_may_preempt_heal(b: &Battle, dex: &Dex, side: usize, priority: i8) -> bool {
+    let Some(id) = b.active_id(1 - side) else { return true };
+    let foe = b.poke(id);
+    // Copied move slots are public overlays; their identities and PP are not needed.
+    if foe.transformed || foe.move_slots.iter().any(|slot| !slot.shared) {
+        return true;
+    }
+    let Some(learnset) = crate::belief::format_learnsets().species(dex.species.key(foe.species)) else {
+        return true;
+    };
+    learnset.moves.iter().any(|key| {
+        dex.moves.id(key).is_some_and(|id| {
+            let ms = dex.move_static(id);
+            ms.priority > priority && ms.category != nc2000_engine::dex::Category::Status
+        })
+    })
+}
+
 /// Is `def` immune to a move of `move_type`? Mirrors
 /// `pokemon.rs::run_move_immunity`: Ground is resolved by groundedness
 /// (gen-2 `isGrounded` = "Flying-types are airborne, nothing else"), every
@@ -862,13 +882,11 @@ fn noop_reason(
         me.hp >= me.maxhp
     };
     if ms.heal.is_some() || key == "rest" {
-        // Only when the user is also strictly faster. Measured on the corpus
-        // (`noop_census`): the unconditional rule was wrong on 34 of 206
-        // firings, every one of them a slower healer that the foe damaged
-        // first — so by the time the heal resolved it was not at full HP and
-        // the move worked. A faster healer resolves before anything can touch
-        // it (bar a priority attack, which this format barely carries).
-        verdict!(full_hp && faster_than_foe(b, dex, side), "healing at full HP, and faster");
+        verdict!(
+            full_hp && faster_than_foe(b, dex, side)
+                && (!rules.priority_heal || !foe_may_preempt_heal(b, dex, side, ms.priority)),
+            "healing at full HP, and faster"
+        );
     }
     if let Some(sc) = ms.side_condition.as_deref() {
         let on_foe = ms.target == "foeSide";

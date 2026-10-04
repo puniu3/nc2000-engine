@@ -1,0 +1,9 @@
+{
+  "baseline": "a1e0047",
+  "change": "Do not exclude full-HP healing on speed alone when the opposing species can learn a higher-priority damaging move. Do not inspect hidden opposing move identities or PP. Copied moves and unknown learnsets conservatively keep healing available.",
+  "adoption": "Correctness correction: reproduce priority-damage-then-heal, preserve ordinary faster-healer exclusion when priority damage is ruled out, and retain hidden-set invariance and forfeit guards. Strength increase is a separate claim requiring changed decisions and improved continuation results.",
+  "search_discovery": {"fixture": "Existing full-HP Alakazam Recover/Psychic vs Scizor Quick Attack/Return reduced fixture", "seeds": [98001,98002,98003,98004,98005,98006,98007,98008], "iterations": 27000, "c": 0.4, "beliefs": ["pinned", "prior-v3"], "checks": ["baseline and fixed visits and means must match", "report raw winner, final winner and visit shares"]},
+  "continuations": {"seeds_start": 98101, "pairs": 16, "iterations": 27000, "c": 0.4, "belief": "prior-v3", "opponent": "Quick Attack while available, then Return, then first legal move", "turn_cap": 200, "scope": "One constructed position and scripted opponent, not natural-game prevalence"},
+  "broad_screen": {"pairs": 16, "seed": 98201, "iterations": 27000, "catalog": "team-pool-v2, uniform", "belief": "prior-v3", "crn": true, "track": ["changed masks", "newly allowed choices actually selected", "wins losses ties caps"], "interpretation": "Inactive treatment cannot establish strength, equivalence or absence of side effects"},
+  "stopping": "Run fixed samples once; do not extend because of observed scores. No learning, evaluation-weight or rollout change."
+}

@@ -1,10 +1,11 @@
 use conformance::load_dex;
-use nc2000_bot::smmcts::dominated_actions;
+use nc2000_bot::smmcts::{dominated_actions_with, MaskRules};
 use nc2000_engine::{battle::PokemonSet, state::Battle};
 use serde_json::json;
 
 fn main() {
     let dex = load_dex();
+    let baseline = std::env::args().any(|arg| arg == "--baseline");
     let set = |species: &str, moves: &[&str]| -> PokemonSet {
         serde_json::from_value(json!({
             "species":species,"name":species,"level":50,"moves":moves,
@@ -25,11 +26,19 @@ fn main() {
         assert!(
             start.get_pokemon_action_speed(&dex, id) > start.get_pokemon_action_speed(&dex, enemy)
         );
-        let masked = dominated_actions(&start, &dex, 0)
-            .into_iter()
-            .find(|(c, _)| c.to_input(&dex) == "move recover")
-            .unwrap()
-            .1;
+        let masked = dominated_actions_with(
+            &start,
+            &dex,
+            0,
+            MaskRules {
+                priority_heal: !baseline,
+                ..Default::default()
+            },
+        )
+        .into_iter()
+        .find(|(c, _)| c.to_input(&dex) == "move recover")
+        .map(|(_, reason)| reason);
+        assert_eq!(masked.is_some(), baseline);
         for reply in ["quickattack", "return"] {
             let mut b = start.clone();
             b.log.clear();
@@ -40,7 +49,7 @@ fn main() {
             println!(
                 "{}",
                 json!({"seed":seed,"opponent_move":reply,
-                "excluded":"move recover","reason":masked,"healed":healed,
+                "excluded":masked.map(|_| "move recover"),"reason":masked,"healed":healed,
                 "hp_before":start.poke(id).hp,"hp_after":b.poke(id).hp,
                 "scope":"Constructed one-turn correctness probe; no strength or prevalence claim",
                 "log":b.log})

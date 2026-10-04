@@ -174,7 +174,7 @@ fn team_is_format_legal(dex: &Dex, sets: &[PokemonSet]) -> bool {
     validate_team(dex, format_learnsets(), &json)["ok"] == serde_json::Value::Bool(true)
 }
 
-fn format_learnsets() -> &'static Learnsets {
+pub(crate) fn format_learnsets() -> &'static Learnsets {
     static LEARNSETS: OnceLock<Learnsets> = OnceLock::new();
     LEARNSETS.get_or_init(|| {
         Learnsets::from_json(FORMAT_LEARNSETS_JSON)
