@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+source = root / "findings/policy-target-focus-v1"
+run = root / "tmp/policy-target-focus-v1" / datetime.datetime.now().strftime("run-%Y%m%d-%H%M%S")
+run.mkdir(parents=True)
+corpus = gzip.decompress((source / "corpus.jsonl.gz").read_bytes())
+(run / "corpus.jsonl").write_bytes(corpus)
+environment = dict(os.environ, NC2000_REPO_ROOT=str(root))
+subprocess.run(
+    ["cargo", "build", "--release", "-p", "nc2000-bot", "--example", "endgame_policy_audit"],
+    cwd=root, env=environment, check=True,
+)
+for target in ["all_actions", "archived"]:
+    protocol = json.loads((source / f"{target}.json").read_text())
+    assert hashlib.sha256(corpus).hexdigest() == protocol["corpus_sha256"]
+    protocol["corpus"] = str((run / "corpus.jsonl").relative_to(root))
+    path = run / f"{target}.json"
+    path.write_text(json.dumps(protocol, indent=2) + "\n")
+    subprocess.run(
+        [str(root / "target/release/examples/endgame_policy_audit"), str(path), str(run / target)],
+        cwd=root, env=environment, check=True,
+    )
+    row = json.loads((run / target / "game-019-d0017.json").read_text())
+    print(target, json.dumps({
+        "stop": row["reference"]["stop"],
+        "runs": row["reference"]["runs"],
+        "loss": [endpoint["archived"]["loss"] for endpoint in row["endpoints"]],
+    }), flush=True)
+print(f"Results: {run}")

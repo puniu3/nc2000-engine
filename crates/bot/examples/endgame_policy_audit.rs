@@ -32,6 +32,16 @@ struct Protocol {
     threads: usize,
     limit: Option<usize>,
     interpretation: String,
+    #[serde(default)]
+    targets: TargetSet,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TargetSet {
+    #[default]
+    AllActions,
+    Archived,
 }
 
 #[derive(Deserialize)]
@@ -61,6 +71,18 @@ fn bound(b: Bounds) -> Value {
 fn assessment(matrix: &RootPayoffs, side: usize, policy: &[f64]) -> Value {
     json!({"policy":policy,"guarantee":bound(matrix.policy_value(side,policy)),
         "loss":bound(matrix.policy_loss(side,policy))})
+}
+
+fn archived_policy(record: &Value, names: &[String]) -> Vec<f64> {
+    let mut policy = vec![0.0; names.len()];
+    for item in record["policy"].as_array().unwrap() {
+        let index = names.iter().position(|name| *name == item["action"].as_str().unwrap()).unwrap();
+        let probability = item["probability"].as_f64().unwrap();
+        assert!(probability.is_finite() && probability >= 0.0);
+        policy[index] += probability;
+    }
+    assert!((policy.iter().sum::<f64>() - 1.0).abs() < 1e-10);
+    policy
 }
 
 fn reconstruct(dex: &Dex, game: &Game, decision: usize) -> Battle {
@@ -97,8 +119,22 @@ fn audit(
             .collect::<Vec<_>>()
     });
     let mut targets = Vec::new();
+    let archived: [Option<&Value>; 2] = [0, 1].map(|side| {
+        if legal[side].is_empty() {
+            return None;
+        }
+        let record = archived.iter().find(|r|
+            r["game"] == game.game && r["decision"] == decision && r["side"] == side
+        ).expect("every actionable endpoint must have an archived baseline");
+        assert_eq!(record["state_key"], battle.state_key128().to_string());
+        Some(record)
+    });
     for side in 0..2 {
         if legal[side].is_empty() {
+            continue;
+        }
+        if matches!(protocol.targets, TargetSet::Archived) {
+            targets.push((side, archived_policy(archived[side].unwrap(), &names[side])));
             continue;
         }
         for action in 0..legal[side].len() {
@@ -140,20 +176,8 @@ fn audit(
         if legal[side].is_empty() {
             continue;
         }
-        let archived = archived
-            .iter()
-            .find(|r| r["game"] == game.game && r["decision"] == decision && r["side"] == side)
-            .expect("every actionable endpoint must have an archived baseline");
-        assert_eq!(archived["state_key"], battle.state_key128().to_string());
-        let mut p = vec![0.0; legal[side].len()];
-        for item in archived["policy"].as_array().unwrap() {
-            let index = names[side]
-                .iter()
-                .position(|name| *name == item["action"].as_str().unwrap())
-                .unwrap();
-            p[index] = item["probability"].as_f64().unwrap();
-        }
-        assert!((p.iter().sum::<f64>() - 1.0).abs() < 1e-10);
+        let archived = archived[side].unwrap();
+        let p = archived_policy(archived, &names[side]);
         let pure: Vec<_> = (0..p.len())
             .map(|a| {
                 let mut policy = vec![0.0; p.len()];
