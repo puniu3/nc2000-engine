@@ -40,7 +40,7 @@ for cell,spec in protocol['cells'].items():
                    'opponent_bond_games':sum(r[arm]['opponent_bond_moves']>0 for r in rows),
                    'opponent_bond_moves':sum(r[arm]['opponent_bond_moves'] for r in rows),
                    'opponent_switch_events':sum(r[arm]['opponent_switch_events'] for r in rows),
-                   'seconds_per_decision':sum(r[arm]['elapsed_seconds'] for r in rows)/sum(r[arm]['decisions'] for r in rows),
+                   'game_seconds_per_own_decision':sum(r[arm]['elapsed_seconds'] for r in rows)/sum(r[arm]['decisions'] for r in rows),
                    'total_turns':sum(r[arm]['turns'] for r in rows)}
     report['results'][cell]={'triplets':len(rows),'arms':arms,'comparisons':comparisons,
                               'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}

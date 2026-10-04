@@ -1,0 +1,1312 @@
+{
+  "complete": true,
+  "default_enabled": false,
+  "results": {
+    "same": {
+      "triplets": 4,
+      "arms": {
+        "a": {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "wins": 4,
+          "caps": 0,
+          "opponent_bond_games": 1,
+          "opponent_bond_moves": 1,
+          "opponent_switch_events": 38,
+          "game_seconds_per_own_decision": 0.15767674395652173,
+          "total_turns": 61
+        },
+        "b": {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "wins": 4,
+          "caps": 0,
+          "opponent_bond_games": 1,
+          "opponent_bond_moves": 1,
+          "opponent_switch_events": 38,
+          "game_seconds_per_own_decision": 0.16662562320289856,
+          "total_turns": 61
+        },
+        "c": {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "wins": 4,
+          "caps": 0,
+          "opponent_bond_games": 1,
+          "opponent_bond_moves": 1,
+          "opponent_switch_events": 38,
+          "game_seconds_per_own_decision": 0.1689361400869565,
+          "total_turns": 61
+        }
+      },
+      "comparisons": {
+        "c-a": {
+          "pairs": 4,
+          "paired_delta": 0.0,
+          "stratified_bootstrap95": [
+            0.0,
+            0.0
+          ],
+          "better_pairs": 0,
+          "worse_pairs": 0,
+          "same_outcome_pairs": 4,
+          "same_trajectory_pairs": 4,
+          "a": {
+            "score": 1.0,
+            "terminal": 4,
+            "wins": 4,
+            "losses": 0,
+            "capped": 0,
+            "exposed_games": 4,
+            "fallback_decisions": 69,
+            "exposed_decisions": 4,
+            "missing_perish_decisions": 4,
+            "opponent_sang_games": 4,
+            "bot_count1_faints": 2,
+            "elapsed_seconds": 10.879695332999999
+          },
+          "b": {
+            "score": 1.0,
+            "terminal": 4,
+            "wins": 4,
+            "losses": 0,
+            "capped": 0,
+            "exposed_games": 4,
+            "fallback_decisions": 69,
+            "exposed_decisions": 4,
+            "missing_perish_decisions": 4,
+            "opponent_sang_games": 4,
+            "bot_count1_faints": 2,
+            "elapsed_seconds": 11.656593666
+          },
+          "cap_delta_bounds": [
+            0.0,
+            0.0
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit2": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit3": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit4": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            }
+          },
+          "terminal_discordant_pairs": 0,
+          "terminal_exact_two_sided_p": 1.0
+        },
+        "c-b": {
+          "pairs": 4,
+          "paired_delta": 0.0,
+          "stratified_bootstrap95": [
+            0.0,
+            0.0
+          ],
+          "better_pairs": 0,
+          "worse_pairs": 0,
+          "same_outcome_pairs": 4,
+          "same_trajectory_pairs": 4,
+          "a": {
+            "score": 1.0,
+            "terminal": 4,
+            "wins": 4,
+            "losses": 0,
+            "capped": 0,
+            "exposed_games": 4,
+            "fallback_decisions": 69,
+            "exposed_decisions": 4,
+            "missing_perish_decisions": 4,
+            "opponent_sang_games": 4,
+            "bot_count1_faints": 2,
+            "elapsed_seconds": 11.497168001
+          },
+          "b": {
+            "score": 1.0,
+            "terminal": 4,
+            "wins": 4,
+            "losses": 0,
+            "capped": 0,
+            "exposed_games": 4,
+            "fallback_decisions": 69,
+            "exposed_decisions": 4,
+            "missing_perish_decisions": 4,
+            "opponent_sang_games": 4,
+            "bot_count1_faints": 2,
+            "elapsed_seconds": 11.656593666
+          },
+          "cap_delta_bounds": [
+            0.0,
+            0.0
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit2": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit3": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit4": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            }
+          },
+          "terminal_discordant_pairs": 0,
+          "terminal_exact_two_sided_p": 1.0
+        },
+        "b-a": {
+          "pairs": 4,
+          "paired_delta": 0.0,
+          "stratified_bootstrap95": [
+            0.0,
+            0.0
+          ],
+          "better_pairs": 0,
+          "worse_pairs": 0,
+          "same_outcome_pairs": 4,
+          "same_trajectory_pairs": 4,
+          "a": {
+            "score": 1.0,
+            "terminal": 4,
+            "wins": 4,
+            "losses": 0,
+            "capped": 0,
+            "exposed_games": 4,
+            "fallback_decisions": 69,
+            "exposed_decisions": 4,
+            "missing_perish_decisions": 4,
+            "opponent_sang_games": 4,
+            "bot_count1_faints": 2,
+            "elapsed_seconds": 10.879695332999999
+          },
+          "b": {
+            "score": 1.0,
+            "terminal": 4,
+            "wins": 4,
+            "losses": 0,
+            "capped": 0,
+            "exposed_games": 4,
+            "fallback_decisions": 69,
+            "exposed_decisions": 4,
+            "missing_perish_decisions": 4,
+            "opponent_sang_games": 4,
+            "bot_count1_faints": 2,
+            "elapsed_seconds": 11.497168001
+          },
+          "cap_delta_bounds": [
+            0.0,
+            0.0
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit2": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit3": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit4": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            }
+          },
+          "terminal_discordant_pairs": 0,
+          "terminal_exact_two_sided_p": 1.0
+        }
+      },
+      "sha256": "a2f81b985c4ece91268fec86b1bcbefbe3822b8a486ce0458c26b84715521f81"
+    },
+    "adaptive": {
+      "triplets": 64,
+      "arms": {
+        "a": {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "wins": 42,
+          "caps": 0,
+          "opponent_bond_games": 24,
+          "opponent_bond_moves": 39,
+          "opponent_switch_events": 608,
+          "game_seconds_per_own_decision": 2.0279728276772997,
+          "total_turns": 1200
+        },
+        "b": {
+          "policy": "revealed-loadout-mode-v1",
+          "wins": 44,
+          "caps": 0,
+          "opponent_bond_games": 26,
+          "opponent_bond_moves": 86,
+          "opponent_switch_events": 616,
+          "game_seconds_per_own_decision": 2.2741811491549386,
+          "total_turns": 1398
+        },
+        "c": {
+          "policy": "revealed-loadout-draw-v1",
+          "wins": 44,
+          "caps": 0,
+          "opponent_bond_games": 24,
+          "opponent_bond_moves": 76,
+          "opponent_switch_events": 606,
+          "game_seconds_per_own_decision": 1.8605722275339427,
+          "total_turns": 1376
+        }
+      },
+      "comparisons": {
+        "c-a": {
+          "pairs": 64,
+          "paired_delta": 0.03125,
+          "stratified_bootstrap95": [
+            -0.0625,
+            0.125
+          ],
+          "better_pairs": 7,
+          "worse_pairs": 5,
+          "same_outcome_pairs": 52,
+          "same_trajectory_pairs": 3,
+          "a": {
+            "score": 0.65625,
+            "terminal": 64,
+            "wins": 42,
+            "losses": 22,
+            "capped": 0,
+            "exposed_games": 59,
+            "fallback_decisions": 1348,
+            "exposed_decisions": 103,
+            "missing_perish_decisions": 103,
+            "opponent_sang_games": 44,
+            "bot_count1_faints": 25,
+            "elapsed_seconds": 2733.7073717089997
+          },
+          "b": {
+            "score": 0.6875,
+            "terminal": 64,
+            "wins": 44,
+            "losses": 20,
+            "capped": 0,
+            "exposed_games": 59,
+            "fallback_decisions": 1532,
+            "exposed_decisions": 158,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 47,
+            "bot_count1_faints": 26,
+            "elapsed_seconds": 2850.396652582
+          },
+          "cap_delta_bounds": [
+            0.03125,
+            0.03125
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 8,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit2": {
+              "pairs": 8,
+              "paired_delta": 0.25
+            },
+            "quagsire-kit3": {
+              "pairs": 8,
+              "paired_delta": -0.125
+            },
+            "quagsire-kit4": {
+              "pairs": 8,
+              "paired_delta": 0.25
+            },
+            "kingdra-kit1": {
+              "pairs": 8,
+              "paired_delta": -0.125
+            },
+            "kingdra-kit2": {
+              "pairs": 8,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit3": {
+              "pairs": 8,
+              "paired_delta": -0.125
+            },
+            "kingdra-kit4": {
+              "pairs": 8,
+              "paired_delta": 0.125
+            }
+          },
+          "terminal_discordant_pairs": 12,
+          "terminal_exact_two_sided_p": 0.7744140625
+        },
+        "c-b": {
+          "pairs": 64,
+          "paired_delta": 0.0,
+          "stratified_bootstrap95": [
+            -0.109375,
+            0.109375
+          ],
+          "better_pairs": 6,
+          "worse_pairs": 6,
+          "same_outcome_pairs": 52,
+          "same_trajectory_pairs": 2,
+          "a": {
+            "score": 0.6875,
+            "terminal": 64,
+            "wins": 44,
+            "losses": 20,
+            "capped": 0,
+            "exposed_games": 59,
+            "fallback_decisions": 1549,
+            "exposed_decisions": 166,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 46,
+            "bot_count1_faints": 33,
+            "elapsed_seconds": 3522.706600041
+          },
+          "b": {
+            "score": 0.6875,
+            "terminal": 64,
+            "wins": 44,
+            "losses": 20,
+            "capped": 0,
+            "exposed_games": 59,
+            "fallback_decisions": 1532,
+            "exposed_decisions": 158,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 47,
+            "bot_count1_faints": 26,
+            "elapsed_seconds": 2850.396652582
+          },
+          "cap_delta_bounds": [
+            0.0,
+            0.0
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 8,
+              "paired_delta": 0.25
+            },
+            "quagsire-kit2": {
+              "pairs": 8,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit3": {
+              "pairs": 8,
+              "paired_delta": -0.125
+            },
+            "quagsire-kit4": {
+              "pairs": 8,
+              "paired_delta": -0.125
+            },
+            "kingdra-kit1": {
+              "pairs": 8,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit2": {
+              "pairs": 8,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit3": {
+              "pairs": 8,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit4": {
+              "pairs": 8,
+              "paired_delta": 0.0
+            }
+          },
+          "terminal_discordant_pairs": 12,
+          "terminal_exact_two_sided_p": 1.0
+        },
+        "b-a": {
+          "pairs": 64,
+          "paired_delta": 0.03125,
+          "stratified_bootstrap95": [
+            -0.0625,
+            0.125
+          ],
+          "better_pairs": 7,
+          "worse_pairs": 5,
+          "same_outcome_pairs": 52,
+          "same_trajectory_pairs": 8,
+          "a": {
+            "score": 0.65625,
+            "terminal": 64,
+            "wins": 42,
+            "losses": 22,
+            "capped": 0,
+            "exposed_games": 59,
+            "fallback_decisions": 1348,
+            "exposed_decisions": 103,
+            "missing_perish_decisions": 103,
+            "opponent_sang_games": 44,
+            "bot_count1_faints": 25,
+            "elapsed_seconds": 2733.7073717089997
+          },
+          "b": {
+            "score": 0.6875,
+            "terminal": 64,
+            "wins": 44,
+            "losses": 20,
+            "capped": 0,
+            "exposed_games": 59,
+            "fallback_decisions": 1549,
+            "exposed_decisions": 166,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 46,
+            "bot_count1_faints": 33,
+            "elapsed_seconds": 3522.706600041
+          },
+          "cap_delta_bounds": [
+            0.03125,
+            0.03125
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 8,
+              "paired_delta": -0.25
+            },
+            "quagsire-kit2": {
+              "pairs": 8,
+              "paired_delta": 0.25
+            },
+            "quagsire-kit3": {
+              "pairs": 8,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit4": {
+              "pairs": 8,
+              "paired_delta": 0.375
+            },
+            "kingdra-kit1": {
+              "pairs": 8,
+              "paired_delta": -0.125
+            },
+            "kingdra-kit2": {
+              "pairs": 8,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit3": {
+              "pairs": 8,
+              "paired_delta": -0.125
+            },
+            "kingdra-kit4": {
+              "pairs": 8,
+              "paired_delta": 0.125
+            }
+          },
+          "terminal_discordant_pairs": 12,
+          "terminal_exact_two_sided_p": 0.7744140625
+        }
+      },
+      "sha256": "17a2540efb4fdc60254ccd03411ef4e26d46761d67b9adda4f0a1099cc0cb394"
+    },
+    "stress": {
+      "triplets": 32,
+      "arms": {
+        "a": {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "wins": 26,
+          "caps": 0,
+          "opponent_bond_games": 7,
+          "opponent_bond_moves": 8,
+          "opponent_switch_events": 322,
+          "game_seconds_per_own_decision": 2.1950981504140508,
+          "total_turns": 596
+        },
+        "b": {
+          "policy": "revealed-loadout-mode-v1",
+          "wins": 28,
+          "caps": 0,
+          "opponent_bond_games": 12,
+          "opponent_bond_moves": 17,
+          "opponent_switch_events": 336,
+          "game_seconds_per_own_decision": 2.280876954961395,
+          "total_turns": 728
+        },
+        "c": {
+          "policy": "revealed-loadout-draw-v1",
+          "wins": 24,
+          "caps": 0,
+          "opponent_bond_games": 11,
+          "opponent_bond_moves": 15,
+          "opponent_switch_events": 332,
+          "game_seconds_per_own_decision": 2.128137164379673,
+          "total_turns": 783
+        }
+      },
+      "comparisons": {
+        "c-a": {
+          "pairs": 32,
+          "paired_delta": -0.0625,
+          "stratified_bootstrap95": [
+            -0.21875,
+            0.09375
+          ],
+          "better_pairs": 3,
+          "worse_pairs": 5,
+          "same_outcome_pairs": 24,
+          "same_trajectory_pairs": 4,
+          "a": {
+            "score": 0.8125,
+            "terminal": 32,
+            "wins": 26,
+            "losses": 6,
+            "capped": 0,
+            "exposed_games": 32,
+            "fallback_decisions": 669,
+            "exposed_decisions": 33,
+            "missing_perish_decisions": 33,
+            "opponent_sang_games": 32,
+            "bot_count1_faints": 10,
+            "elapsed_seconds": 1468.520662627
+          },
+          "b": {
+            "score": 0.75,
+            "terminal": 32,
+            "wins": 24,
+            "losses": 8,
+            "capped": 0,
+            "exposed_games": 32,
+            "fallback_decisions": 856,
+            "exposed_decisions": 32,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 32,
+            "bot_count1_faints": 11,
+            "elapsed_seconds": 1821.685412709
+          },
+          "cap_delta_bounds": [
+            -0.0625,
+            -0.0625
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 4,
+              "paired_delta": 0.25
+            },
+            "quagsire-kit2": {
+              "pairs": 4,
+              "paired_delta": 0.25
+            },
+            "quagsire-kit3": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "quagsire-kit4": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit1": {
+              "pairs": 4,
+              "paired_delta": -0.5
+            },
+            "kingdra-kit2": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "kingdra-kit3": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit4": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            }
+          },
+          "terminal_discordant_pairs": 8,
+          "terminal_exact_two_sided_p": 0.7265625
+        },
+        "c-b": {
+          "pairs": 32,
+          "paired_delta": -0.125,
+          "stratified_bootstrap95": [
+            -0.28125,
+            0.03125
+          ],
+          "better_pairs": 2,
+          "worse_pairs": 6,
+          "same_outcome_pairs": 24,
+          "same_trajectory_pairs": 3,
+          "a": {
+            "score": 0.875,
+            "terminal": 32,
+            "wins": 28,
+            "losses": 4,
+            "capped": 0,
+            "exposed_games": 32,
+            "fallback_decisions": 803,
+            "exposed_decisions": 32,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 32,
+            "bot_count1_faints": 12,
+            "elapsed_seconds": 1831.544194834
+          },
+          "b": {
+            "score": 0.75,
+            "terminal": 32,
+            "wins": 24,
+            "losses": 8,
+            "capped": 0,
+            "exposed_games": 32,
+            "fallback_decisions": 856,
+            "exposed_decisions": 32,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 32,
+            "bot_count1_faints": 11,
+            "elapsed_seconds": 1821.685412709
+          },
+          "cap_delta_bounds": [
+            -0.125,
+            -0.125
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit2": {
+              "pairs": 4,
+              "paired_delta": 0.25
+            },
+            "quagsire-kit3": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit4": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit1": {
+              "pairs": 4,
+              "paired_delta": -0.5
+            },
+            "kingdra-kit2": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "kingdra-kit3": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "kingdra-kit4": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            }
+          },
+          "terminal_discordant_pairs": 8,
+          "terminal_exact_two_sided_p": 0.2890625
+        },
+        "b-a": {
+          "pairs": 32,
+          "paired_delta": 0.0625,
+          "stratified_bootstrap95": [
+            -0.0625,
+            0.1875
+          ],
+          "better_pairs": 4,
+          "worse_pairs": 2,
+          "same_outcome_pairs": 26,
+          "same_trajectory_pairs": 5,
+          "a": {
+            "score": 0.8125,
+            "terminal": 32,
+            "wins": 26,
+            "losses": 6,
+            "capped": 0,
+            "exposed_games": 32,
+            "fallback_decisions": 669,
+            "exposed_decisions": 33,
+            "missing_perish_decisions": 33,
+            "opponent_sang_games": 32,
+            "bot_count1_faints": 10,
+            "elapsed_seconds": 1468.520662627
+          },
+          "b": {
+            "score": 0.875,
+            "terminal": 32,
+            "wins": 28,
+            "losses": 4,
+            "capped": 0,
+            "exposed_games": 32,
+            "fallback_decisions": 803,
+            "exposed_decisions": 32,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 32,
+            "bot_count1_faints": 12,
+            "elapsed_seconds": 1831.544194834
+          },
+          "cap_delta_bounds": [
+            0.0625,
+            0.0625
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 4,
+              "paired_delta": 0.25
+            },
+            "quagsire-kit2": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit3": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "quagsire-kit4": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit1": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit2": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit3": {
+              "pairs": 4,
+              "paired_delta": 0.25
+            },
+            "kingdra-kit4": {
+              "pairs": 4,
+              "paired_delta": 0.25
+            }
+          },
+          "terminal_discordant_pairs": 6,
+          "terminal_exact_two_sided_p": 0.6875
+        }
+      },
+      "sha256": "cf9f5f0eb52721d76a96459b6c84f89414a7799b265d88c68239185a1617b6ab"
+    },
+    "natural": {
+      "triplets": 32,
+      "arms": {
+        "a": {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "wins": 22,
+          "caps": 0,
+          "opponent_bond_games": 0,
+          "opponent_bond_moves": 0,
+          "opponent_switch_events": 928,
+          "game_seconds_per_own_decision": 2.454919042376325,
+          "total_turns": 1625
+        },
+        "b": {
+          "policy": "revealed-loadout-mode-v1",
+          "wins": 21,
+          "caps": 0,
+          "opponent_bond_games": 0,
+          "opponent_bond_moves": 0,
+          "opponent_switch_events": 702,
+          "game_seconds_per_own_decision": 2.3418216948022486,
+          "total_turns": 1437
+        },
+        "c": {
+          "policy": "revealed-loadout-draw-v1",
+          "wins": 17,
+          "caps": 0,
+          "opponent_bond_games": 0,
+          "opponent_bond_moves": 0,
+          "opponent_switch_events": 752,
+          "game_seconds_per_own_decision": 2.709675180631481,
+          "total_turns": 1545
+        }
+      },
+      "comparisons": {
+        "c-a": {
+          "pairs": 32,
+          "paired_delta": -0.15625,
+          "stratified_bootstrap95": [
+            -0.3125,
+            0.0
+          ],
+          "better_pairs": 2,
+          "worse_pairs": 7,
+          "same_outcome_pairs": 23,
+          "same_trajectory_pairs": 1,
+          "a": {
+            "score": 0.6875,
+            "terminal": 32,
+            "wins": 22,
+            "losses": 10,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 1698,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 4168.452533955
+          },
+          "b": {
+            "score": 0.53125,
+            "terminal": 32,
+            "wins": 17,
+            "losses": 15,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 1620,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 4389.673792623
+          },
+          "cap_delta_bounds": [
+            -0.15625,
+            -0.15625
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "quagsire-kit2": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "quagsire-kit3": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "quagsire-kit4": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "kingdra-kit1": {
+              "pairs": 4,
+              "paired_delta": 0.25
+            },
+            "kingdra-kit2": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "kingdra-kit3": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit4": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            }
+          },
+          "terminal_discordant_pairs": 9,
+          "terminal_exact_two_sided_p": 0.1796875
+        },
+        "c-b": {
+          "pairs": 32,
+          "paired_delta": -0.125,
+          "stratified_bootstrap95": [
+            -0.3125,
+            0.0625
+          ],
+          "better_pairs": 4,
+          "worse_pairs": 8,
+          "same_outcome_pairs": 20,
+          "same_trajectory_pairs": 1,
+          "a": {
+            "score": 0.65625,
+            "terminal": 32,
+            "wins": 21,
+            "losses": 11,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 1512,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 3540.834402541
+          },
+          "b": {
+            "score": 0.53125,
+            "terminal": 32,
+            "wins": 17,
+            "losses": 15,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 1620,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 4389.673792623
+          },
+          "cap_delta_bounds": [
+            -0.125,
+            -0.125
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit2": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "quagsire-kit3": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit4": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "kingdra-kit1": {
+              "pairs": 4,
+              "paired_delta": 0.25
+            },
+            "kingdra-kit2": {
+              "pairs": 4,
+              "paired_delta": -0.5
+            },
+            "kingdra-kit3": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit4": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            }
+          },
+          "terminal_discordant_pairs": 12,
+          "terminal_exact_two_sided_p": 0.3876953125
+        },
+        "b-a": {
+          "pairs": 32,
+          "paired_delta": -0.03125,
+          "stratified_bootstrap95": [
+            -0.15625,
+            0.09375
+          ],
+          "better_pairs": 2,
+          "worse_pairs": 3,
+          "same_outcome_pairs": 27,
+          "same_trajectory_pairs": 16,
+          "a": {
+            "score": 0.6875,
+            "terminal": 32,
+            "wins": 22,
+            "losses": 10,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 1698,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 4168.452533955
+          },
+          "b": {
+            "score": 0.65625,
+            "terminal": 32,
+            "wins": 21,
+            "losses": 11,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 1512,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 3540.834402541
+          },
+          "cap_delta_bounds": [
+            -0.03125,
+            -0.03125
+          ],
+          "by_opponent": {
+            "quagsire-kit1": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "quagsire-kit2": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "quagsire-kit3": {
+              "pairs": 4,
+              "paired_delta": -0.25
+            },
+            "quagsire-kit4": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit1": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit2": {
+              "pairs": 4,
+              "paired_delta": 0.25
+            },
+            "kingdra-kit3": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            },
+            "kingdra-kit4": {
+              "pairs": 4,
+              "paired_delta": 0.0
+            }
+          },
+          "terminal_discordant_pairs": 5,
+          "terminal_exact_two_sided_p": 1.0
+        }
+      },
+      "sha256": "5aefc50c1a441249d1595ef3d3bcfd93e01d23713832b3763649501aa16e88a0"
+    },
+    "onpool": {
+      "triplets": 8,
+      "arms": {
+        "a": {
+          "policy": "layered-meta-rentals-learnset-v1",
+          "wins": 2,
+          "caps": 0,
+          "opponent_bond_games": 0,
+          "opponent_bond_moves": 0,
+          "opponent_switch_events": 66,
+          "game_seconds_per_own_decision": 1.9361223365277778,
+          "total_turns": 123
+        },
+        "b": {
+          "policy": "revealed-loadout-mode-v1",
+          "wins": 2,
+          "caps": 0,
+          "opponent_bond_games": 0,
+          "opponent_bond_moves": 0,
+          "opponent_switch_events": 66,
+          "game_seconds_per_own_decision": 1.9234131646319446,
+          "total_turns": 123
+        },
+        "c": {
+          "policy": "revealed-loadout-draw-v1",
+          "wins": 2,
+          "caps": 0,
+          "opponent_bond_games": 0,
+          "opponent_bond_moves": 0,
+          "opponent_switch_events": 66,
+          "game_seconds_per_own_decision": 1.7725778489652777,
+          "total_turns": 123
+        }
+      },
+      "comparisons": {
+        "c-a": {
+          "pairs": 8,
+          "paired_delta": 0.0,
+          "stratified_bootstrap95": [
+            0.0,
+            0.0
+          ],
+          "better_pairs": 0,
+          "worse_pairs": 0,
+          "same_outcome_pairs": 8,
+          "same_trajectory_pairs": 8,
+          "a": {
+            "score": 0.25,
+            "terminal": 8,
+            "wins": 2,
+            "losses": 6,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 0,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 278.80161646
+          },
+          "b": {
+            "score": 0.25,
+            "terminal": 8,
+            "wins": 2,
+            "losses": 6,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 0,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 255.251210251
+          },
+          "cap_delta_bounds": [
+            0.0,
+            0.0
+          ],
+          "by_opponent": {
+            "mjj-2010-garap-a": {
+              "pairs": 2,
+              "paired_delta": 0.0
+            },
+            "sample-13": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "sample-06": {
+              "pairs": 2,
+              "paired_delta": 0.0
+            },
+            "rental-cban-2": {
+              "pairs": 2,
+              "paired_delta": 0.0
+            },
+            "mjj-2020-rraikou": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            }
+          },
+          "terminal_discordant_pairs": 0,
+          "terminal_exact_two_sided_p": 1.0
+        },
+        "c-b": {
+          "pairs": 8,
+          "paired_delta": 0.0,
+          "stratified_bootstrap95": [
+            0.0,
+            0.0
+          ],
+          "better_pairs": 0,
+          "worse_pairs": 0,
+          "same_outcome_pairs": 8,
+          "same_trajectory_pairs": 8,
+          "a": {
+            "score": 0.25,
+            "terminal": 8,
+            "wins": 2,
+            "losses": 6,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 0,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 276.97149570700003
+          },
+          "b": {
+            "score": 0.25,
+            "terminal": 8,
+            "wins": 2,
+            "losses": 6,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 0,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 255.251210251
+          },
+          "cap_delta_bounds": [
+            0.0,
+            0.0
+          ],
+          "by_opponent": {
+            "mjj-2010-garap-a": {
+              "pairs": 2,
+              "paired_delta": 0.0
+            },
+            "sample-13": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "sample-06": {
+              "pairs": 2,
+              "paired_delta": 0.0
+            },
+            "rental-cban-2": {
+              "pairs": 2,
+              "paired_delta": 0.0
+            },
+            "mjj-2020-rraikou": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            }
+          },
+          "terminal_discordant_pairs": 0,
+          "terminal_exact_two_sided_p": 1.0
+        },
+        "b-a": {
+          "pairs": 8,
+          "paired_delta": 0.0,
+          "stratified_bootstrap95": [
+            0.0,
+            0.0
+          ],
+          "better_pairs": 0,
+          "worse_pairs": 0,
+          "same_outcome_pairs": 8,
+          "same_trajectory_pairs": 8,
+          "a": {
+            "score": 0.25,
+            "terminal": 8,
+            "wins": 2,
+            "losses": 6,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 0,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 278.80161646
+          },
+          "b": {
+            "score": 0.25,
+            "terminal": 8,
+            "wins": 2,
+            "losses": 6,
+            "capped": 0,
+            "exposed_games": 0,
+            "fallback_decisions": 0,
+            "exposed_decisions": 0,
+            "missing_perish_decisions": 0,
+            "opponent_sang_games": 0,
+            "bot_count1_faints": 0,
+            "elapsed_seconds": 276.97149570700003
+          },
+          "cap_delta_bounds": [
+            0.0,
+            0.0
+          ],
+          "by_opponent": {
+            "mjj-2010-garap-a": {
+              "pairs": 2,
+              "paired_delta": 0.0
+            },
+            "sample-13": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            },
+            "sample-06": {
+              "pairs": 2,
+              "paired_delta": 0.0
+            },
+            "rental-cban-2": {
+              "pairs": 2,
+              "paired_delta": 0.0
+            },
+            "mjj-2020-rraikou": {
+              "pairs": 1,
+              "paired_delta": 0.0
+            }
+          },
+          "terminal_discordant_pairs": 0,
+          "terminal_exact_two_sided_p": 1.0
+        }
+      },
+      "sha256": "c64ca75d89a5f310a3a93bb1da6df3d3e46699844793abe972db4a92032c2c8b"
+    }
+  }
+}
