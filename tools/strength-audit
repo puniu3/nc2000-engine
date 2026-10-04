@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+mkdir -p tmp
+cargo run --release -p nc2000-bot --example poison_wait_audit > tmp/strength-headroom-reproduction.jsonl
+cmp findings/strength-headroom-v1/measurements.jsonl tmp/strength-headroom-reproduction.jsonl
+printf 'Proof, controls, and 24 search decisions reproduce exactly.\n'
