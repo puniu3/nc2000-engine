@@ -1,0 +1,68 @@
+{
+  "status": "frozen_before_new_outcomes",
+  "candidate": "EarlyPerish extends RetainPerish. After a species publicly appears, if its unchanged modal source includes Perish Song, draw a joint Mean Look+Perish Song move-only variant with the conditional weight fraction of source sets containing both among same-species sets matching revealed moves. Preserve all revealed moves, replace last unrevealed non-combo fillers, preserve item/stats/gender. Unseen preview slots and absent/unsupported combo sources keep RetainPerish. Existing Mean Look reveal retention remains intact. Do not draw combo hypotheses for a publicly fainted opponent.",
+  "arms": {
+    "a": "layered-meta-rentals-learnset-v1",
+    "b": "retain-perish-v1",
+    "c": "early-perish-v1"
+  },
+  "default_changed": false,
+  "iterations": 27000,
+  "ucb_c": 0.4,
+  "max_turns": 500,
+  "cells": {
+    "same": {
+      "games": 4,
+      "iterations": 3000,
+      "seed": 202610080
+    },
+    "adaptive": {
+      "games": 128,
+      "seed": 202610081
+    },
+    "stress": {
+      "games": 32,
+      "seed": 202610082
+    },
+    "natural": {
+      "games": 16,
+      "seed": 202610083
+    },
+    "onpool": {
+      "games": 8,
+      "seed": 202610084
+    }
+  },
+  "primary_endpoint": "Paired terminal outcome C-A in adaptive; C-B isolates value of anticipating the trap. B-A independently replicates the retained candidate.",
+  "analysis": "Report all three paired differences with stratified bootstrap95 and exact discordant-pair sign tests. Report Holm-adjusted p for C-A and B-A so choosing either candidate does not hide the two comparisons. No gain from action changes or exposure counters alone.",
+  "interpretation": "A positive point estimate with an interval spanning zero remains uncertain, not a demonstrated useless candidate. A demonstrated gain requires positive lower95 and Holm p <0.05 on fresh adaptive outcomes, with no unresolved secondary regression. Retain candidates with plausible mechanisms even if this sample cannot establish a small gain.",
+  "stopping": "Complete all frozen cells including long games. Do not tune probabilities against these results or add games until significant. Any subsequent implementation adjustment needs a stated failure mechanism and separate fresh validation.",
+  "pairing": [
+    "teams",
+    "battle seed",
+    "agent seeds",
+    "side"
+  ],
+  "cap_handling": "0.5 conventional score, separately report caps and worst/best paired delta bounds; do not remove long games",
+  "adaptive_opponent": "Force Misdreavus lead and initial Mean Look only; then let the unchanged blind opponent freely choose all legal moves and switches. It never observes own agent choices or hidden enemy sets.",
+  "other_opponents": "same 8 explicit legal historical-core scenarios as previous experiment; stress retains fixed Perish script; natural free preview/play; onpool weighted product catalog",
+  "inputs": {
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "data/team-pool-v2/team-pool.json": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+    "findings/operational-combo-validation-v1/opponents.json": "fde4502fef84e9da9c3680326ccda0dea2d17d38828283c5f00f40b5fd805550"
+  },
+  "limitations": [
+    "Fixed bot opponents and eight historically grounded constructed teams do not estimate human ladder win rate.",
+    "Move-only synthetic hypotheses retain the existing modal item and stats. The new combo fraction conditions on revealed moves, not item or gender; no complete-set consistency claim.",
+    "Ordinary play may not expose the target; invariance then measures scope, not strength.",
+    "Original 64-pair outcomes and ten fork reviews are hypothesis-generating evidence, not part of this fresh outcome gate."
+  ],
+  "prior_misdreavus": {
+    "sets": 28,
+    "weight_total": 20.499999,
+    "joint_sets": 23,
+    "joint_weight": 15.499999,
+    "joint_probability": 0.7560975490779293
+  },
+  "observer_fix": "Public first appearance increments the observation revision so cached beliefs refresh before the first move. All arms share this fix; Layered/Retain do not use appearance for move synthesis. Verified on smoke control trajectories before the trial."
+}

@@ -28,6 +28,8 @@ struct Measured {
     fallback: usize,
     exposed: usize,
     missing: usize,
+    early_exposed: usize,
+    early_combo_samples: usize,
 }
 impl Agent for Measured {
     fn name(&self) -> String {
@@ -48,6 +50,16 @@ impl Agent for Measured {
                     .find(|m| m.species == b.poke(foe).species)
                     .unwrap();
                 let has = |key| mo.revealed_moves.iter().any(|&m| dex.moves.key(m) == key);
+                if mo.appeared && !has("meanlook") && belief.is_fallback() {
+                    self.early_exposed += 1;
+                    let mut rng = SplitMix64::new(771);
+                    for _ in 0..64 {
+                        let sim = belief.determinize(dex, b, obs, &mut rng);
+                        let p = sim.poke(sim.active_id(1 - side).unwrap());
+                        self.early_combo_samples += usize::from(["meanlook", "perishsong"].iter()
+                            .all(|key| p.move_slots.iter().any(|m| dex.moves.key(m.id) == *key)));
+                    }
+                }
                 if has("meanlook") && !has("perishsong") && belief.is_fallback() {
                     self.exposed += 1;
                     let sim = belief.determinize(dex, b, obs, &mut SplitMix64::new(771));
@@ -247,6 +259,8 @@ fn main() {
         .map(|i| args[i + 1].split(',').map(|s| s.parse().unwrap()).collect());
     let candidate = if args.iter().any(|a| a == "--same") {
         FallbackPolicy::Layered
+    } else if args.iter().any(|a| a == "--early-perish") {
+        FallbackPolicy::EarlyPerish
     } else if args.iter().any(|a| a == "--retain-perish") {
         FallbackPolicy::RetainPerish
     } else {
@@ -258,6 +272,7 @@ fn main() {
     assert!(["", "a", "b", "c"].contains(&only_arm.as_str()));
     let mut policies = if triad {
         if args.iter().any(|a| a == "--same") { vec![FallbackPolicy::Layered;3] }
+        else if args.iter().any(|a| a == "--early-perish") { vec![FallbackPolicy::Layered,FallbackPolicy::RetainPerish,FallbackPolicy::EarlyPerish] }
         else { vec![FallbackPolicy::Layered,FallbackPolicy::RevealedLoadout,FallbackPolicy::RevealedLoadoutDraw] }
     } else { vec![FallbackPolicy::Layered,candidate] };
     if !only_arm.is_empty() {
@@ -321,7 +336,7 @@ fn main() {
                     let started=std::time::Instant::now();
                     let mut battle=Battle::from_fixture(&dex,&battle_seed,teams[0],teams[1]).unwrap();battle.set_log_enabled(true);
                     let trace=if trace_dir.is_empty() {None} else {Some(std::io::BufWriter::new(std::fs::File::create(format!("{trace_dir}/{job}-{}.jsonl",policy.id())).unwrap()))};
-                    let mut me=Measured {trace,cfg:cfg.clone(),inner:BlindAgent::new_with_fallback_policy(cfg.clone(),prior.clone(),None,bot_seed,policy),decisions:0,fallback:0,exposed:0,missing:0};
+                    let mut me=Measured {trace,cfg:cfg.clone(),inner:BlindAgent::new_with_fallback_policy(cfg.clone(),prior.clone(),None,bot_seed,policy),decisions:0,fallback:0,exposed:0,missing:0,early_exposed:0,early_combo_samples:0};
                     let mut opp=Opponent {inner:BlindAgent::new(cfg.clone(),prior.clone(),None,opp_seed),forced:mode=="stress"||mode=="adaptive",adaptive:mode=="adaptive",opened:false};
                     let inputs=Arc::new(Mutex::new(Vec::new()));
                     let (score,turns,tally)=if trace_dir.is_empty() {
@@ -335,9 +350,9 @@ fn main() {
                         std::fs::write(format!("{trace_dir}/{job}-{}-replay.json",policy.id()),serde_json::to_string(&json!({"teams":teams,"battle_seed":battle_seed,"inputs":*inputs.lock().unwrap(),"log":battle.log})).unwrap()).unwrap();
                         result
                     };
-                    arms.push(json!({"elapsed_seconds":started.elapsed().as_secs_f64(),"policy":policy.id(),"score":if side==0 {score}else{1.0-score},"turns":turns,"terminal":battle.outcome().is_some(),"trajectory":format!("{:016x}",digest(&battle.log)),"decisions":me.decisions,"fallback":me.fallback,"exposed":me.exposed,"missing":me.missing,"own":tally[side].json(),"opponent":tally[1-side].json(),"opponent_bond_moves":battle.log.iter().filter(|l| l.starts_with(&format!("|move|p{}",2-side)) && l.contains("|Destiny Bond|")).count(),"opponent_switch_events":battle.log.iter().filter(|l|l.starts_with(&format!("|switch|p{}",2-side))).count()}));
+                    arms.push(json!({"elapsed_seconds":started.elapsed().as_secs_f64(),"policy":policy.id(),"score":if side==0 {score}else{1.0-score},"turns":turns,"terminal":battle.outcome().is_some(),"trajectory":format!("{:016x}",digest(&battle.log)),"decisions":me.decisions,"fallback":me.fallback,"exposed":me.exposed,"missing":me.missing,"early_exposed":me.early_exposed,"early_combo_samples":me.early_combo_samples,"own":tally[side].json(),"opponent":tally[1-side].json(),"opponent_bond_moves":battle.log.iter().filter(|l| l.starts_with(&format!("|move|p{}",2-side)) && l.contains("|Destiny Bond|")).count(),"opponent_switch_events":battle.log.iter().filter(|l|l.starts_with(&format!("|switch|p{}",2-side))).count()}));
                 }
-                let mut row=json!({"implementation":if args.iter().any(|a|a=="--retain-perish") {"retain-perish-v1"} else {"compatible-gender-v1"},"job":job,"mode":mode,"iterations":iterations,"c":0.4,"seed":seed,"battle_seed":battle_seed,"bot_seed":bot_seed,"opp_seed":opp_seed,"side":side,"own_team":own.teams[own_i].id,"opponent_team":opponents.teams[opp_i].id,"a":arms.first(),"b":arms.get(1)});
+                let mut row=json!({"implementation":if args.iter().any(|a|a=="--early-perish") {"early-perish-v1"} else if args.iter().any(|a|a=="--retain-perish") {"retain-perish-v1"} else {"compatible-gender-v1"},"job":job,"mode":mode,"iterations":iterations,"c":0.4,"ucb_c":0.4,"seed":seed,"battle_seed":battle_seed,"bot_seed":bot_seed,"opp_seed":opp_seed,"side":side,"own_team":own.teams[own_i].id,"opponent_team":opponents.teams[opp_i].id,"a":arms.first(),"b":arms.get(1)});
                 if !only_arm.is_empty() {
                     row.as_object_mut().unwrap().remove("a");row.as_object_mut().unwrap().remove("b");
                     row[&only_arm]=arms[0].clone();

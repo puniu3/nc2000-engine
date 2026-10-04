@@ -1,0 +1,13 @@
+{
+  "bot_tests": 149,
+  "workspace_all_targets": "passed",
+  "smoke_seed": 912345,
+  "smoke_iterations": 3000,
+  "smoke_early_combo_samples": {
+    "a": 0,
+    "b": 0,
+    "c": 43
+  },
+  "observer_fix_controls": "A/B match pre-fix full trajectory and all counters",
+  "default_changed": false
+}

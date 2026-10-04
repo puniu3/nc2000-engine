@@ -368,6 +368,7 @@ impl Observer {
             let mo = &mut self.mons[slot];
             if !mo.appeared && (p.previously_switched_in > 0 || p.is_active) {
                 mo.appeared = true;
+                dirty = true;
             }
             // moves: base-slot usage marks (every path is a public |move|)
             for s in p.base_move_slots.iter() {
