@@ -1,7 +1,7 @@
 {
   "schema": "nc2000-residual-wait-fix-v1",
   "base_revision": "a63373b2f7ba145dcadb1dd1b7b6d2b8a5ebc037",
-  "deployment": "not_published",
+  "deployment": "published_and_verified",
   "change": "Preserve no-op choices while the opposing active has public residual damage; retain self-KO and sleep-forfeit exclusions.",
   "effects": [
     "poison",
@@ -147,5 +147,7 @@
     "crates/bot/tests/support/residual_wait.rs": "ac4ae0aab28b0044f728c4849a55011e6b6d5fe2049f5706c7c7bc1dbff0f0dd",
     "crates/wasm/tests-node/residual-wait.js": "bf4b26421d39205ee7b412df617441c5d1303b10e80ec2e17ca395dde181efd6",
     "findings/strength-headroom-v1/fixed-measurements.jsonl": "5d55aa4ff3ab3a8dbd21243ef8440c58ccc19d556d8f16e09cec032bd65c3306"
-  }
+  },
+  "deployment_commit": "2df3d177d90b195774d95d897ed7edc2a3da28f8",
+  "deployment_run": 37193330743
 }

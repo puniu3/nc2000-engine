@@ -1,0 +1,150 @@
+{
+  "commit": "2df3d177d90b195774d95d897ed7edc2a3da28f8",
+  "run": 37193330743,
+  "verifiedAt": "2026-10-04T09:51:12.411Z",
+  "url": "https://puniu3.github.io/nc2000-engine/",
+  "assets": [
+    {
+      "name": "index.html",
+      "sha256": "a4268e14817b90f69d15b4c31efb1f2c06ea6d72ba0e4df420a1063366d073cc",
+      "bytes": 838
+    },
+    {
+      "name": "assets/bot-worker-DohTUqti.js",
+      "sha256": "c38ba893b762a1669a78255257121423a85166089e82a951bcf378e1e119a7b8",
+      "bytes": 15758
+    },
+    {
+      "name": "assets/evaluate-worker-ORBwvTL5.js",
+      "sha256": "040b90635e4174ee8922ffdb038dbdd26c92a0534afbcdde17dbcdb7d83b8e19",
+      "bytes": 11472
+    },
+    {
+      "name": "assets/fork-arena-worker-DnTo0Oh-.js",
+      "sha256": "cc41edce30c70c4f4498c3a74bf6747a1a3f978f69b50931cb343d8387aa8f27",
+      "bytes": 5523
+    },
+    {
+      "name": "assets/index-DQVgr2x6.js",
+      "sha256": "486fede3634bc3b9bc57be2a19532d7142c244892ca858afbfa69efc120950df",
+      "bytes": 235332
+    },
+    {
+      "name": "assets/index-DXGscvNi.css",
+      "sha256": "ae959c4a249903358d3bb6b0c6ce154c36cd505e533e5cee387dbb88ea7918db",
+      "bytes": 37204
+    },
+    {
+      "name": "assets/nc2000_wasm_bg-Dk8eKXK4.wasm",
+      "sha256": "863fb633a859fec11f70a32b4becad313033b0d3caf5f128c2607d4426336152",
+      "bytes": 2589199
+    },
+    {
+      "name": "assets/solver-worker-D0MTjNnA.js",
+      "sha256": "d82c715e356c597796e557951ec156e81776d3383a703c837eef395062305996",
+      "bytes": 9497
+    }
+  ],
+  "browser": "149.0.7827.55",
+  "initialTurn": "Turn 1",
+  "nextTurn": "Turn 2",
+  "tactics": [
+    {
+      "seed": 82001,
+      "reply": "counter",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82001,
+      "reply": "mirrorcoat",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82001,
+      "reply": "safeguard",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82001,
+      "reply": "destinybond",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82002,
+      "reply": "counter",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82002,
+      "reply": "mirrorcoat",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82002,
+      "reply": "safeguard",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82002,
+      "reply": "destinybond",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82003,
+      "reply": "counter",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82003,
+      "reply": "mirrorcoat",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82003,
+      "reply": "safeguard",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82003,
+      "reply": "destinybond",
+      "best": "move toxic",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82004,
+      "reply": "counter",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82004,
+      "reply": "mirrorcoat",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82004,
+      "reply": "safeguard",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    },
+    {
+      "seed": 82004,
+      "reply": "destinybond",
+      "best": "move thunderwave",
+      "outcome": "p1"
+    }
+  ],
+  "errors": []
+}
