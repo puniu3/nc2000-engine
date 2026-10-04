@@ -72,6 +72,10 @@ The archive contains anonymous diagnostic rows and generated match traces.
 ## Independent confirmation completed
 
 The fresh 64-pair sample scored 36 versus 40, with primary P(improvement)
-80.197%. The local source default is now EarlyRest after regression checks;
+80.197%. EarlyRest temporarily became the local source default after regression checks;
 the public deployment remains EarlyPerish. See ../early-rest-confirmation-v1
 for the frozen protocol, prior sensitivity, limitations and adoption record.
+
+A later unforced rental screen triggered the frozen reversal criterion.
+The current local default is EarlyPerish; EarlyRest remains opt-in.
+See ../early-rest-natural-v1 for the independent negative result.

@@ -18,7 +18,10 @@ primary = s['posterior'].get('1')
 probability = f"{primary['probability_improved']:.1%}" if primary else '未算出'
 stress = s['stress']
 adoption = '<p>ローカルのソース設定へ採用しました。関連170テストと全ターゲットのコンパイルが通過。公開中の版は変更していません。<a href="adoption-verification.json">採用時の検証</a></p>' if d['stage'] == 'adopted_locally' else ''
-if d['stage'] == 'adopted_locally':
+if d['stage'] == 'reverted_after_robustness':
+    title = '作成条件では通過、通常対戦で悪化：採用取り消し'
+    adoption = '<p>後続の選出・初手を強制しない試験は旧設定11勝・EarlyRest 8勝。事前の悪化基準を超えたため、既定設定をEarlyPerishへ戻しました。以下は変更前の確認試験を保存した結果です。<a href="/nc2000-early-rest-natural/">追加試験と取り消し記録</a></p>'
+elif d['stage'] == 'adopted_locally':
     title = '独立追試の基準を通過：ローカル版に採用'
 elif d['criterion_met']:
     title = '独立追試の基準を通過：採用前の確認中'

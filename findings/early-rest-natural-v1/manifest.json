@@ -1,0 +1,2798 @@
+{
+  "protocol": {
+    "schema": "nc2000-early-rest-duel-v1",
+    "cases": [
+      {
+        "id": "rental-cban-1--sample-17-orig",
+        "family": "rental-cban-1",
+        "actual_rest": true,
+        "teams": [
+          [
+            {
+              "name": "Steelix",
+              "species": "Steelix",
+              "item": "Polkadot Bow",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Explosion",
+                "Roar",
+                "Toxic"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Exeggutor",
+              "species": "Exeggutor",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Psychic",
+                "Hidden Power",
+                "Explosion",
+                "Leech Seed"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 26,
+                "def": 26,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Porygon2",
+              "species": "Porygon2",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Return",
+                "Ice Beam",
+                "Curse",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Double-Edge",
+                "Earthquake",
+                "Self-Destruct",
+                "Curse"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Zapdos",
+              "species": "Zapdos",
+              "item": "Mint Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Thunderbolt",
+                "Hidden Power",
+                "Reflect",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 22,
+                "def": 26,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Suicune",
+              "species": "Suicune",
+              "item": "Bright Powder",
+              "ability": "No Ability",
+              "moves": [
+                "Surf",
+                "Ice Beam",
+                "Rest",
+                "Sleep Talk"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ],
+          [
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Double-Edge",
+                "Curse",
+                "Sleep Talk",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Umbreon",
+              "species": "Umbreon",
+              "item": "Mint Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Pursuit",
+                "Toxic",
+                "Charm",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Marowak",
+              "species": "Marowak",
+              "item": "Thick Club",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Rock Slide",
+                "Flamethrower",
+                "Swords Dance"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Cloyster",
+              "species": "Cloyster",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Ice Beam",
+                "Spikes",
+                "Reflect",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Gengar",
+              "species": "Gengar",
+              "item": "Berry Juice",
+              "ability": "No Ability",
+              "moves": [
+                "Zap Cannon",
+                "Mean Look",
+                "Perish Song",
+                "Destiny Bond"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Starmie",
+              "species": "Starmie",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Hydro Pump",
+                "Psychic",
+                "Thunder Wave",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ]
+        ],
+        "prefix": [],
+        "pairs": 4
+      },
+      {
+        "id": "rental-cban-1--rental-cban-13",
+        "family": "rental-cban-1",
+        "actual_rest": true,
+        "teams": [
+          [
+            {
+              "name": "Porygon2",
+              "species": "Porygon2",
+              "item": "Bright Powder",
+              "ability": "No Ability",
+              "moves": [
+                "Return",
+                "Ice Beam",
+                "Curse",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Poliwrath",
+              "species": "Poliwrath",
+              "item": "Black Belt",
+              "ability": "No Ability",
+              "moves": [
+                "Hydro Pump",
+                "Submission",
+                "Return",
+                "Belly Drum"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Gengar",
+              "species": "Gengar",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Shadow Ball",
+                "Thunderbolt",
+                "Ice Punch",
+                "Fire Punch"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Exeggutor",
+              "species": "Exeggutor",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Psychic",
+                "Leech Seed",
+                "Sleep Powder",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Body Slam",
+                "Earthquake",
+                "Curse",
+                "Self-Destruct"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Golem",
+              "species": "Golem",
+              "item": "Quick Claw",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Fire Blast",
+                "Roar",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ],
+          [
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Double-Edge",
+                "Curse",
+                "Sleep Talk",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Umbreon",
+              "species": "Umbreon",
+              "item": "Mint Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Pursuit",
+                "Toxic",
+                "Charm",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Marowak",
+              "species": "Marowak",
+              "item": "Thick Club",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Rock Slide",
+                "Flamethrower",
+                "Swords Dance"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Cloyster",
+              "species": "Cloyster",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Ice Beam",
+                "Spikes",
+                "Reflect",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Gengar",
+              "species": "Gengar",
+              "item": "Berry Juice",
+              "ability": "No Ability",
+              "moves": [
+                "Zap Cannon",
+                "Mean Look",
+                "Perish Song",
+                "Destiny Bond"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Starmie",
+              "species": "Starmie",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Hydro Pump",
+                "Psychic",
+                "Thunder Wave",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ]
+        ],
+        "prefix": [],
+        "pairs": 4
+      },
+      {
+        "id": "rental-cban-9--sample-17-orig",
+        "family": "rental-cban-9",
+        "actual_rest": true,
+        "teams": [
+          [
+            {
+              "name": "Steelix",
+              "species": "Steelix",
+              "item": "Polkadot Bow",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Explosion",
+                "Roar",
+                "Toxic"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Exeggutor",
+              "species": "Exeggutor",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Psychic",
+                "Hidden Power",
+                "Explosion",
+                "Leech Seed"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 26,
+                "def": 26,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Porygon2",
+              "species": "Porygon2",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Return",
+                "Ice Beam",
+                "Curse",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Double-Edge",
+                "Earthquake",
+                "Self-Destruct",
+                "Curse"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Zapdos",
+              "species": "Zapdos",
+              "item": "Mint Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Thunderbolt",
+                "Hidden Power",
+                "Reflect",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 22,
+                "def": 26,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Suicune",
+              "species": "Suicune",
+              "item": "Bright Powder",
+              "ability": "No Ability",
+              "moves": [
+                "Surf",
+                "Ice Beam",
+                "Rest",
+                "Sleep Talk"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ],
+          [
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Double-Edge",
+                "Earthquake",
+                "Curse",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Cloyster",
+              "species": "Cloyster",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Ice Beam",
+                "Spikes",
+                "Curse",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Zapdos",
+              "species": "Zapdos",
+              "item": "Mint Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Thunderbolt",
+                "Hidden Power",
+                "Thunder Wave",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 30,
+                "atk": 30,
+                "def": 26,
+                "spa": 30,
+                "spd": 30,
+                "spe": 30
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Starmie",
+              "species": "Starmie",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Surf",
+                "Psychic",
+                "Thunder Wave",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Steelix",
+              "species": "Steelix",
+              "item": "Polkadot Bow",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Toxic",
+                "Roar",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Gengar",
+              "species": "Gengar",
+              "item": "PRZ Cure Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Fire Punch",
+                "Mean Look",
+                "Perish Song",
+                "Destiny Bond"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ]
+        ],
+        "prefix": [],
+        "pairs": 4
+      },
+      {
+        "id": "rental-cban-9--rental-cban-13",
+        "family": "rental-cban-9",
+        "actual_rest": true,
+        "teams": [
+          [
+            {
+              "name": "Porygon2",
+              "species": "Porygon2",
+              "item": "Bright Powder",
+              "ability": "No Ability",
+              "moves": [
+                "Return",
+                "Ice Beam",
+                "Curse",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Poliwrath",
+              "species": "Poliwrath",
+              "item": "Black Belt",
+              "ability": "No Ability",
+              "moves": [
+                "Hydro Pump",
+                "Submission",
+                "Return",
+                "Belly Drum"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Gengar",
+              "species": "Gengar",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Shadow Ball",
+                "Thunderbolt",
+                "Ice Punch",
+                "Fire Punch"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Exeggutor",
+              "species": "Exeggutor",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Psychic",
+                "Leech Seed",
+                "Sleep Powder",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Body Slam",
+                "Earthquake",
+                "Curse",
+                "Self-Destruct"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Golem",
+              "species": "Golem",
+              "item": "Quick Claw",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Fire Blast",
+                "Roar",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ],
+          [
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Double-Edge",
+                "Earthquake",
+                "Curse",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Cloyster",
+              "species": "Cloyster",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Ice Beam",
+                "Spikes",
+                "Curse",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Zapdos",
+              "species": "Zapdos",
+              "item": "Mint Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Thunderbolt",
+                "Hidden Power",
+                "Thunder Wave",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 30,
+                "atk": 30,
+                "def": 26,
+                "spa": 30,
+                "spd": 30,
+                "spe": 30
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Starmie",
+              "species": "Starmie",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Surf",
+                "Psychic",
+                "Thunder Wave",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Steelix",
+              "species": "Steelix",
+              "item": "Polkadot Bow",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Toxic",
+                "Roar",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Gengar",
+              "species": "Gengar",
+              "item": "PRZ Cure Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Fire Punch",
+                "Mean Look",
+                "Perish Song",
+                "Destiny Bond"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ]
+        ],
+        "prefix": [],
+        "pairs": 4
+      },
+      {
+        "id": "rental-cban-10--sample-17-orig",
+        "family": "rental-cban-10",
+        "actual_rest": true,
+        "teams": [
+          [
+            {
+              "name": "Steelix",
+              "species": "Steelix",
+              "item": "Polkadot Bow",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Explosion",
+                "Roar",
+                "Toxic"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Exeggutor",
+              "species": "Exeggutor",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Psychic",
+                "Hidden Power",
+                "Explosion",
+                "Leech Seed"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 26,
+                "def": 26,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Porygon2",
+              "species": "Porygon2",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Return",
+                "Ice Beam",
+                "Curse",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Double-Edge",
+                "Earthquake",
+                "Self-Destruct",
+                "Curse"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Zapdos",
+              "species": "Zapdos",
+              "item": "Mint Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Thunderbolt",
+                "Hidden Power",
+                "Reflect",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 22,
+                "def": 26,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Suicune",
+              "species": "Suicune",
+              "item": "Bright Powder",
+              "ability": "No Ability",
+              "moves": [
+                "Surf",
+                "Ice Beam",
+                "Rest",
+                "Sleep Talk"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ],
+          [
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Double-Edge",
+                "Earthquake",
+                "Zap Cannon",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Skarmory",
+              "species": "Skarmory",
+              "item": "Mint Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Drill Peck",
+                "Toxic",
+                "Whirlwind",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Misdreavus",
+              "species": "Misdreavus",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Zap Cannon",
+                "Mean Look",
+                "Perish Song",
+                "Destiny Bond"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Starmie",
+              "species": "Starmie",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Hydro Pump",
+                "Psychic",
+                "Thunder Wave",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Marowak",
+              "species": "Marowak",
+              "item": "Thick Club",
+              "ability": "No Ability",
+              "moves": [
+                "Bonemerang",
+                "Rock Slide",
+                "Hidden Power",
+                "Swords Dance"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 30,
+                "atk": 26,
+                "def": 26,
+                "spa": 30,
+                "spd": 30,
+                "spe": 30
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Miltank",
+              "species": "Miltank",
+              "item": "Pink Bow",
+              "ability": "No Ability",
+              "moves": [
+                "Frustration",
+                "Zap Cannon",
+                "Curse",
+                "Milk Drink"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "F",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            }
+          ]
+        ],
+        "prefix": [],
+        "pairs": 4
+      },
+      {
+        "id": "rental-cban-10--rental-cban-13",
+        "family": "rental-cban-10",
+        "actual_rest": true,
+        "teams": [
+          [
+            {
+              "name": "Porygon2",
+              "species": "Porygon2",
+              "item": "Bright Powder",
+              "ability": "No Ability",
+              "moves": [
+                "Return",
+                "Ice Beam",
+                "Curse",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Poliwrath",
+              "species": "Poliwrath",
+              "item": "Black Belt",
+              "ability": "No Ability",
+              "moves": [
+                "Hydro Pump",
+                "Submission",
+                "Return",
+                "Belly Drum"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Gengar",
+              "species": "Gengar",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Shadow Ball",
+                "Thunderbolt",
+                "Ice Punch",
+                "Fire Punch"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Exeggutor",
+              "species": "Exeggutor",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Psychic",
+                "Leech Seed",
+                "Sleep Powder",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Body Slam",
+                "Earthquake",
+                "Curse",
+                "Self-Destruct"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Golem",
+              "species": "Golem",
+              "item": "Quick Claw",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Fire Blast",
+                "Roar",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ],
+          [
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Double-Edge",
+                "Earthquake",
+                "Zap Cannon",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Skarmory",
+              "species": "Skarmory",
+              "item": "Mint Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Drill Peck",
+                "Toxic",
+                "Whirlwind",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Misdreavus",
+              "species": "Misdreavus",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Zap Cannon",
+                "Mean Look",
+                "Perish Song",
+                "Destiny Bond"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Starmie",
+              "species": "Starmie",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Hydro Pump",
+                "Psychic",
+                "Thunder Wave",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Marowak",
+              "species": "Marowak",
+              "item": "Thick Club",
+              "ability": "No Ability",
+              "moves": [
+                "Bonemerang",
+                "Rock Slide",
+                "Hidden Power",
+                "Swords Dance"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 30,
+                "atk": 26,
+                "def": 26,
+                "spa": 30,
+                "spd": 30,
+                "spe": 30
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Miltank",
+              "species": "Miltank",
+              "item": "Pink Bow",
+              "ability": "No Ability",
+              "moves": [
+                "Frustration",
+                "Zap Cannon",
+                "Curse",
+                "Milk Drink"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "F",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            }
+          ]
+        ],
+        "prefix": [],
+        "pairs": 4
+      },
+      {
+        "id": "onpool-control",
+        "family": "onpool-control",
+        "actual_rest": null,
+        "teams": [
+          [
+            {
+              "name": "Steelix",
+              "species": "Steelix",
+              "item": "Polkadot Bow",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Explosion",
+                "Roar",
+                "Toxic"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Exeggutor",
+              "species": "Exeggutor",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Psychic",
+                "Hidden Power",
+                "Explosion",
+                "Leech Seed"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 26,
+                "def": 26,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Porygon2",
+              "species": "Porygon2",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Return",
+                "Ice Beam",
+                "Curse",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Double-Edge",
+                "Earthquake",
+                "Self-Destruct",
+                "Curse"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Zapdos",
+              "species": "Zapdos",
+              "item": "Mint Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Thunderbolt",
+                "Hidden Power",
+                "Reflect",
+                "Rest"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 22,
+                "def": 26,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Suicune",
+              "species": "Suicune",
+              "item": "Bright Powder",
+              "ability": "No Ability",
+              "moves": [
+                "Surf",
+                "Ice Beam",
+                "Rest",
+                "Sleep Talk"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ],
+          [
+            {
+              "name": "Porygon2",
+              "species": "Porygon2",
+              "item": "Bright Powder",
+              "ability": "No Ability",
+              "moves": [
+                "Return",
+                "Ice Beam",
+                "Curse",
+                "Recover"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "N",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Poliwrath",
+              "species": "Poliwrath",
+              "item": "Black Belt",
+              "ability": "No Ability",
+              "moves": [
+                "Hydro Pump",
+                "Submission",
+                "Return",
+                "Belly Drum"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Gengar",
+              "species": "Gengar",
+              "item": "Miracle Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Shadow Ball",
+                "Thunderbolt",
+                "Ice Punch",
+                "Fire Punch"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 55,
+              "happiness": 255
+            },
+            {
+              "name": "Exeggutor",
+              "species": "Exeggutor",
+              "item": "Gold Berry",
+              "ability": "No Ability",
+              "moves": [
+                "Psychic",
+                "Leech Seed",
+                "Sleep Powder",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Snorlax",
+              "species": "Snorlax",
+              "item": "Leftovers",
+              "ability": "No Ability",
+              "moves": [
+                "Body Slam",
+                "Earthquake",
+                "Curse",
+                "Self-Destruct"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            },
+            {
+              "name": "Golem",
+              "species": "Golem",
+              "item": "Quick Claw",
+              "ability": "No Ability",
+              "moves": [
+                "Earthquake",
+                "Fire Blast",
+                "Roar",
+                "Explosion"
+              ],
+              "nature": "Serious",
+              "evs": {
+                "hp": 255,
+                "atk": 255,
+                "def": 255,
+                "spa": 255,
+                "spd": 255,
+                "spe": 255
+              },
+              "gender": "M",
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "level": 50,
+              "happiness": 255
+            }
+          ]
+        ],
+        "prefix": [],
+        "pairs": 2
+      }
+    ],
+    "iterations": 27000,
+    "c": 0.4,
+    "seed": 2026100540,
+    "max_turns": 300,
+    "threads": 4,
+    "prior": "data/belief-pool-v3/belief-pool.json",
+    "prior_sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "interpretation": "Unmodified archived rental robustness screen; free preview and play. Six equal-weight matchups using all three eligible human-origin inventory teams with no native prior preview match and the two highest draw-weight own catalog teams. Source moves/items overlap the prior; not independent human holdout. actual_rest=true means an opposing roster contains Rest, not forced selection or use. No pooling with constructed trials.",
+    "candidate": "Frozen EarlyRest versus EarlyPerish; common opponent EarlyPerish, HP evidence disabled."
+  },
+  "protocol_sha256": "710381004e6b611832c3105d50003ebebd5572f2341bd4e3e3c99cf9ae771f49",
+  "source_sha256": "d3e39c88e2607ad8d102f2377d372b43eb43c9b3b91e34cbfc53c184873d7c32",
+  "binary_sha256": "1f77e03448e5acc6093fee90381cdf8a759ccd8e5addd74d2e1e1dc8cefa12b5"
+}

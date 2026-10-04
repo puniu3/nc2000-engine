@@ -1,0 +1,1009 @@
+[
+  {
+    "case": "rental-cban-1--sample-17-orig",
+    "trial": 1,
+    "decision": 10,
+    "turn": 9,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move hiddenpower",
+      "move thunderbolt"
+    ],
+    "own": "zapdos",
+    "own_hp": [
+      196,
+      196
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "curse",
+      "sleeptalk",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,rest:Dark:70": 27,
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 37
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-1--sample-17-orig",
+    "trial": 2,
+    "decision": 5,
+    "turn": 4,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move icebeam",
+      "move return"
+    ],
+    "own": "porygon2",
+    "own_hp": [
+      209,
+      209
+    ],
+    "foe": "marowak",
+    "foe_hp": [
+      88,
+      166
+    ],
+    "true_foe_moves": [
+      "earthquake",
+      "rockslide",
+      "flamethrower",
+      "swordsdance"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "rockslide,earthquake,hiddenpowerbug,swordsdance:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "rockslide,earthquake,hiddenpowerbug,rest:Bug:70": 5,
+          "rockslide,earthquake,hiddenpowerbug,swordsdance:Bug:70": 59
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-1--sample-17-orig",
+    "trial": 3,
+    "decision": 5,
+    "turn": 5,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move thunderbolt",
+      "move rest"
+    ],
+    "own": "zapdos",
+    "own_hp": [
+      73,
+      196
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      136,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "curse",
+      "sleeptalk",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "curse,doubleedge,bodyslam,earthquake:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "curse,doubleedge,bodyslam,earthquake:Dark:70": 28,
+          "curse,doubleedge,bodyslam,rest:Dark:70": 36
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-1--rental-cban-13",
+    "trial": 0,
+    "decision": 7,
+    "turn": 6,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move sleeppowder",
+      "switch 3"
+    ],
+    "own": "exeggutor",
+    "own_hp": [
+      165,
+      201
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      268,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "curse",
+      "sleeptalk",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 42,
+          "bodyslam,earthquake,selfdestruct,rest:Dark:70": 22
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-1--rental-cban-13",
+    "trial": 1,
+    "decision": 4,
+    "turn": 4,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "move icebeam",
+      "move curse"
+    ],
+    "own": "porygon2",
+    "own_hp": [
+      209,
+      209
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "curse",
+      "sleeptalk",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 25,
+          "bodyslam,earthquake,selfdestruct,rest:Dark:70": 39
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-1--rental-cban-13",
+    "trial": 2,
+    "decision": 11,
+    "turn": 11,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move bodyslam",
+      "switch 2"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      244,
+      266
+    ],
+    "foe": "marowak",
+    "foe_hp": [
+      86,
+      166
+    ],
+    "true_foe_moves": [
+      "earthquake",
+      "rockslide",
+      "flamethrower",
+      "swordsdance"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "rockslide,earthquake,hiddenpowerbug,swordsdance:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "rockslide,earthquake,hiddenpowerbug,rest:Bug:70": 5,
+          "rockslide,earthquake,hiddenpowerbug,swordsdance:Bug:70": 59
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-1--rental-cban-13",
+    "trial": 3,
+    "decision": 6,
+    "turn": 6,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move curse",
+      "move return"
+    ],
+    "own": "porygon2",
+    "own_hp": [
+      209,
+      209
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      135,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "curse",
+      "sleeptalk",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,rest:Dark:70": 19,
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 45
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-9--sample-17-orig",
+    "trial": 0,
+    "decision": 42,
+    "turn": 39,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move selfdestruct",
+      "move earthquake"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      21,
+      266
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "earthquake",
+      "curse",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 25,
+          "bodyslam,earthquake,selfdestruct,rest:Dark:70": 39
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-9--sample-17-orig",
+    "trial": 1,
+    "decision": 7,
+    "turn": 6,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move thunderbolt",
+      "move reflect"
+    ],
+    "own": "zapdos",
+    "own_hp": [
+      196,
+      196
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "earthquake",
+      "curse",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,rest:Dark:70": 27,
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 37
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-9--sample-17-orig",
+    "trial": 2,
+    "decision": 7,
+    "turn": 6,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move thunderbolt",
+      "switch 2"
+    ],
+    "own": "zapdos",
+    "own_hp": [
+      196,
+      196
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      205,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "earthquake",
+      "curse",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,rest:Dark:70": 19,
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 45
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-9--rental-cban-13",
+    "trial": 0,
+    "decision": 21,
+    "turn": 20,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move curse",
+      "move selfdestruct"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      261,
+      266
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "earthquake",
+      "curse",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 25,
+          "bodyslam,earthquake,selfdestruct,rest:Dark:70": 39
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-9--rental-cban-13",
+    "trial": 1,
+    "decision": 7,
+    "turn": 6,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move curse",
+      "switch 3"
+    ],
+    "own": "porygon2",
+    "own_hp": [
+      204,
+      209
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "earthquake",
+      "curse",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,rest:Dark:70": 27,
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 37
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-9--rental-cban-13",
+    "trial": 2,
+    "decision": 6,
+    "turn": 5,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move curse",
+      "switch 2"
+    ],
+    "own": "porygon2",
+    "own_hp": [
+      201,
+      209
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "earthquake",
+      "curse",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "curse,bodyslam,earthquake,rest:Dark:70": 27,
+          "curse,bodyslam,earthquake,selfdestruct:Dark:70": 37
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-9--rental-cban-13",
+    "trial": 3,
+    "decision": 9,
+    "turn": 7,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move bodyslam",
+      "switch 3"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      86,
+      266
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      292,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "earthquake",
+      "curse",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,bodyslam,selfdestruct,curse:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,bodyslam,selfdestruct,curse:Dark:70": 39,
+          "earthquake,bodyslam,selfdestruct,rest:Dark:70": 25
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-10--sample-17-orig",
+    "trial": 0,
+    "decision": 5,
+    "turn": 5,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move thunderbolt",
+      "move hiddenpower"
+    ],
+    "own": "zapdos",
+    "own_hp": [
+      80,
+      196
+    ],
+    "foe": "marowak",
+    "foe_hp": [
+      16,
+      166
+    ],
+    "true_foe_moves": [
+      "bonemerang",
+      "rockslide",
+      "hiddenpower",
+      "swordsdance"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "rockslide,earthquake,hiddenpowerbug,swordsdance:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "rockslide,earthquake,hiddenpowerbug,rest:Bug:70": 5,
+          "rockslide,earthquake,hiddenpowerbug,swordsdance:Bug:70": 59
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-10--sample-17-orig",
+    "trial": 1,
+    "decision": 25,
+    "turn": 24,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "move recover",
+      "move return"
+    ],
+    "own": "porygon2",
+    "own_hp": [
+      119,
+      209
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      272,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "earthquake",
+      "zapcannon",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "doubleedge,bodyslam,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "doubleedge,bodyslam,earthquake,rest:Dark:70": 40,
+          "doubleedge,bodyslam,earthquake,selfdestruct:Dark:70": 24
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-10--sample-17-orig",
+    "trial": 2,
+    "decision": 5,
+    "turn": 5,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "switch 2",
+      "move thunderbolt"
+    ],
+    "own": "zapdos",
+    "own_hp": [
+      196,
+      196
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      251,
+      292
+    ],
+    "true_foe_moves": [
+      "doubleedge",
+      "earthquake",
+      "zapcannon",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "zapcannon,bodyslam,earthquake,selfdestruct:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "zapcannon,bodyslam,earthquake,rest:Dark:70": 64
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-10--sample-17-orig",
+    "trial": 3,
+    "decision": 1,
+    "turn": 1,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "move reflect",
+      "move hiddenpower"
+    ],
+    "own": "zapdos",
+    "own_hp": [
+      196,
+      196
+    ],
+    "foe": "marowak",
+    "foe_hp": [
+      166,
+      166
+    ],
+    "true_foe_moves": [
+      "bonemerang",
+      "rockslide",
+      "hiddenpower",
+      "swordsdance"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,rockslide,hiddenpowerbug,swordsdance:Bug:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "earthquake,rockslide,hiddenpowerbug,rest:Bug:70": 7,
+          "earthquake,rockslide,hiddenpowerbug,swordsdance:Bug:70": 57
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-10--rental-cban-13",
+    "trial": 0,
+    "decision": 2,
+    "turn": 2,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move icebeam",
+      "switch 3"
+    ],
+    "own": "porygon2",
+    "own_hp": [
+      209,
+      209
+    ],
+    "foe": "skarmory",
+    "foe_hp": [
+      108,
+      171
+    ],
+    "true_foe_moves": [
+      "drillpeck",
+      "toxic",
+      "whirlwind",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "toxic,drillpeck,curse,whirlwind:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "toxic,drillpeck,curse,rest:Dark:70": 54,
+          "toxic,drillpeck,curse,whirlwind:Dark:70": 10
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-10--rental-cban-13",
+    "trial": 2,
+    "decision": 2,
+    "turn": 2,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move icebeam",
+      "switch 3"
+    ],
+    "own": "porygon2",
+    "own_hp": [
+      209,
+      209
+    ],
+    "foe": "skarmory",
+    "foe_hp": [
+      110,
+      171
+    ],
+    "true_foe_moves": [
+      "drillpeck",
+      "toxic",
+      "whirlwind",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "toxic,drillpeck,curse,whirlwind:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "toxic,drillpeck,curse,rest:Dark:70": 54,
+          "toxic,drillpeck,curse,whirlwind:Dark:70": 10
+        },
+        "choice_reproduced": true
+      }
+    ]
+  },
+  {
+    "case": "rental-cban-10--rental-cban-13",
+    "trial": 3,
+    "decision": 2,
+    "turn": 2,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move icebeam",
+      "switch 3"
+    ],
+    "own": "porygon2",
+    "own_hp": [
+      209,
+      209
+    ],
+    "foe": "skarmory",
+    "foe_hp": [
+      114,
+      171
+    ],
+    "true_foe_moves": [
+      "drillpeck",
+      "toxic",
+      "whirlwind",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "toxic,drillpeck,curse,whirlwind:Dark:70": 64
+        },
+        "choice_reproduced": true
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "toxic,drillpeck,curse,rest:Dark:70": 54,
+          "toxic,drillpeck,curse,whirlwind:Dark:70": 10
+        },
+        "choice_reproduced": true
+      }
+    ]
+  }
+]

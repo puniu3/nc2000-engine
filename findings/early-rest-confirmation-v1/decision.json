@@ -1,5 +1,5 @@
 {
-  "stage": "adopted_locally",
+  "stage": "reverted_after_robustness",
   "criterion_met": true,
   "threshold": 0.8,
   "primary": {
@@ -13,7 +13,7 @@
     "probability_loss_gt_1pp": 0.1583
   },
   "data": "independent 64 stress pairs only; pilot not pooled",
-  "default_changed": true,
+  "default_changed": false,
   "secondary_review_required": false,
   "scope": "fixed equal-weight eight-case benchmark; not a human-strength probability",
   "review": {
@@ -25,5 +25,16 @@
     "mechanism": "Four improved Snorlax/Umbreon no-Rest pairs first change Pursuit to Toxic against Machamp. This is a whole-policy benchmark improvement, not isolated evidence for anticipating the lead Rest move."
   },
   "local_checks": "adoption-verification.json",
-  "deployment": "not deployed; published version remains EarlyPerish"
+  "deployment": "not deployed; published version remains EarlyPerish",
+  "subsequent_review": {
+    "benchmark": "../early-rest-natural-v1",
+    "scores": [
+      11,
+      8
+    ],
+    "pairs": 24,
+    "probability_worse": 0.852335,
+    "threshold": 0.8,
+    "action": "Restore EarlyPerish as the local default; preserve this confirmation result as historical evidence."
+  }
 }

@@ -1,0 +1,266 @@
+{
+  "cases": [
+    {
+      "case": "rental-cban-1--sample-17-orig",
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        1.0,
+        0.0
+      ],
+      "better": 0,
+      "worse": 1,
+      "same": 3,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        -0.25,
+        -0.25
+      ],
+      "changed_pairs": 3
+    },
+    {
+      "case": "rental-cban-1--rental-cban-13",
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        1.0,
+        2.0
+      ],
+      "better": 1,
+      "worse": 0,
+      "same": 3,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.25,
+        0.25
+      ],
+      "changed_pairs": 4
+    },
+    {
+      "case": "rental-cban-9--sample-17-orig",
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "better": 0,
+      "worse": 0,
+      "same": 4,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.0,
+        0.0
+      ],
+      "changed_pairs": 3
+    },
+    {
+      "case": "rental-cban-9--rental-cban-13",
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        3.0,
+        2.0
+      ],
+      "better": 0,
+      "worse": 1,
+      "same": 3,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        -0.25,
+        -0.25
+      ],
+      "changed_pairs": 4
+    },
+    {
+      "case": "rental-cban-10--sample-17-orig",
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        2.0,
+        2.0
+      ],
+      "better": 2,
+      "worse": 2,
+      "same": 0,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.0,
+        0.0
+      ],
+      "changed_pairs": 4
+    },
+    {
+      "case": "rental-cban-10--rental-cban-13",
+      "pairs": 4,
+      "complete_pairs": 4,
+      "scores": [
+        4.0,
+        2.0
+      ],
+      "better": 0,
+      "worse": 2,
+      "same": 2,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        -0.5,
+        -0.5
+      ],
+      "changed_pairs": 3
+    },
+    {
+      "case": "onpool-control",
+      "pairs": 2,
+      "complete_pairs": 2,
+      "scores": [
+        2.0,
+        2.0
+      ],
+      "better": 0,
+      "worse": 0,
+      "same": 2,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        0.0,
+        0.0
+      ],
+      "changed_pairs": 0
+    }
+  ],
+  "screen": {
+    "pairs": 24,
+    "complete_pairs": 24,
+    "scores": [
+      11.0,
+      8.0
+    ],
+    "better": 3,
+    "worse": 6,
+    "same": 15,
+    "caps_by_arm": [
+      0,
+      0
+    ],
+    "delta_bounds": [
+      -0.125,
+      -0.125
+    ],
+    "changed_pairs": 21
+  },
+  "roster_rest_groups": {
+    "rest": {
+      "pairs": 24,
+      "complete_pairs": 24,
+      "scores": [
+        11.0,
+        8.0
+      ],
+      "better": 3,
+      "worse": 6,
+      "same": 15,
+      "caps_by_arm": [
+        0,
+        0
+      ],
+      "delta_bounds": [
+        -0.125,
+        -0.125
+      ],
+      "changed_pairs": 21
+    },
+    "no_rest": {
+      "pairs": 0,
+      "estimable": false
+    }
+  },
+  "roster_rest_group_scope": "Rest in a six-mon roster, not actual selection or use; no Rest-absent roster is in this screen.",
+  "posterior": {
+    "0.5": {
+      "probability_improved": 0.13015,
+      "mean_delta": -0.11146035672110706,
+      "analytic_mean_delta": -0.1111111111111111,
+      "credible95": [
+        -0.30159099270668277,
+        0.07627610814801392
+      ],
+      "probability_loss_gt_1pp": 0.84654
+    },
+    "1": {
+      "probability_improved": 0.147665,
+      "mean_delta": -0.09970455670390664,
+      "analytic_mean_delta": -0.1,
+      "credible95": [
+        -0.2842751153941982,
+        0.08321006196316513
+      ],
+      "probability_loss_gt_1pp": 0.826145
+    },
+    "4": {
+      "probability_improved": 0.214045,
+      "mean_delta": -0.062587183476218,
+      "analytic_mean_delta": -0.0625,
+      "credible95": [
+        -0.21723997564337644,
+        0.09192958211885568
+      ],
+      "probability_loss_gt_1pp": 0.74704
+    },
+    "16": {
+      "probability_improved": 0.315365,
+      "mean_delta": -0.025049499679369557,
+      "analytic_mean_delta": -0.025,
+      "credible95": [
+        -0.1266282193349285,
+        0.07615449831730597
+      ],
+      "probability_loss_gt_1pp": 0.614095
+    },
+    "64": {
+      "probability_improved": 0.39931,
+      "mean_delta": -0.007291841963618271,
+      "analytic_mean_delta": -0.007352941176470588,
+      "credible95": [
+        -0.06317183717990842,
+        0.0482984841643998
+      ],
+      "probability_loss_gt_1pp": 0.46182
+    }
+  },
+  "replay": {
+    "games": 52,
+    "decisions": 1997,
+    "legal_replay": true,
+    "state_keys": true,
+    "public_masks": true,
+    "seeds": true,
+    "outcomes": true
+  },
+  "reproduced_searches": 42,
+  "calibration": {
+    "null": 0.50198,
+    "positive": 1.0,
+    "negative": 0.0
+  },
+  "scope": "Unmodified archived rental robustness screen; free preview and play. Six equal-weight matchups using all three eligible human-origin inventory teams with no native prior preview match and the two highest draw-weight own catalog teams. Source moves/items overlap the prior; not independent human holdout. actual_rest=true means an opposing roster contains Rest, not forced selection or use. No pooling with constructed trials."
+}

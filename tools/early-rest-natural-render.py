@@ -31,6 +31,9 @@ if (out / 'summary.json').exists():
 <table><tr><th>各条件の事前質量</th><th>悪化確率</th><th>平均差</th></tr>{sensitivity}</table>
 <p>{summary['replay']['games']}局・{summary['replay']['decisions']}判断を再生照合し、着手が分かれた{summary['reproduced_searches']}探索を再現しました。</p>'''
     links += ['summary.json', 'decision.json', 'replay.json', 'first-divergence.json', 'records.json.gz']
+if (out / 'rollback.json').exists():
+    result = '<p><strong>ローカル採用を取り消し、既定設定をEarlyPerishへ戻しました。</strong>復元後の関連170テストと全ターゲットのコンパイルが通過。公開版は変更していません。</p>' + result
+    links.append('rollback.json')
 links_html = ' · '.join(f'<a href="{name}">{name}</a>' for name in links)
 unmatched_html = '、'.join(html.escape(r['team']) for r in unmatched)
 (out / 'index.html').write_text(f'''<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ねむる推定・通常対戦の追加検証</title>

@@ -1,10 +1,18 @@
 {
   "artifact_sha256": {
-    "index.html": "71b39e6d9aa583e08442cf1967fea9ecda67a14d1b7d80c98deea61a1053a28f",
+    "summary.json": "aeda8ae3d8587a2971739bb17ad175a5bfc12493d939b539dcb8ddc8d6a99b8f",
+    "index.html": "728da84ea1a78171b7182a00aa2979caf1fee8317f2c573674a41a2adecd2b9c",
     "inventory-audit.json": "b7607c6f4d65f945b417235d042164fe09a4ee095260eaa77ff2d7d9aee2e051",
+    "first-divergence.json": "83de6a32b3cf7b477132697de44d9d54ae0b8552705bcdb3e94f91aa6681c1f2",
+    "replay.json": "7473aaa5a9c4af6f18881543dbc415dbabcc92ab6675045f558e48bf4967cff6",
     "source-sha256.json": "4011049dd380ccb3c8d29b34191a8b590f170542d6e7f11efee7df2c8d1d0360",
-    "human-evidence-audit.json": "40d539de492c4f5c2ac807f08b9df2e62f68c19678fd6d68a0a8ba832f7701af",
+    "rollback.json": "f1fbd4fa7451873eb17479d1f81924db800700119acffc1121f6162b03b87290",
+    "human-evidence-audit.json": "465617481c521865437a6ce77cca4517562667317b418fa632f6f6613455547b",
+    "records.json.gz": "9c348d8ff2754ffbb9fbf98b7c2b7893830d0b03e0466172538f72a5e69d3f64",
+    "README.md": "17d55bb720c2258f75665cc879d48ee8bd060b2692830636673e1b1e7e0cf64d",
+    "manifest.json": "a6850c412e87e2b39630e2187ade0498942ec4470981975a74dc8e152896e9c8",
     "protocol.json": "710381004e6b611832c3105d50003ebebd5572f2341bd4e3e3c99cf9ae771f49",
+    "decision.json": "1d6c08dd02cc61b84d73076234c9afb0fe0643c61c7328326aaaa3fdca0b78e7",
     "analysis-plan.json": "466c508e9b1d0ba358be6f750ab17c12a34e875e5f1997511597180dc8ae5195"
   }
 }

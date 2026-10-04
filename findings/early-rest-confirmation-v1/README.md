@@ -23,7 +23,7 @@ whole-game wins.
 
 The secondary review found no no-Rest regression, capped outcome or
 control mismatch. The fixed primary criterion passed without adding
-trials, changing priors or pooling the 32-pair pilot. EarlyRest is now the local source default. All 170 relevant tests and
+trials, changing priors or pooling the 32-pair pilot. EarlyRest was temporarily adopted as the local source default. All 170 relevant tests and
 workspace/all-targets compilation pass. A source comparison confirms the
 runtime implementation differs from the frozen candidate only in which
 enum variant is default. The constructor matches the explicit candidate
@@ -45,3 +45,11 @@ sources and the original temporary game/corpus inputs. The script checks
 source hashes before replay and aggregation. records.json.gz also contains
 the anonymous generated game traces and diagnostic corpus rows. No raw
 spectator logs or player handles are included.
+
+## Subsequent reversal
+
+The independent unforced rental screen scored 11 versus 8 across 24
+paired trials. Its predeclared mass-1 worsening probability was 85.2335%,
+above the 80% reversal threshold. EarlyPerish is restored locally; see
+../early-rest-natural-v1. The constructed confirmation result above
+remains unchanged as historical evidence, but does not justify adoption.

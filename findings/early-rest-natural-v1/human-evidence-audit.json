@@ -32,6 +32,6 @@
   "games_with_recognized_build_marker": 0,
   "rated_marker_games": 0,
   "raw_content_fingerprint": "5bd57c2749d1830946e60fec6aa72e2c1445a7e980a1dcf2890e560a153c4f08",
-  "audit_source_sha256": "3031126bf1dc89904d96940a8f8ad4ebdbae0e5a821f83421d8104b3dc7377ad",
+  "audit_source_sha256": "112f7a61dee564db446423ee6cd8e321b1fb3e0d291d0bfc689915bbfb398dd2",
   "scope": "Archived configured bot-account protocol logs only. Empty player records on disconnect do not erase identity. Account count is not a count of distinct people or verified experts. Missing recognized build markers do not exclude external version mappings. These logs do not establish current EarlyRest human performance. No raw logs, identifiers or per-game rows are exported."
 }

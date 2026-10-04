@@ -19,7 +19,7 @@ a,b = s['stress']['scores']
 <p>ねむる有りの相手では6勝対6勝、無しでは6勝対7勝。狙った回復対策の効果はまだ確認できません。固定した混合条件と弱い事前分布による改善確率は{probability}で、以前採用した80%基準には届きません。これは人間に勝てる確率でも、一般的な強さの改善確率でもありません。</p>
 <h2>診断と検証</h2><p>初めて使われたねむるを64標本のどれかに含めた件数は123／436から332／436へ増加しました。ただし全ての初公開技で平均した1標本あたりの包含率は52.63%から52.42%へ微減。候補を増やすだけでは強さを示せません。</p>
 <p>68局・{s['replay']['decisions']}判断の合法手、局面、乱数、結果を再生照合。最初に着手が分かれた{s['reproduced_first_divergence_searches']}探索も最終コードで再現しました。単体・局面テスト162件が通過し、通常版の人間対局6,701件の推定は元の結果と完全一致しています。</p>
-<p>予備試験後、設定を変えず独立した乱数で64組の確認試験を実施しました。通常版36勝・試験版40勝、事前の改善確率基準は80.20%で通過しました。予備試験は判定に足していません。現在の採否と詳細は<a href="/nc2000-early-rest-confirmation/">独立確認試験</a>に記載しています。</p>
+<p>予備試験後の64組の確認試験は通常版36勝・試験版40勝、改善確率80.20%で通過しましたが、その後の通常対戦では11勝対8勝となり、事前の悪化基準に従って採用を取り消しました。現在の既定設定はEarlyPerishです。<a href="/nc2000-early-rest-confirmation/">確認試験</a>と<a href="/nc2000-early-rest-natural/">追加試験・取り消し記録</a>を分けて保存しています。</p>
 <p><a href="summary.json">全集計・事前分布への感度</a> · <a href="protocol.json">対戦条件</a> · <a href="analysis-plan.json">集計計画</a> · <a href="first-divergence.json">着手分岐の再検証</a> · <a href="records.json.gz">対戦・推定記録</a> · <a href="verification.json">検証記録</a></p></html>''')
 hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in out.iterdir() if p.is_file() and p.name!='verification.json'}
 source_paths=['crates/bot/src/belief.rs','crates/bot/examples/early_rest_duel.rs','crates/bot/examples/next_move_support.rs']

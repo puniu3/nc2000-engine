@@ -1,0 +1,16 @@
+{
+  "status": "reverted_locally",
+  "default_policy": "early-perish-v1",
+  "research_candidate": "early-rest-v1 remains opt-in",
+  "reason": "The fixed unforced rental screen crossed its predeclared 80% worsening-probability threshold.",
+  "source_sha256": "6596eb28b41261c0f9715e3601dcbf43b0fbbebadfe6d9de32a1874e00cab936",
+  "source_byte_identical_to": "7b457c9:crates/bot/src/belief.rs",
+  "tests": {
+    "unit": 152,
+    "position": 10,
+    "belief": 6,
+    "blind": 2,
+    "workspace_all_targets": "passed"
+  },
+  "public_deployment": "unchanged"
+}

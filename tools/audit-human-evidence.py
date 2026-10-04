@@ -43,7 +43,7 @@ for path in files:
     assert winner is None or winner in players.values()
     counts['win' if winner == args.bot else 'loss' if winner else 'tie' if tie else 'incomplete'] += 1
     builds += any(re.search(r'\b(?:commit|revision|build)[=: ]+[0-9a-f]{7,40}\b', line, re.I) for line in lines)
-    rated += any(line.startswith('|rated|') for line in lines)
+    rated += any(line == '|rated' or line.startswith('|rated|') for line in lines)
 result = {'games': len(files), 'results': dict(counts),
           'distinct_opponent_accounts': len(opponents),
           'games_per_opponent_account': sorted(opponents.values(), reverse=True),

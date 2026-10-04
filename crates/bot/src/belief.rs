@@ -200,8 +200,8 @@ pub enum FallbackPolicy {
     RevealedLoadout,
     RevealedLoadoutDraw,
     RetainPerish,
-    EarlyPerish,
     #[default]
+    EarlyPerish,
     EarlyRest,
 }
 
@@ -1829,11 +1829,11 @@ mod fallback_tests {
     }
 
     #[test]
-    fn default_policy_retains_perish_anticipation() {
+    fn default_policy_anticipates_perish() {
         let (dex, pool, mut battle, mut obs) = loadout_fixture();
-        assert_eq!(FallbackPolicy::default(), FallbackPolicy::EarlyRest);
+        assert_eq!(FallbackPolicy::default(), FallbackPolicy::EarlyPerish);
         let mut belief = Belief::new(&dex, &pool, &obs);
-        assert_eq!(belief.fallback_policy, FallbackPolicy::EarlyRest);
+        assert_eq!(belief.fallback_policy, FallbackPolicy::EarlyPerish);
         battle.sides[1].roster[0].is_active = true;
         obs.observe(&battle, &dex);
         belief.sync(&dex, &obs);
@@ -1936,7 +1936,6 @@ mod fallback_tests {
         battle.sides[1].roster[0].move_slots=battle.sides[1].roster[0].base_move_slots;
         let base = Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::EarlyPerish);
         let candidate = Belief::with_fallback_policy(&dex,&pool,&obs,FallbackPolicy::EarlyRest);
-        let default = Belief::new(&dex,&pool,&obs);
         let plan = candidate.loadout_draws.as_ref().unwrap()[0].as_ref().unwrap();
         assert_eq!(plan.entries[0].1 / plan.total,0.25);
         let mut heals = 0;
@@ -1944,7 +1943,6 @@ mod fallback_tests {
             let mut ra=SplitMix64::new(seed); let mut rb=ra.clone(); ra.next();
             let a=base.determinize(&dex,&battle,&obs,&mut ra);
             let mut b=candidate.determinize(&dex,&battle,&obs,&mut rb);
-            assert_eq!(b.state_key128(),default.determinize(&dex,&battle,&obs,&mut SplitMix64::new(seed)).state_key128());
             assert_eq!(ra.0,rb.0);
             let mon=&mut b.sides[1].roster[0];
             assert_eq!(mon.base_move_slots[0].pp,battle.sides[1].roster[0].base_move_slots[0].pp);
