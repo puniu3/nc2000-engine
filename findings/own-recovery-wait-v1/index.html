@@ -1,0 +1,135 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NC2000 — 自分の回復を待つ手の誤除外</title><style>body{font:18px/1.6 system-ui,sans-serif;background:#f4f0e6;color:#28271f;max-width:940px;margin:32px auto;padding:0 20px}h1,h2{line-height:1.2}h2{margin-top:2em}a{color:#684928}table{border-collapse:collapse;font-size:15px;width:100%;font-variant-numeric:tabular-nums}th,td{padding:9px;text-align:left;border-bottom:1px solid #c7c2b6}.table{overflow-x:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;padding:16px;background:#e7e1d4}strong{color:#3b4931}.lead{font-size:22px}.note{color:#635e51}</style>
+<h1>自分の回復を待つ手が消される</h1>
+<p class="lead">改善候補を1件確認。探索は待機を選べているが、最終フィルタが攻撃へ差し替え、カウンターで負ける。</p>
+<p>現行コード <code>63f8317</code> を調査。検証用コードと記録のみ追加し、bot本体は変更していない。</p>
+<h2>再現局面</h2>
+<p>サンダース HP 55/171、たべのこし。技は「おんがえし・のしかかり・どくどく・でんじは」。相手は HP 73/296 のソーナンス、まひ状態、持ち物なし。両者最後の1匹。</p>
+<p>どくどく・でんじは自体は失敗する。しかし、その間にたべのこしで毎ターン10回復でき、攻撃しなければカウンターも失敗する。現在のフィルタは「相手は既に状態異常」という理由で待機2手を除外する。直近の修正が救った相手側の毒・呪い等はなく、能動中のみちづれも、ほろびのうたもない。</p>
+<p>初期化後6ターンの合法操作だけで到達。HPや状態を直接書き換えて作った主実験ではない。ただし、調査用に作成した1対1の縮小局面であり、記録対局や6匹からの選出ではない。技はリポジトリの種族別習得リストで確認した。</p>
+<h2>探索量を増やしてもフィルタの誤除外は直らない</h2>
+<p>27,000反復、UCB、c=0.4。全情報・blind prior v3・公開プロトコル経由を各8シードで測定。</p>
+<div class="table"><table><tr><th>入口</th><th>実際の最終着手</th><th>探索の首位</th><th>待機への訪問割合の最小値</th></tr><tr><td>全情報</td><td>攻撃 8/8</td><td>待機 8/8</td><td>99.60%</td></tr><tr><td>blind v3</td><td>攻撃 8/8</td><td>待機 8/8</td><td>99.34%</td></tr><tr><td>公開ProtocolAgent</td><td>攻撃 8/8</td><td>待機 8/8</td><td>99.69%</td></tr></table></div>
+<p>24/24で探索の首位は待機、最終着手は攻撃。公開プロトコル経由でも8/8で再現した。手の評価を作り直す前に、探索の答えを捨てるこの処理が修正対象になる。</p>
+<h2>勝敗への影響</h2>
+<p>相手がカウンターを選ぶ次の1ターンを、エンジンの乱数分岐を全列挙して計算した。その後の表の継続試行は、相手をカウンター固定、こちらを「初手後は満タンまで待ち、以後おんがえし」という全候補共通の方針にした。</p>
+<div class="table"><table><tr><th>初手</th><th>次の1ターンの敗北確率（列挙）</th><th>継続1,024試行の勝敗</th></tr><tr><td>おんがえし</td><td>70.31%</td><td>301勝 / 723敗</td></tr><tr><td>のしかかり</td><td>72.24%</td><td>284勝 / 740敗</td></tr><tr><td>どくどく（待機）</td><td>0.00%</td><td>1024勝 / 0敗</td></tr><tr><td>でんじは（待機）</td><td>0.00%</td><td>1024勝 / 0敗</td></tr></table></div>
+<p>継続は同じ1,024個の開始乱数を各初手で使用。100ターン上限で打ち切り・引き分けはゼロ。待機の1,024勝は標本結果であって、最適な相手への勝率100%の証明ではない。全情報ソルバの値や評価関数の点数を勝率の根拠にしていない。</p>
+<p>対照として自分のHPだけを満タンにすると、どの初手もこの1ターンでは負けなくなる。これは直接状態を変更した対照実験で、主局面とは区別している。</p>
+<h2>今回、改善の根拠にしなかったもの</h2>
+<p>既存の <code>noop_census</code> は相手の先頭の合法手だけを試していた。全応手を試すオプションを足し、現行priorで570戦・20,765判断を再構築。除外5,038手に対して22,886組を試した。</p>
+<p>「効果が出た」5件は全て同じ対局のアンコールによる技の置き換えだった。元のほえるが有効になった証拠でも、除外を外すと強くなる証拠でもないため、修正理由にはしない。1組につき乱数経路は1本で、推定セットも含む。この検査でゼロ件だった規則の完全性も主張しない。</p>
+<p>みやぶる・ゆめくいは570戦で使用例ゼロ。机上で見つかった例外だけを次の大型開発の理由にしない。</p>
+<h2>採用候補と未測定の範囲</h2>
+<p><strong>自分の継続回復が進む間も、失敗する技を待機として選べるようにする。</strong> 自滅・睡眠ルール違反の防止は維持する。今回の局面では探索本体を変更せずに首位の手を返せばよい。</p>
+<p>平均勝率の改善は未測定。コーパスにはソーナンスが0戦、カウンターが8戦、ミラーコートが7戦で、この損失の頻度は分からない。修正採用には、回復待機が生じる対局を明示的に含むblind対戦で、既存の待機修正と併せて改善・副作用を測る必要がある。</p>
+<p>過去の評価項追加・汎用rollout・学習器・終盤ソルバの不採用結果を読み直した。本件はそれらの再挑戦ではなく、現行探索が見つけた有効な手の誤除外という具体的な欠陥を測っている。今回Wasmや実機の再検証・本番変更・公開は行っていない。</p>
+<h2>証拠と再現</h2>
+<p><a href="summary.json">条件・限界・ソース指紋</a> · <a href="measurements.jsonl">全測定行</a> · <a href="corpus-all-replies.txt">全応手監査の出力</a></p>
+<p>リポジトリで <code>tools/recovery-audit</code> を実行すると、局面・列挙結果・継続試行・対照・24判断の出力一致を確認する。初期構成はSafeguardで麻痺できず失敗し、次のTackle構成では一部シードで待機を選択。未使用Tackleを習得可能なBody Slamへ替えた最終構成をここに示した。設計済み局面の反復測定を独立な実戦頻度と数えない。</p>
+<details><summary>6ターンの生成ログ</summary><pre>|gametype|singles
+|player|p1|P1||
+|player|p2|P2||
+|gen|2
+|tier|[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict
+|rule|Species Clause: Limit one of each Pokémon
+|rule|Item Clause: Limit 1 of each item
+|rule|Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle
+|rule|Freeze Clause Mod: Limit one foe frozen
+|rule|OHKO Clause: OHKO moves are banned
+|rule|HP Percentage Mod: HP is shown in percentages
+|clearpoke
+|poke|p1|Jolteon, L50, M|item
+|poke|p2|Wobbuffet, L50, F|
+|teampreview|3
+|
+|teamsize|p1|1
+|teamsize|p2|1
+|start
+|split|p1
+|switch|p1a: Jolteon|Jolteon, L50, M|171/171
+|switch|p1a: Jolteon|Jolteon, L50, M|100/100
+|split|p2
+|switch|p2a: Wobbuffet|Wobbuffet, L50, F|296/296
+|switch|p2a: Wobbuffet|Wobbuffet, L50, F|100/100
+|turn|1
+|
+|move|p1a: Jolteon|Return|p2a: Wobbuffet
+|split|p2
+|-damage|p2a: Wobbuffet|249/296
+|-damage|p2a: Wobbuffet|85/100
+|move|p2a: Wobbuffet|Counter|p1a: Jolteon
+|split|p1
+|-damage|p1a: Jolteon|77/171
+|-damage|p1a: Jolteon|46/100
+|
+|split|p1
+|-heal|p1a: Jolteon|87/171|[from] item: Leftovers
+|-heal|p1a: Jolteon|51/100|[from] item: Leftovers
+|upkeep
+|turn|2
+|
+|move|p1a: Jolteon|Return|p2a: Wobbuffet
+|split|p2
+|-damage|p2a: Wobbuffet|207/296
+|-damage|p2a: Wobbuffet|70/100
+|move|p2a: Wobbuffet|Mirror Coat|p1a: Jolteon
+|-fail|p1a: Jolteon
+|
+|split|p1
+|-heal|p1a: Jolteon|97/171|[from] item: Leftovers
+|-heal|p1a: Jolteon|57/100|[from] item: Leftovers
+|upkeep
+|turn|3
+|
+|move|p1a: Jolteon|Return|p2a: Wobbuffet
+|split|p2
+|-damage|p2a: Wobbuffet|161/296
+|-damage|p2a: Wobbuffet|55/100
+|move|p2a: Wobbuffet|Destiny Bond|p2a: Wobbuffet
+|-hint|In Pokemon Stadium 2, Destiny Bond fails if it is being used by your last Pokemon.
+|-fail|p2a: Wobbuffet
+|
+|split|p1
+|-heal|p1a: Jolteon|107/171|[from] item: Leftovers
+|-heal|p1a: Jolteon|63/100|[from] item: Leftovers
+|upkeep
+|turn|4
+|
+|move|p1a: Jolteon|Return|p2a: Wobbuffet
+|split|p2
+|-damage|p2a: Wobbuffet|120/296
+|-damage|p2a: Wobbuffet|41/100
+|move|p2a: Wobbuffet|Counter|p1a: Jolteon
+|split|p1
+|-damage|p1a: Jolteon|25/171
+|-damage|p1a: Jolteon|15/100
+|
+|split|p1
+|-heal|p1a: Jolteon|35/171|[from] item: Leftovers
+|-heal|p1a: Jolteon|21/100|[from] item: Leftovers
+|upkeep
+|turn|5
+|
+|move|p1a: Jolteon|Thunder Wave|p2a: Wobbuffet
+|-status|p2a: Wobbuffet|par
+|cant|p2a: Wobbuffet|par
+|
+|split|p1
+|-heal|p1a: Jolteon|45/171|[from] item: Leftovers
+|-heal|p1a: Jolteon|27/100|[from] item: Leftovers
+|upkeep
+|turn|6
+|
+|move|p1a: Jolteon|Return|p2a: Wobbuffet
+|split|p2
+|-damage|p2a: Wobbuffet|73/296 par
+|-damage|p2a: Wobbuffet|25/100 par
+|move|p2a: Wobbuffet|Mirror Coat|p1a: Jolteon
+|-fail|p1a: Jolteon
+|
+|split|p1
+|-heal|p1a: Jolteon|55/171|[from] item: Leftovers
+|-heal|p1a: Jolteon|33/100|[from] item: Leftovers
+|upkeep
+|turn|7</pre></details>
+</html>

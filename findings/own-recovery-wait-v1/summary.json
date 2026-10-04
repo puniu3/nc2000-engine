@@ -1,0 +1,235 @@
+{
+  "schema": "nc2000-own-recovery-wait-v1",
+  "source_revision": "63f831752f8650bebe2a17a25f8011dd10d8a21d",
+  "production_changed": false,
+  "fixture": {
+    "hp": [
+      55,
+      73
+    ],
+    "construction": "Six legal turns in a hand-designed one-mon-per-side reduced endgame; no state mutation. Not a six-mon preview or a recorded match. Both move sets occur in the exported per-species legal move lists.",
+    "discovery": "First construction failed because Safeguard blocked paralysis and Tackle missed. The next Tackle variant revealed the gap on some seeds; final variant replaces unused Tackle with legal Body Slam to expose the retaliation loss clearly. Search seeds are repeated measurements of this selected fixture, not independent game prevalence."
+  },
+  "config": {
+    "iterations": 27000,
+    "c": 0.4,
+    "rule": "Ucb",
+    "search_seeds": [
+      91001,
+      91009
+    ],
+    "protocol_seeds": [
+      94001,
+      94009
+    ],
+    "continuation_seeds": [
+      92001,
+      93025
+    ],
+    "end_exclusive": true
+  },
+  "cohorts": {
+    "pinned": {
+      "n": 8,
+      "selected": {
+        "move bodyslam": 3,
+        "move return": 5
+      },
+      "raw_selected": {
+        "move toxic": 4,
+        "move thunderwave": 4
+      },
+      "waiting_share_min": 0.9959629629629629
+    },
+    "blind_v3": {
+      "n": 8,
+      "selected": {
+        "move return": 6,
+        "move bodyslam": 2
+      },
+      "raw_selected": {
+        "move toxic": 4,
+        "move thunderwave": 4
+      },
+      "waiting_share_min": 0.9933703703703703
+    },
+    "public_protocol": {
+      "n": 8,
+      "selected": {
+        "move bodyslam": 4,
+        "move return": 4
+      },
+      "raw_selected": {
+        "move toxic": 3,
+        "move thunderwave": 5
+      },
+      "waiting_share_min": 0.9969259259259259
+    }
+  },
+  "first_turn_counter": [
+    {
+      "type": "first_turn",
+      "action": "move return",
+      "reply": "move counter",
+      "loss": 0.703125,
+      "runs": 50
+    },
+    {
+      "type": "first_turn",
+      "action": "move bodyslam",
+      "reply": "move counter",
+      "loss": 0.7223557692414033,
+      "runs": 150
+    },
+    {
+      "type": "first_turn",
+      "action": "move toxic",
+      "reply": "move counter",
+      "loss": -0.0,
+      "runs": 15
+    },
+    {
+      "type": "first_turn",
+      "action": "move thunderwave",
+      "reply": "move counter",
+      "loss": -0.0,
+      "runs": 7
+    }
+  ],
+  "continuations": [
+    {
+      "type": "continuation",
+      "first": "move return",
+      "seed_range": [
+        92001,
+        93025
+      ],
+      "win_loss_tie_unresolved": [
+        301,
+        723,
+        0,
+        0
+      ],
+      "policy": "After the first move, wait with Thunder Wave until full HP, then Return. Opponent always Counter. Exhausted moves fall back to first legal action. Cap 100 turns."
+    },
+    {
+      "type": "continuation",
+      "first": "move bodyslam",
+      "seed_range": [
+        92001,
+        93025
+      ],
+      "win_loss_tie_unresolved": [
+        284,
+        740,
+        0,
+        0
+      ],
+      "policy": "After the first move, wait with Thunder Wave until full HP, then Return. Opponent always Counter. Exhausted moves fall back to first legal action. Cap 100 turns."
+    },
+    {
+      "type": "continuation",
+      "first": "move toxic",
+      "seed_range": [
+        92001,
+        93025
+      ],
+      "win_loss_tie_unresolved": [
+        1024,
+        0,
+        0,
+        0
+      ],
+      "policy": "After the first move, wait with Thunder Wave until full HP, then Return. Opponent always Counter. Exhausted moves fall back to first legal action. Cap 100 turns."
+    },
+    {
+      "type": "continuation",
+      "first": "move thunderwave",
+      "seed_range": [
+        92001,
+        93025
+      ],
+      "win_loss_tie_unresolved": [
+        1024,
+        0,
+        0,
+        0
+      ],
+      "policy": "After the first move, wait with Thunder Wave until full HP, then Return. Opponent always Counter. Exhausted moves fall back to first legal action. Cap 100 turns."
+    }
+  ],
+  "control": [
+    {
+      "type": "control",
+      "case": "own_full_hp",
+      "action": "move return",
+      "loss": -0.0
+    },
+    {
+      "type": "control",
+      "case": "own_full_hp",
+      "action": "move bodyslam",
+      "loss": -0.0
+    },
+    {
+      "type": "control",
+      "case": "own_full_hp",
+      "action": "move toxic",
+      "loss": -0.0
+    },
+    {
+      "type": "control",
+      "case": "own_full_hp",
+      "action": "move thunderwave",
+      "loss": -0.0
+    }
+  ],
+  "corpus": {
+    "games": 570,
+    "decisions": 20765,
+    "refused_actions": 5038,
+    "reply_replays": 22886,
+    "effect_events": 5,
+    "all_events": "Roar was replaced with Screech or Earthquake by Encore in source battle index 246 at turns 16,17,18,19,24. This establishes move override, not lost strategy value. No mask relaxation inferred.",
+    "seed": 1,
+    "prior": "belief-pool-v3",
+    "limitations": "All legal replies under one imputed reconstruction; one random trajectory per action pair, not exhaustive chance. Own sets may contain fabricated moves. The reader cannot certify outcome optimality or all silent effects."
+  },
+  "exposure": {
+    "counter": 8,
+    "mirror_coat": 7,
+    "foresight": 0,
+    "dream_eater": 0,
+    "games": 570,
+    "wobbuffet": 0
+  },
+  "limits": [
+    "Continuation results use a fixed Counter opponent and a fixed common recovery policy, not optimal play or a full bot-vs-bot strength gate.",
+    "One-step loss probabilities enumerate engine chance; continuation win frequencies are Monte Carlo, not certified probabilities.",
+    "Wobbuffet occurs in zero archived games. The population incidence and overall win-rate effect remain unmeasured.",
+    "Native public ProtocolAgent tested; no new Wasm build, device check, production change or deployment."
+  ],
+  "candidate": "Preserve no-op waits while our active can gain passive HP; retain self-KO and sleep-forfeit guards. Validate targeted continuations and exposed blind matches before adoption.",
+  "sha256": {
+    "crates/bot/src/smmcts.rs": "1bdd20a363edb4fa1b1dbee6b8fc2070482890a6c2c89a5504e97f5cf2a06193",
+    "crates/bot/src/blind.rs": "e2bb7ea52041be9edce0489b7b3198b87b6990f2e4b7172f1d1493e0e22a796d",
+    "crates/bot/src/import.rs": "accfffb779cb1164fe7ee03976d80fd1b633fbd11646f63ceb984bf0279b5779",
+    "crates/bot/examples/own_recovery_audit.rs": "a3aefc39264ca290da82ded28b5585369bac88fe3025f05ef2fc3462d29bee31",
+    "crates/bot/examples/own_recovery_support/mod.rs": "0514df4d7d64bab21c35aac23981ab16e6e696c57c4e6485a6a55b6ea3dcceff",
+    "crates/bot/examples/noop_census.rs": "06d4b8cb78f9fe883ef01185c3a4a56eb34f047a7e4e753947bbe2eed620d058",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "findings/own-recovery-wait-v1/measurements.jsonl": "56d8bfabb7b1e87e05fa40cc596f30a29ea37f897cd950087c94ef9c3e8393c8",
+    "findings/own-recovery-wait-v1/corpus-all-replies.txt": "7d29961d7c7e55814e6010a10ec2eaa67f2dcb1abb3c68d7273f3e356bd6c2bb"
+  },
+  "verification": {
+    "full_measurements_reproduced_exactly": true,
+    "measurement_rows": 49,
+    "source_b246_first_reply_effect_events": 0,
+    "source_b246_all_replies_effect_events": 5,
+    "source_b246_records_match_full_sweep": true,
+    "preview_hub_entry": "nc2000-recovery-wait",
+    "preview_http_checks": "hub entry, report, summary, measurements and corpus output returned HTTP 200",
+    "preview_visual_check": "Headless screenshot inspected; no device-performance claim."
+  }
+}

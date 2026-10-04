@@ -1,45 +1,9 @@
-//! Guaranteed-fail pruning: how often it fires on real human positions, and
-//! — the part that matters — whether it is ever WRONG.
+//! Replays excluded moves against the first legal reply, or every reply with
+//! `--all-replies`; `--pool PATH` selects the reconstruction prior.
 //!
-//! `smmcts::certain_noop` removes actions from the root argmax. A rule that
-//! hides a *useful* move is a strength bug that no agreement or duel number
-//! would attribute correctly, so every rule has to be checked against the
-//! engine rather than against its author's reading of the engine.
-//!
-//! Method, per corpus decision point (positions come from the same importer
-//! `human_agreement` drives, so these are human positions, not self-play):
-//!
-//! 1. list the acting side's legal actions and ask the mask which it refuses;
-//! 2. for each refused MOVE, actually play it — the mask's own turn, the foe
-//!    on its first legal action, logging on — and read the protocol back;
-//! 3. classify: the engine agrees if the log shows the move failing
-//!    (`-fail` / `-immune` / `-miss` / a Substitute `[block]` / `cant`) ON A
-//!    LINE THAT IS OURS, and shows no effect landing (`-status`, `-start`,
-//!    `-boost`, `-unboost`, `-sidestart`, `-heal`, or damage to the target)
-//!    anywhere in the window the move owns — INCLUDING inside a move it
-//!    called. See `read_outcome` for what those two capitals cost before
-//!    they were there, and `crates/bot/tests/mask_sleep_talk.rs` for the two
-//!    cases that measured it.
-//!
-//! Anything the engine does not agree with is printed in full. Zero
-//! disagreements is the ship bar; the firing histogram sizes the fix.
-//!
-//! Because the classification is itself a ship gate, every replay is scored
-//! TWICE — by the current reader and by `read_outcome_legacy`, the one it
-//! replaced — and every row on which the two differ is printed with the
-//! protocol line that decided it, grouped by rule. A confirmation count that
-//! falls is a claim that needs its own evidence, not a free win.
-//!
-//! `--rules` measures a NON-default `MaskRules` set — the firing rate and
-//! the engine's verdict for a rule that is not shipped yet. Same token
-//! grammar as arena's blind spec: `NAME` on, `-NAME` off, comma-separated.
-//! With no `--rules` this reports the SHIPPED mask, which is what the ship
-//! gate reads.
-//!
-//! Usage:
-//!   cargo run --release -p nc2000-bot --example noop_census -- \
-//!     [--corpus tmp/corpus-spectator] [--battles 0-99] [--seed 1] [--show N]
-//!     [--rules immunity_all_switchins]
+//! Reconstructions can contain imputed sets. Each pair samples one chance path.
+//! An effect can come from an Encore override. Direct move failure, or zero
+//! disagreements, does not prove that removing the action preserves strategy value.
 
 use std::collections::BTreeMap;
 
@@ -314,6 +278,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let corpus = arg_s(&args, "--corpus", "tmp/corpus-spectator");
     let range = arg_s(&args, "--battles", "0-99");
+    let all_replies = args.iter().any(|a| a == "--all-replies");
     let seed: u64 = arg_s(&args, "--seed", "1").parse().unwrap();
     let show: usize = arg_s(&args, "--show", "12").parse().unwrap();
     // Optional: a `human_agreement` artifact whose recorded argmax was taken
@@ -342,7 +307,7 @@ fn main() {
     if rules != MaskRules::default() {
         eprintln!("NON-DEFAULT mask under test: {rules:?}");
     }
-    if rules.immunity_ignores_switch_read {
+    if rules.immunity_ignores_switch_read && !all_replies {
         // The replay below puts the foe on its FIRST legal action, which is
         // `move 1` — the foe stays in. That is precisely the assumption this
         // rule makes, so its disagreement count is structurally 0 and is NOT
@@ -368,7 +333,7 @@ fn main() {
     let dex = conformance::load_dex();
     let root = conformance::fixture::repo_root();
     let src = load_sources(&dex, &root);
-    let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
+    let pool_path = root.join(arg_s(&args, "--pool", "data/meta-pool-v0/meta-pool.json"));
     let files = corpus_files(std::path::Path::new(&corpus));
     assert!(!files.is_empty(), "no corpus battles under {corpus}");
 
@@ -442,104 +407,110 @@ fn main() {
                     continue;
                 }
                 let SearchChoice::Move(id) = choice else { continue };
-                // Only a real, resolvable turn can be replayed: both sides
-                // must owe a normal move choice.
-                let Some(other) = battle.legal_choices(&dex, 1 - d.side).first().copied() else {
-                    continue;
-                };
-                let mut play: Battle = battle.clone();
-                play.set_log_enabled(true);
-                play.log.clear();
-                let actor = format!("p{}a", d.side + 1);
-                // Which mon this move could have touched: itself, or the foe.
-                let subject = move_subject(&dex, id, d.side);
-                let mine = SearchChoice::Move(id).to_input(&dex);
-                if play.choose(&dex, d.side, &mine).is_err() {
-                    continue;
+                let mut replies = battle.legal_choices(&dex, 1 - d.side);
+                if !all_replies {
+                    replies.truncate(1);
                 }
-                if play.choose(&dex, 1 - d.side, &other.to_input(&dex)).is_err() {
-                    continue;
-                }
-                let log: Vec<String> = play.log.clone();
-                checked += 1;
-                let (marker, effect) = read_outcome(&dex, &log, d.side, id);
-                let (lmarker, leffect) = read_outcome_legacy(&log, &actor, &subject);
-                let v = verdict_of(&marker, &effect);
-                let lv = verdict_of(&lmarker, &leffect);
-                *by_verdict.entry((why, v)).or_default() += 1;
-                *legacy_by_verdict.entry((why, lv)).or_default() += 1;
-                match v {
-                    Verdict::Disagreed => {
-                        let line = effect.clone().unwrap_or_default();
-                        *bad_rule.entry(why).or_default() += 1;
-                        if disagreements.len() < show {
-                            disagreements.push(format!(
-                                "  b{bi} T{} side {} masked `{}` ({why}) but the engine logged: {line}",
+                for other in replies {
+                    let mut play: Battle = battle.clone();
+                    play.set_log_enabled(true);
+                    play.log.clear();
+                    let actor = format!("p{}a", d.side + 1);
+                    let subject = move_subject(&dex, id, d.side);
+                    let mine = SearchChoice::Move(id).to_input(&dex);
+                    if play.choose(&dex, d.side, &mine).is_err() {
+                        continue;
+                    }
+                    if play.choose(&dex, 1 - d.side, &other.to_input(&dex)).is_err() {
+                        continue;
+                    }
+                    let log: Vec<String> = play.log.clone();
+                    checked += 1;
+                    let (marker, effect) = read_outcome(&dex, &log, d.side, id);
+                    let (lmarker, leffect) = read_outcome_legacy(&log, &actor, &subject);
+                    let v = verdict_of(&marker, &effect);
+                    let lv = verdict_of(&lmarker, &leffect);
+                    *by_verdict.entry((why, v)).or_default() += 1;
+                    *legacy_by_verdict.entry((why, lv)).or_default() += 1;
+                    match v {
+                        Verdict::Disagreed => {
+                            let line = effect.clone().unwrap_or_default();
+                            if all_replies {
+                                println!("{}", serde_json::json!({"type":"counterexample",
+                                    "battle":bi,"turn":d.turn,"side":d.side,
+                                    "move":dex.moves.key(id),"reply":other.to_input(&dex),
+                                    "reason":why,"effect":line,"log":log}));
+                            }
+                            *bad_rule.entry(why).or_default() += 1;
+                            if disagreements.len() < show {
+                                disagreements.push(format!(
+                                    "  b{bi} T{} side {} masked `{}` ({why}) but the engine logged: {line}",
+                                    d.turn,
+                                    d.side,
+                                    dex.moves.key(id)
+                                ));
+                            }
+                        }
+                        Verdict::Confirmed => agreed += 1,
+                        // No effect landed and no explicit failure marker — the
+                        // engine agrees in substance but silently, so it neither
+                        // confirms nor contradicts the rule.
+                        Verdict::Silent => unproven += 1,
+                    }
+                    match lv {
+                        Verdict::Disagreed => legacy_disagreed += 1,
+                        Verdict::Confirmed => legacy_agreed += 1,
+                        Verdict::Silent => legacy_unproven += 1,
+                    }
+                    if v != lv {
+                        let tag_of = |l: &str| -> String {
+                            l.split('|').filter(|x| !x.is_empty()).next().unwrap_or("").to_string()
+                        };
+                        let (reason, evidence) = match (lv, v) {
+                            (_, Verdict::Disagreed) => {
+                                let l = effect.clone().unwrap_or_default();
+                                (
+                                    format!(
+                                        "the fixed window reaches an effect `{}` on the {} slot",
+                                        tag_of(&l),
+                                        slot_role(&l, &actor, &subject)
+                                    ),
+                                    l,
+                                )
+                            }
+                            (Verdict::Confirmed, _) => {
+                                let l = lmarker.clone().unwrap_or_default();
+                                (
+                                    format!(
+                                        "legacy credited `{}` naming the {} slot",
+                                        tag_of(&l),
+                                        slot_role(&l, &actor, &subject)
+                                    ),
+                                    l,
+                                )
+                            }
+                            (_, Verdict::Confirmed) => {
+                                let l = marker.clone().unwrap_or_default();
+                                (
+                                    format!(
+                                        "the fixed window reaches a marker `{}` on the {} slot",
+                                        tag_of(&l),
+                                        slot_role(&l, &actor, &subject)
+                                    ),
+                                    l,
+                                )
+                            }
+                            _ => (String::from("?"), String::new()),
+                        };
+                        *moved.entry(format!("{lv:?} -> {v:?}  {reason}   [{why}]")).or_default() += 1;
+                        if moved_examples.len() < show {
+                            moved_examples.push(format!(
+                                "  b{bi} T{} side {} `{}` ({why}) {lv:?} -> {v:?}: {evidence}",
                                 d.turn,
                                 d.side,
                                 dex.moves.key(id)
                             ));
                         }
-                    }
-                    Verdict::Confirmed => agreed += 1,
-                    // No effect landed and no explicit failure marker — the
-                    // engine agrees in substance but silently, so it neither
-                    // confirms nor contradicts the rule.
-                    Verdict::Silent => unproven += 1,
-                }
-                match lv {
-                    Verdict::Disagreed => legacy_disagreed += 1,
-                    Verdict::Confirmed => legacy_agreed += 1,
-                    Verdict::Silent => legacy_unproven += 1,
-                }
-                if v != lv {
-                    let tag_of = |l: &str| -> String {
-                        l.split('|').filter(|x| !x.is_empty()).next().unwrap_or("").to_string()
-                    };
-                    let (reason, evidence) = match (lv, v) {
-                        (_, Verdict::Disagreed) => {
-                            let l = effect.clone().unwrap_or_default();
-                            (
-                                format!(
-                                    "the fixed window reaches an effect `{}` on the {} slot",
-                                    tag_of(&l),
-                                    slot_role(&l, &actor, &subject)
-                                ),
-                                l,
-                            )
-                        }
-                        (Verdict::Confirmed, _) => {
-                            let l = lmarker.clone().unwrap_or_default();
-                            (
-                                format!(
-                                    "legacy credited `{}` naming the {} slot",
-                                    tag_of(&l),
-                                    slot_role(&l, &actor, &subject)
-                                ),
-                                l,
-                            )
-                        }
-                        (_, Verdict::Confirmed) => {
-                            let l = marker.clone().unwrap_or_default();
-                            (
-                                format!(
-                                    "the fixed window reaches a marker `{}` on the {} slot",
-                                    tag_of(&l),
-                                    slot_role(&l, &actor, &subject)
-                                ),
-                                l,
-                            )
-                        }
-                        _ => (String::from("?"), String::new()),
-                    };
-                    *moved.entry(format!("{lv:?} -> {v:?}  {reason}   [{why}]")).or_default() += 1;
-                    if moved_examples.len() < show {
-                        moved_examples.push(format!(
-                            "  b{bi} T{} side {} `{}` ({why}) {lv:?} -> {v:?}: {evidence}",
-                            d.turn,
-                            d.side,
-                            dex.moves.key(id)
-                        ));
                     }
                 }
             }
@@ -547,7 +518,7 @@ fn main() {
     }
 
     let disagreed = checked - agreed - unproven;
-    println!("corpus battles {}-{}  decisions {decisions}", lo, hi);
+    println!("corpus battles {}-{}  decisions {decisions}  all_replies={all_replies}  seed={seed}  pool={}", lo, hi, pool_path.display());
     println!(
         "  decisions with at least one refusable action: {with_any} ({:.1}%)",
         100.0 * with_any as f64 / decisions.max(1) as f64
