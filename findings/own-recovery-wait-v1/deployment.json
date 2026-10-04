@@ -1,0 +1,173 @@
+{
+  "commit": "fa6b58fb1516b9720bfdd7826b5672e58d053a06",
+  "run": 37196562290,
+  "verifiedAt": "2026-10-04T10:50:59.890Z",
+  "url": "https://puniu3.github.io/nc2000-engine/",
+  "assets": [
+    {
+      "name": "index.html",
+      "sha256": "ee7347e22bbd11e2c672e8ec33a70b0aa045481892d71af4419c717b71be8abb",
+      "bytes": 838
+    },
+    {
+      "name": "data/gen2stadium2.json",
+      "sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+      "bytes": 416448
+    },
+    {
+      "name": "data/team-pool-v2/team-pool.json",
+      "sha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+      "bytes": 95168
+    },
+    {
+      "name": "data/belief-pool-v3/belief-pool.json",
+      "sha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+      "bytes": 381052
+    },
+    {
+      "name": "data/meta-nash-v3/pool-artifact.json",
+      "sha256": "392d3bb6f9bddfd9dda736a53d11c4549a8cf649760e652d87e0f25f3eb05d79",
+      "bytes": 17748
+    },
+    {
+      "name": "assets/bot-worker-BeYk3ZgK.js",
+      "sha256": "4919af63f84738939e7d8b75d6e9d9eb1959e0ed5f079989d79ee9e64c04a4d5",
+      "bytes": 15758
+    },
+    {
+      "name": "assets/evaluate-worker-DQIDxU8v.js",
+      "sha256": "e65eca740a16002851a480c5a2e17a9d7fb760b8de89bad274f34a4879aa40d8",
+      "bytes": 11472
+    },
+    {
+      "name": "assets/fork-arena-worker--8LyDKbR.js",
+      "sha256": "ffc08cf5aaf3741ec01795a8ff3c78a05a1be4c3c60555bce48b3759e9863e74",
+      "bytes": 5523
+    },
+    {
+      "name": "assets/index-DQv2Hc4_.js",
+      "sha256": "f321dc41a64666ec30507372a1f681560ab7d932546811269c2b3eb5cb1e6215",
+      "bytes": 235332
+    },
+    {
+      "name": "assets/index-DXGscvNi.css",
+      "sha256": "ae959c4a249903358d3bb6b0c6ce154c36cd505e533e5cee387dbb88ea7918db",
+      "bytes": 37204
+    },
+    {
+      "name": "assets/nc2000_wasm_bg-Cw4ox9lD.wasm",
+      "sha256": "5422589be263e3bb52a7de253e84501c29c1c8bc8f624b4cf6dc4119c504c30f",
+      "bytes": 2589608
+    },
+    {
+      "name": "assets/solver-worker-CLEkmwYI.js",
+      "sha256": "817912d341c3080b65a0f08fa99c9bde48ab4b436df8e1b99c8b4dc87a63c781",
+      "bytes": 9497
+    }
+  ],
+  "browser": "149.0.7827.55",
+  "initialTurn": "Turn 1",
+  "nextTurn": "Turn 2",
+  "tactics": [
+    {
+      "seed": 94001,
+      "choices": [
+        "move toxic",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move toxic",
+        "move return",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move bodyslam"
+      ],
+      "outcome": "p1"
+    },
+    {
+      "seed": 94002,
+      "choices": [
+        "move toxic",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move return"
+      ],
+      "outcome": "p1"
+    },
+    {
+      "seed": 94003,
+      "choices": [
+        "move toxic",
+        "move toxic",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move return",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move bodyslam"
+      ],
+      "outcome": "p1"
+    },
+    {
+      "seed": 94004,
+      "choices": [
+        "move toxic",
+        "move toxic",
+        "move thunderwave",
+        "move toxic",
+        "move thunderwave",
+        "move return",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move thunderwave",
+        "move bodyslam"
+      ],
+      "outcome": "p1"
+    }
+  ],
+  "errors": [],
+  "workflow": "https://github.com/puniu3/nc2000-engine/actions/runs/37196562290",
+  "native_tests_on_deployment_checkout": 141,
+  "fixed_audit_bytes_identical": true,
+  "local_web_build": "passed",
+  "public_scope": "Only own-recovery diagnostic and fix cherry-picked onto the previous deployed revision; unpublished research not pushed."
+}

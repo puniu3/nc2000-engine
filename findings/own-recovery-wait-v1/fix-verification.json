@@ -2,7 +2,7 @@
   "schema": "nc2000-own-recovery-fix-v1",
   "baseline_revision": "d455c54",
   "adoption": "fixed_local_defaults_pass_prespecified_checks",
-  "deployment": "not_deployed",
+  "deployment": "deployed_and_live_verified",
   "change": "Keep no-op choices when the living injured active holds Leftovers; keep self-KO and sleep-forfeit guards ahead of this exception.",
   "baseline_byte_identity": true,
   "discovery_choices_corrected": 24,
@@ -153,6 +153,9 @@
     "findings/own-recovery-wait-v1/fix-checks.txt": "fdce794d333f50732955f24d582854f918a0eaa78af84565316e6e4e14b55e59",
     "findings/own-recovery-wait-v1/wasm-own-recovery.json": "626a3c959d062caf4613dcc74d170ca85fbe98025c4f6d7ba10c370d97706820",
     "findings/own-recovery-wait-v1/wasm-residual.json": "b1c9b1a54f94a99e78144a8969d4d998dccaef4904c2c65289fd82e47bd97a68",
-    "findings/own-recovery-wait-v1/wasm-bond.json": "7dce6641f5d247d4d8d59cfb33c05f6e19cd13f4d907804ac1e0e8b23b30e8a7"
-  }
+    "findings/own-recovery-wait-v1/wasm-bond.json": "7dce6641f5d247d4d8d59cfb33c05f6e19cd13f4d907804ac1e0e8b23b30e8a7",
+    "findings/own-recovery-wait-v1/deployment.json": "d2b8826dda3eca3a6810885951c2ba92d61c4646c2e59c33a10c46efc10a6ece"
+  },
+  "deployed_revision": "fa6b58fb1516b9720bfdd7826b5672e58d053a06",
+  "deployment_evidence": "deployment.json"
 }

@@ -1,0 +1,19 @@
+{
+  "priority_damaging_moves": [
+    "extremespeed",
+    "machpunch",
+    "quickattack"
+  ],
+  "catalog_teams": 24,
+  "catalog_hits": [],
+  "corpus_games": 570,
+  "corpus_games_with_priority_damage": [
+    {
+      "file": "battle-gen2nintendocup2000noohkostadium2strict-pbs-H-20260618-070454-26b765b33aba.raw.log",
+      "moves": [
+        "Extreme Speed"
+      ],
+      "uses": 1
+    }
+  ]
+}
