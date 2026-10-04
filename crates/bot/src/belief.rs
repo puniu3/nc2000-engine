@@ -1077,18 +1077,13 @@ impl Belief {
                 }
                 let mut set = source.clone();
                 set.level = mo.level;
-                set.gender = Some(
-                    if mo.gender.as_str().is_empty() {
-                        "N"
-                    } else {
-                        mo.gender.as_str()
-                    }
-                    .into(),
-                );
                 set.name.clear();
                 let Ok(built) = Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set]) else {
                     continue;
                 };
+                if built.sides[0].roster[0].gender != mo.gender {
+                    continue;
+                }
                 let weight = candidate.weight.unwrap_or(1.0);
                 entries.push((built.sides[0].roster[0].clone(), weight));
             }
@@ -1741,12 +1736,14 @@ mod fallback_tests {
             .map(|(_, w)| w)
             .sum::<f64>()
             / support.total;
-        assert!((0.4..0.55).contains(&expected));
+        assert!((0.3..0.6).contains(&expected));
         let mut bonds = 0;
         for seed in 0..4000 {
             let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(seed));
             let p = &det.sides[1].roster[0];
             assert!(carries(p, "meanlook") && carries(p, "perishsong"));
+            assert_eq!(p.gender, obs.mons()[0].gender);
+            assert_eq!(p.gender, if p.set_ivs[1] / 2 < 8 { Gender::F } else { Gender::M });
             assert_eq!(p.base_move_slots.len(), 4);
             let mut keys: Vec<_> = p.base_move_slots.iter().map(|m| m.id).collect();
             keys.sort_by_key(|m| m.0);

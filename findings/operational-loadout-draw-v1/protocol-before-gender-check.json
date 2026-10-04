@@ -1,0 +1,59 @@
+{
+  "status": "frozen_before_outcomes",
+  "candidate": "RevealedLoadoutDraw: after a species reveals a move or original item, draw a complete compatible same-species set proportional to source team weight; observed level/gender; reject level-illegal moves; preserve original/current item constraints. No compatible support keeps Layered fallback. No-reveal and on-pool paths unchanged.",
+  "default_changed": false,
+  "arms": {
+    "a": "Layered (production)",
+    "b": "RevealedLoadout (previous modal candidate)",
+    "c": "RevealedLoadoutDraw"
+  },
+  "iterations": 27000,
+  "ucb_c": 0.4,
+  "max_turns": 500,
+  "cells": {
+    "same": {
+      "games": 4,
+      "iterations": 3000,
+      "seed": 202610050
+    },
+    "adaptive": {
+      "games": 64,
+      "seed": 202610051
+    },
+    "stress": {
+      "games": 32,
+      "seed": 202610052
+    },
+    "natural": {
+      "games": 32,
+      "seed": 202610053
+    },
+    "onpool": {
+      "games": 8,
+      "seed": 202610054
+    }
+  },
+  "adaptive_opponent": "Force Misdreavus lead and initial Mean Look only; then let the unchanged blind opponent freely choose all legal moves and switches. It never observes own agent choices or hidden enemy sets.",
+  "other_opponents": "same 8 explicit legal historical-core scenarios as previous experiment; stress retains fixed Perish script; natural free preview/play; onpool weighted product catalog",
+  "primary_endpoint": "paired terminal outcome C-A in adaptive; C-B also reported. Stratified paired bootstrap95 across fixed opponent fixtures, plus exact discordant-pair sign test. Secondary stress and natural, separately reported.",
+  "promotion_requirement": "Positive primary outcome evidence (lower95 C-A >0), no unresolved regression versus mode or ordinary-play controls; no adoption from action changes or belief coverage alone.",
+  "pairing": [
+    "teams",
+    "battle seed",
+    "agent seeds",
+    "side"
+  ],
+  "cap_handling": "0.5 conventional score, separately report caps and worst/best paired delta bounds; do not remove long games",
+  "limitations": [
+    "Fixed bot opponents and 8 constructed teams do not estimate human ladder gains.",
+    "Whole sets are sampled independently across species; cross-species item/selection correlations are not modeled.",
+    "No-reveal species retain current modal imputation.",
+    "Marginal prior, if separately installed, applies only to slots not covered by full-set draws.",
+    "The adaptive bot may choose poor replies; measure actual Destiny Bond and switch use."
+  ],
+  "inputs": {
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "data/team-pool-v2/team-pool.json": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+    "findings/operational-combo-validation-v1/opponents.json": "fde4502fef84e9da9c3680326ccda0dea2d17d38828283c5f00f40b5fd805550"
+  }
+}

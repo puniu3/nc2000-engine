@@ -1,6 +1,6 @@
 {
   "status": "frozen_before_outcomes",
-  "candidate": "RevealedLoadoutDraw: after a species reveals a move or original item, draw a complete compatible same-species set proportional to source team weight; observed level/gender; reject level-illegal moves; preserve original/current item constraints. No compatible support keeps Layered fallback. No-reveal and on-pool paths unchanged.",
+  "candidate": "RevealedLoadoutDraw: after a species reveals a move or original item, draw a complete compatible same-species set proportional to source team weight; observed level; source gender must match the public gender; reject level-illegal moves; preserve original/current item constraints. No compatible support keeps Layered fallback. No-reveal and on-pool paths unchanged.",
   "default_changed": false,
   "arms": {
     "a": "Layered (production)",
@@ -55,5 +55,10 @@
     "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
     "data/team-pool-v2/team-pool.json": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
     "findings/operational-combo-validation-v1/opponents.json": "fde4502fef84e9da9c3680326ccda0dea2d17d38828283c5f00f40b5fd805550"
+  },
+  "correction": {
+    "reason": "Public gender was being overwritten while source attack DVs were retained; reject source sets with a different gender to preserve full-set consistency. Correctness correction, not outcome tuning.",
+    "arm_c_version": "compatible-gender-v1",
+    "reuse": "A/B are unchanged. Re-run C for every old-version triplet; never combine obsolete C results into final outcomes. Future triplets use corrected binary. Metadata and input seeds must match when joining replacement C."
   }
 }
