@@ -1,0 +1,598 @@
+{
+  "25": {
+    "baseline": {
+      "choices": {
+        "move earthquake": 5,
+        "move rockslide": 2,
+        "move swordsdance": 1
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move toxic": 1.0,
+        "move confuseray": 1.0,
+        "move painsplit": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.2498220415
+    },
+    "conditioned": {
+      "choices": {
+        "move swordsdance": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move zapcannon": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.3302569165
+    },
+    "draw": {
+      "choices": {
+        "move swordsdance": 8
+      },
+      "reply_available_fraction": {
+        "move shadowball": 0.06418518518518518,
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 0.4689490740740741,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move confuseray": 0.1277361111111111,
+        "move protect": 0.48224537037037035,
+        "move painsplit": 0.06419907407407408,
+        "move curse": 0.06494907407407408,
+        "move rest": 0.32357870370370373,
+        "move hiddenpowerice": 0.12920833333333334,
+        "move thunderbolt": 0.08049074074074074,
+        "move zapcannon": 0.15106944444444445,
+        "move thunder": 0.04338888888888889
+      },
+      "median_search_seconds": 1.062926521
+    }
+  },
+  "21": {
+    "baseline": {
+      "choices": {
+        "move curse": 5,
+        "move icebeam": 3
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move toxic": 1.0,
+        "move confuseray": 1.0,
+        "move painsplit": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.3938264999999999
+    },
+    "conditioned": {
+      "choices": {
+        "move icebeam": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move zapcannon": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.395991354
+    },
+    "draw": {
+      "choices": {
+        "move icebeam": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move confuseray": 0.12883796296296296,
+        "move protect": 0.48300925925925925,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move painsplit": 0.06425925925925927,
+        "move hiddenpowerice": 0.1301064814814815,
+        "move destinybond": 0.46799537037037037,
+        "move zapcannon": 0.1501111111111111,
+        "move curse": 0.06508796296296296,
+        "move rest": 0.32313425925925926,
+        "move thunderbolt": 0.08003240740740741,
+        "move shadowball": 0.06490740740740741,
+        "move thunder": 0.04251851851851852
+      },
+      "median_search_seconds": 1.357678
+    }
+  },
+  "23": {
+    "baseline": {
+      "choices": {
+        "move hiddenpowerrock": 8,
+        "move earthquake": 1
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move toxic": 1.0,
+        "move confuseray": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.150002209
+    },
+    "conditioned": {
+      "choices": {
+        "move encore": 7,
+        "move crosschop": 2
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move zapcannon": 1.0,
+        "move destinybond": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.210965542
+    },
+    "draw": {
+      "choices": {
+        "move earthquake": 8,
+        "move hiddenpowerrock": 1
+      },
+      "reply_available_fraction": {
+        "move zapcannon": 0.15093827160493828,
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 0.46656378600823045,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move hiddenpowerice": 0.12827572016460906,
+        "move thunderbolt": 0.08076543209876544,
+        "move protect": 0.4859341563786008,
+        "move rest": 0.32283539094650204,
+        "move confuseray": 0.12955555555555556,
+        "move painsplit": 0.06438683127572016,
+        "move thunder": 0.04269135802469136,
+        "move curse": 0.06391769547325103,
+        "move shadowball": 0.0641358024691358
+      },
+      "median_search_seconds": 1.045413792
+    }
+  },
+  "19": {
+    "baseline": {
+      "choices": {
+        "move rockslide": 4,
+        "move crunch": 4
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move toxic": 1.0,
+        "move confuseray": 1.0,
+        "move painsplit": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.1732404375
+    },
+    "conditioned": {
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move zapcannon": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.290834
+    },
+    "draw": {
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move curse": 0.06443055555555556,
+        "move rest": 0.32033333333333336,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move thunderbolt": 0.08090277777777778,
+        "move protect": 0.48333796296296294,
+        "move shadowball": 0.06571296296296296,
+        "move destinybond": 0.46924074074074074,
+        "move painsplit": 0.06515740740740741,
+        "move hiddenpowerice": 0.12931944444444443,
+        "move confuseray": 0.1284722222222222,
+        "move thunder": 0.04349537037037037,
+        "move zapcannon": 0.14959722222222221
+      },
+      "median_search_seconds": 1.143833125
+    }
+  },
+  "5": {
+    "baseline": {
+      "choices": {
+        "move curse": 6,
+        "move icebeam": 2
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move toxic": 1.0,
+        "move confuseray": 1.0,
+        "move painsplit": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.4330110415
+    },
+    "conditioned": {
+      "choices": {
+        "move icebeam": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move zapcannon": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.4330760415000001
+    },
+    "draw": {
+      "choices": {
+        "move icebeam": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 0.46681944444444445,
+        "move rest": 0.3216481481481481,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move thunderbolt": 0.08120370370370371,
+        "move protect": 0.48570833333333335,
+        "move hiddenpowerice": 0.12957407407407406,
+        "move zapcannon": 0.14978240740740742,
+        "move curse": 0.06414814814814815,
+        "move shadowball": 0.06393518518518519,
+        "move painsplit": 0.06455555555555556,
+        "move confuseray": 0.1297361111111111,
+        "move thunder": 0.042888888888888886
+      },
+      "median_search_seconds": 1.3472410205
+    }
+  },
+  "41": {
+    "baseline": {
+      "choices": {
+        "move psychic": 9
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move toxic": 1.0,
+        "move confuseray": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.446481208
+    },
+    "conditioned": {
+      "choices": {
+        "move hydropump": 9
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move zapcannon": 1.0,
+        "move destinybond": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.365579458
+    },
+    "draw": {
+      "choices": {
+        "move psychic": 9
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move painsplit": 0.0641111111111111,
+        "move protect": 0.4836913580246914,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move zapcannon": 0.15088065843621398,
+        "move destinybond": 0.46726748971193416,
+        "move rest": 0.32408230452674897,
+        "move confuseray": 0.12812345679012346,
+        "move shadowball": 0.06411522633744857,
+        "move thunder": 0.04302057613168724,
+        "move hiddenpowerice": 0.1292716049382716,
+        "move thunderbolt": 0.08076543209876544,
+        "move curse": 0.06467078189300411
+      },
+      "median_search_seconds": 1.296228792
+    }
+  },
+  "35": {
+    "baseline": {
+      "choices": {
+        "move earthquake": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move toxic": 1.0,
+        "move confuseray": 1.0,
+        "move painsplit": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.231199292
+    },
+    "conditioned": {
+      "choices": {
+        "move fireblast": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move zapcannon": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.2633631045
+    },
+    "draw": {
+      "choices": {
+        "move earthquake": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move rest": 0.32401851851851854,
+        "move hiddenpowerice": 0.1287175925925926,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move thunderbolt": 0.08125462962962963,
+        "move protect": 0.4842175925925926,
+        "move shadowball": 0.06450462962962963,
+        "move destinybond": 0.4667546296296296,
+        "move zapcannon": 0.14991666666666667,
+        "move confuseray": 0.12849537037037037,
+        "move painsplit": 0.0642962962962963,
+        "move curse": 0.06468518518518518,
+        "move thunder": 0.043138888888888886
+      },
+      "median_search_seconds": 0.9966605625
+    }
+  },
+  "49": {
+    "baseline": {
+      "choices": {
+        "move rockslide": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move toxic": 1.0,
+        "move confuseray": 1.0,
+        "move painsplit": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.2845532505000001
+    },
+    "conditioned": {
+      "choices": {
+        "move fireblast": 6,
+        "move dynamicpunch": 2
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move zapcannon": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.2288117295
+    },
+    "draw": {
+      "choices": {
+        "move fireblast": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move protect": 0.4856574074074074,
+        "move rest": 0.3235462962962963,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move zapcannon": 0.14950462962962963,
+        "move destinybond": 0.46722685185185187,
+        "move thunder": 0.04349537037037037,
+        "move shadowball": 0.0641712962962963,
+        "move confuseray": 0.12716203703703705,
+        "move thunderbolt": 0.08168518518518518,
+        "move hiddenpowerice": 0.12842592592592592,
+        "move painsplit": 0.06439814814814815,
+        "move curse": 0.06472685185185185
+      },
+      "median_search_seconds": 1.1392936045
+    }
+  },
+  "57": {
+    "baseline": {
+      "choices": {
+        "move curse": 7,
+        "move earthquake": 2
+      },
+      "reply_available_fraction": {
+        "move bodyslam": 1.0,
+        "move earthquake": 1.0,
+        "move selfdestruct": 1.0,
+        "move curse": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.122467292
+    },
+    "conditioned": {
+      "choices": {
+        "move curse": 4,
+        "move doubleedge": 4,
+        "move earthquake": 1
+      },
+      "reply_available_fraction": {
+        "move bodyslam": 1.0,
+        "move earthquake": 1.0,
+        "move selfdestruct": 1.0,
+        "move curse": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.101023417
+    },
+    "draw": {
+      "choices": {
+        "move earthquake": 2,
+        "move doubleedge": 7
+      },
+      "reply_available_fraction": {
+        "move bodyslam": 1.0,
+        "move earthquake": 0.6810699588477366,
+        "move curse": 0.4010781893004115,
+        "move selfdestruct": 0.7457037037037038,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move dynamicpunch": 0.12734156378600822,
+        "move sleeptalk": 0.22339094650205762,
+        "move rest": 0.5889835390946502,
+        "move bellydrum": 0.07343621399176954,
+        "move fireblast": 0.09553909465020576,
+        "move flamethrower": 0.06345679012345679
+      },
+      "median_search_seconds": 0.955712
+    }
+  },
+  "10": {
+    "baseline": {
+      "choices": {
+        "move hydropump": 5,
+        "move psychic": 3
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move toxic": 1.0,
+        "move confuseray": 1.0,
+        "move painsplit": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.357252063
+    },
+    "conditioned": {
+      "choices": {
+        "move psychic": 7,
+        "move hydropump": 1
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move zapcannon": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.4156635
+    },
+    "draw": {
+      "choices": {
+        "move psychic": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move confuseray": 0.13043981481481481,
+        "move protect": 0.48600462962962965,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move hiddenpowerice": 0.13009722222222223,
+        "move destinybond": 0.46611574074074075,
+        "move thunderbolt": 0.08105092592592593,
+        "move painsplit": 0.06412037037037037,
+        "move rest": 0.32205092592592593,
+        "move thunder": 0.04287962962962963,
+        "move curse": 0.06387962962962963,
+        "move zapcannon": 0.14947685185185186,
+        "move shadowball": 0.06388425925925927
+      },
+      "median_search_seconds": 1.3198999795000002
+    }
+  },
+  "29": {
+    "baseline": {
+      "choices": {
+        "move curse": 6,
+        "move icebeam": 2
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move toxic": 1.0,
+        "move confuseray": 1.0,
+        "move painsplit": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.398597125
+    },
+    "conditioned": {
+      "choices": {
+        "move icebeam": 8
+      },
+      "reply_available_fraction": {
+        "move meanlook": 1.0,
+        "move zapcannon": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 1.0,
+        "switch 2": 1.0,
+        "switch 3": 1.0
+      },
+      "median_search_seconds": 1.4198476455
+    },
+    "draw": {
+      "choices": {
+        "move icebeam": 8
+      },
+      "reply_available_fraction": {
+        "move shadowball": 0.06492592592592593,
+        "move meanlook": 1.0,
+        "move perishsong": 1.0,
+        "move destinybond": 0.4670185185185185,
+        "switch 2": 1.0,
+        "switch 3": 1.0,
+        "move thunderbolt": 0.08045370370370371,
+        "move protect": 0.4830601851851852,
+        "move confuseray": 0.12960185185185186,
+        "move hiddenpowerice": 0.1293425925925926,
+        "move zapcannon": 0.15000925925925926,
+        "move rest": 0.323212962962963,
+        "move curse": 0.06530555555555556,
+        "move painsplit": 0.06418055555555556,
+        "move thunder": 0.042888888888888886
+      },
+      "median_search_seconds": 1.373657104
+    }
+  }
+}

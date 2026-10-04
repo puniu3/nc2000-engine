@@ -170,6 +170,14 @@ fn main() {
             }
         }
     }
+    if args.get(4).is_some_and(|s| s == "--draw-probe") {
+        variants.retain(|(name, _, _)| name == "baseline" || name == "conditioned");
+        variants.push((
+            "draw".into(),
+            pool.clone(),
+            FallbackPolicy::RevealedLoadoutDraw,
+        ));
+    }
     let mut seeds = vec![old["seed"].as_u64().unwrap()];
     if new["seed"] != old["seed"] {
         seeds.push(new["seed"].as_u64().unwrap());
@@ -207,6 +215,7 @@ fn main() {
             );
         }
         for &seed in &seeds {
+            let started = std::time::Instant::now();
             let mut search = BlindSearch::new(&b, &dex, cfg.clone(), side, seed);
             search.step(&dex, &belief, &obs, cfg.iterations);
             let choice = search.best().unwrap().to_input(&dex);
@@ -218,7 +227,7 @@ fn main() {
                 assert_eq!(choice, original["choice"]);
                 assert_eq!(json!(root), original["root"], "root must exactly replay");
             }
-            writeln!(out,"{}",json!({"kind":"root","job":job,"turn":b.turn,"side":side,"key":old["state_key"],"variant":name,"seed":seed,"choice":choice,"root":root,"model_moves":foe.move_slots.iter().map(|m|dex.moves.key(m.id)).collect::<Vec<_>>(),"model_item":foe.item.map(|i|dex.items.key(i))})).unwrap();
+            writeln!(out,"{}",json!({"kind":"root","job":job,"turn":b.turn,"side":side,"key":old["state_key"],"variant":name,"seed":seed,"choice":choice,"root":root,"model_moves":foe.move_slots.iter().map(|m|dex.moves.key(m.id)).collect::<Vec<_>>(),"model_item":foe.item.map(|i|dex.items.key(i)),"elapsed_seconds":started.elapsed().as_secs_f64(),"reply_availability":search.root_replies().iter().map(|(a,n)|json!({"action":a.to_input(&dex),"iterations":n})).collect::<Vec<_>>()})).unwrap();
             out.flush().unwrap();
         }
     }

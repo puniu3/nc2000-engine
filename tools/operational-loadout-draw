@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+export NC2000_REPO_ROOT="$PWD"
+cargo build --release -p nc2000-bot --example operational_combo_gate
+python3 tools/run-operational-loadout-draw.py "$@"

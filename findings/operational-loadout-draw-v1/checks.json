@@ -1,0 +1,15 @@
+{
+  "implementation_revision": "e9bc58d",
+  "game_binary_sha256": "14f56baeefb11d1c8fb522358748fdcccda83546a97c577b2c81eb47e363ea4d",
+  "tests": {
+    "bot_unit": 136,
+    "belief_integration": 6,
+    "blind_integration": 2,
+    "failed": 0
+  },
+  "workspace_all_targets_check": "passed",
+  "root_probe_searches": 273,
+  "original_roots_reproduced": 22,
+  "default_policy": "Layered (unchanged)",
+  "same_control": "4 triplets: every trajectory and counter agree across all 3 arms"
+}
