@@ -1,0 +1,78 @@
+{"type":"counterexample","battle":246,"turn":16,"side":0,"move":"roar","reply":"move encore","reason":"there is nobody left to phaze in","effect":"|-unboost|p2a: Shuckle|def|2","log":["|","|-curestatus|p2a: Shuckle|slp|[msg]","|move|p2a: Shuckle|Encore|p1a: Steelix","|-start|p1a: Steelix|Encore","|move|p1a: Steelix|Screech|p2a: Shuckle","|-unboost|p2a: Shuckle|def|2","|","|upkeep","|turn|17"]}
+{"type":"counterexample","battle":246,"turn":17,"side":0,"move":"roar","reply":"move encore","reason":"there is nobody left to phaze in","effect":"|-unboost|p2a: Shuckle|def|2","log":["|","|move|p2a: Shuckle|Encore|p1a: Steelix","|-start|p1a: Steelix|Encore","|move|p1a: Steelix|Screech|p2a: Shuckle","|-unboost|p2a: Shuckle|def|2","|","|upkeep","|turn|18"]}
+{"type":"counterexample","battle":246,"turn":18,"side":0,"move":"roar","reply":"move encore","reason":"there is nobody left to phaze in","effect":"|-damage|p2a: Shuckle|7/133","log":["|","|move|p2a: Shuckle|Encore|p1a: Steelix","|-start|p1a: Steelix|Encore","|move|p1a: Steelix|Earthquake|p2a: Shuckle","|split|p2","|-damage|p2a: Shuckle|7/133","|-damage|p2a: Shuckle|6/100","|","|upkeep","|turn|19"]}
+{"type":"counterexample","battle":246,"turn":19,"side":0,"move":"roar","reply":"move encore","reason":"there is nobody left to phaze in","effect":"|-unboost|p2a: Shuckle|def|2","log":["|","|move|p2a: Shuckle|Encore|p1a: Steelix","|-start|p1a: Steelix|Encore","|move|p1a: Steelix|Screech|p2a: Shuckle","|-unboost|p2a: Shuckle|def|2","|","|upkeep","|turn|20"]}
+{"type":"counterexample","battle":246,"turn":24,"side":0,"move":"roar","reply":"move encore","reason":"there is nobody left to phaze in","effect":"|-unboost|p2a: Shuckle|def|2","log":["|","|move|p2a: Shuckle|Encore|p1a: Steelix","|-start|p1a: Steelix|Encore","|move|p1a: Steelix|Screech|p2a: Shuckle","|-unboost|p2a: Shuckle|def|2","|","|upkeep","|turn|25"]}
+corpus battles 0-569  decisions 20765  all_replies=true  seed=1  pool=/Volumes/Work/puniu/nc2000-engine/data/belief-pool-v3/belief-pool.json
+  decisions with at least one refusable action: 4261 (20.5%)
+  actions refused: 5038   replayed through the engine: 22886
+  engine confirmed the failure: 16365   (legacy reader: 17354)
+  no effect, no explicit marker (silent agreement): 6516   (legacy reader: 5527)
+  ENGINE DISAGREED: 5   (legacy reader: 5)
+
+by rule: refused / replayed / engine-confirmed / silent / DISAGREED  (legacy reader's confirmed+silent in brackets)
+      10      40      37       3      0   [    37      3]  Attract needs opposite, known genders
+       3       9       3       6      0   [     3      6]  Dream Eater needs a sleeping, unsubstituted target
+      36     133     129       4      0   [   129      4]  Leech Seed does not take on a Grass type
+      89     400     380      20      0   [   380     20]  Perish Song and Destiny Bond fail from the last mon
+     997    5128       0    5128      0   [   818   4310]  Sleep Talk and Snore need the user asleep
+     719    3662    3655       7      0   [  3655      7]  Substitute is already up, or there is not enough HP to pay for one
+       7      24      11      13      0   [    11     13]  a Substitute blocks confusion
+      10      35      35       0      0   [    35      0]  a Substitute blocks foe-directed stat drops
+      14      53      33      20      0   [    33     20]  a Substitute blocks foe-inflicted status
+      10      40      40       0      0   [    40      0]  a Substitute rejects this move outright
+     130     602       0     602      0   [   171    431]  every stat this move moves is already capped
+    1535    7988    7631     357      0   [  7631    357]  healing at full HP, and faster
+     252       0       0       0      0   [     0      0]  inflicting sleep would forfeit under Sleep Clause
+     163       0       0       0      0   [     0      0]  self-KO with the last mon
+     493    2585    2434     151      0   [  2434    151]  that side condition is already up
+      79     291     291       0      0   [   291      0]  the target already carries a major status
+     120     472     429      43      0   [   429     43]  the target already has that volatile
+     179     705     671      34      0   [   671     34]  the target is immune to the move's type
+       3      12      11       1      0   [    11      1]  the target's type cannot take that status
+     189     707     575     127      5   [   575    127]  there is nobody left to phaze in
+
+rows whose verdict the reader fix moved: 989 of 22886
+     814  Confirmed -> Silent  legacy credited `cant` naming the neither slot   [Sleep Talk and Snore need the user asleep]
+     159  Confirmed -> Silent  legacy credited `cant` naming the neither slot   [every stat this move moves is already capped]
+       4  Confirmed -> Silent  legacy credited `cant` naming the subject slot   [Sleep Talk and Snore need the user asleep]
+      12  Confirmed -> Silent  legacy credited `cant` naming the subject slot   [every stat this move moves is already capped]
+
+moved rows (first 30):
+  b15 T14 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Articuno|par
+  b15 T14 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Articuno|par
+  b15 T14 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Articuno|par
+  b15 T14 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Articuno|par
+  b31 T16 side 0 `snore` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Umbreon|slp
+  b31 T16 side 0 `snore` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Umbreon|slp
+  b31 T16 side 0 `snore` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Umbreon|slp
+  b31 T16 side 0 `snore` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Umbreon|slp
+  b36 T8 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Snorlax|par
+  b36 T8 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Snorlax|par
+  b36 T8 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Snorlax|par
+  b36 T8 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Snorlax|par
+  b36 T9 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Snorlax|par
+  b36 T9 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Snorlax|par
+  b36 T9 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Snorlax|par
+  b36 T9 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Snorlax|par
+  b37 T2 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T2 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T2 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T2 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T3 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T3 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T3 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T3 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T4 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T4 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T4 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b37 T4 side 0 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p2a: Marowak|par
+  b38 T3 side 1 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p1a: Kingdra|par
+  b38 T3 side 1 `sleeptalk` (Sleep Talk and Snore need the user asleep) Confirmed -> Silent: |cant|p1a: Kingdra|par
+
+disagreements (first 30):
+  b246 T16 side 0 masked `roar` (there is nobody left to phaze in) but the engine logged: |-unboost|p2a: Shuckle|def|2
+  b246 T17 side 0 masked `roar` (there is nobody left to phaze in) but the engine logged: |-unboost|p2a: Shuckle|def|2
+  b246 T18 side 0 masked `roar` (there is nobody left to phaze in) but the engine logged: |-damage|p2a: Shuckle|7/133
+  b246 T19 side 0 masked `roar` (there is nobody left to phaze in) but the engine logged: |-unboost|p2a: Shuckle|def|2
+  b246 T24 side 0 masked `roar` (there is nobody left to phaze in) but the engine logged: |-unboost|p2a: Shuckle|def|2
