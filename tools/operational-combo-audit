@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+export NC2000_REPO_ROOT="$PWD"
+python3 tools/operational-combo-census.py
+cargo build --release -p nc2000-bot --example operational_combo_audit
+target/release/examples/operational_combo_audit "$@"
