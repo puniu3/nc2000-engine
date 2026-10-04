@@ -7,13 +7,15 @@ import statistics
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dir', type=Path, default=Path('tmp/retain-perish/loss-review'))
+parser.add_argument('--direction', choices=['loss', 'gain'], default='loss')
 args = parser.parse_args()
-out = Path('findings/operational-retain-perish-v1/loss-review')
+out = Path('findings/operational-retain-perish-v1') / f'{args.direction}-review'
 out.mkdir(exist_ok=True)
 read_lines = lambda path: [json.loads(s) for s in path.read_text().splitlines()]
 original = {r['job']: r for r in read_lines(out.parent / 'adaptive.jsonl')}
 replayed = read_lines(args.dir / 'games.jsonl')
-jobs = sorted(r['job'] for r in original.values() if r['b']['score'] < r['a']['score'])
+sign = 1 if args.direction == 'gain' else -1
+jobs = sorted(r['job'] for r in original.values() if sign * (r['b']['score'] - r['a']['score']) > 0)
 assert sorted(r['job'] for r in replayed) == jobs
 norm = lambda x: {k: v for k, v in x.items() if k != 'elapsed_seconds'}
 for row in replayed:
@@ -50,9 +52,9 @@ for job in jobs:
     shutil.copy2(args.dir / 'probes' / f'{job}.jsonl', out / f'{job}-probe.jsonl')
 diffs = [r['b']['score'] - r['a']['score'] for r in original.values()]
 z = statistics.NormalDist().inv_cdf(.975) + statistics.NormalDist().inv_cdf(.8)
-summary = {'selection': 'All four worsened pairs in the frozen adaptive trial; post-outcome diagnosis, not new win-rate evidence.',
-           'full_games_reproduced': 8, 'root_searches': sum(c['paired_seeds'] * 2 for c in cases), 'cases': cases,
-           'outcome_accounting': 'Keep all 6 improved and 4 worsened pairs; do not discount losses based on this diagnosis.',
+summary = {'selection': f'All {len(jobs)} {args.direction} pairs in the frozen adaptive trial; post-outcome diagnosis, not new win-rate evidence.',
+           'full_games_reproduced': 2 * len(jobs), 'root_searches': sum(c['paired_seeds'] * 2 for c in cases), 'cases': cases,
+           'outcome_accounting': 'Keep all 6 improved and 4 worsened pairs; do not discount wins or losses based on this diagnosis.',
            'candidate_status': 'retained for further evaluation; superiority unproven; production unchanged',
            'planning_scenario': {'assumed_true_delta': statistics.mean(diffs), 'assumed_variance': statistics.variance(diffs),
                                  'two_sided_alpha': .05, 'power': .8,

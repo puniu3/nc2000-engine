@@ -1,0 +1,208 @@
+{
+  "selection": "All 6 gain pairs in the frozen adaptive trial; post-outcome diagnosis, not new win-rate evidence.",
+  "full_games_reproduced": 12,
+  "root_searches": 102,
+  "cases": [
+    {
+      "job": 3,
+      "turn": 3,
+      "original_choices": [
+        "move rockslide",
+        "move earthquake"
+      ],
+      "original_seeds_equal": false,
+      "paired_seeds": 9,
+      "identical_roots": 9,
+      "choices": {
+        "baseline": {
+          "move rockslide": 2,
+          "move earthquake": 6,
+          "move fireblast": 1
+        },
+        "retain-perish": {
+          "move rockslide": 2,
+          "move earthquake": 6,
+          "move fireblast": 1
+        }
+      },
+      "model_keys": {
+        "baseline": [
+          "07743bfafc41120ddfce1214beaf8068"
+        ],
+        "retain-perish": [
+          "07743bfafc41120ddfce1214beaf8068"
+        ]
+      },
+      "actual_opponent_reply": [
+        "move destinybond"
+      ]
+    },
+    {
+      "job": 8,
+      "turn": 3,
+      "original_choices": [
+        "switch 3",
+        "switch 2"
+      ],
+      "original_seeds_equal": false,
+      "paired_seeds": 9,
+      "identical_roots": 0,
+      "choices": {
+        "baseline": {
+          "switch 3": 9
+        },
+        "retain-perish": {
+          "switch 3": 7,
+          "switch 2": 2
+        }
+      },
+      "model_keys": {
+        "baseline": [
+          "c1bcd3b8fb58c19199d029a60b772c18"
+        ],
+        "retain-perish": [
+          "56b231a5b11c0c02dffbe2ba362d41fb"
+        ]
+      },
+      "actual_opponent_reply": [
+        "move spikes"
+      ]
+    },
+    {
+      "job": 13,
+      "turn": 2,
+      "original_choices": [
+        "move curse",
+        "move icebeam"
+      ],
+      "original_seeds_equal": true,
+      "paired_seeds": 8,
+      "identical_roots": 0,
+      "choices": {
+        "baseline": {
+          "move curse": 5,
+          "move icebeam": 3
+        },
+        "retain-perish": {
+          "move icebeam": 8
+        }
+      },
+      "model_keys": {
+        "baseline": [
+          "69c9374f0aca4b70715206d0a2f26f29"
+        ],
+        "retain-perish": [
+          "815110628f4a413743da87cea8f424d8"
+        ]
+      },
+      "actual_opponent_reply": [
+        "move destinybond"
+      ]
+    },
+    {
+      "job": 20,
+      "turn": 9,
+      "original_choices": [
+        "move surf",
+        "move icebeam"
+      ],
+      "original_seeds_equal": false,
+      "paired_seeds": 9,
+      "identical_roots": 9,
+      "choices": {
+        "baseline": {
+          "move surf": 6,
+          "move icebeam": 3
+        },
+        "retain-perish": {
+          "move surf": 6,
+          "move icebeam": 3
+        }
+      },
+      "model_keys": {
+        "baseline": [
+          "96ee2d950e94abd1a064ad35995b5bf1"
+        ],
+        "retain-perish": [
+          "96ee2d950e94abd1a064ad35995b5bf1"
+        ]
+      },
+      "actual_opponent_reply": [
+        "move rest"
+      ]
+    },
+    {
+      "job": 51,
+      "turn": 2,
+      "original_choices": [
+        "move hydropump",
+        "move psychic"
+      ],
+      "original_seeds_equal": true,
+      "paired_seeds": 8,
+      "identical_roots": 0,
+      "choices": {
+        "baseline": {
+          "move hydropump": 2,
+          "move psychic": 6
+        },
+        "retain-perish": {
+          "move psychic": 6,
+          "move hydropump": 2
+        }
+      },
+      "model_keys": {
+        "baseline": [
+          "057e6a41acc9240543c3381694e0e92e"
+        ],
+        "retain-perish": [
+          "44d3475afa5d30ac6720359234d1ae08"
+        ]
+      },
+      "actual_opponent_reply": [
+        "switch 3"
+      ]
+    },
+    {
+      "job": 52,
+      "turn": 2,
+      "original_choices": [
+        "move spikes",
+        "move icebeam"
+      ],
+      "original_seeds_equal": true,
+      "paired_seeds": 8,
+      "identical_roots": 0,
+      "choices": {
+        "baseline": {
+          "move spikes": 3,
+          "move icebeam": 5
+        },
+        "retain-perish": {
+          "move icebeam": 8
+        }
+      },
+      "model_keys": {
+        "baseline": [
+          "c500352513c9825534b69fe219b9bde1"
+        ],
+        "retain-perish": [
+          "d06333dc4d92329ac31a92b3752a6f0e"
+        ]
+      },
+      "actual_opponent_reply": [
+        "move perishsong"
+      ]
+    }
+  ],
+  "outcome_accounting": "Keep all 6 improved and 4 worsened pairs; do not discount wins or losses based on this diagnosis.",
+  "candidate_status": "retained for further evaluation; superiority unproven; production unchanged",
+  "planning_scenario": {
+    "assumed_true_delta": 0.03125,
+    "assumed_variance": 0.15773809523809523,
+    "two_sided_alpha": 0.05,
+    "power": 0.8,
+    "normal_approximation_pairs": 1268,
+    "limitation": "Illustrative independent-pair normal approximation using a noisy pilot estimate; not a power guarantee or a new stopping rule."
+  }
+}
