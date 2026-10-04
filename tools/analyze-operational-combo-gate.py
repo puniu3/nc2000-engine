@@ -1,3 +1,4 @@
+import argparse
 import collections
 import hashlib
 import json
@@ -28,9 +29,12 @@ def summarize(rows):
     return result
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dir", type=pathlib.Path, default=OUT)
+    out = parser.parse_args().dir
     report = {'candidate_default_enabled': False, 'results': {}}
     for name, expected in [('same', 4), ('stress', 64), ('natural', 32), ('onpool', 8)]:
-        path = OUT / (name + '.jsonl')
+        path = out / (name + '.jsonl')
         if not path.exists():
             continue
         rows = sorted([json.loads(line) for line in path.read_text().splitlines()], key=lambda r: r['job'])
@@ -42,7 +46,7 @@ def main():
         report['results'][name] = summarize(rows)
         report['results'][name]['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
     report['complete'] = set(report['results']) == {'same', 'stress', 'natural', 'onpool'}
-    (OUT / 'results.json').write_text(json.dumps(report, indent=2) + '\n')
+    (out / 'results.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
 
 

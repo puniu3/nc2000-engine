@@ -1,0 +1,3498 @@
+{
+  "cases": [
+    {
+      "job": 5,
+      "turn": 2,
+      "same_original_seed": true,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move curse": 6,
+            "move icebeam": 2
+          },
+          "model_moves": [
+            "meanlook",
+            "toxic",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "17902395643988888445": "move curse"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "destinybond"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "17902395643988888445": "move icebeam"
+          }
+        },
+        "conditioned-no-bond": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "toxic"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "17902395643988888445": "move icebeam"
+          }
+        },
+        "perish-drop-confuseray": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "17902395643988888445": "move icebeam"
+          }
+        },
+        "perish-drop-painsplit": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "confuseray"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "17902395643988888445": "move icebeam"
+          }
+        },
+        "perish-drop-toxic": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "17902395643988888445": "move icebeam"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move icebeam",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 535,
+            "leaves": 280,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.00000000000003,
+              62.58012820611475
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move icebeam",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 535,
+            "leaves": 280,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.00000000000003,
+              62.58012820611475
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move icebeam",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move icebeam",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 535,
+            "leaves": 280,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.00000000000003,
+              62.58012820611475
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move icebeam",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 478,
+            "leaves": 250,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0000000000002,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move icebeam",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 245,
+            "leaves": 132,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move curse",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move curse",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move curse",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move curse",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move curse",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 5,
+          "mine": "move curse",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        }
+      ],
+      "sha256": "4f02f222647bee1d1f2512f1c966951763c1df024524dcf2a74d977c8b12e031"
+    },
+    {
+      "job": 10,
+      "turn": 2,
+      "same_original_seed": true,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move hydropump": 5,
+            "move psychic": 3
+          },
+          "model_moves": [
+            "meanlook",
+            "toxic",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "14863092733152239178": "move hydropump"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move psychic": 7,
+            "move hydropump": 1
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "destinybond"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "14863092733152239178": "move psychic"
+          }
+        },
+        "conditioned-no-bond": {
+          "choices": {
+            "move psychic": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "toxic"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "14863092733152239178": "move psychic"
+          }
+        },
+        "perish-drop-confuseray": {
+          "choices": {
+            "move hydropump": 6,
+            "move psychic": 2
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "14863092733152239178": "move hydropump"
+          }
+        },
+        "perish-drop-painsplit": {
+          "choices": {
+            "move hydropump": 3,
+            "move psychic": 5
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "confuseray"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "14863092733152239178": "move hydropump"
+          }
+        },
+        "perish-drop-toxic": {
+          "choices": {
+            "move psychic": 7,
+            "move hydropump": 1
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "14863092733152239178": "move psychic"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move hydropump",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 106,
+            "leaves": 67,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.020432692307394973
+            ],
+            "hp": [
+              166.0,
+              96.10103665996598
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move hydropump",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 106,
+            "leaves": 67,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.020432692307394973
+            ],
+            "hp": [
+              166.0,
+              96.10103665996598
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move hydropump",
+          "opponent": "move confuseray",
+          "stats": {
+            "runs": 426,
+            "leaves": 259,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.020432692307394973
+            ],
+            "hp": [
+              166.0,
+              96.10103665996598
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move hydropump",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              166.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move hydropump",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 118,
+            "leaves": 76,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              166.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move hydropump",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 100,
+            "leaves": 64,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              166.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move psychic",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 227,
+            "leaves": 128,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              100.70512820633303
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move psychic",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 227,
+            "leaves": 128,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              100.70512820633303
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move psychic",
+          "opponent": "move confuseray",
+          "stats": {
+            "runs": 867,
+            "leaves": 512,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              100.70512820633303
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move psychic",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              166.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move psychic",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 199,
+            "leaves": 112,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              166.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 10,
+          "mine": "move psychic",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 117,
+            "leaves": 65,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              166.0
+            ]
+          }
+        }
+      ],
+      "sha256": "5e59667b4d4c6a4ae626d2ff1f6e8ce54f3db4b7111211aed1a5a3ac0d59d15e"
+    },
+    {
+      "job": 19,
+      "turn": 2,
+      "same_original_seed": true,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move rockslide": 4,
+            "move crunch": 4
+          },
+          "model_moves": [
+            "meanlook",
+            "toxic",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "2313050394904310452": "move rockslide"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move dynamicpunch": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "destinybond"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "2313050394904310452": "move dynamicpunch"
+          }
+        },
+        "conditioned-no-bond": {
+          "choices": {
+            "move crunch": 5,
+            "move rockslide": 3
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "toxic"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "2313050394904310452": "move crunch"
+          }
+        },
+        "perish-drop-confuseray": {
+          "choices": {
+            "move rockslide": 2,
+            "move crunch": 5,
+            "move fireblast": 1
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "2313050394904310452": "move rockslide"
+          }
+        },
+        "perish-drop-painsplit": {
+          "choices": {
+            "move rockslide": 1,
+            "move crunch": 5,
+            "move fireblast": 2
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "confuseray"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "2313050394904310452": "move rockslide"
+          }
+        },
+        "perish-drop-toxic": {
+          "choices": {
+            "move crunch": 6,
+            "move rockslide": 2
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "2313050394904310452": "move crunch"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move rockslide",
+          "opponent": "move zapcannon",
+          "stats": {
+            "runs": 715,
+            "leaves": 244,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.89453125
+            ],
+            "hp": [
+              207.76855468794037,
+              3.69140625
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move rockslide",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 11,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.89453125
+            ],
+            "hp": [
+              226.0,
+              3.69140625
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move rockslide",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 11,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.89453125
+            ],
+            "hp": [
+              226.0,
+              3.69140625
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move rockslide",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 11,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.89453125,
+              0.89453125
+            ],
+            "hp": [
+              23.8359375,
+              3.69140625
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move rockslide",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 161,
+            "leaves": 90,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              225.99999999999997,
+              35.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move rockslide",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 329,
+            "leaves": 186,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              226.0,
+              35.00000000000001
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move dynamicpunch",
+          "opponent": "move zapcannon",
+          "stats": {
+            "runs": 227,
+            "leaves": 122,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              207.76855468794037,
+              34.99999999999999
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move dynamicpunch",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              226.0,
+              35.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move dynamicpunch",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              226.0,
+              35.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move dynamicpunch",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              226.0,
+              35.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move dynamicpunch",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 602,
+            "leaves": 352,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              225.9999999999999,
+              35.000000000000014
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 19,
+          "mine": "move dynamicpunch",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 468,
+            "leaves": 273,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              226.00000000000034,
+              34.99999999999997
+            ]
+          }
+        }
+      ],
+      "sha256": "8c5846d36289438fc9d1c08aaf3911d58bc77a7bb74c16ed445a3ed9eba3d296"
+    },
+    {
+      "job": 21,
+      "turn": 2,
+      "same_original_seed": true,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move curse": 5,
+            "move icebeam": 3
+          },
+          "model_moves": [
+            "meanlook",
+            "toxic",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "8351983998183477369": "move curse"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "destinybond"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "8351983998183477369": "move icebeam"
+          }
+        },
+        "conditioned-no-bond": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "toxic"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "8351983998183477369": "move icebeam"
+          }
+        },
+        "perish-drop-confuseray": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "8351983998183477369": "move icebeam"
+          }
+        },
+        "perish-drop-painsplit": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "confuseray"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "8351983998183477369": "move icebeam"
+          }
+        },
+        "perish-drop-toxic": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "8351983998183477369": "move icebeam"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move icebeam",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 535,
+            "leaves": 280,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.00000000000003,
+              62.58012820611475
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move icebeam",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 535,
+            "leaves": 280,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.00000000000003,
+              62.58012820611475
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move icebeam",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move icebeam",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 535,
+            "leaves": 280,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.00000000000003,
+              62.58012820611475
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move icebeam",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 478,
+            "leaves": 250,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0000000000002,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move icebeam",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 245,
+            "leaves": 132,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move curse",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move curse",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move curse",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move curse",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move curse",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 21,
+          "mine": "move curse",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              119.0
+            ]
+          }
+        }
+      ],
+      "sha256": "99414a8845946c0177d037037e8419d55eddba7c27622f0201a7276dcbbe6893"
+    },
+    {
+      "job": 23,
+      "turn": 3,
+      "same_original_seed": false,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move hiddenpowerrock": 8,
+            "move earthquake": 1
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "confuseray"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "15771535072015985010": "move hiddenpowerrock",
+            "16323935933382269870": "move hiddenpowerrock"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move encore": 7,
+            "move crosschop": 2
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "zapcannon",
+            "destinybond"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "15771535072015985010": "move encore",
+            "16323935933382269870": "move encore"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move hiddenpowerrock",
+          "opponent": "move zapcannon",
+          "stats": {
+            "runs": 724,
+            "leaves": 232,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.8764610290527344
+            ],
+            "hp": [
+              169.85068609826823,
+              3.7061691284179688
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move hiddenpowerrock",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 7,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              1.0
+            ],
+            "hp": [
+              192.0,
+              0.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move hiddenpowerrock",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 7,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              1.0
+            ],
+            "hp": [
+              192.0,
+              0.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move hiddenpowerrock",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 7,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              1.0,
+              1.0
+            ],
+            "hp": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move hiddenpowerrock",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 78,
+            "leaves": 50,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              192.0,
+              30.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move hiddenpowerrock",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 51,
+            "leaves": 32,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              192.0,
+              30.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move encore",
+          "opponent": "move zapcannon",
+          "stats": {
+            "runs": 1144,
+            "leaves": 652,
+            "mass": 1.000000000000001,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              169.85068609826817,
+              29.999999999999975
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move encore",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 13,
+            "leaves": 8,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              192.0,
+              30.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move encore",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 13,
+            "leaves": 8,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              192.0,
+              30.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move encore",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 13,
+            "leaves": 8,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              192.0,
+              30.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move encore",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 13,
+            "leaves": 8,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              192.0,
+              30.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 23,
+          "mine": "move encore",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 13,
+            "leaves": 8,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              192.0,
+              30.0
+            ]
+          }
+        }
+      ],
+      "sha256": "4b12e37af99e333e5a24e4a28c7e35d26fb3e421ce4de6ef7e0173340eb24707"
+    },
+    {
+      "job": 25,
+      "turn": 2,
+      "same_original_seed": true,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move earthquake": 5,
+            "move rockslide": 2,
+            "move swordsdance": 1
+          },
+          "model_moves": [
+            "meanlook",
+            "toxic",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "12362345298882594115": "move earthquake"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move swordsdance": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "destinybond"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "12362345298882594115": "move swordsdance"
+          }
+        },
+        "conditioned-no-bond": {
+          "choices": {
+            "move swordsdance": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "toxic"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "12362345298882594115": "move swordsdance"
+          }
+        },
+        "perish-drop-confuseray": {
+          "choices": {
+            "move swordsdance": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "12362345298882594115": "move swordsdance"
+          }
+        },
+        "perish-drop-painsplit": {
+          "choices": {
+            "move hiddenpowerflying": 3,
+            "move swordsdance": 5
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "confuseray"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "12362345298882594115": "move hiddenpowerflying"
+          }
+        },
+        "perish-drop-toxic": {
+          "choices": {
+            "move earthquake": 5,
+            "move swordsdance": 2,
+            "move rockslide": 1
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "12362345298882594115": "move earthquake"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move earthquake",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 7,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              1.0
+            ],
+            "hp": [
+              173.0,
+              0.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move earthquake",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 7,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              1.0
+            ],
+            "hp": [
+              173.0,
+              0.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move earthquake",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              173.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move earthquake",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 7,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              1.0,
+              1.0
+            ],
+            "hp": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move earthquake",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 89,
+            "leaves": 57,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              173.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move earthquake",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 122,
+            "leaves": 79,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              173.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move swordsdance",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              173.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move swordsdance",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              173.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move swordsdance",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              173.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move swordsdance",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              173.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move swordsdance",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              173.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 25,
+          "mine": "move swordsdance",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              173.0,
+              1.0
+            ]
+          }
+        }
+      ],
+      "sha256": "27ffbde8bd4a8004bbe0e6b0d6ef16a1f78a054ed54fc433dab9e1b9289cab23"
+    },
+    {
+      "job": 29,
+      "turn": 2,
+      "same_original_seed": true,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move curse": 6,
+            "move icebeam": 2
+          },
+          "model_moves": [
+            "meanlook",
+            "toxic",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "3316555997636208843": "move curse"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "destinybond"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "3316555997636208843": "move icebeam"
+          }
+        },
+        "conditioned-no-bond": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "toxic"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "3316555997636208843": "move icebeam"
+          }
+        },
+        "perish-drop-confuseray": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "3316555997636208843": "move icebeam"
+          }
+        },
+        "perish-drop-painsplit": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "confuseray"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "3316555997636208843": "move icebeam"
+          }
+        },
+        "perish-drop-toxic": {
+          "choices": {
+            "move icebeam": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "3316555997636208843": "move icebeam"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move icebeam",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 499,
+            "leaves": 261,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.004807692297617905
+            ],
+            "hp": [
+              209.00000000000003,
+              56.581730770209106
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move icebeam",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 499,
+            "leaves": 261,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.004807692297617905
+            ],
+            "hp": [
+              209.00000000000003,
+              56.581730770209106
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move icebeam",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              113.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move icebeam",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 499,
+            "leaves": 261,
+            "mass": 1.0,
+            "faint": [
+              0.004807692297617905,
+              0.004807692297617905
+            ],
+            "hp": [
+              207.9951923097979,
+              56.581730770209106
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move icebeam",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 478,
+            "leaves": 250,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0000000000002,
+              112.99999999999997
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move icebeam",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 245,
+            "leaves": 132,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              113.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move curse",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              113.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move curse",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              113.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move curse",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              113.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move curse",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              113.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move curse",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              113.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 29,
+          "mine": "move curse",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              209.0,
+              113.0
+            ]
+          }
+        }
+      ],
+      "sha256": "6403771f6c4da74038838207c79175025cf0b9234a025f65803bbb3930c934b5"
+    },
+    {
+      "job": 35,
+      "turn": 2,
+      "same_original_seed": true,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move earthquake": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "toxic",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "4484575126374624616": "move earthquake"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move fireblast": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "destinybond"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "4484575126374624616": "move fireblast"
+          }
+        },
+        "conditioned-no-bond": {
+          "choices": {
+            "move earthquake": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "toxic"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "4484575126374624616": "move earthquake"
+          }
+        },
+        "perish-drop-confuseray": {
+          "choices": {
+            "move earthquake": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "4484575126374624616": "move earthquake"
+          }
+        },
+        "perish-drop-painsplit": {
+          "choices": {
+            "move earthquake": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "confuseray"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "4484575126374624616": "move earthquake"
+          }
+        },
+        "perish-drop-toxic": {
+          "choices": {
+            "move fireblast": 1,
+            "move earthquake": 7
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "4484575126374624616": "move fireblast"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move earthquake",
+          "opponent": "move zapcannon",
+          "stats": {
+            "runs": 15,
+            "leaves": 7,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.9519230767327826
+            ],
+            "hp": [
+              186.0,
+              0.04807692326721735
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move earthquake",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 15,
+            "leaves": 7,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.9519230767327826
+            ],
+            "hp": [
+              186.0,
+              0.04807692326721735
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move earthquake",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 15,
+            "leaves": 7,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.9519230767327826
+            ],
+            "hp": [
+              186.0,
+              0.04807692326721735
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move earthquake",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 15,
+            "leaves": 7,
+            "mass": 1.0,
+            "faint": [
+              0.9519230767327826,
+              0.9519230767327826
+            ],
+            "hp": [
+              8.942307727702428,
+              0.04807692326721735
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move earthquake",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 138,
+            "leaves": 90,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              186.0,
+              83.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move earthquake",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 75,
+            "leaves": 48,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              186.0,
+              83.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move fireblast",
+          "opponent": "move zapcannon",
+          "stats": {
+            "runs": 229,
+            "leaves": 124,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.005408653843005595
+            ],
+            "hp": [
+              186.00000000000006,
+              47.87079326997218
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move fireblast",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 229,
+            "leaves": 124,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.005408653843005595
+            ],
+            "hp": [
+              186.00000000000006,
+              47.87079326997218
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move fireblast",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 229,
+            "leaves": 124,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.005408653843005595
+            ],
+            "hp": [
+              186.00000000000006,
+              47.87079326997218
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move fireblast",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 229,
+            "leaves": 124,
+            "mass": 1.0,
+            "faint": [
+              0.005408653843005595,
+              0.005408653843005595
+            ],
+            "hp": [
+              184.99399038520102,
+              47.87079326997218
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move fireblast",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 216,
+            "leaves": 116,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              186.0,
+              82.99999999999996
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 35,
+          "mine": "move fireblast",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 326,
+            "leaves": 176,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              186.00000000000006,
+              82.99999999999993
+            ]
+          }
+        }
+      ],
+      "sha256": "229563f65f646d8e5298c3560c5b34aa630a1508ab8722ec0e7ff1ff6c9790ac"
+    },
+    {
+      "job": 41,
+      "turn": 3,
+      "same_original_seed": false,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move psychic": 9
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "confuseray"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "16410703667916806963": "move psychic",
+            "7245352875085124888": "move psychic"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move hydropump": 9
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "zapcannon",
+            "destinybond"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "16410703667916806963": "move hydropump",
+            "7245352875085124888": "move hydropump"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move hydropump",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 54,
+            "leaves": 33,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0498046875
+            ],
+            "hp": [
+              166.0,
+              39.31527944821255
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move hydropump",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 54,
+            "leaves": 33,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0498046875
+            ],
+            "hp": [
+              166.0,
+              39.31527944821255
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move hydropump",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              105.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move hydropump",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 54,
+            "leaves": 33,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0498046875
+            ],
+            "hp": [
+              166.0,
+              39.31527944821255
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move hydropump",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 118,
+            "leaves": 76,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              105.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move hydropump",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 100,
+            "leaves": 64,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              105.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move psychic",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 82,
+            "leaves": 45,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0625
+            ],
+            "hp": [
+              166.0,
+              40.74519230875012
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move psychic",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 82,
+            "leaves": 45,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0625
+            ],
+            "hp": [
+              166.0,
+              40.74519230875012
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move psychic",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              105.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move psychic",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 82,
+            "leaves": 45,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0625
+            ],
+            "hp": [
+              166.0,
+              40.74519230875012
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move psychic",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 199,
+            "leaves": 112,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              105.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 41,
+          "mine": "move psychic",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 117,
+            "leaves": 65,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              166.0,
+              105.0
+            ]
+          }
+        }
+      ],
+      "sha256": "9d7d0871f8d3d3612b74e65a02cb26c52f8050bf74810bfaa4b1a74a73a4a3fc"
+    },
+    {
+      "job": 49,
+      "turn": 2,
+      "same_original_seed": true,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move rockslide": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "toxic",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "14031749483373378685": "move rockslide"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move fireblast": 6,
+            "move dynamicpunch": 2
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "destinybond"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "14031749483373378685": "move fireblast"
+          }
+        },
+        "conditioned-no-bond": {
+          "choices": {
+            "move earthquake": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "zapcannon",
+            "perishsong",
+            "toxic"
+          ],
+          "model_item": "goldberry",
+          "at_original_seeds": {
+            "14031749483373378685": "move earthquake"
+          }
+        },
+        "perish-drop-confuseray": {
+          "choices": {
+            "move earthquake": 3,
+            "move rockslide": 5
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "14031749483373378685": "move earthquake"
+          }
+        },
+        "perish-drop-painsplit": {
+          "choices": {
+            "move rockslide": 6,
+            "move earthquake": 2
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "toxic",
+            "confuseray"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "14031749483373378685": "move rockslide"
+          }
+        },
+        "perish-drop-toxic": {
+          "choices": {
+            "move rockslide": 8
+          },
+          "model_moves": [
+            "meanlook",
+            "perishsong",
+            "confuseray",
+            "painsplit"
+          ],
+          "model_item": "miracleberry",
+          "at_original_seeds": {
+            "14031749483373378685": "move rockslide"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move rockslide",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 11,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.89453125
+            ],
+            "hp": [
+              226.0,
+              8.2265625
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move rockslide",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 11,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.89453125
+            ],
+            "hp": [
+              226.0,
+              8.2265625
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move rockslide",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              226.0,
+              78.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move rockslide",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 11,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.89453125,
+              0.89453125
+            ],
+            "hp": [
+              23.8359375,
+              8.2265625
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move rockslide",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 161,
+            "leaves": 90,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              225.99999999999997,
+              78.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move rockslide",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 329,
+            "leaves": 186,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              226.0,
+              78.00000000000003
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move fireblast",
+          "opponent": "move meanlook",
+          "stats": {
+            "runs": 141,
+            "leaves": 75,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.052734375
+            ],
+            "hp": [
+              226.0,
+              24.478665866333813
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move fireblast",
+          "opponent": "move perishsong",
+          "stats": {
+            "runs": 141,
+            "leaves": 75,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.052734375
+            ],
+            "hp": [
+              226.0,
+              24.478665866333813
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move fireblast",
+          "opponent": "move protect",
+          "stats": {
+            "runs": 7,
+            "leaves": 4,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              226.0,
+              78.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move fireblast",
+          "opponent": "move destinybond",
+          "stats": {
+            "runs": 141,
+            "leaves": 75,
+            "mass": 1.0,
+            "faint": [
+              0.052734375,
+              0.052734375
+            ],
+            "hp": [
+              214.08203125,
+              24.478665866333813
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move fireblast",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 227,
+            "leaves": 122,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              226.0,
+              78.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 49,
+          "mine": "move fireblast",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 326,
+            "leaves": 176,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              225.99999999999997,
+              78.0
+            ]
+          }
+        }
+      ],
+      "sha256": "7c0225de4ea2e0b872955ad350f28338d647745ee926d66cc4356de0cee41e11"
+    },
+    {
+      "job": 57,
+      "turn": 7,
+      "same_original_seed": false,
+      "variants": {
+        "baseline": {
+          "choices": {
+            "move curse": 7,
+            "move earthquake": 2
+          },
+          "model_moves": [
+            "bodyslam",
+            "earthquake",
+            "selfdestruct",
+            "curse"
+          ],
+          "model_item": "leftovers",
+          "at_original_seeds": {
+            "13613106060852129090": "move curse",
+            "2951291334094417069": "move curse"
+          }
+        },
+        "conditioned": {
+          "choices": {
+            "move curse": 4,
+            "move doubleedge": 4,
+            "move earthquake": 1
+          },
+          "model_moves": [
+            "bodyslam",
+            "earthquake",
+            "selfdestruct",
+            "curse"
+          ],
+          "model_item": "leftovers",
+          "at_original_seeds": {
+            "13613106060852129090": "move curse",
+            "2951291334094417069": "move doubleedge"
+          }
+        }
+      },
+      "exact_steps": [
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move doubleedge",
+          "opponent": "move bodyslam",
+          "stats": {
+            "runs": 9068,
+            "leaves": 5705,
+            "mass": 0.9999999999999979,
+            "faint": [
+              0.0,
+              0.057861328125
+            ],
+            "hp": [
+              158.11218574886925,
+              42.31251878255083
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move doubleedge",
+          "opponent": "move earthquake",
+          "stats": {
+            "runs": 2327,
+            "leaves": 1484,
+            "mass": 1.0000000000000018,
+            "faint": [
+              0.0,
+              0.0625
+            ],
+            "hp": [
+              167.41987179640256,
+              30.793269233472543
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move doubleedge",
+          "opponent": "move selfdestruct",
+          "stats": {
+            "runs": 36,
+            "leaves": 30,
+            "mass": 1.0,
+            "faint": [
+              0.3749999999272404,
+              1.0
+            ],
+            "hp": [
+              8.197115387374652,
+              0.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move doubleedge",
+          "opponent": "move curse",
+          "stats": {
+            "runs": 131,
+            "leaves": 73,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0625
+            ],
+            "hp": [
+              222.27884615462972,
+              77.64423077183892
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move doubleedge",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              250.0,
+              186.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move doubleedge",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 122,
+            "leaves": 79,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              175.51442307789694,
+              186.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move curse",
+          "opponent": "move bodyslam",
+          "stats": {
+            "runs": 668,
+            "leaves": 350,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              194.6137820524891,
+              186.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move curse",
+          "opponent": "move earthquake",
+          "stats": {
+            "runs": 87,
+            "leaves": 56,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              206.84775641128363,
+              186.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move curse",
+          "opponent": "move selfdestruct",
+          "stats": {
+            "runs": 36,
+            "leaves": 30,
+            "mass": 1.0,
+            "faint": [
+              0.3749999999272404,
+              1.0
+            ],
+            "hp": [
+              8.197115387374652,
+              0.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move curse",
+          "opponent": "move curse",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              250.0,
+              186.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move curse",
+          "opponent": "switch 2",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              250.0,
+              186.0
+            ]
+          }
+        },
+        {
+          "kind": "exact_step",
+          "job": 57,
+          "mine": "move curse",
+          "opponent": "switch 3",
+          "stats": {
+            "runs": 3,
+            "leaves": 2,
+            "mass": 1.0,
+            "faint": [
+              0.0,
+              0.0
+            ],
+            "hp": [
+              250.0,
+              186.0
+            ]
+          }
+        }
+      ],
+      "sha256": "4fab021ce4fa8482b58f08795676744333ed7bac6b42e972ec19add2f3436a4a"
+    }
+  ],
+  "roots": 438,
+  "exact_steps": 132,
+  "unresolved_steps": 0,
+  "conditional_prior": {
+    "rows": 23,
+    "weight": 15.499998999999999,
+    "move_mass": {
+      "thunder": 0.043010712452304034,
+      "meanlook": 1.0,
+      "destinybond": 0.46774190114463887,
+      "perishsong": 1.0,
+      "shadowball": 0.06451613319458924,
+      "painsplit": 0.06451613319458924,
+      "protect": 0.4838709989594193,
+      "rest": 0.3225806659729462,
+      "zapcannon": 0.15053762261533052,
+      "hiddenpowerice": 0.12903226638917847,
+      "confuseray": 0.12903226638917847,
+      "thunderbolt": 0.08064516649323655,
+      "curse": 0.06451613319458924
+    },
+    "interpretation": "Empirical prior weights conditional on Mean Look only; not calibrated human usage probabilities."
+  },
+  "item_followup": {
+    "conditioned-miracle": {
+      "move swordsdance": 8
+    },
+    "conditioned-no-bond-miracle": {
+      "move swordsdance": 8
+    }
+  }
+}

@@ -144,7 +144,10 @@ impl BlindAgent {
         }
     }
 
-    /// The live belief (None before the first decision) — test surface.
+    pub fn search_rng_state(&self) -> u64 {
+        self.rng.0
+    }
+
     pub fn belief(&self) -> Option<&Belief> {
         self.game.as_ref().map(|g| &g.belief)
     }

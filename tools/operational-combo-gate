@@ -2,6 +2,13 @@
 set -eu
 cd "$(dirname "$0")/.."
 export NC2000_REPO_ROOT="$PWD"
-mkdir -p tmp/operational-validation
+mkdir -p tmp/operational-validation/rerun
 cargo build --release -p nc2000-bot --example operational_combo_gate
-target/release/examples/operational_combo_gate "$@"
+if [ "$#" -gt 0 ]; then
+    exec target/release/examples/operational_combo_gate "$@"
+fi
+target/release/examples/operational_combo_gate --same --games 4 --iters 3000 --seed 202610040 --out tmp/operational-validation/rerun/same.jsonl
+target/release/examples/operational_combo_gate --games 64 --seed 202610041 --out tmp/operational-validation/rerun/stress.jsonl
+target/release/examples/operational_combo_gate --mode natural --games 32 --seed 202610042 --out tmp/operational-validation/rerun/natural.jsonl
+target/release/examples/operational_combo_gate --mode onpool --games 8 --seed 202610043 --out tmp/operational-validation/rerun/onpool.jsonl
+python3 tools/analyze-operational-combo-gate.py --dir tmp/operational-validation/rerun

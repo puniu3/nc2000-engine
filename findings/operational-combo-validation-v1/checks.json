@@ -1,0 +1,32 @@
+{
+  "benchmark_binary_sha256": "3e35eb244ac5bce8513d7a5cfbac0a07269f2b72ed029d16e0f773f94b7c0e29",
+  "native_tests": {
+    "bot_unit": 133,
+    "belief_integration": 6,
+    "failed": 0
+  },
+  "production_default": "Layered (unchanged)",
+  "baseline_revision": "11066bf",
+  "trace_replay": {
+    "pairs": 11,
+    "all_original_trajectories_and_counters_match": true
+  },
+  "source_check": "cargo check --workspace --all-targets passed after instrumentation",
+  "fork_original_roots_reproduced": 22,
+  "fork_searches": 438,
+  "fork_additional_item_searches": 16,
+  "exact_step_cells": 132,
+  "exact_step_capped": 0,
+  "browser_report": {
+    "hub_entry": "nc2000-operational-combo-validation",
+    "all_links_http_200": true,
+    "case_rows": 11,
+    "detail_toggle": "passed",
+    "viewport_widths": [
+      820,
+      390
+    ],
+    "page_errors": 0
+  },
+  "diagnostic_binary_sha256": "c3f97a51ba3e123ee6dda78df90b720ac36936fe6cd678eb5992f0a1603cf7b2"
+}

@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+export NC2000_REPO_ROOT="$PWD"
+cargo build --release -p nc2000-bot --example operational_fork_probe
+python3 - "$@" <<'PY'
+import concurrent.futures, os, pathlib, subprocess, sys
+out = pathlib.Path('tmp/operational-validation/fork-rerun')
+out.mkdir(parents=True, exist_ok=True)
+jobs = list(map(int, sys.argv[1:])) or [5,10,19,21,23,25,29,35,41,49,57]
+def run(job):
+    with (out / f'{job}.log').open('w') as log:
+        subprocess.run(['target/release/examples/operational_fork_probe', str(job),
+                        'findings/operational-combo-validation-v1/forks', str(out / f'{job}.jsonl')],
+                       check=True, stdout=log, stderr=log)
+    if job == 25:
+        with (out / "25-item.log").open("w") as log:
+            subprocess.run(["target/release/examples/operational_fork_probe", "25",
+                            "findings/operational-combo-validation-v1/forks", str(out / "25-item.jsonl"),
+                            "--item-probe"], check=True, stdout=log, stderr=log)
+    return job
+with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+    for job in pool.map(run, jobs):
+        print(f'completed {job}', flush=True)
+PY

@@ -21,6 +21,8 @@ use std::{
 mod combo_common;
 
 struct Measured {
+    trace: Option<std::io::BufWriter<std::fs::File>>,
+    cfg: RmConfig,
     inner: BlindAgent,
     decisions: usize,
     fallback: usize,
@@ -32,6 +34,7 @@ impl Agent for Measured {
         "measured".into()
     }
     fn choose(&mut self, b: &Battle, dex: &Dex, side: usize, cs: &[SearchChoice]) -> SearchChoice {
+        let search_seed = self.inner.search_rng_state();
         let choice = self.inner.choose(b, dex, side, cs);
         self.decisions += 1;
         let belief = self.inner.belief().unwrap();
@@ -57,7 +60,47 @@ impl Agent for Measured {
                 }
             }
         }
+        if let Some(file) = self.trace.as_mut() {
+            let model = belief.determinize(dex, b, obs, &mut SplitMix64::new(771));
+            let mut root = Vec::new();
+            if cs.len() > 1 {
+                let mut search = nc2000_bot::blind::BlindSearch::new(
+                    b,
+                    dex,
+                    self.cfg.clone(),
+                    side,
+                    search_seed,
+                );
+                search.step(dex, belief, obs, self.cfg.iterations);
+                assert_eq!(
+                    search.best(),
+                    Some(choice),
+                    "trace search must reproduce the live decision"
+                );
+                root = search.actions().iter().enumerate().map(|(i,a)|json!({"action":a.to_input(dex),"visits":search.visits()[i],"mean":search.means()[i],"dominated":search.dominated()[i]})).collect();
+            }
+            let row = json!({"decision":self.decisions,"turn":b.turn,"side":side,"state_key":format!("{:032x}",b.state_key128()),"seed":search_seed,"choice":choice.to_input(dex),"root":root,"truth":board(b,dex),"model":board(&model,dex),"reveals":obs.mons().iter().map(|m|json!({"species":dex.species.key(m.species),"moves":m.revealed_moves.iter().map(|m|dex.moves.key(*m)).collect::<Vec<_>>(),"item":format!("{:?}",m.item)})).collect::<Vec<_>>()});
+            writeln!(file, "{row}").unwrap();
+            file.flush().unwrap();
+        }
         choice
+    }
+}
+fn board(b: &Battle, dex: &Dex) -> Value {
+    json!((0..2).map(|s|json!({"active":b.sides[s].active,"party":b.sides[s].party.iter().copied().collect::<Vec<_>>(),"roster":b.sides[s].roster.iter().map(|p|json!({"species":dex.species.key(p.species),"hp":p.hp,"maxhp":p.maxhp,"status":p.status.as_str(),"item":p.item.map(|i|dex.items.key(i)),"boosts":format!("{:?}",p.boosts),"trapped":p.trapped,"moves":p.move_slots.iter().map(|m|json!({"move":dex.moves.key(m.id),"pp":m.pp})).collect::<Vec<_>>(),"volatiles":p.volatiles.iter().map(|(c,v)|json!([dex.conds_key(*c),v.duration])).collect::<Vec<_>>()})).collect::<Vec<_>>()})).collect::<Vec<_>>())
+}
+struct Recorder<'a> {
+    inner: &'a mut dyn Agent,
+    inputs: Arc<Mutex<Vec<Value>>>,
+}
+impl Agent for Recorder<'_> {
+    fn name(&self) -> String {
+        self.inner.name()
+    }
+    fn choose(&mut self, b: &Battle, dex: &Dex, side: usize, cs: &[SearchChoice]) -> SearchChoice {
+        let pick = self.inner.choose(b, dex, side, cs);
+        self.inputs.lock().unwrap().push(json!({"key":format!("{:032x}",b.state_key128()),"turn":b.turn,"side":side,"choice":pick.to_input(dex)}));
+        pick
     }
 }
 struct Opponent {
@@ -184,6 +227,14 @@ fn main() {
     let seed: u64 = arg("--seed", "202610041").parse().unwrap();
     let mode = arg("--mode", "stress");
     assert!(["stress", "natural", "onpool"].contains(&mode.as_str()));
+    let trace_dir = arg("--trace-dir", "");
+    if !trace_dir.is_empty() {
+        std::fs::create_dir_all(&trace_dir).unwrap();
+    }
+    let only: Option<Vec<usize>> = args
+        .iter()
+        .position(|a| a == "--only")
+        .map(|i| args[i + 1].split(',').map(|s| s.parse().unwrap()).collect());
     let candidate = if args.iter().any(|a| a == "--same") {
         FallbackPolicy::Layered
     } else {
@@ -234,6 +285,7 @@ fn main() {
         for _ in 0..arg("--threads", "8").parse::<usize>().unwrap() {
             scope.spawn(|| loop {
                 let job=cursor.fetch_add(1,Ordering::Relaxed);if job>=start+games {break;}
+                if only.as_ref().is_some_and(|jobs|!jobs.contains(&job)) { continue; }
                 let mut rng=SplitMix64::new(seed^(job as u64).wrapping_mul(0x9e3779b97f4a7c15));
                 let own_i=weight_pick(&weights,&mut rng);
                 let opp_i=if mode=="onpool" {weight_pick(&weights,&mut rng)} else {job%opponents.teams.len()};
@@ -244,10 +296,21 @@ fn main() {
                 for policy in [FallbackPolicy::Layered,candidate] {
                     let started=std::time::Instant::now();
                     let mut battle=Battle::from_fixture(&dex,&battle_seed,teams[0],teams[1]).unwrap();battle.set_log_enabled(true);
-                    let mut me=Measured {inner:BlindAgent::new_with_fallback_policy(cfg.clone(),prior.clone(),None,bot_seed,policy),decisions:0,fallback:0,exposed:0,missing:0};
+                    let trace=if trace_dir.is_empty() {None} else {Some(std::io::BufWriter::new(std::fs::File::create(format!("{trace_dir}/{job}-{}.jsonl",policy.id())).unwrap()))};
+                    let mut me=Measured {trace,cfg:cfg.clone(),inner:BlindAgent::new_with_fallback_policy(cfg.clone(),prior.clone(),None,bot_seed,policy),decisions:0,fallback:0,exposed:0,missing:0};
                     let mut opp=Opponent {inner:BlindAgent::new(cfg.clone(),prior.clone(),None,opp_seed),forced:mode=="stress"};
-                    let agents:[&mut dyn Agent;2]=if side==0 {[&mut me,&mut opp]} else {[&mut opp,&mut me]};
-                    let (score,turns,tally)=combo_common::play(&dex,&mut battle,agents,500);
+                    let inputs=Arc::new(Mutex::new(Vec::new()));
+                    let (score,turns,tally)=if trace_dir.is_empty() {
+                        let agents:[&mut dyn Agent;2]=if side==0 {[&mut me,&mut opp]} else {[&mut opp,&mut me]};
+                        combo_common::play(&dex,&mut battle,agents,500)
+                    } else {
+                        let mut mine=Recorder{inner:&mut me,inputs:inputs.clone()};
+                        let mut theirs=Recorder{inner:&mut opp,inputs:inputs.clone()};
+                        let agents:[&mut dyn Agent;2]=if side==0 {[&mut mine,&mut theirs]} else {[&mut theirs,&mut mine]};
+                        let result=combo_common::play(&dex,&mut battle,agents,500);
+                        std::fs::write(format!("{trace_dir}/{job}-{}-replay.json",policy.id()),serde_json::to_string(&json!({"teams":teams,"battle_seed":battle_seed,"inputs":*inputs.lock().unwrap(),"log":battle.log})).unwrap()).unwrap();
+                        result
+                    };
                     arms.push(json!({"elapsed_seconds":started.elapsed().as_secs_f64(),"policy":policy.id(),"score":if side==0 {score}else{1.0-score},"turns":turns,"terminal":battle.outcome().is_some(),"trajectory":format!("{:016x}",digest(&battle.log)),"decisions":me.decisions,"fallback":me.fallback,"exposed":me.exposed,"missing":me.missing,"own":tally[side].json(),"opponent":tally[1-side].json()}));
                 }
                 let row=json!({"job":job,"mode":mode,"iterations":iterations,"c":0.4,"seed":seed,"battle_seed":battle_seed,"bot_seed":bot_seed,"opp_seed":opp_seed,"side":side,"own_team":own.teams[own_i].id,"opponent_team":opponents.teams[opp_i].id,"a":arms[0],"b":arms[1]});
