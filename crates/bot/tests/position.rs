@@ -409,3 +409,57 @@ fn a_pokemon_cannot_faint_without_appearing() {
     let err = PositionSpec::parse(&v.to_string()).unwrap_err();
     assert!(err.contains("without ever appearing"), "{err}");
 }
+
+#[test]
+fn hidden_power_type_evidence_survives_position_round_trip() {
+    let dex = load_dex();
+    let mut value = demo_position();
+    let mask = (1u16 << 3) | (1u16 << 10);
+    value["sides"][1]["mons"][5]["revealed_moves"] = json!(["thunderbolt", "drillpeck", "hiddenpower"]);
+    value["sides"][1]["mons"][5]["hp_type_mask"] = json!(mask);
+    let spec = PositionSpec::parse(&value.to_string()).unwrap();
+    let mut first = ProtocolAgent::new(&dex, 0, pool(), RmConfig::default(), 77);
+    first.set_position(&dex, &spec).unwrap();
+    let saved = first.to_position_spec(&dex).unwrap();
+    assert_eq!(saved.sides[1].mons[5].hp_type_mask, mask);
+    let encoded = serde_json::to_string(&saved).unwrap();
+    let parsed = PositionSpec::parse(&encoded).unwrap();
+    let mut restored = ProtocolAgent::new(&dex, 0, pool(), RmConfig::default(), 77);
+    restored.set_position(&dex, &parsed).unwrap();
+    assert_eq!(first.battle().unwrap().state_key128(), restored.battle().unwrap().state_key128());
+    let mut seen = std::collections::BTreeSet::new();
+    for seed in 0..32 {
+        let sample = |agent: &ProtocolAgent| agent.belief().unwrap().determinize(&dex,
+            agent.battle().unwrap(), agent.observer().unwrap(), &mut nc2000_bot::SplitMix64::new(seed));
+        let a = sample(&first);
+        let b = sample(&restored);
+        assert_eq!(a.state_key128(), b.state_key128());
+        let foe = a.poke(a.active_id(1).unwrap());
+        let ty = dex.type_name(foe.hp_type);
+        assert!(matches!(ty, "Ground" | "Grass"));
+        seen.insert(ty.to_string());
+    }
+    assert_eq!(seen.len(), 2);
+}
+
+#[test]
+fn impossible_hidden_power_evidence_is_rejected() {
+    let dex = load_dex();
+    let mut value = demo_position();
+    value["sides"][1]["mons"][5]["hp_type_mask"] = json!(0);
+    let spec = PositionSpec::parse(&value.to_string()).unwrap();
+    let mut agent = ProtocolAgent::new(&dex, 0, pool(), RmConfig::default(), 77);
+    assert!(agent.set_position(&dex, &spec).unwrap_err().contains("constraint is empty"));
+    value["sides"][1]["mons"][5]["hp_type_mask"] = json!(1);
+    let spec = PositionSpec::parse(&value.to_string()).unwrap();
+    assert!(agent.set_position(&dex, &spec).unwrap_err().contains("requires a revealed move"));
+    value["sides"][1]["mons"][5]["revealed_moves"] = json!(["hiddenpowerice"]);
+    let spec = PositionSpec::parse(&value.to_string()).unwrap();
+    assert!(agent.set_position(&dex, &spec).unwrap_err().contains("contradicts a revealed move"));
+    let mut value = demo_position();
+    value["sides"][1]["mons"][4]["revealed_moves"] = json!(["hiddenpower"]);
+    value["sides"][1]["mons"][4]["gender"] = json!("F");
+    value["sides"][1]["mons"][4]["hp_type_mask"] = json!(1 << 15);
+    let spec = PositionSpec::parse(&value.to_string()).unwrap();
+    assert!(agent.set_position(&dex, &spec).unwrap_err().contains("contradicts public gender"));
+}

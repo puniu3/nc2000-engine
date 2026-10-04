@@ -9,11 +9,13 @@ use serde_json::{json, Value};
 
 fn main() {
     let args: Vec<_> = std::env::args().collect();
-    assert_eq!(
-        args.len(),
-        3,
-        "hp_evidence_probe PROTOCOL.json OUTPUT.jsonl"
+    assert!(
+        (3..=4).contains(&args.len()),
+        "hp_evidence_probe PROTOCOL.json OUTPUT.jsonl [--public-constraint]"
     );
+    let public_constraint = args.get(3).is_some_and(|s| s == "--public-constraint");
+    assert!(args.len() == 3 || public_constraint);
+    assert!(!public_constraint || cfg!(feature = "hp-type-evidence"), "build with --features hp-type-evidence");
     let root = std::env::current_dir().unwrap();
     let dex =
         Dex::from_json(&std::fs::read_to_string(root.join("data/gen2stadium2.json")).unwrap())
@@ -88,6 +90,10 @@ fn main() {
             }
         }
         own.party = party;
+        let inferred = spec.clone();
+        for mon in &mut spec.sides[1 - side].mons {
+            mon.hp_type_mask = u16::MAX;
+        }
         let mut typed = spec.clone();
         let foe = &mut typed.sides[1 - side];
         let mon = &mut foe.mons[foe.active.unwrap()];
@@ -103,8 +109,16 @@ fn main() {
             .find(|m| m.as_str() == "hiddenpower")
             .unwrap();
         *revealed = typed_move.clone();
+        if public_constraint {
+            typed = inferred;
+        }
+        let corrected_arm = if public_constraint {
+            "inferred"
+        } else {
+            "known_type"
+        };
         for seed in protocol["seeds"].as_array().unwrap() {
-            for (arm, position) in [("baseline", &spec), ("known_type", &typed)] {
+            for (arm, position) in [("baseline", &spec), (corrected_arm, &typed)] {
                 let mut agent = ProtocolAgent::new(
                     &dex,
                     side,
@@ -120,10 +134,18 @@ fn main() {
                     &mut SplitMix64::new(1),
                 );
                 let foe = model.poke(model.active_id(1 - side).unwrap());
-                assert_eq!(foe.hp_power, 70);
+                if arm != "inferred" {
+                    assert_eq!(foe.hp_power, 70);
+                }
                 let moves: Vec<_> = foe.move_slots.iter().map(|m| dex.moves.key(m.id)).collect();
                 if arm == "known_type" {
                     assert!(moves.contains(&typed_move.as_str()));
+                }
+                if arm == "inferred" {
+                    assert_eq!(
+                        dex.type_name(foe.hp_type),
+                        case["allowed_types"][0].as_str().unwrap()
+                    );
                 }
                 agent.step(&dex, iterations).unwrap();
                 let search = agent.search().unwrap();

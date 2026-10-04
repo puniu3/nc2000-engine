@@ -81,6 +81,7 @@ export interface MonSpec {
   protected_this_turn?: boolean;
   // opponent knowledge
   revealed_moves?: string[];
+  hp_type_mask?: number;
   item_original?: ItemKnowledge;
   item_current?: ItemKnowledge;
   item_gained?: boolean;
@@ -356,6 +357,9 @@ export function setMon(
   const sides: [SideSpec, SideSpec] = [spec.sides[0], spec.sides[1]];
   const mons = sides[side].mons.slice();
   mons[slot] = { ...mons[slot], ...patch };
+  if (patch.revealed_moves && !patch.revealed_moves.some((move) => move.startsWith("hiddenpower"))) {
+    delete mons[slot].hp_type_mask;
+  }
   sides[side] = { ...sides[side], mons };
   return { ...spec, sides };
 }

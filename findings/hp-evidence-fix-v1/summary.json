@@ -1,0 +1,186 @@
+{
+  "adoption": "research-only; automatic inference disabled by default with hp-type-evidence Cargo feature",
+  "schema": "nc2000-hp-evidence-fix-v1",
+  "first_divergence_missing_true_move": {
+    "cases": 23,
+    "with_missing_moves": 21,
+    "causal_claim": false
+  },
+  "default_model_and_root_outputs_exact": true,
+  "reconstructed": 101,
+  "unreconstructed": 26,
+  "contradictory_before": 35,
+  "contradictory_after": 0,
+  "baseline_roots_exact": 16,
+  "probes": [
+    {
+      "battle": 10,
+      "changed": 4,
+      "choices": {
+        "baseline": {
+          "move toxic": 3,
+          "move earthquake": 1
+        },
+        "inferred": {
+          "move earthquake": 3,
+          "move toxic": 1
+        }
+      }
+    },
+    {
+      "battle": 346,
+      "changed": 3,
+      "choices": {
+        "baseline": {
+          "move softboiled": 4
+        },
+        "inferred": {
+          "move softboiled": 1,
+          "switch 3": 3
+        }
+      }
+    },
+    {
+      "battle": 395,
+      "changed": 4,
+      "choices": {
+        "baseline": {
+          "move rest": 3,
+          "move doubleedge": 1
+        },
+        "inferred": {
+          "switch 3": 3,
+          "move earthquake": 1
+        }
+      }
+    },
+    {
+      "battle": 559,
+      "changed": 1,
+      "choices": {
+        "baseline": {
+          "move thunder": 3,
+          "move drillpeck": 1
+        },
+        "inferred": {
+          "move thunder": 4
+        }
+      }
+    }
+  ],
+  "duel_cases": [
+    {
+      "case": "articuno-fighting",
+      "pairs": 8,
+      "baseline": {
+        "0.0": 2,
+        "1.0": 6
+      },
+      "inferred": {
+        "0.0": 5,
+        "1.0": 3
+      },
+      "changed_pairs": 8,
+      "exposed_pairs": 8,
+      "paired_delta_sum": -3.0,
+      "complete_pairs": 8
+    },
+    {
+      "case": "dragonair-fighting",
+      "pairs": 8,
+      "baseline": {
+        "1.0": 7,
+        "0.0": 1
+      },
+      "inferred": {
+        "0.0": 3,
+        "1.0": 5
+      },
+      "changed_pairs": 8,
+      "exposed_pairs": 8,
+      "paired_delta_sum": -2.0,
+      "complete_pairs": 8
+    },
+    {
+      "case": "exeggutor-bug",
+      "pairs": 8,
+      "baseline": {
+        "1.0": 3,
+        "0.0": 5
+      },
+      "inferred": {
+        "1.0": 5,
+        "0.0": 3
+      },
+      "changed_pairs": 7,
+      "exposed_pairs": 8,
+      "paired_delta_sum": 2.0,
+      "complete_pairs": 8
+    },
+    {
+      "case": "onpool-control",
+      "pairs": 2,
+      "baseline": {
+        "1.0": 2
+      },
+      "inferred": {
+        "1.0": 2
+      },
+      "changed_pairs": 0,
+      "exposed_pairs": 0,
+      "paired_delta_sum": 0.0,
+      "complete_pairs": 2
+    }
+  ],
+  "stress_pairs": 24,
+  "complete_stress_pairs": 24,
+  "stress_scores": [
+    16.0,
+    13.0
+  ],
+  "paired_mean_delta": -0.125,
+  "paired_improved": 4,
+  "paired_worsened": 7,
+  "paired_tied": 13,
+  "replay_verification": {
+    "games": 52,
+    "decisions": 1190,
+    "legal_replay": true,
+    "state_keys": true,
+    "public_masks": true,
+    "seeds": true,
+    "outcomes": true
+  },
+  "public_reveal_gate": {
+    "battles": 570,
+    "decisions": 20765,
+    "reconstruct_skips": 44,
+    "fallback_decisions": 20700,
+    "prior_active_decisions": 0,
+    "prior_governed_slots": 0,
+    "dets_per_decision": 8,
+    "checks": {
+      "revealed_move": 827964,
+      "item": 1121310,
+      "identity": 1121310,
+      "hp_reannounce": 124590,
+      "slot_count": 1121310,
+      "total": 4316484
+    },
+    "hp_buckets_unreachable": 0,
+    "over_revealed_mon_checks": 0,
+    "over_revealed_mons": 0,
+    "det_hp_pct_drift": 165,
+    "violations": 0,
+    "prior": "none"
+  },
+  "limitations": [
+    "Constructed exposures, not historical full-team reconstructions or a prevalence estimate.",
+    "Exploratory pilot; small paired sample, common corrected opponent, no general strength or human-superiority claim.",
+    "Caps remain unknown. Complete-pair mean is conditional when any pair is capped.",
+    "DV projection changes type, power and correlated stats coherently; not a type-only intervention.",
+    "Only informative super-effective/resisted events are consumed. Ambiguous compatible prior types are retained.",
+    "Known target type changes/copy mechanics are conservatively excluded; neutral and immune inference are unimplemented.",
+    "Reveal gate uses its legacy no-prior corpus path. 165 HP-percent drift diagnostics are present."
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "checks": {
+    "model_contradictions": 0,
+    "baseline_roots_exact": 16,
+    "default_models_exact": 127,
+    "default_roots_exact": 32,
+    "first_divergence_after_public_evidence": true
+  },
+  "measured_source_sha256": {
+    "crates/bot/src/hp_evidence.rs": "b4b3c03ef8a831c33234410ea593617241dfc0d304d0f4ce7b98a51983aff00d",
+    "crates/bot/src/observe.rs": "89c39378e6b6129237629718aad9fbcf9022d61d98b12445802df9bb0ad50c23",
+    "crates/bot/src/belief.rs": "9dc08ba99ff8e7da96c6a6bc6e9925a622c56c84e5b76c9fd717bcd2c6ae438c",
+    "crates/bot/src/position.rs": "f4e6faa6e13a8bb6636b334d432a91a01482b5dc5adbcaef814b3016e024754a",
+    "crates/bot/src/import.rs": "21b4355c9db958aa8635c3ca8c8524801a85bf5f9241bbf04cbae665c9edf166",
+    "crates/bot/examples/hp_evidence_probe.rs": "8de7371dcc37374363cef178902e103a06e71c89edee5836d4d59607b8fd21ff",
+    "crates/bot/examples/hp_evidence_duel.rs": "eaf0653d697b0f95d89890bcd6918f0cb8efa3ddc3ec0b9d43a740559a5c16e4",
+    "web/src/position.ts": "c147e80534abbdcd30c28c5f091ffca466e5c1f3b9401233ae03c16e82df3df5"
+  },
+  "artifacts_sha256": {
+    "duel-verification.json": "bc85eb9664275550f04e6b7876a82137db5bf203413a3cb23e0b97a6d8688431",
+    "summary.json": "f08ff6100873b1c36c8fdce67d0d1988f9a601410a6da9d32dacafded6228ed8",
+    "gate-validation.json": "042029fac6f2c5ab196f6686cd71311654519edeee2e03d4e1e9eddf5be6f758",
+    "index.html": "3a173fcb1ee895fdd0aefa191710a3328b2a26137a777596ec0891bbbd2d90bf",
+    "first-divergence.json": "174df7b57dcdeb685ffe49543a83ce96f8443524b1a2cc96f36708dcab4cc176",
+    "duel-protocol.json": "044ccd23b89bc795f4f75f25ac832d833c4e9c2a0776727dc788991c97e07f6b",
+    "duel-manifest.json": "6641ae6ff3352015f41d7afb13bfc76d179290dca58ee80fd1fe54f12cf7e085",
+    "records.json.gz": "31effa5c9e5acd385ce608736858564f4a4a4adf49810ccd3074b2d38b6ba99d",
+    "README.md": "6ec21135637cc349e418f2e00f9d9e35d6d36a006155a6db6c8735452749c75c"
+  }
+}

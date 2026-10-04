@@ -310,6 +310,8 @@ pub struct MonSpec {
     /// Moves publicly known to be in this mon's set.
     #[serde(default)]
     pub revealed_moves: Vec<String>,
+    #[serde(default = "unknown_hp_types", skip_serializing_if = "all_hp_types")]
+    pub hp_type_mask: u16,
     /// The item it *brought* (what set filtering matches against).
     #[serde(default)]
     pub item_original: ItemKnowledge,
@@ -322,6 +324,9 @@ pub struct MonSpec {
     #[serde(default)]
     pub item_gained: bool,
 }
+
+fn unknown_hp_types() -> u16 { u16::MAX }
+fn all_hp_types(mask: &u16) -> bool { *mask == u16::MAX }
 
 fn full_hp() -> i32 {
     100
@@ -367,6 +372,7 @@ impl Default for MonSpec {
             last_protect_turn: 0,
             protected_this_turn: false,
             revealed_moves: Vec::new(),
+            hp_type_mask: u16::MAX,
             item_original: ItemKnowledge::unknown(),
             item_current: ItemKnowledge::unknown(),
             item_gained: false,

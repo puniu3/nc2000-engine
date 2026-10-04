@@ -1,0 +1,1041 @@
+[
+  {
+    "case": "articuno-fighting",
+    "trial": 0,
+    "decision": 4,
+    "turn": 4,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "switch 2",
+      "switch 3"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      195,
+      292
+    ],
+    "foe": "snorlax",
+    "foe_hp": [
+      266,
+      266
+    ],
+    "true_foe_moves": [
+      "bodyslam",
+      "earthquake",
+      "selfdestruct",
+      "rest"
+    ],
+    "true_hp_type": "Dark",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "bodyslam,earthquake,selfdestruct,curse:Dark:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "articuno-fighting",
+    "trial": 1,
+    "decision": 3,
+    "turn": 3,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move doubleedge",
+      "move curse"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      174,
+      292
+    ],
+    "foe": "articuno",
+    "foe_hp": [
+      142,
+      201
+    ],
+    "true_foe_moves": [
+      "icebeam",
+      "hiddenpower",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,icebeam,skyattack,blizzard:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,icebeam,skyattack,blizzard:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "articuno-fighting",
+    "trial": 2,
+    "decision": 2,
+    "turn": 2,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move curse",
+      "move doubleedge"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      197,
+      292
+    ],
+    "foe": "articuno",
+    "foe_hp": [
+      52,
+      201
+    ],
+    "true_foe_moves": [
+      "icebeam",
+      "hiddenpower",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,skyattack,blizzard,hyperbeam:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,skyattack,blizzard,hyperbeam:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "articuno-fighting",
+    "trial": 3,
+    "decision": 3,
+    "turn": 3,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move doubleedge",
+      "move curse"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      180,
+      292
+    ],
+    "foe": "articuno",
+    "foe_hp": [
+      119,
+      201
+    ],
+    "true_foe_moves": [
+      "icebeam",
+      "hiddenpower",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,rest,skyattack,blizzard:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,rest,skyattack,blizzard:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "articuno-fighting",
+    "trial": 4,
+    "decision": 13,
+    "turn": 12,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move toxic",
+      "move drillpeck"
+    ],
+    "own": "skarmory",
+    "own_hp": [
+      78,
+      171
+    ],
+    "foe": "articuno",
+    "foe_hp": [
+      192,
+      201
+    ],
+    "true_foe_moves": [
+      "icebeam",
+      "hiddenpower",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,rest,sleeptalk,icebeam:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,rest,sleeptalk,icebeam:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "articuno-fighting",
+    "trial": 5,
+    "decision": 3,
+    "turn": 3,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move doubleedge",
+      "move curse"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      181,
+      292
+    ],
+    "foe": "articuno",
+    "foe_hp": [
+      139,
+      201
+    ],
+    "true_foe_moves": [
+      "icebeam",
+      "hiddenpower",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,icebeam,skyattack,blizzard:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,icebeam,skyattack,blizzard:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "articuno-fighting",
+    "trial": 6,
+    "decision": 3,
+    "turn": 3,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move rest",
+      "move curse"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      170,
+      292
+    ],
+    "foe": "articuno",
+    "foe_hp": [
+      142,
+      201
+    ],
+    "true_foe_moves": [
+      "icebeam",
+      "hiddenpower",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,icebeam,skyattack,blizzard:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,icebeam,skyattack,blizzard:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "articuno-fighting",
+    "trial": 7,
+    "decision": 3,
+    "turn": 3,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "move doubleedge",
+      "move curse"
+    ],
+    "own": "snorlax",
+    "own_hp": [
+      174,
+      292
+    ],
+    "foe": "articuno",
+    "foe_hp": [
+      139,
+      201
+    ],
+    "true_foe_moves": [
+      "icebeam",
+      "hiddenpower",
+      "rest",
+      "sleeptalk"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,icebeam,skyattack,blizzard:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,icebeam,skyattack,blizzard:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "dragonair-fighting",
+    "trial": 0,
+    "decision": 4,
+    "turn": 4,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move icebeam",
+      "switch 2"
+    ],
+    "own": "blissey",
+    "own_hp": [
+      361,
+      361
+    ],
+    "foe": "dragonair",
+    "foe_hp": [
+      116,
+      170
+    ],
+    "true_foe_moves": [
+      "attract",
+      "thunderwave",
+      "hiddenpower",
+      "rest"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "dragonair-fighting",
+    "trial": 1,
+    "decision": 4,
+    "turn": 3,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move drillpeck",
+      "move curse"
+    ],
+    "own": "skarmory",
+    "own_hp": [
+      171,
+      171
+    ],
+    "foe": "dragonair",
+    "foe_hp": [
+      170,
+      170
+    ],
+    "true_foe_moves": [
+      "attract",
+      "thunderwave",
+      "hiddenpower",
+      "rest"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "dragonair-fighting",
+    "trial": 2,
+    "decision": 6,
+    "turn": 6,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move icepunch",
+      "move psychic"
+    ],
+    "own": "alakazam",
+    "own_hp": [
+      156,
+      176
+    ],
+    "foe": "dragonair",
+    "foe_hp": [
+      22,
+      170
+    ],
+    "true_foe_moves": [
+      "attract",
+      "thunderwave",
+      "hiddenpower",
+      "rest"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "dragonair-fighting",
+    "trial": 3,
+    "decision": 5,
+    "turn": 5,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move icepunch",
+      "move psychic"
+    ],
+    "own": "alakazam",
+    "own_hp": [
+      176,
+      176
+    ],
+    "foe": "dragonair",
+    "foe_hp": [
+      170,
+      170
+    ],
+    "true_foe_moves": [
+      "attract",
+      "thunderwave",
+      "hiddenpower",
+      "rest"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract,rest:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract,rest:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "dragonair-fighting",
+    "trial": 4,
+    "decision": 4,
+    "turn": 4,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move icebeam",
+      "switch 2"
+    ],
+    "own": "blissey",
+    "own_hp": [
+      361,
+      361
+    ],
+    "foe": "dragonair",
+    "foe_hp": [
+      117,
+      170
+    ],
+    "true_foe_moves": [
+      "attract",
+      "thunderwave",
+      "hiddenpower",
+      "rest"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "dragonair-fighting",
+    "trial": 5,
+    "decision": 2,
+    "turn": 2,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move thunder",
+      "switch 2"
+    ],
+    "own": "blissey",
+    "own_hp": [
+      361,
+      361
+    ],
+    "foe": "dragonair",
+    "foe_hp": [
+      170,
+      170
+    ],
+    "true_foe_moves": [
+      "attract",
+      "thunderwave",
+      "hiddenpower",
+      "rest"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "dragonair-fighting",
+    "trial": 6,
+    "decision": 4,
+    "turn": 4,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move icebeam",
+      "switch 2"
+    ],
+    "own": "blissey",
+    "own_hp": [
+      361,
+      361
+    ],
+    "foe": "dragonair",
+    "foe_hp": [
+      109,
+      170
+    ],
+    "true_foe_moves": [
+      "attract",
+      "thunderwave",
+      "hiddenpower",
+      "rest"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "dragonair-fighting",
+    "trial": 7,
+    "decision": 4,
+    "turn": 4,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move icebeam",
+      "switch 2"
+    ],
+    "own": "blissey",
+    "own_hp": [
+      361,
+      361
+    ],
+    "foe": "dragonair",
+    "foe_hp": [
+      120,
+      170
+    ],
+    "true_foe_moves": [
+      "attract",
+      "thunderwave",
+      "hiddenpower",
+      "rest"
+    ],
+    "true_hp_type": "Fighting",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,thunderwave,attract:Fighting:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "exeggutor-bug",
+    "trial": 0,
+    "decision": 7,
+    "turn": 6,
+    "scores": [
+      1.0,
+      1.0
+    ],
+    "choices": [
+      "move charm",
+      "move rest"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      15,
+      201
+    ],
+    "foe": "zapdos",
+    "foe_hp": [
+      215,
+      215
+    ],
+    "true_foe_moves": [
+      "thunder",
+      "hiddenpower",
+      "swagger",
+      "whirlwind"
+    ],
+    "true_hp_type": "Ice",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "exeggutor-bug",
+    "trial": 2,
+    "decision": 2,
+    "turn": 2,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "move toxic",
+      "move pursuit"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      144,
+      201
+    ],
+    "foe": "exeggutor",
+    "foe_hp": [
+      201,
+      201
+    ],
+    "true_foe_moves": [
+      "psychic",
+      "hiddenpower",
+      "explosion",
+      "leechseed"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,psychic,leechseed,sleeppowder:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,psychic,leechseed,sleeppowder:Bug:70": 30,
+          "hiddenpower,psychic,leechseed,sleeppowder:Fighting:70": 34
+        }
+      }
+    ]
+  },
+  {
+    "case": "exeggutor-bug",
+    "trial": 3,
+    "decision": 5,
+    "turn": 5,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move toxic",
+      "move pursuit"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      125,
+      201
+    ],
+    "foe": "exeggutor",
+    "foe_hp": [
+      55,
+      201
+    ],
+    "true_foe_moves": [
+      "psychic",
+      "hiddenpower",
+      "explosion",
+      "leechseed"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,leechseed,psychic,sleeppowder:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,leechseed,psychic,sleeppowder:Bug:70": 30,
+          "hiddenpower,leechseed,psychic,sleeppowder:Fighting:70": 34
+        }
+      }
+    ]
+  },
+  {
+    "case": "exeggutor-bug",
+    "trial": 4,
+    "decision": 3,
+    "turn": 3,
+    "scores": [
+      1.0,
+      0.0
+    ],
+    "choices": [
+      "move pursuit",
+      "switch 3"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      146,
+      201
+    ],
+    "foe": "exeggutor",
+    "foe_hp": [
+      141,
+      201
+    ],
+    "true_foe_moves": [
+      "psychic",
+      "hiddenpower",
+      "explosion",
+      "leechseed"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,leechseed,psychic,sleeppowder:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,leechseed,psychic,sleeppowder:Bug:70": 30,
+          "hiddenpower,leechseed,psychic,sleeppowder:Fighting:70": 34
+        }
+      }
+    ]
+  },
+  {
+    "case": "exeggutor-bug",
+    "trial": 5,
+    "decision": 8,
+    "turn": 7,
+    "scores": [
+      0.0,
+      0.0
+    ],
+    "choices": [
+      "move toxic",
+      "move charm"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      97,
+      201
+    ],
+    "foe": "zapdos",
+    "foe_hp": [
+      215,
+      215
+    ],
+    "true_foe_moves": [
+      "thunder",
+      "hiddenpower",
+      "swagger",
+      "whirlwind"
+    ],
+    "true_hp_type": "Ice",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        }
+      }
+    ]
+  },
+  {
+    "case": "exeggutor-bug",
+    "trial": 6,
+    "decision": 3,
+    "turn": 3,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "move pursuit",
+      "switch 3"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      145,
+      201
+    ],
+    "foe": "exeggutor",
+    "foe_hp": [
+      119,
+      201
+    ],
+    "true_foe_moves": [
+      "psychic",
+      "hiddenpower",
+      "explosion",
+      "leechseed"
+    ],
+    "true_hp_type": "Bug",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,leechseed,psychic,sleeppowder:Dark:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "hiddenpower,leechseed,psychic,sleeppowder:Bug:70": 30,
+          "hiddenpower,leechseed,psychic,sleeppowder:Fighting:70": 34
+        }
+      }
+    ]
+  },
+  {
+    "case": "exeggutor-bug",
+    "trial": 7,
+    "decision": 6,
+    "turn": 6,
+    "scores": [
+      0.0,
+      1.0
+    ],
+    "choices": [
+      "move rest",
+      "switch 3"
+    ],
+    "own": "umbreon",
+    "own_hp": [
+      201,
+      201
+    ],
+    "foe": "zapdos",
+    "foe_hp": [
+      215,
+      215
+    ],
+    "true_foe_moves": [
+      "thunder",
+      "hiddenpower",
+      "swagger",
+      "whirlwind"
+    ],
+    "true_hp_type": "Ice",
+    "models": [
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        }
+      },
+      {
+        "fallback": true,
+        "kits": {
+          "thunder,thunderbolt,hiddenpowerice,whirlwind:Ice:70": 64
+        }
+      }
+    ]
+  }
+]

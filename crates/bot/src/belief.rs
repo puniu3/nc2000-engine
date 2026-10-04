@@ -319,10 +319,11 @@ impl LoadoutDraw {
 pub struct Belief {
     cands: Vec<Candidate>,
     /// Pool indices of the candidates consistent with all observations so
-    /// far. Uniform weights. Monotonically non-increasing.
+    /// far. Monotonically non-increasing.
     alive: Vec<usize>,
     /// Synthesized imputation roster when `alive` is empty.
     fallback: Option<Vec<Pokemon>>,
+    fallback_visible: Option<Vec<Pokemon>>,
     /// Open-team-sheet mode (M12): the single candidate IS the truth —
     /// filtering is skipped (provably a no-op, and skipping keeps a filter
     /// bug from silently dropping the truth to fallback).
@@ -375,6 +376,7 @@ impl Belief {
             cands,
             alive: Vec::new(),
             fallback: None,
+            fallback_visible: None,
             pinned: false,
             frozen: false,
             fallback_policy,
@@ -443,6 +445,7 @@ impl Belief {
             }],
             alive: vec![0],
             fallback: None,
+            fallback_visible: None,
             pinned: true,
             frozen: false,
             fallback_policy: FallbackPolicy::Layered,
@@ -472,6 +475,7 @@ impl Belief {
             }],
             alive: vec![0],
             fallback: None,
+            fallback_visible: None,
             pinned: true,
             frozen: false,
             fallback_policy: FallbackPolicy::Layered,
@@ -638,8 +642,9 @@ impl Belief {
                 .as_deref()
                 .expect("refs: candidate is preview-inconsistent"),
             None => self
-                .fallback
+                .fallback_visible
                 .as_deref()
+                .or(self.fallback.as_deref())
                 .expect("refs: fallback roster not built (call sync first)"),
         }
     }
@@ -847,7 +852,8 @@ impl Belief {
                 Some(v) => &v[slot],
                 None => &obs.mons()[slot],
             };
-            impute_mon(mon, &refs[slot], mo, dex);
+            let projected = crate::hp_evidence::project(dex, &refs[slot], mo, rng);
+            impute_mon(mon, projected.as_ref().unwrap_or(&refs[slot]), mo, dex);
             out.refresh_poke_mask(dex, PokeId { side: opp as u8, slot: slot as u8 });
         }
         // active speed reflects stats (+ paralysis, quick claw) like the
@@ -943,6 +949,12 @@ impl Belief {
             let roster = self.build_fallback(dex, obs);
             self.draws = self.build_draws(dex, obs, &roster);
             self.loadout_draws = self.build_loadout_draws(dex, obs, &roster);
+            let mut rng = SplitMix64::new(0);
+            self.fallback_visible = obs.mons().iter().any(|m| m.hp_type_mask != u16::MAX).then(|| {
+                roster.iter().zip(obs.mons()).map(|(p, mo)| {
+                    crate::hp_evidence::project(dex, p, mo, &mut rng).unwrap_or_else(|| p.clone())
+                }).collect()
+            });
             self.fallback = Some(roster);
         } else {
             self.draws = None;
@@ -1429,7 +1441,7 @@ fn build_refs(dex: &Dex, sets: &[PokemonSet], mons: &[MonObs]) -> Option<Vec<Pok
 /// matches any typed hidden power; M10 reveals are typed, bit-identical.)
 fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
     refs.iter().zip(mons).all(|(r, mo)| {
-        mo.revealed_moves
+        crate::hp_evidence::consistent(dex, r, mo.hp_type_mask) && mo.revealed_moves
             .iter()
             .all(|m| r.base_move_slots.iter().any(|s| move_matches(dex, s.id, *m)))
             && match mo.item.original {
@@ -1690,6 +1702,7 @@ mod fallback_tests {
                 .collect(),
             alive: Vec::new(),
             fallback: None,
+            fallback_visible: None,
             pinned: false,
             frozen: false,
             fallback_policy: FallbackPolicy::Layered,
@@ -1708,9 +1721,61 @@ mod fallback_tests {
             gender: Gender::N,
             name: species.to_string(),
             preview_has_item: false,
+            hp_type_mask: u16::MAX,
             revealed_moves: revealed.iter().map(|m| dex.moves.id(m).unwrap()).collect(),
             item: ItemObs::default(),
             appeared: false,
+        }
+    }
+
+    #[cfg(feature = "hp-type-evidence")]
+    #[test]
+    fn hp_constraints_filter_candidates_and_preserve_public_pp_without_hidden_leaks() {
+        let dex = test_dex();
+        let dark: PokemonSet = serde_json::from_value(serde_json::json!({"name":"Exeggutor","species":"exeggutor","level":50,"gender":"M","item":"leftovers","moves":["hiddenpower","rest"]})).unwrap();
+        let mut fighting = dark.clone();
+        fighting.ivs = Some(std::collections::BTreeMap::from([("hp".into(),6),("atk".into(),24),("def".into(),24),("spa".into(),30),("spd".into(),30),("spe".into(),30)]));
+        let mut own = dark.clone(); own.species="snorlax".into(); own.name="Snorlax".into();
+        let mut battle=Battle::from_fixture(&dex,"1,2,3,4",&[own],&[fighting.clone()]).unwrap();
+        let pool=MetaPool { teams:vec![
+            crate::preview::MetaTeam { id:"dark".into(), sets:vec![dark.clone()],weight:None },
+            crate::preview::MetaTeam { id:"fighting".into(),sets:vec![fighting],weight:None },
+        ]};
+        let mut obs=Observer::new(&battle,0);
+        let mut belief=Belief::new(&dex,&pool,&obs);
+        assert_eq!(belief.candidate_count(),2);
+        for line in ["|switch|p1a: Snorlax|Snorlax, L50|100/100", "|move|p2a: Exeggutor|Hidden Power|p1a: Snorlax", "|-supereffective|p1a: Snorlax"] {
+            obs.ingest_line(line,&dex);
+        }
+        belief.sync(&dex,&obs);
+        assert_eq!(belief.candidate_count(),1);
+        assert_eq!(belief.candidate_id(belief.alive()[0]),"fighting");
+        let ablated = Belief::new(&dex, &pool, &obs.without_hp_type_evidence());
+        assert_eq!(ablated.candidate_count(), 2);
+        assert_eq!(obs.mons()[0].hp_type_mask, 1);
+        let fallback=MetaPool {teams:vec![pool.teams[0].clone()]};
+        let belief=Belief::new(&dex,&fallback,&obs);
+        assert!(belief.is_fallback());
+        assert_eq!(dex.type_name(belief.refs(None)[0].hp_type),"Fighting");
+        battle.sides[1].roster[0].base_move_slots[0].pp-=3;
+        battle.sides[1].roster[0].base_move_slots[0].used=true;
+        battle.sides[1].roster[0].move_slots=battle.sides[1].roster[0].base_move_slots;
+        let pp=battle.sides[1].roster[0].base_move_slots[0].pp;
+        let mut hidden=battle.clone();
+        let mon=&mut hidden.sides[1].roster[0];
+        mon.hp_type=dex.type_id("Ice").unwrap();
+        mon.base_hp_type=mon.hp_type;
+        mon.set_ivs=[0;6];
+        mon.base_stored_stats=[1;5]; mon.stored_stats=[1;5];
+        mon.base_move_slots[1]=fresh_move_slot(&dex,dex.moves.id("splash").unwrap());
+        mon.move_slots=mon.base_move_slots;
+        for seed in 0..16 {
+            let a=belief.determinize(&dex,&battle,&obs,&mut SplitMix64::new(seed));
+            let b=belief.determinize(&dex,&hidden,&obs,&mut SplitMix64::new(seed));
+            assert_eq!(a.state_key128(),b.state_key128());
+            let p=&a.sides[1].roster[0];
+            assert_eq!(dex.type_name(p.hp_type),"Fighting");
+            assert_eq!(p.base_move_slots[0].pp,pp);
         }
     }
 

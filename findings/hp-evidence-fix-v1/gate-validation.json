@@ -1,0 +1,20 @@
+{
+  "candidate_models_and_roots_unchanged_after_gating": true,
+  "candidate_replays_unchanged": true,
+  "default_models_exact": 127,
+  "default_roots_exact": 32,
+  "default_unit_tests": 149,
+  "feature_unit_tests": 150,
+  "position_tests_each": 10,
+  "current_source_sha256": {
+    "crates/bot/Cargo.toml": "be36c8445ddc06034d00bf47f21b4c4afd930080928cb871651434cfba3ca933",
+    "crates/bot/src/hp_evidence.rs": "b4b3c03ef8a831c33234410ea593617241dfc0d304d0f4ce7b98a51983aff00d",
+    "crates/bot/src/observe.rs": "eeb0d45d0ff366484bcde0979f3426602e99a39949dabc99aa6e1a726e7d9e07",
+    "crates/bot/src/belief.rs": "91f72b4068f557eb5ebbe31d4dd9a67ace3171e1127fc194dbe39a6f5c16cf3e",
+    "crates/bot/src/position.rs": "f4e6faa6e13a8bb6636b334d432a91a01482b5dc5adbcaef814b3016e024754a",
+    "crates/bot/src/import.rs": "21b4355c9db958aa8635c3ca8c8524801a85bf5f9241bbf04cbae665c9edf166",
+    "crates/bot/examples/hp_evidence_probe.rs": "4f75b4b8e762df2442851f41821adb827d3c072357809847dcbf6290ae264c5e",
+    "crates/bot/examples/hp_evidence_duel.rs": "bb2ab3ade6f93c485bce21b003e86cec20995dd1e9d9ff9b2e31a5ef8544481d",
+    "web/src/position.ts": "c147e80534abbdcd30c28c5f091ffca466e5c1f3b9401233ae03c16e82df3df5"
+  }
+}

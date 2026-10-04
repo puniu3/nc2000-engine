@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+import datetime
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+run = root / 'tmp/hp-evidence-fix-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+run.mkdir(parents=True)
+env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+
+
+def execute(args, output=None):
+    if output:
+        with (run / output).open('w') as f:
+            subprocess.run(args, cwd=root, env=env, stdout=f, check=True)
+    else:
+        subprocess.run(args, cwd=root, env=env, check=True)
+
+
+(run / 'duel-protocol.json').write_bytes((root / 'findings/hp-evidence-fix-v1/duel-protocol.json').read_bytes())
+execute(['cargo', 'test', '-p', 'nc2000-bot', '--lib', '--test', 'position', '--no-default-features', '--features', 'hp-type-evidence'], 'tests.txt')
+execute(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--features', 'hp-type-evidence', '--example', 'hp_evidence_audit', '--example', 'hp_evidence_probe', '--example', 'hp_evidence_duel', '--example', 'reveal_dominance_gate'])
+sources = ['crates/bot/src/hp_evidence.rs', 'crates/bot/src/observe.rs', 'crates/bot/src/belief.rs', 'crates/bot/src/position.rs', 'crates/bot/src/import.rs', 'crates/bot/examples/hp_evidence_probe.rs', 'crates/bot/examples/hp_evidence_duel.rs', 'web/src/position.ts']
+(run / 'measured-source-sha256.json').write_text(json.dumps({p: hashlib.sha256((root / p).read_bytes()).hexdigest() for p in sources}, indent=2) + '\n')
+execute(['python3', 'tools/hp-evidence-census.py', 'tmp/corpus-spectator', str(run / 'census')])
+execute(['target/release/examples/hp_evidence_audit', str(run / 'census/cases.json'), str(run / 'release-models.jsonl')])
+execute(['target/release/examples/hp_evidence_probe', 'findings/hp-evidence-v1/probe-protocol.json', str(run / 'release-probe.jsonl'), '--public-constraint'])
+execute(['target/release/examples/reveal_dominance_gate', '--corpus', 'tmp/corpus-spectator', '--battles', '0-569', '--dets', '8', '--no-prior', '--threads', '4'], 'reveal-gate.json')
+execute(['target/release/examples/hp_evidence_duel', str(run / 'duel-protocol.json'), str(run / 'duel')])
+execute(['target/release/examples/hp_evidence_duel', str(run / 'duel-protocol.json'), str(run / 'duel'), '--verify'], 'duel-verification.json')
+execute(['target/release/examples/hp_evidence_duel', str(run / 'duel-protocol.json'), str(run / 'duel'), '--audit'], 'first-divergence.json')
+execute(['cargo', 'test', '-p', 'nc2000-bot', '--lib', '--test', 'position', '--no-default-features'], 'default-tests.txt')
+execute(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'hp_evidence_audit', '--example', 'hp_evidence_probe'])
+execute(['target/release/examples/hp_evidence_audit', str(run / 'census/cases.json'), str(run / 'default-models.jsonl')])
+execute(['target/release/examples/hp_evidence_probe', 'findings/hp-evidence-v1/probe-protocol.json', str(run / 'default-probe.jsonl')])
+execute(['python3', 'tools/hp-evidence-fix-report.py', str(run), str(run / 'report')])
+print('Report:', run / 'report')

@@ -282,6 +282,7 @@ impl ProtocolTracker {
                 name: m.name.clone(),
                 preview_has_item: m.preview_item,
                 revealed_moves: Vec::new(),
+                hp_type_mask: u16::MAX,
                 item: Default::default(),
                 appeared: m.appeared,
             })
@@ -2677,6 +2678,7 @@ impl ProtocolTracker {
         // observer's roster (both follow `|poke|` order).
         for (slot, mo) in obs.mons().iter().enumerate() {
             let Some(m) = sides[opp].mons.get_mut(slot) else { break };
+            m.hp_type_mask = mo.hp_type_mask;
             m.revealed_moves = mo.revealed_moves.iter().map(|&x| move_key(dex, x)).collect();
             m.item_original =
                 ItemKnowledge::from_obs(mo.item.original.map(|x| x.map(|i| dex.items.key(i))));
