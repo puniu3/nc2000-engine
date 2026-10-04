@@ -1,7 +1,7 @@
 {
-  "status": "correctness_fix_validated_locally_not_deployed",
+  "status": "deployed_and_live_verified",
   "baseline": "a1e0047",
-  "production_revision": "fa6b58f",
+  "production_revision": "08e51da55cc1215fe7b3ac2159ddf5d5c4e9ee75",
   "change": "Keep full-HP healing when public species learnsets admit a priority attack; copied moves and missing learnsets also preserve healing. Hidden opposing moves and PP are not consulted.",
   "native_tests": 158,
   "workspace_all_targets": "passed",
@@ -103,5 +103,6 @@
     "findings/priority-heal-v1/search.jsonl": "4c526213c0b466503fb6b77888e76375b9af432e807e209ef8ed1a9d0e7bba90",
     "findings/priority-heal-v1/targeted.jsonl": "34e63169ffed92100a46bebedd38fef5404d535acb00a310d9a0fa8ae643219e",
     "findings/priority-heal-v1/wasm-priority-heal.txt": "07b74d06940fdd9df11ddbbcfcc414e3b87ef8757521e70615f30bda52f0c0fe"
-  }
+  },
+  "deployment_evidence": "deployment.json"
 }

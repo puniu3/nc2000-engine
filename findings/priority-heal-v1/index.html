@@ -2,7 +2,7 @@
 <style>body{font:18px/1.65 system-ui,sans-serif;background:#f4f0e6;color:#28271f;max-width:940px;margin:32px auto;padding:0 20px}h1,h2{line-height:1.25}h2{margin-top:2em}a{color:#684928}table{border-collapse:collapse;width:100%;font-size:16px}th,td{padding:10px;text-align:left;border-bottom:1px solid #c7c2b6}.table{overflow-x:auto}code{overflow-wrap:anywhere}.lead{font-size:22px}strong{color:#3b4931}</style>
 <h1>先制技と回復技の誤除外</h1>
 <p class="lead">先制攻撃を受けてから回復できる技を、満タンという理由で除外する欠陥を修正した。勝率の改善は確認できなかった。</p>
-<p>ローカル実装・検証済み。本番は前回の回復待機修正 <code>fa6b58f</code> のまま。</p>
+<p><a href="https://puniu3.github.io/nc2000-engine/">本番</a>へ <code>08e51da</code> を反映済み。配信ファイル・データの照合、実対戦の1→2ターン、本番Wasmの先制回復8例を確認した。<a href="deployment.json">配信検証の記録</a>。</p>
 <h2>修正した判定</h2>
 <p>フーディンが満タンでも、ハッサムの「でんこうせっか」が先に当たれば、その後の「じこさいせい」は成功する。従来は素早さだけを根拠に回復技を除外していた。</p>
 <p>相手の種族が先制攻撃を習得できる場合は回復技を残す。相手の隠れた技構成やPPを参照しない。コピー技がある場合や習得表がない場合も、回復できる可能性を残す。先制攻撃を否定できる相手への満タン回復の除外と、自滅・睡眠ルール違反の防止は維持する。</p>
