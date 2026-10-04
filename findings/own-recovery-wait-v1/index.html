@@ -1,7 +1,7 @@
 <!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NC2000 — 回復待機の誤除外を修正</title><style>body{font:18px/1.6 system-ui,sans-serif;background:#f4f0e6;color:#28271f;max-width:940px;margin:32px auto;padding:0 20px}h1,h2{line-height:1.2}h2{margin-top:2em}a{color:#684928}table{border-collapse:collapse;font-size:15px;width:100%;font-variant-numeric:tabular-nums}th,td{padding:9px;text-align:left;border-bottom:1px solid #c7c2b6}.table{overflow-x:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;padding:16px;background:#e7e1d4}strong{color:#3b4931}.lead{font-size:22px}.note{color:#635e51}</style>
 <h1>回復待機の誤除外を修正</h1>
 <p class="lead">自分がたべのこしで回復できる間、待機手を最終フィルタが消さないよう修正。再現局面の継続対戦は7勝25敗から32勝0敗になった。</p>
-<p>ローカル実装・検証が完了。本番サイトへのデプロイは未実施。以下の修正前診断は <code>63f8317</code> を対象にした。</p>
+<p><a href="https://puniu3.github.io/nc2000-engine/">本番サイト</a>へ <code>fa6b58f</code> を反映済み。配信ファイル照合、実対戦の1→2ターン、本番Wasmでの回復待機4継続戦全勝を確認。<a href="deployment.json">配信検証の記録</a>。以下の修正前診断は <code>63f8317</code> を対象にした。</p>
 <h2>修正と確認結果</h2>
 <p>場にいる自分が生存し、たべのこしを持ち、HPが減っている場合だけ、直接効果のない技を待機として残す。自滅・睡眠ルール違反の除外を先に適用する。満タン、持ち物なし、別の持ち物、控えの所持者ではこの例外を適用しない。</p>
 <div class="table"><table><tr><th>検査</th><th>結果</th></tr>
@@ -36,7 +36,12 @@
 <h2>修正の範囲と残る限界</h2>
 <p><strong>自分の継続回復が進む間も、失敗する技を待機として選べるようにする。</strong> 自滅・睡眠ルール違反の防止は維持する。今回の修正は探索本体を変更せず、この局面で首位の手を返す。</p>
 <p>平均勝率の改善は未測定。コーパスにはソーナンスが0戦、カウンターが8戦、ミラーコートが7戦で、この損失の頻度は分からない。回復待機が生じる固定局面で改善を確認した。自然対局でこの機会がどの程度現れるかは未確定。</p>
-<p>過去の評価項追加・汎用rollout・学習器・終盤ソルバの不採用結果を読み直した。本件はそれらの再挑戦ではなく、現行探索が見つけた有効な手の誤除外という具体的な欠陥を測っている。WasmとWeb workerは修正後に再検証した。実機の性能測定・本番へのデプロイは行っていない。</p>
+<p>過去の評価項追加・汎用rollout・学習器・終盤ソルバの不採用結果を読み直した。本件はそれらの再挑戦ではなく、現行探索が見つけた有効な手の誤除外という具体的な欠陥を測っている。WasmとWeb workerは修正後に再検証した。本番配信版は別途141テストとWebビルドを確認し、配信Wasmでも再現対戦が通った。実機の性能測定は行っていない。</p>
+<h2>次の改善候補</h2>
+<p><strong>先制技を考慮しない回復技の誤除外を再現。</strong> 満タンのフーディンはハッサムより速いため、現行フィルタは「じこさいせい」を除外する。しかし相手が「でんこうせっか」なら、先に被弾してから回復できる。4シード全てで回復に成功。通常優先度の「おんがえし」を相手の手にした対照4例では、先に回復が失敗する。</p>
+<p>現行24パーティに先制攻撃技は0件。570戦のログで先制攻撃技の使用は1戦（しんそく1回）だけであり、これは誤除外が発生した回数ではない。作成した1対1局面の正しさの反例で、探索の首位・継続勝敗の改善は未測定。今回の本番修正には含めていない。</p>
+<p>次は、残る除外について「探索で高い訪問割合を持つ手が最終選択で消える局面」を集め、実際の着手と継続勝敗が変わるかを測る。発火しなかった自己対戦の五分を採用根拠にしない。ほろびの残り2〜3ターン等の待機価値は未検証の仮説に留める。</p>
+<p><a href="next-candidate.json">候補の条件と限界</a> · <a href="next-priority-heal.jsonl">8例の全ログ</a> · <a href="next-priority-exposure.json">先制技の使用状況</a>。再現は <code>tools/priority-heal-audit</code>。</p>
 <h2>証拠と再現</h2>
 <p><a href="summary.json">修正前の条件・限界・ソース指紋</a> · <a href="measurements.jsonl">全測定行</a> · <a href="corpus-all-replies.txt">全応手監査の出力</a></p>
 <p>リポジトリで <code>tools/recovery-audit</code> を実行すると、修正前アブレーションと修正後の両方で、局面・列挙結果・継続試行・対照・24判断の出力一致を確認する。初期構成はSafeguardで麻痺できず失敗し、次のTackle構成では一部シードで待機を選択。未使用Tackleを習得可能なBody Slamへ替えた最終構成をここに示した。設計済み局面の反復測定を独立な実戦頻度と数えない。</p>

@@ -1,0 +1,21 @@
+{
+  "status": "reproduced_correctness_candidate_not_implemented",
+  "source_revision": "a9135e5a2028a8abac496939cc6c18981ce80c30",
+  "fixture": "Alakazam level 50, Recover/Psychic vs Scizor level 50, Quick Attack/Return; both at full HP, no items; one-mon reduced fixture",
+  "checks": {
+    "quick_attack_then_recover_succeeds": 4,
+    "return_control_recover_fails": 4
+  },
+  "limits": [
+    "No search-preference or continuation-win comparison was performed.",
+    "Current 24-team catalog contains zero priority damaging moves.",
+    "One of 570 corpus games reveals a priority damaging move; this is not the frequency of the recovery-mask defect.",
+    "Not included in the deployed fix."
+  ],
+  "sha256": {
+    "crates/bot/examples/priority_heal_audit.rs": "60dbce956feca17430c3d13148a5db73d1cef113f19985f82acbbc0f974555b7",
+    "findings/own-recovery-wait-v1/next-priority-heal.jsonl": "695532b52ca3bfd3925905cd9fbb0cac46cb5afe25890f991d34f5de027093d5",
+    "findings/own-recovery-wait-v1/next-priority-exposure.json": "7bdae792a9a775a4a2e5daa092398cc6bb0ff4b6e3d452266bc0f2ff29558cb8",
+    "tools/priority-heal-audit": "aaf85907c8b169e6217b343c58a1dfb7cb18b5c91cdd778c0d76257c02fca2f1"
+  }
+}
