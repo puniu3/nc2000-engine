@@ -139,3 +139,10 @@
 .arena-cli code {
   word-break: break-all;
 }
+
+@media (max-width: 600px) {
+  .fork-facts {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    overflow-wrap: anywhere;
+  }
+}

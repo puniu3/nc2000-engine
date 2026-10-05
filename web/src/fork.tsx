@@ -1,10 +1,5 @@
-// `?fork`: repeated games from one recorded decision point. The human keeps
-// their original side; the bot's first action is one of the fork's arms,
-// assigned in shuffled blocks and not shown until the turn resolves, and
-// every later decision is the ladder searcher's. Results persist per fork
-// document in this browser and export as tools/summarize-counterfactual.py
-// rows (scores from the bot's side, like the bot-vs-bot tool's).
-
+import { useToolMessage, errorText } from "./tool-message";
+import { toolText } from "./tool-strings";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   forkBattle,
@@ -18,7 +13,7 @@ import {
   type Battle,
 } from "./engine";
 import { fetchFork, fetchI18nJa, fetchRecordPool } from "./data";
-import { loadJaNames, moveName, setLocale, speciesName, toId } from "./i18n";
+import { loadJaNames, moveName, locale, speciesName, toId } from "./i18n";
 import { BotWorker } from "./bot";
 import { Narrator } from "./narrate";
 import { ActiveCard, FieldStrip } from "./battle-ui";
@@ -114,14 +109,14 @@ function forkName(): string | null {
   return v === "" || v === "1" || v.toLowerCase() === "true" ? null : v;
 }
 
-function armNames(json: string, info: ForkInfo): string[] {
+export function armNames(json: string, info: ForkInfo): string[] {
   const b = forkBattle(json, 0);
   try {
     const legal = legalChoices(b, info.botSide);
     return info.arms.map((arm) => {
       const c = legal.find((x) => x.input === arm.input);
       if (c?.kind === "move") return moveName(c.name);
-      if (c?.kind === "switch") return `交代: ${speciesName(c.species)}`;
+      if (c?.kind === "switch") return toolText("switchLabel", speciesName(c.species));
       return arm.input;
     });
   } finally {
@@ -131,15 +126,14 @@ function armNames(json: string, info: ForkInfo): string[] {
 
 export function Fork() {
   const [poolJson, setPoolJson] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [fork, setFork] = useState<LoadedFork | null>(null);
+  const [error, setError] = useToolMessage(null);
+  const [loadedFork, setFork] = useState<LoadedFork | null>(null);
+  const fork = useMemo(() => loadedFork && ({ ...loadedFork, armNames: armNames(loadedFork.json, loadedFork.info) }), [loadedFork, locale()]);
   const [session, setSession] = useState<Session | null>(null);
   const [current, setCurrent] = useState<GameRecord | null>(null);
   const [paste, setPaste] = useState("");
 
   useEffect(() => {
-    setLocale("ja", false);
-    document.title = "NC2000 — 反実仮想フォーク対局";
     void (async () => {
       try {
         const [, pool] = await Promise.all([
@@ -151,7 +145,7 @@ export function Fork() {
         const name = forkName();
         if (name) await load(await fetchFork(name));
       } catch (e) {
-        setError(String(e));
+        setError(() => errorText(e));
       }
     })();
   }, []);
@@ -182,7 +176,7 @@ export function Fork() {
       setFork(loaded);
       setSession(s);
     } catch (e) {
-      setError(`フォーク定義を読み込めません: ${String(e)}`);
+      setError(() => toolText("forkLoadError", errorText(e)));
     }
   }
 
@@ -239,7 +233,7 @@ export function Fork() {
   if (!poolJson) {
     return (
       <div class="center-screen">
-        <div class="loading-pulse">読み込み中…</div>
+        <div class="loading-pulse">{toolText("loading")}</div>
       </div>
     );
   }
@@ -278,7 +272,7 @@ export function Fork() {
         onStart={startGame}
         onReveal={() => update({ ...session, revealed: true })}
         onClear={() => {
-          if (!confirm("このフォークの記録をすべて消去しますか？")) return;
+          if (!confirm(toolText("deleteForkConfirm"))) return;
           const s: Session = {
             ...session,
             sessionSeed: randomSeed32(),
@@ -303,16 +297,10 @@ export function Fork() {
 function ForkIntro() {
   return (
     <header class="fork-intro">
-      <p class="fork-eyebrow">反実仮想フォーク対局</p>
-      <h1>記録された局面から、bot と繰り返し対戦する</h1>
-      <p>
-        対戦記録の1局面から対局を再開し、bot の初手の候補ごとに勝率を比べます。比べ方は2つあります。あなたが元の対戦と同じ側を持って
-        bot と対戦するか、bot 同士で対戦させるかです。どちらも 2手目以降は bot がラダーと同じ仕組みで考えます。
-      </p>
-      <p class="fork-muted">
-        あなたとの対戦では、bot の初手は候補手のどれか1つに固定され、どれになるかは対局ごとに無作為に決まり、ターンが進むまで分かりません。途中でやめた対局は投了（bot
-        の勝ち）として記録します。記録はこのブラウザにだけ保存されます。
-      </p>
+      <p class="fork-eyebrow">{toolText("forkEyebrow")}</p>
+      <h1>{toolText("forkHeading")}</h1>
+      <p>{toolText("forkIntro")}</p>
+      <p class="fork-muted">{toolText("forkHelp")}</p>
     </header>
   );
 }
@@ -324,14 +312,13 @@ function Loader(props: {
 }) {
   return (
     <section class="fork-panel">
-      <h2>フォーク定義を読み込む</h2>
+      <h2>{toolText("loadFork")}</h2>
       <p class="fork-muted">
-        <code>fork_bundle</code> で作った <code>nc2000-fork-v1</code> の JSON を選ぶか、貼り付けてください。
-      </p>
+        <code>fork_bundle</code> {toolText("forkFormatMiddle")}<code>nc2000-fork-v1</code> {toolText("forkFormatSuffix")}</p>
       <input
         type="file"
         accept=".json,application/json"
-        aria-label="フォーク定義ファイル"
+        aria-label={toolText("forkFile")}
         onChange={async (e) => {
           const file = (e.currentTarget as HTMLInputElement).files?.[0];
           if (file) await props.onLoad(await file.text());
@@ -347,9 +334,7 @@ function Loader(props: {
         class="primary"
         disabled={props.paste.trim() === ""}
         onClick={() => void props.onLoad(props.paste)}
-      >
-        貼り付けた定義を読み込む
-      </button>
+      >{toolText("loadPastedFork")}</button>
     </section>
   );
 }
@@ -414,21 +399,21 @@ function ForkSummary(props: {
   return (
     <>
       <section class="fork-panel">
-        <h2>{info.label || "フォーク"}</h2>
+        <h2>{info.label || toolText("fork")}</h2>
         <dl class="fork-facts">
-          <dt>開始局面</dt>
-          <dd>ターン {info.turn}</dd>
-          <dt>あなた</dt>
-          <dd>p{2 - info.botSide} 側（元の対戦と同じ）</dd>
-          <dt>bot の情報</dt>
+          <dt>{toolText("startingPosition")}</dt>
+          <dd>{toolText("turn", info.turn)}</dd>
+          <dt>{toolText("you")}</dt>
+          <dd>{toolText("playerSide", 2 - info.botSide)}</dd>
+          <dt>{toolText("botInformation")}</dt>
           <dd>
             {info.info === "blind"
-              ? "あなたの構築を知らない（ラダーと同じ）"
-              : "あなたの構築を知っている（オープンシート）"}
+              ? toolText("blindBot")
+              : toolText("openBot")}
           </dd>
-          <dt>対戦での bot の思考量</dt>
-          <dd>1手あたり {session.budget.toLocaleString()} 回</dd>
-          <dt>bot の初手の候補</dt>
+          <dt>{toolText("botBudget")}</dt>
+          <dd>{toolText("perActionBudget", session.budget.toLocaleString())}</dd>
+          <dt>{toolText("firstActionCandidates")}</dt>
           <dd>
             <ul class="fork-arms">
               {info.arms.map((a, i) => (
@@ -441,37 +426,30 @@ function ForkSummary(props: {
           </dd>
         </dl>
         <button class="primary fork-start" onClick={props.onStart}>
-          {done.length === 0 ? "対局を始める" : "次の対局"}
+          {done.length === 0 ? toolText("startGame") : toolText("nextGame")}
         </button>
       </section>
 
       <section class="fork-panel" data-testid="human-results">
-        <h2>あなたとの対戦結果</h2>
-        <p>
-          {done.length} 局終了 — あなたの {humanWins} 勝 {done.length - humanWins - ties} 敗
-          {ties > 0 && ` ${ties} 分`}
-        </p>
+        <h2>{toolText("humanResults")}</h2>
+        <p>{toolText("humanResultsSummary", done.length, humanWins, done.length - humanWins - ties, ties > 0 && toolText("tieCount", ties))}</p>
         {!session.revealed ? (
           <>
-            <p class="fork-muted">
-              候補ごとの結果は伏せてあります。対局中に意識しないよう、予定の局数を終えてから表示してください。
-            </p>
-            <button onClick={props.onReveal} disabled={done.length === 0}>
-              候補ごとの結果を表示
-            </button>
+            <p class="fork-muted">{toolText("hiddenResultsHelp")}</p>
+            <button onClick={props.onReveal} disabled={done.length === 0}>{toolText("revealResults")}</button>
           </>
         ) : (
           <div class="fork-table-wrap">
             <table class="fork-table">
               <thead>
                 <tr>
-                  <th>bot の初手</th>
-                  <th>局数</th>
-                  <th>bot 勝</th>
-                  <th>bot 負</th>
-                  <th>分</th>
-                  <th>bot 勝率 (95%)</th>
-                  <th>{info.arms[0].label || "1番目"} との差</th>
+                  <th>{toolText("botFirstAction")}</th>
+                  <th>{toolText("gameTotal")}</th>
+                  <th>{toolText("botWins")}</th>
+                  <th>{toolText("botLosses")}</th>
+                  <th>{toolText("draws")}</th>
+                  <th>{toolText("botWinInterval")}</th>
+                  <th>{toolText("differenceFrom", info.arms[0].label || toolText("firstCandidate"))}</th>
                 </tr>
               </thead>
               <tbody>
@@ -510,28 +488,21 @@ function ForkSummary(props: {
                 })}
               </tbody>
             </table>
-            <p class="fork-muted">
-              区間は Wilson の95%区間、p は Fisher の正確検定（両側）です。途中でやめた対局（
-              {perArm.reduce((a, r) => a + r.forfeits, 0)} 局）は bot の勝ちに含みます。
-            </p>
+            <p class="fork-muted">{toolText("forkStatisticsHelp", perArm.reduce((a, r) => a + r.forfeits, 0))}</p>
           </div>
         )}
         <div class="fork-actions">
-          <button onClick={exportRows} disabled={done.length === 0}>
-            結果を書き出す (JSONL)
-          </button>
-          <button class="ghost" onClick={props.onClear} disabled={session.games.length === 0}>
-            記録を消去
-          </button>
+          <button onClick={exportRows} disabled={done.length === 0}>{toolText("exportJsonl")}</button>
+          <button class="ghost" onClick={props.onClear} disabled={session.games.length === 0}>{toolText("deleteRecords")}</button>
         </div>
         {session.revealed && done.length > 0 && (
           <ol class="fork-games">
             {done.map((g) => (
               <li key={g.game}>
                 {fork.armNames[g.arm]} —{" "}
-                {g.outcome === "loss" ? "あなたの勝ち" : g.outcome === "win" ? "bot の勝ち" : "引き分け"}
-                {g.forfeit && "（投了）"}
-                {g.finalTurn !== null && `・ターン ${g.finalTurn}`}
+                {g.outcome === "loss" ? toolText("youWin") : g.outcome === "win" ? toolText("botWin") : toolText("draw")}
+                {g.forfeit && toolText("forfeited")}
+                {g.finalTurn !== null && toolText("turnSuffix", g.finalTurn)}
               </li>
             ))}
           </ol>
@@ -564,9 +535,11 @@ export function ForkGame(props: {
   const blind = info.info === "blind";
   const [phase, setPhase] = useState<"init" | "battle" | "end">("init");
   const [view, setView] = useState<StateView | null>(null);
-  const [log, setLog] = useState<LogEntry[]>([
-    { kind: "turn", text: `ターン ${info.turn} から再開` },
-  ]);
+  const [rawLog, setRawLog] = useState<string[]>([]);
+  const log = useMemo<LogEntry[]>(() => [
+    { kind: "turn", text: toolText("resumedTurn", info.turn) },
+    ...new Narrator(HUMAN).render(rawLog),
+  ], [rawLog, HUMAN, info.turn, locale()]);
   const [humanChoices, setHumanChoices] = useState<Choice[] | null>(null);
   const [humanWaiting, setHumanWaiting] = useState(false);
   const [thinking, setThinking] = useState<{ done: number; budget: number } | null>(null);
@@ -612,7 +585,7 @@ export function ForkGame(props: {
     if (lines.length > 0) {
       const entries = narrator.render(lines);
       if (entries.length > 0) {
-        setLog((prev) => [...prev, ...entries]);
+        setRawLog((prev) => [...prev, ...lines]);
         const speak = entries
           .filter((e) => e.kind !== "result")
           .map((e) => e.text)
@@ -634,7 +607,7 @@ export function ForkGame(props: {
       setOutcome(o);
       setPhase("end");
       setHumanChoices(null);
-      announceAssertive(o === "loss" ? "あなたの勝ち" : o === "win" ? "bot の勝ち" : "引き分け");
+      announceAssertive(o === "loss" ? toolText("youWin") : o === "win" ? toolText("botWin") : toolText("draw"));
       props.onFinish(o, v.turn);
       return;
     }
@@ -723,7 +696,7 @@ export function ForkGame(props: {
   if (!view) {
     return (
       <div class="center-screen">
-        <div class="loading-pulse">局面を準備中…</div>
+        <div class="loading-pulse">{toolText("preparingScene")}</div>
       </div>
     );
   }
@@ -742,20 +715,16 @@ export function ForkGame(props: {
   return (
     <main class="screen battle-screen fork-battle">
       <header class="battle-header">
-        <span class="turn-label">
-          フォーク #{props.record.game + 1}・ターン {view.turn}
-        </span>
+        <span class="turn-label">{toolText("forkGameTitle", props.record.game + 1, view.turn)}</span>
         {humanChoices && <ThinkChip thinking={thinking} />}
         {phase !== "end" && (
           <button
             class="ghost quit-btn"
             onClick={() => {
-              if (confirm("この対局を投了しますか？ bot の勝ちとして記録されます。"))
+              if (confirm(toolText("forfeitConfirm")))
                 props.onForfeit(view.turn);
             }}
-          >
-            投了
-          </button>
+          >{toolText("forfeit")}</button>
         )}
       </header>
 
@@ -764,7 +733,7 @@ export function ForkGame(props: {
           <ActiveCard
             poke={blind ? { ...activeFoe, item: "?" } : activeFoe}
             mine={false}
-            extra={`残り${foe.pokemonLeft}`}
+            extra={toolText("remaining", foe.pokemonLeft)}
             initialItem={null}
           />
         )}
@@ -781,22 +750,17 @@ export function ForkGame(props: {
 
       <LogPane log={log} />
 
-      <section class="choice-panel" aria-label="あなたの行動">
+      <section class="choice-panel" aria-label={toolText("yourAction")}>
         {phase === "end" && outcome ? (
           <div class="end-banner">
             <h2 class={`end-text ${outcome === "loss" ? "win" : "lose"}`}>
-              {outcome === "loss" ? "あなたの勝ち" : outcome === "win" ? "bot の勝ち" : "引き分け"}
+              {outcome === "loss" ? toolText("youWin") : outcome === "win" ? toolText("botWin") : toolText("draw")}
             </h2>
-            <p class="fork-muted">
-              この対局の bot の初手: {props.fork.armNames[props.record.arm]}
-              {props.record.label && `（${props.record.label}）`}
-            </p>
+            <p class="fork-muted">{toolText("revealedFirstMove", props.fork.armNames[props.record.arm], props.record.label && `（${props.record.label}）`)}</p>
             <div class="end-actions">
-              <button class="primary" onClick={props.onNext}>
-                次の対局
-              </button>
+              <button class="primary" onClick={props.onNext}>{toolText("nextGame")}</button>
               <button class="ghost" onClick={props.onBack}>
-                {props.backLabel ?? "結果一覧へ"}
+                {props.backLabel ?? toolText("backToResults")}
               </button>
             </div>
           </div>

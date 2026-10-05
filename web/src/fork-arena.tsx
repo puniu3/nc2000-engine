@@ -1,8 +1,5 @@
-// Bot-vs-bot trials of a fork in a pool of workers. Trial k is the native
-// fork_counterfactual trial k for the same seed and settings; every arm of a
-// trial shares its seeds, so arms compare pairwise. Results live in memory
-// and export as the same JSONL rows.
-
+import { useToolMessage, type ToolMessage } from "./tool-message";
+import { toolText } from "./tool-strings";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { randomSeed32 } from "./engine";
 import { searchProfile } from "./search-profile";
@@ -71,7 +68,7 @@ export function ArenaPanel(props: {
   const [seed, setSeed] = useState(() => randomSeed32());
   const [workers, setWorkers] = useState(defaultWorkers);
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useToolMessage(null);
   const [, setTick] = useState(0);
   const runRef = useRef<Run | null>(null);
   const poolRef = useRef<Worker[]>([]);
@@ -97,7 +94,7 @@ export function ArenaPanel(props: {
   const run = runRef.current;
   const sameConfig = run !== null && JSON.stringify(run.config) === JSON.stringify(config);
 
-  function halt(message?: string) {
+  function halt(message?: ToolMessage) {
     poolRef.current.forEach((w) => w.terminate());
     poolRef.current = [];
     const r = runRef.current;
@@ -165,9 +162,9 @@ export function ArenaPanel(props: {
           r.partial.delete(m.trial);
           rerender();
           deal(w);
-        } else halt(`対戦中にエラーが起きました: ${m.message}`);
+        } else halt(() => toolText("battleError", m.message));
       };
-      w.onerror = (e) => halt(`Worker エラー: ${e.message}`);
+      w.onerror = (e) => halt(() => toolText("workerError", e.message));
       w.postMessage({
         t: "start",
         fork: props.json,
@@ -211,15 +208,11 @@ export function ArenaPanel(props: {
 
   return (
     <section class="fork-panel" data-testid="arena-panel">
-      <h2>{props.simple ? "bot同士で比較" : "bot 同士で検証"}</h2>
-      <p class="fork-muted">
-        同じ局面から bot 同士で対戦させ、bot の初手ごとの勝率を比べます。各試行ではすべての候補手を同じ乱数で打つので、候補手の差は初手とその後の展開だけから生まれます。相手も
-        bot が打ちます。
-      </p>
+      <h2>{props.simple ? toolText("botComparison") : toolText("botTrials")}</h2>
+      <p class="fork-muted">{toolText("arenaHelp")}</p>
       <div class="arena-settings">
         <label>
-          試行数
-          <input
+          {toolText("trialCount")}<input
             type="number"
             min={1}
             max={10000}
@@ -229,33 +222,28 @@ export function ArenaPanel(props: {
           />
         </label>
         {!props.simple && <><label>
-          思考量（1手あたり）
-          <select
+          {toolText("actionBudget")}<select
             value={iters}
             disabled={running}
             onChange={(e) => setIters(Number((e.currentTarget as HTMLSelectElement).value))}
           >
             {[...new Set([1000, 3000, 10000, profile.iterations])].map((n) => (
-              <option key={n} value={n}>
-                {n.toLocaleString()} 回{n === profile.iterations ? "（ラダーと同じ）" : ""}
-              </option>
+              <option key={n} value={n}>{toolText("arenaBudget", n.toLocaleString(), n === profile.iterations ? toolText("ladderBudgetSuffix") : "")}</option>
             ))}
           </select>
         </label>
         <label>
-          相手
-          <select
+          {toolText("opponent")}<select
             value={foe}
             disabled={running}
             onChange={(e) => setFoe((e.currentTarget as HTMLSelectElement).value as Foe)}
           >
-            {info.opponentView && <option value="protocol">ラダーと同じ bot（相手視点の情報）</option>}
-            <option value="skuct">全情報を見る探索（skuct）</option>
+            {info.opponentView && <option value="protocol">{toolText("protocolBot")}</option>}
+            <option value="skuct">{toolText("omniscientBot")}</option>
           </select>
         </label>
         <label>
-          シード
-          <input
+          {toolText("seed")}<input
             type="number"
             min={0}
             value={seed}
@@ -264,8 +252,7 @@ export function ArenaPanel(props: {
           />
         </label>
         <label>
-          並列数
-          <input
+          {toolText("parallelism")}<input
             type="number"
             min={1}
             max={32}
@@ -277,31 +264,23 @@ export function ArenaPanel(props: {
       </div>
       <div class="fork-actions">
         {running ? (
-          <button onClick={() => halt()}>停止</button>
+          <button onClick={() => halt()}>{toolText("stop")}</button>
         ) : (
           <button class="primary" onClick={start}>
             {sameConfig && done > 0
               ? done >= run!.target
-                ? `さらに ${trials} 試行`
-                : "再開"
-              : "検証を開始"}
+                ? toolText("moreTrials", trials)
+                : toolText("resume")
+              : toolText("startTrials")}
           </button>
         )}
-        {!props.simple && <button onClick={exportRows} disabled={running || rows.length === 0}>
-          結果を書き出す (JSONL)
-        </button>}
-        <button class="ghost" onClick={clear} disabled={running || run === null}>
-          結果を消去
-        </button>
+        {!props.simple && <button onClick={exportRows} disabled={running || rows.length === 0}>{toolText("exportJsonl")}</button>}
+        <button class="ghost" onClick={clear} disabled={running || run === null}>{toolText("clearResults")}</button>
       </div>
       {error && <p class="fork-error" role="alert">{error}</p>}
       {run && (
         <>
-          <p class="arena-progress" data-testid="arena-progress">
-            {done} / {run.target} 試行 · 経過 {clock(elapsed)}
-            {running && eta !== null && ` · 残り目安 ${clock(eta)}`}
-            {!sameConfig && "（設定を変えたので、次の開始で新しい検証になります）"}
-          </p>
+          <p class="arena-progress" data-testid="arena-progress">{toolText("trialProgress", done, run.target, clock(elapsed), running && eta !== null && toolText("estimatedRemaining", clock(eta)), !sameConfig && toolText("trialsConfigChanged"))}</p>
           {running && (
             <div class="think-progress" aria-hidden="true">
               <div
@@ -313,14 +292,14 @@ export function ArenaPanel(props: {
           {props.simple ? <div class="kp-arena-results" aria-live="polite">{info.arms.map((arm, i) => {
             const mine = rows.filter(row => row.action === arm.input);
             return <div class="kp-card" key={arm.input}><h3>{arm.label} · {props.armNames[i]}</h3>
-              <p>{mine.filter(row => row.outcome === "win").length}勝 · {mine.filter(row => row.outcome === "loss").length}敗 · {mine.filter(row => row.outcome === "tie").length}引き分け</p>
-              <p class="kp-muted">{mine.length}対戦を完了{mine.some(row => row.outcome === "cap") && ` · ${mine.filter(row => row.outcome === "cap").length}対戦は打ち切り`}</p>
+              <p>{toolText("winLossTie", mine.filter(row => row.outcome === "win").length, mine.filter(row => row.outcome === "loss").length, mine.filter(row => row.outcome === "tie").length)}</p>
+              <p class="kp-muted">{toolText("arenaCompleted", mine.length, mine.some(row => row.outcome === "cap") && toolText("cappedGames", mine.filter(row => row.outcome === "cap").length))}</p>
             </div>;
           })}</div> : <ArenaTable info={info} armNames={props.armNames} rows={rows} />}
-          {!props.simple && cli && <p class="fork-muted arena-cli">CLI で同じ試行: <code>{cli}</code></p>}
+          {!props.simple && cli && <p class="fork-muted arena-cli">{toolText("cliEquivalent")}<code>{cli}</code></p>}
         </>
       )}
-      <p class="fork-muted">結果はこのページを閉じると消えます。{!props.simple && "残すには書き出してください。"}</p>
+      <p class="fork-muted">{toolText("arenaResultsHelp", !props.simple && toolText("exportToKeep"))}</p>
     </section>
   );
 }
@@ -338,14 +317,14 @@ function ArenaTable(props: { info: ForkInfo; armNames: string[]; rows: Row[] }) 
       <table class="fork-table" data-testid="arena-table">
         <thead>
           <tr>
-            <th>bot の初手</th>
-            <th>試行</th>
-            <th>bot 勝</th>
-            <th>bot 負</th>
-            <th>分</th>
-            <th>打切</th>
-            <th>bot 勝率 (95%)</th>
-            <th>{info.arms[0].label || "1番目"} との差 (95%)</th>
+            <th>{toolText("botFirstAction")}</th>
+            <th>{toolText("trials")}</th>
+            <th>{toolText("botWins")}</th>
+            <th>{toolText("botLosses")}</th>
+            <th>{toolText("draws")}</th>
+            <th>{toolText("caps")}</th>
+            <th>{toolText("botWinInterval")}</th>
+            <th>{toolText("differenceInterval", info.arms[0].label || toolText("firstCandidate"))}</th>
             <th>McNemar p</th>
           </tr>
         </thead>

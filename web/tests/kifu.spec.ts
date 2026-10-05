@@ -18,7 +18,7 @@ const scenes = JSON.parse(kifu.scenes()).scenes;
 const compareIndex = scenes.findLastIndex((s: {round: number}) => JSON.parse(kifu.scene(s.round)).choices.length > 1);
 kifu.free(); battle.free(); dex.free();
 
-test.use({ viewport: { width: 390, height: 844 }, launchOptions: { args: ["--mute-audio"] } });
+test.use({ locale: "ja-JP", viewport: { width: 390, height: 844 }, launchOptions: { args: ["--mute-audio"] } });
 
 test("pasted HTML restores a scene, supports keyboard selection and resumes a game", async ({ page }) => {
   const errors: string[] = [];

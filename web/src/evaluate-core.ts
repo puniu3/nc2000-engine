@@ -1,3 +1,4 @@
+import { ToolError, type ToolIssue } from "./tool-errors";
 export interface EvaluationTeam {
   sets: unknown[];
   warnings: string[];
@@ -52,19 +53,17 @@ export type WorkerResponse =
     }
   | { type: "pair"; pair: PairResult }
   | { type: "done" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; issue?: ToolIssue };
 
 export function normalizeWeights<T extends { weight: number }>(
   entries: T[],
 ): T[] {
-  if (!entries.length) throw new Error("対戦相手を1件以上指定してください。");
+  if (!entries.length) throw new ToolError("noOpponents");
   if (entries.some((e) => !Number.isFinite(e.weight) || e.weight < 0))
-    throw new Error("出やすさは0以上の数値にしてください。");
+    throw new ToolError("invalidWeight");
   const max = Math.max(...entries.map((e) => e.weight));
   if (max === 0)
-    throw new Error(
-      "少なくとも1つの相手の出やすさを、0より大きくしてください。",
-    );
+    throw new ToolError("zeroWeights");
   const total = entries.reduce((s, e) => s + e.weight / max, 0);
   return entries.map((e) => ({ ...e, weight: e.weight / max / total }));
 }
@@ -155,7 +154,7 @@ export function appendPair(
   pair: PairResult,
 ): EvaluationRun {
   if (pair.index !== run.pairs.length || pair.games.length !== 2)
-    throw new Error("対戦結果の順序を確認できないため、計測を停止しました。");
+    throw new ToolError("resultOrderError");
   return { ...run, pairs: [...run.pairs, pair] };
 }
 

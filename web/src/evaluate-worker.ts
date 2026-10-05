@@ -1,3 +1,4 @@
+import { ToolError } from "./tool-errors";
 import init, {
   Dex,
   Battle,
@@ -25,7 +26,7 @@ onmessage = (event: MessageEvent<WorkerRequest>) => {
   if (started) return;
   started = true;
   void run(event.data.run, event.data.beliefJson).catch((e) =>
-    send({ type: "error", message: String(e) }),
+    send({ type: "error", message: String(e), ...(e instanceof ToolError ? { issue: e.issue } : {}) }),
   );
 };
 
@@ -71,7 +72,7 @@ async function run(run: EvaluationRun, beliefJson: string) {
           while (!battle.outcome() && battle.turn() < run.config.turnLimit) {
             const needs = JSON.parse(battle.needsChoice()) as boolean[];
             if (!needs.some(Boolean))
-              throw new Error("終局前に両側の選択要求が消えました。");
+              throw new ToolError("missingRequests");
             const choices: (string | undefined)[] = [];
             for (let side = 0; side < 2; side++) {
               if (!needs[side]) continue;
@@ -97,7 +98,7 @@ async function run(run: EvaluationRun, beliefJson: string) {
               }
               choices[side] = agent.best();
               if (!choices[side])
-                throw new Error(`P${side + 1}: 選択できる手がありません。`);
+                throw new ToolError("noLegalAction", side + 1);
             }
             for (let side = 0; side < 2; side++)
               if (choices[side]) battle.applyChoice(side, choices[side]!);

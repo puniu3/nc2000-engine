@@ -1,7 +1,3 @@
-// UI string tables for the two locales (M13). Battle narration lives in
-// narrate.ts; dex names in data/i18n-ja.json. Everything else the UI
-// prints is here, keyed by a typed interface so en/ja can't drift apart.
-
 export type Locale = "en" | "ja";
 
 export interface UIStrings {

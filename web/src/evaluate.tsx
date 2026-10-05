@@ -1,3 +1,5 @@
+import { useToolMessage, errorText, type ToolMessage } from "./tool-message";
+import { toolText } from "./tool-strings";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { loadEngine, randomSeed32 } from "./engine";
 import {
@@ -8,7 +10,7 @@ import {
 } from "./data";
 import {
   loadJaNames,
-  setLocale,
+  locale,
   speciesName,
   itemName,
   moveName,
@@ -43,29 +45,28 @@ function download(name: string, text: string, type = "application/json") {
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-/** The shipped mixture's teams are shown as 基本の相手N in file order
- * rather than by id; an uploaded distribution keeps its own ids. Filled
- * once, when the default mixture loads. */
-const defaultLabels = new Map<string, string>();
-const opponentLabel = (id: string) => defaultLabels.get(id) ?? id;
+const defaultLabels = new Map<string, number>();
+const opponentLabel = (id: string) => {
+  const index = defaultLabels.get(id);
+  return index === undefined ? id : toolText("defaultOpponent", index);
+};
 const percent = (v: number | null) =>
   v === null ? "—" : `${(v * 100).toFixed(1)}%`;
 function Findings({ team }: { team: EvaluationTeam }) {
+  const warnings = useMemo(() => readTeam(JSON.stringify(team.sets)).warnings, [team, locale()]);
   return (
     <>
       {team.relaxed && (
-        <p class="eval-warning">
-          このパーティは、選ぶ3匹のレベル合計が155を超えていても対戦できます。
-        </p>
+        <p class="eval-warning">{toolText("relaxedLevels")}</p>
       )}
-      {team.warnings.length > 0 ? (
+      {warnings.length > 0 ? (
         <ul class="eval-findings eval-warning">
-          {team.warnings.map((w, i) => (
-            <li key={i}>警告: {w}</li>
+          {warnings.map((w, i) => (
+            <li key={i}>{toolText("warning", w)}</li>
           ))}
         </ul>
       ) : (
-        <p class="eval-muted">大会ルールに合っています。</p>
+        <p class="eval-muted">{toolText("legalTeam")}</p>
       )}
     </>
   );
@@ -77,15 +78,15 @@ function ResultTable({ run }: { run: EvaluationRun }) {
         <thead>
           <tr>
             {[
-              "対戦相手",
-              "試合",
-              "勝",
-              "負",
-              "引分",
-              "打切",
-              "勝率",
-              "引き分けを含む成績",
-              "推定の幅",
+              toolText("opponents"),
+              toolText("games"),
+              toolText("wins"),
+              toolText("losses"),
+              toolText("ties"),
+              toolText("caps"),
+              toolText("winRate"),
+              toolText("score"),
+              toolText("interval"),
             ].map((t) => (
               <th key={t}>{t}</th>
             ))}
@@ -100,7 +101,7 @@ function ResultTable({ run }: { run: EvaluationRun }) {
             );
             return (
               <tr key={id ?? "overall"}>
-                <th>{id === null ? "総合" : opponentLabel(id)}</th>
+                <th>{id === null ? toolText("overall") : opponentLabel(id)}</th>
                 <td>{s.games}</td>
                 <td>{s.win}</td>
                 <td>{s.loss}</td>
@@ -122,8 +123,8 @@ function ResultTable({ run }: { run: EvaluationRun }) {
  * such, anything else is marked as a quick run. */
 function budgetLabel(n: number): string {
   return n === PRODUCT_ITERATIONS
-    ? `${n.toLocaleString()}回(実際のボットと同じ)`
-    : `${n.toLocaleString()}回(簡易計測)`;
+    ? toolText("productBudget", n.toLocaleString())
+    : toolText("quickBudget", n.toLocaleString());
 }
 
 export function Evaluate() {
@@ -134,12 +135,12 @@ export function Evaluate() {
   const [iterations, setIterations] = useState(PRODUCT_ITERATIONS);
   const [games, setGames] = useState("32");
   const [belief, setBelief] = useState({ json: "", hash: "" });
-  const [error, setError] = useState("");
+  const [error, setError] = useToolMessage("");
   const [run, setRun] = useState<EvaluationRun | null>(null);
   const [history, setHistory] = useState<EvaluationRun[]>([]);
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState("");
-  const [notice, setNotice] = useState("");
+  const [progress, setProgress] = useToolMessage("");
+  const [notice, setNotice] = useToolMessage("");
   const worker = useRef<Worker | null>(null);
   const currentRun = useRef<EvaluationRun | null>(null);
   const alive = useRef(true);
@@ -161,8 +162,6 @@ export function Evaluate() {
     setNotice("");
   }
   useEffect(() => {
-    setLocale("ja", false);
-    document.title = "NC2000 — パーティ強度測定";
     void (async () => {
       try {
         const [, nash, pool, , dex] = await Promise.all([
@@ -173,7 +172,7 @@ export function Evaluate() {
           fetchDexJson(),
         ]);
         const draft = importDistribution(nash);
-        draft.forEach((d, i) => defaultLabels.set(d.id, `基本の相手${i + 1}`));
+        draft.forEach((d, i) => defaultLabels.set(d.id, i + 1));
         const hash = await sha256(pool.poolJson);
         if (!alive.current) return;
         setEditorDex(dex as EditorDex);
@@ -181,7 +180,7 @@ export function Evaluate() {
         setBelief({ json: pool.poolJson, hash });
         setReady(true);
       } catch (e) {
-        setError(String(e));
+        setError(() => errorText(e));
       }
     })();
     return () => {
@@ -205,15 +204,15 @@ export function Evaluate() {
     try {
       player = readTeam(party);
     } catch (e) {
-      playerError = String(e).replace(/^Error: /, "");
+      playerError = errorText(e);
     }
     try {
       opponents = readOpponents(entries);
     } catch (e) {
-      opponentError = String(e).replace(/^Error: /, "");
+      opponentError = errorText(e);
     }
     return { player, opponents, playerError, opponentError };
-  }, [ready, party, entries]);
+  }, [ready, party, entries, locale()]);
   const testBudget =
     import.meta.env.MODE === "test"
       ? Number(import.meta.env.VITE_NC2000_TEST_BUDGET)
@@ -249,7 +248,7 @@ export function Evaluate() {
     );
   }
   function stop(
-    message = "停止しました。終わっていない2戦は、再開したときにやり直します。",
+    message: ToolMessage = () => toolText("evaluationStopped"),
   ) {
     worker.current?.terminate();
     worker.current = null;
@@ -262,7 +261,7 @@ export function Evaluate() {
     setRunning(true);
     setError("");
     setNotice("");
-    setProgress("対戦を準備しています…");
+    setProgress(() => toolText("preparingBattle"));
     retain(next);
     try {
       const w = new Worker(new URL("./evaluate-worker.ts", import.meta.url), {
@@ -270,15 +269,15 @@ export function Evaluate() {
       });
       worker.current = w;
       w.onerror = (event) => {
-        setError(`対戦を開始できません: ${event.message}`);
-        stop("エラーで停止しました。終わった対戦の結果は残っています。");
+        setError(() => toolText("battleStartError", event.message));
+        stop(() => toolText("evaluationError"));
       };
       w.onmessage = (event: MessageEvent<WorkerResponse>) => {
         if (worker.current !== w) return;
         const msg = event.data;
         if (msg.type === "progress")
           setProgress(
-            `対戦 ${msg.pair * 2 + msg.game} / ${next.targetPairs * 2} · ${msg.turn === 0 ? "ポケモンを選んでいます" : `${msg.turn}ターン目・次の手を考えています`}`,
+            () => toolText("evaluationProgress", msg.pair * 2 + msg.game, next.targetPairs * 2, msg.turn === 0 ? toolText("selectingPokemon") : toolText("thinkingTurn", msg.turn)),
           );
         if (msg.type === "pair") {
           try {
@@ -286,20 +285,20 @@ export function Evaluate() {
             retain(updated);
             w.postMessage({ type: "ack" });
           } catch (e) {
-            setError(String(e));
-            stop("結果の集計中に停止しました。");
+            setError(() => errorText(e));
+            stop(() => toolText("aggregationStopped"));
           }
         }
-        if (msg.type === "done") stop("指定した試合数の計測が完了しました。");
+        if (msg.type === "done") stop(() => toolText("evaluationDone"));
         if (msg.type === "error") {
-          setError(msg.message);
-          stop("エラーで停止しました。終わった対戦の結果は残っています。");
+          setError(() => msg.issue ? toolText(msg.issue.key, ...msg.issue.args) : errorText(msg.message));
+          stop(() => toolText("evaluationError"));
         }
       };
       w.postMessage({ type: "start", run: next, beliefJson: belief.json });
     } catch (e) {
-      setError(String(e));
-      stop("計測を開始できませんでした。");
+      setError(() => errorText(e));
+      stop(() => toolText("evaluationStartError"));
     }
   }
   function newRun() {
@@ -332,31 +331,29 @@ export function Evaluate() {
       apply(await file.text());
       setError("");
     } catch (e) {
-      setError(String(e));
+      setError(() => errorText(e));
     }
   }
 
   return (
     <main class="evaluate">
       <header>
-        <p class="eval-eyebrow">NC2000 パーティ診断</p>
-        <h1>パーティの強さを調べる</h1>
-        <p>
-          ポケモンを登録すると、コンピューター同士で対戦して勝率を調べます。相手の技や持ち物は、対戦で判明するまで見えないルールです。
-        </p>
+        <p class="eval-eyebrow">{toolText("evaluateEyebrow")}</p>
+        <h1>{toolText("evaluateHeading")}</h1>
+        <p>{toolText("evaluateIntro")}</p>
       </header>
       {error && (
         <p class="eval-error" role="alert">
           {error}
         </p>
       )}
-      {!ready && !error && <p role="status">対戦データを読み込んでいます…</p>}
+      {!ready && !error && <p role="status">{toolText("loadingBattleData")}</p>}
       {history.length > 0 && (
         <section class="eval-panel">
           <label>
-            このタブの計測{" "}
+            {toolText("tabRuns")}{" "}
             <select
-              aria-label="このタブの計測"
+              aria-label={toolText("tabRuns")}
               disabled={running}
               value={run?.id}
               onChange={(e) => {
@@ -367,11 +364,7 @@ export function Evaluate() {
               }}
             >
               {history.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.createdAt.slice(0, 16).replace("T", " ")} UTC ·{" "}
-                  {r.pairs.length * 2}戦 ·{" "}
-                  {budgetLabel(r.config.iterations)}
-                </option>
+                <option key={r.id} value={r.id}>{toolText("runSummary", r.createdAt.slice(0, 16).replace("T", " "), r.pairs.length * 2, budgetLabel(r.config.iterations))}</option>
               ))}
             </select>
           </label>
@@ -380,23 +373,21 @@ export function Evaluate() {
       <fieldset disabled={!ready || running}>
         <div class="eval-columns">
           <section class="eval-panel">
-            <h2>自分のパーティ</h2>
-            <p>
-              ポケモンを選び、レベル・持ち物・技を入力してください。6匹まで登録できます。
-            </p>
+            <h2>{toolText("yourTeam")}</h2>
+            <p>{toolText("teamHelp")}</p>
             {editorDex && (
               <TeamEditor
-                name="自分のパーティ"
+                name={toolText("yourTeam")}
                 text={party}
                 onChange={setParty}
                 dex={editorDex}
               />
             )}
             <details class="eval-import">
-              <summary>テキストから読み込む</summary>
-              <p>他のツールからコピーしたパーティ情報を貼り付けられます。</p>
+              <summary>{toolText("importText")}</summary>
+              <p>{toolText("importTextHelp")}</p>
               <textarea
-                aria-label="自分のパーティ"
+                aria-label={toolText("yourTeam")}
                 value={party}
                 onInput={(e) => setParty(e.currentTarget.value)}
                 placeholder={
@@ -404,9 +395,8 @@ export function Evaluate() {
                 }
               />
               <label class="eval-file">
-                パーティを読み込む
-                <input
-                  aria-label="パーティファイル"
+                {toolText("importTeam")}<input
+                  aria-label={toolText("teamFile")}
                   type="file"
                   accept=".txt,.json"
                   onChange={(e) => {
@@ -416,9 +406,7 @@ export function Evaluate() {
                 />
               </label>
             </details>
-            <p class="eval-muted">
-              大会ルール違反は警告を表示し、対戦に参加できます。
-            </p>
+            <p class="eval-muted">{toolText("ruleWarningHelp")}</p>
             {party.trim() && validation.playerError && (
               <p class="eval-error" role="alert">
                 {validation.playerError}
@@ -428,10 +416,10 @@ export function Evaluate() {
           </section>
           <section
             class="eval-panel eval-opponents"
-            aria-label="対戦相手の設定"
+            aria-label={toolText("opponentSettings")}
           >
-            <h2>対戦相手</h2>
-            <p>この中から、表示した確率で対戦相手を選びます。</p>
+            <h2>{toolText("opponents")}</h2>
+            <p>{toolText("opponentHelp")}</p>
             {validation.opponents?.map((t) => (
               <div class="eval-entry" key={t.id}>
                 <div class="eval-opponent">
@@ -448,7 +436,7 @@ export function Evaluate() {
                   )}
                 </ul>
                 <details>
-                  <summary>技・持ち物を見る</summary>
+                  <summary>{toolText("showSets")}</summary>
                   <div class="eval-opponent-sets">
                     {(
                       t.sets as {
@@ -463,9 +451,9 @@ export function Evaluate() {
                           {speciesName(mon.species)} Lv.{mon.level}
                         </strong>
                         <p>
-                          {mon.item ? itemName(mon.item) : "持ち物なし"}
+                          {mon.item ? itemName(mon.item) : toolText("noItem")}
                           <br />
-                          {mon.moves.map(moveName).join(" / ") || "技なし"}
+                          {mon.moves.map(moveName).join(" / ") || toolText("noMoves")}
                         </p>
                       </div>
                     ))}
@@ -479,9 +467,7 @@ export function Evaluate() {
                 {validation.opponentError}
               </p>
             )}
-            <p class="eval-muted eval-opponent-help">
-              今の設定をファイルに保存し、書き換えてから読み込むと相手を変更できます。
-            </p>
+            <p class="eval-muted eval-opponent-help">{toolText("opponentImportHelp")}</p>
             <button
               onClick={() =>
                 download(
@@ -489,13 +475,10 @@ export function Evaluate() {
                   exportDistribution(entries),
                 )
               }
-            >
-              相手の設定をファイルに保存
-            </button>
+            >{toolText("saveOpponents")}</button>
             <label class="eval-file">
-              相手の設定を読み込む（JSON）
-              <input
-                aria-label="相手の設定ファイル"
+              {toolText("importOpponents")}<input
+                aria-label={toolText("opponentFile")}
                 type="file"
                 accept=".json"
                 onChange={(e) => {
@@ -509,12 +492,12 @@ export function Evaluate() {
           </section>
         </div>
         <section class="eval-panel">
-          <h2>計測設定</h2>
+          <h2>{toolText("evaluationSettings")}</h2>
           <div class="eval-actions">
             <label>
-              試合数{" "}
+              {toolText("gameCount")}{" "}
               <input
-                aria-label="試合数"
+                aria-label={toolText("gameCount")}
                 type="number"
                 value={games}
                 min={2}
@@ -523,9 +506,9 @@ export function Evaluate() {
               />
             </label>
             <label>
-              考える回数{" "}
+              {toolText("iterations")}{" "}
               <select
-                aria-label="考える回数"
+                aria-label={toolText("iterations")}
                 value={iterations}
                 onChange={(e) => setIterations(Number(e.currentTarget.value))}
               >
@@ -541,29 +524,23 @@ export function Evaluate() {
             </label>
           </div>
           {!validCount && (
-            <p class="eval-error">試合数は2以上の偶数にしてください。</p>
+            <p class="eval-error">{toolText("evenGames")}</p>
           )}
           {Number.isFinite(testBudget) && (
-            <p class="eval-warning">
-              テストビルド：実際に考える回数は{budget}回です。
-            </p>
+            <p class="eval-warning">{toolText("testBudget", budget)}</p>
           )}
-          <p class="eval-muted">
-            1手を決めるまでに試す回数です。実際のボットは
-            {PRODUCT_ITERATIONS.toLocaleString()}
-            回で、それより少ない回数は結果を早く見るための簡易計測です。両方に同じ回数を使い、先後を入れ替えて2戦ずつ対戦します。
-          </p>
+          <p class="eval-muted">{toolText("budgetHelp", PRODUCT_ITERATIONS.toLocaleString())}</p>
         </section>
       </fieldset>
       <section class="eval-panel">
-        <h2>計測と結果</h2>
+        <h2>{toolText("evaluationResults")}</h2>
         <div class="eval-actions">
           <button
             class="eval-start"
             disabled={!config || !validCount || running}
             onClick={newRun}
           >
-            {run ? "別の計測を開始" : "計測を開始"}
+            {run ? toolText("newEvaluation") : toolText("startEvaluation")}
           </button>
           {run && (
             <>
@@ -572,33 +549,24 @@ export function Evaluate() {
                   !compatible || running || run.pairs.length >= run.targetPairs
                 }
                 onClick={() => resume(false)}
-              >
-                再開
-              </button>
+              >{toolText("resume")}</button>
               <button
                 disabled={!compatible || running || !validCount}
                 onClick={() => resume(true)}
-              >
-                追加計測
-              </button>
+              >{toolText("extendEvaluation")}</button>
             </>
           )}
-          {running && <button onClick={() => stop()}>停止</button>}
+          {running && <button onClick={() => stop()}>{toolText("stop")}</button>}
         </div>
         {run && !compatible && ready && (
-          <p class="eval-warning">
-            パーティ・対戦設定・アプリのバージョンが計測開始時と異なります。この結果に追加せず、新しい計測を始めてください。
-          </p>
+          <p class="eval-warning">{toolText("configurationChanged")}</p>
         )}
         {run && (
-          <p>
-            {run.pairs.length * 2} / {run.targetPairs * 2}戦完了 ·{" "}
-            {budgetLabel(run.config.iterations)}
-          </p>
+          <p>{toolText("completedGames", run.pairs.length * 2, run.targetPairs * 2, budgetLabel(run.config.iterations))}</p>
         )}
         {run && (
           <progress
-            aria-label="完了した試合"
+            aria-label={toolText("completedGamesLabel")}
             max={run.targetPairs}
             value={run.pairs.length}
           />
@@ -617,9 +585,7 @@ export function Evaluate() {
                     JSON.stringify(run, null, 2),
                   )
                 }
-              >
-                結果をファイルに保存
-              </button>
+              >{toolText("saveResults")}</button>
               <button
                 onClick={() =>
                   download(
@@ -628,14 +594,12 @@ export function Evaluate() {
                     "text/csv;charset=utf-8",
                   )
                 }
-              >
-                表計算ソフト用に保存
-              </button>
+              >{toolText("saveCsv")}</button>
             </div>
             <details>
-              <summary>この結果の条件と警告</summary>
-              <p>開始: {run.createdAt.slice(0, 16).replace("T", " ")} UTC</p>
-              <h3>自分のパーティ</h3>
+              <summary>{toolText("resultConditions")}</summary>
+              <p>{toolText("startedAt", run.createdAt.slice(0, 16).replace("T", " "))}</p>
+              <h3>{toolText("yourTeam")}</h3>
               <Findings team={run.config.player} />
               {run.config.opponents.map((t) => (
                 <div key={t.id}>
@@ -648,16 +612,10 @@ export function Evaluate() {
             </details>
           </>
         ) : (
-          <p class="eval-empty">
-            パーティを入力して計測を開始すると、総合成績と相手別成績がここに表示されます。
-          </p>
+          <p class="eval-empty">{toolText("emptyResults")}</p>
         )}
-        <p class="eval-muted">
-          勝率は勝った試合の割合です。「引き分けを含む成績」では、引き分けと500ターンでの打ち切りを半勝として数えます。「推定の幅」は偶然によるばらつきの目安です。試合が少ない間は、結果も大きく変わります。
-        </p>
-        <p class="eval-muted">
-          このコンピューターが、指定した相手と対戦したときの成績です。結果は自動保存されません。再読み込みやタブを閉じる操作でリセットされます。残したい結果はファイルに保存してください。
-        </p>
+        <p class="eval-muted">{toolText("statisticsHelp")}</p>
+        <p class="eval-muted">{toolText("resultsHelp")}</p>
       </section>
     </main>
   );

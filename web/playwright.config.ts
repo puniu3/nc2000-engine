@@ -16,8 +16,9 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     headless: true,
+    launchOptions: { args: ["--mute-audio"] },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    ...(chromiumExe ? { launchOptions: { executablePath: chromiumExe } } : {}),
+    ...(chromiumExe ? { launchOptions: { executablePath: chromiumExe, args: ["--mute-audio"] } } : {}),
   },
 });

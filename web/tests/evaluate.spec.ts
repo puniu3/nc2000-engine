@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import type { EvaluationRun } from "../src/evaluate-core";
 
-test.use({ actionTimeout: 10000 });
+test.use({ locale: "ja-JP", actionTimeout: 10000 });
 
 const route = `${process.env.NC2000_E2E_BASE ?? "/"}?evaluate`;
 /** The default opponents are the shipped Nash mixture, read from the same

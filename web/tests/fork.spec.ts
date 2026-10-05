@@ -38,6 +38,8 @@ async function playToOutcome(page: Page) {
   throw new Error("forked battle did not reach an outcome");
 }
 
+test.use({ locale: "ja-JP", launchOptions: { args: ["--mute-audio"] } });
+
 test.describe.configure({ mode: "serial" });
 
 test("a hosted fork plays, forfeits, reveals, exports and persists", async ({ page }) => {

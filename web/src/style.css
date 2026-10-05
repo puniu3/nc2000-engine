@@ -2037,3 +2037,11 @@ td.solver-cell {
   font-size: 0.85rem;
   color: var(--text-dim);
 }
+
+.tool-language-bar {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 12px 16px 0;
+}
