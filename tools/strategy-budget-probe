@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import statistics
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/strategy-budget-v1'
+loss=runpy.run_path(str(root/'tools/counter-mix-probe'))['loss']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def inputs():
+    bond=json.loads(gzip.decompress((root/'findings/bond-mix-v1/records.json.gz').read_bytes()))
+    counter=json.loads(gzip.decompress((root/'findings/counter-mix-v1/records.json.gz').read_bytes()))
+    counter_corpora=json.loads(gzip.decompress((root/'findings/counter-mix-v1/corpora.json.gz').read_bytes()))
+    return {'bond':(bond['corpora']['screen'],bond['records']['screen']),
+            'counter':(counter_corpora['screen'],counter['screen'])}
+
+
+def summarize(bundle):
+    report=[]
+    for name,record in bundle['records'].items():
+        oracle=bundle['oracles'][name]
+        assert all(v['ok'] for v in oracle['validations'])
+        corpus=json.loads(bundle['corpora'][name])
+        assert corpus['prefix_only'] and len(corpus['samples'])==1
+        assert corpus['decisions'][corpus['samples'][0]]['key']==record['state_key']==oracle['state_key']
+        assert record['actions']==oracle['actions']
+        for side in range(2):
+            search=[r for r in record['search'] if r['side']==side]
+            assert len(search)==3 and all(r['iterations']==27000 for r in search)
+            search_ms=statistics.median(r['milliseconds'] for r in search)
+            ordinary_losses=[dict(seed=r['seed'],choice=r['choice'],loss=loss(oracle,side,
+                [float(a==r['choice']) for a in record['actions'][side]])) for r in search]
+            ordinary_policy=[sum(r['choice']==a for r in search)/len(search) for a in record['actions'][side]]
+            rows=[r for r in record['rows'] if r['side']==side]
+            previous=(0.,1.)
+            total_runs=0
+            for r in rows:
+                assert r['value'][0]>=previous[0]-1e-8 and r['value'][1]<=previous[1]+1e-8
+                assert r['value'][0]<=oracle['proof']['value'][1]+1e-8
+                assert r['value'][1]>=oracle['proof']['value'][0]-1e-8
+                previous=r['value']
+                total_runs+=r['call_runs']
+                assert total_runs==r['runs']
+                cert=r['certificate']
+                if cert:
+                    measured=loss(oracle,side,cert['policy'])
+                    assert cert['max_loss']+1e-8>=measured[0]
+                    assert r['met']==(cert['max_loss']<=r['target'])
+                else:
+                    assert not r['met']
+            targets=[]
+            for target in [.02,.005,.001]:
+                hit=next((r for r in rows if r['target']==target and r['met']),None)
+                targets.append(dict(target=target,met=hit is not None,
+                    milliseconds=hit['milliseconds'] if hit else None,
+                    relative_to_search=hit['milliseconds']/search_ms if hit else None,
+                    runs=hit['runs'] if hit else None,
+                    certificate=hit['certificate'] if hit else None,
+                    oracle_loss=loss(oracle,side,hit['certificate']['policy']) if hit else None))
+            within=[r for r in rows if r['milliseconds']<=search_ms and r['certificate']]
+            best=min(within,key=lambda r:r['certificate']['max_loss']) if within else None
+            report.append(dict(fixture=name,side=side,ordinary_search_ms=search_ms,
+                ordinary_first_action_losses=ordinary_losses,targets=targets,
+                empirical_ordinary_policy=ordinary_policy,empirical_ordinary_loss=loss(oracle,side,ordinary_policy),
+                best_within_search_time=best,last=rows[-1]))
+    return dict(rows=report,scope='One known-type Bond and one Counter fixture. Each side gets an independent '
+                'solver; progressively tighter targets retain its graph. Timing is a single local run with '
+                'a three-seed median of 27000-iteration pinned search measured in the same process. '
+                'The empirical ordinary policy averages those three chosen actions before taking a '
+                'best response; neither it nor the seed-conditional losses identify the population policy. '
+                'Solver checkpoints are coarse and may miss earlier feasible certificates. Certificates '
+                'bound first-action loss under optimal continuation in the concrete full-information state; '
+                'they do not certify a complete continuation policy or uncertain hidden types.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_text())
+        print('strategy-budget: verified legal-prefix identity, run accounting and certificates against archived tighter bounds')
+        return
+    assert not archive.exists()
+    sources=list((root/'crates/bot/src').rglob('*.rs'))+list((root/'crates/engine/src').rglob('*.rs'))+[root/'crates/bot/examples/strategy_budget.rs']
+    hashes={str(p.relative_to(root)):sha(p.read_bytes()) for p in sorted(sources)}
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    binary=root/'target/release/examples/strategy_budget'
+    data=inputs()
+    if args.import_directory:
+        directory=args.import_directory
+        manifest=json.loads((directory/'run-manifest.json').read_text())
+        assert manifest['source_hashes']==hashes
+        assert manifest['binary_sha256']==sha(binary.read_bytes())
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','strategy_budget'],cwd=root,env=env,check=True)
+        directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-strategy-budget-'))
+        (directory/'run-manifest.json').write_text(json.dumps(dict(source_hashes=hashes,binary_sha256=sha(binary.read_bytes()))))
+        print(directory,flush=True)
+        for name,(corpus,_) in data.items():
+            (directory/f'{name}.jsonl').write_text(corpus)
+            with (directory/f'{name}.log').open('w') as log:
+                subprocess.run([str(binary),str(directory/f'{name}.jsonl'),str(directory/f'{name}.json')],cwd=root,env=env,stdout=log,stderr=log,check=True)
+            print(f'{name} complete',flush=True)
+    assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
+    bundle=dict(records={name:json.loads((directory/f'{name}.json').read_text()) for name in data},
+        corpora={name:corpus for name,(corpus,_) in data.items()},
+        oracles={name:oracle for name,(_,oracle) in data.items()},
+        source_hashes=hashes,binary_sha256=sha(binary.read_bytes()))
+    report=summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report,indent=2))
+
+
+if __name__=='__main__':
+    main()
