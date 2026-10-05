@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+
+from interval_policy_gap import certify, verify
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-rest-continuation-v1'
+continuations = ['continuation-unrestricted', 'continuation-bodyslam', 'continuation-icebeam']
+replies = ['reply-doubleedge', 'reply-earthquake', 'reply-curse', 'reply-selfdestruct', 'reply-switch']
+names = continuations + replies
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+spec = importlib.util.spec_from_file_location('assessor', root / 'tools/headroom-cases-report.py')
+assessor = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(assessor)
+
+
+def summarize(records):
+    assert set(records) == set(names)
+    for group in [continuations, replies]:
+        assert len({records[name]['manifest']['binary_sha256'] for name in group}) == 1
+        assert all(records[name]['manifest']['source_hashes'] == records[group[0]]['manifest']['source_hashes'] for name in group)
+    prior_path = root / 'findings/policy-selected-claw-v1/summary.json'
+    prior_records_path = root / 'findings/policy-selected-claw-v1/records.json.gz'
+    prior = json.loads(prior_path.read_bytes())
+    matrix = json.loads(json.dumps(prior['matrix']))
+    padding = 1e-10
+    for b in matrix['cells'] + [matrix['value']]:
+        b['lo'] = max(0, b['lo'] - padding)
+        b['hi'] = min(1, b['hi'] + padding)
+    continuation_value = {'lo': 0, 'hi': 1}
+    arms = {}
+    state = None
+    for name in continuations:
+        record = records[name]
+        row = record['result']
+        child = row['descendant_preparation'][0]
+        config = record['manifest']['protocol']['descendant_preparation']
+        assert row['state_key'] == config['root_state_key'] == '199433906935569759004884428941975153695'
+        assert child['semantic_key'] == config['semantic_key'] == '263682260409615048506169108012994383425'
+        assert child['mass'] == config['mass'] == 0.030448717945546377
+        assert child['actions'] == ['move bodyslam', 'move selfdestruct']
+        assert child['quotient_quick_claw'] and child['two_sided_resource_class'].startswith('Ok(')
+        replacement = child['replacement']
+        assert replacement['actions'] == [None, 'switch 2']
+        assert replacement['distribution'] == {'117263564646771609871238892275545246756': .234375, '293375799380379620812455782601318274900': .765625}
+        assert replacement['quotient_distribution'] == {'293375799380379620812455782601318274900': 1.0}
+        assert replacement['quotient_semantic_key'] == replacement['semantic_key'] == config['replacement_semantic_key']
+        assert child['successor_distribution'][child['semantic_key']] == child['mass']
+        assert abs(sum(child['successor_distribution'].values()) - 1) < 1e-10
+        assert sum(c['runs'] for c in child['root_chance']) == child['runs']
+        assert row['total_runs'] == row['reference']['runs'] + child['runs'] + child['enumeration_runs']
+        if state is None:
+            state = child['state']
+        assert state == child['state']
+        if name == 'continuation-unrestricted':
+            assert child['strategy'] is None and child['value'] == child['matrix']['value']
+        else:
+            strategy = child['strategy']
+            side = 0 if name.endswith('bodyslam') else 1
+            assert strategy['side'] == config['fixed_policy_side'] == side
+            assert strategy['priority_actions'] == config['fixed_priority_actions']
+            assert strategy['sleep_talk'] == config['fixed_sleep_talk'] == (side == 1)
+            score = strategy['guaranteed_score']
+            assert child['value'] == ({'lo': score['lo'], 'hi': 1.0} if side == 0 else {'lo': 0.0, 'hi': 1 - score['lo']})
+        continuation_value['lo'] = max(continuation_value['lo'], child['value']['lo'] - padding)
+        continuation_value['hi'] = min(continuation_value['hi'], child['value']['hi'] + padding)
+        arms[name] = {k: child[k] for k in ['value', 'strategy', 'runs', 'nodes', 'stop', 'elapsed_ms']}
+    assert continuation_value['lo'] <= continuation_value['hi']
+    seen = set()
+    for name in replies:
+        record = records[name]
+        row, config = record['result'], record['manifest']['protocol']
+        assert row['schema'] == 'nc2000-fixed-reply-bound-v1'
+        assert row['state_key'] == '199433906935569759004884428941975153695'
+        assert row['side'] == config['fixed_policy_side'] == 0
+        assert row['fixed_first_action'] == config['fixed_first_action'] == 'move bodyslam'
+        assert row['priority_actions'] == config['fixed_priority_actions'] == ['move bodyslam', 'move fireblast', 'move rest', 'move selfdestruct']
+        reply = row['reply_action']
+        assert reply == config['fixed_reply_action']
+        assert row['threshold'] == config['fixed_reply_threshold']
+        index = matrix['actions'][1].index(reply)
+        assert index not in seen
+        seen.add(index)
+        restricted = row['restricted_matrix']
+        assert restricted['actions'] == [['move bodyslam'], matrix['actions'][1]]
+        assert row['reply_value'] == restricted['cells'][index]
+        assert all(c['runs'] == 0 for i, c in enumerate(row['root_chance']) if i != index)
+        assert row['root_chance'][index]['runs'] == row['reference']['runs']
+        for target, b in zip(matrix['cells'], restricted['cells']):
+            target['lo'] = max(target['lo'], b['lo'] - padding)
+        arms[name] = {'reply': reply, 'restricted_cell': row['reply_value'], **row['reference']}
+    assert len(seen) == len(matrix['actions'][1])
+    previous = json.loads(gzip.decompress(prior_records_path.read_bytes()))['quotient']['result']
+    assert previous['side'] == 1 and previous['fixed_first_action'] == 'move selfdestruct'
+    key = 'NoDamageOrQuickClawRoll(263682260409615048506169108012994383425)'
+    upper_shared = next(c for c in previous['root_chance'][0]['largest_children'] if c['key'] == key)
+    upper_cell = previous['restricted_matrix']['cells'][0]['hi']
+    upper_residual = upper_cell - upper_shared['mass'] * upper_shared['bounds']['hi']
+    shared_differences = []
+    for name in ['reply-doubleedge', 'reply-earthquake', 'reply-curse']:
+        row = records[name]['result']
+        index = matrix['actions'][1].index(row['reply_action'])
+        lower_shared = next(c for c in row['root_chance'][index]['largest_children'] if c['key'] == key)
+        assert abs(lower_shared['mass'] - upper_shared['mass']) < 1e-12
+        lower_cell = row['reply_value']['lo']
+        lower_residual = lower_cell - lower_shared['mass'] * lower_shared['bounds']['lo']
+        difference = upper_residual - lower_residual + max(0, upper_shared['mass'] - lower_shared['mass']) + padding
+        shared_differences.append({'upper_actions': ['move bodyslam', 'move selfdestruct'],
+                                  'lower_actions': ['move bodyslam', row['reply_action']],
+                                  'shared_key': key, 'upper_mass': upper_shared['mass'], 'lower_mass': lower_shared['mass'],
+                                  'upper_residual': upper_residual, 'lower_residual': lower_residual,
+                                  'difference_upper': difference})
+    index = matrix['actions'][1].index('move selfdestruct')
+    matrix['cells'][index]['lo'] = max(matrix['cells'][index]['lo'], .030448717945546377 * continuation_value['lo'] - padding)
+    width = len(matrix['actions'][1])
+    matrix['value']['lo'] = max(matrix['value']['lo'], max(min(b['lo'] for b in matrix['cells'][i:i + width]) for i in range(0, len(matrix['cells']), width)))
+    assert all(0 <= b['lo'] <= b['hi'] <= 1 for b in matrix['cells'] + [matrix['value']])
+    assessor.calibrate_assessor()
+    endpoints = []
+    for previous in prior['endpoints']:
+        side, policy = previous['side'], previous['interval_assessment']['policy']
+        interval = assessor.assess(matrix, side, policy)
+        correlated = certify(matrix, side, policy)
+        verify(matrix, correlated)
+        loss = {'lo': interval['loss']['lo'], 'hi': min(interval['loss']['hi'], correlated['loss_upper'])}
+        endpoints.append({'side': side, 'previous_loss': previous['certified_loss'], 'interval_assessment': interval,
+                          'correlated_certificate': correlated, 'certified_loss': loss, 'verdict': assessor.verdict(loss)})
+    return {'schema': 'nc2000-policy-rest-continuation-v1', 'arms': arms, 'matrix': matrix,
+            'continuation_value': continuation_value, 'endpoints': endpoints, 'numerical_envelope': padding,
+            'shared_continuation_differences': shared_differences,
+            'shared_difference_proof': 'Write each unrestricted first-action cell as R + p V(s), where s is the identical semantic successor. A fixed side-one strategy gives an upper bound on R; a fixed side-zero strategy gives a lower bound on the other R. Subtracting their respective shared child contributions from the recorded cell bounds yields these residual bounds. The cell difference is at most R_upper - R_lower + max(0, p_upper - p_lower), since V(s) is in [0,1]. Equal masses cancel the unsolved continuation. These pairwise differences do not alone bound full policy regret: alternative first actions and the switch reply remain.',
+            'prior_hashes': {str(p.relative_to(root)): sha(p.read_bytes()) for p in [prior_path, prior_records_path]},
+            'interpretation': 'The replacement outcomes differ only in an unobservable Quick Claw bit and have one quotient continuation. Postreplacement solvers recognize a two-sided-heal root. Fixed strategies retain every future opponent response. Reply probes change refinement order only: the complete root matrix remains intact, and a favorable selected reply never becomes a whole-game guarantee. Only fixed side-zero lower bounds enter unrestricted cells. These are full-information first-decision bounds with optimal continuation; no human calibration, deployed-policy improvement or global optimality is established.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    for name, record in records.items():
+        manifest = record['manifest']
+        raw = (archive / f'{name}.json').read_bytes()
+        assert sha(raw) == manifest['protocol_sha256'] and json.loads(raw) == manifest['protocol']
+        assert sha(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())) == manifest['protocol']['corpus_sha256']
+        assert sha((root / manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified replacement quotient, fixed-strategy projections, targeted reply cells and correlated regret')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-rest-proof-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in names:
+        protocol = json.loads((archive / f'{name}.json').read_bytes())
+        protocol['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(protocol, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {name: {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()),
+                  'result': json.loads((directory / name / 'game-017-d0021.json').read_bytes())} for name in names}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress((directory / 'corpus.jsonl').read_bytes(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(summary['arms'])
+print([endpoint['certified_loss'] for endpoint in summary['endpoints']])

@@ -42,6 +42,8 @@ struct Protocol {
     fixed_policy_side: Option<usize>,
     fixed_first_action: Option<String>,
     fixed_priority_actions: Option<Vec<String>>,
+    fixed_reply_action: Option<String>,
+    fixed_reply_threshold: Option<f64>,
     #[serde(default)]
     fixed_sleep_talk: bool,
     #[serde(default)]
@@ -85,6 +87,9 @@ struct DescendantPreparation {
     quotient_quick_claw: bool,
     lower_threshold: Option<f64>,
     fixed_policy_side: Option<usize>,
+    fixed_priority_actions: Option<Vec<String>>,
+    #[serde(default)]
+    fixed_sleep_talk: bool,
 }
 
 #[derive(Deserialize)]
@@ -278,6 +283,21 @@ fn audit(
         if protocol.fixed_sleep_talk { solver = solver.with_sleep_talk(); }
         if protocol.fixed_frozen_switch { solver = solver.with_frozen_switch(); }
         let started = Instant::now();
+        if let Some(reply) = &protocol.fixed_reply_action {
+            let reply_choice = legal[1-side][names[1-side].iter().position(|name|name==reply).unwrap()];
+            let report = solver.solve_reply(&battle,reply_choice,protocol.fixed_reply_threshold);
+            let matrix = solver.restricted_root_payoffs(&battle).unwrap();
+            return json!({"schema":"nc2000-fixed-reply-bound-v1","game":game.game,"decision":decision,
+                "state_key":battle.state_key128().to_string(),"side":side,"priority_actions":priority_names,
+                "fixed_first_action":protocol.fixed_first_action,"reply_action":reply,
+                "reply_value":bound(report.bounds),"threshold":protocol.fixed_reply_threshold,
+                "restricted_matrix":{"actions":matrix.actions.map(|aa|aa.into_iter().map(|a|a.map(|a|action_input(dex,a))).collect::<Vec<_>>()),
+                    "cells":matrix.cells.iter().copied().map(bound).collect::<Vec<_>>(),"value":bound(matrix.value)},
+                "reference":{"stop":format!("{:?}",report.stop),"runs":report.runs,
+                    "nodes":solver.node_count(),"elapsed_ms":started.elapsed().as_secs_f64()*1000.0},
+                "root_chance":solver.root_chance_diagnostics(&battle).unwrap().iter().map(|c|chance_diagnostic(c,dex)).collect::<Vec<_>>()});
+        }
+        assert!(protocol.fixed_reply_threshold.is_none());
         let report = solver.solve(&battle);
         let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
         let graph = solver.graph_diagnostics();
@@ -308,6 +328,7 @@ fn audit(
         });
     }
     assert!(protocol.fixed_first_action.is_none());
+    assert!(protocol.fixed_reply_action.is_none() && protocol.fixed_reply_threshold.is_none());
     assert!(protocol.fixed_priority_actions.is_none());
     assert!(!protocol.fixed_sleep_talk);
     assert!(!protocol.fixed_frozen_switch);
@@ -408,9 +429,14 @@ fn audit(
             assert!((next.leaves.iter().map(|leaf| leaf.prob).sum::<f64>() - 1.0).abs() < 1e-10);
             let selected: u128 = selected.parse().unwrap();
             let mut distribution = std::collections::BTreeMap::<String, f64>::new();
+            let mut quotient_distribution = std::collections::BTreeMap::<String, f64>::new();
             for leaf in &next.leaves {
                 assert!(!leaf.battle.damage_bookkeeping_observable(dex));
                 *distribution.entry(leaf.battle.state_key128_without_damage_bookkeeping().to_string()).or_default() += leaf.prob;
+                if prep.quotient_quick_claw {
+                    assert!(!leaf.battle.quick_claw_roll_observable(dex));
+                    *quotient_distribution.entry(successor_key(&leaf.battle).to_string()).or_default() += leaf.prob;
+                }
             }
             let first = &next.leaves.iter().find(|leaf|
                 leaf.battle.state_key128_without_damage_bookkeeping() == selected).unwrap().battle;
@@ -418,6 +444,8 @@ fn audit(
             replacement = json!({"actions":actions.map(|a|a.map(|a|action_input(dex,a))),
                 "runs":next.runs,"leaves":next.leaves.len(),"distribution":distribution,
                 "mass":distribution[&selected.to_string()],
+                "quotient_distribution":quotient_distribution,
+                "quotient_semantic_key":prep.quotient_quick_claw.then(||successor_key(first).to_string()),
                 "semantic_key":first.state_key128_without_damage_bookkeeping().to_string()});
             child = first.clone();
         }
@@ -470,10 +498,14 @@ fn audit(
         let (value, stop, runs, matrix, nodes, root_chance, certificates, strategy) = if let Some(side) = prep.fixed_policy_side {
             assert!(side < 2 && prep.lower_threshold.is_none());
             let mut probe = child.clone();
-            let priority = probe.legal_choices(dex,side);
+            let legal = probe.legal_choices(dex,side);
+            let priority = prep.fixed_priority_actions.as_ref().map_or_else(||legal.clone(),|names|
+                names.iter().map(|name|*legal.iter().find(|&&action|action_input(dex,action)==*name)
+                    .expect("descendant priority action must be legal at its root")).collect());
             assert!(!priority.is_empty());
             let priority_names: Vec<_> = priority.iter().map(|a|action_input(dex,*a)).collect();
             let mut dedicated = FixedPolicySolver::new(dex,dedicated_config,side,priority);
+            if prep.fixed_sleep_talk { dedicated = dedicated.with_sleep_talk(); }
             let report = dedicated.solve(child);
             let matrix = dedicated.restricted_root_payoffs(child).unwrap();
             let nodes = dedicated.node_count();
@@ -481,8 +513,10 @@ fn audit(
                 .map(|c|chance_diagnostic(c,dex)).collect();
             (report.unrestricted_game_value,report.stop,report.runs,matrix,nodes,chance,
                 dedicated.into_value_certificates(),json!({"side":side,"priority_actions":priority_names,
+                    "sleep_talk":prep.fixed_sleep_talk,
                     "guaranteed_score":bound(report.guaranteed_score)}))
         } else {
+            assert!(prep.fixed_priority_actions.is_none() && !prep.fixed_sleep_talk);
             let mut dedicated = BoundSolver::new(dex,dedicated_config);
             let report = dedicated.solve(child,prep.lower_threshold.map(|t|(t,t)));
             let matrix = dedicated.root_payoffs(child).unwrap();
@@ -502,6 +536,7 @@ fn audit(
             "actions":prep.actions,"mass":mass,"matching_leaves":matching.len(),
             "state":child.essence(dex),"enumeration_runs":enumeration_runs,"replacement":replacement,
             "one_sided_resource_class":format!("{:?}",nc2000_bot::stall::classify_one_sided_heal(child,dex)),
+            "two_sided_resource_class":format!("{:?}",nc2000_bot::stall::classify_two_sided_heal(child,dex)),
             "quick_claw_roll":child.quick_claw_roll,
             "quick_claw_kernel":quick_claw_kernel,
             "value":bound(value),"stop":format!("{:?}",stop),

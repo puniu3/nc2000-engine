@@ -510,6 +510,51 @@ impl<'d> FixedPolicySolver<'d> {
         self
     }
 
+    /// Refine one first opponent reply, retaining every later opponent choice.
+    /// Returned bounds are side-zero cell values, not whole-game guarantees.
+    pub fn solve_reply(&mut self, battle: &Battle, reply: SearchChoice,
+        threshold: Option<f64>) -> SolveReport {
+        assert!(threshold.is_none_or(|t| t.is_finite() && (0.0..=1.0).contains(&t)));
+        let started = Instant::now();
+        let budget = self.solver.cfg.work_budget;
+        self.solver.cfg.work_budget = 0;
+        self.solver.solve(battle, None);
+        self.solver.cfg.work_budget = budget;
+        let root = self.solver.node_key(battle);
+        assert!(!self.solver.closed.contains_key(&root), "reply analysis requires a retained matrix");
+        self.solver.init_cells(root);
+        let matrix = self.solver.root_payoffs(battle).unwrap();
+        assert_eq!(matrix.actions[self.side].len(), 1);
+        let cell = matrix.actions[1-self.side].iter().position(|a| *a == Some(reply))
+            .expect("opponent reply must be legal");
+        let start_runs = self.solver.stats.runs;
+        let work_limit = start_runs.saturating_add(budget);
+        let direction = if self.side == 0 { BoundDirection::Lower } else { BoundDirection::Upper };
+        let mut idle = 0;
+        loop {
+            let current = &self.solver.nodes[&root].cells[cell];
+            let bounds = Bounds { lo: current.lo, hi: current.hi };
+            let stop = if bounds.width() <= self.solver.cfg.eps { Some(Stop::WidthMet) }
+                else if threshold.is_some_and(|t| bounds.lo > t) { Some(Stop::ProvenAbove) }
+                else if threshold.is_some_and(|t| bounds.hi < t) { Some(Stop::ProvenBelow) }
+                else if self.solver.cfg.time_budget.is_some_and(|limit| started.elapsed() >= limit) { Some(Stop::TimeBudget) }
+                else if self.solver.stats.runs >= work_limit || idle > 256 { Some(Stop::WorkExhausted) }
+                else if self.solver.nodes.len() + self.solver.closed.len() >= self.solver.cfg.node_budget { Some(Stop::NodeBudget) }
+                else { None };
+            if let Some(stop) = stop {
+                return SolveReport { bounds, stop, runs: self.solver.stats.runs-start_runs, strategies: None };
+            }
+            if self.solver.nodes[&root].battle.is_none() {
+                self.solver.nodes.get_mut(&root).unwrap().battle = Some(battle.clone());
+            }
+            if self.solver.trial_from_cell(root,work_limit,Some(cell),Some(direction)) { idle = 0; }
+                else { idle += 1; }
+            if self.solver.cfg.fold_closed_nodes && self.solver.stats.trials % 4096 == 0 {
+                self.solver.fold_closed_graph();
+            }
+        }
+    }
+
     pub fn with_frozen_switch(mut self) -> Self {
         assert!(self.solver.nodes.is_empty() && self.solver.closed.is_empty(),
             "fixed strategy must be configured before search");
@@ -2922,6 +2967,71 @@ mod tests {
             BoundConfig { work_budget: 0, ..BoundConfig::default() }, 0, vec![]);
         solver.solve(&root);
         solver.with_sleep_talk();
+    }
+
+    #[test]
+    fn fixed_reply_bounds_keep_future_replies_free_and_resume() {
+        use nc2000_engine::battle::SearchChoice;
+        fn exact(dex: &nc2000_engine::dex::Dex, b: &Battle, side: usize, first: Option<SearchChoice>) -> f64 {
+            if let Some(value) = super::outcome_value(b) { return value; }
+            assert!(b.turn >= 999);
+            let attack = SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
+            let mut probe = b.clone();
+            let replies = first.map_or_else(||probe.legal_choices(dex,1-side),|reply|vec![reply]);
+            let scores = replies.into_iter().map(|reply| {
+                let actions = if side==0 { [attack,reply] } else { [reply,attack] };
+                enumerate_step(dex,b,actions.map(Some),100_000).unwrap().leaves.iter()
+                    .map(|leaf|leaf.prob*exact(dex,&leaf.battle,side,None)).sum::<f64>()
+            });
+            if side==0 { scores.fold(1.0,f64::min) } else { scores.fold(0.0,f64::max) }
+        }
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex,&["Seismic Toss","Protect"],&["Seismic Toss","Protect"]);
+        let preview = [0,1].map(|side|root.legal_choices(&dex,side).first().copied());
+        root.apply_choices(&dex,preview).unwrap();
+        root.turn=999;
+        for side in 0..2 { let id=root.active_id(side).unwrap();root.poke_mut(id).hp=if side==0 {40} else {60}; }
+        let attack=SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
+        for side in 0..2 { for reply in root.legal_choices(&dex,1-side) {
+            let expected=exact(&dex,&root,side,Some(reply));
+            let mut solver=super::FixedPolicySolver::new(&dex,BoundConfig {
+                work_budget:1,cell_cap:0,eps:1e-8,..BoundConfig::default()
+            },side,vec![attack]);
+            let mut closed=false;
+            for _ in 0..1000 {
+                let report=solver.solve_reply(&root,reply,None);
+                assert!(report.runs<=1 && report.strategies.is_none());
+                assert!(report.bounds.lo<=expected+1e-10 && report.bounds.hi>=expected-1e-10);
+                assert_eq!(solver.restricted_root_payoffs(&root).unwrap().actions[1-side].len(),2);
+                if report.stop==super::Stop::WidthMet { closed=true;break; }
+            }
+            assert!(closed);
+            let chance=solver.root_chance_diagnostics(&root).unwrap();
+            assert_eq!(chance.iter().filter(|cell|cell.runs>0).count(),1);
+        }}
+    }
+
+    #[test]
+    fn winning_fixed_reply_is_not_exported_as_a_whole_game_guarantee() {
+        use nc2000_engine::battle::SearchChoice;
+        let dex=conformance::load_dex();
+        let mut root=battle(&dex,&["Seismic Toss","Splash"],&["Seismic Toss","Splash"]);
+        let preview=[0,1].map(|side|root.legal_choices(&dex,side).first().copied());
+        root.apply_choices(&dex,preview).unwrap();root.turn=1000;
+        for side in 0..2 { let id=root.active_id(side).unwrap();root.poke_mut(id).hp=1; }
+        let attack=SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
+        let splash=SearchChoice::Move(dex.moves.id("splash").unwrap());
+        for side in 0..2 {
+            let mut solver=super::FixedPolicySolver::new(&dex,BoundConfig::default(),side,vec![attack]);
+            let report=solver.solve_reply(&root,splash,Some(0.75));
+            let expected=if side==0 {1.0} else {0.0};
+            assert!((report.bounds.lo-expected).abs()<1e-10 && (report.bounds.hi-expected).abs()<1e-10);
+            let root_bounds=solver.restricted_root_payoffs(&root).unwrap().value;
+            assert!(root_bounds.lo<=0.5 && root_bounds.hi>=0.5);
+            let key=solver.solver.node_key(&root);
+            let certificates=solver.into_value_certificates();
+            assert!(certificates.entries.get(&key).is_none_or(|b|b.lo<=0.5 && b.hi>=0.5));
+        }
     }
 
     #[test]
