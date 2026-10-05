@@ -20,7 +20,10 @@ def summarize(record, corpus):
     old_path = root / 'findings/policy-healing-reuse-v1/records.json.gz'
     old = json.loads(gzip.decompress(old_path.read_bytes()))['healing']
     assert record['schema'] == old['schema'] and record['state_key'] == old['state_key']
-    assert record['config'] == old['config']
+    expected = dict(old['config'])
+    if 'reuse_attacks' in record['config']:
+        expected['reuse_attacks'] = False
+    assert record['config'] == expected
     assert record['manifest']['corpus_sha256'] == sha(corpus)
     assert record['manifest']['dex_fingerprint'] == old['manifest']['dex_fingerprint']
     report, before = record['report'], old['report']

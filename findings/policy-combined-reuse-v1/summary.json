@@ -1,0 +1,106 @@
+{
+  "schema": "nc2000-policy-combined-reuse-v1",
+  "results": {
+    "control": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9558916275509785
+      },
+      "runs": 2000000,
+      "elapsed_ms": 31558.812458999997,
+      "cache": {
+        "observations": 2057352,
+        "eligible": 65260,
+        "attack_eligible": 0,
+        "hits": 57352,
+        "attack_hits": 0,
+        "reset_hits": 23850,
+        "rejected_hp": 407,
+        "runs": 2000000,
+        "peak_entries": 6550,
+        "exclusions": {
+          "healer_full_hp": 4096,
+          "healer_volatile": 8343,
+          "no_single_healer": 1979653
+        }
+      },
+      "hit_fraction": 0.027876610322395003,
+      "peak_states": 25026,
+      "peak_templates": 44,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 2000000,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.04410837344902253,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.3868009615413384,
+        "frontier_mass": 0.5690906650096401,
+        "unknown_mass": 0.9558916265509785,
+        "frontier_states": 25026,
+        "frontier_templates": 44,
+        "enumeration_failures": 163,
+        "mass_error": 1.1102230246251565e-15,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9558916275509785
+        }
+      }
+    },
+    "combined": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9530969556136478
+      },
+      "runs": 2000000,
+      "elapsed_ms": 34344.968041,
+      "cache": {
+        "observations": 2231920,
+        "eligible": 842731,
+        "attack_eligible": 774771,
+        "hits": 231920,
+        "attack_hits": 171868,
+        "reset_hits": 26550,
+        "rejected_hp": 73460,
+        "runs": 2000000,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "boom_choice": 783618,
+          "frame_or_field": 32,
+          "healer_full_hp": 4096,
+          "healer_volatile": 10443,
+          "non_move_choice": 590400
+        }
+      },
+      "hit_fraction": 0.10391053442775727,
+      "peak_states": 26062,
+      "peak_templates": 44,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 2000000,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.0469030453863537,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.3807269742597436,
+        "frontier_mass": 0.5723699803539042,
+        "unknown_mass": 0.9530969546136479,
+        "frontier_states": 26062,
+        "frontier_templates": 44,
+        "enumeration_failures": 177,
+        "mass_error": 1.5543122344752192e-15,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9530969556136478
+        }
+      }
+    }
+  },
+  "prior_archive_sha256": "c389e81f65b32ed4be58a2bd19a2af33adcd76e4bfbedd6beb5769534e1b82fa",
+  "interpretation": "Equal actual engine-execution budgets compare healing-only reuse with combined attack and healing reuse in the same packed fixed-policy enumeration. Attack reuse keeps the existing HP-independent move/item guards and requires both translated survivors to remain positive. Each input is validated before preparing its shared key. Incomplete chance and pruned frontier mass stay unknown. Counters distinguish attack hits, reset hits, boundary fallbacks and excluded work. No sampled value enters the intervals. These are fixed-policy-pair bounds, not an unrestricted-game ceiling or deployed strength result. Concurrent wall times do not establish a speedup."
+}

@@ -35,6 +35,8 @@ def summarize(records, corpus):
     expected = dict(old['config'], hp_storage_census=False, guarded_keys=False, packed_hp=False, packed_state_cap=100000)
     if 'healing_capacity' in config:
         expected['healing_capacity'] = 0
+    if 'reuse_attacks' in config:
+        expected['reuse_attacks'] = False
     assert config == expected
     results = {}
     for name in names:

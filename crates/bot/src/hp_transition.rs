@@ -215,7 +215,9 @@ impl HpHealingTransition {
 pub struct HpHealingStats {
     pub observations:usize,
     pub eligible:usize,
+    pub attack_eligible:usize,
     pub hits:usize,
+    pub attack_hits:usize,
     pub reset_hits:usize,
     pub rejected_hp:usize,
     pub runs:usize,
@@ -223,9 +225,19 @@ pub struct HpHealingStats {
     pub exclusions:BTreeMap<&'static str,usize>,
 }
 
+enum HpSharedTransition {Healing(HpHealingTransition),Attack(HpTransition)}
+
+impl HpSharedTransition {
+    fn translate_hp(&self,target:&Battle)->Option<(Battle,Vec<Draw>)> {
+        match self {Self::Healing(entry)=>entry.translate_hp(target),Self::Attack(entry)=>entry.translate_hp(target)}
+    }
+    fn resets_hp(&self)->bool {matches!(self,Self::Healing(entry) if entry.resets_hp())}
+}
+
 pub struct HpHealingCache {
     capacity:usize,
-    entries:HashMap<HpTransitionKey,HpHealingTransition>,
+    attacks:bool,
+    entries:HashMap<HpTransitionKey,HpSharedTransition>,
     order:VecDeque<HpTransitionKey>,
     stats:HpHealingStats,
 }
@@ -237,20 +249,37 @@ pub struct HpHealingRunner<'a> {
     choices:[Option<SearchChoice>;2],
     key:Option<HpTransitionKey>,
     exclusion:Option<&'static str>,
+    attack:bool,
 }
 
 impl HpHealingCache {
     pub fn new(capacity:usize)->Self {
-        Self {capacity,entries:HashMap::new(),order:VecDeque::new(),stats:HpHealingStats::default()}
+        Self {capacity,attacks:false,entries:HashMap::new(),order:VecDeque::new(),stats:HpHealingStats::default()}
+    }
+    pub fn with_attacks(mut self)->Self {
+        assert_eq!(self.stats.observations,0);self.attacks=true;self
     }
     pub fn stats(&self)->HpHealingStats {self.stats.clone()}
     pub fn prepare<'a>(&'a mut self,dex:&'a Dex,base:&'a Battle,choices:[Option<SearchChoice>;2])->HpHealingRunner<'a> {
+        let mut attack=false;
         let (key,exclusion)=if self.capacity==0 {(None,Some("disabled"))} else {
             match HpTransitionKey::healing_domain(dex,base,choices,&[]) {
-                Ok(key)=>(Some(key),None),Err(reason)=>(None,Some(reason)),
+                Ok(key)=>(Some(key),None),
+                Err(reason)=>match self.attacks.then(||HpTransitionKey::new_domain(dex,base,choices,&[],None)) {
+                    Some(Ok(key))=>{attack=true;(Some(key),None)},
+                    Some(Err(attack_reason))=> {
+                        let reason=if reason=="no_single_healer" {
+                            if choices.iter().any(|choice|matches!(choice,Some(SearchChoice::Move(id))
+                                if matches!(dex.moves.key(*id),"selfdestruct"|"explosion"))) {"boom_choice"}
+                            else {attack_reason}
+                        } else {reason};
+                        (None,Some(reason))
+                    },
+                    None=>(None,Some(reason)),
+                },
             }
         };
-        HpHealingRunner {cache:self,dex,base,choices,key,exclusion}
+        HpHealingRunner {cache:self,dex,base,choices,key,exclusion,attack}
     }
 }
 
@@ -260,9 +289,11 @@ impl HpHealingRunner<'_> {
         if let Some(reason)=self.exclusion {*self.cache.stats.exclusions.entry(reason).or_default()+=1;}
         let key=self.key.as_ref().map(|key| {let mut key=key.clone();key.script=script.to_vec();key});
         self.cache.stats.eligible+=usize::from(key.is_some());
+        self.cache.stats.attack_eligible+=usize::from(self.attack);
         if let Some(entry)=key.as_ref().and_then(|key|self.cache.entries.get(key)) {
             if let Some((battle,trace))=entry.translate_hp(self.base) {
                 self.cache.stats.hits+=1;self.cache.stats.reset_hits+=usize::from(entry.resets_hp());
+                self.cache.stats.attack_hits+=usize::from(self.attack);
                 return (battle,trace,false);
             }
             self.cache.stats.rejected_hp+=1;
@@ -270,7 +301,9 @@ impl HpHealingRunner<'_> {
         let (battle,trace)=run_scripted(self.dex,self.base,self.choices,script);
         self.cache.stats.runs+=1;
         if let Some(key)=key.filter(|key|!self.cache.entries.contains_key(key)) {
-            if let Some(entry)=HpHealingTransition::from_result(self.dex,key.clone(),self.base,self.choices,&battle,&trace) {
+            let entry=if self.attack {HpTransition::from_key(key.clone(),self.base,&battle,&trace).map(HpSharedTransition::Attack)}
+                else {HpHealingTransition::from_result(self.dex,key.clone(),self.base,self.choices,&battle,&trace).map(HpSharedTransition::Healing)};
+            if let Some(entry)=entry {
                 if self.cache.entries.len()==self.cache.capacity {
                     self.cache.entries.remove(&self.cache.order.pop_front().unwrap());
                 }
@@ -645,6 +678,38 @@ mod tests {
             assert_eq!(stats.observations,stats.runs+stats.hits);
             if capacity==0 {assert_eq!(stats.hits,0);} else if capacity==4096 {assert!(stats.hits>100 && stats.reset_hits>0 && stats.rejected_hp>0);}
         }
+    }
+
+
+    #[test]
+    fn prepared_combined_cache_preserves_attack_kernels_and_boundaries() {
+        use nc2000_engine::battle::enumerate::{enumerate_step,enumerate_step_with_runner};
+        let dex=conformance::load_dex();
+        let base=battle(&dex,[&["Seismic Toss"],&["Ice Beam"]],["Mint Berry","Bright Powder"]);
+        let choices=["seismictoss","icebeam"].map(|name|Some(SearchChoice::Move(dex.moves.id(name).unwrap())));
+        let mut cache=HpHealingCache::new(4096).with_attacks();
+        for hp in [220,180,1,150] {
+            let mut target=base.clone();
+            for side in 0..2 {let id=target.active_id(side).unwrap();target.poke_mut(id).hp=hp;}
+            let mut runner=cache.prepare(&dex,&target,choices);
+            let found=enumerate_step_with_runner(&dex,&target,choices,100_000,&mut |script| {
+                let found=runner.run(script);let actual=run_scripted(&dex,&target,choices,script);
+                assert_eq!(found.0.state_key128(),actual.0.state_key128());
+                assert_eq!(trace_signature(&found.1),trace_signature(&actual.1));found
+            }).unwrap();
+            let expected=enumerate_step(&dex,&target,choices,100_000).unwrap();
+            let aggregate=|leaves:Vec<nc2000_engine::battle::enumerate::ChanceLeaf>| {
+                let mut map=HashMap::<u128,f64>::new();
+                for leaf in leaves {*map.entry(leaf.battle.state_key128()).or_default()+=leaf.prob;}
+                map
+            };
+            let found=aggregate(found.leaves);let expected=aggregate(expected.leaves);
+            assert_eq!(found.len(),expected.len());
+            for (key,mass) in found {assert!((mass-expected[&key]).abs()<1e-10);}
+        }
+        let stats=cache.stats();assert!(stats.attack_hits>100 && stats.rejected_hp>0);
+        assert_eq!(stats.attack_hits,stats.hits);assert_eq!(stats.attack_eligible,stats.eligible);
+        assert_eq!(stats.observations,stats.hits+stats.runs);
     }
 
 }
