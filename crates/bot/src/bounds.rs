@@ -2108,6 +2108,49 @@ mod tests {
     }
 
     #[test]
+    fn fainted_quick_claw_is_ignored_only_at_idle_move_requests() {
+        let dex = conformance::load_dex();
+        let mut holder = mon(&["Splash"]);
+        holder.item = "Quick Claw".into();
+        let mut root = Battle::from_fixture(&dex,"1,2,3,4",
+            &[mon(&["Thief"]),holder],&[mon(&["Splash"])]).unwrap();
+        let preview = [0,1].map(|side|root.legal_choices(&dex,side).first().copied());
+        root.apply_choices(&dex,preview).unwrap();
+        let slot = root.sides[0].party[1] as usize;
+        root.sides[0].roster[slot].hp=0;
+        root.sides[0].roster[slot].fainted=true;
+        root.sides[0].pokemon_left=1;
+        assert!(!root.quick_claw_roll_observable(&dex));
+        for changed in 0..5 {
+            let mut busy = root.clone();
+            match changed {
+                0 => busy.mid_turn=true,
+                1 => busy.active_pokemon=busy.active_id(0),
+                2 => busy.active_move=Some(nc2000_engine::battle::moveexec::get_active_move(&dex,dex.moves.id("thief").unwrap())),
+                3 => busy.sides[0].roster[slot].hp=1,
+                _ => busy.sides[0].roster[slot].fainted=false,
+            }
+            assert!(busy.quick_claw_roll_observable(&dex));
+        }
+        let solver = BoundSolver::new(&dex,BoundConfig { dead_quick_claw_quotient:true,..BoundConfig::default() });
+        let choices=[0,1].map(|side|root.legal_choices(&dex,side).first().copied());
+        let mut kernels=Vec::new();
+        for roll in [false,true] {
+            root.quick_claw_roll=roll;
+            let step=enumerate_step(&dex,&root,choices,100_000).unwrap();
+            let mut kernel=HashMap::new();
+            for leaf in step.leaves {
+                assert!(leaf.battle.sides.iter().flat_map(|s|s.roster.iter())
+                    .filter(|p|!p.fainted).all(|p|p.item!=dex.known_items.quickclaw));
+                *kernel.entry(solver.node_key(&leaf.battle)).or_insert(0.0)+=leaf.prob;
+            }
+            kernels.push(kernel);
+        }
+        assert_eq!(kernels[0].len(),kernels[1].len());
+        for (key,mass) in &kernels[0] { assert!((mass-kernels[1][key]).abs()<1e-10); }
+    }
+
+    #[test]
     fn held_quick_claw_changes_outcomes_and_cannot_be_quotiented() {
         let dex = conformance::load_dex();
         let mut holder = mon(&["Seismic Toss"]);

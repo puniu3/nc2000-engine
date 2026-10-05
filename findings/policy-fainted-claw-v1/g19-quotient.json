@@ -1,0 +1,40 @@
+{
+  "schema": "nc2000-policy-gap-v1",
+  "corpus": "tmp/policy-fainted-claw-v1/g19.jsonl",
+  "corpus_sha256": "c8684a9f6f566e771f20ae970e24bbe9973f3960c2cb0afcef117baaed64af8b",
+  "baseline": "findings/policy-gap-v1/archived-baseline.json",
+  "baseline_sha256": "9b2c1c06296fa8dfb51bac6ed712fce3c9bc4f3bde5df2a19b3d1bf50ff83dc1",
+  "reference_ms": 300000,
+  "node_budget": 480000,
+  "work_budget": 6000000,
+  "cell_cap": 4096,
+  "tolerance": 0.02,
+  "iterations": [],
+  "search_seeds": 1,
+  "seed": 2026100501,
+  "threads": 1,
+  "limit": null,
+  "interpretation": "Ignore the current Quick Claw roll when no live holder exists at an idle move request. Fainted holders remain observable outside idle move requests. Preserve every action, chance outcome, and all other key fields. This is a full-information endgame analysis, not a deployed-policy strength claim.",
+  "targets": "archived",
+  "diagnostics": true,
+  "certified_action_pruning": true,
+  "chance_fair_period": 32,
+  "aggregate_lazy_children": true,
+  "witness_preparation": null,
+  "resource_closure_nodes": 90000,
+  "descendant_preparation": {
+    "root_state_key": "160298700970866480479685871464306122045",
+    "actions": [
+      "move bodyslam",
+      "move thunder"
+    ],
+    "semantic_key": "335198304254042248407122083938512062892",
+    "mass": 0.058319091796875,
+    "enumeration_cap": 100000,
+    "reference_ms": 180000,
+    "work_budget": 2000000,
+    "node_budget": 120000,
+    "tolerance": 0.02
+  },
+  "dead_quick_claw_quotient": true
+}

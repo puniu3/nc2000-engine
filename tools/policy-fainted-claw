@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/policy-fainted-claw-v1'
+names=['g17-control','g17-quotient','g19-quotient','g19-census']
+
+
+def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+
+def module(name,file):
+    spec=importlib.util.spec_from_file_location(name,root/'tools'/file)
+    result=importlib.util.module_from_spec(spec);spec.loader.exec_module(result)
+    return result
+
+
+assessor=module('assessor','headroom-cases-report.py')
+verifier=module('verifier','policy-gap-report.py')
+
+
+def summarize(records):
+    assert set(records)==set(names)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()})==1
+    paths=[root/'findings/policy-ending-witness-v1/summary.json',root/'findings/policy-descendant-v1/summary.json']
+    old17=next(s for s in json.loads(paths[0].read_bytes())['states'] if s['game']==17)
+    old19=json.loads(paths[1].read_bytes())['combined']
+    padding=1e-10
+    matrices={17:json.loads(json.dumps(old17['matrix'])),19:json.loads(json.dumps(old19['matrix']))}
+    for matrix in matrices.values():
+        for b in matrix['cells']+[matrix['value']]:
+            b['lo']=max(0,b['lo']-padding);b['hi']=min(1,b['hi']+padding)
+    arms={}
+    for name,record in records.items():
+        row,p=record['result'],record['manifest']['protocol']
+        assert p['dead_quick_claw_quotient']==(name!='g17-control')
+        hashes=dict(record['manifest']['source_hashes'])
+        assert 'crates/engine/src/battle/search.rs' in hashes and 'crates/engine/src/battle/enumerate.rs' in hashes
+        game=int(name[1:3]);matrix=matrices[game]
+        if name=='g19-census':
+            assert row['schema']=='nc2000-root-transition-census-v1'
+            assert len(row['cells'])==16
+            assert sum(c['runs'] for c in row['cells'])==row['reference']['runs']
+            for cell in row['cells']:
+                assert abs(sum(g['mass'] for g in cell['groups'])-1)<1e-10
+            continue
+        if game==17:
+            assert row['state_key']==old17['state_key']
+            assert row['side']==1 and row['fixed_first_action']=='move selfdestruct'
+            restricted=row['restricted_matrix']
+            assert restricted['actions']==[matrix['actions'][0],['move selfdestruct']]
+            index=matrix['actions'][1].index('move selfdestruct')
+            for i,b in enumerate(restricted['cells']):
+                target=matrix['cells'][i*len(matrix['actions'][1])+index]
+                target['hi']=min(target['hi'],b['hi']+padding)
+            matrix['value']['hi']=min(matrix['value']['hi'],row['unrestricted_game_value']['hi']+padding)
+            value=row['unrestricted_game_value']
+            assert sum(c['runs'] for c in row['root_chance'])==row['reference']['runs']
+        else:
+            assert row['state_key']=='160298700970866480479685871464306122045'
+            reference=row['reference']
+            assert reference['actions']==matrix['actions']
+            for a,b in zip(matrix['cells']+[matrix['value']],reference['cells']+[reference['value']]):
+                a['lo']=max(a['lo'],b['lo']-padding);a['hi']=min(a['hi'],b['hi']+padding)
+                assert a['lo']<=a['hi']
+            value=reference['value']
+            assert row['total_runs']==reference['runs']+sum(x['runs']+x['enumeration_runs'] for x in row['descendant_preparation'])
+        arms[name]={'value':value,**{k:row['reference'][k] for k in ['runs','nodes','stop','elapsed_ms']}}
+        if game==19:arms[name]['total_runs']=row['total_runs']
+    assessor.calibrate_assessor()
+    states=[]
+    for game,matrix in matrices.items():
+        policies=[e['assessment']['policy'] for e in old17['endpoints']] if game==17 else [e['policy'] for e in old19['archived_first_decisions']]
+        endpoints=[]
+        for side,policy in enumerate(policies):
+            assessment=assessor.assess(matrix,side,policy)
+            verifier.verify_assessment(matrix,side,assessment)
+            endpoints.append({'side':side,'assessment':assessment,'verdict':assessor.verdict(assessment['loss'])})
+        states.append({'game':game,'matrix':matrix,'endpoints':endpoints})
+    return {'schema':'nc2000-policy-fainted-claw-v1','arms':arms,'census':records['g19-census']['result'],'states':states,'numerical_envelope':padding,
+            'prior_hashes':{str(p.relative_to(root)):sha(p.read_bytes()) for p in paths},
+            'interpretation':'At idle move requests, fainted zero-HP Quick Claw holders cannot return or be targeted by item transfer. Outside that phase the prior complete-roster guard remains. Queues, callbacks, active move, and outstanding choices must all be absent before discarding fainted-holder relevance. All legal actions and chance mass remain. Intersections combine unrestricted values and only the valid one-sided fixed-policy bounds. These are full-information first-decision certificates; no deployed blind-policy strength or global optimality claim.'}
+
+
+parser=argparse.ArgumentParser();mode=parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only',action='store_true');mode.add_argument('--record-existing',type=pathlib.Path)
+args=parser.parse_args()
+if args.verify_only:
+    records=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    for name,record in records.items():
+        manifest=record['manifest'];raw=(archive/f'{name}.json').read_bytes()
+        assert sha(raw)==manifest['protocol_sha256'] and json.loads(raw)==manifest['protocol']
+        corpus=gzip.decompress((archive/f'{name[:3]}.jsonl.gz').read_bytes())
+        assert sha(corpus)==manifest['protocol']['corpus_sha256']
+        assert sha((root/manifest['protocol']['baseline']).read_bytes())==manifest['protocol']['baseline_sha256']
+    assert summarize(records)==json.loads((archive/'summary.json').read_bytes())
+    print('Verified same-binary arms, source provenance, one-sided projections and combined policy bounds')
+    raise SystemExit(0)
+directory=args.record_existing
+if directory is None:
+    directory=root/'tmp/policy-fainted-claw-v1'/datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S');directory.mkdir(parents=True)
+    for game in [17,19]:(directory/f'g{game}.jsonl').write_bytes(gzip.decompress((archive/f'g{game}.jsonl.gz').read_bytes()))
+    env=dict(os.environ,NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','endgame_policy_audit'],cwd=root,env=env,check=True)
+    for name in names:
+        p=json.loads((archive/f'{name}.json').read_bytes());p['corpus']=str((directory/f'{name[:3]}.jsonl').relative_to(root))
+        (directory/f'{name}.json').write_text(json.dumps(p,indent=2)+'\n')
+        subprocess.run([str(root/'target/release/examples/endgame_policy_audit'),str(directory/f'{name}.json'),str(directory/name)],cwd=root,env=env,check=True)
+records={}
+for name in names:
+    game=int(name[1:3]);decision=21 if game==17 else 17
+    records[name]={'manifest':json.loads((directory/name/'manifest.json').read_bytes()),'result':json.loads((directory/name/f'game-{game:03}-d{decision:04}.json').read_bytes())}
+summary=summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    for game in [17,19]:(archive/f'g{game}.jsonl.gz').write_bytes(gzip.compress((directory/f'g{game}.jsonl').read_bytes(),mtime=0))
+    for name in names:(archive/f'{name}.json').write_bytes((directory/f'{name}.json').read_bytes())
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(records,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+print(summary['arms'])
+print([(s['game'],[e['assessment']['loss'] for e in s['endpoints']]) for s in summary['states']])

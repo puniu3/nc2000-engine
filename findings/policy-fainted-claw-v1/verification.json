@@ -1,0 +1,29 @@
+{
+  "schema": "nc2000-policy-fainted-claw-verification-v1",
+  "native_bot_tests": 178,
+  "checks": [
+    "cargo test -p nc2000-bot --lib",
+    "cargo check --workspace --all-targets",
+    "tools/policy-fainted-claw --verify-only",
+    "git diff --check"
+  ],
+  "proof_scope": [
+    "At an idle move request, all queues, active move/context, event/effect stacks and outstanding choices must be empty. Only in that phase may a holder marked fainted with nonpositive HP be ignored.",
+    "The engine does not revive fainted Pokemon. Future Thief actions reject or retarget fainted targets, while already pending callbacks are excluded by the idle guard. Live holders and inconsistent fainted/positive-HP states retain the original distinction.",
+    "A complete Thief transition test with a fainted Quick Claw holder verifies no live Pokemon acquires the item and both roll settings have the same successor distribution. In-flight move/context and non-idle negative controls preserve observability."
+  ],
+  "conclusions": [
+    "g19d17 unrestricted value tightens to [0.1053861545,0.1349494582]. After combining prior certificates, both archived first-decision loss upper bounds improve from 0.0342628371 to 0.0295633041. They remain unresolved at tolerance 0.02.",
+    "g19 uses 5718520 parent executions at 480000 nodes plus 1049521 dedicated-successor executions and 104 initial enumerations. The dedicated successor interval is [0.03515625,0.2690845483]. No timing or matched-work speed claim is made against older binaries.",
+    "g17d21 remains at loss upper 0.0465485464. The fresh same-binary control and quotient arms both stop at 90 seconds. The full roster contains an unselected live Steelix holding Quick Claw, so the conservative complete-roster scan still disables the quotient. Excluding unselected roster slots requires a separate participation invariant and is not implemented here.",
+    "The complete 16-cell g19 root census uses 1966 executions. Body Slam versus Thunder has immediate terminal mass 0.6953125 for side one and 0.0142822265625 for side zero. Body Slam versus Substitute has six nonterminal leaves at HP [90,96], providing a small concrete first-step distribution for dedicated response analysis.",
+    "Manifests now record source hashes for the engine key, enumerator, Pokemon/item logic and move callbacks in addition to the solver and harness. All new comparison arms share one binary hash.",
+    "The quotient remains optional and off by default. No positive archived first-decision loss lower bound, deployed blind-bot improvement, or global optimality is established."
+  ],
+  "source_hashes": {
+    "crates/engine/src/battle/search.rs": "e327ffa580e1ebf5095d41ed5d6d22ff08ef0d3e804e948eb9afb9b8bf7ee4b5",
+    "crates/bot/src/bounds.rs": "3dd432bdbccafa91d4d285582e7f3f52e13e9ba0de0cfa3b78a0eabba5f530a5",
+    "crates/bot/examples/endgame_policy_audit.rs": "be90ff25df46892ee80a40150cde078bd6228efd217b482bfa5f6f51c1241414",
+    "tools/policy-fainted-claw": "0ba9b8dff9e5d79b030318eab5894ad5c3850ed523f3a6295c46569bc028f712"
+  }
+}

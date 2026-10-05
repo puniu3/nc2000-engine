@@ -705,6 +705,10 @@ fn main() {
     let sources = [
         "crates/bot/src/bounds.rs",
         "crates/bot/examples/endgame_policy_audit.rs",
+        "crates/engine/src/battle/search.rs",
+        "crates/engine/src/battle/enumerate.rs",
+        "crates/engine/src/battle/pokemon.rs",
+        "crates/engine/src/battle/moveexec.rs",
     ];
     let manifest = json!({"protocol":serde_json::from_slice::<Value>(&bytes).unwrap(),
         "protocol_sha256":sha(&bytes),"revision":git(&["rev-parse","HEAD"]),"dirty":git(&["status","--porcelain"]),
