@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+import argparse
+import concurrent.futures
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/hp-probe-seeds-v1'
+summarize_run = runpy.run_path(str(root/'tools/small-gain-probe'))['summarize']
+seed_base = 2026110901
+seed_count = 4
+iterations = 864000
+probes = 345600
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    assert records['bucketed']['source_hashes'] == records['exact_hp']['source_hashes']
+    assert records['bucketed']['binary_sha256'] == records['exact_hp']['binary_sha256']
+    assert records['bucketed']['state_key'] == records['exact_hp']['state_key']
+    groups = []
+    all_rows = {}
+    for name, buckets in [('bucketed',16),('exact_hp',0)]:
+        record = records[name]
+        assert record.get('hp_buckets',16) == buckets
+        assert record['fresh_probes'] and not record['adaptive_probes']
+        assert (record['search_seed_base'],record['search_seeds'],record['iterations'],record['probe_iterations']) == (seed_base,seed_count,iterations,probes)
+        assert record['proof']['value'][1]-record['proof']['value'][0] < 1e-5
+        assert len(record['rows']) == seed_count*4
+        for index in range(seed_count):
+            seed = seed_base ^ ((index*0x94d049bb133111eb) % (1 << 64))
+            assert seed != 2026110801
+            selected = [r for r in record['rows'] if r['seed_index'] == index]
+            assert [(r['mode'],r['side']) for r in selected] == [('full',0),('pinned',0),('full',1),('pinned',1)]
+            assert all(r['seed'] == seed for r in selected)
+            report = summarize_run({**record,'search_seeds':1,'rows':selected})
+            for r in selected:
+                if r['mode'] != 'pinned':
+                    continue
+                side = r['side']
+                result = report['rows'][side]
+                own = record['actions'][side].index('move curse' if side==0 else 'move destinybond')
+                reply = record['actions'][1-side].index('move destinybond' if side==0 else 'move curse')
+                cell = next(c for c in r['fresh_evidence']['phase_types'][0]['cells'] if c['own']==own and c['reply']==reply)
+                n1 = len(record['actions'][1])
+                lo, hi = record['proof']['cells'][own*n1+reply if side==0 else reply*n1+own]
+                if side==1:
+                    lo, hi = 1-hi,1-lo
+                row = dict(variant=name,seed=seed,side=side,fresh_mean=cell['mean'],
+                           fresh_bias=[cell['mean']-hi,cell['mean']-lo],result=result)
+                all_rows[name,index,side] = row
+        for side in range(2):
+            rows = [all_rows[name,i,side] for i in range(seed_count)]
+            analyses = {}
+            for phase in ['cumulative_analysis','phase_analysis']:
+                aa = [r['result']['analyses'][phase] for r in rows]
+                analyses[phase] = dict(mean_loss=[sum(a['loss'][k] for a in aa)/seed_count for k in [0,1]],
+                    max_loss_upper=max(a['loss'][1] for a in aa),
+                    positive_margins=sum(a['passes_positive_margin'] for a in aa),
+                    worse_than_fallback=sum(r['result']['analyses'][phase]['loss'][0]>r['result']['fallback_loss'][1] for r in rows))
+            groups.append(dict(variant=name,side=side,analyses=analyses,
+                               fresh_bias_range=[min(r['fresh_bias'][0] for r in rows),max(r['fresh_bias'][1] for r in rows)]))
+    pairs = []
+    for i in range(seed_count):
+        for side in range(2):
+            a,b = all_rows['bucketed',i,side],all_rows['exact_hp',i,side]
+            delta = {}
+            for phase in ['cumulative_analysis','phase_analysis']:
+                la,lb = a['result']['analyses'][phase]['loss'],b['result']['analyses'][phase]['loss']
+                delta[phase] = [lb[0]-la[1],lb[1]-la[0]]
+            pairs.append(dict(seed=a['seed'],side=side,exact_minus_bucketed_loss=delta))
+    return dict(groups=groups,pairs=pairs,rows=list(all_rows.values()),
+                scope='Four fresh paired seeds on one certified known-type Bond fixture at equal iterations. '
+                      'These are first-action losses under optimal subsequent play, not full-policy losses. '
+                      'HP keys change tree allocation and RNG consumption; trajectories and thinking time '
+                      'are not matched. Fresh-phase means remain approximate continuation estimates. '
+                      'No general strength or convergence claim.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only:
+        records = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(records) == json.loads((archive/'summary.json').read_text())
+        print('hp-probe-seeds: verified paired seeds, shared binary, sample accounting and certified losses')
+        return
+    assert not archive.exists()
+    env = {**os.environ,'NC2000_REPO_ROOT':str(root)}
+    binary = root/'target/release/examples/counter_mix_probe'
+    if args.import_directory:
+        directory = args.import_directory
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
+        directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-hp-probe-seeds-'))
+        print(directory,flush=True)
+        def run(pair):
+            name,buckets = pair
+            with (directory/f'{name}.log').open('w') as log:
+                subprocess.run([str(binary),str(directory/name),'2,3,4,5',str(seed_count),str(iterations),str(seed_base),'bond',str(probes),'fresh',str(buckets)],cwd=root,env=env,stdout=log,stderr=log,check=True)
+            print(f'{name} complete',flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            list(pool.map(run,[('bucketed',16),('exact_hp',0)]))
+    records = {name:json.loads((directory/name/'records.json').read_text()) for name in ['bucketed','exact_hp']}
+    for record in records.values():
+        assert all(sha((root/p).read_bytes()) == expected for p,expected in record['source_hashes'])
+        assert sha(binary.read_bytes()) == record['binary_sha256']
+    report = summarize(records)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(records,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report['groups'],indent=2))
+
+
+if __name__ == '__main__':
+    main()
