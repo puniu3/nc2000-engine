@@ -43,6 +43,7 @@ struct Protocol {
     aggregate_lazy_children: bool,
     #[serde(default)]
     chance_fair_period: usize,
+    resource_closure_nodes: Option<usize>,
     witness_preparation: Option<WitnessPreparation>,
 }
 
@@ -163,6 +164,7 @@ fn audit(
             certified_action_pruning: protocol.certified_action_pruning,
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
+            resource_closure_nodes: protocol.resource_closure_nodes,
             ..BoundConfig::default()
         }, side, legal[side].clone());
         let started = Instant::now();
@@ -229,6 +231,7 @@ fn audit(
             certified_action_pruning: protocol.certified_action_pruning,
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
+            resource_closure_nodes: protocol.resource_closure_nodes,
             ..BoundConfig::default()
         };
     let mut solver = BoundSolver::new(dex, cfg.clone());
@@ -385,6 +388,10 @@ fn audit(
             "trial_depth_counts": stats.trial_depth_counts,
             "depth_limit_trials": stats.depth_limit_trials,
             "trials": stats.trials,
+            "resource_closure_visits": stats.resource_closure_visits,
+            "first_resource_closure_nodes": stats.first_resource_closure_nodes,
+            "two_sided_roots": stats.two_sided_roots,
+            "two_sided_invalidations": stats.two_sided_invalidations,
             "eager_runs": stats.eager_runs,
             "eager_failures": stats.eager_failures,
             "reused_nodes": stats.reused_nodes,

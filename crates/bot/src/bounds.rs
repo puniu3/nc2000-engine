@@ -66,8 +66,8 @@ pub struct BoundConfig {
     /// Periodically fold exact non-root nodes into a compact closed memo.
     /// This is graph-local and does not depend on stall classification.
     pub fold_closed_nodes: bool,
-    /// Near the node budget, prefer lower proven resource generations in a
-    /// conservatively classified one-sided-heal subgame. Every generated
+    /// After the resource closure threshold, prefer lower proven resource
+    /// generations in a classified one-sided-heal subgame. Every generated
     /// edge is checked; the first violation disables only this scheduler.
     pub monotone_stall_scheduling: bool,
     /// Extend resource-ordered scheduling to certified two-sided-heal
@@ -85,6 +85,7 @@ pub struct BoundConfig {
     pub reuse_unchanged_backups: bool,
     pub aggregate_lazy_children: bool,
     pub chance_fair_period: usize,
+    pub resource_closure_nodes: Option<usize>,
 }
 
 impl Default for BoundConfig {
@@ -107,6 +108,7 @@ impl Default for BoundConfig {
             reuse_unchanged_backups: true,
             aggregate_lazy_children: false,
             chance_fair_period: 0,
+            resource_closure_nodes: None,
         }
     }
 }
@@ -262,6 +264,8 @@ impl SolveReport {
 #[derive(Clone, Debug, Default)]
 pub struct BoundStats {
     pub certificate_hits: usize,
+    pub resource_closure_visits: usize,
+    pub first_resource_closure_nodes: Option<usize>,
     pub runs: usize,
     pub eager_runs: usize,
     pub eager_failures: usize,
@@ -1029,7 +1033,14 @@ impl<'d> BoundSolver<'d> {
             // Expand pending mass while it dominates the cell's remaining
             // uncertainty; otherwise descend into the widest child term.
             let closure_mode = (self.active_stall.is_some() || self.active_two_sided.is_some())
-                && self.nodes.len().saturating_mul(4) >= self.cfg.node_budget.saturating_mul(3);
+                && self.cfg.resource_closure_nodes.map_or_else(
+                    || self.nodes.len().saturating_mul(4) >= self.cfg.node_budget.saturating_mul(3),
+                    |threshold| self.nodes.len() >= threshold,
+                );
+            if closure_mode {
+                self.stats.resource_closure_visits += 1;
+                self.stats.first_resource_closure_nodes.get_or_insert(self.nodes.len());
+            }
             let best_child = if closure_mode {
                 if let Some(class) = self.active_stall.as_ref() {
                     let mut best: Option<(i64, f64, NodeKey)> = None;
@@ -2937,6 +2948,37 @@ mod tests {
         solver.nodes.insert(key, synthetic_node(31, 2));
         assert_eq!(solver.select_cell(key), 2);
         assert_eq!(solver.stats.fair_cell_picks, 1);
+    }
+
+    #[test]
+    fn explicit_resource_threshold_preserves_prefix_across_node_budgets() {
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Rest", "Tackle", "Protect"], &["Rest", "Tackle", "Protect"]);
+        let choices = [0, 1].map(|side| root.legal_choices(&dex, side)[0]);
+        root.apply_choices(&dex, choices.map(Some)).unwrap();
+        let targets: Vec<_> = (0..2).map(|side| {
+            let mut policy = vec![0.0; root.legal_choices(&dex, side).len()];
+            policy[0] = 1.0;
+            (side, policy)
+        }).collect();
+        let mut results = Vec::new();
+        for node_budget in [10_000, 20_000] {
+            let mut solver = BoundSolver::new(&dex, BoundConfig {
+                work_budget: 2_000,
+                node_budget,
+                cell_cap: 0,
+                resource_closure_nodes: Some(0),
+                ..BoundConfig::default()
+            });
+            let report = solver.solve_policy_losses(&root, &targets, 0.02);
+            assert!(solver.node_count() < 10_000);
+            assert_eq!(solver.stats.two_sided_invalidations, 0);
+            assert!(solver.stats.resource_closure_visits > 0);
+            results.push((report.bounds.lo, report.bounds.hi, solver.stats.runs,
+                solver.node_count(), solver.stats.resource_closure_visits,
+                solver.stats.first_resource_closure_nodes));
+        }
+        assert_eq!(results[0], results[1]);
     }
 
     #[test]

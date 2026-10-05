@@ -15,6 +15,7 @@ studies = parser.add_mutually_exclusive_group()
 studies.add_argument("--frontier", action="store_true")
 studies.add_argument("--witness", action="store_true")
 studies.add_argument("--allocation", action="store_true")
+studies.add_argument("--transfer", action="store_true")
 parser.add_argument("--verify-only", action="store_true")
 args = parser.parse_args()
 study = "policy-frontier-v1" if args.frontier else "policy-target-focus-v1"
@@ -23,10 +24,19 @@ if args.witness:
     study, targets = "policy-witness-v1", ["control", "side-0", "side-1", "side-1-merged", "side-1-refined"]
 if args.allocation:
     study, targets = "policy-allocation-v1", ["control", "fair", "side-0-fair", "unrestricted-fair", "side-0-refined"]
+if args.transfer:
+    study, targets = "policy-transfer-v1", ["cold", "staged", "cold-total", "staged-lower", "staged-lower-refined", "cold-large", "staged-lower-fixed", "cold-fixed"]
 source = root / "findings" / study
 spec = importlib.util.spec_from_file_location("policy_gap", root / "tools/policy-gap-report.py")
 verifier = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(verifier)
+
+
+def verify_projection(side, score, value):
+    assert side in (0, 1)
+    assert 0 <= score["lo"] <= score["hi"] <= 1
+    expected = {"lo": score["lo"], "hi": 1.0} if side == 0 else {"lo": 0.0, "hi": 1 - score["lo"]}
+    assert all(abs(value[key] - expected[key]) < 1e-12 for key in expected)
 
 
 def verify(row):
@@ -34,9 +44,7 @@ def verify(row):
         assert row["side"] in (0, 1) and row["priority_actions"]
         score = row["guaranteed_score"]
         value = row["unrestricted_game_value"]
-        assert 0 <= score["lo"] <= score["hi"] <= 1
-        expected = {"lo": score["lo"], "hi": 1.0} if row["side"] == 0 else {"lo": 0.0, "hi": 1 - score["lo"]}
-        assert all(abs(value[key] - expected[key]) < 1e-12 for key in expected)
+        verify_projection(row["side"], score, value)
         graph = row["graph"]
         assert graph["initialized_nodes"] + graph["unexpanded_nodes"] == row["reference"]["nodes"]
         assert graph["unique_child_edges"] <= graph["resolved_edges"]
@@ -54,6 +62,15 @@ def verify(row):
                 assert cell["expanded_children"] <= cell["unique_children"]
         return
     matrix = row["reference"]
+    if "preparation" in row:
+        preparation = row["preparation"]
+        assert row["total_runs"] == matrix["runs"] + sum(p["runs"] for p in preparation)
+        assert abs(row["total_elapsed_ms"] - matrix["elapsed_ms"] - sum(p["elapsed_ms"] for p in preparation)) < 1e-6
+        counts = [p["certificates"] for p in preparation]
+        assert max(counts, default=0) <= matrix["imported_certificates"] <= sum(counts)
+        assert 0 <= matrix["certificate_hits"] <= matrix["imported_certificates"]
+        for prep in preparation:
+            verify_projection(prep["side"], prep["guaranteed_score"], prep["unrestricted_game_value"])
     for endpoint in row["endpoints"]:
         for arm in ["archived", "uniform", "max_damage", "oracle"]:
             verifier.verify_assessment(matrix, endpoint["side"], endpoint[arm])
@@ -69,6 +86,31 @@ if args.verify_only:
     assert set(records) == set(targets)
     for target in targets:
         verify(records[target]["result"])
+    if args.transfer:
+        summary = json.loads((source / "summary.json").read_text())
+        prior_path = root / summary["prior_certificate"]
+        assert hashlib.sha256(prior_path.read_bytes()).hexdigest() == summary["prior_certificate_sha256"]
+        prior = json.loads(prior_path.read_text())["combined"]["matrix"]
+        matrices = [prior] + [record["result"]["reference"] for record in records.values()]
+        combined = summary["combined"]["matrix"]
+        assert all(matrix["actions"] == combined["actions"] for matrix in matrices)
+        for index, cell in enumerate(combined["cells"]):
+            assert cell == {"lo": max(m["cells"][index]["lo"] for m in matrices),
+                            "hi": min(m["cells"][index]["hi"] for m in matrices)}
+        rows, cols = map(len, combined["actions"])
+        pure_lower = max(min(combined["cells"][r * cols + c]["lo"] for c in range(cols)) for r in range(rows))
+        pure_upper = min(max(combined["cells"][r * cols + c]["hi"] for r in range(rows)) for c in range(cols))
+        assert combined["value"] == {"lo": max(pure_lower, max(m["value"]["lo"] for m in matrices)),
+                                     "hi": min(pure_upper, min(m["value"]["hi"] for m in matrices))}
+        for side, assessment in enumerate(summary["combined"]["archived_first_decisions"]):
+            verifier.verify_assessment(combined, side, assessment)
+        for small, large in [("cold", "cold-fixed"), ("staged-lower", "staged-lower-fixed")]:
+            before, after = (records[name]["result"] for name in (small, large))
+            assert after["reference"]["value"]["lo"] >= before["reference"]["value"]["lo"]
+            assert after["reference"]["value"]["hi"] <= before["reference"]["value"]["hi"]
+            assert after["diagnostics"]["resource_closure_visits"] > 0
+            assert after["diagnostics"]["first_resource_closure_nodes"] >= 90_000
+            assert after["diagnostics"]["two_sided_invalidations"] == 0
     print(f"Verified {len(targets)} archived arms")
     raise SystemExit(0)
 
@@ -99,6 +141,7 @@ for target in targets:
     print(target, json.dumps({
         "stop": row["reference"]["stop"],
         "runs": row["reference"]["runs"],
+        "total_runs": row.get("total_runs", row["reference"]["runs"]),
         **scores,
     }), flush=True)
 print(f"Results: {run}")
