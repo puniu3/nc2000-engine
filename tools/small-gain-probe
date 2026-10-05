@@ -44,20 +44,23 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--iterations', type=int, default=864000)
     parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--probe-iterations', type=int)
     args = parser.parse_args()
-    archive = root / 'findings/small-gain-probe-v1' / str(args.iterations)
+    probes = args.iterations*2//5 if args.probe_iterations is None else args.probe_iterations
+    label = str(args.iterations) if args.probe_iterations is None else f'{args.iterations}-probes{probes}'
+    archive = root / 'findings/small-gain-probe-v1' / label
     if args.verify_only:
         bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
         assert summarize(bundle['record']) == json.loads((archive/'summary.json').read_text())
         print('small-gain-probe: verified counts, policies and certified first-action losses')
         return
-    assert args.iterations > 0 and not archive.exists()
+    assert args.iterations > 0 and 0 <= probes < args.iterations and not archive.exists()
     env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
     binary = root/'target/release/examples/counter_mix_probe'
     subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
     directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-small-gain-'))
     with (directory/'run.log').open('w') as log:
-        subprocess.run([str(binary),str(directory/'run'),'2,3,4,5','1',str(args.iterations),'2026110801','bond',str(args.iterations*2//5),'typed'],
+        subprocess.run([str(binary),str(directory/'run'),'2,3,4,5','1',str(args.iterations),'2026110801','bond',str(probes),'typed'],
                        cwd=root,env=env,stdout=log,stderr=log,check=True)
     record = json.loads((directory/'run/records.json').read_text())
     assert all(sha((root/p).read_bytes()) == value for p,value in record['source_hashes'])

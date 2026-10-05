@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import math
+import pathlib
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/small-gain-probe-v1'
+
+
+def read(label):
+    raw = (archive / label / 'records.json.gz').read_bytes()
+    return json.loads(gzip.decompress(raw))['record'], hashlib.sha256(raw).hexdigest()
+
+
+def summarize():
+    warm, warm_sha = read('518400-probes0')
+    final, final_sha = read('864000')
+    for key in ['state_key', 'actions', 'search_seed_base', 'search_seeds', 'family']:
+        assert warm[key] == final[key]
+    changed = [p for p, h in warm['source_hashes'] if dict(final['source_hashes'])[p] != h]
+    assert changed == ['crates/bot/src/root_policy.rs']
+    assert warm['iterations'] + final['probe_iterations'] == final['iterations']
+    a = next(r for r in warm['rows'] if r['mode'] == 'pinned' and r['side'] == 1)
+    b = next(r for r in final['rows'] if r['mode'] == 'pinned' and r['side'] == 1)
+    assert a['seed'] == b['seed'] and a['probes_used'] == 0
+    assert b['probes_used'] == final['probe_iterations']
+    assert [y-x for x, y in zip(a['visits'], b['visits'])] == b['joint_probe_visits']
+    before = {(c['own'], c['reply']): c for c in a['joint']}
+    rows = []
+    for c in sorted(b['joint'], key=lambda c: (c['own'], c['reply'])):
+        old = before.get((c['own'], c['reply']), dict(samples=0, mean=0))
+        n = c['samples'] - old['samples']
+        assert n >= 0
+        mean = (c['samples']*c['mean']-old['samples']*old['mean'])/n if n else None
+        if n == 0:
+            assert c['mean'] == old['mean']
+        reply = final['actions'][0].index(c['reply'])
+        lo, hi = final['proof']['cells'][reply*len(final['actions'][1])+c['own']]
+        optimal = [1-hi, 1-lo]
+        rows.append(dict(own=final['actions'][1][c['own']], reply=c['reply'],
+                         warm_samples=old['samples'], added_samples=n, final_samples=c['samples'],
+                         warm_mean=old['mean'] if old['samples'] else None,
+                         added_mean=mean, final_mean=c['mean'], optimal_continuation=optimal,
+                         final_bias=[c['mean']-optimal[1], c['mean']-optimal[0]],
+                         heuristic_radius=math.sqrt(math.log(200*6)/(2*c['samples']))))
+    assert sum(r['added_samples'] for r in rows) == b['probes_used']
+    stale = next(r for r in rows if r['own'] == 'move destinybond' and r['reply'] == 'move curse')
+    assert stale['added_samples'] == 0 and stale['final_bias'][1] < -.025
+    return dict(inputs={'518400-probes0': warm_sha, '864000': final_sha},
+                changed_sources=changed, state_key=final['state_key'], side=1, rows=rows,
+                scope='A deterministic replay of the ordinary warm prefix, with unchanged search sources; '
+                      'only the final root selector and its tests differ. Cumulative least-count probing '
+                      'never revisits Destiny Bond versus Curse. Its continuation estimate remains biased '
+                      'despite the added probe budget. This does not measure what new samples of that cell '
+                      'would return, or certify sampled continuation policies.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    report = summarize()
+    path = archive / 'history.json'
+    if args.verify_only:
+        assert json.loads(path.read_text()) == report
+        print('probe-history: verified warm replay, probe increments, stale cell and certified bias')
+    else:
+        path.write_text(json.dumps(report, indent=2)+'\n')
+        print(json.dumps(report, indent=2))
+
+
+if __name__ == '__main__':
+    main()

@@ -1,6 +1,6 @@
 use crate::exact::solve_matrix_full;
 
-pub const MIN_MIX_MARGIN: f64 = 1e-8;
+pub const MIN_MIX_MARGIN: f64 = 0.02;
 
 #[derive(Clone, serde::Serialize)]
 pub struct RootCell {
@@ -501,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn a_resolved_small_game_value_gain_is_not_permanently_rejected() {
+    fn the_matrix_solver_resolves_small_game_value_gains() {
         let earthquake = 0.91461181640625;
         let destiny_bond = earthquake / 7.;
         let values = [
@@ -516,16 +516,60 @@ mod tests {
         let iterations = types[0].samples;
         let evidence = analyze_bayesian_root(&[true; 3], iterations, &types).unwrap();
         assert!(evidence.estimated_gain() > 0.016 && evidence.estimated_gain() < 0.017);
-        assert!(evidence.margin() > MIN_MIX_MARGIN && evidence.margin() < 0.02);
-        let mixed = bayesian_mixed_root(&[true; 3], iterations, &types).unwrap();
-        assert!((mixed.policy[0] - 0.125).abs() < 1e-10);
-        assert!((mixed.policy[1] - 0.875).abs() < 1e-10);
-        assert_eq!(mixed.policy[2], 0.);
+        assert!(evidence.margin() > 1e-8 && evidence.margin() < 0.02);
+        assert!((evidence.policy[0] - 0.125).abs() < 1e-10);
+        assert!((evidence.policy[1] - 0.875).abs() < 1e-10);
+        assert_eq!(evidence.policy[2], 0.);
         let uncertain = [RootType {
             samples: 6,
             replies: 2,
             cells: cells(&values, 2, 1),
         }];
         assert!(bayesian_mixed_root(&[true; 3], 6, &uncertain).is_none());
+    }
+
+    #[test]
+    fn a_positive_search_margin_does_not_certify_continuation_value() {
+        let samples = [81855, 81854, 81854, 454729, 81854, 81854];
+        let means = [
+            0.08785046728971962,
+            0.9985706257482835,
+            1.,
+            0.8442742820449103,
+            0.08280597160798495,
+            0.08400322525472183,
+        ];
+        let types = [RootType {
+            samples: 864000,
+            replies: 2,
+            cells: samples
+                .into_iter()
+                .zip(means)
+                .enumerate()
+                .map(|(i, (samples, mean))| RootCell {
+                    own: i / 2,
+                    reply: i % 2,
+                    samples,
+                    mean,
+                })
+                .collect(),
+        }];
+        let analysis = analyze_bayesian_root(&[true; 3], 864000, &types).unwrap();
+        assert!((analysis.margin() - 0.013157734486514139).abs() < 1e-10);
+        let earthquake = 0.91461181640625;
+        let oracle = [TypeMatrix {
+            weight: 1.,
+            replies: 2,
+            values: vec![
+                1. - earthquake,
+                1.,
+                1.,
+                1. - earthquake / 7.,
+                1. - earthquake,
+                1. - earthquake,
+            ],
+        }];
+        assert!(guarantee(&oracle, &analysis.policy) + 0.0028 < best_pure(&oracle, 3));
+        assert!(bayesian_mixed_root(&[true; 3], 864000, &types).is_none());
     }
 }
