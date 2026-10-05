@@ -27,7 +27,9 @@ def summarize(records, corpus):
     old = json.loads(gzip.decompress(old_path.read_bytes()))['packed']
     baseline = records['control']['report']
     for key, value in old['report'].items():
-        if key != 'elapsed_ms':
+        if key == 'healing_cache':
+            assert all(baseline[key][field] == count for field, count in value.items())
+        elif key != 'elapsed_ms':
             assert baseline[key] == value, key
     config = records['control']['config']
     assert config == dict(old['config'], healing_capacity=0)

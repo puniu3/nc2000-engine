@@ -2,7 +2,7 @@ use nc2000_engine::battle::{enumerate::run_scripted,SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::prng::Draw;
 use nc2000_engine::state::{Battle, PokeId, RequestState, Status, DK};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HpTransitionKey {
@@ -24,15 +24,19 @@ pub struct HpTransition {
 
 impl HpTransitionKey {
     pub fn new(dex: &Dex, battle: &Battle, choices: [Option<SearchChoice>; 2], script: &[usize]) -> Option<Self> {
-        Self::new_domain(dex,battle,choices,script,None)
+        Self::new_domain(dex,battle,choices,script,None).ok()
     }
 
     pub fn new_healing(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize])->Option<Self> {
-        let healer=healing_side(dex,choices)?;
+        Self::healing_domain(dex,battle,choices,script).ok()
+    }
+
+    fn healing_domain(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize])->Result<Self,&'static str> {
+        let healer=healing_side(dex,choices).ok_or("no_single_healer")?;
         Self::new_domain(dex,battle,choices,script,Some(healer))
     }
 
-    fn new_domain(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize],healer:Option<usize>)->Option<Self> {
+    fn new_domain(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize],healer:Option<usize>)->Result<Self,&'static str> {
         if !battle.started || battle.ended || battle.turn==0 || battle.mid_turn
             || battle.request_state!=RequestState::Move || battle.needs_choice()!=[true,true]
             || !battle.queue.is_empty() || !battle.faint_queue.is_empty()
@@ -40,25 +44,24 @@ impl HpTransitionKey {
             || battle.active_move.is_some() || battle.active_pokemon.is_some() || battle.active_target.is_some()
             || battle.pending_boosts.is_some() || battle.field.weather.is_some()
             || battle.field.pseudo_weather.iter().any(|(id,_)|!matches!(dex.conds.key(*id),"maxtotallevel"|"stadiumsleepclause"|"freezeclausemod")) {
-            return None;
+            return Err("frame_or_field");
         }
         for side in 0..2 {
             let team=&battle.sides[side];
             if !team.side_conditions.is_empty() || !team.slot_conditions.is_empty()
                 || !team.choice.actions.is_empty() || !team.choice.switch_ins.is_empty()
-                || team.choice.forced_switches_left!=0 || team.choice.forced_passes_left!=0 { return None; }
-            let pokemon=battle.poke(battle.active_id(side)?);
+                || team.choice.forced_switches_left!=0 || team.choice.forced_passes_left!=0 { return Err("side_conditions_or_choice"); }
+            let pokemon=battle.poke(battle.active_id(side).ok_or("missing_active")?);
             if pokemon.hp<=0 || pokemon.hp>pokemon.maxhp || pokemon.fainted || pokemon.transformed
-                || !matches!(pokemon.status,Status::None|Status::Par|Status::Slp|Status::Frz)
-                || pokemon.volatiles.iter().any(|(id,_)|dex.conds.key(*id)!="parspeeddrop")
-                || pokemon.item.is_some_and(|item|!matches!(dex.items.key(item),"mintberry"|"miracleberry"|"brightpowder"|"quickclaw")) {
-                return None;
-            }
-            let Some(SearchChoice::Move(id))=choices[side] else { return None; };
-            if !pokemon.move_slots.iter().any(|slot|slot.id==id && slot.pp>0 && !slot.disabled) {return None;}
+                || !matches!(pokemon.status,Status::None|Status::Par|Status::Slp|Status::Frz) {return Err("health_status_or_transform");}
+            if pokemon.volatiles.iter().any(|(id,_)|dex.conds.key(*id)!="parspeeddrop") {return Err("volatile");}
+            if pokemon.item.is_some_and(|item|!matches!(dex.items.key(item),"mintberry"|"miracleberry"|"brightpowder"|"quickclaw")) {return Err("active_item");}
+            let Some(SearchChoice::Move(id))=choices[side] else {return Err("non_move_choice");};
+            if !pokemon.move_slots.iter().any(|slot|slot.id==id && slot.pp>0 && !slot.disabled) {return Err("unavailable_move");}
             if healer==Some(side) {
-                if pokemon.hp==pokemon.maxhp || !pokemon.volatiles.is_empty()
-                    || pokemon.item.is_some_and(|item|dex.items.key(item)!="brightpowder") {return None;}
+                if pokemon.hp==pokemon.maxhp {return Err("healer_full_hp");}
+                if !pokemon.volatiles.is_empty() {return Err("healer_volatile");}
+                if pokemon.item.is_some_and(|item|dex.items.key(item)!="brightpowder") {return Err("healer_item");}
                 match dex.moves.key(id) {
                     "rest" if pokemon.status==Status::None || (pokemon.status==Status::Slp && pokemon.status_state.get_int(DK::Time)<=1)=>{},
                     "sleeptalk" if pokemon.status==Status::Slp && pokemon.status_state.get_int(DK::Time)>1=> {
@@ -66,22 +69,22 @@ impl HpTransitionKey {
                             let mv=dex.move_static(slot.id);
                             !mv.has_flag(dex,"nosleeptalk") && !mv.has_flag(dex,"charge")
                                 && !matches!(dex.moves.key(slot.id),"hydropump"|"icebeam"|"rest")
-                        }) {return None;}
+                        }) {return Err("called_move_pool");}
                     },
-                    _=>return None,
+                    _=>return Err("healer_status"),
                 }
             } else if !matches!(dex.moves.key(id),"bodyslam"|"hydropump"|"icebeam"|"fireblast"|"thunderbolt"|"thunder"|"earthquake"|"seismictoss"|"tackle"|"splash") {
-                return None;
+                return Err("opponent_move");
             }
         }
         if let Some(healer)=healer {
-            if battle.quick_claw_roll_observable(dex)
-                || battle.get_pokemon_action_speed(dex,battle.active_id(healer)?)
-                    <=battle.get_pokemon_action_speed(dex,battle.active_id(1-healer)?) {return None;}
+            if battle.quick_claw_roll_observable(dex) {return Err("quick_claw");}
+            if battle.get_pokemon_action_speed(dex,battle.active_id(healer).ok_or("missing_active")?)
+                <=battle.get_pokemon_action_speed(dex,battle.active_id(1-healer).ok_or("missing_active")?) {return Err("not_strictly_faster");}
         }
         let mut canonical=battle.clone();
         for side in 0..2 {
-            let id=canonical.active_id(side)?;
+            let id=canonical.active_id(side).ok_or("missing_active")?;
             let pokemon=canonical.poke_mut(id);pokemon.hp=pokemon.maxhp;
         }
         let damage_omitted=!canonical.damage_bookkeeping_observable(dex);
@@ -89,7 +92,7 @@ impl HpTransitionKey {
         let state=if claw_omitted {canonical.state_key128_without_quick_claw_roll(dex,damage_omitted)}
             else if damage_omitted {canonical.state_key128_without_damage_bookkeeping()}
             else {canonical.state_key128()};
-        Some(Self {fingerprint:dex.replay_fingerprint,state,damage_omitted,claw_omitted,choices,script:script.to_vec()})
+        Ok(Self {fingerprint:dex.replay_fingerprint,state,damage_omitted,claw_omitted,choices,script:script.to_vec()})
     }
 }
 
@@ -208,7 +211,7 @@ impl HpHealingTransition {
 }
 
 
-#[derive(Default,Clone,Copy,serde::Serialize)]
+#[derive(Default,Clone,serde::Serialize)]
 pub struct HpHealingStats {
     pub observations:usize,
     pub eligible:usize,
@@ -217,6 +220,7 @@ pub struct HpHealingStats {
     pub rejected_hp:usize,
     pub runs:usize,
     pub peak_entries:usize,
+    pub exclusions:BTreeMap<&'static str,usize>,
 }
 
 pub struct HpHealingCache {
@@ -232,22 +236,28 @@ pub struct HpHealingRunner<'a> {
     base:&'a Battle,
     choices:[Option<SearchChoice>;2],
     key:Option<HpTransitionKey>,
+    exclusion:Option<&'static str>,
 }
 
 impl HpHealingCache {
     pub fn new(capacity:usize)->Self {
         Self {capacity,entries:HashMap::new(),order:VecDeque::new(),stats:HpHealingStats::default()}
     }
-    pub fn stats(&self)->HpHealingStats {self.stats}
+    pub fn stats(&self)->HpHealingStats {self.stats.clone()}
     pub fn prepare<'a>(&'a mut self,dex:&'a Dex,base:&'a Battle,choices:[Option<SearchChoice>;2])->HpHealingRunner<'a> {
-        let key=(self.capacity>0).then(||HpTransitionKey::new_healing(dex,base,choices,&[])).flatten();
-        HpHealingRunner {cache:self,dex,base,choices,key}
+        let (key,exclusion)=if self.capacity==0 {(None,Some("disabled"))} else {
+            match HpTransitionKey::healing_domain(dex,base,choices,&[]) {
+                Ok(key)=>(Some(key),None),Err(reason)=>(None,Some(reason)),
+            }
+        };
+        HpHealingRunner {cache:self,dex,base,choices,key,exclusion}
     }
 }
 
 impl HpHealingRunner<'_> {
     pub fn run(&mut self,script:&[usize])->(Battle,Vec<Draw>,bool) {
         self.cache.stats.observations+=1;
+        if let Some(reason)=self.exclusion {*self.cache.stats.exclusions.entry(reason).or_default()+=1;}
         let key=self.key.as_ref().map(|key| {let mut key=key.clone();key.script=script.to_vec();key});
         self.cache.stats.eligible+=usize::from(key.is_some());
         if let Some(entry)=key.as_ref().and_then(|key|self.cache.entries.get(key)) {

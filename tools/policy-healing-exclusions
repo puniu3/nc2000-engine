@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-healing-exclusions-v1'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(record, corpus):
+    old_path = root / 'findings/policy-healing-reuse-v1/records.json.gz'
+    old = json.loads(gzip.decompress(old_path.read_bytes()))['healing']
+    assert record['schema'] == old['schema'] and record['state_key'] == old['state_key']
+    assert record['config'] == old['config']
+    assert record['manifest']['corpus_sha256'] == sha(corpus)
+    assert record['manifest']['dex_fingerprint'] == old['manifest']['dex_fingerprint']
+    report, before = record['report'], old['report']
+    for key, value in before.items():
+        if key == 'healing_cache':
+            assert all(report[key][field] == count for field, count in value.items())
+        elif key != 'elapsed_ms':
+            assert report[key] == value, key
+    cache = report['healing_cache']
+    assert sum(cache['exclusions'].values()) + cache['eligible'] == cache['observations']
+    assert cache['observations'] == cache['runs'] + cache['hits']
+    assert sum(cache['exclusions'].values()) + cache['eligible'] - cache['hits'] == cache['runs']
+    reasons = [dict(reason=reason, engine_runs=count, fraction_of_engine_runs=count / cache['runs'])
+               for reason, count in sorted(cache['exclusions'].items(), key=lambda x: (-x[1], x[0]))]
+    return dict(schema='nc2000-policy-healing-exclusions-v1', reasons=reasons,
+                eligible_engine_runs=cache['eligible'] - cache['hits'], cache=cache,
+                unchanged_score=report['score'], audit_elapsed_ms=report['elapsed_ms'],
+                prior_archive_sha256=sha(old_path.read_bytes()),
+                interpretation='The first rejecting guard is counted for every scripted observation outside the healing-reuse domain. Every excluded observation executes the engine, so these counts partition excluded engine work, not state probability. Eligible misses and HP-boundary fallbacks remain a separate category. The admitted domain, search work, cache outcomes and every interval reproduce the previous run exactly. Reasons diagnose this reached workload; they neither authorize relaxing a guard nor establish global optimality.')
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    record = json.loads(gzip.decompress((archive / 'record.json.gz').read_bytes()))
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    assert record['config'] == json.loads((archive / 'audit.json').read_bytes())
+    assert summarize(record, corpus) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified unchanged search, cache parity and exhaustive exclusion accounting')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-healing-exclusions-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    (directory / 'audit.json').write_bytes((archive / 'audit.json').read_bytes())
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    subprocess.run([str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl'),
+                    'certify', str(directory / 'audit.json'), str(directory / 'result.json')], cwd=root, env=env, check=True)
+record = json.loads((directory / 'result.json').read_bytes())
+corpus = (directory / 'corpus.jsonl').read_bytes()
+summary = summarize(record, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (archive / 'record.json.gz').write_bytes(gzip.compress(json.dumps(record, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'audit.json').write_bytes((directory / 'audit.json').read_bytes())
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for row in summary['reasons']:
+    print(row)
