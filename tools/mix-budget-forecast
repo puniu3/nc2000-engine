@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import math
+import pathlib
+import runpy
+
+root = pathlib.Path(__file__).resolve().parents[1]
+source = root / 'findings/root-type-probes-v1/records.json.gz'
+reference = root / 'findings/typed-mix-fixtures-v1/records.json.gz'
+destination = root / 'findings/mix-budget-forecast-v1.json'
+diagnose = runpy.run_path(str(root / 'tools/root-type-audit'))['diagnose']
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def waterfill(counts, extra):
+    low, high = min(counts), max(counts) + extra
+    for _ in range(80):
+        mid = (low + high) / 2
+        if sum(max(0., mid-n) for n in counts) > extra:
+            high = mid
+        else:
+            low = mid
+    return [max(n, low) for n in counts]
+
+
+def projected_margin(row, extra):
+    evidence = row['root_diagnostics']
+    p = evidence['analysis']['policy']
+    actions = [i for i, ok in enumerate(evidence['eligible']) if ok]
+    total_cells = len(actions) * sum(t['replies'] for t in evidence['types'])
+    lower, upper_pure = 0., [0.] * len(actions)
+    for t in evidence['types']:
+        weight = t['samples'] / row['iterations']
+        cells = {(c['own'], c['reply']):c for c in t['cells']}
+        keys = [(i,j) for i in actions for j in range(t['replies'])]
+        counts = waterfill([cells.get(k, {}).get('samples', 0) for k in keys], extra * weight)
+        means = [cells.get(k, {}).get('mean', .5) for k in keys]
+        radius = [math.sqrt(math.log(200*total_cells)/(2*n)) if n > 1e-8 else 1 for n in counts]
+        lo = {k:max(0.,v-r) for k,v,r in zip(keys,means,radius)}
+        hi = {k:min(1.,v+r) for k,v,r in zip(keys,means,radius)}
+        lower += weight * min(sum(p[i] * lo[i,j] for i in actions) for j in range(t['replies']))
+        for k,i in enumerate(actions):
+            upper_pure[k] += weight * min(hi[i,j] for j in range(t['replies']))
+    return lower-max(upper_pure)
+
+
+def needed(row, threshold, gain):
+    if gain <= threshold:
+        return None
+    if projected_margin(row, 0) > threshold:
+        return 0
+    low, high = 0, 10800
+    while high < 10**12 and projected_margin(row, high) <= threshold:
+        high *= 2
+    assert high < 10**12
+    while low+1 < high:
+        mid = (low+high)//2
+        if projected_margin(row, mid) > threshold:
+            high = mid
+        else:
+            low = mid
+    return high
+
+
+def report():
+    records = json.loads(gzip.decompress(source.read_bytes()))['records']
+    cases = []
+    for name, stages in records.items():
+        for warm, after in zip(stages['warm']['observed']['rows'], stages['after']['observed']['rows']):
+            metric = diagnose(warm)
+            if metric['reason'] == 'unsupported':
+                continue
+            zero = projected_margin(warm, 0)
+            assert abs(zero-metric['margin']) < 1e-10
+            projected = projected_margin(warm, 10800)
+            cases.append(dict(id=f"{name}:{warm['mode']}:{warm['seed_index']}",probed=after['probes_used'] > 0,
+                actual_accepted=after['candidate_policy'] is not None, warm_estimated_gain=metric['estimated_gain'],
+                warm_margin=zero, projected_margin=projected,
+                required_extra_for_two_points=needed(warm,.02,metric['estimated_gain']),
+                required_extra_for_positive_margin=needed(warm,1e-8,metric['estimated_gain'])))
+    bond = json.loads(gzip.decompress(reference.read_bytes()))['records']['bond']
+    cells = bond['proof']['cells']
+    pure_guarantee_lower = max(min(1-cells[i*3+j][1] for i in range(2)) for j in range(3))
+    pure_guarantee_upper = max(min(1-cells[i*3+j][0] for i in range(2)) for j in range(3))
+    optimal_value_lower = 1-bond['proof']['value'][1]
+    optimal_value_upper = 1-bond['proof']['value'][0]
+    gain_lower = optimal_value_lower-pure_guarantee_upper
+    gain_upper = optimal_value_upper-pure_guarantee_lower
+    assert 0 < gain_lower <= gain_upper < .02
+    projected_accept = lambda c: c['projected_margin'] > .02
+    return dict(source_sha256=sha(source), reference_sha256=sha(reference), cases=cases,
+        probed=sum(c['probed'] for c in cases),
+        projected_acceptances=sum(projected_accept(c) for c in cases),
+        actual_acceptances=sum(c['actual_accepted'] for c in cases),
+        unexpected_acceptances=[c['id'] for c in cases if c['actual_accepted'] and not projected_accept(c)],
+        expected_but_rejected=[c['id'] for c in cases if projected_accept(c) and not c['actual_accepted']],
+        bond_side_one=dict(best_pure_interval=[pure_guarantee_lower,pure_guarantee_upper],
+                           optimal_value_interval=[optimal_value_lower,optimal_value_upper],
+                           mixing_gain_interval=[gain_lower,gain_upper],
+                           two_point_gate_can_accept_exact_means=False),
+        scope='Counterfactual frozen-mean calculation: type weights, payoff means, policy and type set are held fixed while probe counts are ideally balanced within types. This is neither a probabilistic forecast nor a sound rejection rule for changing search estimates. The Bond comparison uses certified game-value intervals and shows a permanent barrier caused by the fixed two-point gate.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    result = report()
+    if args.verify_only:
+        assert json.loads(destination.read_text()) == result
+        print('mix-budget-forecast: verified frozen-mean margins and certified two-point barrier')
+    else:
+        assert not destination.exists()
+        destination.write_text(json.dumps(result,indent=2)+'\n')
+        print(json.dumps({k:v for k,v in result.items() if k != 'cases'},indent=2))
+
+
+if __name__ == '__main__':
+    main()

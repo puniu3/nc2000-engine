@@ -1,5 +1,7 @@
 use crate::exact::solve_matrix_full;
 
+pub const MIN_MIX_MARGIN: f64 = 1e-8;
+
 #[derive(Clone, serde::Serialize)]
 pub struct RootCell {
     pub own: usize,
@@ -236,7 +238,7 @@ pub fn bayesian_mixed_root(
 ) -> Option<MixedRoot> {
     let analysis = analyze_bayesian_root(eligible, iterations, types)?;
     let estimated_advantage = analysis.margin();
-    if estimated_advantage <= 0.02 {
+    if estimated_advantage <= MIN_MIX_MARGIN {
         return None;
     }
     Some(MixedRoot {
@@ -490,11 +492,40 @@ mod tests {
             if let Some(mixed) = bayesian_mixed_root(&[true; 3], iterations, &types) {
                 let m = matrices(&[true; 3], iterations, &types).unwrap();
                 let advantage = guarantee(&m.lower, &mixed.policy) - best_pure(&m.upper, 3);
-                assert!(advantage > 0.02);
+                assert!(advantage > MIN_MIX_MARGIN);
                 assert!((advantage - mixed.estimated_advantage).abs() < 1e-12);
                 accepted += 1;
             }
         }
         assert!(accepted > 20, "only {accepted} accepted mixtures");
+    }
+
+    #[test]
+    fn a_resolved_small_game_value_gain_is_not_permanently_rejected() {
+        let earthquake = 0.91461181640625;
+        let destiny_bond = earthquake / 7.;
+        let values = [
+            1. - earthquake,
+            1.,
+            1.,
+            1. - destiny_bond,
+            1. - earthquake,
+            1. - earthquake,
+        ];
+        let types = [typed(&values, 2)];
+        let iterations = types[0].samples;
+        let evidence = analyze_bayesian_root(&[true; 3], iterations, &types).unwrap();
+        assert!(evidence.estimated_gain() > 0.016 && evidence.estimated_gain() < 0.017);
+        assert!(evidence.margin() > MIN_MIX_MARGIN && evidence.margin() < 0.02);
+        let mixed = bayesian_mixed_root(&[true; 3], iterations, &types).unwrap();
+        assert!((mixed.policy[0] - 0.125).abs() < 1e-10);
+        assert!((mixed.policy[1] - 0.875).abs() < 1e-10);
+        assert_eq!(mixed.policy[2], 0.);
+        let uncertain = [RootType {
+            samples: 6,
+            replies: 2,
+            cells: cells(&values, 2, 1),
+        }];
+        assert!(bayesian_mixed_root(&[true; 3], 6, &uncertain).is_none());
     }
 }

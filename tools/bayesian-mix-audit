@@ -78,8 +78,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--verify-only', action='store_true')
     parser.add_argument('--typed', action='store_true')
+    parser.add_argument('--positive-margin', action='store_true')
     args = parser.parse_args()
-    archive = root / ('findings/typed-mix-fixtures-v1' if args.typed else 'findings/bayesian-mix-v1')
+    assert not args.positive_margin or args.typed
+    archive = root / ('findings/positive-margin-fixtures-v1' if args.positive_margin else ('findings/typed-mix-fixtures-v1' if args.typed else 'findings/bayesian-mix-v1'))
     if args.verify_only:
         bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
         assert bundle['previous_sha256'] == sha(previous_path.read_bytes())

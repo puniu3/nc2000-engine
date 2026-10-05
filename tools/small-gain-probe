@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+loss = runpy.run_path(str(root/'tools/counter-mix-probe'))['loss']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(record):
+    assert record['family'] == 'bond' and record['search_seeds'] == 1
+    assert record['typed_probes'] and record['adaptive_probes']
+    assert all(v['ok'] for v in record['validations'])
+    rows = []
+    for r in record['rows']:
+        if r['mode'] != 'pinned':
+            continue
+        side = r['side']
+        assert sum(r['visits']) == record['iterations']
+        assert sum(r['joint_probe_visits']) == r['probes_used']
+        fallback = [float(a == r['choice']) for a in record['actions'][side]]
+        policy = r['candidate_policy'] or fallback
+        margin = r['candidate_estimated_advantage']
+        assert abs(sum(policy)-1) < 1e-10 and min(policy) >= 0
+        rows.append(dict(side=side, policy=policy, mixed=r['candidate_policy'] is not None,
+                         margin=margin, probed=r['probes_used'], loss=loss(record, side, policy),
+                         fallback_loss=loss(record, side, fallback),
+                         same_evidence_passes_old_floor=margin is not None and margin > .02))
+    return dict(iterations=record['iterations'], seed=record['search_seed_base'], rows=rows,
+        scope='A single paired search seed at a larger iteration budget on the certified Bond fixture. Loss intervals concern only first-action distributions with optimal continuation. The old-floor comparison applies the former threshold to the same final evidence; it is not a separately executed old agent.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--iterations', type=int, default=864000)
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    archive = root / 'findings/small-gain-probe-v1' / str(args.iterations)
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle['record']) == json.loads((archive/'summary.json').read_text())
+        print('small-gain-probe: verified counts, policies and certified first-action losses')
+        return
+    assert args.iterations > 0 and not archive.exists()
+    env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+    binary = root/'target/release/examples/counter_mix_probe'
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
+    directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-small-gain-'))
+    with (directory/'run.log').open('w') as log:
+        subprocess.run([str(binary),str(directory/'run'),'2,3,4,5','1',str(args.iterations),'2026110801','bond',str(args.iterations*2//5),'typed'],
+                       cwd=root,env=env,stdout=log,stderr=log,check=True)
+    record = json.loads((directory/'run/records.json').read_text())
+    assert all(sha((root/p).read_bytes()) == value for p,value in record['source_hashes'])
+    report = summarize(record)
+    archive.mkdir(parents=True)
+    bundle = dict(record=record,binary_sha256=sha(binary.read_bytes()))
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report,indent=2))
+
+
+if __name__ == '__main__':
+    main()
