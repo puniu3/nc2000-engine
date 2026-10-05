@@ -1,0 +1,153 @@
+{
+  "schema": "nc2000-horizon-pp-audit-v1",
+  "state_key": "160298700970866480479685871464306122045",
+  "kernel_comparisons": 80,
+  "maximum_probability_error": 0.0,
+  "original_successor_states": 1138,
+  "horizon_successor_states": [
+    {
+      "turns": 1,
+      "nonterminal_quotient_states": 0,
+      "cutoff_at_successors": true
+    },
+    {
+      "turns": 2,
+      "nonterminal_quotient_states": 1138,
+      "cutoff_at_successors": false
+    },
+    {
+      "turns": 4,
+      "nonterminal_quotient_states": 1138,
+      "cutoff_at_successors": false
+    },
+    {
+      "turns": 8,
+      "nonterminal_quotient_states": 1138,
+      "cutoff_at_successors": false
+    },
+    {
+      "turns": 12,
+      "nonterminal_quotient_states": 1138,
+      "cutoff_at_successors": false
+    }
+  ],
+  "sampled_states": [
+    {
+      "depth": 0,
+      "turns_left": 12,
+      "exact_states": 1,
+      "quotient_states": 1
+    },
+    {
+      "depth": 1,
+      "turns_left": 11,
+      "exact_states": 453,
+      "quotient_states": 453
+    },
+    {
+      "depth": 2,
+      "turns_left": 10,
+      "exact_states": 2104,
+      "quotient_states": 2036
+    },
+    {
+      "depth": 3,
+      "turns_left": 9,
+      "exact_states": 2165,
+      "quotient_states": 2065
+    },
+    {
+      "depth": 4,
+      "turns_left": 8,
+      "exact_states": 1399,
+      "quotient_states": 1378
+    },
+    {
+      "depth": 5,
+      "turns_left": 7,
+      "exact_states": 822,
+      "quotient_states": 820
+    },
+    {
+      "depth": 6,
+      "turns_left": 6,
+      "exact_states": 489,
+      "quotient_states": 489
+    },
+    {
+      "depth": 7,
+      "turns_left": 5,
+      "exact_states": 260,
+      "quotient_states": 260
+    },
+    {
+      "depth": 8,
+      "turns_left": 4,
+      "exact_states": 164,
+      "quotient_states": 164
+    },
+    {
+      "depth": 9,
+      "turns_left": 3,
+      "exact_states": 106,
+      "quotient_states": 106
+    },
+    {
+      "depth": 10,
+      "turns_left": 2,
+      "exact_states": 77,
+      "quotient_states": 77
+    },
+    {
+      "depth": 11,
+      "turns_left": 1,
+      "exact_states": 60,
+      "quotient_states": 60
+    }
+  ],
+  "sampled_exact_total": 8100,
+  "sampled_quotient_total": 7909,
+  "sampled_reduction_fraction": 0.023580246913580294,
+  "total_runs": 73730,
+  "source_hashes": [
+    [
+      "crates/bot/src/horizon_pp.rs",
+      "1726efbcc7c333a55cd33e5d39ddd0c8a8bca0493fa0d9ca3c759c938635fa8a"
+    ],
+    [
+      "crates/bot/src/stall.rs",
+      "313f475686c01ecbcf958b8157b47e9c8f8f43b4e44687694435dea4926f8baa"
+    ],
+    [
+      "crates/bot/examples/horizon_pp_audit.rs",
+      "58b5e9f7ce552496d05f3780d5a45772c0843c2ad3774525af989db7436d21b1"
+    ],
+    [
+      "crates/engine/src/state.rs",
+      "ee6c19533cef36d1328e3063eeec3b93133ceef5fb39c351b2dcef7de9d32d97"
+    ],
+    [
+      "crates/engine/src/battle/search.rs",
+      "6497b0897a8c1f6da435c06dd4bb2f99c69fa895901f45cb7241daeca0321cea"
+    ],
+    [
+      "crates/engine/src/battle/pokemon.rs",
+      "96dca3a0221197fb0198da6aaffa2606a8e64dac3593c586f72c802814b0e0bf"
+    ],
+    [
+      "crates/engine/src/battle/moveexec.rs",
+      "15495872b5b4eaf096cdb9a7d2e2bb241c3d51b2f89e8b51b6aaeb6e693efd73"
+    ],
+    [
+      "crates/engine/src/battle/conditions.rs",
+      "f0ec5a70f640cd835a38ede6bcf6c5642530a89eb5c7adda69658c8eaea6da9b"
+    ],
+    [
+      "crates/engine/src/battle/items.rs",
+      "18bf9afaa48c097a40b54cf29dad2c9cf1af1128d3da1975e7650a8119e4c226"
+    ]
+  ],
+  "decision": "Keep as an isolated prototype; these sampled reductions do not justify solver integration.",
+  "interpretation": "One-step transition-equivalence and seeded uniform-legal paired-path audits with a remaining-turn-dependent PP key. Sample counts describe only the sampled reachable frontier. H=1 collapses nonterminal successors solely because they are at the unknown boundary; its state count is not a PP-merging gain. This is not a full-game value certificate or a strength claim.",
+  "report_archive_sha256": "2687e22ae6f028a5bfa547aa3be8ed7643c17f14b834acfce58b36be04b4df77"
+}

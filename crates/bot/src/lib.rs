@@ -40,6 +40,7 @@ pub mod exact;
 pub mod exploit;
 pub mod fork;
 pub mod frozen;
+pub mod horizon_pp;
 pub mod import;
 pub mod learning;
 pub mod learned;

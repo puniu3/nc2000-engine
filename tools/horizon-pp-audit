@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import math
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/horizon-pp-v1'
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def summarize(report, corpus):
+    p = report['protocol']
+    assert report['schema'] == p['schema'] == 'nc2000-horizon-pp-audit-v1'
+    assert sha(corpus) == p['corpus_sha256']
+    assert (p['game'], p['decision']) == (19, 17)
+    game = next(g for g in map(json.loads, corpus.splitlines()) if g['game'] == p['game'])
+    assert report['state_key'] == game['decisions'][p['decision']]['key']
+    assert p['horizons'] == [1, 2, 4, 8, 12]
+    assert (p['sample_paths'], p['sample_turns'], p['sample_seed']) == (10000, 12, 2026100501)
+    assert [h['turns'] for h in report['horizons']] == p['horizons']
+    original_runs = None
+    capped_runs = 0
+    for h in report['horizons']:
+        assert len(h['cells']) == 16
+        assert len({tuple(c['actions']) for c in h['cells']}) == 16
+        runs = sum(c['original_runs'] for c in h['cells'])
+        if original_runs is None:
+            original_runs = runs
+        assert original_runs == runs
+        for c in h['cells']:
+            assert c['successor_classes'] > 0
+            assert 0 <= c['maximum_probability_error'] < 1e-10
+            assert len(c['probability_mass']) == 2
+            assert all(math.isfinite(m) and abs(m - 1) < 1e-10 for m in c['probability_mass'])
+        capped_runs += sum(c['capped_runs'] for c in h['cells'])
+        assert h['cutoff_at_successors'] == (h['turns'] == 1)
+        if h['turns'] == 1:
+            assert h['nonterminal_quotient_states'] == 0
+        else:
+            assert 0 < h['nonterminal_quotient_states'] <= report['original_nonterminal_states']
+    assert original_runs == report['original_runs']
+    assert capped_runs == report['capped_runs']
+    assert 2 * p['sample_paths'] <= report['sampled_runs'] <= 2 * p['sample_paths'] * p['sample_turns']
+    assert report['sampled_runs'] % 2 == 0
+    assert original_runs + capped_runs + report['sampled_runs'] == report['total_runs']
+    rows = report['sampled_states']
+    assert len(rows) == p['sample_turns']
+    for depth, row in enumerate(rows):
+        assert row['depth'] == depth and row['turns_left'] == p['sample_turns'] - depth
+        assert 0 <= row['quotient_states'] <= row['exact_states'] <= p['sample_paths']
+    exact = sum(r['exact_states'] for r in rows)
+    quotient = sum(r['quotient_states'] for r in rows)
+    assert exact > 0
+    assert len(report['source_hashes']) == len({p for p, _ in report['source_hashes']})
+    return {
+        'schema': p['schema'], 'state_key': report['state_key'],
+        'kernel_comparisons': sum(len(h['cells']) for h in report['horizons']),
+        'maximum_probability_error': max(c['maximum_probability_error'] for h in report['horizons'] for c in h['cells']),
+        'original_successor_states': report['original_nonterminal_states'],
+        'horizon_successor_states': [{k: h[k] for k in ['turns', 'nonterminal_quotient_states', 'cutoff_at_successors']} for h in report['horizons']],
+        'sampled_states': rows, 'sampled_exact_total': exact, 'sampled_quotient_total': quotient,
+        'sampled_reduction_fraction': 1 - quotient / exact,
+        'total_runs': report['total_runs'], 'source_hashes': report['source_hashes'],
+        'decision': 'Keep as an isolated prototype; these sampled reductions do not justify solver integration.',
+        'interpretation': report['interpretation'],
+    }
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    raw = (archive / 'report.json.gz').read_bytes()
+    report = json.loads(gzip.decompress(raw))
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    assert sha((archive / 'protocol.json').read_bytes()) == report['protocol_sha256']
+    assert json.loads((archive / 'protocol.json').read_bytes()) == report['protocol']
+    summary = summarize(report, corpus)
+    summary['report_archive_sha256'] = sha(raw)
+    assert summary == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified 80 transition comparisons and paired-path census; no value certificate claimed')
+    raise SystemExit(0)
+if args.record_existing:
+    directory = args.record_existing
+else:
+    directory = root / 'tmp/horizon-pp-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    (directory / 'corpus.jsonl').write_bytes(corpus)
+    protocol = json.loads((archive / 'protocol.json').read_bytes())
+    protocol['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+    (directory / 'protocol.json').write_text(json.dumps(protocol, indent=2) + '\n')
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'horizon_pp_audit'], cwd=root, env=env, check=True)
+    subprocess.run([str(root / 'target/release/examples/horizon_pp_audit'), str(directory / 'protocol.json'), str(directory / 'report.json')], cwd=root, env=env, check=True)
+report = json.loads((directory / 'report.json').read_bytes())
+assert sha((directory / 'protocol.json').read_bytes()) == report['protocol_sha256']
+corpus = (root / report['protocol']['corpus']).read_bytes()
+summary = summarize(report, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    for path, digest in report['source_hashes']:
+        assert sha((root / path).read_bytes()) == digest
+    raw = gzip.compress((directory / 'report.json').read_bytes(), mtime=0)
+    (archive / 'report.json.gz').write_bytes(raw)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (archive / 'protocol.json').write_bytes((directory / 'protocol.json').read_bytes())
+    summary['report_archive_sha256'] = sha(raw)
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(f"80 transition comparisons; sampled states {summary['sampled_exact_total']} -> {summary['sampled_quotient_total']}; reduction {summary['sampled_reduction_fraction']:.2%}")
