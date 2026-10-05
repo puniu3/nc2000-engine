@@ -83,6 +83,7 @@ pub struct BoundConfig {
     /// frontier order; certification still uses every unpruned action.
     pub support_br_scheduling: bool,
     pub reuse_unchanged_backups: bool,
+    pub aggregate_lazy_children: bool,
 }
 
 impl Default for BoundConfig {
@@ -103,6 +104,7 @@ impl Default for BoundConfig {
             certified_action_pruning: true,
             support_br_scheduling: true,
             reuse_unchanged_backups: true,
+            aggregate_lazy_children: false,
         }
     }
 }
@@ -286,6 +288,7 @@ pub struct BoundStats {
     pub fair_cell_picks: usize,
     pub trial_depth_counts: Vec<usize>,
     pub depth_limit_trials: usize,
+    pub lazy_edge_merges: usize,
 }
 
 #[derive(Debug)]
@@ -297,6 +300,15 @@ pub struct ChanceDiagnostics {
     pub child_uncertainty: f64,
     pub largest_edge_uncertainty: f64,
     pub largest_child_uncertainty: f64,
+}
+
+#[derive(Debug, Default)]
+pub struct GraphDiagnostics {
+    pub unexpanded_nodes: usize,
+    pub initialized_nodes: usize,
+    pub stored_battles: usize,
+    pub resolved_edges: usize,
+    pub unique_child_edges: usize,
 }
 
 struct Pending {
@@ -365,7 +377,49 @@ pub struct BoundSolver<'d> {
     roots: HashSet<NodeKey>,
     active_stall: Option<OneSidedHeal>,
     active_two_sided: Option<TwoSidedHeal>,
+    fixed_policy: Option<(usize, Vec<SearchChoice>)>,
     pub stats: BoundStats,
+}
+
+pub struct FixedPolicySolver<'d> {
+    solver: BoundSolver<'d>,
+    side: usize,
+}
+
+pub struct PolicyBoundReport {
+    /// Fixed side's score against an optimal full-information opponent.
+    pub guaranteed_score: Bounds,
+    /// Side-zero value when both players may optimize.
+    pub unrestricted_game_value: Bounds,
+    pub stop: Stop,
+    pub runs: usize,
+}
+
+impl<'d> FixedPolicySolver<'d> {
+    /// At every decision, use the first legal priority action, falling back
+    /// to the engine's first legal choice. Only the opponent may optimize.
+    pub fn new(dex: &'d Dex, cfg: BoundConfig, side: usize, priority: Vec<SearchChoice>) -> Self {
+        assert!(side < 2);
+        let mut solver = BoundSolver::new(dex, cfg);
+        solver.fixed_policy = Some((side, priority));
+        Self { solver, side }
+    }
+
+    pub fn solve(&mut self, battle: &Battle) -> PolicyBoundReport {
+        let report = self.solver.solve(battle, None);
+        let value = report.bounds;
+        let (guaranteed_score, unrestricted_game_value) = if self.side == 0 {
+            (value, Bounds { lo: value.lo, hi: 1.0 })
+        } else {
+            (Bounds { lo: 1.0 - value.hi, hi: 1.0 - value.lo },
+                Bounds { lo: 0.0, hi: value.hi })
+        };
+        PolicyBoundReport { guaranteed_score, unrestricted_game_value,
+            stop: report.stop, runs: report.runs }
+    }
+
+    pub fn node_count(&self) -> usize { self.solver.node_count() }
+    pub fn graph_diagnostics(&self) -> GraphDiagnostics { self.solver.graph_diagnostics() }
 }
 
 #[derive(Default)]
@@ -401,6 +455,7 @@ impl<'d> BoundSolver<'d> {
             roots: HashSet::new(),
             active_stall: None,
             active_two_sided: None,
+            fixed_policy: None,
             stats: BoundStats::default(),
         }
     }
@@ -418,11 +473,13 @@ impl<'d> BoundSolver<'d> {
             roots: cache.roots,
             active_stall: None,
             active_two_sided: None,
+            fixed_policy: None,
             stats: cache.stats,
         }
     }
 
     pub fn into_cache(self) -> BoundCache {
+        assert!(self.fixed_policy.is_none(), "restricted values cannot enter an unrestricted cache");
         BoundCache {
             dex_fingerprint: Some(self.dex.replay_fingerprint),
             nodes: self.nodes,
@@ -462,6 +519,24 @@ impl<'d> BoundSolver<'d> {
                 largest_child_uncertainty: children.values().copied().fold(0.0, f64::max),
             }
         }).collect())
+    }
+
+    pub fn graph_diagnostics(&self) -> GraphDiagnostics {
+        let mut result = GraphDiagnostics::default();
+        for node in self.nodes.values() {
+            if node.cells.is_empty() {
+                result.unexpanded_nodes += 1;
+            } else {
+                result.initialized_nodes += 1;
+            }
+            result.stored_battles += usize::from(node.battle.is_some());
+            for cell in &node.cells {
+                result.resolved_edges += cell.resolved.len();
+                result.unique_child_edges += cell.resolved.iter()
+                    .map(|&(_, key)| key).collect::<HashSet<_>>().len();
+            }
+        }
+        result
     }
 
     /// Tighten the root's certified interval until a stop condition fires.
@@ -805,8 +880,15 @@ impl<'d> BoundSolver<'d> {
         let needs = probe.needs_choice();
         let mut acts = |side: usize| -> Vec<Option<SearchChoice>> {
             if needs[side] {
-                probe
-                    .legal_choices(self.dex, side)
+                let legal = probe.legal_choices(self.dex, side);
+                if let Some((fixed_side, priority)) = &self.fixed_policy {
+                    if side == *fixed_side {
+                        let choice = priority.iter().find(|choice| legal.contains(choice))
+                            .or_else(|| legal.first()).expect("requested side has a legal choice");
+                        return vec![Some(*choice)];
+                    }
+                }
+                legal
                     .into_iter()
                     .map(Some)
                     .collect()
@@ -1280,7 +1362,17 @@ impl<'d> BoundSolver<'d> {
             cell.fixed_lo += leaf_mass * bounds.lo;
             cell.fixed_hi += leaf_mass * bounds.hi;
         } else {
-            cell.resolved.push((leaf_mass, child.unwrap()));
+            let child = child.unwrap();
+            if self.cfg.aggregate_lazy_children {
+                if let Some((mass, _)) = cell.resolved.iter_mut().find(|(_, key)| *key == child) {
+                    *mass += leaf_mass;
+                    self.stats.lazy_edge_merges += 1;
+                } else {
+                    cell.resolved.push((leaf_mass, child));
+                }
+            } else {
+                cell.resolved.push((leaf_mass, child));
+            }
         }
     }
 
@@ -1989,6 +2081,145 @@ mod tests {
             if report.stop == super::Stop::StrategyMet { return; }
         }
         panic!("policy certificates did not converge");
+    }
+
+    #[test]
+    fn fixed_policy_bounds_keep_the_opponent_free_and_orient_both_sides() {
+        use nc2000_engine::battle::SearchChoice;
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Seismic Toss", "Splash"], &["Seismic Toss", "Splash"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 1000;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = 1;
+        }
+        let cfg = BoundConfig { eps: 1e-8, ..BoundConfig::default() };
+        let mut unrestricted = BoundSolver::new(&dex, cfg.clone());
+        let value = unrestricted.solve(&root, None).bounds;
+        assert!((value.lo - 0.5).abs() < 1e-8 && (value.hi - 0.5).abs() < 1e-8);
+        for side in 0..2 {
+            for (name, expected) in [("splash", 0.0), ("seismictoss", 0.5)] {
+                let priority = vec![SearchChoice::Move(dex.moves.id(name).unwrap())];
+                let mut fixed = super::FixedPolicySolver::new(&dex, cfg.clone(), side, priority);
+                let report = fixed.solve(&root);
+                assert!((report.guaranteed_score.lo - expected).abs() < 1e-8);
+                assert!((report.guaranteed_score.hi - expected).abs() < 1e-8);
+                assert!(report.unrestricted_game_value.lo <= value.lo + 1e-8);
+                assert!(report.unrestricted_game_value.hi >= value.hi - 1e-8);
+                if side == 0 { assert_eq!(report.unrestricted_game_value.hi, 1.0); }
+                else { assert_eq!(report.unrestricted_game_value.lo, 0.0); }
+            }
+        }
+    }
+
+    #[test]
+    fn fixed_policy_applies_after_the_root_and_falls_back_when_unavailable() {
+        use nc2000_engine::battle::SearchChoice;
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Seismic Toss", "Splash"], &["Splash"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 999;
+        let foe = root.active_id(1).unwrap();
+        root.poke_mut(foe).hp = 25;
+        let cfg = BoundConfig { eps: 1e-8, ..BoundConfig::default() };
+        for (priority, expected) in [
+            (vec![SearchChoice::Move(dex.moves.id("splash").unwrap())], 0.5),
+            (vec![SearchChoice::Move(dex.moves.id("seismictoss").unwrap())], 1.0),
+            (vec![SearchChoice::Move(dex.moves.id("thunder").unwrap())], 1.0),
+        ] {
+            let mut solver = super::FixedPolicySolver::new(&dex, cfg.clone(), 0, priority);
+            let result = solver.solve(&root);
+            assert!((result.guaranteed_score.lo - expected).abs() < 1e-8);
+            assert!((result.guaranteed_score.hi - expected).abs() < 1e-8);
+        }
+    }
+
+    #[test]
+    fn fixed_policy_partial_bounds_enclose_exhaustive_two_turn_best_response() {
+        use nc2000_engine::battle::SearchChoice;
+        fn exhaustive(dex: &nc2000_engine::dex::Dex, b: &Battle, side: usize) -> f64 {
+            if let Some(value) = super::outcome_value(b) { return value; }
+            assert!(b.turn >= 999);
+            let mut probe = b.clone();
+            let choices = [0, 1].map(|s| probe.legal_choices(dex, s));
+            let fixed = SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
+            assert!(choices[side].contains(&fixed));
+            let scores = choices[1 - side].iter().map(|&reply| {
+                let pair = if side == 0 { [fixed, reply] } else { [reply, fixed] };
+                let step = enumerate_step(dex, b, pair.map(Some), 100_000).unwrap();
+                step.leaves.iter().map(|leaf| leaf.prob * exhaustive(dex, &leaf.battle, side)).sum::<f64>()
+            });
+            if side == 0 { scores.fold(1.0, f64::min) }
+            else { scores.fold(0.0, f64::max) }
+        }
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Seismic Toss", "Protect"], &["Seismic Toss", "Protect"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 999;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = if side == 0 { 40 } else { 60 };
+        }
+        for (side, aggregate) in [(0, false), (1, false), (0, true), (1, true)] {
+            let value = exhaustive(&dex, &root, side);
+            let score = if side == 0 { value } else { 1.0 - value };
+            let mut solver = super::FixedPolicySolver::new(&dex, BoundConfig {
+                work_budget: 1, cell_cap: 0, eps: 1e-8,
+                aggregate_lazy_children: aggregate, ..BoundConfig::default()
+            }, side, vec![SearchChoice::Move(dex.moves.id("seismictoss").unwrap())]);
+            let mut closed = false;
+            for _ in 0..1000 {
+                let report = solver.solve(&root);
+                assert!(report.guaranteed_score.lo <= score + 1e-10);
+                assert!(report.guaranteed_score.hi >= score - 1e-10);
+                if report.stop == super::Stop::WidthMet { closed = true; break; }
+            }
+            assert!(closed);
+        }
+    }
+
+    #[test]
+    fn aggregated_lazy_edges_match_exhaustive_successor_probabilities() {
+        use std::collections::HashMap;
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Splash"], &["Splash"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        let choices = [0, 1].map(|s| Some(root.legal_choices(&dex, s)[0]));
+        let exact = enumerate_step(&dex, &root, choices, 100_000).unwrap();
+        for aggregate in [false, true] {
+            let mut solver = BoundSolver::new(&dex, BoundConfig {
+                cell_cap: 0, aggregate_lazy_children: aggregate, ..BoundConfig::default()
+            });
+            let key = solver.intern(root.clone());
+            solver.init_cells(key);
+            while !solver.nodes[&key].cells[0].pending.is_empty() {
+                solver.expand(key, 0);
+                assert!(solver.stats.runs < 100_000);
+            }
+            let mut expected = HashMap::<_, f64>::new();
+            for leaf in &exact.leaves {
+                assert!(leaf.battle.outcome().is_none());
+                *expected.entry(solver.node_key(&leaf.battle)).or_default() += leaf.prob;
+            }
+            let cell = &solver.nodes[&key].cells[0];
+            let mut found = HashMap::<_, f64>::new();
+            for &(mass, child) in &cell.resolved { *found.entry(child).or_default() += mass; }
+            assert_eq!(found.len(), expected.len());
+            for (child, mass) in expected { assert!((found[&child] - mass).abs() < 1e-10); }
+            assert!((found.values().sum::<f64>() - 1.0).abs() < 1e-10);
+            if aggregate {
+                assert!(solver.stats.lazy_edge_merges > 0);
+                assert_eq!(cell.resolved.len(), found.len());
+            } else {
+                assert_eq!(solver.stats.lazy_edge_merges, 0);
+                assert!(cell.resolved.len() > found.len());
+            }
+        }
     }
 
     #[test]

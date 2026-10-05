@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use nc2000_bot::bounds::{BoundConfig, BoundSolver, Bounds, RootPayoffs};
+use nc2000_bot::bounds::{BoundConfig, BoundSolver, Bounds, FixedPolicySolver, RootPayoffs};
 use nc2000_bot::player::action_input;
 use nc2000_bot::{Agent, MaxDamageAgent, RmConfig, SkuctSearch};
 use nc2000_engine::battle::PokemonSet;
@@ -38,6 +38,9 @@ struct Protocol {
     diagnostics: bool,
     #[serde(default)]
     certified_action_pruning: bool,
+    fixed_policy_side: Option<usize>,
+    #[serde(default)]
+    aggregate_lazy_children: bool,
 }
 
 #[derive(Default, Deserialize)]
@@ -122,6 +125,35 @@ fn audit(
             .map(|a| action_input(dex, a))
             .collect::<Vec<_>>()
     });
+    if let Some(side) = protocol.fixed_policy_side {
+        assert!(side < 2 && !legal[side].is_empty());
+        let mut solver = FixedPolicySolver::new(dex, BoundConfig {
+            time_budget: Some(Duration::from_millis(protocol.reference_ms)),
+            work_budget: protocol.work_budget,
+            node_budget: protocol.node_budget,
+            cell_cap: protocol.cell_cap,
+            eps: protocol.tolerance,
+            certified_action_pruning: protocol.certified_action_pruning,
+            aggregate_lazy_children: protocol.aggregate_lazy_children,
+            ..BoundConfig::default()
+        }, side, legal[side].clone());
+        let started = Instant::now();
+        let report = solver.solve(&battle);
+        let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+        let graph = solver.graph_diagnostics();
+        return json!({
+            "schema":"nc2000-fixed-policy-bound-v1",
+            "game":game.game,"decision":decision,"state_key":battle.state_key128().to_string(),
+            "side":side,"priority_actions":names[side],
+            "guaranteed_score":bound(report.guaranteed_score),
+            "unrestricted_game_value":bound(report.unrestricted_game_value),
+            "reference":{"stop":format!("{:?}",report.stop),"runs":report.runs,
+                "elapsed_ms":elapsed_ms,"nodes":solver.node_count()},
+            "graph":{"unexpanded_nodes":graph.unexpanded_nodes,"initialized_nodes":graph.initialized_nodes,
+                "stored_battles":graph.stored_battles,"resolved_edges":graph.resolved_edges,
+                "unique_child_edges":graph.unique_child_edges},
+        });
+    }
     let mut targets = Vec::new();
     let archived: [Option<&Value>; 2] = [0, 1].map(|side| {
         if legal[side].is_empty() {
@@ -160,6 +192,7 @@ fn audit(
             node_budget: protocol.node_budget,
             cell_cap: protocol.cell_cap,
             certified_action_pruning: protocol.certified_action_pruning,
+            aggregate_lazy_children: protocol.aggregate_lazy_children,
             ..BoundConfig::default()
         },
     );
@@ -271,7 +304,15 @@ fn audit(
     }
     let diagnostics = protocol.diagnostics.then(|| {
         let stats = &solver.stats;
+        let graph = solver.graph_diagnostics();
         json!({
+            "graph": {
+                "unexpanded_nodes": graph.unexpanded_nodes,
+                "initialized_nodes": graph.initialized_nodes,
+                "stored_battles": graph.stored_battles,
+                "resolved_edges": graph.resolved_edges,
+                "unique_child_edges": graph.unique_child_edges,
+            },
             "trial_depth_counts": stats.trial_depth_counts,
             "depth_limit_trials": stats.depth_limit_trials,
             "trials": stats.trials,
@@ -281,6 +322,7 @@ fn audit(
             "dominated_rows": stats.dominated_rows,
             "dominated_cols": stats.dominated_cols,
             "avoided_cells": stats.avoided_cells,
+            "lazy_edge_merges": stats.lazy_edge_merges,
             "root_chance": solver.root_chance_diagnostics(&battle).unwrap().iter().map(|cell| json!({
                 "pending_mass": cell.pending_mass,
                 "pending_scripts": cell.pending_scripts,
