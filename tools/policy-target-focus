@@ -11,11 +11,15 @@ import subprocess
 
 root = pathlib.Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
-parser.add_argument("--frontier", action="store_true")
+studies = parser.add_mutually_exclusive_group()
+studies.add_argument("--frontier", action="store_true")
+studies.add_argument("--witness", action="store_true")
 parser.add_argument("--verify-only", action="store_true")
 args = parser.parse_args()
 study = "policy-frontier-v1" if args.frontier else "policy-target-focus-v1"
 targets = ["diagnostic", "pruned", "pruned-eager", "pruned-lazy", "refined"] if args.frontier else ["all_actions", "archived"]
+if args.witness:
+    study, targets = "policy-witness-v1", ["control", "side-0", "side-1", "side-1-merged", "side-1-refined"]
 source = root / "findings" / study
 spec = importlib.util.spec_from_file_location("policy_gap", root / "tools/policy-gap-report.py")
 verifier = importlib.util.module_from_spec(spec)
@@ -23,6 +27,17 @@ spec.loader.exec_module(verifier)
 
 
 def verify(row):
+    if row.get("schema") == "nc2000-fixed-policy-bound-v1":
+        assert row["side"] in (0, 1) and row["priority_actions"]
+        score = row["guaranteed_score"]
+        value = row["unrestricted_game_value"]
+        assert 0 <= score["lo"] <= score["hi"] <= 1
+        expected = {"lo": score["lo"], "hi": 1.0} if row["side"] == 0 else {"lo": 0.0, "hi": 1 - score["lo"]}
+        assert all(abs(value[key] - expected[key]) < 1e-12 for key in expected)
+        graph = row["graph"]
+        assert graph["initialized_nodes"] + graph["unexpanded_nodes"] == row["reference"]["nodes"]
+        assert graph["unique_child_edges"] <= graph["resolved_edges"]
+        return
     matrix = row["reference"]
     for endpoint in row["endpoints"]:
         for arm in ["archived", "uniform", "max_damage", "oracle"]:
@@ -63,9 +78,12 @@ for target in targets:
     )
     row = json.loads((run / target / "game-019-d0017.json").read_text())
     verify(row)
+    scores = {"guaranteed_score": row["guaranteed_score"]} if "guaranteed_score" in row else {
+        "loss": [endpoint["archived"]["loss"] for endpoint in row["endpoints"]],
+    }
     print(target, json.dumps({
         "stop": row["reference"]["stop"],
         "runs": row["reference"]["runs"],
-        "loss": [endpoint["archived"]["loss"] for endpoint in row["endpoints"]],
+        **scores,
     }), flush=True)
 print(f"Results: {run}")
