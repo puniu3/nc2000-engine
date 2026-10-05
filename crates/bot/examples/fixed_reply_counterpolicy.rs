@@ -2,7 +2,7 @@ use std::time::Instant;
 use nc2000_engine::battle::{Outcome,PokemonSet,SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::{Battle,Status,DK};
-use serde::Deserialize;
+use serde::{Deserialize,Serialize};
 use serde_json::{json,Value};
 use sha2::{Digest,Sha256};
 
@@ -85,13 +85,52 @@ fn choose_rules(dex:&Dex,b:&mut Battle,side:usize,first:bool,own:OwnPolicy,oppon
         .find_map(|name|action(dex,&legal,name)).or_else(||legal.first().copied())
 }
 
+#[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[serde(rename_all="snake_case")]
+enum ReturnWhen { Always,Never,FoeLow,FoeFrozen,SelfLow }
+
+#[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[serde(deny_unknown_fields)]
+struct CounterResponse { return_when:ReturnWhen,ice_first:bool,finish_low:bool }
+
+fn choose_response(dex:&Dex,b:&mut Battle,side:usize,first:bool,own:OwnPolicy,response:CounterResponse)->Option<SearchChoice> {
+    if side==0 || first {return choose_rules(dex,b,side,first,own,Some(99),false);}
+    if !b.needs_choice()[side] {return None;}
+    let legal=b.legal_choices(dex,side);assert!(!legal.is_empty());
+    let me=b.poke(b.active_id(side).unwrap());
+    let foe=b.poke(b.active_id(1-side).unwrap());
+    let return_now=match response.return_when {
+        ReturnWhen::Always=>true,ReturnWhen::Never=>false,
+        ReturnWhen::FoeLow=>i64::from(foe.hp)*2<=i64::from(foe.maxhp),
+        ReturnWhen::FoeFrozen=>foe.status==Status::Frz,
+        ReturnWhen::SelfLow=>i64::from(me.hp)*2<=i64::from(me.maxhp),
+    };
+    if return_now {
+        if let Some(&switch)=legal.iter().find(|choice|match choice {
+            SearchChoice::Switch(pos)=> {
+                let team=&b.sides[side];dex.species.key(team.roster[team.party[(*pos-1) as usize] as usize].species)=="snorlax"
+            },_=>false,
+        }) {return Some(switch);}
+    }
+    if dex.species.key(me.species)=="vaporeon" && response.finish_low
+        && i64::from(foe.hp)*100<=i64::from(foe.maxhp)*40
+        && (me.status!=Status::Slp || me.status_state.get_int(DK::Time)<=1) {
+        if let Some(hydro)=action(dex,&legal,"hydropump") {return Some(hydro);}
+    }
+    let chosen=choose_rules(dex,b,side,false,own,Some(99),false);
+    if response.ice_first && chosen==action(dex,&legal,"hydropump") {
+        if let Some(ice)=action(dex,&legal,"icebeam") {return Some(ice);}
+    }
+    chosen
+}
+
 fn seed(base:u64,index:usize)->u64 {
     let mut z=base.wrapping_add((index as u64).wrapping_mul(0x9e3779b97f4a7c15));
     z=(z^(z>>30)).wrapping_mul(0xbf58476d1ce4e5b9);
     z=(z^(z>>27)).wrapping_mul(0x94d049bb133111eb);z^(z>>31)
 }
 
-fn run(dex:&Dex,root:&Battle,n:usize,base:u64,own:OwnPolicy,opponent_rest:Option<u8>,return_boom:bool)->Value {
+fn run(dex:&Dex,root:&Battle,n:usize,base:u64,own:OwnPolicy,opponent_rest:Option<u8>,return_boom:bool,response:Option<CounterResponse>)->Value {
     let started=Instant::now();let mut outcomes=[0usize;3];let mut steps_total=0;let mut max_steps=0;
     let mut example=Vec::new();
     for trial in 0..n {
@@ -102,7 +141,9 @@ fn run(dex:&Dex,root:&Battle,n:usize,base:u64,own:OwnPolicy,opponent_rest:Option
                 outcomes[match outcome {Outcome::P1Win=>0,Outcome::Tie=>1,Outcome::P2Win=>2}]+=1;break;
             }
             assert!(steps<2048,"every trial must reach an engine terminal state");
-            let choices=[0,1].map(|side|choose_rules(dex,&mut b,side,steps==0,own,opponent_rest,return_boom));
+            let choices=[0,1].map(|side|if let Some(response)=response {
+                choose_response(dex,&mut b,side,steps==0,own,response)
+            } else {choose_rules(dex,&mut b,side,steps==0,own,opponent_rest,return_boom)});
             if trial==0 && steps<16 {example.push(json!({"turn":b.turn,
                 "hp":([0,1].map(|s|b.active_id(s).map(|id|b.poke(id).hp))),
                 "choices":choices.map(|a|a.map(|a|nc2000_bot::player::action_input(dex,a)))}));}
@@ -110,7 +151,7 @@ fn run(dex:&Dex,root:&Battle,n:usize,base:u64,own:OwnPolicy,opponent_rest:Option
         }
         steps_total+=steps;max_steps=max_steps.max(steps);
     }
-    json!({"own_policy":own.name(),"opponent_return_boom":return_boom,"own_rest_percent":(own!=OwnPolicy::Attack).then_some(75),"opponent_rest_percent":opponent_rest,"opponent_waking_rest":opponent_rest==Some(99),
+    json!({"own_policy":own.name(),"counter_response":response,"opponent_return_boom":return_boom,"own_rest_percent":(own!=OwnPolicy::Attack).then_some(75),"opponent_rest_percent":opponent_rest,"opponent_waking_rest":opponent_rest==Some(99),
         "samples":n,"seed":base,"wins":outcomes[0],"ties":outcomes[1],"losses":outcomes[2],
         "mean_score":(outcomes[0] as f64+0.5*outcomes[1] as f64)/n as f64,
         "steps":steps_total,"max_steps":max_steps,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0,
@@ -119,26 +160,37 @@ fn run(dex:&Dex,root:&Battle,n:usize,base:u64,own:OwnPolicy,opponent_rest:Option
 
 fn sha(bytes:&[u8])->String {format!("{:x}",Sha256::digest(bytes))}
 fn main() {
-    let args:Vec<_>=std::env::args().collect();assert!(matches!(args.len(),5|6),"corpus samples seed output [late-rest]");
-    let extended=args.get(5).is_some_and(|mode|{assert_eq!(mode,"late-rest");true});
+    let args:Vec<_>=std::env::args().collect();assert!(matches!(args.len(),5|6),"corpus samples seed output [late-rest|counter-search|responses.json]");
+    let extended=args.get(5).is_some_and(|mode|mode=="late-rest");
+    let responses:Option<Vec<CounterResponse>>=args.get(5).filter(|mode|*mode!="late-rest").map(|mode| {
+        if mode=="counter-search" {
+            [ReturnWhen::Always,ReturnWhen::Never,ReturnWhen::FoeLow,ReturnWhen::FoeFrozen,ReturnWhen::SelfLow].into_iter()
+                .flat_map(|return_when|[false,true].into_iter().flat_map(move|ice_first|[false,true].map(|finish_low|CounterResponse {return_when,ice_first,finish_low}))).collect()
+        } else {serde_json::from_slice(&std::fs::read(mode).unwrap()).unwrap()}
+    });
     let raw=std::fs::read(&args[1]).unwrap();let n:usize=args[2].parse().unwrap();assert!(n>0);
     let base:u64=args[3].parse().unwrap();let dex=conformance::load_dex();
     let game=std::str::from_utf8(&raw).unwrap().lines().map(|line|serde_json::from_str::<Game>(line).unwrap())
         .find(|game|game.game==17).unwrap();
     let root=reconstruct(&dex,&game,21);assert_eq!(root.state_key128().to_string(),"199433906935569759004884428941975153695");
     let mut jobs=Vec::new();
+    if let Some(responses)=&responses {
+        assert!(!responses.is_empty());
+        for &response in responses {jobs.push((OwnPolicy::AfterBoom75,Some(99),false,Some(response)));}
+    } else {
     for return_boom in if extended {vec![true,false]} else {vec![true]} {
         for opponent_rest in [None,Some(75),Some(99)] {
             for own in if extended {vec![OwnPolicy::Attack,OwnPolicy::Rest75,OwnPolicy::AfterBoom75]} else {vec![OwnPolicy::Attack,OwnPolicy::Rest75]} {
-                jobs.push((own,opponent_rest,return_boom));
+                jobs.push((own,opponent_rest,return_boom,None));
             }
         }
+    }
     }
     let mut arms=Vec::new();
     for group in jobs.chunks(6) {
         arms.extend(std::thread::scope(|scope| {
-            let handles=group.iter().map(|&(own,opp,return_boom)| {
-                let dex=&dex;let root=&root;scope.spawn(move||run(dex,root,n,base,own,opp,return_boom))
+            let handles=group.iter().map(|&(own,opp,return_boom,response)| {
+                let dex=&dex;let root=&root;scope.spawn(move||run(dex,root,n,base,own,opp,return_boom,response))
             }).collect::<Vec<_>>();
             handles.into_iter().map(|handle|handle.join().unwrap()).collect::<Vec<_>>()
         }));
@@ -151,14 +203,14 @@ fn main() {
     let sources=paths.map(|p|(p,sha(&std::fs::read(p).unwrap())));
     let revision=std::process::Command::new("git").args(["rev-parse","HEAD"]).output().unwrap();
     assert!(revision.status.success());
-    let result=json!({"schema":if extended {"nc2000-late-rest-counterpolicy-v1"} else {"nc2000-fixed-reply-counterpolicy-v1"},"game":17,"decision":21,
+    let result=json!({"schema":if responses.is_some() {"nc2000-counterresponse-v1"} else if extended {"nc2000-late-rest-counterpolicy-v1"} else {"nc2000-fixed-reply-counterpolicy-v1"},"game":17,"decision":21,
         "state_key":root.state_key128().to_string(),"state":root.essence(&dex),"arms":arms,
         "manifest":{"revision":String::from_utf8(revision.stdout).unwrap().trim(),"corpus_sha256":sha(&raw),"source_hashes":sources,
             "dex_fingerprint":format!("{:?}",dex.replay_fingerprint),
             "binary_sha256":sha(&std::fs::read(std::env::current_exe().unwrap()).unwrap())},
-        "interpretation":"Seeded full-state policy-pair rollouts after fixed first Body Slam / switch-2 actions. Side zero uses the existing attack priority, optionally Rest at <=75% HP while awake and unfrozen. Side one returns to any legal Snorlax, uses Selfdestruct, then Hydro Pump / Ice Beam on Vaporeon; Sleep Talk only when the remaining sleep counter exceeds one, with optional Rest at <=75% while awake or <=99% also on the waking turn. All trials run to a true engine terminal. The optional late-rest study also keeps Vaporeon active as a counterpolicy and adds a side-zero rule withholding threshold Rest while a selected living opponent carries Selfdestruct or Explosion. Scores count ties as one half. This screens concrete counterpolicies, not human calibration, an optimal-opponent assumption, or an exact enumeration certificate."});
+        "interpretation":"Seeded full-state policy-pair rollouts after fixed first Body Slam / switch-2 actions. Side zero uses the existing attack priority, optionally Rest at <=75% HP while awake and unfrozen. Side one returns to any legal Snorlax, uses Selfdestruct, then Hydro Pump / Ice Beam on Vaporeon; Sleep Talk only when the remaining sleep counter exceeds one, with optional Rest at <=75% while awake or <=99% also on the waking turn. All trials run to a true engine terminal. The optional late-rest study also keeps Vaporeon active as a counterpolicy and adds a side-zero rule withholding threshold Rest while a selected living opponent carries Selfdestruct or Explosion. The counter-search mode tests state-based return timing (always, never, foe HP <=50%, foe frozen, or own HP <=50%), optional Ice Beam priority, and optional Hydro Pump before Rest when foe HP <=40%. These rules read only the current battle state, not the opponent action or PRNG. Scores count ties as one half. This screens concrete counterpolicies, not human calibration, an optimal-opponent assumption, or an exact enumeration certificate."});
     std::fs::write(&args[4],serde_json::to_vec_pretty(&result).unwrap()).unwrap();
-    for arm in &result["arms"].as_array().unwrap()[..] {println!("own={} return={} rest={:?} mean={} samples={} steps={}",arm["own_policy"],arm["opponent_return_boom"],arm["opponent_rest_percent"],arm["mean_score"],arm["samples"],arm["steps"]);}
+    for arm in &result["arms"].as_array().unwrap()[..] {println!("own={} return={} rest={:?} response={} mean={} samples={} steps={}",arm["own_policy"],arm["opponent_return_boom"],arm["opponent_rest_percent"],arm["counter_response"],arm["mean_score"],arm["samples"],arm["steps"]);}
 }
 
 #[cfg(test)]
@@ -216,6 +268,21 @@ mod tests {
     fn stay_counterpolicy_does_not_voluntarily_return_to_snorlax() {
         let dex=conformance::load_dex();let mut b=battle(&dex,true);
         assert_eq!(choose_rules(&dex,&mut b,1,false,OwnPolicy::Attack,None,false),Some(SearchChoice::Move(dex.moves.id("hydropump").unwrap())));
+    }
+    #[test]
+    fn response_switching_and_finishing_use_only_present_state() {
+        let dex=conformance::load_dex();let mut b=battle(&dex,true);
+        let own=b.active_id(0).unwrap();let foe=b.active_id(1).unwrap();
+        let mut response=CounterResponse {return_when:ReturnWhen::FoeLow,ice_first:false,finish_low:false};
+        assert_eq!(choose_response(&dex,&mut b,1,false,OwnPolicy::AfterBoom75,response),Some(SearchChoice::Move(dex.moves.id("hydropump").unwrap())));
+        b.poke_mut(own).hp=b.poke(own).maxhp/2;
+        assert_eq!(choose_response(&dex,&mut b,1,false,OwnPolicy::AfterBoom75,response),Some(SearchChoice::Switch(2)));
+        response.return_when=ReturnWhen::Never;response.ice_first=true;
+        assert_eq!(choose_response(&dex,&mut b,1,false,OwnPolicy::AfterBoom75,response),Some(SearchChoice::Move(dex.moves.id("icebeam").unwrap())));
+        b.poke_mut(foe).hp=b.poke(foe).maxhp/2;b.poke_mut(own).hp=b.poke(own).maxhp/4;
+        assert_eq!(choose_response(&dex,&mut b,1,false,OwnPolicy::AfterBoom75,response),Some(SearchChoice::Move(dex.moves.id("rest").unwrap())));
+        response.finish_low=true;
+        assert_eq!(choose_response(&dex,&mut b,1,false,OwnPolicy::AfterBoom75,response),Some(SearchChoice::Move(dex.moves.id("hydropump").unwrap())));
     }
     #[test]
     fn trial_seeds_do_not_alias_at_sixteen_bits() {

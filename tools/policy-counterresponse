@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import math
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-counterresponse-v1'
+stages = {'pilot': (10000, 2026100901), 'confirmation': (1000000, 2026100937), 'regression': (10000, 2026100801)}
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def upper(successes, n, delta):
+    p = successes / n
+    if p == 1:
+        return 1.0
+    target = math.log(1 / delta) / n
+    lo, hi = p, 1.0
+    for _ in range(80):
+        q = (lo + hi) / 2
+        if q == 1:
+            break
+        divergence = (p * math.log(p / q) if p else 0) + (1 - p) * math.log((1 - p) / (1 - q))
+        if divergence <= target:
+            lo = q
+        else:
+            hi = q
+    return hi
+
+
+def selected(pilot):
+    best = min(pilot['arms'], key=lambda arm: arm['mean_score'])['counter_response']
+    return [dict(return_when='always', ice_first=False, finish_low=False),
+            dict(best, finish_low=False), dict(best, return_when='always'), best]
+
+
+def summarize(records, responses, corpus):
+    assert set(records) == set(stages)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert len({json.dumps(r['manifest']['source_hashes']) for r in records.values()}) == 1
+    assert len({r['manifest']['dex_fingerprint'] for r in records.values()}) == 1
+    pilot, confirmation, regression = [records[name] for name in stages]
+    assert responses == selected(pilot)
+    assert len({json.dumps(r, sort_keys=True) for r in responses}) == 4
+    layout = [dict(return_when=when, ice_first=ice, finish_low=finish)
+              for when in ['always', 'never', 'foe_low', 'foe_frozen', 'self_low']
+              for ice in [False, True] for finish in [False, True]]
+    assert [a['counter_response'] for a in pilot['arms']] == layout
+    assert [a['counter_response'] for a in confirmation['arms']] == responses
+    for name, record in records.items():
+        n, seed = stages[name]
+        assert record['state_key'] == '199433906935569759004884428941975153695'
+        assert record['manifest']['corpus_sha256'] == sha(corpus)
+        assert record['schema'] == ('nc2000-late-rest-counterpolicy-v1' if name == 'regression' else 'nc2000-counterresponse-v1')
+        for arm in record['arms']:
+            assert arm['samples'] == n and arm['seed'] == seed
+            assert arm['wins'] + arm['ties'] + arm['losses'] == n
+            assert arm['mean_score'] == (arm['wins'] + .5 * arm['ties']) / n
+            assert 0 < arm['max_steps'] <= 2048 and n <= arm['steps'] <= n * 2048
+            assert arm['first_trial_prefix'][0]['choices'] == ['move bodyslam', 'switch 2']
+            if name != 'regression':
+                assert arm['own_policy'] == 'after_boom75' and arm['own_rest_percent'] == 75
+                assert arm['opponent_rest_percent'] == 99 and arm['opponent_waking_rest']
+    old_path = root / 'findings/policy-late-rest-v1/records.json.gz'
+    old = json.loads(gzip.decompress(old_path.read_bytes()))['sampling']['pilot']
+    assert len(old['arms']) == len(regression['arms']) == 18
+    for before, after in zip(old['arms'], regression['arms']):
+        for key in before:
+            if key != 'elapsed_ms':
+                assert before[key] == after[key], key
+    seed_sets = [{(seed + i * 0x9e3779b97f4a7c15) % (1 << 64) for i in range(n)} for n, seed in stages.values()]
+    assert all(not seed_sets[i].intersection(seed_sets[j]) for i in range(3) for j in range(i))
+    rows = []
+    for arm in confirmation['arms']:
+        row = {k: arm[k] for k in ['counter_response', 'samples', 'wins', 'ties', 'losses', 'mean_score']}
+        row['nominal_score_upper'] = upper(arm['wins'] + arm['ties'], arm['samples'], .01 / len(responses))
+        row['screen_below_target'] = row['nominal_score_upper'] < .027
+        rows.append(row)
+    return {'schema': 'nc2000-policy-counterresponse-v1', 'confirmed_pairs': rows,
+            'exploratory_pairs': len(layout), 'confirmation_comparisons': len(responses), 'family_alpha': .01,
+            'target_fixed_reply_lower_bound': .027, 'prior_archive_sha256': sha(old_path.read_bytes()),
+            'interpretation': 'A pilot selects a concrete state-based counterpolicy and confirmation uses fresh seeds for that response and three ablations. Every game reaches an engine terminal. Nominal one-sided binomial KL bounds count ties as successes and assume independent trials; deterministic pseudorandom sweeps are not exact chance enumeration. A low score falsifies the proposed fixed-policy witness statistically, not the optimal game value or the possibility of a stronger policy. No sampled value enters a certified matrix. The opponent pool is not assumed optimal; no human calibration or deployed bot strength claim is made.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    responses = json.loads((archive / 'responses.json').read_bytes())
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    assert summarize(records, responses, corpus) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified counterpolicy selection, independent confirmation, ablations and 18-arm regression')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-counterresponse-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    command = [str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl')]
+    for name in ['pilot', 'regression', 'confirmation']:
+        if name == 'confirmation':
+            responses = selected(json.loads((directory / 'pilot.json').read_bytes()))
+            (directory / 'responses.json').write_text(json.dumps(responses, indent=2) + '\n')
+        n, seed = stages[name]
+        mode = {'pilot': 'counter-search', 'regression': 'late-rest', 'confirmation': str(directory / 'responses.json')}[name]
+        subprocess.run(command + [str(n), str(seed), str(directory / f'{name}.json'), mode], cwd=root, env=env, check=True)
+records = {name: json.loads((directory / f'{name}.json').read_bytes()) for name in stages}
+responses = json.loads((directory / 'responses.json').read_bytes())
+corpus = (directory / 'corpus.jsonl').read_bytes()
+summary = summarize(records, responses, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'responses.json').write_text(json.dumps(responses, indent=2) + '\n')
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for row in summary['confirmed_pairs']:
+    print(row)

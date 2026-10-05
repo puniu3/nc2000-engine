@@ -1,0 +1,22 @@
+[
+  {
+    "return_when": "always",
+    "ice_first": false,
+    "finish_low": false
+  },
+  {
+    "return_when": "self_low",
+    "ice_first": false,
+    "finish_low": false
+  },
+  {
+    "return_when": "always",
+    "ice_first": false,
+    "finish_low": true
+  },
+  {
+    "return_when": "self_low",
+    "ice_first": false,
+    "finish_low": true
+  }
+]

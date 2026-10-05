@@ -1,0 +1,67 @@
+{
+  "schema": "nc2000-policy-counterresponse-v1",
+  "confirmed_pairs": [
+    {
+      "counter_response": {
+        "return_when": "always",
+        "ice_first": false,
+        "finish_low": false
+      },
+      "samples": 1000000,
+      "wins": 43690,
+      "ties": 0,
+      "losses": 956310,
+      "mean_score": 0.04369,
+      "nominal_score_upper": 0.04440122183846069,
+      "screen_below_target": false
+    },
+    {
+      "counter_response": {
+        "return_when": "self_low",
+        "ice_first": false,
+        "finish_low": false
+      },
+      "samples": 1000000,
+      "wins": 32309,
+      "ties": 0,
+      "losses": 967691,
+      "mean_score": 0.032309,
+      "nominal_score_upper": 0.03292482485881093,
+      "screen_below_target": false
+    },
+    {
+      "counter_response": {
+        "return_when": "always",
+        "ice_first": false,
+        "finish_low": true
+      },
+      "samples": 1000000,
+      "wins": 24463,
+      "ties": 0,
+      "losses": 975537,
+      "mean_score": 0.024463,
+      "nominal_score_upper": 0.025001563147324882,
+      "screen_below_target": true
+    },
+    {
+      "counter_response": {
+        "return_when": "self_low",
+        "ice_first": false,
+        "finish_low": true
+      },
+      "samples": 1000000,
+      "wins": 22125,
+      "ties": 0,
+      "losses": 977875,
+      "mean_score": 0.022125,
+      "nominal_score_upper": 0.022637995499911356,
+      "screen_below_target": true
+    }
+  ],
+  "exploratory_pairs": 20,
+  "confirmation_comparisons": 4,
+  "family_alpha": 0.01,
+  "target_fixed_reply_lower_bound": 0.027,
+  "prior_archive_sha256": "617ccb8b9d285bca5a6ccdb8cbe017e0192c91625795e31f7bb20fd956b7c1f4",
+  "interpretation": "A pilot selects a concrete state-based counterpolicy and confirmation uses fresh seeds for that response and three ablations. Every game reaches an engine terminal. Nominal one-sided binomial KL bounds count ties as successes and assume independent trials; deterministic pseudorandom sweeps are not exact chance enumeration. A low score falsifies the proposed fixed-policy witness statistically, not the optimal game value or the possibility of a stronger policy. No sampled value enters a certified matrix. The opponent pool is not assumed optimal; no human calibration or deployed bot strength claim is made."
+}
