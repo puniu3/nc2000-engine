@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import math
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-waking-rest-v1'
+stages = {
+    'pilot': (10000, 2026102201, 'waking-rest'),
+    'confirmation': (200000, 2026102237, 'waking-rest'),
+    'regression': (10000, 2026100801, 'late-rest'),
+    'counter-regression': (10000, 2026100901, 'counter-search'),
+}
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def upper(successes, n, delta):
+    p = successes / n
+    if p == 1:
+        return 1.0
+    target = math.log(1 / delta) / n
+    lo, hi = p, 1.0
+    for _ in range(80):
+        q = (lo + hi) / 2
+        if q == 1:
+            break
+        divergence = (p * math.log(p / q) if p else 0) + (1 - p) * math.log((1 - p) / (1 - q))
+        if divergence <= target:
+            lo = q
+        else:
+            hi = q
+    return hi
+
+
+def summarize(records, corpus):
+    assert set(records) == set(stages)
+    for key in ['binary_sha256', 'source_hashes', 'dex_fingerprint', 'revision']:
+        assert len({json.dumps(r['manifest'][key], sort_keys=True) for r in records.values()}) == 1
+    responses = [dict(return_when=when, ice_first=ice, finish_low=finish)
+                 for when in ['always', 'never', 'foe_low', 'foe_frozen', 'self_low']
+                 for ice in [False, True] for finish in [False, True]]
+    for name, record in records.items():
+        n, seed, mode = stages[name]
+        assert record['state_key'] == '199433906935569759004884428941975153695'
+        assert record['manifest']['corpus_sha256'] == sha(corpus)
+        if mode == 'waking-rest':
+            assert record['schema'] == 'nc2000-waking-rest-v1'
+            assert [(a['counter_response'], a['own_policy']) for a in record['arms']] == [
+                (response, own) for response in responses for own in ['after_boom75', 'after_boom_wake75']]
+        for arm in record['arms']:
+            assert arm['samples'] == n and arm['seed'] == seed
+            assert arm['wins'] + arm['ties'] + arm['losses'] == n
+            assert arm['mean_score'] == (arm['wins'] + .5 * arm['ties']) / n
+            assert 0 < arm['max_steps'] <= 2048 and n <= arm['steps'] <= n * 2048
+            assert arm['first_trial_prefix'][0]['choices'] == ['move bodyslam', 'switch 2']
+            if mode == 'waking-rest':
+                assert arm['own_rest_percent'] == 75 and arm['opponent_rest_percent'] == 99
+                assert arm['opponent_waking_rest'] and not arm['opponent_return_boom']
+    old_path = root / 'findings/policy-counterresponse-v1/records.json.gz'
+    old = json.loads(gzip.decompress(old_path.read_bytes()))
+    for name, reference in [('regression', old['regression']), ('counter-regression', old['pilot'])]:
+        assert records[name]['schema'] == reference['schema']
+        assert len(records[name]['arms']) == len(reference['arms'])
+        for before, after in zip(reference['arms'], records[name]['arms']):
+            assert {k: v for k, v in before.items() if k != 'elapsed_ms'} == {k: v for k, v in after.items() if k != 'elapsed_ms'}
+    seed_sets = [{(seed + i * 0x9e3779b97f4a7c15) % (1 << 64) for i in range(n)} for n, seed, _ in stages.values()]
+    assert all(not seed_sets[i].intersection(seed_sets[j]) for i in range(len(seed_sets)) for j in range(i))
+    rows = []
+    arms = records['confirmation']['arms']
+    for index, response in enumerate(responses):
+        pair = arms[index * 2:index * 2 + 2]
+        bounds = [(1 - upper(a['samples'] - a['wins'], a['samples'], .01 / 80),
+                   upper(a['wins'] + a['ties'], a['samples'], .01 / 80)) for a in pair]
+        rows.append(dict(counter_response=response,
+                         scores=[a['mean_score'] for a in pair],
+                         nominal_intervals=bounds,
+                         score_change=pair[1]['mean_score'] - pair[0]['mean_score'],
+                         nominal_change_lower=bounds[1][0] - bounds[0][1],
+                         nominal_change_upper=bounds[1][1] - bounds[0][0]))
+    worst = [min(rows, key=lambda r: r['scores'][i]) for i in range(2)]
+    return dict(schema='nc2000-policy-waking-rest-v1', confirmed_pairs=rows,
+                worst_observed_responses=[r['counter_response'] for r in worst],
+                worst_observed_scores=[r['scores'][i] for i, r in enumerate(worst)],
+                comparisons=20, family_alpha=.01, confirmation_samples_per_arm=200000,
+                prior_archive_sha256=sha(old_path.read_bytes()),
+                interpretation='Only side-zero waking-turn Rest eligibility changes; both policies withhold threshold Rest while a living selected foe has a boom move. All twenty existing counterresponses are confirmed on fresh seeds, without selecting favorable responses. Nominal simultaneous KL intervals bound wins below and wins plus ties above, assume independent trials within each arm, and use a union bound over eighty tails. Shared seeds across policies do not imply independent policy estimates. Seeded rollouts are not exact chance enumeration. The finite opponent pool is a falsification screen, not an optimality assumption or an all-opponent guarantee. No human calibration, certified game-value update, or deployed strength claim is made.')
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    summary = summarize(records, corpus)
+    assert json.loads(json.dumps(summary)) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified twenty paired responses, fresh confirmation, and 38-arm deterministic regression')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-waking-rest-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    for name, (n, seed, study) in stages.items():
+        subprocess.run([str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl'),
+                        str(n), str(seed), str(directory / f'{name}.json'), study], cwd=root, env=env, check=True)
+records = {name: json.loads((directory / f'{name}.json').read_bytes()) for name in stages}
+corpus = (directory / 'corpus.jsonl').read_bytes()
+summary = summarize(records, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(json.dumps({k: summary[k] for k in ['worst_observed_responses', 'worst_observed_scores']}, indent=2))
