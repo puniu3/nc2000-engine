@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+import argparse
+import concurrent.futures
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+summarize_run = runpy.run_path(str(root/'tools/small-gain-probe'))['summarize']
+seed_base = 2026110901
+count = 4
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records,iterations):
+    assert records['ucb']['source_hashes'] == records['exp3']['source_hashes']
+    assert records['ucb']['binary_sha256'] == records['exp3']['binary_sha256']
+    assert records['ucb']['state_key'] == records['exp3']['state_key']
+    parity = None
+    if iterations == 864000:
+        old = json.loads(gzip.decompress((root/'findings/hp-probe-seeds-v1/records.json.gz').read_bytes()))['bucketed']
+        assert records['ucb']['rows'] == old['rows']
+        parity = 'All four default search seeds reproduce the archived pre-change rows exactly.'
+    rows = []
+    groups = []
+    for mode,record in records.items():
+        assert record.get('continuation_exp3_ix',False) == (mode=='exp3')
+        assert record['fresh_probes'] and record.get('hp_buckets',16)==16
+        assert (record['search_seed_base'],record['search_seeds'],record['iterations'],record['probe_iterations']) == (seed_base,count,iterations,iterations*2//5)
+        assert record['proof']['value'][1]-record['proof']['value'][0] < 1e-5
+        assert len(record['rows']) == count*4
+        for index in range(count):
+            selected = [r for r in record['rows'] if r['seed_index']==index]
+            seed = seed_base ^ ((index*0x94d049bb133111eb)%(1<<64))
+            assert [(r['mode'],r['side']) for r in selected] == [('full',0),('pinned',0),('full',1),('pinned',1)]
+            assert all(r['seed']==seed for r in selected)
+            result = summarize_run({**record,'search_seeds':1,'rows':selected})
+            for r in selected:
+                if r['mode']!='pinned':
+                    continue
+                side=r['side']
+                own=record['actions'][side].index('move curse' if side==0 else 'move destinybond')
+                reply=record['actions'][1-side].index('move destinybond' if side==0 else 'move curse')
+                cell=next(c for c in r['fresh_evidence']['phase_types'][0]['cells'] if c['own']==own and c['reply']==reply)
+                n1=len(record['actions'][1])
+                lo,hi=record['proof']['cells'][own*n1+reply if side==0 else reply*n1+own]
+                if side==1:
+                    lo,hi=1-hi,1-lo
+                rows.append(dict(mode=mode,side=side,seed=seed,fresh_mean=cell['mean'],
+                                 fresh_bias=[cell['mean']-hi,cell['mean']-lo],result=result['rows'][side]))
+        for side in range(2):
+            rr=[r for r in rows if r['mode']==mode and r['side']==side]
+            phases={}
+            for phase in ['cumulative_analysis','phase_analysis']:
+                aa=[r['result']['analyses'][phase] for r in rr]
+                phases[phase]=dict(mean_loss=[sum(a['loss'][k] for a in aa)/count for k in [0,1]],
+                    worst_loss_upper=max(a['loss'][1] for a in aa),
+                    positive_margins=sum(a['passes_positive_margin'] for a in aa),
+                    worse_than_fallback=sum(r['result']['analyses'][phase]['loss'][0]>r['result']['fallback_loss'][1] for r in rr))
+            groups.append(dict(mode=mode,side=side,phases=phases,
+                               fresh_bias_range=[min(r['fresh_bias'][0] for r in rr),max(r['fresh_bias'][1] for r in rr)]))
+    pairs=[]
+    for a in (r for r in rows if r['mode']=='ucb'):
+        b=next(r for r in rows if r['mode']=='exp3' and r['side']==a['side'] and r['seed']==a['seed'])
+        pairs.append(dict(side=a['side'],seed=a['seed'],exp3_minus_ucb_loss={
+            phase:[b['result']['analyses'][phase]['loss'][0]-a['result']['analyses'][phase]['loss'][1],
+                   b['result']['analyses'][phase]['loss'][1]-a['result']['analyses'][phase]['loss'][0]]
+            for phase in ['cumulative_analysis','phase_analysis']}))
+    return dict(iterations=iterations,default_parity=parity,groups=groups,pairs=pairs,rows=rows,
+                algorithm=dict(source='https://proceedings.neurips.cc/paper/2015/file/e5a4d6bf330f23a8707bb0d6001dfbe8-Paper.pdf',
+                    eta='sqrt(log(K)/(K*t))',gamma='eta/2',update='chosen loss/(p+gamma)',
+                    selection='softmax(-eta*cumulative_estimated_loss)',scope='Non-root, non-preview tree nodes only.'),
+                scope='Paired search seeds on one certified known-type fixture at equal iterations. '
+                      'Losses concern first-action distributions under optimal continuation. '
+                      'Bandit regret guarantees are not transferred to the stochastic game, hidden '
+                      'information, or the mixed-policy admission gate. No general-strength or matched-time claim.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--iterations',type=int,default=864000)
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    archive=root/'findings/continuation-exp3-v1'/str(args.iterations)
+    if args.verify_only:
+        records=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(records,args.iterations)==json.loads((archive/'summary.json').read_text())
+        print('continuation-exp3: verified controls, paired seeds, probe counts and certified losses')
+        return
+    assert args.iterations>1 and not archive.exists()
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    binary=root/'target/release/examples/counter_mix_probe'
+    if args.import_directory:
+        directory=args.import_directory
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
+        directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-continuation-exp3-'))
+        print(directory,flush=True)
+        def run(mode):
+            with (directory/f'{mode}.log').open('w') as log:
+                subprocess.run([str(binary),str(directory/mode),'2,3,4,5',str(count),str(args.iterations),str(seed_base),
+                    'bond',str(args.iterations*2//5),'fresh','16',mode],cwd=root,env=env,stdout=log,stderr=log,check=True)
+            print(f'{mode} complete',flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            list(pool.map(run,['ucb','exp3']))
+    records={mode:json.loads((directory/mode/'records.json').read_text()) for mode in ['ucb','exp3']}
+    for record in records.values():
+        assert all(sha((root/p).read_bytes())==h for p,h in record['source_hashes'])
+        assert sha(binary.read_bytes())==record['binary_sha256']
+    report=summarize(records,args.iterations)
+    archive.mkdir(parents=True)
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(records,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report['groups'],indent=2))
+
+
+if __name__=='__main__':
+    main()

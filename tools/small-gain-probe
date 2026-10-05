@@ -71,6 +71,7 @@ def main():
     parser.add_argument('--hp-buckets', type=int, default=16)
     parser.add_argument('--trace', action='store_true')
     parser.add_argument('--seed', type=int, default=2026110801)
+    parser.add_argument('--exp3', action='store_true')
     args = parser.parse_args()
     assert not args.trace or args.fresh
     probes = args.iterations*2//5 if args.probe_iterations is None else args.probe_iterations
@@ -83,6 +84,8 @@ def main():
         label += '-trace'
     if args.seed != 2026110801:
         label += f'-seed{args.seed}'
+    if args.exp3:
+        label += '-exp3'
     archive = root / 'findings/small-gain-probe-v1' / label
     if args.verify_only:
         bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
@@ -96,7 +99,7 @@ def main():
     directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-small-gain-'))
     with (directory/'run.log').open('w') as log:
         mode = 'fresh-trace' if args.trace else 'fresh' if args.fresh else 'typed'
-        subprocess.run([str(binary),str(directory/'run'),'2,3,4,5','1',str(args.iterations),str(args.seed),'bond',str(probes),mode,str(args.hp_buckets)],
+        subprocess.run([str(binary),str(directory/'run'),'2,3,4,5','1',str(args.iterations),str(args.seed),'bond',str(probes),mode,str(args.hp_buckets),'exp3' if args.exp3 else 'ucb'],
                        cwd=root,env=env,stdout=log,stderr=log,check=True)
     record = json.loads((directory/'run/records.json').read_text())
     assert all(sha((root/p).read_bytes()) == value for p,value in record['source_hashes'])

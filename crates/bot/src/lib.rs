@@ -55,6 +55,7 @@ pub mod pick_prior;
 pub mod preview;
 pub mod prior;
 pub mod regret;
+mod exp3;
 pub mod rng;
 pub mod root_policy;
 pub mod runner;

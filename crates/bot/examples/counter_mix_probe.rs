@@ -68,8 +68,8 @@ fn step(
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert!(
-        (6..=10).contains(&args.len()),
-        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed|fresh|fresh-trace] [hp-buckets]"
+        (6..=11).contains(&args.len()),
+        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed|fresh|fresh-trace] [hp-buckets] [ucb|exp3]"
     );
     let family = args.get(6).map(String::as_str).unwrap_or("counter");
     assert!(matches!(family, "counter" | "bond"));
@@ -86,6 +86,11 @@ fn main() {
     let fresh = trace || args.get(8).map(String::as_str) == Some("fresh");
     let adaptive = typed || args.get(8).map(String::as_str) == Some("adaptive");
     let hp_buckets: i64 = args.get(9).map(|s| s.parse().unwrap()).unwrap_or(16);
+    let continuation_exp3_ix = match args.get(10).map(String::as_str).unwrap_or("ucb") {
+        "ucb" => false,
+        "exp3" => true,
+        mode => panic!("unknown continuation mode {mode}"),
+    };
     let dex = conformance::load_dex();
     let teams: [Vec<PokemonSet>; 2] = if family == "bond" {
         bond::teams()
@@ -200,6 +205,7 @@ fn main() {
             RmConfig {
                 c: 0.4,
                 hp_buckets,
+                continuation_exp3_ix,
                 ..Default::default()
             },
             search_seed,
@@ -214,6 +220,7 @@ fn main() {
                 RmConfig {
                     c: 0.4,
                     hp_buckets,
+                    continuation_exp3_ix,
                     ..Default::default()
                 },
                 s,
@@ -310,6 +317,7 @@ fn main() {
         "crates/bot/src/root_policy.rs",
         "crates/bot/src/blind.rs",
         "crates/bot/src/smmcts.rs",
+        "crates/bot/src/exp3.rs",
         "crates/bot/src/belief.rs",
         "crates/bot/src/observe.rs",
         "crates/bot/src/eval.rs",
@@ -326,6 +334,7 @@ fn main() {
         "interpretation":"Legal prefix; fixed known loadouts. Pinned beliefs reconstructed from preview. No shipped-pool or human calibration claim. Matrix continuation values bound the first-action distribution with optimal subsequent play."});
     if fresh { output["fresh_probes"] = json!(true); }
     if trace { output["trace_probes"] = json!(true); }
+    if continuation_exp3_ix { output["continuation_exp3_ix"] = json!(true); }
     if hp_buckets != 16 { output["hp_buckets"] = json!(hp_buckets); }
     std::fs::write(
         out.join("records.json"),

@@ -96,6 +96,7 @@ pub struct RmConfig {
     pub mix_actions: usize,
     /// UCB1 exploration constant.
     pub c: f64,
+    pub continuation_exp3_ix: bool,
     /// Tree horizon in turns (same meaning as `MctsConfig::horizon`).
     pub horizon: u16,
     /// Rollout policy + leaf eval (shared with the M6 agent).
@@ -156,6 +157,7 @@ impl Default for RmConfig {
             probe: 0.25,
             mix_actions: 3,
             c: 1.0,
+            continuation_exp3_ix: false,
             horizon: 100,
             playout: Playout::heavy(),
             threshold: 0.5,
@@ -181,6 +183,7 @@ pub(crate) struct Node {
     pub(crate) w: [Vec<f64>; 2],
     /// Team-preview node (always UCB1 + argmax).
     pub(crate) preview: bool,
+    exp3: [Option<crate::exp3::Exp3Ix>; 2],
 }
 
 pub enum SearchTrace<'a> {
@@ -207,6 +210,7 @@ impl Node {
             n: [vec![0; acts[0].len()], vec![0; acts[1].len()]],
             w: [vec![0.0; acts[0].len()], vec![0.0; acts[1].len()]],
             preview,
+            exp3: [None, None],
             acts,
         }
     }
@@ -411,6 +415,7 @@ pub(crate) fn run_iteration_with_leaf(
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
 ) -> f64 {
     let mut path: Vec<(usize, usize, usize)> = Vec::new(); // (node, side, act)
+    let mut exp3_path = Vec::new();
     let mut node_idx = start;
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
@@ -430,6 +435,14 @@ pub(crate) fn run_iteration_with_leaf(
                     Some(f) if at_root => {
                         nodes[node_idx].n[s][f] += 1;
                         f
+                    }
+                    _ if cfg.continuation_exp3_ix && !at_root && !nodes[node_idx].preview => {
+                        let node = &mut nodes[node_idx];
+                        let draw = node.exp3[s].get_or_insert_with(|| crate::exp3::Exp3Ix::new(k)).sample(rng);
+                        let action = draw.action;
+                        node.n[s][action] += 1;
+                        exp3_path.push((node_idx,s,draw));
+                        action
                     }
                     _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
                 };
@@ -493,6 +506,9 @@ pub(crate) fn run_iteration_with_leaf(
     // ---- backprop: UCB stats along the path
     for (ni, s, ai) in path {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
+    }
+    for (ni,s,draw) in exp3_path {
+        nodes[ni].exp3[s].as_mut().unwrap().observe(draw,if s==0 {1.-reward0} else {reward0});
     }
     reward0
 }
