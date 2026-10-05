@@ -12,7 +12,7 @@ use nc2000_engine::battle::{Outcome, PokemonSet};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
 
-use crate::agent::Agent;
+use crate::agent::{Agent, RootSearchStats};
 use crate::rng::SplitMix64;
 use crate::runner::{play_game, GameResult};
 
@@ -68,6 +68,10 @@ impl DuelSpec {
 
 #[derive(Clone, Debug)]
 pub struct DuelStats {
+    pub a_root_search: Option<RootSearchStats>,
+    pub b_root_search: Option<RootSearchStats>,
+    pub game_root_search: Vec<[Option<RootSearchStats>; 2]>,
+    pub game_scores: Vec<f64>,
     pub games: usize,
     /// Number of independent schedule blocks. Each block is the same teams
     /// and battle seed played once with A on each side.
@@ -182,7 +186,7 @@ pub fn run_duel(
     let t0 = Instant::now();
 
     // per-game record: score, turns, cap flag, aggregate and per-move timing.
-    type Rec = (f64, u16, bool, u64, u64, Vec<u64>, u64, u64, Vec<u64>);
+    type Rec = (f64, u16, bool, u64, u64, Vec<u64>, u64, u64, Vec<u64>, [Option<RootSearchStats>; 2]);
     let mut results: Vec<Rec> = Vec::with_capacity(games);
     std::thread::scope(|scope| {
         let mut handles = Vec::new();
@@ -236,12 +240,14 @@ pub fn run_duel(
                         GameResult::Outcome(Outcome::Tie) | GameResult::TurnCapped => 0.5,
                     };
                     let a_score = if g.a_is_p1 { p1_score } else { 1.0 - p1_score };
+                    let root_search = [agent_a.inner.root_search_stats(), agent_b.inner.root_search_stats()];
                     out.push((
                         i,
                         (
                             a_score, battle.turn, matches!(res, GameResult::TurnCapped),
                             agent_a.ns, agent_a.moves, agent_a.samples_ns,
                             agent_b.ns, agent_b.moves, agent_b.samples_ns,
+                            root_search,
                         ),
                     ));
                     let d = done.fetch_add(1, Ordering::Relaxed) + 1;
@@ -282,6 +288,10 @@ pub fn run_duel(
     b_samples.sort_unstable();
     let turns_sum = results.iter().map(|r| r.1 as u64).sum();
     DuelStats {
+        a_root_search: results.iter().filter_map(|r| r.9[0]).reduce(|mut a,b| {a+=b;a}),
+        b_root_search: results.iter().filter_map(|r| r.9[1]).reduce(|mut a,b| {a+=b;a}),
+        game_root_search: results.iter().map(|r|r.9).collect(),
+        game_scores: results.iter().map(|r|r.0).collect(),
         games: results.len(),
         pairs: pair_scores.len(),
         wins,

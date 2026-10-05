@@ -68,7 +68,7 @@ use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::prng::DamageRollMode;
 use nc2000_engine::state::Battle;
 
-use crate::agent::Agent;
+use crate::agent::{Agent, RootSearchStats};
 use crate::belief::{Belief, FallbackPolicy};
 use crate::observe::Observer;
 use crate::preview::{MetaPool, TableSet};
@@ -99,6 +99,8 @@ pub struct BlindAgent {
     prior: Option<Arc<BeliefPrior>>,
     game: Option<GameState>,
     adaptive_mixture: Option<AdaptiveMixture>,
+    decision_policy: Option<Vec<f64>>,
+    root_stats: RootSearchStats,
 }
 
 impl BlindAgent {
@@ -136,6 +138,8 @@ impl BlindAgent {
             prior: None,
             game: None,
             adaptive_mixture: None,
+            decision_policy: None,
+            root_stats: RootSearchStats::default(),
         }
     }
 
@@ -185,12 +189,21 @@ impl BlindAgent {
     fn search(&mut self, battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoice]) -> SearchChoice {
         let g = self.game.as_ref().expect("search after lifecycle setup");
         if !matches!(choices[0], SearchChoice::Team(_)) {
+            self.root_stats.searches += 1;
             if let Some(mixture) = self.adaptive_mixture.as_mut() {
                 let mut search = BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
                 debug_assert_eq!(search.actions(), choices);
-                search.finish_with_mixed_probes(dex, &g.belief, &g.observer, self.cfg.iterations, mixture.probe_iterations);
+                let probes = search.finish_with_mixed_probes(dex, &g.belief, &g.observer, self.cfg.iterations, mixture.probe_iterations);
+                self.root_stats.probed_searches += u64::from(probes > 0);
+                self.root_stats.probe_iterations += u64::from(probes);
                 self.rng = search.rng.clone();
-                return search.sample_mixed(mixture.rng.next_f64()).expect("search called with a non-empty choice list");
+                self.decision_policy = search.mixed_policy().map(|mixed| mixed.policy);
+                let draw = mixture.rng.next_f64();
+                if let Some(policy) = &self.decision_policy {
+                    self.root_stats.mixed_searches += 1;
+                    return draw_policy(choices, policy, draw).unwrap();
+                }
+                return search.best().expect("search called with a non-empty choice list");
             }
         }
         search_choose(&self.cfg, &mut self.rng, g, battle, dex, side, choices)
@@ -263,8 +276,17 @@ pub fn open_preview_pick(
     Some(SearchChoice::Team(tables.actions()[sample_mixed(p, rng)]))
 }
 
-/// One draw from a mixed policy (one `next_f64`; degenerate rows fall back
-/// to argmax — same rule and rng pattern as `BakedPreviewAgent`).
+fn draw_policy(actions: &[SearchChoice], policy: &[f64], draw: f64) -> Option<SearchChoice> {
+    let mut total = 0.;
+    let mut last = None;
+    for (&action, &mass) in actions.iter().zip(policy) {
+        if mass > 0. { last = Some(action); }
+        total += mass;
+        if draw < total { return Some(action); }
+    }
+    last
+}
+
 fn sample_mixed(p: &[f64], rng: &mut SplitMix64) -> usize {
     let u = rng.next_f64();
     let mut acc = 0.0;
@@ -976,14 +998,7 @@ impl BlindSearch {
     pub fn sample_mixed(&self, draw: f64) -> Option<SearchChoice> {
         assert!(draw.is_finite() && (0.0..1.0).contains(&draw));
         let Some(mixed) = self.mixed_policy() else { return self.best(); };
-        let mut total = 0.;
-        let mut last = None;
-        for (i, &mass) in mixed.policy.iter().enumerate() {
-            if mass > 0. { last = Some(self.my_acts[i]); }
-            total += mass;
-            if draw < total { return Some(self.my_acts[i]); }
-        }
-        last
+        draw_policy(&self.my_acts, &mixed.policy, draw)
     }
 
     /// Experimental fixed-budget best-arm rule: argmax empirical mean over
@@ -1136,6 +1151,29 @@ impl Agent for OpenAgent {
 }
 
 impl Agent for BlindAgent {
+    fn root_search_stats(&self) -> Option<RootSearchStats> { Some(self.root_stats) }
+
+    fn root_policy(&mut self, battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoice]) -> Vec<f64> {
+        let picked = self.choose(battle, dex, side, choices);
+        if let Some(policy) = &self.decision_policy { return policy.clone(); }
+        if matches!(choices[0], SearchChoice::Team(_)) {
+            if let (Some(tables), Some(game)) = (&self.tables, &self.game) {
+                if game.belief.candidate_count() == 1 {
+                    if let Some(me) = tables.side_index(battle, side) {
+                        if let Some((table, first)) = tables.pair_by_idx(me, game.belief.alive()[0]) {
+                            let policy = if first { &table.sol.p_a } else { &table.sol.p_b };
+                            let aligned: Vec<f64> = choices.iter().map(|action|
+                                tables.actions().iter().position(|t| SearchChoice::Team(*t) == *action)
+                                    .map_or(0., |i| policy[i])).collect();
+                            if (aligned.iter().sum::<f64>() - 1.).abs() < 1e-8 { return aligned; }
+                        }
+                    }
+                }
+            }
+        }
+        choices.iter().map(|&c| if c == picked {1.} else {0.}).collect()
+    }
+
     fn name(&self) -> String {
         let mut name = format!("blind:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets);
         if let Some(mixture) = &self.adaptive_mixture {
@@ -1153,7 +1191,7 @@ impl Agent for BlindAgent {
     ) -> SearchChoice {
         let is_preview = matches!(choices[0], SearchChoice::Team(_));
 
-        // ---- per-game lifecycle: (re)build at preview / on a new game
+        self.decision_policy = None;
         let stale = match &self.game {
             None => true,
             Some(g) => g.side != side || is_preview || battle.turn < g.last_turn,
@@ -1302,6 +1340,7 @@ mod mixed_selection_tests {
         ] {
             let mut battle = Battle::from_fixture(&dex, "1,2,3,4",
                 &[set("Starmie", &["Return", "Surf"])], &[set(foe, &moves)]).unwrap();
+            let preview = battle.clone();
             let mut observer = Observer::new(&battle, 0);
             let mut belief = Belief::pinned_from_battle(&battle, &observer);
             battle.choose(&dex, 0, "team 1").unwrap();
@@ -1324,6 +1363,24 @@ mod mixed_selection_tests {
             assert_eq!(agent.choose(&battle, &dex, 0, &legal), expected);
             assert_eq!(agent.search_rng_state(), reference.rng.0);
             assert_eq!(agent.adaptive_mixture.as_ref().unwrap().rng.0, draws.0);
+            let stats = RootSearchStats {searches:1, probed_searches:u64::from(probes>0),
+                probe_iterations:u64::from(probes), mixed_searches:u64::from(expect_mix)};
+            assert_eq!(agent.root_search_stats(), Some(stats));
+            let obs = agent.game.as_ref().unwrap().observer.clone();
+            let mut exporter = BlindAgent::new(cfg.clone(), Arc::new(MetaPool {teams:vec![]}), None, 7)
+                .with_adaptive_mixture(reserve);
+            exporter.game = Some(GameState {side:0, last_turn:battle.turn,
+                belief:Belief::pinned_from_battle(&preview,&obs), observer:obs});
+            let expected_policy = reference.mixed_policy().map(|m|m.policy)
+                .unwrap_or_else(||legal.iter().map(|&a|if a==expected {1.} else {0.}).collect());
+            assert_eq!(exporter.root_policy(&battle,&dex,0,&legal), expected_policy);
+            assert_eq!(exporter.root_search_stats(), Some(stats));
+            assert_eq!(exporter.search_rng_state(), agent.search_rng_state());
+            let mut forced = battle.clone(); let id = forced.active_id(0).unwrap();
+            forced.poke_mut(id).get_move_slot_mut(dex.moves.id("return").unwrap()).unwrap().pp = 0;
+            let only = forced.legal_choices(&dex,0); assert_eq!(only.len(),1);
+            assert_eq!(exporter.root_policy(&forced,&dex,0,&only),vec![1.]);
+            assert_eq!(exporter.root_search_stats(), Some(stats));
             if !expect_mix {
                 assert_eq!(probes, 0);
                 let g = agent.game.as_ref().unwrap();

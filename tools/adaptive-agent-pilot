@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+import argparse
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+destination = root / 'findings/adaptive-agent-pilot-v1'
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def check(row, games, iterations):
+    assert row['result']['games'] == games and row['result']['invalid_games'] == 0
+    assert row['config']['teams'] == 24 and row['config']['baked_tables'] == 0
+    assert row['config']['team_pool_path'] == 'data/team-pool-v2/team-pool.json'
+    assert row['config']['belief_pool_path'] == 'data/belief-pool-v3/belief-pool.json'
+    stats = row['root_search']
+    assert len(stats['games']) == len(row['result']['game_scores']) == games
+    for side, key in enumerate(['a', 'b']):
+        total = stats[key]
+        assert total == {k: sum(pair[side][k] for pair in stats['games']) for k in total}
+        for counts in [total] + [pair[side] for pair in stats['games']]:
+            assert counts['mixed_searches'] <= counts['searches']
+            assert counts['probed_searches'] <= counts['searches']
+            assert counts['probe_iterations'] == (iterations * 2 // 5) * counts['probed_searches']
+    scores = row['result']['game_scores']
+    assert [(a+b)/2 for a,b in zip(scores[::2], scores[1::2])] == row['result']['pair_scores']
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+    binary = root / 'target/release/examples/arena'
+    if not args.verify_only:
+        assert not destination.exists()
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','arena'],cwd=root,env=env,check=True)
+        destination.mkdir()
+        paths = ['crates/bot/src/agent.rs','crates/bot/src/blind.rs','crates/bot/src/duel.rs','crates/bot/src/root_policy.rs',
+                 'crates/bot/examples/arena.rs','data/team-pool-v2/team-pool.json','data/belief-pool-v3/belief-pool.json']
+        (destination/'manifest.json').write_text(json.dumps(dict(binary_sha256=sha(binary),
+            source_sha256={p:sha(root/p) for p in paths}),indent=2)+'\n')
+        for label, games, iterations, other, seed in [('null',4,1000,':mix',2026111600),('pilot',32,27000,'',2026111601)]:
+            base = f'blind:{iterations}:0.4'
+            command = [str(binary),base+':mix',base+other,'--games',str(games),'--seed',str(seed),'--threads','4',
+                       '--pool','meta','--teams','data/team-pool-v2/team-pool.json',
+                       '--belief-pool','data/belief-pool-v3/belief-pool.json','--crn-seeds','--jsonl',str(destination/f'{label}.jsonl')]
+            with (destination/f'{label}.log').open('w') as log:
+                subprocess.run(command,cwd=root,env=env,stdout=log,stderr=subprocess.STDOUT,check=True)
+            print(label+' complete',flush=True)
+    rows = {}
+    for label, games, iterations in [('null',4,1000),('pilot',32,27000)]:
+        path = destination/f'{label}.jsonl'
+        subprocess.run([str(binary),'--validate-jsonl',str(path)],cwd=root,env=env,check=True)
+        lines = path.read_text().splitlines();assert len(lines)==1
+        row = rows[label] = json.loads(lines[0]);check(row,games,iterations)
+    control = rows['null']
+    assert control['result']['pair_scores'] == [0.5,0.5]
+    assert control['root_search']['a'] == control['root_search']['b']
+    for a,b in zip(control['root_search']['games'][::2],control['root_search']['games'][1::2]):
+        assert a == b[::-1]
+    row = rows['pilot'];a,b = row['root_search']['a'],row['root_search']['b']
+    assert b['mixed_searches'] == b['probed_searches'] == b['probe_iterations'] == 0
+    summary = dict(games=32,pairs=16,result=row['result'],root_search=dict(a=a,b=b),
+        mixed_rate=a['mixed_searches']/max(1,a['searches']),probe_rate=a['probed_searches']/max(1,a['searches']),
+        mean_think_ms={side:row['timing'][side]['mean_ms'] for side in ['a','b']},
+        games_with_mixing=sum(pair[0]['mixed_searches']>0 for pair in row['root_search']['games']),
+        scope='Uniform scheduling from the current 24-team catalog with the weighted 103-candidate belief pool; both agents use 27000 iterations. Timing is measured, not forced equal wall time. Root telemetry counts non-preview decisions with at least two legal actions. Sixteen paired schedule blocks screen activation and regressions, not optimality or general strength.')
+    path = destination/'summary.json'
+    if args.verify_only:
+        assert summary == json.loads(path.read_text())
+        print('adaptive-agent-pilot: verified telemetry sums, paired scores and current-pool inputs')
+    else:
+        path.write_text(json.dumps(summary,indent=2)+'\n');print(json.dumps(summary,indent=2))
+
+
+if __name__ == '__main__':
+    main()

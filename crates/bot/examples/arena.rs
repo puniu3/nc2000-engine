@@ -783,9 +783,13 @@ fn main() {
     let is_blind = spec_a.is_blind() || spec_b.is_blind();
     let needs_meta =
         pool_spec.starts_with("meta") || spec_a.needs_tables() || spec_b.needs_tables();
-    let meta_path = root.join("data/meta-pool-v0/meta-pool.json");
+    let meta_path = flag(&args, "--belief-pool").map(PathBuf::from)
+        .unwrap_or_else(||root.join("data/meta-pool-v0/meta-pool.json"));
     let meta = needs_meta.then(|| Arc::new(load_meta_pool(&meta_path)));
-    let teams = if let Some(range) = pool_spec.strip_prefix("meta") {
+    let team_pool_path = flag(&args, "--teams");
+    let teams = if let Some(path) = &team_pool_path {
+        load_meta_pool(Path::new(path)).teams.into_iter().map(|team|team.sets).collect()
+    } else if let Some(range) = pool_spec.strip_prefix("meta") {
         let pool = meta.as_ref().unwrap();
         let (lo, hi) = match range.strip_prefix(':') {
             None => (0, pool.teams.len() - 1),
@@ -995,6 +999,8 @@ fn main() {
                 "agent_a_iterations": spec_a.iterations(),
                 "agent_b_iterations": spec_b.iterations(),
                 "pool": pool_spec,
+                "team_pool_path": team_pool_path,
+                "belief_pool_path": meta_path,
                 "teams": teams.len(),
                 "baked_tables": tables.as_ref().map_or(0, |t| t.len()),
                 "log_on": is_blind,
@@ -1012,11 +1018,13 @@ fn main() {
                 "ci95": ci95,
                 "ci_unit": "side_swap_pair",
                 "pair_scores": &stats.pair_scores,
+                "game_scores": &stats.game_scores,
                 "split_pairs": split,
                 "turns_sum": stats.turns_sum,
                 "avg_turns": stats.avg_turns,
                 "wall_secs": stats.secs,
             },
+            "root_search": {"a":stats.a_root_search,"b":stats.b_root_search,"games":stats.game_root_search},
             "timing": {
                 "unit": "choose_call",
                 "a": {

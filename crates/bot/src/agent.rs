@@ -8,8 +8,27 @@ use nc2000_engine::state::{Battle, Pokemon};
 
 use crate::rng::SplitMix64;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct RootSearchStats {
+    pub searches: u64,
+    pub probed_searches: u64,
+    pub probe_iterations: u64,
+    pub mixed_searches: u64,
+}
+
+impl std::ops::AddAssign for RootSearchStats {
+    fn add_assign(&mut self, other: Self) {
+        self.searches += other.searches;
+        self.probed_searches += other.probed_searches;
+        self.probe_iterations += other.probe_iterations;
+        self.mixed_searches += other.mixed_searches;
+    }
+}
+
 pub trait Agent {
     fn name(&self) -> String;
+
+    fn root_search_stats(&self) -> Option<RootSearchStats> { None }
 
     /// Pick one of `choices` for `side`. `choices` is non-empty and was
     /// enumerated by the caller via `Battle::legal_choices` at this exact

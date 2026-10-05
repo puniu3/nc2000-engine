@@ -74,6 +74,35 @@ fn pick(agent: &mut dyn Agent, battle: &Battle, side: usize) -> SearchChoice {
 }
 
 #[test]
+fn blind_preview_exports_the_baked_distribution_in_both_orientations() {
+    let dex = load_dex();
+    let mut pool = load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json"));
+    pool.teams.truncate(2); let pool = Arc::new(pool);
+    let mut table = test_table(&pool.teams[0].id, &pool.teams[1].id);
+    table.sol.p_a[3]=0.25;table.sol.p_a[12]=0.75;
+    table.sol.p_b[12]=0.6;table.sol.p_b[30]=0.4;
+    let policies = [table.sol.p_a.clone(),table.sol.p_b.clone()];
+    let mut tables = TableSet::from_pool(&dex,&pool);tables.add_pair(table).unwrap();
+    let tables = Arc::new(tables);
+    for order in [[0,1],[1,0]] {
+        let mut battle = Battle::from_fixture(&dex,"1,2,3,4",&pool.teams[order[0]].sets,&pool.teams[order[1]].sets).unwrap();
+        for side in 0..2 {
+            let mut agent = nc2000_bot::BlindAgent::new(nc2000_bot::RmConfig {iterations:100,..Default::default()},
+                pool.clone(),Some(tables.clone()),7).with_adaptive_mixture(40);
+            let choices = battle.legal_choices(&dex,side);
+            let policy = agent.root_policy(&battle,&dex,side,&choices);
+            assert_eq!(policy.iter().filter(|&&p|p>0.).count(),2);
+            assert!((policy.iter().sum::<f64>()-1.).abs()<1e-12);
+            for (&action,&p) in choices.iter().zip(&policy) {
+                let index = tables.actions().iter().position(|t|SearchChoice::Team(*t)==action);
+                assert_eq!(p,index.map_or(0.,|i|policies[order[side]][i]));
+            }
+            assert_eq!(agent.root_search_stats().unwrap().searches,0);
+        }
+    }
+}
+
+#[test]
 fn baked_and_counter_agents_honor_table_orientation() {
     let dex = load_dex();
     let pool = load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json"));
