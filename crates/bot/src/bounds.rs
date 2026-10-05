@@ -60,6 +60,7 @@ pub struct BoundConfig {
     /// in either roster can observe them. The key domain is tagged, so a
     /// solver reused across safe and unsafe corpus roots cannot cross-merge.
     pub dead_damage_quotient: bool,
+    pub dead_quick_claw_quotient: bool,
     /// Fold terminal successor mass directly into its parent cell instead
     /// of retaining one graph node per terminal fingerprint.
     pub fold_terminal_nodes: bool,
@@ -103,6 +104,7 @@ impl Default for BoundConfig {
             trial_depth: 24,
             descend_floor: 0.1,
             dead_damage_quotient: true,
+            dead_quick_claw_quotient: false,
             fold_terminal_nodes: true,
             fold_closed_nodes: true,
             monotone_stall_scheduling: true,
@@ -370,6 +372,8 @@ struct Pending {
 enum NodeKey {
     Exact(u128),
     NoDamageBookkeeping(u128),
+    NoQuickClawRoll(u128),
+    NoDamageOrQuickClawRoll(u128),
 }
 
 struct Cell {
@@ -966,7 +970,11 @@ impl<'d> BoundSolver<'d> {
     }
 
     fn node_key(&self, b: &Battle) -> NodeKey {
-        if self.cfg.dead_damage_quotient && !b.damage_bookkeeping_observable(self.dex) {
+        let omit_damage = self.cfg.dead_damage_quotient && !b.damage_bookkeeping_observable(self.dex);
+        if self.cfg.dead_quick_claw_quotient && !b.quick_claw_roll_observable(self.dex) {
+            let key = b.state_key128_without_quick_claw_roll(self.dex, omit_damage);
+            if omit_damage { NodeKey::NoDamageOrQuickClawRoll(key) } else { NodeKey::NoQuickClawRoll(key) }
+        } else if omit_damage {
             NodeKey::NoDamageBookkeeping(b.state_key128_without_damage_bookkeeping())
         } else {
             NodeKey::Exact(b.state_key128())
@@ -2037,6 +2045,87 @@ mod tests {
 
     fn battle(dex: &nc2000_engine::dex::Dex, moves0: &[&str], moves1: &[&str]) -> Battle {
         Battle::from_fixture(dex, "1,2,3,4", &[mon(moves0)], &[mon(moves1)]).unwrap()
+    }
+
+    #[test]
+    fn quick_claw_quotient_guards_every_roster_and_keeps_key_domains_separate() {
+        let dex = conformance::load_dex();
+        let mut root = Battle::from_fixture(&dex,"1,2,3,4",
+            &[mon(&["Thief"]),mon(&["Splash"])],&[mon(&["Splash"])]).unwrap();
+        let solver = BoundSolver::new(&dex,BoundConfig { dead_quick_claw_quotient:true,..BoundConfig::default() });
+        for damage in [false,true] {
+            let solver = BoundSolver::new(&dex,BoundConfig { dead_quick_claw_quotient:true,
+                dead_damage_quotient:damage,..BoundConfig::default() });
+            let mut alternate = root.clone();
+            alternate.quick_claw_roll = !root.quick_claw_roll;
+            assert_eq!(solver.node_key(&root),solver.node_key(&alternate));
+            assert_ne!(solver.node_key(&root),BoundSolver::new(&dex,BoundConfig {
+                dead_damage_quotient:damage,..BoundConfig::default() }).node_key(&root));
+        }
+        for (side,slot,fainted) in [(0,0,false),(0,1,false),(0,1,true),(1,0,false)] {
+            let mut holder = root.clone();
+            holder.sides[side].roster[slot].item = dex.known_items.quickclaw;
+            holder.sides[side].roster[slot].fainted = fainted;
+            assert!(holder.quick_claw_roll_observable(&dex));
+            let mut alternate = holder.clone();
+            alternate.quick_claw_roll = !holder.quick_claw_roll;
+            assert_ne!(solver.node_key(&holder),solver.node_key(&alternate));
+        }
+        root.sides[0].roster[0].move_slots = battle(&dex,&["Counter"],&["Splash"]).sides[0].roster[0].move_slots.clone();
+        assert!(matches!(solver.node_key(&root),NodeKey::NoQuickClawRoll(_)));
+    }
+
+    #[test]
+    fn quick_claw_quotient_preserves_complete_kernels_with_switches_and_thief() {
+        let dex = conformance::load_dex();
+        let mut root = Battle::from_fixture(&dex,"1,2,3,4",
+            &[mon(&["Thief","Splash"]),mon(&["Quick Attack"])],
+            &[mon(&["Quick Attack","Splash"])]).unwrap();
+        let preview = [0,1].map(|side|root.legal_choices(&dex,side).first().copied());
+        root.apply_choices(&dex,preview).unwrap();
+        let solver = BoundSolver::new(&dex,BoundConfig { dead_quick_claw_quotient:true,..BoundConfig::default() });
+        let mut alternate = root.clone();
+        alternate.quick_claw_roll = !root.quick_claw_roll;
+        let legal = [0,1].map(|side|root.legal_choices(&dex,side));
+        assert_eq!(legal,[0,1].map(|side|alternate.legal_choices(&dex,side)));
+        for &a in &legal[0] { for &b in &legal[1] {
+            let mut kernels = Vec::new();
+            for state in [&root,&alternate] {
+                let step = enumerate_step(&dex,state,[Some(a),Some(b)],100_000).unwrap();
+                let mut kernel = HashMap::new();
+                for leaf in step.leaves {
+                    assert!(!leaf.battle.quick_claw_roll_observable(&dex));
+                    let key = leaf.battle.outcome().map_or_else(||format!("{:?}",solver.node_key(&leaf.battle)),
+                        |outcome|format!("terminal:{outcome:?}"));
+                    *kernel.entry(key).or_insert(0.0) += leaf.prob;
+                }
+                assert!((kernel.values().sum::<f64>()-1.0).abs()<1e-10);
+                kernels.push(kernel);
+            }
+            assert_eq!(kernels[0].len(),kernels[1].len());
+            for (key,mass) in &kernels[0] { assert!((mass-kernels[1][key]).abs()<1e-10); }
+        }}
+    }
+
+    #[test]
+    fn held_quick_claw_changes_outcomes_and_cannot_be_quotiented() {
+        let dex = conformance::load_dex();
+        let mut holder = mon(&["Seismic Toss"]);
+        holder.item = "Quick Claw".into();
+        let mut root = Battle::from_fixture(&dex,"1,2,3,4",&[holder],&[mon(&["Seismic Toss"])]).unwrap();
+        let preview = [0,1].map(|side|root.legal_choices(&dex,side).first().copied());
+        root.apply_choices(&dex,preview).unwrap();
+        for side in 0..2 { let id=root.active_id(side).unwrap();root.poke_mut(id).hp=1; }
+        root.turn=1000;
+        let choices=[0,1].map(|side|root.legal_choices(&dex,side).first().copied());
+        let mut values=Vec::new();
+        for roll in [false,true] {
+            root.quick_claw_roll=roll;
+            let step=enumerate_step(&dex,&root,choices,100_000).unwrap();
+            values.push(step.leaves.iter().map(|leaf|leaf.prob*super::outcome_value(&leaf.battle).unwrap()).sum::<f64>());
+        }
+        assert!((values[0]-0.5).abs()<1e-10);
+        assert!((values[1]-1.0).abs()<1e-10);
     }
 
     fn perturb_damage_history(b: &mut Battle, move_id: MoveId) {
@@ -3418,14 +3507,15 @@ mod tests {
         let targets: Vec<_> = (0..2).flat_map(|side| {
             [vec![1.0, 0.0], vec![0.0, 1.0], vec![0.3, 0.7]].map(|policy| (side, policy))
         }).collect();
-        for (period, directed, targeted, grouped) in [(0, false, false, false), (1, false, false, false),
-            (2, false, false, false), (1, true, false, false), (1, false, true, false), (1, true, true, false),
-            (0, false, false, true), (1, true, true, true)] {
+        for (period, directed, targeted, grouped, quotient) in [(0, false, false, false, false), (1, false, false, false, false),
+            (2, false, false, false, false), (1, true, false, false, false), (1, false, true, false, false), (1, true, true, false, false),
+            (0, false, false, true, false), (1, true, true, true, false), (0, false, false, false, true)] {
             let mut solver = BoundSolver::new(&dex, BoundConfig {
                 work_budget: 17, cell_cap: 0, eps: 1e-10,
                 resource_closure_nodes: Some(0), resource_closure_period: period,
                 directed_policy_refinement: directed, target_aware_refinement: targeted,
                 chance_status_groups: grouped,
+                dead_quick_claw_quotient: quotient,
                 ..BoundConfig::default()
             });
             let mut previous = super::Bounds { lo: 0.0, hi: 1.0 };

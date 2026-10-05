@@ -1,0 +1,229 @@
+{
+  "schema": "nc2000-policy-quick-claw-v1",
+  "archived_work_discrepancy": {
+    "previous_runs": 971342,
+    "current_runs": 521348,
+    "previous_replacement_enumeration_runs": 3,
+    "current_replacement_enumeration_runs": 2
+  },
+  "arms": {
+    "default-check": {
+      "value": {
+        "lo": 0.0,
+        "hi": 0.1486582361171193
+      },
+      "runs": 521348,
+      "nodes": 120002,
+      "stop": "NodeBudget",
+      "elapsed_ms": 42374.18775
+    },
+    "child-quotient": {
+      "value": {
+        "lo": 0.0,
+        "hi": 0.15280241652458235
+      },
+      "runs": 1103466,
+      "nodes": 120000,
+      "stop": "NodeBudget",
+      "elapsed_ms": 81092.093333
+    },
+    "root-control": {
+      "value": {
+        "lo": 0.0,
+        "hi": 0.02306075900785985
+      },
+      "runs": 1127872,
+      "nodes": 120005,
+      "stop": "NodeBudget",
+      "elapsed_ms": 67143.63525
+    },
+    "root-quotient": {
+      "value": {
+        "lo": 0.0,
+        "hi": 0.02064331559730502
+      },
+      "runs": 1113516,
+      "nodes": 120009,
+      "stop": "NodeBudget",
+      "elapsed_ms": 79777.56554200001
+    },
+    "root-extended": {
+      "value": {
+        "lo": 0.0,
+        "hi": 0.013560311849153352
+      },
+      "runs": 1938796,
+      "nodes": 192655,
+      "stop": "TimeBudget",
+      "elapsed_ms": 180013.285042
+    }
+  },
+  "splices": [
+    {
+      "source": "prior-extended",
+      "previous_child_upper": 0.15206440826806725,
+      "new_cell_upper": 0.020331807478247785
+    },
+    {
+      "source": "root-quotient",
+      "previous_child_upper": 0.1510461310829502,
+      "new_cell_upper": 0.02064331569730502
+    },
+    {
+      "source": "root-extended",
+      "previous_child_upper": 0.1003577334207966,
+      "new_cell_upper": 0.013560311949153352
+    }
+  ],
+  "matrix": {
+    "actions": [
+      [
+        "move icebeam",
+        "move explosion",
+        "move reflect",
+        "move spikes"
+      ],
+      [
+        "move earthquake",
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance",
+        "switch 2"
+      ]
+    ],
+    "cells": [
+      {
+        "lo": 0,
+        "hi": 0.013560311949153352
+      },
+      {
+        "lo": 0,
+        "hi": 0.5436773032836375
+      },
+      {
+        "lo": 0,
+        "hi": 0.19153957611401612
+      },
+      {
+        "lo": 0,
+        "hi": 0.368183507103502
+      },
+      {
+        "lo": 0,
+        "hi": 0.38362573991762344
+      },
+      {
+        "lo": 0,
+        "hi": 1e-10
+      },
+      {
+        "lo": 0,
+        "hi": 4e-10
+      },
+      {
+        "lo": 0,
+        "hi": 4e-10
+      },
+      {
+        "lo": 0,
+        "hi": 4e-10
+      },
+      {
+        "lo": 0,
+        "hi": 4e-10
+      },
+      {
+        "lo": 0,
+        "hi": 8.55624466511274e-05
+      },
+      {
+        "lo": 0,
+        "hi": 0.8059405053909727
+      },
+      {
+        "lo": 0,
+        "hi": 0.675507943304895
+      },
+      {
+        "lo": 0,
+        "hi": 0.28971679982570636
+      },
+      {
+        "lo": 0,
+        "hi": 0.2546621632642566
+      },
+      {
+        "lo": 0,
+        "hi": 1e-10
+      },
+      {
+        "lo": 0,
+        "hi": 0.5862729596792728
+      },
+      {
+        "lo": 0,
+        "hi": 0.09737002307919819
+      },
+      {
+        "lo": 0,
+        "hi": 0.30579763216182215
+      },
+      {
+        "lo": 0,
+        "hi": 0.2546621632642566
+      }
+    ],
+    "value": {
+      "lo": 0,
+      "hi": 0.013560311949153352
+    }
+  },
+  "endpoints": [
+    {
+      "side": 0,
+      "assessment": {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.0,
+          "hi": 0.013560311949153352
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.013560312049153351
+        }
+      }
+    },
+    {
+      "side": 1,
+      "assessment": {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.9864396880508467,
+          "hi": 1.0
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.013560312049153303
+        }
+      }
+    }
+  ],
+  "numerical_envelope": 1e-10,
+  "prior_hashes": {
+    "findings/policy-critical-child-v1/records.json.gz": "beb17c2cffa4c9257a0da314944a17784621a1e96c0adc9579f22732e0edc5e3",
+    "findings/policy-critical-child-v1/summary.json": "244aa3d396d928ae6a1d1442efb55367c298d384914aaac2c0ce84a6f7f3e2fa",
+    "findings/policy-freeze-branch-v1/records.json.gz": "98c23370e7b6c45be8abcb1cf6ebd48c1e053bbd77e6968599be84ec94dbfcb9"
+  },
+  "interpretation": "Exact conditional quotient of the current Quick Claw roll when no roster holds Quick Claw. Every item-bearing roster slot is scanned, including benches and fainted Pokemon; item transfer/loss preserves absence. Tagged keys prevent mixing with exact or damage-only keys. The previous complete kernel census establishes that both replacement roots differ only in this bit, so the dedicated quotient value applies to both. Child upper bounds are stitched into the fixed-strategy root after the critical KO only. All player actions and chance mass remain represented. The rebuilt control preserves archived values, matrices and node counts but uses different enumeration execution counts; performance comparisons use only fresh arms with the same binary hash. Optional quotient remains off by default; these are full-information first-decision bounds, not deployed bot strength or global optimality."
+}

@@ -142,7 +142,7 @@ impl Battle {
     fn state_key_with(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
         use std::hash::Hasher;
         let mut h = FxHasher::default();
-        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping);
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping, false);
         h.finish()
     }
 
@@ -151,7 +151,7 @@ impl Battle {
     pub fn search_key(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
         use std::hash::Hasher;
         let mut h = crate::fxhash::SearchHasher::default();
-        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping);
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping, false);
         h.finish()
     }
 
@@ -161,7 +161,7 @@ impl Battle {
     /// merge must not — two hashes over independent functions push the
     /// collision odds to ~2^-128.
     pub fn state_key128(&self) -> u128 {
-        self.state_key128_with(false)
+        self.state_key128_with(false, false)
     }
 
     /// Certificate-grade solver key with damage-history fields removed.
@@ -169,16 +169,28 @@ impl Battle {
     /// the method is separate from `state_key128` so ordinary exact identity
     /// can never silently acquire this semantic quotient.
     pub fn state_key128_without_damage_bookkeeping(&self) -> u128 {
-        self.state_key128_with(true)
+        self.state_key128_with(true, false)
     }
 
-    fn state_key128_with(&self, omit_damage_bookkeeping: bool) -> u128 {
+    fn state_key128_with(&self, omit_damage_bookkeeping: bool, omit_quick_claw_roll: bool) -> u128 {
         use std::hash::Hasher;
         let mut h1 = FxHasher::default();
-        self.state_hash_into(&mut h1, None, omit_damage_bookkeeping);
+        self.state_hash_into(&mut h1, None, omit_damage_bookkeeping, omit_quick_claw_roll);
         let mut h2 = std::collections::hash_map::DefaultHasher::new();
-        self.state_hash_into(&mut h2, None, omit_damage_bookkeeping);
+        self.state_hash_into(&mut h2, None, omit_damage_bookkeeping, omit_quick_claw_roll);
         ((h1.finish() as u128) << 64) | h2.finish() as u128
+    }
+
+    pub fn state_key128_without_quick_claw_roll(&self, dex: &Dex, omit_damage_bookkeeping: bool) -> u128 {
+        assert!(!self.quick_claw_roll_observable(dex));
+        assert!(!omit_damage_bookkeeping || !self.damage_bookkeeping_observable(dex));
+        self.state_key128_with(omit_damage_bookkeeping, true)
+    }
+
+    /// Items can only be lost or transferred during battle; absent Quick Claw stays absent.
+    pub fn quick_claw_roll_observable(&self, dex: &Dex) -> bool {
+        dex.known_items.quickclaw.is_some_and(|item| self.sides.iter()
+            .flat_map(|side| side.roster.iter()).any(|pokemon| pokemon.item == Some(item)))
     }
 
     /// Whether dropping damage-history fields can change future behavior.
@@ -200,6 +212,7 @@ impl Battle {
         mut h: H,
         hp_buckets: Option<i64>,
         omit_damage_bookkeeping: bool,
+        omit_quick_claw_roll: bool,
     ) {
         use std::hash::Hash;
         // Total destructuring on purpose: adding a `Battle` field breaks
@@ -254,7 +267,7 @@ impl Battle {
                 Some(_) => (last_damage / 16).hash(&mut h),
             }
         }
-        (quick_claw_roll, speed_order, format_data).hash(&mut h);
+        (if omit_quick_claw_roll { false } else { *quick_claw_roll }, speed_order, format_data).hash(&mut h);
         // mid-event machinery: quiescent at request points, hashed as a guard
         (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(&mut h);
         (active_pokemon, active_target, last_move_id, pending_boosts).hash(&mut h);

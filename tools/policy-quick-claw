@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/policy-quick-claw-v1'
+names = ['default-check','child-quotient','root-control','root-quotient','root-extended']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def read(path):
+    return json.loads(gzip.decompress(path.read_bytes()))
+
+
+def module(name, filename):
+    spec = importlib.util.spec_from_file_location(name,root/'tools'/filename)
+    result = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(result)
+    return result
+
+
+assessor = module('assessor','headroom-cases-report.py')
+verifier = module('verifier','policy-gap-report.py')
+
+
+def summarize(records):
+    assert set(records) == set(names)
+    child_path = root/'findings/policy-critical-child-v1/records.json.gz'
+    old_child = read(child_path)['major']['result']['descendant_preparation'][0]
+    default = records['default-check']['result']['descendant_preparation'][0]
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    for key in ['value','matrix','nodes','stop']:
+        assert old_child[key] == default[key]
+    arms = {}
+    for name, record in records.items():
+        protocol = record['manifest']['protocol']
+        assert protocol['dead_quick_claw_quotient'] == (name not in ['default-check','root-control'])
+        row = record['result']
+        assert row['state_key'] == '220099424291272094622176126743844857922'
+        if name.startswith('root-'):
+            value = row['unrestricted_game_value']
+            work = row['reference']
+        else:
+            prep = row['descendant_preparation'][0]
+            assert prep['replacement']['distribution'] == old_child['replacement']['distribution']
+            assert prep['replacement']['semantic_key'] == old_child['replacement']['semantic_key']
+            assert prep['state'] == old_child['state']
+            assert sum(c['runs'] for c in prep['root_chance']) == prep['runs']
+            assert prep['matrix']['value'] == prep['value']
+            value, work = prep['value'], prep
+        arms[name] = {'value':value, **{k:work[k] for k in ['runs','nodes','stop','elapsed_ms']}}
+    prior_path = root/'findings/policy-critical-child-v1/summary.json'
+    prior = json.loads(prior_path.read_bytes())
+    matrix = json.loads(json.dumps(prior['matrix']))
+    padding = 1e-10
+    for bound in matrix['cells']+[matrix['value']]:
+        bound['lo'] = max(0,bound['lo']-padding)
+        bound['hi'] = min(1,bound['hi']+padding)
+    n = len(matrix['actions'][1])
+    for name in ['root-quotient','root-extended']:
+        candidate = records[name]['result']
+        restricted = candidate['restricted_matrix']
+        assert restricted['actions'] == [matrix['actions'][0],['move earthquake']]
+        for i,cell in enumerate(restricted['cells']):
+            matrix['cells'][i*n]['hi'] = min(matrix['cells'][i*n]['hi'],cell['hi']+padding)
+    child_hi = arms['child-quotient']['value']['hi']
+    old_root_path = root/'findings/policy-freeze-branch-v1/records.json.gz'
+    old_root = read(old_root_path)['switch-moves-grouped-extended']['result']
+    splices = []
+    for label, row in [('prior-extended',old_root)]+[(name,records[name]['result']) for name in ['root-quotient','root-extended']]:
+        chance = row['root_chance'][0]
+        assert chance['pending_mass'] == 0
+        assert abs(chance['child_uncertainty']-(row['restricted_matrix']['cells'][0]['hi']-row['restricted_matrix']['cells'][0]['lo'])) < 1e-9
+        matches = [c for c in chance['largest_children'] if c['mass'] == 0.0625 and c['actions'] == [[None],['switch 2']]]
+        if not matches:
+            continue
+        assert len(matches) == 1
+        old = matches[0]
+        hi = row['restricted_matrix']['cells'][0]['hi'] - 0.0625*max(0,old['bounds']['hi']-child_hi)+padding
+        matrix['cells'][0]['hi'] = min(matrix['cells'][0]['hi'],hi)
+        splices.append({'source':label,'previous_child_upper':old['bounds']['hi'],'new_cell_upper':hi})
+    matrix['value']['hi'] = min(matrix['value']['hi'],max(c['hi'] for c in matrix['cells'][::n]))
+    assessor.calibrate_assessor()
+    endpoints=[]
+    for e in prior['endpoints']:
+        assessment=assessor.assess(matrix,e['side'],e['assessment']['policy'])
+        verifier.verify_assessment(matrix,e['side'],assessment)
+        endpoints.append({'side':e['side'],'assessment':assessment})
+    return {'schema':'nc2000-policy-quick-claw-v1','archived_work_discrepancy':{'previous_runs':old_child['runs'],'current_runs':default['runs'],'previous_replacement_enumeration_runs':old_child['replacement']['runs'],'current_replacement_enumeration_runs':default['replacement']['runs']},'arms':arms,'splices':splices,'matrix':matrix,'endpoints':endpoints,
+            'numerical_envelope':padding,'prior_hashes':{str(p.relative_to(root)):sha(p.read_bytes()) for p in [child_path,prior_path,old_root_path]},
+            'interpretation':'Exact conditional quotient of the current Quick Claw roll when no roster holds Quick Claw. Every item-bearing roster slot is scanned, including benches and fainted Pokemon; item transfer/loss preserves absence. Tagged keys prevent mixing with exact or damage-only keys. The previous complete kernel census establishes that both replacement roots differ only in this bit, so the dedicated quotient value applies to both. Child upper bounds are stitched into the fixed-strategy root after the critical KO only. All player actions and chance mass remain represented. The rebuilt control preserves archived values, matrices and node counts but uses different enumeration execution counts; performance comparisons use only fresh arms with the same binary hash. Optional quotient remains off by default; these are full-information first-decision bounds, not deployed bot strength or global optimality.'}
+
+
+parser=argparse.ArgumentParser()
+mode=parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only',action='store_true')
+mode.add_argument('--record-existing',type=pathlib.Path)
+args=parser.parse_args()
+if args.verify_only:
+    records=read(archive/'records.json.gz')
+    corpus=gzip.decompress((archive/'corpus.jsonl.gz').read_bytes())
+    for name,record in records.items():
+        raw=(archive/f'{name}.json').read_bytes(); manifest=record['manifest']
+        assert sha(raw)==manifest['protocol_sha256'] and json.loads(raw)==manifest['protocol']
+        assert sha(corpus)==manifest['protocol']['corpus_sha256']
+        assert sha((root/manifest['protocol']['baseline']).read_bytes())==manifest['protocol']['baseline_sha256']
+    assert summarize(records)==json.loads((archive/'summary.json').read_bytes())
+    print('Verified unchanged default values, same-binary conditional-quotient analyses and combined first-decision bounds')
+    raise SystemExit(0)
+directory=args.record_existing
+if directory is None:
+    directory=root/'tmp/policy-quick-claw-v1'/datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory/'corpus.jsonl').write_bytes(gzip.decompress((archive/'corpus.jsonl.gz').read_bytes()))
+    env=dict(os.environ,NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','endgame_policy_audit'],cwd=root,env=env,check=True)
+    for name in names:
+        p=json.loads((archive/f'{name}.json').read_bytes());p['corpus']=str((directory/'corpus.jsonl').relative_to(root))
+        (directory/f'{name}.json').write_text(json.dumps(p,indent=2)+'\n')
+        subprocess.run([str(root/'target/release/examples/endgame_policy_audit'),str(directory/f'{name}.json'),str(directory/name)],cwd=root,env=env,check=True)
+records={name:{'manifest':json.loads((directory/name/'manifest.json').read_bytes()),'result':json.loads((directory/name/'game-023-d0017.json').read_bytes())} for name in names}
+summary=summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive/'corpus.jsonl.gz').write_bytes(gzip.compress((directory/'corpus.jsonl').read_bytes(),mtime=0))
+    for name in names:(archive/f'{name}.json').write_bytes((directory/f'{name}.json').read_bytes())
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(records,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+print('Arms:',summary['arms'])
+print('Combined losses:',[e['assessment']['loss'] for e in summary['endpoints']])
