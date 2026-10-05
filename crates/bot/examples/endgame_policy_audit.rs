@@ -76,6 +76,9 @@ struct DescendantPreparation {
     work_budget: usize,
     node_budget: usize,
     tolerance: f64,
+    replacement_semantic_key: Option<String>,
+    #[serde(default)]
+    quick_claw_kernel_audit: bool,
 }
 
 #[derive(Deserialize)]
@@ -369,8 +372,73 @@ fn audit(
             leaf.battle.state_key128_without_damage_bookkeeping() == key).collect();
         let mass: f64 = matching.iter().map(|leaf| leaf.prob).sum();
         assert!(!matching.is_empty() && (mass - prep.mass).abs() < 1e-12);
-        let child = &matching[0].battle;
+        let mut child = matching[0].battle.clone();
+        let mut replacement = Value::Null;
+        let mut enumeration_runs = step.runs;
+        if let Some(selected) = &prep.replacement_semantic_key {
+            let needs = child.needs_choice();
+            assert_ne!(needs[0], needs[1]);
+            let legal = [0, 1].map(|side| child.legal_choices(dex, side));
+            assert!(legal.iter().all(|actions| actions.len() <= 1));
+            let actions = legal.map(|actions| actions.first().copied());
+            assert!(actions.iter().flatten().any(|action|
+                matches!(action, nc2000_engine::battle::SearchChoice::Switch(_))));
+            let next = nc2000_engine::battle::enumerate::enumerate_step(dex, &child,
+                actions, prep.enumeration_cap).unwrap();
+            assert!((next.leaves.iter().map(|leaf| leaf.prob).sum::<f64>() - 1.0).abs() < 1e-10);
+            let selected: u128 = selected.parse().unwrap();
+            let mut distribution = std::collections::BTreeMap::<String, f64>::new();
+            for leaf in &next.leaves {
+                assert!(!leaf.battle.damage_bookkeeping_observable(dex));
+                *distribution.entry(leaf.battle.state_key128_without_damage_bookkeeping().to_string()).or_default() += leaf.prob;
+            }
+            let first = &next.leaves.iter().find(|leaf|
+                leaf.battle.state_key128_without_damage_bookkeeping() == selected).unwrap().battle;
+            enumeration_runs += next.runs;
+            replacement = json!({"actions":actions.map(|a|a.map(|a|action_input(dex,a))),
+                "runs":next.runs,"leaves":next.leaves.len(),"distribution":distribution,
+                "mass":distribution[&selected.to_string()],
+                "semantic_key":first.state_key128_without_damage_bookkeeping().to_string()});
+            child = first.clone();
+        }
+        let child = &child;
         assert!(child.outcome().is_none() && !child.damage_bookkeeping_observable(dex));
+        let mut quick_claw_kernel = Value::Null;
+        if prep.quick_claw_kernel_audit {
+            let mut alternate = child.clone();
+            alternate.quick_claw_roll = !alternate.quick_claw_roll;
+            let mut probe = child.clone();
+            let choices = [0,1].map(|side|probe.legal_choices(dex,side));
+            assert!([0,1].into_iter().all(|side|alternate.legal_choices(dex,side) == choices[side]));
+            let mut cells = Vec::new();
+            for &a in &choices[0] { for &b in &choices[1] {
+                let mut kernels = Vec::new();
+                let mut runs = 0;
+                for state in [child,&alternate] {
+                    let step = nc2000_engine::battle::enumerate::enumerate_step(dex,state,
+                        [Some(a),Some(b)],prep.enumeration_cap).unwrap();
+                    runs += step.runs;
+                    let mut kernel = std::collections::BTreeMap::<String,f64>::new();
+                    for leaf in &step.leaves {
+                        assert!(!leaf.battle.damage_bookkeeping_observable(dex));
+                        let key = leaf.battle.outcome().map_or_else(
+                            ||leaf.battle.state_key128_without_damage_bookkeeping().to_string(),
+                            |outcome|format!("terminal:{outcome:?}"));
+                        *kernel.entry(key).or_default() += leaf.prob;
+                    }
+                    assert!((kernel.values().sum::<f64>() - 1.0).abs() < 1e-10);
+                    kernels.push(kernel);
+                }
+                let difference: f64 = kernels[0].keys().chain(kernels[1].keys())
+                    .cloned().collect::<std::collections::BTreeSet<_>>().iter()
+                    .map(|key|(kernels[0].get(key).unwrap_or(&0.0)-kernels[1].get(key).unwrap_or(&0.0)).abs()).sum();
+                enumeration_runs += runs;
+                cells.push(json!({"actions":[action_input(dex,a),action_input(dex,b)],
+                    "runs":runs,"states":kernels.iter().map(|k|k.len()).collect::<Vec<_>>(),"l1_difference":difference}));
+            }}
+            quick_claw_kernel = json!({"semantic_keys":[child.state_key128_without_damage_bookkeeping().to_string(),
+                alternate.state_key128_without_damage_bookkeeping().to_string()],"cells":cells});
+        }
         let mut dedicated = BoundSolver::new(dex, BoundConfig {
             time_budget: Some(Duration::from_millis(prep.reference_ms)),
             work_budget: prep.work_budget,
@@ -387,11 +455,14 @@ fn audit(
         let certificate_count = certificates.len();
         imported_certificates = solver.import_value_certificates(certificates);
         let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
-        preparation_runs += step.runs + report.runs;
+        preparation_runs += enumeration_runs + report.runs;
         preparation_ms += elapsed_ms;
         descendant_preparation.push(json!({"semantic_key":prep.semantic_key,
             "actions":prep.actions,"mass":mass,"matching_leaves":matching.len(),
-            "state":child.essence(dex),"enumeration_runs":step.runs,
+            "state":child.essence(dex),"enumeration_runs":enumeration_runs,"replacement":replacement,
+            "one_sided_resource_class":format!("{:?}",nc2000_bot::stall::classify_one_sided_heal(child,dex)),
+            "quick_claw_roll":child.quick_claw_roll,
+            "quick_claw_kernel":quick_claw_kernel,
             "value":bound(report.bounds),"stop":format!("{:?}",report.stop),
             "runs":report.runs,"nodes":nodes,"elapsed_ms":elapsed_ms,
             "certificates":certificate_count,"root_chance":root_chance,

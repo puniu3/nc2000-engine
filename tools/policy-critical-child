@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-critical-child-v1'
+names = ['unrestricted', 'major', 'minor', 'probe-major', 'probe-minor']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    assert set(records) == set(names)
+    distribution = records['major']['result']['descendant_preparation'][0]['replacement']['distribution']
+    assert abs(sum(distribution.values()) - 1) < 1e-12
+    combined = {'lo': 0.0, 'hi': 0.0}
+    arms = {}
+    selected = set()
+    probes = {}
+    for name, record in records.items():
+        row = record['result']
+        protocol = record['manifest']['protocol']
+        config = protocol['descendant_preparation']
+        assert row['state_key'] == config['root_state_key'] == '220099424291272094622176126743844857922'
+        assert len(row['descendant_preparation']) == 1
+        prep = row['descendant_preparation'][0]
+        assert prep['semantic_key'] == config['semantic_key'] == '29971514748623649365579286978443897290'
+        assert prep['mass'] == config['mass'] == 0.0625
+        assert prep['actions'] == config['actions'] == ['move icebeam', 'move earthquake']
+        assert prep['matrix']['value'] == prep['value']
+        assert 0 <= prep['value']['lo'] <= prep['value']['hi'] <= 1
+        assert sum(c['runs'] for c in prep['root_chance']) == prep['runs']
+        assert row['total_runs'] == row['reference']['runs'] + prep['runs'] + prep['enumeration_runs']
+        if name != 'unrestricted':
+            replacement = prep['replacement']
+            assert replacement['actions'] == [None, 'switch 2']
+            assert replacement['distribution'] == distribution
+            key = replacement['semantic_key']
+            assert key == config['replacement_semantic_key']
+            if name.startswith('probe-'):
+                probes[name] = {k: prep[k] for k in ['quick_claw_roll', 'one_sided_resource_class']}
+                assert prep['state'] == records[name.removeprefix('probe-')]['result']['descendant_preparation'][0]['state']
+                continue
+            assert key not in selected
+            selected.add(key)
+            assert replacement['mass'] == distribution[key]
+            assert prep['matrix']['actions'] == [['move icebeam', 'move explosion', 'move reflect', 'move spikes'], ['move surf', 'move icebeam', 'move rest', 'move sleeptalk']]
+            for bound in combined:
+                combined[bound] += replacement['mass'] * prep['value'][bound]
+        arms[name] = {k: prep[k] for k in ['value', 'runs', 'nodes', 'stop', 'elapsed_ms', 'enumeration_runs']}
+    assert selected == set(distribution)
+    assert {p['quick_claw_roll'] for p in probes.values()} == {False, True}
+    assert all(p['one_sided_resource_class'].startswith('Ok(') for p in probes.values())
+    kernel = records['probe-major']['result']['descendant_preparation'][0]['quick_claw_kernel']
+    assert set(kernel['semantic_keys']) == set(distribution)
+    assert len(kernel['cells']) == 16
+    assert all(c['l1_difference'] < 1e-10 for c in kernel['cells'])
+    assert records['probe-major']['result']['descendant_preparation'][0]['enumeration_runs'] == 491 + sum(c['runs'] for c in kernel['cells'])
+    prior_path = root / 'findings/policy-freeze-branch-v1/records.json.gz'
+    prior = json.loads(gzip.decompress(prior_path.read_bytes()))['switch-moves-grouped-extended']['result']
+    parent = prior['root_chance'][0]
+    old = next(c for c in parent['largest_children'] if c['key'] == 'NoDamageBookkeeping(29971514748623649365579286978443897290)')
+    assert old['mass'] == 0.0625 and parent['pending_mass'] == 0
+    restricted = prior['restricted_matrix']['cells'][0]
+    assert abs(parent['child_uncertainty'] - (restricted['hi'] - restricted['lo'])) < 1e-10
+    matrix_path = root / 'findings/policy-freeze-branch-v1/summary.json'
+    previous = json.loads(matrix_path.read_bytes())
+    matrix = json.loads(json.dumps(previous['matrix']))
+    padding = 1e-10
+    for bound in matrix['cells'] + [matrix['value']]:
+        bound['lo'] = max(0, bound['lo'] - padding)
+        bound['hi'] = min(1, bound['hi'] + padding)
+    reduction = old['mass'] * max(0, old['bounds']['hi'] - combined['hi'])
+    matrix['cells'][0]['hi'] = min(matrix['cells'][0]['hi'], restricted['hi'] - reduction + padding)
+    matrix['value']['hi'] = min(matrix['value']['hi'], max(c['hi'] for c in matrix['cells'][::len(matrix['actions'][1])]))
+    spec = importlib.util.spec_from_file_location('assessor', root/'tools/headroom-cases-report.py')
+    assessor = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(assessor)
+    assessor.calibrate_assessor()
+    endpoints = [{'side':e['side'], 'assessment':assessor.assess(matrix,e['side'],e['assessment']['policy'])} for e in previous['endpoints']]
+    spec = importlib.util.spec_from_file_location('verifier', root/'tools/policy-gap-report.py')
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+    for endpoint in endpoints:
+        verifier.verify_assessment(matrix,endpoint['side'],endpoint['assessment'])
+    return {'schema':'nc2000-policy-critical-child-v1', 'arms':arms,
+            'replacement_distribution':distribution, 'replacement_value':combined,
+            'probes':probes, 'quick_claw_kernel':kernel, 'matrix':matrix, 'endpoints':endpoints,
+            'previous_critical_branch_upper':old['bounds']['hi'],
+            'root_mass':old['mass'],
+            'parent_upper_reduction':reduction, 'numerical_envelope':padding,
+            'previous_matrix_sha256':sha(matrix_path.read_bytes()),
+            'prior_sha256':sha(prior_path.read_bytes()),
+            'interpretation':'Both post-replacement semantic states are solved independently with every legal action retained. Their conditional values are combined using the complete replacement distribution. On the critical branch, the side-one continuation may use the unrestricted certified strategy; elsewhere it retains the archived fixed strategy. Subtracting the weighted upper-bound improvement from the fixed-strategy root cell gives another valid unrestricted upper bound. This is a dedicated full-information successor analysis. No states are merged and no deployed policy strength or global optimality is established.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    corpus = gzip.decompress((archive/'corpus.jsonl.gz').read_bytes())
+    for name, record in records.items():
+        raw = (archive/f'{name}.json').read_bytes()
+        manifest = record['manifest']
+        assert sha(raw) == manifest['protocol_sha256']
+        assert json.loads(raw) == manifest['protocol']
+        assert sha(corpus) == manifest['protocol']['corpus_sha256']
+        assert sha((root/manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive/'summary.json').read_bytes())
+    print('Verified both replacement outcomes, conditional values, execution accounting and weighted bounds')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root/'tmp/policy-critical-child-v1'/datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory/'corpus.jsonl').write_bytes(gzip.decompress((archive/'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','endgame_policy_audit'],cwd=root,env=env,check=True)
+    for name in names:
+        p = json.loads((archive/f'{name}.json').read_bytes())
+        p['corpus'] = str((directory/'corpus.jsonl').relative_to(root))
+        (directory/f'{name}.json').write_text(json.dumps(p,indent=2)+'\n')
+        subprocess.run([str(root/'target/release/examples/endgame_policy_audit'),str(directory/f'{name}.json'),str(directory/name)],cwd=root,env=env,check=True)
+records = {name:{'manifest':json.loads((directory/name/'manifest.json').read_bytes()),'result':json.loads((directory/name/'game-023-d0017.json').read_bytes())} for name in names}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive/'corpus.jsonl.gz').write_bytes(gzip.compress((directory/'corpus.jsonl').read_bytes(),mtime=0))
+    for name in names:
+        (archive/f'{name}.json').write_bytes((directory/f'{name}.json').read_bytes())
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(records,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+print(json.dumps(summary,indent=2))

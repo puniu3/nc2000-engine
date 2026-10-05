@@ -1,0 +1,407 @@
+{
+  "schema": "nc2000-policy-critical-child-v1",
+  "arms": {
+    "unrestricted": {
+      "value": {
+        "lo": 0.0,
+        "hi": 0.15362364863757585
+      },
+      "runs": 970681,
+      "nodes": 120214,
+      "stop": "NodeBudget",
+      "elapsed_ms": 41733.491166,
+      "enumeration_runs": 488
+    },
+    "major": {
+      "value": {
+        "lo": 0.0,
+        "hi": 0.1486582361171193
+      },
+      "runs": 971342,
+      "nodes": 120002,
+      "stop": "NodeBudget",
+      "elapsed_ms": 42296.920915999995,
+      "enumeration_runs": 491
+    },
+    "minor": {
+      "value": {
+        "lo": 0.0,
+        "hi": 0.1486582361171193
+      },
+      "runs": 971342,
+      "nodes": 120002,
+      "stop": "NodeBudget",
+      "elapsed_ms": 42237.27925,
+      "enumeration_runs": 491
+    }
+  },
+  "replacement_distribution": {
+    "282046317607488147590030942062470761830": 0.765625,
+    "30880024293067064754207458040469781265": 0.234375
+  },
+  "replacement_value": {
+    "lo": 0.0,
+    "hi": 0.1486582361171193
+  },
+  "probes": {
+    "probe-major": {
+      "quick_claw_roll": false,
+      "one_sided_resource_class": "Ok(OneSidedHeal { healer: 1, non_healer: 0, active: [PokeId { side: 0, slot: 2 }, PokeId { side: 1, slot: 5 }], move_ids: [[MoveId(113), MoveId(59), MoveId(178), MoveId(218)], [MoveId(233), MoveId(113), MoveId(179), MoveId(206)]], max_hp: [156, 206] })"
+    },
+    "probe-minor": {
+      "quick_claw_roll": true,
+      "one_sided_resource_class": "Ok(OneSidedHeal { healer: 1, non_healer: 0, active: [PokeId { side: 0, slot: 2 }, PokeId { side: 1, slot: 5 }], move_ids: [[MoveId(113), MoveId(59), MoveId(178), MoveId(218)], [MoveId(233), MoveId(113), MoveId(179), MoveId(206)]], max_hp: [156, 206] })"
+    }
+  },
+  "quick_claw_kernel": {
+    "semantic_keys": [
+      "282046317607488147590030942062470761830",
+      "30880024293067064754207458040469781265"
+    ],
+    "cells": [
+      {
+        "actions": [
+          "move icebeam",
+          "move surf"
+        ],
+        "runs": 5194,
+        "states": [
+          811,
+          811
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move icebeam",
+          "move icebeam"
+        ],
+        "runs": 5766,
+        "states": [
+          900,
+          900
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move icebeam",
+          "move rest"
+        ],
+        "runs": 576,
+        "states": [
+          90,
+          90
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move icebeam",
+          "move sleeptalk"
+        ],
+        "runs": 576,
+        "states": [
+          90,
+          90
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move explosion",
+          "move surf"
+        ],
+        "runs": 658,
+        "states": [
+          1,
+          1
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move explosion",
+          "move icebeam"
+        ],
+        "runs": 726,
+        "states": [
+          1,
+          1
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move explosion",
+          "move rest"
+        ],
+        "runs": 72,
+        "states": [
+          1,
+          1
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move explosion",
+          "move sleeptalk"
+        ],
+        "runs": 72,
+        "states": [
+          1,
+          1
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move reflect",
+          "move surf"
+        ],
+        "runs": 64,
+        "states": [
+          19,
+          19
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move reflect",
+          "move icebeam"
+        ],
+        "runs": 66,
+        "states": [
+          20,
+          20
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move reflect",
+          "move rest"
+        ],
+        "runs": 6,
+        "states": [
+          2,
+          2
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move reflect",
+          "move sleeptalk"
+        ],
+        "runs": 6,
+        "states": [
+          2,
+          2
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move spikes",
+          "move surf"
+        ],
+        "runs": 64,
+        "states": [
+          19,
+          19
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move spikes",
+          "move icebeam"
+        ],
+        "runs": 66,
+        "states": [
+          20,
+          20
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move spikes",
+          "move rest"
+        ],
+        "runs": 6,
+        "states": [
+          2,
+          2
+        ],
+        "l1_difference": 0.0
+      },
+      {
+        "actions": [
+          "move spikes",
+          "move sleeptalk"
+        ],
+        "runs": 6,
+        "states": [
+          2,
+          2
+        ],
+        "l1_difference": 0.0
+      }
+    ]
+  },
+  "matrix": {
+    "actions": [
+      [
+        "move icebeam",
+        "move explosion",
+        "move reflect",
+        "move spikes"
+      ],
+      [
+        "move earthquake",
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance",
+        "switch 2"
+      ]
+    ],
+    "cells": [
+      {
+        "lo": 0,
+        "hi": 0.02011892171881354
+      },
+      {
+        "lo": 0,
+        "hi": 0.5436773031836375
+      },
+      {
+        "lo": 0,
+        "hi": 0.1915395760140161
+      },
+      {
+        "lo": 0,
+        "hi": 0.368183507003502
+      },
+      {
+        "lo": 0,
+        "hi": 0.38362573981762343
+      },
+      {
+        "lo": 0,
+        "hi": 2e-10
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 8.653882383933179e-05
+      },
+      {
+        "lo": 0,
+        "hi": 0.8059405052909727
+      },
+      {
+        "lo": 0,
+        "hi": 0.675507943204895
+      },
+      {
+        "lo": 0,
+        "hi": 0.28971679972570635
+      },
+      {
+        "lo": 0,
+        "hi": 0.2546621631642566
+      },
+      {
+        "lo": 0,
+        "hi": 2e-10
+      },
+      {
+        "lo": 0,
+        "hi": 0.5862729595792728
+      },
+      {
+        "lo": 0,
+        "hi": 0.0973700229791982
+      },
+      {
+        "lo": 0,
+        "hi": 0.30579763206182214
+      },
+      {
+        "lo": 0,
+        "hi": 0.2546621631642566
+      }
+    ],
+    "value": {
+      "lo": 0,
+      "hi": 0.02011892171881354
+    }
+  },
+  "endpoints": [
+    {
+      "side": 0,
+      "assessment": {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.0,
+          "hi": 0.02011892171881354
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.020118921818813543
+        }
+      }
+    },
+    {
+      "side": 1,
+      "assessment": {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.9798810782811864,
+          "hi": 1.0
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.020118921818813577
+        }
+      }
+    }
+  ],
+  "previous_critical_branch_upper": 0.15206440826806725,
+  "root_mass": 0.0625,
+  "parent_upper_reduction": 0.00021288575943424586,
+  "numerical_envelope": 1e-10,
+  "previous_matrix_sha256": "9c33a35b7bd2e14f7cc2987dff0274c393d4457f0e9ac7488af01508d5781cd6",
+  "prior_sha256": "98c23370e7b6c45be8abcb1cf6ebd48c1e053bbd77e6968599be84ec94dbfcb9",
+  "interpretation": "Both post-replacement semantic states are solved independently with every legal action retained. Their conditional values are combined using the complete replacement distribution. On the critical branch, the side-one continuation may use the unrestricted certified strategy; elsewhere it retains the archived fixed strategy. Subtracting the weighted upper-bound improvement from the fixed-strategy root cell gives another valid unrestricted upper bound. This is a dedicated full-information successor analysis. No states are merged and no deployed policy strength or global optimality is established."
+}
