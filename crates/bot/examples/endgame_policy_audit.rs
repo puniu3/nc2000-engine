@@ -45,6 +45,8 @@ struct Protocol {
     chance_fair_period: usize,
     resource_closure_nodes: Option<usize>,
     resource_closure_period: Option<usize>,
+    #[serde(default)]
+    directed_policy_refinement: bool,
     witness_preparation: Option<WitnessPreparation>,
 }
 
@@ -176,6 +178,7 @@ fn audit(
             chance_fair_period: protocol.chance_fair_period,
             resource_closure_nodes: protocol.resource_closure_nodes,
             resource_closure_period: protocol.resource_closure_period.unwrap_or(1),
+            directed_policy_refinement: protocol.directed_policy_refinement,
             ..BoundConfig::default()
         }, side, legal[side].clone());
         let started = Instant::now();
@@ -244,6 +247,7 @@ fn audit(
             chance_fair_period: protocol.chance_fair_period,
             resource_closure_nodes: protocol.resource_closure_nodes,
             resource_closure_period: protocol.resource_closure_period.unwrap_or(1),
+            directed_policy_refinement: protocol.directed_policy_refinement,
             ..BoundConfig::default()
         };
     let mut solver = BoundSolver::new(dex, cfg.clone());
@@ -400,6 +404,8 @@ fn audit(
             "trial_depth_counts": stats.trial_depth_counts,
             "depth_limit_trials": stats.depth_limit_trials,
             "trials": stats.trials,
+            "lower_directed_trials": stats.lower_directed_trials,
+            "upper_directed_trials": stats.upper_directed_trials,
             "resource_closure_visits": stats.resource_closure_visits,
             "first_resource_closure_nodes": stats.first_resource_closure_nodes,
             "two_sided_roots": stats.two_sided_roots,

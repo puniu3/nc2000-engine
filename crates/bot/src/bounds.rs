@@ -87,6 +87,7 @@ pub struct BoundConfig {
     pub chance_fair_period: usize,
     pub resource_closure_nodes: Option<usize>,
     pub resource_closure_period: usize,
+    pub directed_policy_refinement: bool,
 }
 
 impl Default for BoundConfig {
@@ -111,6 +112,7 @@ impl Default for BoundConfig {
             chance_fair_period: 0,
             resource_closure_nodes: None,
             resource_closure_period: 1,
+            directed_policy_refinement: false,
         }
     }
 }
@@ -266,6 +268,8 @@ impl SolveReport {
 #[derive(Clone, Debug, Default)]
 pub struct BoundStats {
     pub certificate_hits: usize,
+    pub lower_directed_trials: usize,
+    pub upper_directed_trials: usize,
     pub resource_closure_visits: usize,
     pub first_resource_closure_nodes: Option<usize>,
     pub runs: usize,
@@ -368,6 +372,12 @@ struct Cell {
     hi: f64,
     /// One-shot eager enumeration already attempted for this cell.
     tried_eager: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BoundDirection {
+    Lower,
+    Upper,
 }
 
 struct StageWitness {
@@ -850,6 +860,7 @@ impl<'d> BoundSolver<'d> {
         let start_runs = self.stats.runs;
         let work_limit = start_runs.saturating_add(budget);
         let mut cursor = 0;
+        let mut value_cursor = 0;
         let mut idle = 0;
         loop {
             let payoffs = self.root_payoffs(b).unwrap();
@@ -871,15 +882,21 @@ impl<'d> BoundSolver<'d> {
             let (side, policy) = pending[cursor % pending.len()];
             cursor += 1;
             let refine = payoffs.refinement_cell(*side, policy);
-            let cell = if payoffs.value.width() > tolerance * 0.5
-                && (cursor % 4 == 0 || refine.is_none()) {
-                self.select_cell(root)
-            } else if let Some((cell, _)) = refine { cell }
-                else { self.select_cell(root) };
+            let refine_value = (payoffs.value.width() > tolerance * 0.5 && cursor % 4 == 0)
+                || refine.is_none();
+            let direction = self.cfg.directed_policy_refinement.then(|| {
+                if refine_value {
+                    let (value_side, _) = pending[value_cursor % pending.len()];
+                    value_cursor += 1;
+                    if *value_side == 0 { BoundDirection::Upper } else { BoundDirection::Lower }
+                } else if *side == 0 { BoundDirection::Lower } else { BoundDirection::Upper }
+            });
+            let cell = if refine_value { self.select_cell_for_bound(root, direction) }
+                else { refine.unwrap().0 };
             if self.nodes[&root].battle.is_none() {
                 self.nodes.get_mut(&root).unwrap().battle = Some(b.clone());
             }
-            if self.trial_from_cell(root, work_limit, Some(cell)) { idle = 0; }
+            if self.trial_from_cell(root, work_limit, Some(cell), direction) { idle = 0; }
                 else { idle += 1; }
             if self.cfg.fold_closed_nodes && self.stats.trials % 4096 == 0 {
                 self.fold_closed_graph();
@@ -1034,10 +1051,15 @@ impl<'d> BoundSolver<'d> {
     /// One trial: descend by LP-support × uncertainty, expand one pending
     /// chance script at the frontier, back up along the path.
     fn trial(&mut self, root: NodeKey, work_limit: usize) -> bool {
-        self.trial_from_cell(root, work_limit, None)
+        self.trial_from_cell(root, work_limit, None, None)
     }
 
-    fn trial_from_cell(&mut self, root: NodeKey, work_limit: usize, root_cell: Option<usize>) -> bool {
+    fn trial_from_cell(&mut self, root: NodeKey, work_limit: usize, root_cell: Option<usize>, direction: Option<BoundDirection>) -> bool {
+        match direction {
+            Some(BoundDirection::Lower) => self.stats.lower_directed_trials += 1,
+            Some(BoundDirection::Upper) => self.stats.upper_directed_trials += 1,
+            None => {}
+        }
         self.stats.trials += 1;
         let mut did_work = false;
         let mut path: Vec<(NodeKey, usize)> = Vec::new();
@@ -1054,8 +1076,8 @@ impl<'d> BoundSolver<'d> {
             if n.cells.is_empty() {
                 self.init_cells(cur);
             }
-            let ci = if depth == 0 { root_cell.unwrap_or_else(|| self.select_cell(cur)) }
-                else { self.select_cell(cur) };
+            let ci = if depth == 0 { root_cell.unwrap_or_else(|| self.select_cell_for_bound(cur, direction)) }
+                else { self.select_cell_for_bound(cur, direction) };
             path.push((cur, ci));
             if self.try_eager(cur, ci, work_limit) {
                 did_work = true;
@@ -1198,12 +1220,10 @@ impl<'d> BoundSolver<'d> {
         Some(selected)
     }
 
-    /// Cell choice alternates the two certificate witnesses. For the lower
-    /// bound, cross the lower row strategy with every tied pure best-response
-    /// column. For the upper bound, cross every tied pure best-response row
-    /// with the upper column strategy. Every 32nd visit is a round-robin fair
-    /// pick, so zero-support cells cannot remain starved forever.
-    fn select_cell(&mut self, key: NodeKey) -> usize {
+    /// A requested direction selects its certificate witness; otherwise the
+    /// witnesses alternate. Every 32nd visit covers unresolved live cells
+    /// regardless of witness support.
+    fn select_cell_for_bound(&mut self, key: NodeKey, direction: Option<BoundDirection>) -> usize {
         const FAIR_PERIOD: usize = 32;
         const EPS: f64 = 1e-12;
 
@@ -1262,10 +1282,7 @@ impl<'d> BoundSolver<'d> {
                         }
                     }
                     (if best.0 > 0.0 { best.1 } else { widest() }, 0u8)
-                } else if node.select_count % 4 == 0 {
-                    // Keep a sparse copy of the old union-support priority.
-                    // It is redundant as a proof witness but empirically
-                    // valuable on tiny lethal fans that close immediately.
+                } else if direction.is_none() && node.select_count % 4 == 0 {
                     let mut best = (f64::NEG_INFINITY, widest());
                     for &ci in &active_cells {
                         let (i, j) = (ci / n1, ci % n1);
@@ -1278,7 +1295,8 @@ impl<'d> BoundSolver<'d> {
                         }
                     }
                     (if best.0 > 0.0 { best.1 } else { widest() }, 4u8)
-                } else if node.select_count % 2 == 0 {
+                } else if direction == Some(BoundDirection::Lower)
+                    || (direction.is_none() && node.select_count % 2 == 0) {
                     let guarantees: Vec<f64> = (0..n1)
                         .map(|j| {
                             (0..n0)
@@ -2977,18 +2995,18 @@ mod tests {
         // Next visit is lower-directed. Column 1 is a tied pure response to
         // xlo but has zero ylo support; the scheduler must still select it.
         solver.nodes.insert(key, synthetic_node(1, 0));
-        assert_eq!(solver.select_cell(key), 1);
+        assert_eq!(solver.select_cell_for_bound(key, None), 1);
         assert_eq!(solver.stats.lower_br_picks, 1);
 
         // Every 32nd visit ignores policy scores and advances a deterministic
         // cursor over all unresolved active cells.
         solver.nodes.insert(key, synthetic_node(31, 2));
-        assert_eq!(solver.select_cell(key), 2);
+        assert_eq!(solver.select_cell_for_bound(key, None), 2);
         assert_eq!(solver.stats.fair_cell_picks, 1);
     }
 
     #[test]
-    fn interleaved_resource_search_encloses_exhaustive_two_turn_value() {
+    fn resource_and_directional_search_enclose_exhaustive_two_turn_policies() {
         let dex = conformance::load_dex();
         let mut root = battle(&dex, &["Recover", "Seismic Toss"], &["Recover", "Seismic Toss"]);
         let choices = [0, 1].map(|side| root.legal_choices(&dex, side)[0]);
@@ -3001,24 +3019,44 @@ mod tests {
         assert!(crate::stall::classify_two_sided_heal(&root, &dex).is_ok());
         let matrix = exhaustive_matrix(&dex, &root, 2);
         let value = solve_matrix(&matrix, 2, 2).0;
-        for period in [0, 1, 2] {
+        let exact = super::RootPayoffs {
+            actions: [0, 1].map(|side| root.legal_choices(&dex, side).into_iter().map(Some).collect()),
+            cells: matrix.iter().map(|&v| super::Bounds { lo: v, hi: v }).collect(),
+            value: super::Bounds { lo: value, hi: value },
+        };
+        let targets: Vec<_> = (0..2).flat_map(|side| {
+            [vec![1.0, 0.0], vec![0.0, 1.0], vec![0.3, 0.7]].map(|policy| (side, policy))
+        }).collect();
+        for (period, directed) in [(0, false), (1, false), (2, false), (1, true)] {
             let mut solver = BoundSolver::new(&dex, BoundConfig {
                 work_budget: 17, cell_cap: 0, eps: 1e-10,
                 resource_closure_nodes: Some(0), resource_closure_period: period,
+                directed_policy_refinement: directed,
                 ..BoundConfig::default()
             });
             let mut previous = super::Bounds { lo: 0.0, hi: 1.0 };
             for _ in 0..2_000 {
-                let report = solver.solve(&root, None);
+                let report = solver.solve_policy_losses(&root, &targets, 1e-8);
+                let payoffs = solver.root_payoffs(&root).unwrap();
+                for (side, policy) in &targets {
+                    let expected = exact.policy_loss(*side, policy);
+                    let found = payoffs.policy_loss(*side, policy);
+                    assert!(found.lo <= expected.lo + 1e-9);
+                    assert!(found.hi >= expected.hi - 1e-9);
+                }
                 assert!(report.bounds.lo <= value + 1e-10);
                 assert!(report.bounds.hi >= value - 1e-10);
                 assert!(report.bounds.lo >= previous.lo);
                 assert!(report.bounds.hi <= previous.hi);
                 previous = report.bounds;
-                if previous.width() < 1e-10 { break; }
+                if report.stop == super::Stop::StrategyMet { break; }
                 assert!(report.runs > 0, "period={period}, bounds={:?}, stop={:?}", report.bounds, report.stop);
             }
-            assert!(previous.width() < 1e-10);
+            for (side, policy) in &targets {
+                assert!(solver.root_payoffs(&root).unwrap().policy_loss(*side, policy).width() < 1e-8);
+            }
+            assert_eq!(solver.stats.lower_directed_trials > 0, directed);
+            assert_eq!(solver.stats.upper_directed_trials > 0, directed);
             assert_eq!(solver.stats.resource_closure_visits > 0, period > 0);
             assert_eq!(solver.stats.two_sided_invalidations, 0);
         }
