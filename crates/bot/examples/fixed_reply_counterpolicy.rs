@@ -11,6 +11,8 @@ mod terminal_step;
 mod switch_kernel;
 #[path="fixed_reply_counterpolicy/healing_kernel.rs"]
 mod healing_kernel;
+#[path="fixed_reply_counterpolicy/waking_continuation.rs"]
+mod waking_continuation;
 use nc2000_engine::battle::{Outcome,PokemonSet,SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::{Battle,Status,DK};
@@ -175,6 +177,7 @@ fn sha(bytes:&[u8])->String {format!("{:x}",Sha256::digest(bytes))}
 fn main() {
     let args:Vec<_>=std::env::args().collect();
     if args.get(2).is_some_and(|mode|mode=="certify") {pair_bound::execute(&args);return;}
+    if args.get(2).is_some_and(|mode|mode=="continuations") {waking_continuation::execute(&args);return;}
     assert!(matches!(args.len(),5|6),"corpus samples seed output [late-rest|counter-search|waking-rest|responses.json]");
     let extended=args.get(5).is_some_and(|mode|mode=="late-rest");
     let waking=args.get(5).is_some_and(|mode|mode=="waking-rest");
@@ -328,7 +331,7 @@ mod tests {
 }
 
 fn manifest(dex:&Dex,raw:&[u8])->Value {
-    let paths=["crates/bot/examples/fixed_reply_counterpolicy.rs","crates/bot/examples/fixed_reply_counterpolicy/pair_bound.rs","crates/bot/examples/fixed_reply_counterpolicy/best_first.rs","crates/bot/examples/fixed_reply_counterpolicy/hp_storage.rs","crates/bot/examples/fixed_reply_counterpolicy/retained.rs","crates/bot/examples/fixed_reply_counterpolicy/terminal_step.rs","crates/bot/examples/fixed_reply_counterpolicy/switch_kernel.rs","crates/bot/examples/fixed_reply_counterpolicy/healing_kernel.rs","crates/bot/src/bounds.rs","crates/bot/src/hp_transition.rs",
+    let paths=["crates/bot/examples/fixed_reply_counterpolicy.rs","crates/bot/examples/fixed_reply_counterpolicy/pair_bound.rs","crates/bot/examples/fixed_reply_counterpolicy/best_first.rs","crates/bot/examples/fixed_reply_counterpolicy/hp_storage.rs","crates/bot/examples/fixed_reply_counterpolicy/retained.rs","crates/bot/examples/fixed_reply_counterpolicy/terminal_step.rs","crates/bot/examples/fixed_reply_counterpolicy/switch_kernel.rs","crates/bot/examples/fixed_reply_counterpolicy/healing_kernel.rs","crates/bot/examples/fixed_reply_counterpolicy/waking_continuation.rs","crates/bot/src/bounds.rs","crates/bot/src/hp_transition.rs",
         "crates/engine/src/state.rs","crates/engine/src/prng.rs","crates/engine/src/battle/enumerate.rs","crates/engine/src/battle/search.rs",
         "crates/engine/src/battle/actions.rs","crates/engine/src/battle/conditions.rs",
         "crates/engine/src/battle/moveexec.rs","crates/engine/src/battle/turn.rs","crates/engine/src/battle/events.rs",

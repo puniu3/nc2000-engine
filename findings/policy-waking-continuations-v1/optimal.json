@@ -1,0 +1,9 @@
+{
+  "samples": 10000,
+  "seed": 2026102301,
+  "positions": 1,
+  "work_budget": 200000,
+  "time_budget_ms": 120000,
+  "selection": "low_pp",
+  "unrestricted_work_budget": 1000000
+}

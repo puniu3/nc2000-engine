@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-waking-continuations-v1'
+names = ['probe', 'low-pp', 'optimal']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records, corpus):
+    assert set(records) == {*names, 'regression'}
+    for key in ['binary_sha256', 'source_hashes', 'revision', 'dex_fingerprint']:
+        assert len({json.dumps(r['manifest'][key], sort_keys=True) for r in records.values()}) == 1
+    for record in records.values():
+        assert record['manifest']['corpus_sha256'] == sha(corpus)
+    assert len({records[name]['divergent_trials'] for name in names}) == 1
+    assert records['optimal']['positions'][0]['state'] == records['low-pp']['positions'][0]['state']
+    for a, b in zip(records['optimal']['positions'][0]['arms'], records['low-pp']['positions'][0]['arms']):
+        assert {k: v for k, v in a.items() if k != 'elapsed_ms'} == {k: v for k, v in b.items() if k != 'elapsed_ms'}
+    studies = {}
+    for name in names:
+        record = records[name]
+        assert record['schema'] == 'nc2000-waking-continuations-v1'
+        assert record['root_key'] == '199433906935569759004884428941975153695'
+        cfg = record['config']
+        assert cfg == dict(samples=10000, seed=2026102301, positions=1 if name == 'optimal' else 3, work_budget=200000,
+                           time_budget_ms=120000 if name == 'optimal' else 60000,
+                           unrestricted_work_budget=1000000 if name == 'optimal' else 0,
+                           selection='first' if name == 'probe' else 'low_pp')
+        assert 0 < record['divergent_trials'] <= cfg['samples']
+        positions = record['positions']
+        assert len(positions) == cfg['positions']
+        assert len({p['state']['key'] for p in positions}) == len(positions)
+        assert len({p['state']['trial'] for p in positions}) == len(positions)
+        rows = []
+        for position in positions:
+            state, arms = position['state'], position['arms']
+            assert state['turn'] == state['essence']['turn']
+            assert 0 <= state['trial'] < cfg['samples']
+            assert 0 < len(state['prefix']) < 2048
+            assert state['prefix'][0] == ['move bodyslam', 'switch 2']
+            live = [p for side in state['essence']['sides'] for p in side['pokemon'] if p['hp'] > 0 and not p['fainted']]
+            assert len(live) == 2
+            assert state['live_pp'] == sum(m['pp'] for p in live for m in p['moves'])
+            own = next(p for p in state['essence']['sides'][0]['pokemon'] if p['active'])
+            assert own['status'] == 'slp' and own['statusState']['time'] == 1
+            assert own['hp'] * 100 <= own['maxhp'] * 75
+            assert [a['waking'] for a in arms] == [False, True]
+            assert arms[0]['root_actions'][0] != ['move rest']
+            assert arms[1]['root_actions'][0] == ['move rest']
+            assert arms[0]['root_actions'][1] == arms[1]['root_actions'][1]
+            for arm in arms:
+                assert 0 < arm['runs'] <= cfg['work_budget']
+                assert len(arm['root_cells']) == len(arm['root_actions'][1])
+                for value in arm['root_cells'] + [arm['guaranteed_score'], arm['imported_unrestricted_value']]:
+                    assert 0 <= value['lo'] <= value['hi'] <= 1
+                assert arm['imported_unrestricted_value']['lo'] == arm['guaranteed_score']['lo']
+                assert arm['imported_unrestricted_value']['hi'] == 1
+                assert arm['import_hits'] == int(arm['guaranteed_score']['lo'] > 0)
+                assert bool(arm['waking_rest_nodes']) == arm['waking']
+            optimal = position['unrestricted']
+            if name == 'optimal':
+                assert optimal['root_actions'][1] == ['move struggle']
+                assert optimal['root_actions'][0] == ['move fireblast', 'move rest', 'move selfdestruct']
+                assert len(optimal['root_cells']) == 3
+                assert 0 < optimal['runs'] <= cfg['unrestricted_work_budget']
+                for value in optimal['root_cells'] + [optimal['value'], optimal['rest_loss']]:
+                    assert 0 <= value['lo'] <= value['hi'] <= 1
+                rest = optimal['root_cells'][1]
+                assert abs(optimal['rest_loss']['lo'] - max(0, optimal['value']['lo'] - min(1, rest['hi'] + 4e-12))) < 1e-12
+                assert abs(optimal['rest_loss']['hi'] - max(0, optimal['value']['hi'] - max(0, rest['lo'] - 4e-12))) < 1e-12
+            else:
+                assert optimal is None
+            rows.append(dict(trial=state['trial'], turn=state['turn'], live_pp=state['live_pp'],
+                             prefix_steps=len(state['prefix']), key=state['key'],
+                             guarantees=[a['guaranteed_score'] for a in arms],
+                             waking_rest_nodes=[a['waking_rest_nodes'] for a in arms],
+                             certificate_counts=[a['certificates'] for a in arms],
+                             import_hits=[a['import_hits'] for a in arms],
+                             runs=[a['runs'] for a in arms],
+                             stops=[a['stop'] for a in arms],
+                             old_guarantee_minus_waking_guarantee_lower=max(0, arms[0]['guaranteed_score']['lo'] - arms[1]['guaranteed_score']['hi'] - 1e-10),
+                             unrestricted=optimal))
+        if name == 'low-pp':
+            assert [(r['live_pp'], r['trial']) for r in rows] == sorted((r['live_pp'], r['trial']) for r in rows)
+        studies[name] = rows
+    prior_path = root / 'findings/policy-waking-rest-v1/records.json.gz'
+    prior = json.loads(gzip.decompress(prior_path.read_bytes()))['pilot']
+    current = records['regression']
+    assert current['schema'] == prior['schema']
+    assert current['state_key'] == prior['state_key']
+    assert len(current['arms']) == len(prior['arms']) == 40
+    for before, after in zip(prior['arms'], current['arms']):
+        assert {k: v for k, v in before.items() if k != 'elapsed_ms'} == {k: v for k, v in after.items() if k != 'elapsed_ms'}
+    return dict(schema='nc2000-policy-waking-continuations-v1', studies=studies,
+                divergent_trials=records['probe']['divergent_trials'], extraction_trials=10000,
+                numerical_envelope=1e-10,
+                prior_archive_sha256=sha(prior_path.read_bytes()),
+                interpretation='Seeded rollouts select reachable continuation states and exact replay checks state plus PRNG, not a probability certificate. The first-state and low-PP selections expose different resource layers; low-PP states may be rare. All subsequent opponent choices remain free in each fixed-policy proof. Only proven lower bounds are projected into the unrestricted same-state solver, without importing fixed-policy upper bounds. A zero import-hit count means no positive lower certificate at that selected root. The additional unrestricted search frees both players at every future decision and separately bounds the first Rest action loss against optimal continuation; its matrix and loss are not inferred from the two fixed policies. No reach probability or original-root game bound is inferred from selection frequency. Forty existing rollout arms reproduce exactly.')
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    for name in names:
+        assert records[name]['config'] == json.loads((archive / f'{name}.json').read_bytes())
+    assert summarize(records, corpus) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified replayed continuation states, one-sided imports, and forty-arm regression')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-waking-continuations-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    command = [str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl')]
+    for name in names:
+        (directory / f'{name}.json').write_bytes((archive / f'{name}.json').read_bytes())
+        subprocess.run(command + ['continuations', str(directory / f'{name}.json'), str(directory / f'{name}-result.json')], cwd=root, env=env, check=True)
+    subprocess.run(command + ['10000', '2026102201', str(directory / 'regression.json'), 'waking-rest'], cwd=root, env=env, check=True)
+records = {name: json.loads((directory / f'{name}-result.json').read_bytes()) for name in names}
+records['regression'] = json.loads((directory / 'regression.json').read_bytes())
+corpus = (directory / 'corpus.jsonl').read_bytes()
+summary = summarize(records, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    for name in names:
+        raw = (directory / f'{name}.json').read_bytes()
+        assert json.loads(raw) == records[name]['config']
+        (archive / f'{name}.json').write_bytes(raw)
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(json.dumps(summary['studies'], indent=2))

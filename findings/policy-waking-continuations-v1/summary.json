@@ -1,0 +1,326 @@
+{
+  "schema": "nc2000-policy-waking-continuations-v1",
+  "studies": {
+    "probe": [
+      {
+        "trial": 17,
+        "turn": 30,
+        "live_pp": 86,
+        "prefix_steps": 13,
+        "key": "264615293776878679992161447807057991756",
+        "guarantees": [
+          {
+            "lo": 0.0,
+            "hi": 0.9922223345078777
+          },
+          {
+            "lo": 0.0,
+            "hi": 0.9902093349351051
+          }
+        ],
+        "waking_rest_nodes": [
+          0,
+          85
+        ],
+        "certificate_counts": [
+          1,
+          0
+        ],
+        "import_hits": [
+          0,
+          0
+        ],
+        "runs": [
+          200000,
+          200000
+        ],
+        "stops": [
+          "WorkExhausted",
+          "WorkExhausted"
+        ],
+        "old_guarantee_minus_waking_guarantee_lower": 0,
+        "unrestricted": null
+      },
+      {
+        "trial": 19,
+        "turn": 32,
+        "live_pp": 83,
+        "prefix_steps": 15,
+        "key": "117687752220602468334222156969425496733",
+        "guarantees": [
+          {
+            "lo": 0.0,
+            "hi": 0.24679521035096003
+          },
+          {
+            "lo": 0.0,
+            "hi": 0.3368865916458803
+          }
+        ],
+        "waking_rest_nodes": [
+          0,
+          62
+        ],
+        "certificate_counts": [
+          0,
+          0
+        ],
+        "import_hits": [
+          0,
+          0
+        ],
+        "runs": [
+          200000,
+          200000
+        ],
+        "stops": [
+          "WorkExhausted",
+          "WorkExhausted"
+        ],
+        "old_guarantee_minus_waking_guarantee_lower": 0,
+        "unrestricted": null
+      },
+      {
+        "trial": 22,
+        "turn": 28,
+        "live_pp": 91,
+        "prefix_steps": 11,
+        "key": "163217990589347680588207827975951651539",
+        "guarantees": [
+          {
+            "lo": 0.0,
+            "hi": 0.949365437030792
+          },
+          {
+            "lo": 0.0,
+            "hi": 0.9501477967802571
+          }
+        ],
+        "waking_rest_nodes": [
+          0,
+          62
+        ],
+        "certificate_counts": [
+          0,
+          0
+        ],
+        "import_hits": [
+          0,
+          0
+        ],
+        "runs": [
+          200000,
+          200000
+        ],
+        "stops": [
+          "WorkExhausted",
+          "WorkExhausted"
+        ],
+        "old_guarantee_minus_waking_guarantee_lower": 0,
+        "unrestricted": null
+      }
+    ],
+    "low-pp": [
+      {
+        "trial": 7455,
+        "turn": 89,
+        "live_pp": 10,
+        "prefix_steps": 72,
+        "key": "175093530742874641976215422968133191950",
+        "guarantees": [
+          {
+            "lo": 0.07126487861527529,
+            "hi": 0.08125009818076662
+          },
+          {
+            "lo": 0.0,
+            "hi": 0.03065504115462469
+          }
+        ],
+        "waking_rest_nodes": [
+          0,
+          1
+        ],
+        "certificate_counts": [
+          396,
+          0
+        ],
+        "import_hits": [
+          1,
+          0
+        ],
+        "runs": [
+          144464,
+          200000
+        ],
+        "stops": [
+          "WidthMet",
+          "WorkExhausted"
+        ],
+        "old_guarantee_minus_waking_guarantee_lower": 0.0406098373606506,
+        "unrestricted": null
+      },
+      {
+        "trial": 1665,
+        "turn": 89,
+        "live_pp": 11,
+        "prefix_steps": 72,
+        "key": "61151904223889402225416600602663115779",
+        "guarantees": [
+          {
+            "lo": 9.459970164962655e-06,
+            "hi": 0.010009248871630117
+          },
+          {
+            "lo": 0.0,
+            "hi": 0.009987514088313198
+          }
+        ],
+        "waking_rest_nodes": [
+          0,
+          1
+        ],
+        "certificate_counts": [
+          112,
+          0
+        ],
+        "import_hits": [
+          1,
+          0
+        ],
+        "runs": [
+          156476,
+          99822
+        ],
+        "stops": [
+          "WidthMet",
+          "WidthMet"
+        ],
+        "old_guarantee_minus_waking_guarantee_lower": 0,
+        "unrestricted": null
+      },
+      {
+        "trial": 3628,
+        "turn": 86,
+        "live_pp": 11,
+        "prefix_steps": 69,
+        "key": "196676676567089501724887318943786566778",
+        "guarantees": [
+          {
+            "lo": 0.05436983670140525,
+            "hi": 0.14451270730854854
+          },
+          {
+            "lo": 0.04974563126013113,
+            "hi": 0.27383477380837556
+          }
+        ],
+        "waking_rest_nodes": [
+          0,
+          20
+        ],
+        "certificate_counts": [
+          40,
+          201
+        ],
+        "import_hits": [
+          1,
+          1
+        ],
+        "runs": [
+          200000,
+          200000
+        ],
+        "stops": [
+          "WorkExhausted",
+          "WorkExhausted"
+        ],
+        "old_guarantee_minus_waking_guarantee_lower": 0,
+        "unrestricted": null
+      }
+    ],
+    "optimal": [
+      {
+        "trial": 7455,
+        "turn": 89,
+        "live_pp": 10,
+        "prefix_steps": 72,
+        "key": "175093530742874641976215422968133191950",
+        "guarantees": [
+          {
+            "lo": 0.07126487861527529,
+            "hi": 0.08125009818076662
+          },
+          {
+            "lo": 0.0,
+            "hi": 0.03065504115462469
+          }
+        ],
+        "waking_rest_nodes": [
+          0,
+          1
+        ],
+        "certificate_counts": [
+          396,
+          0
+        ],
+        "import_hits": [
+          1,
+          0
+        ],
+        "runs": [
+          144464,
+          200000
+        ],
+        "stops": [
+          "WidthMet",
+          "WorkExhausted"
+        ],
+        "old_guarantee_minus_waking_guarantee_lower": 0.0406098373606506,
+        "unrestricted": {
+          "value": {
+            "lo": 0.07231740130693688,
+            "hi": 0.07822748328077819
+          },
+          "rest_loss": {
+            "lo": 0.07231740130095006,
+            "hi": 0.07822748328077819
+          },
+          "runs": 1000000,
+          "stop": "WorkExhausted",
+          "nodes": 3464,
+          "elapsed_ms": 31520.595083,
+          "root_actions": [
+            [
+              "move fireblast",
+              "move rest",
+              "move selfdestruct"
+            ],
+            [
+              "move struggle"
+            ]
+          ],
+          "root_cells": [
+            {
+              "lo": 0.07231740130693688,
+              "hi": 0.07822748328077819
+            },
+            {
+              "lo": 0.0,
+              "hi": 1.986819752180715e-12
+            },
+            {
+              "lo": 0.0,
+              "hi": 0.0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "divergent_trials": 1683,
+  "extraction_trials": 10000,
+  "numerical_envelope": 1e-10,
+  "prior_archive_sha256": "c8baabf8564450462706f38ecb6b2d4700bd08d638c05b7ee5e052fe576b22dc",
+  "interpretation": "Seeded rollouts select reachable continuation states and exact replay checks state plus PRNG, not a probability certificate. The first-state and low-PP selections expose different resource layers; low-PP states may be rare. All subsequent opponent choices remain free in each fixed-policy proof. Only proven lower bounds are projected into the unrestricted same-state solver, without importing fixed-policy upper bounds. A zero import-hit count means no positive lower certificate at that selected root. The additional unrestricted search frees both players at every future decision and separately bounds the first Rest action loss against optimal continuation; its matrix and loss are not inferred from the two fixed policies. No reach probability or original-root game bound is inferred from selection frequency. Forty existing rollout arms reproduce exactly."
+}
