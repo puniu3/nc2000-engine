@@ -1,0 +1,24 @@
+{
+  "response": {
+    "return_when": "self_low",
+    "ice_first": false,
+    "finish_low": true
+  },
+  "width": 256,
+  "steps": 32,
+  "cell_cap": 4096,
+  "work_budget": 100000000,
+  "lazy": true,
+  "hp_storage_census": false,
+  "guarded_keys": true,
+  "packed_hp": true,
+  "packed_state_cap": 4096,
+  "healing_capacity": 16384,
+  "reuse_attacks": true,
+  "boom_eager_cap": 4096,
+  "boom_terminal_quotient": false,
+  "reuse_switches": true,
+  "switch_kernel_capacity": 4096,
+  "time_budget_ms": 30000,
+  "frontier_mass_order": true
+}

@@ -1,0 +1,867 @@
+{
+  "schema": "nc2000-policy-frontier-cap-v1",
+  "results": {
+    "cap-100000-1": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9152250869327907
+      },
+      "runs": 1044709,
+      "elapsed_ms": 30016.735833,
+      "cache": {
+        "observations": 953507,
+        "eligible": 935119,
+        "attack_eligible": 840603,
+        "switch_eligible": 2880,
+        "hits": 318319,
+        "attack_hits": 235276,
+        "switch_hits": 0,
+        "reset_hits": 26550,
+        "rejected_hp": 55191,
+        "runs": 635188,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 448,
+        "completed": 448,
+        "runs": 409521,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 525,
+        "eligible": 42,
+        "hits": 40,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 114,
+        "translated_leaves": 2280,
+        "observations_avoided": 57600
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 2146,
+          "input_mass": 0.9968234231755768,
+          "processed_states": 934,
+          "processed_mass": 0.9876732520441956,
+          "top_mass_same_count": 0.9876732520441956
+        }
+      ],
+      "hit_fraction": 0.3338402339993309,
+      "peak_states": 14056,
+      "peak_templates": 36,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1044709,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08477491406719924,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.022504108301518173,
+        "frontier_mass": 0.8927209776312726,
+        "unknown_mass": 0.9152250859327907,
+        "frontier_states": 14056,
+        "frontier_templates": 36,
+        "enumeration_failures": 53,
+        "mass_error": 9.992007221626409e-15,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9152250869327907
+        }
+      }
+    },
+    "cap-4096-1": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9137473632893418
+      },
+      "runs": 1115094,
+      "elapsed_ms": 30019.74375,
+      "cache": {
+        "observations": 1024218,
+        "eligible": 1005830,
+        "attack_eligible": 908974,
+        "switch_eligible": 4320,
+        "hits": 326569,
+        "attack_hits": 242626,
+        "switch_hits": 0,
+        "reset_hits": 27450,
+        "rejected_hp": 63666,
+        "runs": 697649,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 518,
+        "completed": 518,
+        "runs": 417445,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 558,
+        "eligible": 56,
+        "hits": 53,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 171,
+        "translated_leaves": 3021,
+        "observations_avoided": 76320
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 2146,
+          "input_mass": 0.9968234231755768,
+          "processed_states": 1037,
+          "processed_mass": 0.9910126174959719,
+          "top_mass_same_count": 0.9910126174959719
+        }
+      ],
+      "hit_fraction": 0.3188471594914364,
+      "peak_states": 8254,
+      "peak_templates": 39,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1115094,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08625263771065372,
+        "dropped_mass": 0.01967443774983011,
+        "failed_mass": 0.01916474464101279,
+        "frontier_mass": 0.8749081798984989,
+        "unknown_mass": 0.9137473622893418,
+        "frontier_states": 4096,
+        "frontier_templates": 34,
+        "enumeration_failures": 54,
+        "mass_error": 4.440892098500626e-15,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9137473632893418
+        }
+      }
+    },
+    "cap-1024-1": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9129462459995319
+      },
+      "runs": 1082256,
+      "elapsed_ms": 30063.656208,
+      "cache": {
+        "observations": 995152,
+        "eligible": 972668,
+        "attack_eligible": 863524,
+        "switch_eligible": 4320,
+        "hits": 330217,
+        "attack_hits": 238126,
+        "switch_hits": 0,
+        "reset_hits": 27750,
+        "rejected_hp": 57816,
+        "runs": 664935,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 8192,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 517,
+        "completed": 517,
+        "runs": 417321,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 550,
+        "eligible": 56,
+        "hits": 53,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 171,
+        "translated_leaves": 3021,
+        "observations_avoided": 76320
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 1024,
+          "input_mass": 0.9906105380660506,
+          "processed_states": 1024,
+          "processed_mass": 0.9906105380660506,
+          "top_mass_same_count": 0.9906105380660506
+        },
+        {
+          "depth": 4,
+          "input_states": 1024,
+          "input_mass": 0.7451141842794027,
+          "processed_states": 4,
+          "processed_mass": 0.08679855895060677,
+          "top_mass_same_count": 0.08679855895060677
+        }
+      ],
+      "hit_fraction": 0.33182569094972425,
+      "peak_states": 2672,
+      "peak_templates": 32,
+      "depth": 4,
+      "final": {
+        "depth": 4,
+        "runs": 1082256,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08705375500046501,
+        "dropped_mass": 0.15924893849778207,
+        "failed_mass": 0.6730616787483329,
+        "frontier_mass": 0.08063562775341697,
+        "unknown_mass": 0.9129462449995319,
+        "frontier_states": 1024,
+        "frontier_templates": 11,
+        "enumeration_failures": 4,
+        "mass_error": 3.1086244689504383e-15,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9129462459995319
+        }
+      }
+    },
+    "cap-256-1": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9436017828859796
+      },
+      "runs": 414861,
+      "elapsed_ms": 30015.065916,
+      "cache": {
+        "observations": 851070,
+        "eligible": 770884,
+        "attack_eligible": 86272,
+        "switch_eligible": 20160,
+        "hits": 674485,
+        "attack_hits": 68992,
+        "switch_hits": 0,
+        "reset_hits": 54360,
+        "rejected_hp": 1740,
+        "runs": 176585,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 74,
+          "healer_full_hp": 53248,
+          "healer_volatile": 12600,
+          "opponent_move": 13664
+        }
+      },
+      "boom_eager": {
+        "attempts": 152,
+        "completed": 152,
+        "runs": 238276,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 1153,
+        "eligible": 739,
+        "hits": 725,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 798,
+        "translated_leaves": 41325,
+        "observations_avoided": 1044000
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 256,
+          "input_mass": 0.9240935121489045,
+          "processed_states": 256,
+          "processed_mass": 0.9240935121489045,
+          "top_mass_same_count": 0.9240935121489045
+        },
+        {
+          "depth": 4,
+          "input_states": 256,
+          "input_mass": 0.5096027486527526,
+          "processed_states": 256,
+          "processed_mass": 0.5096027486527526,
+          "top_mass_same_count": 0.5096027486527526
+        },
+        {
+          "depth": 5,
+          "input_states": 256,
+          "input_mass": 0.15912643406760682,
+          "processed_states": 256,
+          "processed_mass": 0.15912643406760682,
+          "top_mass_same_count": 0.15912643406760682
+        },
+        {
+          "depth": 6,
+          "input_states": 256,
+          "input_mass": 0.051688600993621145,
+          "processed_states": 256,
+          "processed_mass": 0.051688600993621145,
+          "top_mass_same_count": 0.051688600993621145
+        },
+        {
+          "depth": 7,
+          "input_states": 256,
+          "input_mass": 0.01779786928563082,
+          "processed_states": 242,
+          "processed_mass": 0.017562639125108866,
+          "top_mass_same_count": 0.017562639125108866
+        }
+      ],
+      "hit_fraction": 0.7925141292725628,
+      "peak_states": 1900,
+      "peak_templates": 35,
+      "depth": 7,
+      "final": {
+        "depth": 7,
+        "runs": 414861,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.05639821811401953,
+        "dropped_mass": 0.9168242534086478,
+        "failed_mass": 0.0199370425626021,
+        "frontier_mass": 0.006840485914729716,
+        "unknown_mass": 0.9436017818859797,
+        "frontier_states": 256,
+        "frontier_templates": 22,
+        "enumeration_failures": 28,
+        "mass_error": 7.771561172376096e-16,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9436017828859796
+        }
+      }
+    },
+    "cap-256-2": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9436819168655962
+      },
+      "runs": 406369,
+      "elapsed_ms": 30042.468792,
+      "cache": {
+        "observations": 851062,
+        "eligible": 770884,
+        "attack_eligible": 86272,
+        "switch_eligible": 20160,
+        "hits": 674485,
+        "attack_hits": 68992,
+        "switch_hits": 0,
+        "reset_hits": 54360,
+        "rejected_hp": 1740,
+        "runs": 176577,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 66,
+          "healer_full_hp": 53248,
+          "healer_volatile": 12600,
+          "opponent_move": 13664
+        }
+      },
+      "boom_eager": {
+        "attempts": 147,
+        "completed": 147,
+        "runs": 229792,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 1142,
+        "eligible": 732,
+        "hits": 718,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 798,
+        "translated_leaves": 40926,
+        "observations_avoided": 1033920
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 256,
+          "input_mass": 0.9240935121489045,
+          "processed_states": 256,
+          "processed_mass": 0.9240935121489045,
+          "top_mass_same_count": 0.9240935121489045
+        },
+        {
+          "depth": 4,
+          "input_states": 256,
+          "input_mass": 0.5096027486527526,
+          "processed_states": 256,
+          "processed_mass": 0.5096027486527526,
+          "top_mass_same_count": 0.5096027486527526
+        },
+        {
+          "depth": 5,
+          "input_states": 256,
+          "input_mass": 0.15912643406760682,
+          "processed_states": 256,
+          "processed_mass": 0.15912643406760682,
+          "top_mass_same_count": 0.15912643406760682
+        },
+        {
+          "depth": 6,
+          "input_states": 256,
+          "input_mass": 0.051688600993621145,
+          "processed_states": 256,
+          "processed_mass": 0.051688600993621145,
+          "top_mass_same_count": 0.051688600993621145
+        },
+        {
+          "depth": 7,
+          "input_states": 256,
+          "input_mass": 0.01779786928563082,
+          "processed_states": 226,
+          "processed_mass": 0.017261862328083275,
+          "top_mass_same_count": 0.017261862328083275
+        }
+      ],
+      "hit_fraction": 0.7925215789213946,
+      "peak_states": 1900,
+      "peak_templates": 35,
+      "depth": 7,
+      "final": {
+        "depth": 7,
+        "runs": 406369,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.05631808413440284,
+        "dropped_mass": 0.9166525308853385,
+        "failed_mass": 0.02023781935962769,
+        "frontier_mass": 0.006791565620630128,
+        "unknown_mass": 0.9436819158655962,
+        "frontier_states": 256,
+        "frontier_templates": 22,
+        "enumeration_failures": 28,
+        "mass_error": 8.881784197001252e-16,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9436819168655962
+        }
+      }
+    },
+    "cap-1024-2": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9151613180096092
+      },
+      "runs": 1054430,
+      "elapsed_ms": 30003.00125,
+      "cache": {
+        "observations": 965178,
+        "eligible": 946790,
+        "attack_eligible": 852274,
+        "switch_eligible": 2880,
+        "hits": 320269,
+        "attack_hits": 237226,
+        "switch_hits": 0,
+        "reset_hits": 26550,
+        "rejected_hp": 56241,
+        "runs": 644909,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 448,
+        "completed": 448,
+        "runs": 409521,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 528,
+        "eligible": 42,
+        "hits": 40,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 114,
+        "translated_leaves": 2280,
+        "observations_avoided": 57600
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 1024,
+          "input_mass": 0.9906105380660506,
+          "processed_states": 937,
+          "processed_mass": 0.9877967801101172,
+          "top_mass_same_count": 0.9877967801101172
+        }
+      ],
+      "hit_fraction": 0.33182376722221185,
+      "peak_states": 2672,
+      "peak_templates": 32,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1054430,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08483868299038992,
+        "dropped_mass": 0.1539119287076227,
+        "failed_mass": 0.016167696917336345,
+        "frontier_mass": 0.7450816913846502,
+        "unknown_mass": 0.9151613170096092,
+        "frontier_states": 1024,
+        "frontier_templates": 19,
+        "enumeration_failures": 54,
+        "mass_error": 8.881784197001252e-16,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9151613180096092
+        }
+      }
+    },
+    "cap-4096-2": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9137842769492749
+      },
+      "runs": 1108194,
+      "elapsed_ms": 30044.486,
+      "cache": {
+        "observations": 1016718,
+        "eligible": 998330,
+        "attack_eligible": 901474,
+        "switch_eligible": 4320,
+        "hits": 325969,
+        "attack_hits": 242026,
+        "switch_hits": 0,
+        "reset_hits": 27450,
+        "rejected_hp": 62616,
+        "runs": 690749,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 518,
+        "completed": 518,
+        "runs": 417445,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 556,
+        "eligible": 56,
+        "hits": 53,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 171,
+        "translated_leaves": 3021,
+        "observations_avoided": 76320
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 2146,
+          "input_mass": 0.9968234231755768,
+          "processed_states": 1035,
+          "processed_mass": 0.9909508534636655,
+          "top_mass_same_count": 0.9909508534636655
+        }
+      ],
+      "hit_fraction": 0.320609057772165,
+      "peak_states": 8254,
+      "peak_templates": 39,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1108194,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08621572405072064,
+        "dropped_mass": 0.019649587377456843,
+        "failed_mass": 0.01922650867331917,
+        "frontier_mass": 0.8749081798984989,
+        "unknown_mass": 0.9137842759492749,
+        "frontier_states": 4096,
+        "frontier_templates": 34,
+        "enumeration_failures": 54,
+        "mass_error": 4.440892098500626e-15,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9137842769492749
+        }
+      }
+    },
+    "cap-100000-2": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9151367089028843
+      },
+      "runs": 1057880,
+      "elapsed_ms": 30010.284291,
+      "cache": {
+        "observations": 968928,
+        "eligible": 950540,
+        "attack_eligible": 856024,
+        "switch_eligible": 2880,
+        "hits": 320569,
+        "attack_hits": 237526,
+        "switch_hits": 0,
+        "reset_hits": 26550,
+        "rejected_hp": 56766,
+        "runs": 648359,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 448,
+        "completed": 448,
+        "runs": 409521,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 529,
+        "eligible": 42,
+        "hits": 40,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 114,
+        "translated_leaves": 2280,
+        "observations_avoided": 57600
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 2146,
+          "input_mass": 0.9968234231755768,
+          "processed_states": 938,
+          "processed_mass": 0.9878379561318106,
+          "top_mass_same_count": 0.9878379561318106
+        }
+      ],
+      "hit_fraction": 0.330849144621685,
+      "peak_states": 14150,
+      "peak_templates": 36,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1057880,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.0848632920971051,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.02233940600517541,
+        "frontier_mass": 0.892797301897709,
+        "unknown_mass": 0.9151367079028844,
+        "frontier_states": 14150,
+        "frontier_templates": 36,
+        "enumeration_failures": 54,
+        "mass_error": 1.0547118733938987e-14,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9151367089028843
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "1": {
+      "4096": {
+        "upper_reduction": 0.0014777236434488916,
+        "elapsed_ratio": 1.0001002079978563,
+        "depth_gain": 0,
+        "discarded_mass": 0.01967443774983011
+      },
+      "1024": {
+        "upper_reduction": 0.0022788409332588078,
+        "elapsed_ratio": 1.0015631404847298,
+        "depth_gain": 1,
+        "discarded_mass": 0.15924893849778207
+      },
+      "256": {
+        "upper_reduction": -0.028376695953188924,
+        "elapsed_ratio": 0.999944367135411,
+        "depth_gain": 4,
+        "discarded_mass": 0.9168242534086478
+      }
+    },
+    "2": {
+      "4096": {
+        "upper_reduction": 0.0013524319536094564,
+        "elapsed_ratio": 1.0011396662780119,
+        "depth_gain": 0,
+        "discarded_mass": 0.019649587377456843
+      },
+      "1024": {
+        "upper_reduction": -2.460910672485994e-05,
+        "elapsed_ratio": 0.9997573151613834,
+        "depth_gain": 0,
+        "discarded_mass": 0.1539119287076227
+      },
+      "256": {
+        "upper_reduction": -0.02854520796271187,
+        "elapsed_ratio": 1.0010724490540615,
+        "depth_gain": 4,
+        "discarded_mass": 0.9166525308853385
+      }
+    }
+  },
+  "prior_archive_sha256": "1dacf8e418af8d84c1cc4887572b682fd013068a119215b35df9b40fca3e73b7",
+  "interpretation": "Four concrete-state caps are compared under the same 30-second search limit in forward and reverse serial order. The existing probability order, guarded HP storage, exact transition reuse and fixed policies are unchanged. Every state discarded by the cap contributes its entire probability to the unknown interval permanently; deeper traversal is useful only if the resulting interval improves despite that cost. Lower and upper bounds concern this fixed policy pair, not unrestricted game value or deployed strength. Two trials diagnose this workload rather than establish a universal optimal cap."
+}
