@@ -1283,8 +1283,6 @@ impl<'d> BoundSolver<'d> {
                 break;
             }
             let cell = &self.nodes[&cur].cells[ci];
-            // Expand pending mass while it dominates the cell's remaining
-            // uncertainty; otherwise descend into the widest child term.
             let closure_mode = (self.active_stall.is_some() || self.active_two_sided.is_some())
                 && self.cfg.resource_closure_period > 0
                 && (cell.visits + 1) % self.cfg.resource_closure_period == 0
