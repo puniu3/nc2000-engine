@@ -1,0 +1,70 @@
+{
+  "iterations": 27000,
+  "cells": [
+    {
+      "actions": [
+        "move doubleedge",
+        "move return"
+      ],
+      "trials": 64,
+      "wins": 13,
+      "ties": 0,
+      "losses": 51,
+      "censored": 0,
+      "sample_score_interval": [
+        0.203125,
+        0.203125
+      ],
+      "max_steps": 76
+    },
+    {
+      "actions": [
+        "move doubleedge",
+        "move curse"
+      ],
+      "trials": 64,
+      "wins": 52,
+      "ties": 0,
+      "losses": 12,
+      "censored": 0,
+      "sample_score_interval": [
+        0.8125,
+        0.8125
+      ],
+      "max_steps": 82
+    },
+    {
+      "actions": [
+        "move selfdestruct",
+        "move return"
+      ],
+      "trials": 64,
+      "wins": 54,
+      "ties": 0,
+      "losses": 10,
+      "censored": 0,
+      "sample_score_interval": [
+        0.84375,
+        0.84375
+      ],
+      "max_steps": 7
+    },
+    {
+      "actions": [
+        "move selfdestruct",
+        "move curse"
+      ],
+      "trials": 64,
+      "wins": 32,
+      "ties": 0,
+      "losses": 32,
+      "censored": 0,
+      "sample_score_interval": [
+        0.5,
+        0.5
+      ],
+      "max_steps": 85
+    }
+  ],
+  "scope": "Paired terminal samples under concrete pinned-team bot continuations. Intervals only account for censored games; they are not sampling confidence intervals or game-value bounds. No optimal-opponent assumption. Root cells share battle and decision-index search seeds; divergent trajectories can consume random numbers differently."
+}

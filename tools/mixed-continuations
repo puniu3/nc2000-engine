@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/mixed-continuations-v1'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(bundle):
+    cfg = bundle['manifest']['config']
+    ordered = {key: cfg[key] for key in ['game', 'decision', 'pairs', 'trials', 'seed', 'iterations', 'max_steps', 'threads']}
+    assert sha((json.dumps(ordered, indent=2) + '\n').encode()) == bundle['manifest']['config_sha256']
+    rows = bundle['rows']
+    assert len(rows) == cfg['trials'] * len(cfg['pairs'])
+    cells = []
+    for pair, actions in enumerate(cfg['pairs']):
+        group = [r for r in rows if r['pair'] == pair]
+        assert sorted(r['trial'] for r in group) == list(range(cfg['trials']))
+        assert all(r['decisions'][0]['choices'] == actions for r in group)
+        scores = [r['score'] for r in group if r['score'] is not None]
+        assert all(s in (0, 0.5, 1) for s in scores)
+        missing = cfg['trials'] - len(scores)
+        cells.append(dict(actions=actions, trials=cfg['trials'], wins=scores.count(1), ties=scores.count(0.5),
+                          losses=scores.count(0), censored=missing,
+                          sample_score_interval=[sum(scores) / cfg['trials'], (sum(scores) + missing) / cfg['trials']],
+                          max_steps=max(len(r['decisions']) for r in group)))
+    for trial in range(cfg['trials']):
+        assert len({r['battle_seed'] for r in rows if r['trial'] == trial}) == 1
+    return dict(iterations=cfg['iterations'], cells=cells,
+                scope='Paired terminal samples under concrete pinned-team bot continuations. Intervals only account for censored games; they are not sampling confidence intervals or game-value bounds. No optimal-opponent assumption. Root cells share battle and decision-index search seeds; divergent trajectories can consume random numbers differently.')
+
+
+def compare():
+    bundles = {label: json.loads(gzip.decompress((archive / label / 'records.json.gz').read_bytes()))
+               for label in ['shallow', 'screen']}
+    cfg = bundles['screen']['manifest']['config']
+    assert bundles['shallow']['manifest']['config'] == {**cfg, 'iterations': 2700}
+    assert cfg['iterations'] == 27000
+    summaries = {label: summarize(bundle) for label, bundle in bundles.items()}
+    assert all(cell['censored'] == 0 for summary in summaries.values() for cell in summary['cells'])
+    changes = []
+    for pair in range(len(cfg['pairs'])):
+        groups = {label: {r['trial']: r for r in bundle['rows'] if r['pair'] == pair}
+                  for label, bundle in bundles.items()}
+        diffs = []
+        for trial in range(cfg['trials']):
+            low, high = groups['shallow'][trial], groups['screen'][trial]
+            assert low['battle_seed'] == high['battle_seed']
+            diffs.append(high['score'] - low['score'])
+        changes.append(dict(actions=cfg['pairs'][pair], mean_change=sum(diffs)/len(diffs),
+                            higher=sum(d > 0 for d in diffs), lower=sum(d < 0 for d in diffs), unchanged=diffs.count(0)))
+    frozen_path = root / 'findings/adaptive-mix-visits-v1/records.json.gz'
+    frozen = json.loads(gzip.decompress(frozen_path.read_bytes()))['records']
+    matrix = [cell['sample_score_interval'][0] for cell in summaries['screen']['cells']]
+    candidate_scores = []
+    for side in range(2):
+        record = frozen[f'g015-d0016-s{side}']
+        assert record['state_key'] == bundles['screen']['manifest']['state_key']
+        own = list(dict.fromkeys(pair[side] for pair in cfg['pairs']))
+        for row in record['observed']['rows']:
+            if row['mode'] != 'pinned':
+                continue
+            assert row['choice'] == ['move selfdestruct', 'move curse'][side]
+            policy = row['candidate_policy']
+            assert policy is not None
+            assert all(p == 0 or action in own for action, p in zip(row['actions'], policy))
+            weights = [policy[row['actions'].index(action)] for action in own]
+            assert abs(sum(weights) - 1) < 1e-10
+            if side == 0:
+                scores = [sum(weights[i] * matrix[2*i+j] for i in range(2)) for j in range(2)]
+                pure = matrix[2:]
+            else:
+                scores = [1-sum(weights[j] * matrix[2*i+j] for j in range(2)) for i in range(2)]
+                pure = [1-matrix[1], 1-matrix[3]]
+            candidate_scores.append(dict(side=side, seed_index=row['seed_index'], actions=own, policy=weights,
+                                         candidate_sample_scores=scores, default_sample_scores=pure,
+                                         candidate_worst_sample_score=min(scores), default_worst_sample_score=min(pure)))
+    control = json.loads(gzip.decompress((archive / 'counter/records.json.gz').read_bytes()))
+    exact_path = root / 'findings/counter-mix-v1/records.json.gz'
+    exact = json.loads(gzip.decompress(exact_path.read_bytes()))['screen']
+    assert control['manifest']['state_key'] == exact['state_key']
+    assert control['manifest']['config']['pairs'] == [[a, b] for a in exact['actions'][0] for b in exact['actions'][1]]
+    controls = []
+    for cell, bound in zip(summarize(control)['cells'], exact['proof']['cells'], strict=True):
+        assert cell['censored'] == 0
+        mean = cell['sample_score_interval'][0]
+        if bound in ([0, 0], [1, 1]):
+            assert mean == bound[0]
+        controls.append(dict(actions=cell['actions'], exact_optimal_continuation_interval=bound,
+                             sampled_current_continuation_score=mean, trials=cell['trials']))
+    report = dict(summaries=summaries, paired_budget_changes=changes, candidate_scores=candidate_scores,
+                  frozen_policy_sha256=sha(frozen_path.read_bytes()),
+                  counter_control=controls, counter_reference_sha256=sha(exact_path.read_bytes()),
+                  scope='Frozen root mixtures evaluated by linearity against the sampled two-action counterpolicy family, with unchanged ordinary pinned-team bot continuations. The family omits other legal first actions and all alternative continuation policies. Sample minima are neither game-value certificates nor bounds on optimal exploitability. Both sides receive the larger continuation budget in the budget comparison.')
+    return report
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--label', default='screen')
+    parser.add_argument('--trials', type=int, default=64)
+    parser.add_argument('--iterations', type=int, default=27000)
+    parser.add_argument('--seed', type=int, default=2026111101)
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--compare', action='store_true')
+    parser.add_argument('--counter', action='store_true')
+    args = parser.parse_args()
+    if args.compare:
+        report = compare()
+        path = archive / 'comparison.json'
+        if args.verify_only:
+            assert report == json.loads(path.read_text())
+            print('mixed-continuations: paired budget comparison and frozen policy scores verified')
+        else:
+            assert not path.exists()
+            path.write_text(json.dumps(report, indent=2) + '\n')
+            print(json.dumps(report, indent=2))
+        return
+    assert args.label.replace('-', '').isalnum()
+    destination = archive / args.label
+    source = (root / ('findings/counter-mix-v1/corpora.json.gz' if args.counter
+                      else 'findings/policy-gap-v1/corpus.jsonl.gz')).read_bytes()
+    corpus_bytes = json.loads(gzip.decompress(source))['screen'].encode() if args.counter else gzip.decompress(source)
+    env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+    scratch = pathlib.Path(tempfile.mkdtemp(prefix='nc-root-continuations-'))
+    corpus = scratch / 'corpus.jsonl'
+    corpus.write_bytes(corpus_bytes)
+    binary = root / 'target/release/examples/fixed_reply_counterpolicy'
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((destination / 'records.json.gz').read_bytes()))
+        assert bundle['source_corpus_sha256'] == sha(source)
+        assert summarize(bundle) == json.loads((destination / 'summary.json').read_text())
+        output = scratch / 'verify'
+        output.mkdir()
+        (output / 'manifest.json').write_text(json.dumps(bundle['manifest']))
+        for row in bundle['rows']:
+            (output / f"t{row['trial']:04}-p{row['pair']}.json").write_text(json.dumps(row))
+        subprocess.run([str(binary), str(corpus), 'verify-root-continuations', str(output)], cwd=root, env=env, check=True)
+        return
+    assert not destination.exists()
+    cfg = dict(game=15, decision=16, pairs=[[a, b] for a in ['move doubleedge', 'move selfdestruct']
+                                         for b in ['move return', 'move curse']],
+               trials=args.trials, seed=args.seed, iterations=args.iterations, max_steps=1024, threads=4)
+    if args.counter:
+        game = json.loads(corpus_bytes)
+        cfg.update(game=game['game'], decision=game['samples'][0],
+                   pairs=[[a, b] for a in ['move return', 'move surf']
+                          for b in ['move counter', 'move mirrorcoat', 'move safeguard']])
+    config = scratch / 'config.json'
+    config.write_text(json.dumps(cfg, indent=2) + '\n')
+    output = scratch / 'run'
+    print(f'run directory: {output}', flush=True)
+    subprocess.run([str(binary), str(corpus), 'root-continuations', str(config), str(output)], cwd=root, env=env, check=True)
+    subprocess.run([str(binary), str(corpus), 'verify-root-continuations', str(output)], cwd=root, env=env, check=True)
+    bundle = dict(source_corpus_sha256=sha(source), manifest=json.loads((output / 'manifest.json').read_text()),
+                  rows=[json.loads(p.read_text()) for p in sorted(output.glob('t*-p*.json'))])
+    summary = summarize(bundle)
+    destination.mkdir(parents=True)
+    (destination / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, sort_keys=True).encode(), mtime=0))
+    (destination / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == '__main__':
+    main()
