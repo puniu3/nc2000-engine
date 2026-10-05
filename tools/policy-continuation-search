@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-continuation-search-v1'
+prior_archive = root / 'findings/policy-waking-continuations-v1/records.json.gz'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(result, certificate, corpus):
+    proof = json.loads(certificate)
+    assert proof == json.loads(gzip.decompress(prior_archive.read_bytes()))['optimal']
+    assert result['schema'] == 'nc2000-certified-continuation-search-v1'
+    assert result['manifest']['corpus_sha256'] == sha(corpus)
+    assert result['certificate_sha256'] == sha(certificate)
+    state = proof['positions'][0]
+    assert result['state_key'] == state['state']['key']
+    matrix = state['unrestricted']
+    assert matrix['root_actions'][1] == ['move struggle']
+    actions, cells = matrix['root_actions'][0], matrix['root_cells']
+    winners = [i for i, cell in enumerate(cells) if all(i == j or cell['lo'] > other['hi'] + 1e-10 for j, other in enumerate(cells))]
+    assert len(winners) == 1
+    optimal = actions[winners[0]]
+    assert result['budgets'] == [100, 1000, 10000, 27000]
+    assert result['seeds'] == 8 and result['seed_base'] == 2026102401
+    rows = result['rows']
+    expected = [(mode, seed, budget) for mode in ['full_state', 'pinned', 'blind'] for seed in range(8) for budget in result['budgets']]
+    assert [(r['mode'], r['seed_index'], r['iterations']) for r in rows] == expected
+    for row in rows:
+        assert row['actions'] == actions
+        assert len(row['visits']) == len(row['means']) == len(actions)
+        assert sum(row['visits']) == row['iterations']
+        assert all(n >= 0 for n in row['visits']) and all(0 <= value <= 1 for value in row['means'])
+        assessment = row['assessment']
+        index = actions.index(assessment['choice'])
+        chosen = cells[index]
+        score = dict(lo=max(0, chosen['lo'] - 4e-12), hi=min(1, chosen['hi'] + 4e-12))
+        loss = dict(lo=max(0, matrix['value']['lo'] - score['hi']), hi=max(0, matrix['value']['hi'] - score['lo']))
+        assert assessment['true_state_optimal_continuation_score'] == score
+        assert assessment['true_state_first_action_loss'] == loss
+        if row['mode'] != 'full_state':
+            assert len(row['dominated']) == len(actions)
+            assert not row['dominated'][index]
+    summaries = []
+    for mode in ['full_state', 'pinned', 'blind']:
+        for budget in result['budgets']:
+            subset = [r for r in rows if r['mode'] == mode and r['iterations'] == budget]
+            counts = {action: sum(r['assessment']['choice'] == action for r in subset) for action in actions}
+            chosen_means = [r['means'][winners[0]] for r in subset]
+            summaries.append(dict(mode=mode, iterations=budget, choices=counts,
+                                  optimal_choices=counts[optimal], trials=len(subset),
+                                  optimal_action_mean_range=[min(chosen_means), max(chosen_means)]))
+    equality_keys = ['seed', 'iterations', 'assessment', 'actions', 'visits', 'means', 'dominated', 'nodes']
+    pinned = [r for r in rows if r['mode'] == 'pinned']
+    blind = [r for r in rows if r['mode'] == 'blind']
+    identical = all(all(a[k] == b[k] for k in equality_keys) for a, b in zip(pinned, blind))
+    return dict(schema='nc2000-policy-continuation-search-v1', state_key=result['state_key'],
+                certified_unique_best_action=optimal, optimal_first_action_loss=dict(lo=0, hi=0),
+                rows=summaries, belief=result['belief'], pinned_blind_identical_statistics=identical,
+                source_archive_sha256=sha(prior_archive.read_bytes()),
+                interpretation='A strict interval dominance certificate makes Fire Blast the unique optimal first action at this actual full-information continuation state: its lower value exceeds every alternative upper value against the only opponent action. This certifies zero first-action regret for that choice even though the game value remains an interval. Search choices are compared with this game-derived certificate, not human players or assumed-optimal policy pools. Public observations are rebuilt from the full replay; the shipped pool is used only to reproduce the current blind bot. Scores conditional on the actual hidden state do not prove optimality of a blind information-set policy. Eight seeds at one selected late-game anchor do not establish global strength or a convergence rate.')
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    result = json.loads(gzip.decompress((archive / 'result.json.gz').read_bytes()))
+    certificate = gzip.decompress((archive / 'certificate.json.gz').read_bytes())
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    assert summarize(result, certificate, corpus) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified strict optimal-action certificate and 96 search-budget observations')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-continuation-search-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    for name in ['corpus.jsonl', 'certificate.json']:
+        (directory / name).write_bytes(gzip.decompress((archive / f'{name}.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    subprocess.run([str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl'),
+                    'continuation-search', str(directory / 'certificate.json'), str(directory / 'result.json')], cwd=root, env=env, check=True)
+result = json.loads((directory / 'result.json').read_bytes())
+certificate = (directory / 'certificate.json').read_bytes()
+corpus = (directory / 'corpus.jsonl').read_bytes()
+summary = summarize(result, certificate, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (archive / 'certificate.json.gz').write_bytes(gzip.compress(certificate, mtime=0))
+    (archive / 'result.json.gz').write_bytes(gzip.compress(json.dumps(result, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for row in summary['rows']:
+    print(row['mode'], row['iterations'], row['choices'])

@@ -1,0 +1,199 @@
+{
+  "schema": "nc2000-policy-continuation-search-v1",
+  "state_key": "175093530742874641976215422968133191950",
+  "certified_unique_best_action": "move fireblast",
+  "optimal_first_action_loss": {
+    "lo": 0,
+    "hi": 0
+  },
+  "rows": [
+    {
+      "mode": "full_state",
+      "iterations": 100,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.024390243902439025,
+        0.1267605633802817
+      ]
+    },
+    {
+      "mode": "full_state",
+      "iterations": 1000,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.04888268156424581,
+        0.0728395061728395
+      ]
+    },
+    {
+      "mode": "full_state",
+      "iterations": 10000,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.06740865182696346,
+        0.07607565994595718
+      ]
+    },
+    {
+      "mode": "full_state",
+      "iterations": 27000,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.0716012084592145,
+        0.07793430766912762
+      ]
+    },
+    {
+      "mode": "pinned",
+      "iterations": 100,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.024390243902439025,
+        0.09375
+      ]
+    },
+    {
+      "mode": "pinned",
+      "iterations": 1000,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.043343653250773995,
+        0.07901234567901234
+      ]
+    },
+    {
+      "mode": "pinned",
+      "iterations": 10000,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.0683151718357083,
+        0.07685916078105526
+      ]
+    },
+    {
+      "mode": "pinned",
+      "iterations": 27000,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.0701058201058201,
+        0.07770830194364924
+      ]
+    },
+    {
+      "mode": "blind",
+      "iterations": 100,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.024390243902439025,
+        0.09375
+      ]
+    },
+    {
+      "mode": "blind",
+      "iterations": 1000,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.043343653250773995,
+        0.07901234567901234
+      ]
+    },
+    {
+      "mode": "blind",
+      "iterations": 10000,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.0683151718357083,
+        0.07685916078105526
+      ]
+    },
+    {
+      "mode": "blind",
+      "iterations": 27000,
+      "choices": {
+        "move fireblast": 8,
+        "move rest": 0,
+        "move selfdestruct": 0
+      },
+      "optimal_choices": 8,
+      "trials": 8,
+      "optimal_action_mean_range": [
+        0.0701058201058201,
+        0.07770830194364924
+      ]
+    }
+  ],
+  "belief": {
+    "alive": 1,
+    "fallback": false,
+    "species_prior": false
+  },
+  "pinned_blind_identical_statistics": true,
+  "source_archive_sha256": "ffb0eae0738f9aab176f879d186a843a47a0cd0f1139a61180717c551e60ec80",
+  "interpretation": "A strict interval dominance certificate makes Fire Blast the unique optimal first action at this actual full-information continuation state: its lower value exceeds every alternative upper value against the only opponent action. This certifies zero first-action regret for that choice even though the game value remains an interval. Search choices are compared with this game-derived certificate, not human players or assumed-optimal policy pools. Public observations are rebuilt from the full replay; the shipped pool is used only to reproduce the current blind bot. Scores conditional on the actual hidden state do not prove optimality of a blind information-set policy. Eight seeds at one selected late-game anchor do not establish global strength or a convergence rate."
+}
