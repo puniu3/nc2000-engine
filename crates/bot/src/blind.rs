@@ -875,6 +875,31 @@ impl BlindSearch {
             .map(|a| self.my_acts[a])
     }
 
+    pub fn mixed_policy(&self) -> Option<crate::root_policy::MixedRoot> {
+        if self.my_acts.iter().any(|a| matches!(a, SearchChoice::Team(_))) { return None; }
+        let eligible: Vec<bool> = (0..self.my_acts.len()).map(|i|
+            self.my_mask.as_ref().map_or(true, |m| m[i]) && !self.my_dominated[i]).collect();
+        let availability: Vec<u32> = self.avail.iter().map(|&(_, n)| n).collect();
+        let cells: Vec<crate::root_policy::RootCell> = self.root_matrix().into_iter().map(|(own, reply, samples, mean)| {
+            let reply = self.avail.iter().position(|&(a, _)| a == reply).unwrap();
+            crate::root_policy::RootCell { own, reply, samples, mean }
+        }).collect();
+        crate::root_policy::mixed_root(&eligible, self.done, &availability, &cells)
+    }
+
+    pub fn sample_mixed(&self, draw: f64) -> Option<SearchChoice> {
+        assert!(draw.is_finite() && (0.0..1.0).contains(&draw));
+        let Some(mixed) = self.mixed_policy() else { return self.best(); };
+        let mut total = 0.;
+        let mut last = None;
+        for (i, &mass) in mixed.policy.iter().enumerate() {
+            if mass > 0. { last = Some(self.my_acts[i]); }
+            total += mass;
+            if draw < total { return Some(self.my_acts[i]); }
+        }
+        last
+    }
+
     /// Experimental fixed-budget best-arm rule: argmax empirical mean over
     /// the same eligible root actions as [`Self::best`]. Allocation remains
     /// caller-controlled (`step` for UCB, `step_forced` for a designed
@@ -1184,4 +1209,37 @@ fn argmax_visits(visits: &[u32], dominated: Option<&[bool]>) -> usize {
     best.unwrap_or_else(|| {
         (0..visits.len()).max_by_key(|&i| visits[i]).unwrap_or(0)
     })
+}
+
+#[cfg(test)]
+mod mixed_selection_tests {
+    use super::*;
+
+    #[test]
+    fn mixed_sampling_respects_masks_without_consuming_search_randomness() {
+        let dex=conformance::load_dex();
+        let set: nc2000_engine::battle::PokemonSet=serde_json::from_value(serde_json::json!({
+            "name":"starmie","species":"starmie","ability":"","level":50,"moves":["Return","Surf"]
+        })).unwrap();
+        let battle=Battle::from_fixture(&dex,"1,2,3,4",&[set.clone()],&[set]).unwrap();
+        let mut search=BlindSearch::new(&battle,&dex,RmConfig::default(),0,123);
+        let actions=["return","surf"].map(|m|SearchChoice::Move(dex.moves.id(m).unwrap()));
+        search.my_acts=actions.to_vec();search.my_n=vec![20000,20000];search.my_w=vec![10000.,10000.];
+        search.my_dominated=vec![false,false];search.done=40000;
+        search.avail=vec![(actions[1],40000),(actions[0],40000)];
+        search.joint=vec![(0,actions[0],10000,0.),(0,actions[1],10000,10000.),
+            (1,actions[0],10000,10000.),(1,actions[1],10000,0.)];
+        let rng=search.rng.0;
+        assert_eq!(search.sample_mixed(0.),Some(actions[0]));
+        assert_eq!(search.sample_mixed(0.5),Some(actions[1]));
+        assert_eq!(search.sample_mixed(1.-f64::EPSILON),Some(actions[1]));
+        assert_eq!(search.rng.0,rng);
+        assert_eq!(search.visits(),&[20000,20000]);
+        search.mask_actions(&[false,true]);
+        assert!(search.mixed_policy().is_none());
+        assert_eq!(search.sample_mixed(0.),Some(actions[1]));
+        search.mask_actions(&[true,true]);search.my_dominated[0]=true;
+        assert!(search.mixed_policy().is_none());
+        assert_eq!(search.sample_mixed(0.),Some(actions[1]));
+    }
 }

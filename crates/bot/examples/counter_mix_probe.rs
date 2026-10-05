@@ -175,8 +175,19 @@ fn main() {
                 search_seed,
             );
             pinned.step(&dex, &beliefs[s], &obs[s], iterations);
+            let mut play_rng = nc2000_bot::rng::SplitMix64::new(
+                search_seed ^ (s as u64 + 1).wrapping_mul(0xa24baed4963ee407),
+            );
+            let play_draw = play_rng.next_f64();
+            let mixed = pinned.mixed_policy();
             rows.push(json!({"mode":"pinned","side":s,"seed_index":index,"seed":search_seed,"iterations":iterations,
-                "choice":pinned.best().map(|a|a.to_input(&dex)),"visits":pinned.visits(),"means":pinned.means()}));
+                "choice":pinned.best().map(|a|a.to_input(&dex)),"visits":pinned.visits(),"means":pinned.means(),
+                "dominated":pinned.dominated(),"play_draw":play_draw,
+                "candidate_choice":pinned.sample_mixed(play_draw).map(|a|a.to_input(&dex)),
+                "candidate_policy":mixed.as_ref().map(|m|m.policy.clone()),
+                "candidate_estimated_advantage":mixed.map(|m|m.estimated_advantage),
+                "joint":pinned.root_matrix().into_iter().map(|(own,reply,samples,mean)|json!({"own":own,"reply":reply.to_input(&dex),"samples":samples,"mean":mean})).collect::<Vec<_>>(),
+                "reply_availability":pinned.root_replies().iter().map(|&(reply,samples)|json!({"reply":reply.to_input(&dex),"samples":samples})).collect::<Vec<_>>() }));
         }
         eprintln!("seed {index} complete");
     }
@@ -184,6 +195,7 @@ fn main() {
         "crates/bot/examples/counter_mix_probe.rs",
         "crates/bot/src/bounds.rs",
         "crates/bot/src/exact.rs",
+        "crates/bot/src/root_policy.rs",
         "crates/bot/src/blind.rs",
         "crates/bot/src/smmcts.rs",
         "crates/bot/src/belief.rs",

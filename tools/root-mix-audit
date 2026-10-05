@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/root-mix-v1'
+loss = runpy.run_path(str(root/'tools/counter-mix-probe'))['loss']
+specs = [('fresh', '1,2,3,4', 32, 2026110301),
+         ('variant2', '2,3,4,5', 16, 2026110401),
+         ('variant3', '3,4,5,6', 16, 2026110402),
+         ('variant4', '4,5,6,7', 16, 2026110403),
+         ('variant5', '5,6,7,8', 16, 2026110404)]
+census_path = root/'findings/certified-blind-census-v1/records.json.gz'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def cases_for(records):
+    census = json.loads(gzip.decompress(census_path.read_bytes()))['screen']
+    cases = []
+    for name, r in census.items():
+        for row in r['observed']['rows']:
+            cases.append(dict(id=f"{name}:{row['mode']}:{row['seed_index']}", row=row))
+    for name, r in records.items():
+        for row in r['rows']:
+            if row['mode'] == 'pinned':
+                cases.append(dict(id=f"{name}:{row['side']}:{row['seed_index']}",
+                                  row={**row, 'actions': r['actions'][row['side']]}))
+    return cases
+
+
+def summarize(records, runs, cases, extracted):
+    assert [(r['name'], r['battle_seed'], r['count'], r['search_seed_base']) for r in runs] == specs
+    assert [r['name'] for r in runs if r['exit_code'] != 0] == ['variant2']
+    failure = next(r for r in runs if r['name'] == 'variant2')
+    assert 'assertion failed: b.outcome().is_none()' in failure['log']
+    assert list(records) == ['fresh', 'variant3', 'variant4', 'variant5']
+    assert cases == cases_for(records)
+    results = {r['id']: r['result'] for r in extracted['rows']}
+    assert list(results) == [c['id'] for c in cases]
+    census_cases = [c for c in cases if c['id'].startswith('g')]
+    assert len(census_cases) == 144
+    for case in census_cases:
+        row = case['row']
+        out = results[case['id']]
+        expected = [float(a == row['choice']) for a in row['actions']]
+        assert out['policy'] == expected and out['mixed'] is False
+    groups = []
+    for name, r in records.items():
+        spec = next(s for s in specs if s[0] == name)
+        assert r['search_seeds'] == spec[2] and r['search_seed_base'] == spec[3]
+        assert r['iterations'] == 27000
+        assert all(v['ok'] for v in r['validations'])
+        for side in range(2):
+            rows = [row for row in r['rows'] if row['mode'] == 'pinned' and row['side'] == side]
+            actions = r['actions'][side]
+            count = len(rows)
+            assert count == spec[2]
+            policies = []
+            for row in rows:
+                out = results[f"{name}:{side}:{row['seed_index']}"]
+                assert out['mixed'] is True and row['candidate_policy'] is not None
+                policy = row['candidate_policy']
+                assert all(abs(a-b) < 1e-12 for a, b in zip(out['policy'], policy))
+                assert abs(sum(policy)-1) < 1e-12 and min(policy) >= 0
+                assert all(p == 0 for p, excluded in zip(policy, row['dominated']) if excluded)
+                assert row['candidate_choice'] in actions
+                total = 0
+                for i, p in enumerate(policy):
+                    total += p
+                    if row['play_draw'] < total:
+                        assert row['candidate_choice'] == actions[i]
+                        break
+                else:
+                    assert row['candidate_choice'] == actions[max(i for i, p in enumerate(policy) if p > 0)]
+                policies.append(policy)
+            mean = lambda ps: [sum(p[i] for p in ps)/count for i in range(len(actions))]
+            baseline = [sum(row['choice'] == a for row in rows)/count for a in actions]
+            visit = mean([[n/row['iterations'] for n in row['visits']] for row in rows])
+            mixed = mean(policies)
+            groups.append(dict(case=name, side=side, count=count,
+                               active_hp=[s['pokemon'][0]['hp'] for s in r['state']['sides']],
+                               game_value=r['proof']['value'],
+                               baseline_policy=baseline, baseline_loss=loss(r, side, baseline),
+                               visit_policy=visit, visit_loss=loss(r, side, visit),
+                               candidate_policy=mixed, candidate_loss=loss(r, side, mixed),
+                               worst_candidate_loss_upper=max(loss(r, side, p)[1] for p in policies),
+                               candidate_sample_counts=dict(collections.Counter(row['candidate_choice'] for row in rows))))
+    assert len(groups) == 8 and sum(g['count'] for g in groups) == 160
+    assert all(g['candidate_loss'][1] < g['baseline_loss'][0] for g in groups)
+    assert max(g['worst_candidate_loss_upper'] for g in groups) < .01
+    return dict(groups=groups, unchanged_census_searches=len(census_cases),
+                rejected_prefixes=['variant2: battle already ended'],
+                scope=('Candidate API only; default best() unchanged. Fixed known loadouts, legally replayed prefixes. '
+                       'Loss concerns the first-action probability distribution with optimal continuation in the actual full state. '
+                       'Candidate distributions are validated against certified matrices; the triggering search margin is heuristic. '
+                       'Actual sample counts are finite draws and are not the candidate probability vector. '
+                       'The same root search samples feed all selection rules; no additional search budget or game-specific gate. '
+                       'The four live roots belong to one tactical family. Wider held-out game families remain untested.'))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert bundle['census_sha256'] == sha(census_path.read_bytes())
+        summary = summarize(bundle['records'], bundle['runs'], bundle['cases'], bundle['extracted'])
+        assert summary == json.loads((archive/'summary.json').read_bytes())
+        assert bundle['extracted']['input_sha256'] == sha(json.dumps(bundle['cases'], separators=(',', ':')).encode())
+        print('root-mix: verified 160 candidate policies, sampler mapping, 144 unchanged controls and terminal exclusion')
+        return
+    assert not archive.exists()
+    env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'root_mix_policy',
+                    '--example', 'counter_mix_probe'], cwd=root, env=env, check=True)
+    directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-root-mix-audit-'))
+    print(directory, flush=True)
+    runs, records = [], {}
+    for name, battle_seed, count, search_seed in specs:
+        result = subprocess.run([str(root/'target/release/examples/counter_mix_probe'), str(directory/name),
+                                 battle_seed, str(count), '27000', str(search_seed)], cwd=root, env=env,
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        runs.append(dict(name=name, battle_seed=battle_seed, count=count,
+                         search_seed_base=search_seed, exit_code=result.returncode, log=result.stdout))
+        if result.returncode == 0:
+            records[name] = json.loads((directory/name/'records.json').read_bytes())
+        print(name, result.returncode, flush=True)
+    cases = cases_for(records)
+    raw = json.dumps(cases, separators=(',', ':')).encode()
+    (directory/'input.json').write_bytes(raw)
+    subprocess.run([str(root/'target/release/examples/root_mix_policy'), str(directory/'input.json'),
+                    str(directory/'extracted.json')], cwd=root, env=env, check=True)
+    extracted = json.loads((directory/'extracted.json').read_bytes())
+    assert extracted['input_sha256'] == sha(raw)
+    for r in [*records.values(), extracted]:
+        assert all(sha((root/path).read_bytes()) == expected for path, expected in r['source_hashes'])
+    summary = summarize(records, runs, cases, extracted)
+    bundle = dict(records=records, runs=runs, cases=cases, extracted=extracted,
+                  corpus={name: (directory/name/'corpus.jsonl').read_text() for name in records},
+                  census_sha256=sha(census_path.read_bytes()))
+    sources = sorted((root/'crates/engine/src').rglob('*.rs')) + sorted((root/'crates/bot/src').rglob('*.rs'))
+    manifest = dict(revision=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
+                    source_sha256={str(path.relative_to(root)): sha(path.read_bytes()) for path in sources})
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
+    (archive/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
+    print('root-mix: candidate audit completed')
+
+
+if __name__ == '__main__':
+    main()

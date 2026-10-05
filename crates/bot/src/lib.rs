@@ -56,6 +56,7 @@ pub mod preview;
 pub mod prior;
 pub mod regret;
 pub mod rng;
+pub mod root_policy;
 pub mod runner;
 pub mod smmcts;
 pub mod shared_search;

@@ -1,0 +1,357 @@
+{
+  "groups": [
+    {
+      "case": "fresh",
+      "side": 0,
+      "count": 32,
+      "active_hp": [
+        68,
+        120
+      ],
+      "game_value": [
+        0.5154244889213129,
+        0.5154244889213129
+      ],
+      "baseline_policy": [
+        0.21875,
+        0.78125
+      ],
+      "baseline_loss": [
+        0.24846258415141587,
+        0.24846258435141588
+      ],
+      "visit_policy": [
+        0.4922048611111111,
+        0.5077951388888888
+      ],
+      "visit_loss": [
+        0.007629349932424043,
+        0.007629350132424042
+      ],
+      "candidate_policy": [
+        0.4846336422701858,
+        0.5153663577298142
+      ],
+      "candidate_loss": [
+        5.813109149866708e-05,
+        5.813129149866708e-05
+      ],
+      "worst_candidate_loss_upper": 0.0018833964074191829,
+      "candidate_sample_counts": {
+        "move surf": 20,
+        "move return": 12
+      }
+    },
+    {
+      "case": "fresh",
+      "side": 1,
+      "count": 32,
+      "active_hp": [
+        68,
+        120
+      ],
+      "game_value": [
+        0.5154244889213129,
+        0.5154244889213129
+      ],
+      "baseline_policy": [
+        0.09375,
+        0.90625,
+        0.0
+      ],
+      "baseline_loss": [
+        0.3882725981825461,
+        0.38827259838254613
+      ],
+      "visit_policy": [
+        0.4719201388888889,
+        0.5277511574074074,
+        0.0003287037037037037
+      ],
+      "visit_loss": [
+        0.011166879333982702,
+        0.011167767506554174
+      ],
+      "candidate_policy": [
+        0.48307346761050735,
+        0.5169265323894927,
+        0.0
+      ],
+      "candidate_loss": [
+        4.585759250869953e-05,
+        4.585779250869953e-05
+      ],
+      "worst_candidate_loss_upper": 0.001477176012170503,
+      "candidate_sample_counts": {
+        "move mirrorcoat": 14,
+        "move counter": 18
+      }
+    },
+    {
+      "case": "variant3",
+      "side": 0,
+      "count": 16,
+      "active_hp": [
+        70,
+        124
+      ],
+      "game_value": [
+        0.4962316837121051,
+        0.4962316837121051
+      ],
+      "baseline_policy": [
+        0.6875,
+        0.3125
+      ],
+      "baseline_loss": [
+        0.18373168361210507,
+        0.18373168381210508
+      ],
+      "visit_policy": [
+        0.5184236111111111,
+        0.4815763888888889
+      ],
+      "visit_loss": [
+        0.014655294723216203,
+        0.014655294923216202
+      ],
+      "candidate_policy": [
+        0.4993797475833982,
+        0.5006202524166018
+      ],
+      "candidate_loss": [
+        0.003778445728657162,
+        0.003778445928657162
+      ],
+      "worst_candidate_loss_upper": 0.008222791343178317,
+      "candidate_sample_counts": {
+        "move return": 10,
+        "move surf": 6
+      }
+    },
+    {
+      "case": "variant3",
+      "side": 1,
+      "count": 16,
+      "active_hp": [
+        70,
+        124
+      ],
+      "game_value": [
+        0.4962316837121051,
+        0.4962316837121051
+      ],
+      "baseline_policy": [
+        0.0625,
+        0.9375,
+        0.0
+      ],
+      "baseline_loss": [
+        0.3695256775804784,
+        0.3695256777804784
+      ],
+      "visit_policy": [
+        0.45879861111111114,
+        0.540787037037037,
+        0.00041435185185185184
+      ],
+      "visit_loss": [
+        0.003518457941269268,
+        0.003554008576103765
+      ],
+      "candidate_policy": [
+        0.4681687104403505,
+        0.5318312895596495,
+        0.0
+      ],
+      "candidate_loss": [
+        0.005176482225723542,
+        0.005176482425723541
+      ],
+      "worst_candidate_loss_upper": 0.008202968395760615,
+      "candidate_sample_counts": {
+        "move mirrorcoat": 8,
+        "move counter": 8
+      }
+    },
+    {
+      "case": "variant4",
+      "side": 0,
+      "count": 16,
+      "active_hp": [
+        64,
+        116
+      ],
+      "game_value": [
+        0.5161290322580645,
+        0.5161290322580645
+      ],
+      "baseline_policy": [
+        0.3125,
+        0.6875
+      ],
+      "baseline_loss": [
+        0.1606602821580645,
+        0.1606602823580645
+      ],
+      "visit_policy": [
+        0.4989444444444444,
+        0.5010555555555556
+      ],
+      "visit_loss": [
+        0.015073476602508915,
+        0.015073476802508914
+      ],
+      "candidate_policy": [
+        0.4844965374182283,
+        0.5155034625817717
+      ],
+      "candidate_loss": [
+        0.000625569576292792,
+        0.0006255697762927921
+      ],
+      "worst_candidate_loss_upper": 0.0018364446052417855,
+      "candidate_sample_counts": {
+        "move return": 9,
+        "move surf": 7
+      }
+    },
+    {
+      "case": "variant4",
+      "side": 1,
+      "count": 16,
+      "active_hp": [
+        64,
+        116
+      ],
+      "game_value": [
+        0.5161290322580645,
+        0.5161290322580645
+      ],
+      "baseline_policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "baseline_loss": [
+        0.4838709676419355,
+        0.4838709678419355
+      ],
+      "visit_policy": [
+        0.47385185185185186,
+        0.5256412037037037,
+        0.0005069444444444444
+      ],
+      "visit_loss": [
+        0.010017782928339833,
+        0.01001911599008364
+      ],
+      "candidate_policy": [
+        0.48340597382780887,
+        0.5165940261721912,
+        0.0
+      ],
+      "candidate_loss": [
+        0.0004649938141266324,
+        0.00046499401412663236
+      ],
+      "worst_candidate_loss_upper": 0.0016111848500069887,
+      "candidate_sample_counts": {
+        "move mirrorcoat": 10,
+        "move counter": 6
+      }
+    },
+    {
+      "case": "variant5",
+      "side": 0,
+      "count": 16,
+      "active_hp": [
+        74,
+        123
+      ],
+      "game_value": [
+        0.5029569436712407,
+        0.5029569436712408
+      ],
+      "baseline_policy": [
+        0.4375,
+        0.5625
+      ],
+      "baseline_loss": [
+        0.052764347522357764,
+        0.052764347722357934
+      ],
+      "visit_policy": [
+        0.5006481481481482,
+        0.4993518518518518
+      ],
+      "visit_loss": [
+        0.0036050917193888392,
+        0.0036050919193889503
+      ],
+      "candidate_policy": [
+        0.4939573635794608,
+        0.5060426364205393
+      ],
+      "candidate_loss": [
+        0.0027344004316222164,
+        0.0027344006316224385
+      ],
+      "worst_candidate_loss_upper": 0.00506813392758875,
+      "candidate_sample_counts": {
+        "move return": 8,
+        "move surf": 8
+      }
+    },
+    {
+      "case": "variant5",
+      "side": 1,
+      "count": 16,
+      "active_hp": [
+        74,
+        123
+      ],
+      "game_value": [
+        0.5029569436712407,
+        0.5029569436712408
+      ],
+      "baseline_policy": [
+        0.0625,
+        0.9375,
+        0.0
+      ],
+      "baseline_loss": [
+        0.38640665490493675,
+        0.386406655104937
+      ],
+      "visit_policy": [
+        0.46998842592592593,
+        0.5297013888888888,
+        0.0003101851851851852
+      ],
+      "visit_loss": [
+        0.0004480041454259037,
+        0.00044800434542601467
+      ],
+      "candidate_policy": [
+        0.4742271536832419,
+        0.525772846316758,
+        0.0
+      ],
+      "candidate_loss": [
+        0.0041310128067985705,
+        0.004131013006798681
+      ],
+      "worst_candidate_loss_upper": 0.00681895077335192,
+      "candidate_sample_counts": {
+        "move mirrorcoat": 10,
+        "move counter": 6
+      }
+    }
+  ],
+  "unchanged_census_searches": 144,
+  "rejected_prefixes": [
+    "variant2: battle already ended"
+  ],
+  "scope": "Candidate API only; default best() unchanged. Fixed known loadouts, legally replayed prefixes. Loss concerns the first-action probability distribution with optimal continuation in the actual full state. Candidate distributions are validated against certified matrices; the triggering search margin is heuristic. Actual sample counts are finite draws and are not the candidate probability vector. The same root search samples feed all selection rules; no additional search budget or game-specific gate. The four live roots belong to one tactical family. Wider held-out game families remain untested."
+}
