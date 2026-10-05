@@ -12,6 +12,8 @@ struct Config {
     full_state:Option<bool>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     probe_iterations:Option<u32>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    root_diagnostics:Option<bool>,
 }
 
 fn search_seed(cfg:&Config,index:usize)->u64 {
@@ -48,14 +50,20 @@ fn observed_search(dex:&Dex,game:&Game,cfg:&Config,root:&Battle)->Value {
                     search.finish_with_mixed_probes(dex,belief,&obs,iterations,probes)
                 } else {search.step(dex,belief,&obs,iterations-search.iterations());0};
                 let mixed=search.mixed_policy();
-                rows.push(json!({"mode":mode,"seed_index":index,"seed":seed,"iterations":iterations,
+                let mut row = json!({"mode":mode,"seed_index":index,"seed":seed,"iterations":iterations,
                     "probes_used":probes_used,"candidate_policy":mixed.map(|m|m.policy),
                     "choice":search.best().map(|a|nc2000_bot::player::action_input(dex,a)),
                     "actions":search.actions().iter().map(|&a|nc2000_bot::player::action_input(dex,a)).collect::<Vec<_>>(),
                     "visits":search.visits(),"joint_probe_visits":search.joint_probe_visits(),"means":search.means(),"dominated":search.dominated(),"nodes":search.node_count(),
                     "joint":search.root_matrix().into_iter().map(|(own,reply,samples,mean)|json!({"own":own,"reply":nc2000_bot::player::action_input(dex,reply),"samples":samples,"mean":mean})).collect::<Vec<_>>(),
                     "reply_availability":search.root_replies().iter().map(|&(reply,n)|json!({"reply":nc2000_bot::player::action_input(dex,reply),"samples":n})).collect::<Vec<_>>(),
-                    "elapsed_ms":started.elapsed().as_secs_f64()*1000.0}));
+                    "elapsed_ms":started.elapsed().as_secs_f64()*1000.0});
+                if cfg.root_diagnostics.unwrap_or(false) {
+                    let (eligible, types) = search.root_policy_evidence();
+                    let analysis = nc2000_bot::root_policy::analyze_bayesian_root(&eligible, iterations, &types);
+                    row["root_diagnostics"] = json!({"eligible":eligible, "types":types, "analysis":analysis});
+                }
+                rows.push(row);
             }
             eprintln!("mode={mode} seed_index={index} complete");
         }

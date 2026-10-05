@@ -1,6 +1,6 @@
 use crate::exact::solve_matrix_full;
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize)]
 pub struct RootCell {
     pub own: usize,
     pub reply: usize,
@@ -8,6 +8,7 @@ pub struct RootCell {
     pub mean: f64,
 }
 
+#[derive(serde::Serialize)]
 pub struct RootType {
     pub samples: u32,
     pub replies: usize,
@@ -187,25 +188,59 @@ pub fn estimated_bayesian_mix_gain(
     Some((guarantee(&matrices.means, &policy) - best_pure(&matrices.means, n)).max(0.))
 }
 
+#[derive(serde::Serialize)]
+pub struct RootAnalysis {
+    pub policy: Vec<f64>,
+    pub estimated_guarantee: f64,
+    pub estimated_best_pure: f64,
+    pub lower_guarantee: f64,
+    pub upper_best_pure: f64,
+}
+
+impl RootAnalysis {
+    pub fn estimated_gain(&self) -> f64 {
+        (self.estimated_guarantee - self.estimated_best_pure).max(0.)
+    }
+
+    pub fn margin(&self) -> f64 {
+        self.lower_guarantee - self.upper_best_pure
+    }
+}
+
+pub fn analyze_bayesian_root(
+    eligible: &[bool],
+    iterations: u32,
+    types: &[RootType],
+) -> Option<RootAnalysis> {
+    let matrices = matrices(eligible, iterations, types)?;
+    let n = matrices.actions.len();
+    let mixed = solve_bayesian(&matrices.means, n)?;
+    let mut policy = vec![0.; eligible.len()];
+    for (i, &a) in matrices.actions.iter().enumerate() {
+        policy[a] = mixed[i];
+    }
+    Some(RootAnalysis {
+        policy,
+        estimated_guarantee: guarantee(&matrices.means, &mixed),
+        estimated_best_pure: best_pure(&matrices.means, n),
+        lower_guarantee: guarantee(&matrices.lower, &mixed),
+        upper_best_pure: best_pure(&matrices.upper, n),
+    })
+}
+
 // Search continuations are nonstationary; these margins do not certify game values.
 pub fn bayesian_mixed_root(
     eligible: &[bool],
     iterations: u32,
     types: &[RootType],
 ) -> Option<MixedRoot> {
-    let matrices = matrices(eligible, iterations, types)?;
-    let n = matrices.actions.len();
-    let mixed = solve_bayesian(&matrices.means, n)?;
-    let estimated_advantage = guarantee(&matrices.lower, &mixed) - best_pure(&matrices.upper, n);
+    let analysis = analyze_bayesian_root(eligible, iterations, types)?;
+    let estimated_advantage = analysis.margin();
     if estimated_advantage <= 0.02 {
         return None;
     }
-    let mut policy = vec![0.; eligible.len()];
-    for (i, &a) in matrices.actions.iter().enumerate() {
-        policy[a] = mixed[i];
-    }
     Some(MixedRoot {
-        policy,
+        policy: analysis.policy,
         estimated_advantage,
     })
 }

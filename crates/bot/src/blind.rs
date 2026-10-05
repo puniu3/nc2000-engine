@@ -967,7 +967,7 @@ impl BlindSearch {
             .map(|i|self.my_acts[i])
     }
 
-    fn root_policy_inputs(&self) -> (Vec<bool>, Vec<crate::root_policy::RootType>) {
+    pub fn root_policy_evidence(&self) -> (Vec<bool>, Vec<crate::root_policy::RootType>) {
         let eligible: Vec<bool> = (0..self.my_acts.len()).map(|i|
             self.my_mask.as_ref().map_or(true, |m| m[i]) && !self.my_dominated[i]).collect();
         let types = self.root_types.iter().map(|t| crate::root_policy::RootType {
@@ -983,13 +983,13 @@ impl BlindSearch {
 
     pub fn mixed_policy(&self) -> Option<crate::root_policy::MixedRoot> {
         if self.my_acts.iter().any(|a|matches!(a,SearchChoice::Team(_))) {return None;}
-        let (eligible, types) = self.root_policy_inputs();
+        let (eligible, types) = self.root_policy_evidence();
         crate::root_policy::bayesian_mixed_root(&eligible, self.done, &types)
     }
 
     pub fn estimated_mix_gain(&self) -> Option<f64> {
         if self.my_acts.iter().any(|a|matches!(a,SearchChoice::Team(_))) {return None;}
-        let (eligible, types) = self.root_policy_inputs();
+        let (eligible, types) = self.root_policy_evidence();
         crate::root_policy::estimated_bayesian_mix_gain(&eligible, self.done, &types)
     }
 

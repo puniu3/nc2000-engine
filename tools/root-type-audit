@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+import argparse
+import concurrent.futures
+import gzip
+import hashlib
+import json
+import math
+import os
+import pathlib
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/root-type-audit-v1'
+source = root / 'findings/adaptive-mix-visits-v1/records.json.gz'
+corpus_path = root / 'findings/policy-gap-v1/corpus.jsonl.gz'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def diagnose(row):
+    evidence = row['root_diagnostics']
+    types, analysis = evidence['types'], evidence['analysis']
+    actions = [i for i, eligible in enumerate(evidence['eligible']) if eligible]
+    assert sum(t['samples'] for t in types) == row['iterations']
+    total_cells = len(actions) * sum(t['replies'] for t in types)
+    unseen = observed = 0
+    missing_mass = minimum_count = 0.
+    estimated = lower = 0.
+    pure = [0.] * len(actions)
+    upper_pure = [0.] * len(actions)
+    for t in types:
+        weight = t['samples'] / row['iterations']
+        cells = {(c['own'], c['reply']): c for c in t['cells']}
+        assert len(cells) == len(t['cells'])
+        assert sum(c['samples'] for c in t['cells']) == t['samples']
+        counts = [cells.get((i, j), {}).get('samples', 0) for i in actions for j in range(t['replies'])]
+        unseen += counts.count(0)
+        observed += sum(n > 0 for n in counts)
+        minimum_count += weight * min(counts, default=0)
+        missing_mass += weight * (0 in counts)
+        if analysis is None:
+            continue
+        mean = [[cells.get((i, j), {}).get('mean', .5) for j in range(t['replies'])] for i in actions]
+        radius = [[math.sqrt(math.log(200 * total_cells) / (2 * cells[(i, j)]['samples']))
+                   if (i, j) in cells else 1 for j in range(t['replies'])] for i in actions]
+        lo = [[max(0., v-r) for v, r in zip(vs, rs)] for vs, rs in zip(mean, radius)]
+        hi = [[min(1., v+r) for v, r in zip(vs, rs)] for vs, rs in zip(mean, radius)]
+        p = [analysis['policy'][i] for i in actions]
+        estimated += weight * min(sum(p[k] * mean[k][j] for k in range(len(actions))) for j in range(t['replies']))
+        lower += weight * min(sum(p[k] * lo[k][j] for k in range(len(actions))) for j in range(t['replies']))
+        for k in range(len(actions)):
+            pure[k] += weight * min(mean[k])
+            upper_pure[k] += weight * min(hi[k])
+    metrics = dict(types=len(types), effective_types=1 / sum((t['samples']/row['iterations'])**2 for t in types),
+                   cells=total_cells, unseen_cells=unseen, missing_type_mass=missing_mass,
+                   weighted_minimum_cell_count=minimum_count)
+    assert unseen + observed == total_cells
+    if analysis is None:
+        assert row['candidate_policy'] is None
+        return dict(**metrics, reason='unsupported')
+    p = analysis['policy']
+    assert min(p) >= 0 and abs(sum(p)-1) < 1e-10
+    assert all(p[i] == 0 for i, allowed in enumerate(evidence['eligible']) if not allowed)
+    for field, value in dict(estimated_guarantee=estimated, lower_guarantee=lower,
+                             estimated_best_pure=max(pure), upper_best_pure=max(upper_pure)).items():
+        assert abs(analysis[field]-value) < 1e-10, field
+    gain, margin = max(0., estimated-max(pure)), lower-max(upper_pure)
+    assert (row['candidate_policy'] is not None) == (margin > .02)
+    if row['candidate_policy'] is not None:
+        assert row['candidate_policy'] == p
+    reason = 'accepted' if margin > .02 else ('small_estimated_gain' if gain <= .02 else 'uncertainty_margin')
+    return dict(**metrics, estimated_gain=gain, margin=margin, uncertainty_penalty=gain-margin, reason=reason)
+
+
+def summarize(records):
+    cases = []
+    for name, stages in records.items():
+        assert stages['warm']['state_key'] == stages['after']['state_key']
+        for warm, after in zip(stages['warm']['observed']['rows'], stages['after']['observed']['rows']):
+            assert (warm['mode'], warm['seed']) == (after['mode'], after['seed'])
+            if after['probes_used']:
+                assert after['probes_used'] == 10800
+                assert [n-p for n, p in zip(after['visits'], after['joint_probe_visits'])] == warm['visits']
+                assert after['choice'] == warm['choice']
+            cases.append(dict(id=f"{name}:{after['mode']}:{after['seed_index']}", probed=after['probes_used'] > 0,
+                              warm=diagnose(warm), after=diagnose(after)))
+    return dict(searches=len(cases), probed=sum(c['probed'] for c in cases),
+                final_reasons={r:sum(c['after']['reason'] == r for c in cases) for r in ['accepted','small_estimated_gain','uncertainty_margin','unsupported']},
+                cases=cases, scope='Six previously probe-active corpus endpoints, paired seeds and pinned/blind views. Diagnostics reconstruct heuristic margins from type-conditional cells; they are not confidence intervals or optimal game values. Warm and final searches use 16200 and 27000 iterations respectively.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert bundle['source_sha256'] == sha(source.read_bytes())
+        assert bundle['corpus_sha256'] == sha(gzip.decompress(corpus_path.read_bytes()))
+        assert summarize(bundle['records']) == json.loads((archive/'summary.json').read_text())
+        print('root-type-audit: verified type counts, reconstructed margins and probe fallback invariants')
+        return
+    assert not archive.exists()
+    previous = json.loads(gzip.decompress(source.read_bytes()))['records']
+    env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+    binary = root / 'target/release/examples/fixed_reply_counterpolicy'
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-root-type-audit-'))
+    corpus = gzip.decompress(corpus_path.read_bytes())
+    (directory/'corpus.jsonl').write_bytes(corpus)
+    def run(name):
+        results = {}
+        for stage in ['warm', 'after']:
+            cfg = dict(previous[name]['config'], root_diagnostics=True)
+            if stage == 'warm':
+                cfg.pop('probe_iterations')
+                cfg['iterations'] = [16200]
+            path = directory / (name+'-'+stage)
+            raw = json.dumps(cfg).encode()
+            path.with_suffix('.config.json').write_bytes(raw)
+            with path.with_suffix('.log').open('w') as log:
+                subprocess.run([str(binary),str(directory/'corpus.jsonl'),'corpus-search',str(path.with_suffix('.config.json')),str(path.with_suffix('.json'))],
+                               cwd=root, env=env, stdout=log, stderr=log, check=True)
+            row = json.loads(path.with_suffix('.json').read_text())
+            assert row['config_sha256'] == sha(raw) and row['manifest']['corpus_sha256'] == sha(corpus)
+            assert all(sha((root/p).read_bytes()) == value for p,value in row['search_source_hashes'])
+            results[stage] = row
+        print(name+' complete', flush=True)
+        return name, results
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        records = dict(executor.map(run, sorted(previous)))
+    summary = summarize(records)
+    archive.mkdir()
+    bundle = dict(records=records, source_sha256=sha(source.read_bytes()), corpus_sha256=sha(corpus), binary_sha256=sha(binary.read_bytes()))
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in summary.items() if k != 'cases'},indent=2))
+
+
+if __name__ == '__main__':
+    main()
