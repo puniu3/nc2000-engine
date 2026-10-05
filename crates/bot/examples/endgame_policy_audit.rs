@@ -39,6 +39,8 @@ struct Protocol {
     #[serde(default)]
     certified_action_pruning: bool,
     fixed_policy_side: Option<usize>,
+    fixed_first_action: Option<String>,
+    fixed_priority_actions: Option<Vec<String>>,
     #[serde(default)]
     aggregate_lazy_children: bool,
     #[serde(default)]
@@ -185,7 +187,12 @@ fn audit(
         assert!(protocol.witness_preparation.is_none());
         assert!(protocol.descendant_preparation.is_none());
         assert!(side < 2 && !legal[side].is_empty());
-        let mut solver = FixedPolicySolver::new(dex, BoundConfig {
+        let priority_names = protocol.fixed_priority_actions.as_ref().unwrap_or(&names[side]);
+        assert_eq!(priority_names.len(), names[side].len());
+        assert!(names[side].iter().all(|name| priority_names.iter().filter(|p| *p == name).count() == 1));
+        let priority: Vec<_> = priority_names.iter().map(|name|
+            legal[side][names[side].iter().position(|n| n == name).unwrap()]).collect();
+        let cfg = BoundConfig {
             time_budget: Some(Duration::from_millis(protocol.reference_ms)),
             work_budget: protocol.work_budget,
             node_budget: protocol.node_budget,
@@ -199,7 +206,14 @@ fn audit(
             directed_policy_refinement: protocol.directed_policy_refinement,
             target_aware_refinement: protocol.target_aware_refinement,
             ..BoundConfig::default()
-        }, side, legal[side].clone());
+        };
+        let mut solver = if let Some(first) = &protocol.fixed_first_action {
+            let index = names[side].iter().position(|name| name == first).unwrap();
+            FixedPolicySolver::new_with_first_action(dex, cfg, side, priority,
+                &battle, legal[side][index])
+        } else {
+            FixedPolicySolver::new(dex, cfg, side, priority)
+        };
         let started = Instant::now();
         let report = solver.solve(&battle);
         let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
@@ -209,7 +223,8 @@ fn audit(
         return json!({
             "schema":"nc2000-fixed-policy-bound-v1",
             "game":game.game,"decision":decision,"state_key":battle.state_key128().to_string(),
-            "side":side,"priority_actions":names[side],
+            "side":side,"priority_actions":priority_names,
+            "fixed_first_action":protocol.fixed_first_action,
             "guaranteed_score":bound(report.guaranteed_score),
             "unrestricted_game_value":bound(report.unrestricted_game_value),
             "restricted_matrix":{
@@ -227,6 +242,8 @@ fn audit(
                 "unique_child_edges":graph.unique_child_edges},
         });
     }
+    assert!(protocol.fixed_first_action.is_none());
+    assert!(protocol.fixed_priority_actions.is_none());
     let mut targets = Vec::new();
     let archived: [Option<&Value>; 2] = [0, 1].map(|side| {
         if legal[side].is_empty() {

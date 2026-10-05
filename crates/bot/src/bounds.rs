@@ -433,6 +433,7 @@ pub struct BoundSolver<'d> {
     active_stall: Option<OneSidedHeal>,
     active_two_sided: Option<TwoSidedHeal>,
     fixed_policy: Option<(usize, Vec<SearchChoice>)>,
+    fixed_first_action: Option<(NodeKey, SearchChoice)>,
     value_certificates: HashMap<NodeKey, Bounds>,
     pub stats: BoundStats,
 }
@@ -469,6 +470,15 @@ impl<'d> FixedPolicySolver<'d> {
         let mut solver = BoundSolver::new(dex, cfg);
         solver.fixed_policy = Some((side, priority));
         Self { solver, side }
+    }
+
+    pub fn new_with_first_action(dex: &'d Dex, cfg: BoundConfig, side: usize,
+        priority: Vec<SearchChoice>, root: &Battle, action: SearchChoice) -> Self {
+        let mut probe = root.clone();
+        assert!(side < 2 && probe.legal_choices(dex, side).contains(&action));
+        let mut fixed = Self::new(dex, cfg, side, priority);
+        fixed.solver.fixed_first_action = Some((fixed.solver.node_key(root), action));
+        fixed
     }
 
     pub fn solve(&mut self, battle: &Battle) -> PolicyBoundReport {
@@ -543,6 +553,7 @@ impl<'d> BoundSolver<'d> {
             active_stall: None,
             active_two_sided: None,
             fixed_policy: None,
+            fixed_first_action: None,
             value_certificates: HashMap::new(),
             stats: BoundStats::default(),
         }
@@ -562,6 +573,7 @@ impl<'d> BoundSolver<'d> {
             active_stall: None,
             active_two_sided: None,
             fixed_policy: None,
+            fixed_first_action: None,
             value_certificates: cache.value_certificates,
             stats: cache.stats,
         }
@@ -1034,6 +1046,12 @@ impl<'d> BoundSolver<'d> {
                 let legal = probe.legal_choices(self.dex, side);
                 if let Some((fixed_side, priority)) = &self.fixed_policy {
                     if side == *fixed_side {
+                        if let Some((root, action)) = self.fixed_first_action {
+                            if root == key {
+                                assert!(legal.contains(&action));
+                                return vec![Some(action)];
+                            }
+                        }
                         let choice = priority.iter().find(|choice| legal.contains(choice))
                             .or_else(|| legal.first()).expect("requested side has a legal choice");
                         return vec![Some(*choice)];
@@ -2472,6 +2490,33 @@ mod tests {
             assert_eq!(result.runs, 0);
             assert_eq!((result.bounds.lo, result.bounds.hi), (solved.bounds.lo, solved.bounds.hi));
             assert!(result.strategies.is_none());
+        }
+    }
+
+    #[test]
+    fn fixed_first_action_does_not_replace_continuation_priority() {
+        use nc2000_engine::battle::SearchChoice;
+        let dex = conformance::load_dex();
+        let splash = SearchChoice::Move(dex.moves.id("splash").unwrap());
+        let attack = SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
+        for side in 0..2 {
+            for (turn, expected) in [(999, 1.0), (1000, 0.5)] {
+                let mut root = if side == 0 {
+                    battle(&dex, &["Splash", "Seismic Toss"], &["Splash"])
+                } else { battle(&dex, &["Splash"], &["Splash", "Seismic Toss"]) };
+                let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+                root.apply_choices(&dex, preview).unwrap();
+                root.turn = turn;
+                let foe = root.active_id(1 - side).unwrap();
+                root.poke_mut(foe).hp = 25;
+                let mut solver = super::FixedPolicySolver::new_with_first_action(&dex,
+                    BoundConfig { eps: 1e-10, ..BoundConfig::default() }, side,
+                    vec![attack], &root, splash);
+                let report = solver.solve(&root);
+                assert!((report.guaranteed_score.lo - expected).abs() < 1e-10);
+                assert!((report.guaranteed_score.hi - expected).abs() < 1e-10);
+                assert_eq!(solver.restricted_root_payoffs(&root).unwrap().actions[side], vec![Some(splash)]);
+            }
         }
     }
 

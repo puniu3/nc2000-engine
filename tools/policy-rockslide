@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-rockslide-v1'
+arms = ['targeted', 'witness', 'witness-tight', 'witness-closed', 'opponent']
+padding = 1e-10
+
+
+def module(name, filename):
+    spec = importlib.util.spec_from_file_location(name, root / 'tools' / filename)
+    result = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(result)
+    return result
+
+
+assessor = module('assessor', 'headroom-cases-report.py')
+verifier = module('verifier', 'policy-gap-report.py')
+
+
+def read_archive(path):
+    return json.loads(gzip.decompress(path.read_bytes()))
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def summarize(records):
+    assessor.calibrate_assessor()
+    assert set(records) == set(arms)
+    prior_paths = [root / 'findings/policy-gap-v1/records.json.gz', root / 'findings/headroom-cases-v1/records.json.gz']
+    originals = read_archive(prior_paths[0])
+    references = read_archive(prior_paths[1])['references']
+    priors = [next(r for r in rows if (r['game'], r['decision']) == (2, 11)) for rows in [originals, references]]
+    state_key = priors[0]['state_key']
+    full = records['targeted']['result']
+    matrices = [r['reference'] for r in priors] + [full['reference']]
+    actions = matrices[0]['actions']
+    assert all(r['state_key'] == state_key for r in priors + [full])
+    assert all(m['actions'] == actions for m in matrices)
+    for row in priors + [full]:
+        for endpoint in row['endpoints']:
+            for arm in ['archived', 'uniform', 'max_damage', 'oracle']:
+                verifier.verify_assessment(row['reference'], endpoint['side'], endpoint[arm])
+    assert len(actions[0]) == 5 and len(actions[1]) == 4
+    cells = [{'lo': max(0, max(m['cells'][i]['lo'] for m in matrices) - padding),
+              'hi': min(1, min(m['cells'][i]['hi'] for m in matrices) + padding)} for i in range(20)]
+    value = {'lo': max(0, max(m['value']['lo'] for m in matrices) - padding),
+             'hi': min(1, min(m['value']['hi'] for m in matrices) + padding)}
+    assert all(b['lo'] <= b['hi'] for b in cells + [value])
+    matrix = {'actions': actions, 'cells': cells, 'value': value}
+    before = [assessor.assess(matrix, e['side'], e['archived']['policy']) for e in full['endpoints']]
+    witnesses = []
+    for name in arms[1:]:
+        row = records[name]['result']
+        p = records[name]['manifest']['protocol']
+        assert row['state_key'] == p.get('root_state_key', state_key) == state_key
+        side = row['side']
+        assert side == p['fixed_policy_side'] == (1 if name == 'opponent' else 0)
+        assert row['fixed_first_action'] == p['fixed_first_action'] == full['endpoints'][side]['archived_choice']
+        restricted = row['restricted_matrix']
+        expected_actions = list(actions)
+        expected_actions[side] = [row['fixed_first_action']]
+        assert restricted['actions'] == expected_actions
+        assert row['priority_actions'] == p.get('fixed_priority_actions', actions[side])
+        assert sorted(row['priority_actions']) == sorted(actions[side])
+        assert len(restricted['cells']) == len(actions[1 - side])
+        score = row['guaranteed_score']
+        expected_value = score if side == 0 else {'lo': 1 - score['hi'], 'hi': 1 - score['lo']}
+        assert all(abs(restricted['value'][k] - v) < 1e-12 for k, v in expected_value.items())
+        projection = {'lo': score['lo'], 'hi': 1.0} if side == 0 else {'lo': 0.0, 'hi': 1 - score['lo']}
+        assert all(abs(row['unrestricted_game_value'][k] - v) < 1e-12 for k, v in projection.items())
+        assert sum(c['runs'] for c in row['root_chance']) == row['reference']['runs']
+        action_index = actions[side].index(row['fixed_first_action'])
+        for reply, bound in enumerate(restricted['cells']):
+            cell = cells[action_index * 4 + reply if side == 0 else reply * 4 + action_index]
+            if side == 0:
+                cell['lo'] = max(cell['lo'], bound['lo'] - padding)
+            else:
+                cell['hi'] = min(cell['hi'], bound['hi'] + padding)
+            assert cell['lo'] <= cell['hi']
+        witnesses.append({'arm': name, 'side': side, 'score': score, **row['reference']})
+    value['lo'] = max(value['lo'], max(min(cells[i * 4 + j]['lo'] for j in range(4)) for i in range(5)))
+    value['hi'] = min(value['hi'], min(max(cells[i * 4 + j]['hi'] for i in range(5)) for j in range(4)))
+    assert value['lo'] <= value['hi']
+    assessments = [assessor.assess(matrix, e['side'], e['archived']['policy']) for e in full['endpoints']]
+    for side, assessment in enumerate(assessments):
+        verifier.verify_assessment(matrix, side, assessment)
+    standalone = {'lo': max(0, records['witness-closed']['result']['guaranteed_score']['lo'] - padding),
+                  'hi': min(1, 1 - records['opponent']['result']['guaranteed_score']['lo'] + padding)}
+    assert standalone['lo'] <= standalone['hi']
+    return {
+        'schema': 'nc2000-policy-rockslide-v1', 'state': {'game': 2, 'decision': 11, 'state_key': state_key},
+        'numerical_envelope': padding, 'before_witness': before, 'witnesses': witnesses,
+        'targeted': {k: full['reference'][k] for k in ['value', 'runs', 'nodes', 'stop', 'elapsed_ms']},
+        'combined': {'matrix': matrix, 'archived_first_decisions': assessments},
+        'standalone_strategy_pair': standalone,
+        'prior_hashes': {str(p.relative_to(root)): sha(p.read_bytes()) for p in prior_paths},
+        'interpretation': 'Side zero chooses Rock Slide at this root, then the first legal original-root priority action, falling back to the engine first legal action. The independent side-one witness prioritizes Psychic at every decision. Each witness lets the opponent use every legal action. Only restricted side-zero lower bounds and restricted side-one upper bounds transfer to unrestricted root cells. The standalone strategy pair uses only these new two-sided guarantees, without prior certificates. Float bounds receive an outward 1e-10 envelope before intersection. Values score a win as 1 and a tie as 0.5. First-decision losses assume optimal full-information continuation; this does not certify deployed blind-policy exploitability or global optimality.',
+    }
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = read_archive(archive / 'records.json.gz')
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    for name, record in records.items():
+        manifest = record['manifest']
+        protocol = (archive / f'{name}.json').read_bytes()
+        assert sha(protocol) == manifest['protocol_sha256']
+        assert json.loads(protocol) == manifest['protocol']
+        assert sha(corpus) == manifest['protocol']['corpus_sha256']
+        assert sha((root / manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified restricted-continuation lower bounds and unrestricted first-decision assessments')
+    raise SystemExit(0)
+if args.record_existing:
+    directory = args.record_existing
+else:
+    directory = root / 'tmp/policy-rockslide-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    (directory / 'corpus.jsonl').write_bytes(corpus)
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in arms:
+        p = json.loads((archive / f'{name}.json').read_bytes())
+        p['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(p, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {name: {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()),
+                  'result': json.loads((directory / name / 'game-002-d0011.json').read_bytes())} for name in arms}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    corpus = (root / records['targeted']['manifest']['protocol']['corpus']).read_bytes()
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    for name in arms:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print('Archived first-decision losses:', [a['loss'] for a in summary['combined']['archived_first_decisions']])

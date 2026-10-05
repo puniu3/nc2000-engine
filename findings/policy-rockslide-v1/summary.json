@@ -1,0 +1,253 @@
+{
+  "schema": "nc2000-policy-rockslide-v1",
+  "state": {
+    "game": 2,
+    "decision": 11,
+    "state_key": "245845597322975585360400929104655917751"
+  },
+  "numerical_envelope": 1e-10,
+  "before_witness": [
+    {
+      "policy": [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "guarantee": {
+        "lo": 0.3978875788820466,
+        "hi": 0.7910156250999844
+      },
+      "loss": {
+        "lo": 0,
+        "hi": 0.39312804631793774
+      }
+    },
+    {
+      "policy": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "guarantee": {
+        "lo": 0.20898437490001565,
+        "hi": 0.2089843751
+      },
+      "loss": {
+        "lo": 0,
+        "hi": 2.99984362403427e-10
+      }
+    }
+  ],
+  "witnesses": [
+    {
+      "arm": "witness",
+      "side": 0,
+      "score": {
+        "lo": 0.7713613553693722,
+        "hi": 0.791015625
+      },
+      "stop": "WidthMet",
+      "runs": 486368,
+      "elapsed_ms": 10303.181708,
+      "nodes": 82587
+    },
+    {
+      "arm": "witness-tight",
+      "side": 0,
+      "score": {
+        "lo": 0.7900600258553666,
+        "hi": 0.791015625
+      },
+      "stop": "WidthMet",
+      "runs": 513605,
+      "elapsed_ms": 8253.1325,
+      "nodes": 85494
+    },
+    {
+      "arm": "witness-closed",
+      "side": 0,
+      "score": {
+        "lo": 0.791015625,
+        "hi": 0.791015625
+      },
+      "stop": "WidthMet",
+      "runs": 515309,
+      "elapsed_ms": 7640.766167,
+      "nodes": 85786
+    },
+    {
+      "arm": "opponent",
+      "side": 1,
+      "score": {
+        "lo": 0.208984375,
+        "hi": 0.208984375
+      },
+      "stop": "WidthMet",
+      "runs": 15599,
+      "elapsed_ms": 272.3485,
+      "nodes": 1267
+    }
+  ],
+  "targeted": {
+    "value": {
+      "lo": 0.791015625,
+      "hi": 0.8008103221261524
+    },
+    "runs": 2081386,
+    "nodes": 479956,
+    "stop": "NodeBudget",
+    "elapsed_ms": 47321.20045900001
+  },
+  "combined": {
+    "matrix": {
+      "actions": [
+        [
+          "move earthquake",
+          "move rockslide",
+          "move hiddenpower",
+          "move swordsdance",
+          "switch 3"
+        ],
+        [
+          "move hydropump",
+          "move psychic",
+          "move thunderwave",
+          "move recover"
+        ]
+      ],
+      "cells": [
+        {
+          "lo": 0.8234742715447007,
+          "hi": 0.8334655762718626
+        },
+        {
+          "lo": 0.7910156249,
+          "hi": 0.7910156250999844
+        },
+        {
+          "lo": 0.9999999999,
+          "hi": 1
+        },
+        {
+          "lo": 0.9999999999,
+          "hi": 1
+        },
+        {
+          "lo": 0.8076661375175259,
+          "hi": 0.8326807032407828
+        },
+        {
+          "lo": 0.7910156249,
+          "hi": 0.7910156250999844
+        },
+        {
+          "lo": 0.8951515943546432,
+          "hi": 0.9999009234250732
+        },
+        {
+          "lo": 0.79126774644876,
+          "hi": 0.9764775752469352
+        },
+        {
+          "lo": 0.8234742715447007,
+          "hi": 0.8334655762718626
+        },
+        {
+          "lo": 0.7910156249,
+          "hi": 0.7910156250999844
+        },
+        {
+          "lo": 0.9999999999,
+          "hi": 1
+        },
+        {
+          "lo": 0.9999999999,
+          "hi": 1
+        },
+        {
+          "lo": 0.7580623294572792,
+          "hi": 0.8058629475382442
+        },
+        {
+          "lo": 0.7910156249,
+          "hi": 0.7910156250999844
+        },
+        {
+          "lo": 0.7505219419215414,
+          "hi": 0.7983645305208786
+        },
+        {
+          "lo": 0.7431976807828318,
+          "hi": 0.7910156250999817
+        },
+        {
+          "lo": 0.153642559206782,
+          "hi": 0.3036374356124991
+        },
+        {
+          "lo": 0,
+          "hi": 0.009621033782489198
+        },
+        {
+          "lo": 0.4620828621819796,
+          "hi": 0.920697847487384
+        },
+        {
+          "lo": 0.5363938819785156,
+          "hi": 0.9996257104391678
+        }
+      ],
+      "value": {
+        "lo": 0.7910156249,
+        "hi": 0.7910156250999844
+      }
+    },
+    "archived_first_decisions": [
+      {
+        "policy": [
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.7910156249,
+          "hi": 0.7910156250999844
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 2.99984362403427e-10
+        }
+      },
+      {
+        "policy": [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.20898437490001565,
+          "hi": 0.2089843751
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 2.99984362403427e-10
+        }
+      }
+    ]
+  },
+  "standalone_strategy_pair": {
+    "lo": 0.7910156249,
+    "hi": 0.7910156251
+  },
+  "prior_hashes": {
+    "findings/policy-gap-v1/records.json.gz": "e97b42095359d87daba81593e75169d4b742b97b8f757a01f8fea08bb2cb246e",
+    "findings/headroom-cases-v1/records.json.gz": "7e33da4bf0938cf5d9b185d0a680aaded287280f517b2ba0915a02fef72f2597"
+  },
+  "interpretation": "Side zero chooses Rock Slide at this root, then the first legal original-root priority action, falling back to the engine first legal action. The independent side-one witness prioritizes Psychic at every decision. Each witness lets the opponent use every legal action. Only restricted side-zero lower bounds and restricted side-one upper bounds transfer to unrestricted root cells. The standalone strategy pair uses only these new two-sided guarantees, without prior certificates. Float bounds receive an outward 1e-10 envelope before intersection. Values score a win as 1 and a tie as 0.5. First-decision losses assume optimal full-information continuation; this does not certify deployed blind-policy exploitability or global optimality."
+}
