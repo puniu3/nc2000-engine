@@ -44,8 +44,8 @@ pub struct ChanceLeaf {
 pub struct StepEnum {
     pub leaves: Vec<ChanceLeaf>,
     pub runs: usize,
-    /// Diagnostic observations across scripted engine runs. These are not
-    /// unique battle events: probes deliberately replay the same prefix.
+    /// Diagnostic observations across scripted transitions, including cache
+    /// hits. These are not unique events: probes revisit the same prefix.
     pub damage: DamageEnumStats,
 }
 
@@ -100,11 +100,14 @@ pub fn run_scripted_with_damage_mode(
     (b, trace)
 }
 
+type ScriptRunner<'a> = dyn FnMut(&[usize]) -> (Battle, Vec<Draw>, bool) + 'a;
+
 struct Ctx<'a> {
     dex: &'a Dex,
     base: &'a Battle,
     choices: [Option<SearchChoice>; 2],
     damage_mode: DamageRollMode,
+    runner: Option<&'a mut ScriptRunner<'a>>,
     cap: usize,
     runs: usize,
     damage: DamageEnumStats,
@@ -115,14 +118,14 @@ impl Ctx<'_> {
         if self.runs >= self.cap {
             return None;
         }
-        self.runs += 1;
-        let result = run_scripted_with_damage_mode(
-            self.dex,
-            self.base,
-            self.choices,
-            script,
-            self.damage_mode,
-        );
+        let result = if let Some(runner) = self.runner.as_mut() {
+            let (battle, trace, executed) = runner(script);
+            self.runs += usize::from(executed);
+            (battle, trace)
+        } else {
+            self.runs += 1;
+            run_scripted_with_damage_mode(self.dex, self.base, self.choices, script, self.damage_mode)
+        };
         for draw in &result.1 {
             match draw.label {
                 "dmgvar" => self.damage.exact_draws += 1,
@@ -304,11 +307,37 @@ pub fn enumerate_step_with_damage_mode(
     cap: usize,
     damage_mode: DamageRollMode,
 ) -> Option<StepEnum> {
+    enumerate_with_runner(dex, base, choices, cap, damage_mode, None)
+}
+
+/// The runner must return a semantically equivalent scripted successor
+/// and the identical chance trace, with
+/// `executed` true iff it performed an engine execution. Cached calls may
+/// cost zero; a depleted cap still stops before invoking the runner.
+pub fn enumerate_step_with_runner(
+    dex: &Dex,
+    base: &Battle,
+    choices: [Option<SearchChoice>; 2],
+    cap: usize,
+    runner: &mut ScriptRunner<'_>,
+) -> Option<StepEnum> {
+    enumerate_with_runner(dex, base, choices, cap, DamageRollMode::Exact, Some(runner))
+}
+
+fn enumerate_with_runner<'a>(
+    dex: &'a Dex,
+    base: &'a Battle,
+    choices: [Option<SearchChoice>; 2],
+    cap: usize,
+    damage_mode: DamageRollMode,
+    runner: Option<&'a mut ScriptRunner<'a>>,
+) -> Option<StepEnum> {
     let mut ctx = Ctx {
         dex,
         base,
         choices,
         damage_mode,
+        runner,
         cap,
         runs: 0,
         damage: DamageEnumStats::default(),

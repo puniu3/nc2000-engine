@@ -62,6 +62,7 @@ pub struct BoundConfig {
     pub dead_damage_quotient: bool,
     pub dead_quick_claw_quotient: bool,
     pub hp_transition_capacity: usize,
+    pub hp_transition_eager: bool,
     /// Fold terminal successor mass directly into its parent cell instead
     /// of retaining one graph node per terminal fingerprint.
     pub fold_terminal_nodes: bool,
@@ -108,6 +109,7 @@ impl Default for BoundConfig {
             dead_damage_quotient: true,
             dead_quick_claw_quotient: false,
             hp_transition_capacity: 0,
+            hp_transition_eager: false,
             fold_terminal_nodes: true,
             fold_closed_nodes: true,
             monotone_stall_scheduling: true,
@@ -294,6 +296,8 @@ pub struct BoundStats {
     pub resource_closure_visits: usize,
     pub first_resource_closure_nodes: Option<usize>,
     pub runs: usize,
+    pub hp_transition_eager_hits: usize,
+    pub hp_transition_eager_eligible: usize,
     pub hp_transition_hits: usize,
     pub hp_transition_eligible: usize,
     pub hp_transition_rejected: usize,
@@ -1621,7 +1625,25 @@ impl<'d> BoundSolver<'d> {
                 [node.acts0[i], node.acts1[j]],
             )
         };
-        let step = enumerate_step(self.dex, &battle, choices, cap);
+        let step = if self.cfg.hp_transition_eager && self.cfg.hp_transition_capacity>0
+            && self.cfg.dead_damage_quotient && self.cfg.dead_quick_claw_quotient {
+            let cache=&mut self.hp_transitions;
+            let stats=&mut self.stats;
+            let dex=self.dex;
+            let capacity=self.cfg.hp_transition_capacity;
+            nc2000_engine::battle::enumerate::enumerate_step_with_runner(dex,&battle,choices,cap,&mut |script| {
+                let step=cache.run(dex,&battle,choices,script,capacity);
+                stats.hp_transition_hits+=usize::from(step.hit);
+                stats.hp_transition_eligible+=usize::from(step.eligible);
+                stats.hp_transition_eager_hits+=usize::from(step.hit);
+                stats.hp_transition_eager_eligible+=usize::from(step.eligible);
+                stats.hp_transition_rejected+=usize::from(step.rejected_hp);
+                stats.hp_transition_peak=stats.hp_transition_peak.max(cache.len());
+                (step.battle,step.trace,!step.hit)
+            })
+        } else {
+            enumerate_step(self.dex,&battle,choices,cap)
+        };
         let Some(step) = step else {
             self.nodes.get_mut(&key).unwrap().battle = Some(battle);
             self.stats.runs += cap;
@@ -2169,10 +2191,10 @@ mod tests {
         let preview=[0,1].map(|side|base.legal_choices(&dex,side)[0]);
         base.apply_choices(&dex,preview.map(Some)).unwrap();
         base.turn=999;
-        for capacity in [0,128] {
+        for (capacity,cell_cap) in [(0,0),(128,0),(128,1),(128,4096)] {
             let mut solver=BoundSolver::new(&dex,BoundConfig {
-                hp_transition_capacity:capacity,dead_quick_claw_quotient:true,
-                cell_cap:0,eps:1e-10,work_budget:10_000,..BoundConfig::default()
+                hp_transition_capacity:capacity,hp_transition_eager:true,dead_quick_claw_quotient:true,
+                cell_cap,eps:1e-10,work_budget:10_000,..BoundConfig::default()
             });
             for hp in [[100,100],[90,80],[60,90],[40,90]] {
                 let mut root=base.clone();
@@ -2183,7 +2205,8 @@ mod tests {
                 assert!((report.bounds.lo-exact).abs()<1e-9);
                 assert!((report.bounds.hi-exact).abs()<1e-9);
             }
-            assert_eq!(solver.stats.runs+solver.stats.hp_transition_hits,solver.stats.expansions);
+            if cell_cap==0 {assert_eq!(solver.stats.runs+solver.stats.hp_transition_hits,solver.stats.expansions);}
+            if cell_cap==4096 {assert!(solver.stats.hp_transition_eager_hits>0);}
             assert_eq!(solver.stats.hp_transition_hits>0,capacity>0);
             assert!(solver.stats.hp_transition_peak<=capacity);
         }

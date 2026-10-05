@@ -43,6 +43,8 @@ struct Protocol {
     #[serde(default)]
     hp_transition_capacity: usize,
     #[serde(default)]
+    hp_transition_eager: bool,
+    #[serde(default)]
     certified_action_pruning: bool,
     fixed_policy_side: Option<usize>,
     fixed_first_action: Option<String>,
@@ -413,6 +415,7 @@ fn audit(
             chance_material_order: protocol.chance_material_order,
             dead_quick_claw_quotient: protocol.dead_quick_claw_quotient,
             hp_transition_capacity: protocol.hp_transition_capacity,
+            hp_transition_eager: protocol.hp_transition_eager,
             resource_closure_nodes: protocol.resource_closure_nodes,
             resource_closure_period: protocol.resource_closure_period.unwrap_or(1),
             directed_policy_refinement: protocol.directed_policy_refinement,
@@ -446,6 +449,8 @@ fn audit(
                 "hp_translation_audit":hp_audit,
                 "hp_transition_cache":{"capacity":protocol.hp_transition_capacity,
                     "eligible":solver.stats().hp_transition_eligible,"hits":solver.stats().hp_transition_hits,
+                    "eager_enabled":protocol.hp_transition_eager,
+                    "eager_hits":solver.stats().hp_transition_eager_hits,"eager_eligible":solver.stats().hp_transition_eager_eligible,
                     "rejected_hp":solver.stats().hp_transition_rejected,"peak":solver.stats().hp_transition_peak,
                     "expansions":solver.stats().expansions,"eager_runs":solver.stats().eager_runs},
                 "restricted_matrix":{"actions":matrix.actions.map(|aa|aa.into_iter().map(|a|a.map(|a|action_input(dex,a))).collect::<Vec<_>>()),
@@ -533,6 +538,7 @@ fn audit(
             chance_material_order: protocol.chance_material_order,
             dead_quick_claw_quotient: protocol.dead_quick_claw_quotient,
             hp_transition_capacity: protocol.hp_transition_capacity,
+            hp_transition_eager: protocol.hp_transition_eager,
             resource_closure_nodes: protocol.resource_closure_nodes,
             resource_closure_period: protocol.resource_closure_period.unwrap_or(1),
             directed_policy_refinement: protocol.directed_policy_refinement,

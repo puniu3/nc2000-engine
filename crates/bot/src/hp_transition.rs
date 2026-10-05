@@ -247,6 +247,57 @@ mod tests {
     }
 
     #[test]
+    fn eager_cache_matches_complete_kernels_and_accounts_for_caps() {
+        use nc2000_engine::battle::enumerate::{enumerate_step,enumerate_step_with_runner};
+        let dex=conformance::load_dex();
+        let base=battle(&dex,[&["Seismic Toss"],&["Ice Beam"]],["Mint Berry","Bright Powder"]);
+        let choices=["seismictoss","icebeam"].map(|name|Some(SearchChoice::Move(dex.moves.id(name).unwrap())));
+        let mut cache=HpTransitionCache::default();
+        let mut hits=0;
+        for reduction in [0,20,40,1000] {
+            let mut target=base.clone();
+            for side in 0..2 {let id=target.active_id(side).unwrap();let p=target.poke_mut(id);p.hp=(p.hp-reduction).max(1);}
+            let exact=enumerate_step(&dex,&target,choices,100_000).unwrap();
+            let mut runs=0;
+            let cached=enumerate_step_with_runner(&dex,&target,choices,100_000,&mut |script| {
+                let step=cache.run(&dex,&target,choices,script,4096);
+                runs+=usize::from(!step.hit);hits+=usize::from(step.hit);
+                let actual=run_scripted(&dex,&target,choices,script);
+                assert_eq!(step.battle.state_key128(),actual.0.state_key128());
+                assert_eq!(trace_signature(&step.trace),trace_signature(&actual.1));
+                (step.battle,step.trace,!step.hit)
+            }).unwrap();
+            assert_eq!(cached.runs,runs);
+            let aggregate=|leaves:Vec<nc2000_engine::battle::enumerate::ChanceLeaf>| {
+                let mut mass=HashMap::<u128,f64>::new();
+                for leaf in leaves {*mass.entry(leaf.battle.state_key128()).or_default()+=leaf.prob;}
+                mass
+            };
+            let found=aggregate(cached.leaves);let expected=aggregate(exact.leaves);
+            assert_eq!(found.len(),expected.len());
+            for (key,mass) in found {assert!((mass-expected[&key]).abs()<1e-10);}
+        }
+        assert!(hits>39);
+        for cap in [0,1,7] {
+            let mut empty=HpTransitionCache::default();let mut runs=0;
+            let result=enumerate_step_with_runner(&dex,&base,choices,cap,&mut |script| {
+                let step=empty.run(&dex,&base,choices,script,4096);
+                runs+=usize::from(!step.hit);
+                (step.battle,step.trace,!step.hit)
+            });
+            assert!(result.is_none());assert_eq!(runs,cap);
+        }
+        let mut warm=HpTransitionCache::default();
+        for cap in [100_000,1] {
+            let step=enumerate_step_with_runner(&dex,&base,choices,cap,&mut |script| {
+                let step=warm.run(&dex,&base,choices,script,4096);
+                (step.battle,step.trace,!step.hit)
+            }).unwrap();
+            if cap==1 {assert_eq!(step.runs,0);}
+        }
+    }
+
+    #[test]
     fn bounded_cache_evicts_and_disables_without_changing_execution() {
         let dex=conformance::load_dex();
         let base=battle(&dex,[&["Seismic Toss"],&["Splash"]],["",""]);
