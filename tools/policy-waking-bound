@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-waking-bound-v1'
+names = ['control', 'waking']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def same_diagnostics(actual, expected):
+    if isinstance(expected, dict):
+        assert actual.keys() == expected.keys()
+        for key in expected:
+            same_diagnostics(actual[key], expected[key])
+    elif isinstance(expected, list):
+        assert len(actual) == len(expected)
+        for a, b in zip(actual, expected):
+            same_diagnostics(a, b)
+    elif isinstance(expected, float):
+        assert abs(actual - expected) <= 2e-15
+    else:
+        assert actual == expected
+
+
+def summarize(records, corpus):
+    assert set(records) == set(names)
+    for key in ['binary_sha256', 'source_hashes', 'revision']:
+        assert len({json.dumps(r['manifest'][key], sort_keys=True) for r in records.values()}) == 1
+    common = None
+    rows = {}
+    for name, record in records.items():
+        manifest, row = record['manifest'], record['result']
+        cfg = manifest['protocol']
+        assert cfg['corpus_sha256'] == sha(corpus)
+        assert row['schema'] == 'nc2000-fixed-reply-bound-v1' and row['side'] == 0
+        assert row['state_key'] == '199433906935569759004884428941975153695'
+        assert row['fixed_first_action'] == cfg['fixed_first_action'] == 'move bodyslam'
+        assert row['reply_action'] == cfg['fixed_reply_action'] == 'switch 2'
+        assert row['fixed_rest_percent'] == cfg['fixed_rest_percent'] == 75
+        assert row['fixed_rest_after_boom'] == cfg['fixed_rest_after_boom'] is True
+        assert row['fixed_rest_on_wake'] == cfg['fixed_rest_on_wake'] == (name == 'waking')
+        assert row['threshold'] == cfg['fixed_reply_threshold'] == .027
+        comparable = {k: v for k, v in cfg.items() if k != 'fixed_rest_on_wake'}
+        if common is None:
+            common = comparable
+        assert common == comparable
+        matrix = row['restricted_matrix']
+        assert matrix['actions'][0] == ['move bodyslam']
+        reply = matrix['actions'][1].index('switch 2')
+        assert matrix['cells'][reply] == row['reply_value']
+        for cell in matrix['cells'] + [matrix['value']]:
+            assert 0 <= cell['lo'] <= cell['hi'] <= 1
+        reference = row['reference']
+        assert reference['runs'] <= cfg['work_budget'] == 2000000
+        assert row['root_chance'][reply]['runs'] == reference['runs']
+        assert all(c['runs'] == 0 for i, c in enumerate(row['root_chance']) if i != reply)
+        assert row['refinement']['fixed_waking_rest_nodes'] == 0 or name == 'waking'
+        rows[name] = dict(reply_value=row['reply_value'], reference=reference,
+                          fixed_waking_rest_nodes=row['refinement']['fixed_waking_rest_nodes'],
+                          threshold_proven=row['reply_value']['lo'] >= row['threshold'])
+    old_path = root / 'findings/policy-late-rest-v1/records.json.gz'
+    old = json.loads(gzip.decompress(old_path.read_bytes()))['proofs']['after-boom']['result']
+    control = records['control']['result']
+    for key in ['restricted_matrix', 'reply_value']:
+        assert control[key] == old[key], key
+    same_diagnostics(control['root_chance'], old['root_chance'])
+    for key in ['runs', 'nodes', 'stop']:
+        assert control['reference'][key] == old['reference'][key], key
+    for key in old['refinement']:
+        assert control['refinement'][key] == old['refinement'][key], key
+    return dict(schema='nc2000-policy-waking-bound-v1', proofs=rows,
+                target_fixed_reply_lower_bound=.027,
+                admissible_cell_lower=max(r['reply_value']['lo'] for r in rows.values()),
+                lower_bound_change=rows['waking']['reply_value']['lo'] - rows['control']['reply_value']['lo'],
+                prior_archive_sha256=sha(old_path.read_bytes()),
+                diagnostic_float_tolerance=2e-15,
+                interpretation='The fixed side-zero strategy is evaluated against every future legal opponent choice after the fixed first Body Slam / switch-2 pair. Exact chance expansion assigns all unexpanded mass the interval [0,1]. Waking-turn Rest is optional and defaults off. The control reproduces the archived solver matrix and work counts exactly. Only each fixed-strategy lower bound can transfer to the unrestricted full-information game cell; its upper bound cannot. This is not a blind-policy exploitability certificate or global optimality claim. No sampled or human-calibrated value enters these bounds.')
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    for name, record in records.items():
+        protocol = (archive / f'{name}.json').read_bytes()
+        assert record['manifest']['protocol_sha256'] == sha(protocol)
+        assert record['manifest']['protocol'] == json.loads(protocol)
+    assert summarize(records, corpus) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified unrestricted opponent actions, exact control regression, and one-sided certificate scope')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-waking-bound-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in names:
+        cfg = json.loads((archive / f'{name}.json').read_bytes())
+        cfg['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(cfg, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {name: dict(manifest=json.loads((directory / name / 'manifest.json').read_bytes()),
+                      result=json.loads((directory / name / 'game-017-d0021.json').read_bytes())) for name in names}
+corpus = (directory / 'corpus.jsonl').read_bytes()
+summary = summarize(records, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    for name in names:
+        protocol = (directory / f'{name}.json').read_bytes()
+        assert records[name]['manifest']['protocol_sha256'] == sha(protocol)
+        assert records[name]['manifest']['protocol'] == json.loads(protocol)
+        (archive / f'{name}.json').write_bytes(protocol)
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(json.dumps(summary['proofs'], indent=2))

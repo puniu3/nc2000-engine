@@ -341,6 +341,7 @@ pub struct BoundStats {
     pub trial_depth_counts: Vec<usize>,
     pub depth_limit_trials: usize,
     pub material_descent_bypasses: usize,
+    pub fixed_waking_rest_nodes: usize,
     pub lazy_edge_merges: usize,
 }
 
@@ -469,6 +470,7 @@ pub struct BoundSolver<'d> {
     fixed_frozen_switch: bool,
     fixed_rest_percent: Option<u8>,
     fixed_rest_after_boom: bool,
+    fixed_rest_on_wake: bool,
     value_certificates: HashMap<NodeKey, Bounds>,
     hp_transitions: crate::hp_transition::HpTransitionCache,
     pub stats: BoundStats,
@@ -605,6 +607,14 @@ impl<'d> FixedPolicySolver<'d> {
         self
     }
 
+    pub fn with_rest_on_wake(mut self) -> Self {
+        assert!(self.solver.nodes.is_empty() && self.solver.closed.is_empty(),
+            "fixed strategy must be configured before search");
+        assert!(self.solver.fixed_rest_percent.is_some(),"Rest threshold must be configured first");
+        self.solver.fixed_rest_on_wake=true;
+        self
+    }
+
     pub fn node_count(&self) -> usize { self.solver.node_count() }
     pub fn retained_battles(&self) -> impl Iterator<Item=&Battle> { self.solver.retained_battles() }
     pub fn graph_diagnostics(&self) -> GraphDiagnostics { self.solver.graph_diagnostics() }
@@ -670,6 +680,7 @@ impl<'d> BoundSolver<'d> {
             fixed_frozen_switch: false,
             fixed_rest_percent: None,
             fixed_rest_after_boom: false,
+            fixed_rest_on_wake: false,
             value_certificates: HashMap::new(),
             hp_transitions: crate::hp_transition::HpTransitionCache::default(),
             stats: BoundStats::default(),
@@ -695,6 +706,7 @@ impl<'d> BoundSolver<'d> {
             fixed_frozen_switch: false,
             fixed_rest_percent: None,
             fixed_rest_after_boom: false,
+            fixed_rest_on_wake: false,
             value_certificates: cache.value_certificates,
             hp_transitions: crate::hp_transition::HpTransitionCache::default(),
             stats: cache.stats,
@@ -1215,11 +1227,16 @@ impl<'d> BoundSolver<'d> {
                             if (!self.fixed_rest_after_boom || !has_live_boom_move(self.dex,&probe,1-side))
                                 && probe.active_id(side).is_some_and(|id| {
                                 let pokemon=probe.poke(id);
-                                !matches!(pokemon.status,nc2000_engine::state::Status::Slp | nc2000_engine::state::Status::Frz)
+                                pokemon.status!=nc2000_engine::state::Status::Frz
+                                    && (pokemon.status!=nc2000_engine::state::Status::Slp || (self.fixed_rest_on_wake
+                                        && pokemon.status_state.get_int(nc2000_engine::state::DK::Time)<=1))
                                     && i64::from(pokemon.hp)*100 <= i64::from(pokemon.maxhp)*i64::from(percent)
                             }) {
                                 if let Some(action)=self.dex.moves.id("rest").map(SearchChoice::Move)
                                     .filter(|action|legal.contains(action)) {
+                                    if probe.active_id(side).is_some_and(|id|probe.poke(id).status==nc2000_engine::state::Status::Slp) {
+                                        self.stats.fixed_waking_rest_nodes+=1;
+                                    }
                                     return vec![Some(action)];
                                 }
                             }
@@ -3254,6 +3271,62 @@ mod tests {
             assert!((report.guaranteed_score.hi-expected).abs()<1e-10);
             assert_eq!(solver.restricted_root_payoffs(&root).unwrap().actions[side],vec![Some(selected)]);
         }}
+    }
+
+    #[test]
+    fn waking_rest_matches_exhaustive_responses_and_respects_strategy_guards() {
+        use nc2000_engine::battle::{EffectHandle,SearchChoice};
+        use nc2000_engine::state::DK;
+        let dex=conformance::load_dex();
+        let attack=SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
+        let rest=SearchChoice::Move(dex.moves.id("rest").unwrap());
+        for side in 0..2 { for waking in [false,true] {
+            for (status,time,pp,first,threat) in [
+                ("slp",1,10,false,false),("slp",2,10,false,false),
+                ("",0,10,false,false),("frz",0,10,false,false),
+                ("slp",1,0,false,false),("slp",1,10,true,false),("slp",1,10,false,true),
+            ] {
+                let foe_moves=if threat {&["Seismic Toss","Self-Destruct"][..]} else {&["Seismic Toss","Rest"][..]};
+                let mut root=if side==0 {battle(&dex,&["Seismic Toss","Rest"],foe_moves)}
+                    else {battle(&dex,foe_moves,&["Seismic Toss","Rest"])};
+                let preview=[0,1].map(|s|root.legal_choices(&dex,s).first().copied());
+                root.apply_choices(&dex,preview).unwrap();root.turn=1000;
+                let me=root.active_id(side).unwrap();let foe=root.active_id(1-side).unwrap();
+                root.poke_mut(me).maxhp=100;root.poke_mut(me).hp=49;root.poke_mut(foe).hp=1;
+                root.poke_mut(me).move_slots[1].pp=pp;root.poke_mut(me).base_move_slots[1].pp=pp;
+                if !status.is_empty() {root.set_status(&dex,me,status,Some(me),EffectHandle::None,true);}
+                if status=="slp" {root.poke_mut(me).status_state.set_int(DK::Time,time);}
+                let selected=if pp>0 && !first && !threat && (status.is_empty() || (waking && status=="slp" && time==1)) {rest} else {attack};
+                let replies=root.legal_choices(&dex,1-side);
+                let expected=replies.iter().map(|&reply| {
+                    let pair=if side==0 {[selected,reply]} else {[reply,selected]};
+                    enumerate_step(&dex,&root,pair.map(Some),100_000).unwrap().leaves.iter().map(|leaf| {
+                        let value=super::outcome_value(&leaf.battle).unwrap();leaf.prob*if side==0 {value} else {1.0-value}
+                    }).sum::<f64>()
+                }).fold(1.0,f64::min);
+                let cfg=BoundConfig {eps:1e-10,..BoundConfig::default()};
+                let mut solver=if first {super::FixedPolicySolver::new_with_first_action(&dex,cfg,side,vec![attack],&root,attack)}
+                    else {super::FixedPolicySolver::new(&dex,cfg,side,vec![attack])};
+                solver=solver.with_rest_threshold(75).with_rest_after_boom();
+                if waking {solver=solver.with_rest_on_wake();}
+                let report=solver.solve(&root);
+                assert!((report.guaranteed_score.lo-expected).abs()<1e-10);
+                assert!((report.guaranteed_score.hi-expected).abs()<1e-10);
+                let matrix=solver.restricted_root_payoffs(&root).unwrap();
+                assert_eq!(matrix.actions[side],vec![Some(selected)]);
+                assert_eq!(matrix.actions[1-side],replies.into_iter().map(Some).collect::<Vec<_>>());
+                assert_eq!(solver.stats().fixed_waking_rest_nodes,usize::from(selected==rest && status=="slp"));
+            }
+        }}
+    }
+
+    #[test]
+    #[should_panic(expected="fixed strategy must be configured before search")]
+    fn waking_rest_cannot_change_after_search() {
+        let dex=conformance::load_dex();let root=battle(&dex,&["Rest","Splash"],&["Splash"]);
+        let mut solver=super::FixedPolicySolver::new(&dex,BoundConfig {work_budget:0,..BoundConfig::default()},0,vec![])
+            .with_rest_threshold(75);
+        solver.solve(&root);solver.with_rest_on_wake();
     }
 
     #[test]

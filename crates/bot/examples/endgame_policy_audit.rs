@@ -56,6 +56,8 @@ struct Protocol {
     #[serde(default)]
     fixed_rest_after_boom: bool,
     #[serde(default)]
+    fixed_rest_on_wake: bool,
+    #[serde(default)]
     fixed_sleep_talk: bool,
     #[serde(default)]
     root_census_only: bool,
@@ -440,6 +442,7 @@ fn audit(
         if protocol.fixed_frozen_switch { solver = solver.with_frozen_switch(); }
         if let Some(percent)=protocol.fixed_rest_percent { solver=solver.with_rest_threshold(percent); }
         if protocol.fixed_rest_after_boom { solver=solver.with_rest_after_boom(); }
+        if protocol.fixed_rest_on_wake { solver=solver.with_rest_on_wake(); }
         let started = Instant::now();
         if let Some(reply) = &protocol.fixed_reply_action {
             let reply_choice = legal[1-side][names[1-side].iter().position(|name|name==reply).unwrap()];
@@ -453,6 +456,7 @@ fn audit(
                 "fixed_first_action":protocol.fixed_first_action,"reply_action":reply,
                 "fixed_rest_percent":protocol.fixed_rest_percent,
                 "fixed_rest_after_boom":protocol.fixed_rest_after_boom,
+                "fixed_rest_on_wake":protocol.fixed_rest_on_wake,
                 "reply_value":bound(report.bounds),"threshold":protocol.fixed_reply_threshold,
                 "frontier_key_census":census,
                 "hp_translation_audit":hp_audit,
@@ -460,6 +464,7 @@ fn audit(
                     "trial_depth_counts":solver.stats().trial_depth_counts,"depth_limit_trials":solver.stats().depth_limit_trials,
                     "eager_failures":solver.stats().eager_failures,"lp_solves":solver.stats().lp_solves,
                     "material_descent_bypasses":solver.stats().material_descent_bypasses,
+                    "fixed_waking_rest_nodes":solver.stats().fixed_waking_rest_nodes,
                     "resource_closure_visits":solver.stats().resource_closure_visits,
                     "lower_directed_trials":solver.stats().lower_directed_trials,"upper_directed_trials":solver.stats().upper_directed_trials},
                 "hp_transition_cache":{"capacity":protocol.hp_transition_capacity,
@@ -488,6 +493,8 @@ fn audit(
             "fixed_sleep_talk":protocol.fixed_sleep_talk,
             "fixed_frozen_switch":protocol.fixed_frozen_switch,
             "fixed_rest_percent":protocol.fixed_rest_percent,
+            "fixed_rest_after_boom":protocol.fixed_rest_after_boom,
+            "fixed_rest_on_wake":protocol.fixed_rest_on_wake,
             "guaranteed_score":bound(report.guaranteed_score),
             "unrestricted_game_value":bound(report.unrestricted_game_value),
             "restricted_matrix":{
@@ -512,6 +519,7 @@ fn audit(
     assert!(!protocol.fixed_frozen_switch);
     assert!(protocol.fixed_rest_percent.is_none());
     assert!(!protocol.fixed_rest_after_boom);
+    assert!(!protocol.fixed_rest_on_wake);
     let mut targets = Vec::new();
     let archived: [Option<&Value>; 2] = [0, 1].map(|side| {
         if legal[side].is_empty() {
