@@ -31,6 +31,14 @@ use crate::stall::{
     TwoSidedHeal,
 };
 
+pub fn has_live_boom_move(dex: &Dex, battle: &Battle, side: usize) -> bool {
+    battle.sides[side].party.iter().any(|&slot| {
+        let pokemon=&battle.sides[side].roster[slot as usize];
+        pokemon.hp>0 && !pokemon.fainted && pokemon.move_slots.iter()
+            .any(|slot|matches!(dex.moves.key(slot.id),"selfdestruct"|"explosion"))
+    })
+}
+
 #[derive(Clone, Debug)]
 pub struct BoundConfig {
     pub time_budget: Option<Duration>,
@@ -460,6 +468,7 @@ pub struct BoundSolver<'d> {
     fixed_sleep_talk: bool,
     fixed_frozen_switch: bool,
     fixed_rest_percent: Option<u8>,
+    fixed_rest_after_boom: bool,
     value_certificates: HashMap<NodeKey, Bounds>,
     hp_transitions: crate::hp_transition::HpTransitionCache,
     pub stats: BoundStats,
@@ -588,6 +597,14 @@ impl<'d> FixedPolicySolver<'d> {
         self
     }
 
+    pub fn with_rest_after_boom(mut self) -> Self {
+        assert!(self.solver.nodes.is_empty() && self.solver.closed.is_empty(),
+            "fixed strategy must be configured before search");
+        assert!(self.solver.fixed_rest_percent.is_some(),"Rest threshold must be configured first");
+        self.solver.fixed_rest_after_boom=true;
+        self
+    }
+
     pub fn node_count(&self) -> usize { self.solver.node_count() }
     pub fn retained_battles(&self) -> impl Iterator<Item=&Battle> { self.solver.retained_battles() }
     pub fn graph_diagnostics(&self) -> GraphDiagnostics { self.solver.graph_diagnostics() }
@@ -652,6 +669,7 @@ impl<'d> BoundSolver<'d> {
             fixed_sleep_talk: false,
             fixed_frozen_switch: false,
             fixed_rest_percent: None,
+            fixed_rest_after_boom: false,
             value_certificates: HashMap::new(),
             hp_transitions: crate::hp_transition::HpTransitionCache::default(),
             stats: BoundStats::default(),
@@ -676,6 +694,7 @@ impl<'d> BoundSolver<'d> {
             fixed_sleep_talk: false,
             fixed_frozen_switch: false,
             fixed_rest_percent: None,
+            fixed_rest_after_boom: false,
             value_certificates: cache.value_certificates,
             hp_transitions: crate::hp_transition::HpTransitionCache::default(),
             stats: cache.stats,
@@ -1193,7 +1212,8 @@ impl<'d> BoundSolver<'d> {
                             }
                         }
                         if let Some(percent) = self.fixed_rest_percent {
-                            if probe.active_id(side).is_some_and(|id| {
+                            if (!self.fixed_rest_after_boom || !has_live_boom_move(self.dex,&probe,1-side))
+                                && probe.active_id(side).is_some_and(|id| {
                                 let pokemon=probe.poke(id);
                                 !matches!(pokemon.status,nc2000_engine::state::Status::Slp | nc2000_engine::state::Status::Frz)
                                     && i64::from(pokemon.hp)*100 <= i64::from(pokemon.maxhp)*i64::from(percent)
@@ -3204,6 +3224,36 @@ mod tests {
                 assert_eq!(solver.restricted_root_payoffs(&root).unwrap().actions[side],vec![Some(selected)]);
             }
         }
+    }
+
+    #[test]
+    fn boom_aware_rest_matches_exhaustive_response_on_both_sides() {
+        use nc2000_engine::battle::SearchChoice;
+        let dex=conformance::load_dex();
+        let attack=SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
+        let rest=SearchChoice::Move(dex.moves.id("rest").unwrap());
+        for side in 0..2 { for threat in ["Self-Destruct","Explosion","Splash"] {
+            let teams=if side==0 {[&["Seismic Toss","Rest"][..],&["Seismic Toss",threat][..]]}
+                else {[&["Seismic Toss",threat][..],&["Seismic Toss","Rest"][..]]};
+            let mut root=battle(&dex,teams[0],teams[1]);
+            let preview=[0,1].map(|s|root.legal_choices(&dex,s).first().copied());
+            root.apply_choices(&dex,preview).unwrap();root.turn=1000;
+            let own=root.active_id(side).unwrap();let foe=root.active_id(1-side).unwrap();
+            root.poke_mut(own).maxhp=100;root.poke_mut(own).hp=50;root.poke_mut(foe).hp=1;
+            let selected=if threat=="Splash" {rest} else {attack};
+            let expected=root.legal_choices(&dex,1-side).iter().map(|&reply| {
+                let pair=if side==0 {[selected,reply]} else {[reply,selected]};
+                enumerate_step(&dex,&root,pair.map(Some),100_000).unwrap().leaves.iter().map(|leaf| {
+                    let value=super::outcome_value(&leaf.battle).unwrap();leaf.prob*if side==0 {value} else {1.0-value}
+                }).sum::<f64>()
+            }).fold(1.0,f64::min);
+            let mut solver=super::FixedPolicySolver::new(&dex,BoundConfig {eps:1e-10,..BoundConfig::default()},side,vec![attack])
+                .with_rest_threshold(75).with_rest_after_boom();
+            let report=solver.solve(&root);
+            assert!((report.guaranteed_score.lo-expected).abs()<1e-10);
+            assert!((report.guaranteed_score.hi-expected).abs()<1e-10);
+            assert_eq!(solver.restricted_root_payoffs(&root).unwrap().actions[side],vec![Some(selected)]);
+        }}
     }
 
     #[test]

@@ -54,6 +54,8 @@ struct Protocol {
     fixed_reply_threshold: Option<f64>,
     fixed_rest_percent: Option<u8>,
     #[serde(default)]
+    fixed_rest_after_boom: bool,
+    #[serde(default)]
     fixed_sleep_talk: bool,
     #[serde(default)]
     root_census_only: bool,
@@ -437,6 +439,7 @@ fn audit(
         if protocol.fixed_sleep_talk { solver = solver.with_sleep_talk(); }
         if protocol.fixed_frozen_switch { solver = solver.with_frozen_switch(); }
         if let Some(percent)=protocol.fixed_rest_percent { solver=solver.with_rest_threshold(percent); }
+        if protocol.fixed_rest_after_boom { solver=solver.with_rest_after_boom(); }
         let started = Instant::now();
         if let Some(reply) = &protocol.fixed_reply_action {
             let reply_choice = legal[1-side][names[1-side].iter().position(|name|name==reply).unwrap()];
@@ -449,6 +452,7 @@ fn audit(
                 "state_key":battle.state_key128().to_string(),"side":side,"priority_actions":priority_names,
                 "fixed_first_action":protocol.fixed_first_action,"reply_action":reply,
                 "fixed_rest_percent":protocol.fixed_rest_percent,
+                "fixed_rest_after_boom":protocol.fixed_rest_after_boom,
                 "reply_value":bound(report.bounds),"threshold":protocol.fixed_reply_threshold,
                 "frontier_key_census":census,
                 "hp_translation_audit":hp_audit,
@@ -507,6 +511,7 @@ fn audit(
     assert!(!protocol.fixed_sleep_talk);
     assert!(!protocol.fixed_frozen_switch);
     assert!(protocol.fixed_rest_percent.is_none());
+    assert!(!protocol.fixed_rest_after_boom);
     let mut targets = Vec::new();
     let archived: [Option<&Value>; 2] = [0, 1].map(|side| {
         if legal[side].is_empty() {

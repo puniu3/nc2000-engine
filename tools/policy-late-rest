@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import math
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-late-rest-v1'
+stages = {'pilot': (10000, 2026100801), 'confirmation': (200000, 2026100837)}
+proof_names = ['rest-control', 'after-boom']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def upper(successes, n, delta):
+    p = successes / n
+    if p == 1:
+        return 1.0
+    target = math.log(1 / delta) / n
+    lo, hi = p, 1.0
+    for _ in range(80):
+        q = (lo + hi) / 2
+        if q == 1:
+            break
+        divergence = (p * math.log(p / q) if p else 0) + (1 - p) * math.log((1 - p) / (1 - q))
+        if divergence <= target:
+            lo = q
+        else:
+            hi = q
+    return hi
+
+
+def summarize(records):
+    sampling, proofs, regression = records['sampling'], records['proofs'], records['regression']
+    assert set(sampling) == set(stages) and set(proofs) == set(proof_names)
+    assert len({r['manifest']['binary_sha256'] for r in [*sampling.values(), regression]}) == 1
+    assert len({r['manifest']['binary_sha256'] for r in proofs.values()}) == 1
+    sources = [dict(r['manifest']['source_hashes']) for r in [*sampling.values(), *proofs.values(), regression]]
+    for paths in sources[1:]:
+        assert paths['crates/bot/src/bounds.rs'] == sources[0]['crates/bot/src/bounds.rs']
+        assert all(paths[path] == digest for path, digest in sources[0].items() if path in paths)
+    old_probe_path = root / 'findings/policy-counterprobe-v1/records.json.gz'
+    old_probe = json.loads(gzip.decompress(old_probe_path.read_bytes()))['pilot']
+    for before, after in zip(old_probe['arms'], regression['arms']):
+        for field in ['samples', 'seed', 'wins', 'ties', 'losses', 'mean_score', 'steps', 'max_steps', 'first_trial_prefix']:
+            assert before[field] == after[field]
+    layouts = [(own, boom, rest) for boom in [True, False] for rest in [None, 75, 99] for own in ['attack', 'rest75', 'after_boom75']]
+    seeds = []
+    for stage, record in sampling.items():
+        n, seed = stages[stage]
+        assert record['schema'] == 'nc2000-late-rest-counterpolicy-v1'
+        assert record['state_key'] == '199433906935569759004884428941975153695'
+        assert len(record['arms']) == len(layouts)
+        for arm, (own, boom, rest) in zip(record['arms'], layouts):
+            assert arm['own_policy'] == own and arm['opponent_return_boom'] == boom
+            assert arm['opponent_rest_percent'] == rest and arm['opponent_waking_rest'] == (rest == 99)
+            assert arm['own_rest_percent'] == (None if own == 'attack' else 75)
+            assert arm['samples'] == n and arm['seed'] == seed
+            assert arm['wins'] + arm['ties'] + arm['losses'] == n
+            assert arm['mean_score'] == (arm['wins'] + .5 * arm['ties']) / n
+            assert 0 < arm['max_steps'] <= 2048 and n <= arm['steps'] <= n * 2048
+            assert arm['first_trial_prefix'][0]['choices'] == ['move bodyslam', 'switch 2']
+        seeds.append({(seed + i * 0x9e3779b97f4a7c15) % (1 << 64) for i in range(n)})
+    assert not seeds[0].intersection(seeds[1])
+    sampled = []
+    for arm in sampling['confirmation']['arms']:
+        row = {key: arm[key] for key in ['own_policy', 'opponent_return_boom', 'opponent_rest_percent', 'opponent_waking_rest', 'samples', 'wins', 'ties', 'losses', 'mean_score']}
+        row['nominal_score_upper'] = upper(arm['wins'] + arm['ties'], arm['samples'], .01 / len(layouts))
+        row['screen_below_target'] = row['nominal_score_upper'] < .027
+        sampled.append(row)
+    old_proof_path = root / 'findings/policy-rest-witness-v1/records.json.gz'
+    previous_control = json.loads(gzip.decompress(old_proof_path.read_bytes()))['rest-material']['result']
+    control = proofs['rest-control']['result']
+    assert control['restricted_matrix'] == previous_control['restricted_matrix']
+    for field in ['runs', 'nodes', 'stop']:
+        assert control['reference'][field] == previous_control['reference'][field]
+    prior_path = root / 'findings/policy-lower-order-v1/summary.json'
+    prior = json.loads(prior_path.read_bytes())
+    matrix = json.loads(json.dumps(prior['matrix']))
+    cols = len(matrix['actions'][1]); switch = matrix['actions'][1].index('switch 2'); padding = 1e-10
+    proof_rows = {}
+    common = None
+    for name, record in proofs.items():
+        row, protocol = record['result'], record['manifest']['protocol']
+        assert row['schema'] == 'nc2000-fixed-reply-bound-v1' and row['side'] == 0
+        assert row['state_key'] == '199433906935569759004884428941975153695'
+        assert row['fixed_first_action'] == 'move bodyslam' and row['reply_action'] == 'switch 2'
+        assert row['fixed_rest_percent'] == protocol['fixed_rest_percent'] == 75
+        assert row['fixed_rest_after_boom'] == protocol['fixed_rest_after_boom'] == (name == 'after-boom')
+        config = {k: v for k, v in protocol.items() if k != 'fixed_rest_after_boom'}
+        if common is None:
+            common = config
+        assert config == common
+        restricted = row['restricted_matrix']
+        assert restricted['actions'] == [['move bodyslam'], matrix['actions'][1]]
+        assert restricted['cells'][switch] == row['reply_value']
+        assert row['root_chance'][switch]['runs'] == row['reference']['runs']
+        assert all(c['runs'] == 0 for i, c in enumerate(row['root_chance']) if i != switch)
+        for target, bound in zip(matrix['cells'], restricted['cells']):
+            target['lo'] = max(target['lo'], bound['lo'] - padding)
+        proof_rows[name] = {'reply_value': row['reply_value'], 'refinement': row['refinement'], **row['reference']}
+    matrix['value']['lo'] = max(matrix['value']['lo'], max(min(b['lo'] for b in matrix['cells'][i:i + cols]) for i in range(0, len(matrix['cells']), cols)))
+    assert all(0 <= b['lo'] <= b['hi'] <= 1 for b in matrix['cells'] + [matrix['value']])
+    differences = json.loads(json.dumps(prior['difference_certificates']))
+    for d in differences:
+        i, j = [matrix['actions'][side].index(action) for side, action in enumerate(d['upper_actions'])]
+        k, l = [matrix['actions'][side].index(action) for side, action in enumerate(d['lower_actions'])]
+        bound = 0 if (i, j) == (k, l) else matrix['cells'][i * cols + j]['hi'] - matrix['cells'][k * cols + l]['lo'] + padding
+        if bound < d['difference_upper']:
+            d['difference_upper'] = bound; d['source'] = 'matrix_intervals_with_boom_aware_rest'
+    loss_upper = min(prior['archived_first_decisions'][0]['loss']['hi'], max(0, max(d['difference_upper'] for d in differences)) + padding)
+    return {'schema': 'nc2000-policy-late-rest-v1', 'sampled_pairs': sampled, 'proofs': proof_rows,
+            'lowest_sampled_pair_scores': {own: min(row['mean_score'] for row in sampled if row['own_policy'] == own) for own in ['attack', 'rest75', 'after_boom75']},
+            'target_fixed_reply_lower_bound': .027, 'family_alpha': .01, 'sampling_comparisons': len(layouts),
+            'matrix': matrix, 'difference_certificates': differences,
+            'remaining_above_two_points': [d for d in differences if d['difference_upper'] > .02],
+            'archived_first_decisions': [{'side': side, 'loss': {'lo': 0, 'hi': loss_upper}} for side in range(2)],
+            'numerical_envelope': padding,
+            'prior_hashes': {str(p.relative_to(root)): sha(p.read_bytes()) for p in [old_probe_path, old_proof_path, prior_path]},
+            'interpretation': 'The new policy withholds threshold Rest while a selected living foe carries Selfdestruct or Explosion; attack-priority fallback is unchanged. Concrete counterpolicy trials can refute candidates but do not certify their worst-case value. Nominal one-sided binomial KL sampling bounds count ties as successes and assume independent trials; deterministic pseudorandom sweeps are not exact enumeration. Only the separate all-opponent-action solver lower bounds enter the certified matrix. No sampled result is transferred. First-decision certificates concern this full-information state, not deployed blind-policy strength or global optimality.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    raw = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    for record in [*records['sampling'].values(), records['regression']]:
+        assert record['manifest']['corpus_sha256'] == sha(raw)
+    for name, record in records['proofs'].items():
+        protocol = (archive / f'{name}.json').read_bytes()
+        assert sha(protocol) == record['manifest']['protocol_sha256']
+        assert json.loads(protocol) == record['manifest']['protocol']
+        assert record['manifest']['protocol']['corpus_sha256'] == sha(raw)
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified policy parity, sampling stages, unchanged control and independent certificate transfer')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-late-rest-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    command = [str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl')]
+    subprocess.run(command + ['20000', '2026100701', str(directory / 'regression.json')], cwd=root, env=env, check=True)
+    for stage, (n, seed) in stages.items():
+        subprocess.run(command + [str(n), str(seed), str(directory / f'{stage}.json'), 'late-rest'], cwd=root, env=env, check=True)
+    for name in proof_names:
+        protocol = json.loads((archive / f'{name}.json').read_bytes())
+        protocol['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(protocol, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {'sampling': {stage: json.loads((directory / f'{stage}.json').read_bytes()) for stage in stages},
+           'regression': json.loads((directory / 'regression.json').read_bytes()),
+           'proofs': {name: {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()), 'result': json.loads((directory / name / 'game-017-d0021.json').read_bytes())} for name in proof_names}}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress((directory / 'corpus.jsonl').read_bytes(), mtime=0))
+    for name in proof_names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print('lowest sampled pair scores', summary['lowest_sampled_pair_scores'])
+print('proofs', summary['proofs'])
+print('first-decision loss upper', summary['archived_first_decisions'][0]['loss']['hi'])
