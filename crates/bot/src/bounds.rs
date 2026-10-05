@@ -575,6 +575,7 @@ impl<'d> FixedPolicySolver<'d> {
     }
 
     pub fn node_count(&self) -> usize { self.solver.node_count() }
+    pub fn retained_battles(&self) -> impl Iterator<Item=&Battle> { self.solver.retained_battles() }
     pub fn graph_diagnostics(&self) -> GraphDiagnostics { self.solver.graph_diagnostics() }
     pub fn restricted_root_payoffs(&self, battle: &Battle) -> Option<RootPayoffs> {
         self.solver.root_payoffs(battle)
@@ -705,6 +706,10 @@ impl<'d> BoundSolver<'d> {
 
     pub fn node_count(&self) -> usize {
         self.nodes.len()
+    }
+
+    pub fn retained_battles(&self) -> impl Iterator<Item=&Battle> {
+        self.nodes.values().filter_map(|node|node.battle.as_ref())
     }
 
     pub fn closed_count(&self) -> usize {

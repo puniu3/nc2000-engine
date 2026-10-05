@@ -1,0 +1,140 @@
+{
+  "schema": "nc2000-policy-frontier-census-v1",
+  "arms": {
+    "attack": {
+      "reference": {
+        "stop": "WorkExhausted",
+        "runs": 2000000,
+        "nodes": 44929,
+        "elapsed_ms": 61577.225917
+      },
+      "retained": 44890,
+      "covered_node_fraction": 0.9991319637650515,
+      "requests": {
+        "move": 44065,
+        "switch": 825
+      },
+      "projections": {
+        "baseline": {
+          "unique": 44890,
+          "redundant_states": 0,
+          "largest_class": 1,
+          "unique_fraction": 1.0
+        },
+        "combined_history": {
+          "unique": 41125,
+          "redundant_states": 3765,
+          "largest_class": 3,
+          "unique_fraction": 0.9161283136556025
+        },
+        "effect_order_rank": {
+          "unique": 44890,
+          "redundant_states": 0,
+          "largest_class": 1,
+          "unique_fraction": 1.0
+        },
+        "hp": {
+          "unique": 841,
+          "redundant_states": 44049,
+          "largest_class": 2028,
+          "unique_fraction": 0.018734684785030074
+        },
+        "move_history": {
+          "unique": 41125,
+          "redundant_states": 3765,
+          "largest_class": 3,
+          "unique_fraction": 0.9161283136556025
+        },
+        "pp": {
+          "unique": 42617,
+          "redundant_states": 2273,
+          "largest_class": 3,
+          "unique_fraction": 0.949365114724883
+        },
+        "turn_counters": {
+          "unique": 44890,
+          "redundant_states": 0,
+          "largest_class": 1,
+          "unique_fraction": 1.0
+        },
+        "unused_history": {
+          "unique": 41682,
+          "redundant_states": 3208,
+          "largest_class": 3,
+          "unique_fraction": 0.928536422365783
+        }
+      },
+      "census_elapsed_ms": 4295.452208000001
+    },
+    "rest": {
+      "reference": {
+        "stop": "WorkExhausted",
+        "runs": 2000000,
+        "nodes": 88594,
+        "elapsed_ms": 64694.442417000006
+      },
+      "retained": 88544,
+      "covered_node_fraction": 0.9994356276948777,
+      "requests": {
+        "move": 85703,
+        "switch": 2841
+      },
+      "projections": {
+        "baseline": {
+          "unique": 88544,
+          "redundant_states": 0,
+          "largest_class": 1,
+          "unique_fraction": 1.0
+        },
+        "combined_history": {
+          "unique": 85721,
+          "redundant_states": 2823,
+          "largest_class": 3,
+          "unique_fraction": 0.9681175460787856
+        },
+        "effect_order_rank": {
+          "unique": 88544,
+          "redundant_states": 0,
+          "largest_class": 1,
+          "unique_fraction": 1.0
+        },
+        "hp": {
+          "unique": 1553,
+          "redundant_states": 86991,
+          "largest_class": 1104,
+          "unique_fraction": 0.01753930249367546
+        },
+        "move_history": {
+          "unique": 85721,
+          "redundant_states": 2823,
+          "largest_class": 3,
+          "unique_fraction": 0.9681175460787856
+        },
+        "pp": {
+          "unique": 87500,
+          "redundant_states": 1044,
+          "largest_class": 2,
+          "unique_fraction": 0.9882092518973618
+        },
+        "turn_counters": {
+          "unique": 88544,
+          "redundant_states": 0,
+          "largest_class": 1,
+          "unique_fraction": 1.0
+        },
+        "unused_history": {
+          "unique": 85723,
+          "redundant_states": 2821,
+          "largest_class": 3,
+          "unique_fraction": 0.968140133718829
+        }
+      },
+      "census_elapsed_ms": 9488.24275
+    }
+  },
+  "prior_hashes": {
+    "findings/policy-rest-witness-v1/records.json.gz": "3cf22ffb8d4e6e44dce7d621187f70e96b2baa9f2410741e14c21f6730d36870"
+  },
+  "diagnostic_sum_tolerance": 1e-12,
+  "interpretation": "Each ablation is applied only to temporary clones after solving. Default matrices, execution counts and node counts reproduce the archived controls exactly. Chance diagnostics also match except floating-point summation of child uncertainty, checked within 1e-12. Counts cover retained concrete battles, excluding nodes whose source battles were released. Effect-order rank compression and history removal are hypotheses, not certified equivalences. HP/PP/turn removal is deliberately unsafe and measures structural multiplicity only. No ablation changes the solver, policy bounds or deployed bot."
+}

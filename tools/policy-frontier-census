@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-frontier-census-v1'
+names = ['attack', 'rest']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    assert set(records) == set(names)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert records['attack']['manifest']['source_hashes'] == records['rest']['manifest']['source_hashes']
+    prior_path = root / 'findings/policy-rest-witness-v1/records.json.gz'
+    previous = json.loads(gzip.decompress(prior_path.read_bytes()))
+    arms = {}
+    for name, record in records.items():
+        row, protocol = record['result'], record['manifest']['protocol']
+        prior = previous[name]['result']
+        assert protocol['frontier_key_census']
+        assert row['schema'] == 'nc2000-fixed-reply-bound-v1'
+        assert row['state_key'] == '199433906935569759004884428941975153695'
+        assert row['side'] == 0 and row['reply_action'] == 'switch 2' and row['fixed_first_action'] == 'move bodyslam'
+        assert row['fixed_rest_percent'] == protocol['fixed_rest_percent'] == (75 if name == 'rest' else None)
+        assert row['restricted_matrix'] == prior['restricted_matrix']
+        assert len(row['root_chance']) == len(prior['root_chance'])
+        for after, before in zip(row['root_chance'], prior['root_chance']):
+            after, before = dict(after), dict(before)
+            assert abs(after.pop('child_uncertainty') - before.pop('child_uncertainty')) < 1e-12
+            assert after == before
+        for field in ['runs', 'nodes', 'stop']:
+            assert row['reference'][field] == prior['reference'][field]
+        census = row['frontier_key_census']
+        assert census['schema'] == 'nc2000-retained-key-ablation-v1'
+        total = census['retained']
+        assert 0 < total <= row['reference']['nodes']
+        assert sum(census['requests'].values()) == total
+        projections = census['projections']
+        assert set(projections) == {'baseline', 'effect_order_rank', 'unused_history', 'move_history', 'combined_history', 'turn_counters', 'pp', 'hp'}
+        assert projections['baseline'] == {'unique': total, 'redundant_states': 0, 'largest_class': 1}
+        for projection in projections.values():
+            assert 1 <= projection['unique'] <= total
+            assert projection['redundant_states'] == total - projection['unique']
+            assert 1 <= projection['largest_class'] <= projection['redundant_states'] + 1
+            assert projection['largest_class'] * projection['unique'] >= total
+        assert projections['combined_history']['unique'] <= projections['effect_order_rank']['unique']
+        assert projections['combined_history']['unique'] <= projections['move_history']['unique'] <= projections['unused_history']['unique']
+        arms[name] = {'reference': row['reference'], 'retained': total,
+                      'covered_node_fraction': total / row['reference']['nodes'], 'requests': census['requests'],
+                      'projections': {key: {**value, 'unique_fraction': value['unique'] / total} for key, value in projections.items()},
+                      'census_elapsed_ms': census['elapsed_ms']}
+    return {'schema': 'nc2000-policy-frontier-census-v1', 'arms': arms,
+            'prior_hashes': {str(prior_path.relative_to(root)): sha(prior_path.read_bytes())},
+            'diagnostic_sum_tolerance': 1e-12,
+            'interpretation': 'Each ablation is applied only to temporary clones after solving. Default matrices, execution counts and node counts reproduce the archived controls exactly. Chance diagnostics also match except floating-point summation of child uncertainty, checked within 1e-12. Counts cover retained concrete battles, excluding nodes whose source battles were released. Effect-order rank compression and history removal are hypotheses, not certified equivalences. HP/PP/turn removal is deliberately unsafe and measures structural multiplicity only. No ablation changes the solver, policy bounds or deployed bot.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    for name, record in records.items():
+        manifest = record['manifest']
+        raw = (archive / f'{name}.json').read_bytes()
+        assert sha(raw) == manifest['protocol_sha256'] and json.loads(raw) == manifest['protocol']
+        assert sha(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())) == manifest['protocol']['corpus_sha256']
+        assert sha((root / manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified unchanged controls, retained-state coverage and diagnostic-only key ablations')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-frontier-census-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in names:
+        protocol = json.loads((archive / f'{name}.json').read_bytes())
+        protocol['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(protocol, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {name: {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()),
+                  'result': json.loads((directory / name / 'game-017-d0021.json').read_bytes())} for name in names}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress((directory / 'corpus.jsonl').read_bytes(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for name, arm in summary['arms'].items():
+    print(name, arm['retained'], {key: value['unique'] for key, value in arm['projections'].items()})

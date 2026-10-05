@@ -38,6 +38,8 @@ struct Protocol {
     #[serde(default)]
     diagnostics: bool,
     #[serde(default)]
+    frontier_key_census: bool,
+    #[serde(default)]
     certified_action_pruning: bool,
     fixed_policy_side: Option<usize>,
     fixed_first_action: Option<String>,
@@ -104,6 +106,90 @@ struct WitnessPreparation {
     work_budget: usize,
     node_budget: usize,
     tolerance: f64,
+}
+
+fn visit_effect_states(battle: &mut Battle, mut visit: impl FnMut(&mut nc2000_engine::state::EffectState)) {
+    visit(&mut battle.format_data);
+    visit(&mut battle.field.weather_state);
+    for (_,state) in &mut battle.field.pseudo_weather { visit(state); }
+    for side in &mut battle.sides {
+        for (_,state) in &mut side.side_conditions { visit(state); }
+        for (_,state) in &mut side.slot_conditions { visit(state); }
+        for pokemon in &mut side.roster {
+            visit(&mut pokemon.status_state);visit(&mut pokemon.item_state);
+            for (_,state) in &mut pokemon.volatiles { visit(state); }
+        }
+    }
+}
+
+fn project_frontier_state(battle: &mut Battle, name: &str) {
+    use nc2000_engine::state::MoveResult;
+    if matches!(name,"effect_order_rank" | "combined_history") {
+        let mut orders=vec![0,battle.effect_order];
+        visit_effect_states(battle,|state|orders.push(state.effect_order));
+        orders.sort_unstable();orders.dedup();
+        battle.effect_order=orders.binary_search(&battle.effect_order).unwrap() as u32;
+        visit_effect_states(battle,|state|state.effect_order=orders.binary_search(&state.effect_order).unwrap() as u32);
+    }
+    if matches!(name,"unused_history" | "move_history" | "combined_history") {
+        battle.last_move_id=None;battle.last_successful_move_this_turn=None;
+        for side in &mut battle.sides { for p in &mut side.roster {
+            p.last_move_used=None;p.move_last_turn_result=MoveResult::Undef;p.active_move_actions=0;
+        }}
+    }
+    if matches!(name,"move_history" | "combined_history") {
+        for side in &mut battle.sides {
+            side.last_move=None;
+            for p in &mut side.roster {
+                p.last_move=None;p.last_move_encore=None;p.last_move_target_loc=None;
+                p.move_this_turn=None;p.move_this_turn_result=MoveResult::Undef;
+            }
+        }
+    }
+    if name=="turn_counters" {
+        battle.turn=1;
+        for side in &mut battle.sides { for p in &mut side.roster { p.active_turns=i32::from(p.active_turns>0); }}
+    }
+    if name=="pp" {
+        for side in &mut battle.sides { for p in &mut side.roster {
+            for slot in &mut p.move_slots { slot.pp=0; }
+            for slot in &mut p.base_move_slots { slot.pp=0; }
+        }}
+    }
+    if name=="hp" {
+        for side in &mut battle.sides { for p in &mut side.roster { if p.hp>0 {p.hp=p.maxhp;} }}
+    }
+}
+
+fn frontier_key_census<'a>(battles: impl Iterator<Item=&'a Battle>, dex: &Dex, protocol: &Protocol) -> Value {
+    use std::collections::{BTreeMap,HashMap};
+    let started=Instant::now();
+    let names=["baseline","effect_order_rank","unused_history","move_history","combined_history","turn_counters","pp","hp"];
+    let mut groups: Vec<HashMap<(bool,bool,u128),usize>>=names.iter().map(|_|HashMap::new()).collect();
+    let mut requests=BTreeMap::<String,usize>::new();
+    let mut retained=0;
+    for battle in battles {
+        retained+=1;
+        *requests.entry(battle.request_state.as_str().to_string()).or_default()+=1;
+        let damage=!battle.damage_bookkeeping_observable(dex);
+        let claw=protocol.dead_quick_claw_quotient && !battle.quick_claw_roll_observable(dex);
+        for (name,group) in names.iter().zip(groups.iter_mut()) {
+            let mut projected=battle.clone();
+            project_frontier_state(&mut projected,name);
+            let key=if claw {projected.state_key128_without_quick_claw_roll(dex,damage)}
+                else if damage {projected.state_key128_without_damage_bookkeeping()}
+                else {projected.state_key128()};
+            *group.entry((damage,claw,key)).or_default()+=1;
+        }
+    }
+    assert_eq!(groups[0].len(),retained);
+    let projections: BTreeMap<_,_>=names.into_iter().zip(groups).map(|(name,groups)| {
+        (name,json!({"unique":groups.len(),"redundant_states":retained-groups.len(),
+            "largest_class":groups.values().copied().max().unwrap_or(0)}))
+    }).collect();
+    json!({"schema":"nc2000-retained-key-ablation-v1","retained":retained,"requests":requests,
+        "projections":projections,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0,
+        "interpretation":"Read-only ablation of retained concrete battles after solving; expanded nodes whose battles were released are excluded. Projections are diagnostic, not certified equivalences. In particular HP, PP, turn and move-history deletion can change the game and are never used by the solver."})
 }
 
 #[derive(Default, Deserialize)]
@@ -292,16 +378,19 @@ fn audit(
         if let Some(reply) = &protocol.fixed_reply_action {
             let reply_choice = legal[1-side][names[1-side].iter().position(|name|name==reply).unwrap()];
             let report = solver.solve_reply(&battle,reply_choice,protocol.fixed_reply_threshold);
+            let elapsed_ms=started.elapsed().as_secs_f64()*1000.0;
             let matrix = solver.restricted_root_payoffs(&battle).unwrap();
+            let census=protocol.frontier_key_census.then(||frontier_key_census(solver.retained_battles(),dex,protocol));
             return json!({"schema":"nc2000-fixed-reply-bound-v1","game":game.game,"decision":decision,
                 "state_key":battle.state_key128().to_string(),"side":side,"priority_actions":priority_names,
                 "fixed_first_action":protocol.fixed_first_action,"reply_action":reply,
                 "fixed_rest_percent":protocol.fixed_rest_percent,
                 "reply_value":bound(report.bounds),"threshold":protocol.fixed_reply_threshold,
+                "frontier_key_census":census,
                 "restricted_matrix":{"actions":matrix.actions.map(|aa|aa.into_iter().map(|a|a.map(|a|action_input(dex,a))).collect::<Vec<_>>()),
                     "cells":matrix.cells.iter().copied().map(bound).collect::<Vec<_>>(),"value":bound(matrix.value)},
                 "reference":{"stop":format!("{:?}",report.stop),"runs":report.runs,
-                    "nodes":solver.node_count(),"elapsed_ms":started.elapsed().as_secs_f64()*1000.0},
+                    "nodes":solver.node_count(),"elapsed_ms":elapsed_ms},
                 "root_chance":solver.root_chance_diagnostics(&battle).unwrap().iter().map(|c|chance_diagnostic(c,dex)).collect::<Vec<_>>()});
         }
         assert!(protocol.fixed_reply_threshold.is_none());
