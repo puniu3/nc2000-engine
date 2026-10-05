@@ -26,7 +26,7 @@
 //!   mon's moves — the collision pair). This is decoupled UCB where the
 //!   opponent is modeled knowing their own team, which they do.
 //!
-//! Play = argmax visits over the global root stats — the `skuct` play rule.
+//! Final choice excludes joint-probe counts whenever eligible ordinary visits exist.
 //!
 //! M10c: the loop body lives in `BlindSearch` — the persistent, steppable
 //! form (mirroring `SkuctSearch`) that the wasm bridge's ponder loop pumps —
@@ -278,6 +278,7 @@ pub struct BlindSearch {
     /// The public own-side choice list — the information-set root.
     my_acts: Vec<SearchChoice>,
     my_n: Vec<u32>,
+    joint_probe_n: Vec<u32>,
     my_w: Vec<f64>,
     /// M15: optional root-action legality mask (masked actions are never
     /// selected or reported best). `None` = all allowed, bit-identical to
@@ -351,6 +352,7 @@ impl BlindSearch {
             turn_cap,
             side,
             my_n: vec![0; my_acts.len()],
+            joint_probe_n: vec![0; my_acts.len()],
             my_w: vec![0.0; my_acts.len()],
             my_mask: None,
             my_dominated,
@@ -486,7 +488,9 @@ impl BlindSearch {
         my_pick: usize,
         reply: SearchChoice,
     ) -> f64 {
-        self.step_forced_impl(dex, belief, obs, my_pick, Some(reply))
+        let value=self.step_forced_impl(dex, belief, obs, my_pick, Some(reply));
+        self.joint_probe_n[my_pick]+=1;
+        value
     }
 
     fn step_forced_impl(
@@ -884,21 +888,16 @@ impl BlindSearch {
         }
     }
 
-    /// Current best choice: argmax visits over the global root stats (the
-    /// blind play rule), restricted to the mask when one is set. `None`
-    /// when the side owes nothing.
+    pub fn joint_probe_visits(&self) -> &[u32] { &self.joint_probe_n }
+
     pub fn best(&self) -> Option<SearchChoice> {
-        // Deep-loss roots tie every action at mean 0 with exactly uniform
-        // visits; excluding certain-immediate-self-loss actions keeps the
-        // tie-break from picking a guaranteed instant loss (2026-07-21
-        // last-mon-Explosion report). Falls back to mask-only when nothing
-        // else is allowed.
-        let allowed = |a: usize| self.my_mask.as_ref().map_or(true, |m| m[a]);
-        (0..self.my_acts.len())
-            .filter(|&a| allowed(a) && !self.my_dominated[a])
-            .max_by_key(|&a| self.my_n[a])
-            .or_else(|| (0..self.my_acts.len()).filter(|&a| allowed(a)).max_by_key(|&a| self.my_n[a]))
-            .map(|a| self.my_acts[a])
+        let allowed=|i:usize|self.my_mask.as_ref().map_or(true,|m|m[i]);
+        let safe=(0..self.my_acts.len()).any(|i|allowed(i) && !self.my_dominated[i]);
+        let eligible=|i:usize|allowed(i) && (!safe || !self.my_dominated[i]);
+        let ordinary=(0..self.my_acts.len()).any(|i|eligible(i) && self.my_n[i]>self.joint_probe_n[i]);
+        (0..self.my_acts.len()).filter(|&i|eligible(i))
+            .max_by_key(|&i|if ordinary {self.my_n[i]-self.joint_probe_n[i]} else {self.my_n[i]})
+            .map(|i|self.my_acts[i])
     }
 
     fn root_policy_inputs(&self) -> (Vec<bool>,Vec<u32>,Vec<crate::root_policy::RootCell>) {
@@ -1255,24 +1254,6 @@ pub struct PrincipalLine {
     pub steps: Vec<LineStep>,
 }
 
-/// Most-visited action index, skipping dominated ones while any alternative
-/// survives — the same play rule as `BlindSearch::best`.
-fn argmax_visits(visits: &[u32], dominated: Option<&[bool]>) -> usize {
-    let ok = |i: usize| dominated.map(|d| !d.get(i).copied().unwrap_or(false)).unwrap_or(true);
-    let mut best = None;
-    for i in 0..visits.len() {
-        if !ok(i) {
-            continue;
-        }
-        if best.map(|b: usize| visits[i] > visits[b]).unwrap_or(true) {
-            best = Some(i);
-        }
-    }
-    best.unwrap_or_else(|| {
-        (0..visits.len()).max_by_key(|&i| visits[i]).unwrap_or(0)
-    })
-}
-
 #[cfg(test)]
 mod mixed_selection_tests {
     use super::*;
@@ -1286,7 +1267,7 @@ mod mixed_selection_tests {
         let battle=Battle::from_fixture(&dex,"1,2,3,4",&[set.clone()],&[set]).unwrap();
         let mut search=BlindSearch::new(&battle,&dex,RmConfig::default(),0,123);
         let actions=["return","surf"].map(|m|SearchChoice::Move(dex.moves.id(m).unwrap()));
-        search.my_acts=actions.to_vec();search.my_n=vec![20000,20000];search.my_w=vec![10000.,10000.];
+        search.my_acts=actions.to_vec();search.my_n=vec![20000,20000];search.joint_probe_n=vec![0,0];search.my_w=vec![10000.,10000.];
         search.my_dominated=vec![false,false];search.done=40000;
         search.avail=vec![(actions[1],40000),(actions[0],40000)];
         search.joint=vec![(0,actions[0],10000,0.),(0,actions[1],10000,10000.),
@@ -1297,6 +1278,10 @@ mod mixed_selection_tests {
         assert_eq!(search.sample_mixed(1.-f64::EPSILON),Some(actions[1]));
         assert_eq!(search.rng.0,rng);
         assert_eq!(search.visits(),&[20000,20000]);
+        search.my_n=vec![20000,10000];
+        assert_eq!(search.best(),Some(actions[0]));
+        search.my_n[1]+=30000;search.joint_probe_n[1]+=30000;
+        assert_eq!(search.best(),Some(actions[0]));
         search.mask_actions(&[false,true]);
         assert!(search.mixed_policy().is_none());
         assert_eq!(search.sample_mixed(0.),Some(actions[1]));

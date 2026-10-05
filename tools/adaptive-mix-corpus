@@ -60,8 +60,77 @@ def summarize(records):
                        'of strength improvement without a separate certificate or controlled continuation measurement. Default play is unchanged.'))
 
 
+def visit_summary(records,warm):
+    previous=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))['records']
+    names=sorted({x.split(':')[0] for x in json.loads((archive/'summary.json').read_bytes())['probed']})
+    assert list(records)==list(warm)==names
+    fallback_changes=[];checked=0;probed=0
+    for name in names:
+        assert records[name]['config']==previous[name]['config']
+        assert warm[name]['config']=={k:([16200] if k=='iterations' else v) for k,v in previous[name]['config'].items() if k!='probe_iterations'}
+        for after,before,start in zip(records[name]['observed']['rows'],previous[name]['observed']['rows'],warm[name]['observed']['rows']):
+            checked+=1
+            for field,value in before.items():
+                if field not in ('elapsed_ms','choice'):assert after[field]==value,(name,field)
+            counts=after['joint_probe_visits']
+            assert len(counts)==len(after['visits']) and sum(counts)==after['probes_used']
+            assert all(0<=p<=n for p,n in zip(counts,after['visits']))
+            if after['probes_used']:
+                probed+=1
+                assert [n-p for n,p in zip(after['visits'],counts)]==start['visits']
+                assert after['choice']==start['choice']
+            else:assert after['choice']==before['choice']
+            if after['candidate_policy'] is None and after['choice']!=before['choice']:
+                fallback_changes.append(dict(id=f"{name}:{after['mode']}:{after['seed_index']}",before=before['choice'],after=after['choice']))
+    assert checked==24 and probed==17
+    return dict(searches=checked,probed=probed,fallback_changes=fallback_changes,
+                scope='All six positions that activated probing in the frozen census. Final ordinary visit counts and fallback choice match a separately replayed 16200-iteration warm search. Every total visit count, mean, joint sample and candidate mixture matches the pre-fix adaptive search; only fallback ranking excludes forced probes. No game-value improvement is inferred from changed fallback choices.')
+
+
+def visit_audit(verify):
+    destination=root/'findings/adaptive-mix-visits-v1'
+    previous_path=archive/'records.json.gz'
+    if verify:
+        b=json.loads(gzip.decompress((destination/'records.json.gz').read_bytes()))
+        assert b['previous_sha256']==sha(previous_path.read_bytes())
+        assert visit_summary(b['records'],b['warm'])==json.loads((destination/'summary.json').read_bytes())
+        print('adaptive-mix-visits: verified 17 probe interventions against independent warm searches')
+        return
+    assert not destination.exists()
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','fixed_reply_counterpolicy'],cwd=root,env=env,check=True)
+    previous=json.loads(gzip.decompress(previous_path.read_bytes()))['records']
+    names=sorted({x.split(':')[0] for x in json.loads((archive/'summary.json').read_bytes())['probed']})
+    directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-adaptive-visits-'))
+    corpus=gzip.decompress(corpus_path.read_bytes());(directory/'corpus.jsonl').write_bytes(corpus)
+    def run(name):
+        results={}
+        for mode in ['warm','after']:
+            cfg=dict(previous[name]['config'])
+            if mode=='warm':cfg.pop('probe_iterations');cfg['iterations']=[16200]
+            path=directory/(name+'-'+mode);raw=json.dumps(cfg).encode();path.with_suffix('.config.json').write_bytes(raw)
+            with path.with_suffix('.log').open('w') as log:
+                subprocess.run([str(root/'target/release/examples/fixed_reply_counterpolicy'),str(directory/'corpus.jsonl'),'corpus-search',
+                                str(path.with_suffix('.config.json')),str(path.with_suffix('.json'))],cwd=root,env=env,stdout=log,stderr=log,check=True)
+            r=json.loads(path.with_suffix('.json').read_bytes())
+            assert r['config_sha256']==sha(raw) and r['manifest']['corpus_sha256']==sha(corpus)
+            assert all(sha((root/p).read_bytes())==value for p,value in r['search_source_hashes'])
+            results[mode]=r
+        print(name,flush=True);return name,results
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:results=dict(executor.map(run,names))
+    records={n:r['after'] for n,r in results.items()};warm={n:r['warm'] for n,r in results.items()}
+    summary=visit_summary(records,warm)
+    destination.mkdir()
+    bundle=dict(records=records,warm=warm,previous_sha256=sha(previous_path.read_bytes()))
+    (destination/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (destination/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print(json.dumps(summary,indent=2))
+
+
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true');parser.add_argument('--visit-audit',action='store_true');args=parser.parse_args()
+    if args.visit_audit:
+        visit_audit(args.verify_only);return
     if args.verify_only:
         b=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
         assert b['baseline_sha256']==sha(old_path.read_bytes()) and b['reference_sha256']==sha(reference_path.read_bytes())

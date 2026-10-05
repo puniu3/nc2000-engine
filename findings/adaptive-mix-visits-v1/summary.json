@@ -1,0 +1,12 @@
+{
+  "searches": 24,
+  "probed": 17,
+  "fallback_changes": [
+    {
+      "id": "g002-d0008-s0:pinned:1",
+      "before": "switch 3",
+      "after": "move earthquake"
+    }
+  ],
+  "scope": "All six positions that activated probing in the frozen census. Final ordinary visit counts and fallback choice match a separately replayed 16200-iteration warm search. Every total visit count, mean, joint sample and candidate mixture matches the pre-fix adaptive search; only fallback ranking excludes forced probes. No game-value improvement is inferred from changed fallback choices."
+}

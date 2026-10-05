@@ -222,7 +222,7 @@ fn main() {
             let play_draw = play_rng.next_f64();
             let mixed = pinned.mixed_policy();
             rows.push(json!({"mode":"pinned","side":s,"seed_index":index,"seed":search_seed,"iterations":iterations,
-                "choice":pinned.best().map(|a|a.to_input(&dex)),"visits":pinned.visits(),"means":pinned.means(),
+                "choice":pinned.best().map(|a|a.to_input(&dex)),"visits":pinned.visits(),"joint_probe_visits":pinned.joint_probe_visits(),"means":pinned.means(),
                 "dominated":pinned.dominated(),"play_draw":play_draw,"probes_used":probes_used,
                 "candidate_choice":pinned.sample_mixed(play_draw).map(|a|a.to_input(&dex)),
                 "candidate_policy":mixed.as_ref().map(|m|m.policy.clone()),

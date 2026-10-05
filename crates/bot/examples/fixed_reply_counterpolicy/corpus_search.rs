@@ -52,7 +52,7 @@ fn observed_search(dex:&Dex,game:&Game,cfg:&Config,root:&Battle)->Value {
                     "probes_used":probes_used,"candidate_policy":mixed.map(|m|m.policy),
                     "choice":search.best().map(|a|nc2000_bot::player::action_input(dex,a)),
                     "actions":search.actions().iter().map(|&a|nc2000_bot::player::action_input(dex,a)).collect::<Vec<_>>(),
-                    "visits":search.visits(),"means":search.means(),"dominated":search.dominated(),"nodes":search.node_count(),
+                    "visits":search.visits(),"joint_probe_visits":search.joint_probe_visits(),"means":search.means(),"dominated":search.dominated(),"nodes":search.node_count(),
                     "joint":search.root_matrix().into_iter().map(|(own,reply,samples,mean)|json!({"own":own,"reply":nc2000_bot::player::action_input(dex,reply),"samples":samples,"mean":mean})).collect::<Vec<_>>(),
                     "reply_availability":search.root_replies().iter().map(|&(reply,n)|json!({"reply":nc2000_bot::player::action_input(dex,reply),"samples":n})).collect::<Vec<_>>(),
                     "elapsed_ms":started.elapsed().as_secs_f64()*1000.0}));
