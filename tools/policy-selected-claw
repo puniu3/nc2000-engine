@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+
+from interval_policy_gap import certify, verify
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-selected-claw-v1'
+comparison_names = ['control', 'quotient', 'grouped']
+names = comparison_names + ['child', 'bodyslam']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def module(name, filename):
+    spec = importlib.util.spec_from_file_location(name, root / 'tools' / filename)
+    result = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(result)
+    return result
+
+
+assessor = module('assessor', 'headroom-cases-report.py')
+verifier = module('verifier', 'policy-gap-report.py')
+
+
+def summarize(records):
+    assert set(records) == set(names)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert all(r['manifest']['source_hashes'] == records['control']['manifest']['source_hashes'] for r in records.values())
+    prior_path = root / 'findings/policy-fainted-claw-v1/summary.json'
+    prior = next(s for s in json.loads(prior_path.read_bytes())['states'] if s['game'] == 17)
+    matrix = json.loads(json.dumps(prior['matrix']))
+    padding = 1e-10
+    for bound in matrix['cells'] + [matrix['value']]:
+        bound['lo'] = max(0, bound['lo'] - padding)
+        bound['hi'] = min(1, bound['hi'] + padding)
+    config = None
+    sources = None
+    arms = {}
+    for name in comparison_names:
+        record = records[name]
+        row, protocol = record['result'], record['manifest']['protocol']
+        assert protocol['dead_quick_claw_quotient'] == (name != 'control')
+        assert protocol['chance_status_groups'] == (name == 'grouped')
+        common = {k: v for k, v in protocol.items() if k not in ['dead_quick_claw_quotient', 'chance_status_groups']}
+        if config is None:
+            config = common
+            sources = record['manifest']['source_hashes']
+        assert common == config and record['manifest']['source_hashes'] == sources
+        hashes = dict(sources)
+        for source in ['crates/engine/src/battle/search.rs', 'crates/engine/src/battle/enumerate.rs', 'crates/bot/src/bounds.rs']:
+            assert source in hashes
+        assert row['state_key'] == '199433906935569759004884428941975153695'
+        assert row['side'] == 1 and row['fixed_first_action'] == 'move selfdestruct'
+        restricted = row['restricted_matrix']
+        assert restricted['actions'] == [matrix['actions'][0], ['move selfdestruct']]
+        assert row['unrestricted_game_value']['lo'] == 0
+        assert abs(row['unrestricted_game_value']['hi'] - (1 - row['guaranteed_score']['lo'])) < 1e-12
+        index = matrix['actions'][1].index('move selfdestruct')
+        for i, bound in enumerate(restricted['cells']):
+            target = matrix['cells'][i * len(matrix['actions'][1]) + index]
+            target['hi'] = min(target['hi'], bound['hi'] + padding)
+            assert target['lo'] <= target['hi']
+        matrix['value']['hi'] = min(matrix['value']['hi'], row['unrestricted_game_value']['hi'] + padding)
+        assert matrix['value']['lo'] <= matrix['value']['hi']
+        assert sum(c['runs'] for c in row['root_chance']) == row['reference']['runs']
+        keys = [child['key'] for chance in row['root_chance'] for child in chance['largest_children']]
+        assert keys
+        if name != 'control':
+            assert any(key.startswith('NoDamageOrQuickClawRoll(') for key in keys)
+        else:
+            assert not any('QuickClawRoll(' in key for key in keys)
+        arms[name] = {'guaranteed_score': row['guaranteed_score'],
+                      'unrestricted_game_value': row['unrestricted_game_value'],
+                      **{k: row['reference'][k] for k in ['runs', 'nodes', 'stop', 'elapsed_ms']}}
+    row = records['bodyslam']['result']
+    assert row['state_key'] == records['control']['result']['state_key']
+    assert row['side'] == 0 and row['fixed_first_action'] == 'move bodyslam'
+    assert row['restricted_matrix']['actions'] == [['move bodyslam'], matrix['actions'][1]]
+    assert row['unrestricted_game_value']['hi'] == 1
+    assert row['guaranteed_score']['lo'] == row['unrestricted_game_value']['lo']
+    assert sum(c['runs'] for c in row['root_chance']) == row['reference']['runs']
+    for target, bound in zip(matrix['cells'], row['restricted_matrix']['cells']):
+        target['lo'] = max(target['lo'], bound['lo'] - padding)
+    matrix['value']['lo'] = max(matrix['value']['lo'], row['unrestricted_game_value']['lo'] - padding)
+    arms['bodyslam'] = {'guaranteed_score': row['guaranteed_score'], **row['reference']}
+    row = records['child']['result']
+    child = row['descendant_preparation'][0]
+    config = records['child']['manifest']['protocol']['descendant_preparation']
+    assert row['state_key'] == config['root_state_key'] == records['control']['result']['state_key']
+    assert child['semantic_key'] == config['semantic_key'] == '263682260409615048506169108012994383425'
+    assert child['quotient_quick_claw'] == config['quotient_quick_claw'] == True
+    assert child['mass'] == config['mass'] == 0.030448717945546377
+    assert child['actions'] == config['actions'] == ['move bodyslam', 'move selfdestruct']
+    assert child['strategy'] is None and child['replacement'] is None
+    assert abs(sum(child['successor_distribution'].values()) - 1) < 1e-10
+    assert child['successor_distribution'][child['semantic_key']] == child['mass']
+    assert child['matrix']['value'] == child['value']
+    assert sum(c['runs'] for c in child['root_chance']) == child['runs']
+    assert row['total_runs'] == row['reference']['runs'] + child['runs'] + child['enumeration_runs']
+    index = matrix['actions'][1].index('move selfdestruct')
+    matrix['cells'][index]['lo'] = max(matrix['cells'][index]['lo'], child['mass'] * child['value']['lo'] - padding)
+    for name in comparison_names:
+        previous = records[name]['result']
+        candidates = [c for c in previous['root_chance'][0]['largest_children'] if c['key'] == f"NoDamageOrQuickClawRoll({child['semantic_key']})"]
+        if not candidates:
+            continue
+        old = candidates[0]
+        assert abs(old['mass'] - child['mass']) < 1e-12
+        upper = previous['restricted_matrix']['cells'][0]['hi'] - child['mass'] * max(0, old['bounds']['hi'] - child['value']['hi'])
+        matrix['cells'][index]['hi'] = min(matrix['cells'][index]['hi'], upper + padding)
+    width = len(matrix['actions'][1])
+    matrix['value']['lo'] = max(matrix['value']['lo'], max(min(c['lo'] for c in matrix['cells'][i:i + width]) for i in range(0, len(matrix['cells']), width)))
+    matrix['value']['hi'] = min(matrix['value']['hi'], min(max(c['hi'] for c in matrix['cells'][j::width]) for j in range(width)))
+    assert all(0 <= b['lo'] <= b['hi'] <= 1 for b in matrix['cells'] + [matrix['value']])
+    arms['child'] = {k: child[k] for k in ['value', 'runs', 'nodes', 'stop', 'elapsed_ms', 'mass', 'semantic_key']}
+    assessor.calibrate_assessor()
+    endpoints = []
+    for endpoint in prior['endpoints']:
+        side, policy = endpoint['side'], endpoint['assessment']['policy']
+        interval = assessor.assess(matrix, side, policy)
+        verifier.verify_assessment(matrix, side, interval)
+        certificate = certify(matrix, side, policy)
+        verify(matrix, certificate)
+        loss = {'lo': interval['loss']['lo'], 'hi': min(interval['loss']['hi'], certificate['loss_upper'])}
+        endpoints.append({'side': side, 'previous_loss': endpoint['assessment']['loss'],
+                          'interval_assessment': interval, 'correlated_certificate': certificate,
+                          'certified_loss': loss, 'verdict': assessor.verdict(loss)})
+    return {'schema': 'nc2000-policy-selected-claw-v1', 'arms': arms, 'matrix': matrix,
+            'endpoints': endpoints, 'numerical_envelope': padding,
+            'prior_hashes': {str(prior_path.relative_to(root)): sha(prior_path.read_bytes())},
+            'interpretation': 'After team selection completes, unselected holders cannot enter play or transfer items, including during forced replacement. Fainted selected holders retain the separate idle-request guard. The optional quotient changes no legal action or chance mass. The control, quotient and grouped arms have identical configured caps; actual work and stop reasons may differ. All five arms use the same binary. Only upper bounds from side-one fixed strategies and lower bounds from the side-zero fixed strategy transfer into the unrestricted game. The dedicated unrestricted successor contributes both bounds, weighted by its exact probability. Certificates cover full-information first decisions with optimal continuation, not deployed blind-policy strength or global optimality.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    for name, record in records.items():
+        manifest = record['manifest']
+        raw = (archive / f'{name}.json').read_bytes()
+        assert sha(raw) == manifest['protocol_sha256'] and json.loads(raw) == manifest['protocol']
+        assert sha(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())) == manifest['protocol']['corpus_sha256']
+        assert sha((root / manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified same-binary controls, selected-party quotient, one-sided projections and first-decision bounds')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-selected-claw-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in names:
+        protocol = json.loads((archive / f'{name}.json').read_bytes())
+        protocol['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(protocol, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {name: {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()),
+                  'result': json.loads((directory / name / 'game-017-d0021.json').read_bytes())} for name in names}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress((directory / 'corpus.jsonl').read_bytes(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(summary['arms'])
+print([endpoint['certified_loss'] for endpoint in summary['endpoints']])

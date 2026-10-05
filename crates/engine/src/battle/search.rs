@@ -187,10 +187,12 @@ impl Battle {
         self.state_key128_with(omit_damage_bookkeeping, true)
     }
 
-    /// Items are only lost or transferred. At an idle move request, fainted
-    /// holders cannot return or be targeted by Thief; pending callbacks retain the guard.
+    /// After selection, unselected items cannot enter play. Fainted holders
+    /// are ignored only at idle move requests after pending callbacks finish.
     pub fn quick_claw_roll_observable(&self, dex: &Dex) -> bool {
-        let idle = !self.ended && self.request_state == RequestState::Move
+        let selected = self.started && self.turn > 0 && self.request_state != RequestState::TeamPreview
+            && !self.queue.iter().any(|action| matches!(action.choice, ActionKind::Team { .. } | ActionKind::Start));
+        let idle = self.started && !self.ended && self.request_state == RequestState::Move
             && self.needs_choice() == [true, true] && !self.mid_turn
             && self.queue.is_empty() && self.faint_queue.is_empty()
             && self.event_stack.is_empty() && self.effect_stack.is_empty()
@@ -199,9 +201,10 @@ impl Battle {
             && self.sides.iter().all(|side| side.choice.actions.is_empty()
                 && side.choice.switch_ins.is_empty() && side.choice.forced_switches_left == 0
                 && side.choice.forced_passes_left == 0);
-        dex.known_items.quickclaw.is_some_and(|item| self.sides.iter()
-            .flat_map(|side| side.roster.iter()).any(|pokemon| pokemon.item == Some(item)
-                && (!idle || !pokemon.fainted || pokemon.hp > 0)))
+        dex.known_items.quickclaw.is_some_and(|item| self.sides.iter().any(|side|
+            side.roster.iter().enumerate().any(|(slot,pokemon)| pokemon.item == Some(item)
+                && (!selected || side.party.contains(&(slot as u8)))
+                && (!idle || !pokemon.fainted || pokemon.hp > 0))))
     }
 
     /// Whether dropping damage-history fields can change future behavior.

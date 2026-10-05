@@ -2151,6 +2151,50 @@ mod tests {
     }
 
     #[test]
+    fn unselected_quick_claw_cannot_enter_play_or_change_successor_kernels() {
+        use nc2000_engine::battle::SearchChoice;
+        let dex=conformance::load_dex();
+        let mut holder=mon(&["Splash"]);holder.item="Quick Claw".into();
+        let mut root=Battle::from_fixture(&dex,"1,2,3,4",
+            &[mon(&["Thief","Splash"]),mon(&["Splash"]),mon(&["Splash"]),holder],
+            &[mon(&["Seismic Toss"])]).unwrap();
+        assert!(root.quick_claw_roll_observable(&dex));
+        root.apply_choices(&dex,[Some(SearchChoice::Team([1,2,3])),Some(SearchChoice::Team([1,0,0]))]).unwrap();
+        assert_eq!(root.sides[0].party.as_slice(),&[0,1,2]);
+        assert!(!root.quick_claw_roll_observable(&dex));
+        assert!(!root.sides[0].roster[3].fainted && root.sides[0].roster[3].hp>0);
+        let mut unfinished=root.clone();unfinished.started=false;
+        assert!(unfinished.quick_claw_roll_observable(&dex));
+        unfinished=root.clone();unfinished.turn=0;
+        assert!(unfinished.quick_claw_roll_observable(&dex));
+        unfinished=root.clone();unfinished.request_state=nc2000_engine::state::RequestState::TeamPreview;
+        assert!(unfinished.quick_claw_roll_observable(&dex));
+        let solver=BoundSolver::new(&dex,BoundConfig { dead_quick_claw_quotient:true,..BoundConfig::default() });
+        let active=root.active_id(0).unwrap();root.poke_mut(active).hp=1;
+        let legal=[0,1].map(|side|root.legal_choices(&dex,side));
+        assert!(!legal[0].contains(&SearchChoice::Switch(4)));
+        for &a in &legal[0] { for &b in &legal[1] {
+            let mut kernels=Vec::new();
+            for roll in [false,true] {
+                root.quick_claw_roll=roll;
+                let step=enumerate_step(&dex,&root,[Some(a),Some(b)],100_000).unwrap();
+                let mut kernel=HashMap::new();
+                for leaf in step.leaves {
+                    let mut next=leaf.battle;
+                    assert!(!next.sides[0].party.contains(&3));
+                    assert!(next.sides[0].party.iter().all(|&slot|next.sides[0].roster[slot as usize].item!=dex.known_items.quickclaw));
+                    assert!(!next.legal_choices(&dex,0).contains(&SearchChoice::Switch(4)));
+                    let key=next.outcome().map_or_else(||format!("{:?}",solver.node_key(&next)),|outcome|format!("terminal:{outcome:?}"));
+                    *kernel.entry(key).or_insert(0.0)+=leaf.prob;
+                }
+                kernels.push(kernel);
+            }
+            assert_eq!(kernels[0].len(),kernels[1].len());
+            for (key,mass) in &kernels[0] { assert!((mass-kernels[1][key]).abs()<1e-10); }
+        }}
+    }
+
+    #[test]
     fn held_quick_claw_changes_outcomes_and_cannot_be_quotiented() {
         let dex = conformance::load_dex();
         let mut holder = mon(&["Seismic Toss"]);

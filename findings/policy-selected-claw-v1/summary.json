@@ -1,0 +1,307 @@
+{
+  "schema": "nc2000-policy-selected-claw-v1",
+  "arms": {
+    "control": {
+      "guaranteed_score": {
+        "lo": 0.953451453824263,
+        "hi": 1.0
+      },
+      "unrestricted_game_value": {
+        "lo": 0.0,
+        "hi": 0.046548546175737046
+      },
+      "runs": 1771683,
+      "nodes": 120033,
+      "stop": "NodeBudget",
+      "elapsed_ms": 103816.702958
+    },
+    "quotient": {
+      "guaranteed_score": {
+        "lo": 0.9537066322418504,
+        "hi": 1.0
+      },
+      "unrestricted_game_value": {
+        "lo": 0.0,
+        "hi": 0.0462933677581496
+      },
+      "runs": 2000000,
+      "nodes": 60193,
+      "stop": "WorkExhausted",
+      "elapsed_ms": 55914.325625000005
+    },
+    "grouped": {
+      "guaranteed_score": {
+        "lo": 0.9537066322418504,
+        "hi": 1.0
+      },
+      "unrestricted_game_value": {
+        "lo": 0.0,
+        "hi": 0.0462933677581496
+      },
+      "runs": 2000000,
+      "nodes": 58366,
+      "stop": "WorkExhausted",
+      "elapsed_ms": 55623.154833
+    },
+    "bodyslam": {
+      "guaranteed_score": {
+        "lo": 0.0,
+        "hi": 0.05424104152488547
+      },
+      "stop": "WorkExhausted",
+      "runs": 2000000,
+      "elapsed_ms": 69647.353834,
+      "nodes": 50027
+    },
+    "child": {
+      "value": {
+        "lo": 0.0,
+        "hi": 0.9642427884707575
+      },
+      "runs": 1924025,
+      "nodes": 116082,
+      "stop": "TimeBudget",
+      "elapsed_ms": 90154.597541,
+      "mass": 0.030448717945546377,
+      "semantic_key": "263682260409615048506169108012994383425"
+    }
+  },
+  "matrix": {
+    "actions": [
+      [
+        "move bodyslam",
+        "move fireblast",
+        "move rest",
+        "move selfdestruct"
+      ],
+      [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move selfdestruct",
+        "switch 2"
+      ]
+    ],
+    "cells": [
+      {
+        "lo": 0,
+        "hi": 0.9672053599352656
+      },
+      {
+        "lo": 0,
+        "hi": 0.9991512600369626
+      },
+      {
+        "lo": 0,
+        "hi": 0.9899074939620833
+      },
+      {
+        "lo": 0,
+        "hi": 0.0462933678581496
+      },
+      {
+        "lo": 0,
+        "hi": 0.9968931610958794
+      },
+      {
+        "lo": 0,
+        "hi": 0.9679540075406539
+      },
+      {
+        "lo": 0,
+        "hi": 1
+      },
+      {
+        "lo": 0,
+        "hi": 0.9989027368258503
+      },
+      {
+        "lo": 0,
+        "hi": 0.021867609187013574
+      },
+      {
+        "lo": 0,
+        "hi": 0.9972501170900244
+      },
+      {
+        "lo": 0,
+        "hi": 0.9687500003000242
+      },
+      {
+        "lo": 0,
+        "hi": 1
+      },
+      {
+        "lo": 0,
+        "hi": 0.9989281818142092
+      },
+      {
+        "lo": 0,
+        "hi": 1e-10
+      },
+      {
+        "lo": 0,
+        "hi": 1
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 1e-10
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      }
+    ],
+    "value": {
+      "lo": 0,
+      "hi": 0.0462933678581496
+    }
+  },
+  "endpoints": [
+    {
+      "side": 0,
+      "previous_loss": {
+        "lo": 0,
+        "hi": 0.04654854637573705
+      },
+      "interval_assessment": {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.0,
+          "hi": 0.0462933678581496
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.0462933679581496
+        }
+      },
+      "correlated_certificate": {
+        "schema": "nc2000-correlated-policy-gap-v1",
+        "side": 0,
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "opponent_reply": 3,
+        "difference_upper_bounds": [
+          0.0462933678581496,
+          0.0462933678581496,
+          0.0462933678581496,
+          0.0,
+          0.0462933678581496,
+          0.021867609187013574,
+          0.021867609187013574,
+          0.021867609187013574,
+          0.021867609187013574,
+          0.021867609187013574,
+          1e-10,
+          1e-10,
+          1e-10,
+          1e-10,
+          1e-10,
+          1e-10,
+          1e-10,
+          1e-10,
+          1e-10,
+          1e-10
+        ],
+        "loss_upper": 0.0462933679581496,
+        "numerical_envelope": 1e-10
+      },
+      "certified_loss": {
+        "lo": 0,
+        "hi": 0.0462933679581496
+      },
+      "verdict": "unresolved"
+    },
+    {
+      "side": 1,
+      "previous_loss": {
+        "lo": 0,
+        "hi": 0.046548546375737014
+      },
+      "interval_assessment": {
+        "policy": [
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.9537066321418504,
+          "hi": 1.0
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.04629336795814964
+        }
+      },
+      "correlated_certificate": {
+        "schema": "nc2000-correlated-policy-gap-v1",
+        "side": 1,
+        "policy": [
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "opponent_reply": 0,
+        "difference_upper_bounds": [
+          0.04629336785814964,
+          0.02186760918701358,
+          1.000000082740371e-10,
+          1.000000082740371e-10,
+          0.04629336785814964,
+          0.02186760918701358,
+          1.000000082740371e-10,
+          1.000000082740371e-10,
+          0.04629336785814964,
+          0.02186760918701358,
+          1.000000082740371e-10,
+          1.000000082740371e-10,
+          0.0,
+          0.02186760918701358,
+          1.000000082740371e-10,
+          1.000000082740371e-10,
+          0.04629336785814964,
+          0.02186760918701358,
+          1.000000082740371e-10,
+          1.000000082740371e-10
+        ],
+        "loss_upper": 0.04629336795814964,
+        "numerical_envelope": 1e-10
+      },
+      "certified_loss": {
+        "lo": 0,
+        "hi": 0.04629336795814964
+      },
+      "verdict": "unresolved"
+    }
+  ],
+  "numerical_envelope": 1e-10,
+  "prior_hashes": {
+    "findings/policy-fainted-claw-v1/summary.json": "dca91a10a9b2606d9352b775f9cf6d7872ae9d0eed2166b9a0afa4b89b47ad3f"
+  },
+  "interpretation": "After team selection completes, unselected holders cannot enter play or transfer items, including during forced replacement. Fainted selected holders retain the separate idle-request guard. The optional quotient changes no legal action or chance mass. The control, quotient and grouped arms have identical configured caps; actual work and stop reasons may differ. All five arms use the same binary. Only upper bounds from side-one fixed strategies and lower bounds from the side-zero fixed strategy transfer into the unrestricted game. The dedicated unrestricted successor contributes both bounds, weighted by its exact probability. Certificates cover full-information first decisions with optimal continuation, not deployed blind-policy strength or global optimality."
+}
