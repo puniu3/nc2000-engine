@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+import argparse
+import concurrent.futures
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/mixed-root-corpus-v1'
+reference_path = root/'findings/policy-gap-v1/records.json.gz'
+corpus_path = root/'findings/policy-gap-v1/corpus.jsonl.gz'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def selected():
+    reference = json.loads(gzip.decompress(reference_path.read_bytes()))
+    return [(p, e, f"g{p['game']:03}-d{p['decision']:04}-s{e['side']}")
+            for p in reference for e in p['endpoints'] if len(e['actions']) > 1]
+
+
+def cases_for(records):
+    return [dict(id=f"{name}:{row['mode']}:{row['seed_index']}", row=row)
+            for name, record in records.items() for row in record['observed']['rows']]
+
+
+def loss(matrix, side, policy):
+    n0, n1 = map(len, matrix['actions'])
+    assert len(policy) == [n0, n1][side] and abs(sum(policy)-1) < 1e-10
+    low, high = [], []
+    for reply in range([n1, n0][side]):
+        lo = hi = 0
+        for i, mass in enumerate(policy):
+            a, b = (i, reply) if side == 0 else (reply, i)
+            cell = matrix['cells'][a*n1+b]
+            cl, ch = max(0, min(cell.values())-1e-10), min(1, max(cell.values())+1e-10)
+            if side == 1:
+                cl, ch = 1-ch, 1-cl
+            lo += mass*cl
+            hi += mass*ch
+        low.append(lo)
+        high.append(hi)
+    vl, vh = matrix['value']['lo'], matrix['value']['hi']
+    vl, vh = min(vl, vh)-1e-10, max(vl, vh)+1e-10
+    if side == 1:
+        vl, vh = 1-vh, 1-vl
+    return [max(0, vl-min(high)), min(1, max(0, vh-min(low)))]
+
+
+def summarize(records, extracted):
+    selection = selected()
+    assert len(selection) == 93 and list(records) == [name for _, _, name in selection]
+    outputs = {row['id']: row['result'] for row in extracted['rows']}
+    assert list(outputs) == [case['id'] for case in cases_for(records)]
+    triggered = []
+    for p, endpoint, name in selection:
+        record = records[name]
+        cfg = dict(game=p['game'], decision=p['decision'], observed_side=endpoint['side'],
+                   iterations=[27000], search_seeds=2, seed=2026110501, full_state=False)
+        assert record['config'] == cfg
+        assert record['state_key'] == p['state_key'] and record['rows'] == []
+        rows = record['observed']['rows']
+        assert [(r['mode'], r['seed_index']) for r in rows] == [(m, i) for m in ['pinned', 'blind'] for i in range(2)]
+        for row in rows:
+            assert row['actions'] == endpoint['actions'] and sum(row['visits']) == 27000
+            result = outputs[f"{name}:{row['mode']}:{row['seed_index']}"]
+            policy = result['policy']
+            assert len(policy) == len(row['actions']) and abs(sum(policy)-1) < 1e-10 and min(policy) >= 0
+            fallback = [float(a == row['choice']) for a in row['actions']]
+            if not result['mixed']:
+                assert policy == fallback
+            else:
+                assert all(p == 0 for p, excluded in zip(policy, row['dominated']) if excluded)
+                assert all(r['samples'] == 27000 for r in row['reply_availability'])
+                triggered.append(dict(id=f"{name}:{row['mode']}:{row['seed_index']}",
+                                      game=p['game'], decision=p['decision'], side=endpoint['side'],
+                                      mode=row['mode'], actions=row['actions'], baseline_choice=row['choice'],
+                                      candidate_policy=policy, estimated_advantage=result['estimated_advantage'],
+                                      baseline_loss=loss(p['reference'], endpoint['side'], fallback),
+                                      candidate_loss=loss(p['reference'], endpoint['side'], policy),
+                                      belief=record['observed']['belief']))
+    return dict(positions=len({(p['game'],p['decision']) for p, _, _ in selection}), decisions=len(selection),
+                searches=len(outputs), unchanged=len(outputs)-len(triggered), triggered=triggered,
+                scope=('All non-forced endpoints in the frozen 72-position endgame corpus; two fresh seeds at 27000 iterations, '
+                       'both pinned-team and shipped-pool searches. Trigger margin is a heuristic. Archived matrix losses are '
+                       'conditional on the actual full state and optimal continuation; unresolved bounds do not establish safety '
+                       'or regret at a blind information set. No human calibration and no change to the default selector.'))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert bundle['reference_sha256'] == sha(reference_path.read_bytes())
+        assert bundle['corpus_sha256'] == sha(corpus_path.read_bytes())
+        summary = summarize(bundle['records'], bundle['extracted'])
+        assert summary == json.loads((archive/'summary.json').read_bytes())
+        cases = cases_for(bundle['records'])
+        assert bundle['extracted']['input_sha256'] == sha(json.dumps(cases, separators=(',', ':')).encode())
+        print(f"mixed-root-corpus: {summary['searches']} searches, {len(summary['triggered'])} mixed policies verified")
+        return
+    assert not archive.exists()
+    env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','fixed_reply_counterpolicy',
+                    '--example','root_mix_policy'], cwd=root, env=env, check=True)
+    directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-mixed-root-corpus-'))
+    print(directory, flush=True)
+    corpus = gzip.decompress(corpus_path.read_bytes())
+    (directory/'corpus.jsonl').write_bytes(corpus)
+    selection = selected()
+    def run(entry):
+        p, e, name = entry
+        cfg = dict(game=p['game'], decision=p['decision'], observed_side=e['side'],
+                   iterations=[27000], search_seeds=2, seed=2026110501, full_state=False)
+        raw = json.dumps(cfg).encode()
+        (directory/(name+'.config.json')).write_bytes(raw)
+        with (directory/(name+'.log')).open('w') as log:
+            subprocess.run([str(root/'target/release/examples/fixed_reply_counterpolicy'), str(directory/'corpus.jsonl'),
+                            'corpus-search', str(directory/(name+'.config.json')), str(directory/(name+'.json'))],
+                           cwd=root, env=env, stdout=log, stderr=log, check=True)
+        record = json.loads((directory/(name+'.json')).read_bytes())
+        assert record['config_sha256'] == sha(raw) and record['manifest']['corpus_sha256'] == sha(corpus)
+        assert all(sha((root/path).read_bytes()) == expected for path, expected in record['search_source_hashes'])
+        print(name, flush=True)
+        return name, record
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        records = dict(executor.map(run, selection))
+    raw = json.dumps(cases_for(records), separators=(',', ':')).encode()
+    (directory/'input.json').write_bytes(raw)
+    subprocess.run([str(root/'target/release/examples/root_mix_policy'), str(directory/'input.json'),
+                    str(directory/'extracted.json')], cwd=root, env=env, check=True)
+    extracted = json.loads((directory/'extracted.json').read_bytes())
+    assert all(sha((root/path).read_bytes()) == expected for path, expected in extracted['source_hashes'])
+    summary = summarize(records, extracted)
+    bundle = dict(records=records, extracted=extracted, reference_sha256=sha(reference_path.read_bytes()),
+                  corpus_sha256=sha(corpus_path.read_bytes()))
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == '__main__':
+    main()

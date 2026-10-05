@@ -1,3 +1,5 @@
+#[path = "counter_mix_probe/bond.rs"]
+mod bond;
 use nc2000_bot::bounds::{BoundConfig, BoundSolver};
 use nc2000_bot::exact::solve_matrix_full;
 use nc2000_bot::{Belief, BlindSearch, Observer, RmConfig, SkuctSearch};
@@ -27,17 +29,26 @@ fn step(
     b: &mut Battle,
     obs: &mut [Observer; 2],
     beliefs: &mut [Belief; 2],
-    actions: [SearchChoice; 2],
+    actions: [Option<SearchChoice>; 2],
     records: &mut Vec<Value>,
 ) {
     let indices = [0, 1].map(|s| {
-        b.legal_choices(dex, s)
-            .iter()
-            .position(|a| *a == actions[s])
-            .expect("legal prefix")
+        let legal = b.legal_choices(dex, s);
+        match actions[s] {
+            Some(action) => Some(
+                legal
+                    .iter()
+                    .position(|a| *a == action)
+                    .unwrap_or_else(||panic!("illegal prefix side={s} turn={} wanted={action:?} legal={legal:?} state={}",b.turn,b.essence(dex))),
+            ),
+            None => {
+                assert!(legal.is_empty());
+                None
+            }
+        }
     });
     records.push(json!({"key":b.state_key128().to_string(),"choices":indices}));
-    b.apply_choices(dex, actions.map(Some)).unwrap();
+    b.apply_choices(dex, actions).unwrap();
     for s in 0..2 {
         obs[s].observe(b, dex);
         beliefs[s].sync(dex, &obs[s]);
@@ -45,11 +56,12 @@ fn step(
 }
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    assert_eq!(
-        args.len(),
-        6,
-        "output seed search-seeds iterations search-seed-base"
+    assert!(
+        (6..=7).contains(&args.len()),
+        "output seed search-seeds iterations search-seed-base [family]"
     );
+    let family = args.get(6).map(String::as_str).unwrap_or("counter");
+    assert!(matches!(family, "counter" | "bond"));
     let out = std::path::Path::new(&args[1]);
     assert!(!out.exists());
     let seed = &args[2];
@@ -57,20 +69,24 @@ fn main() {
     let iterations: u32 = args[4].parse().unwrap();
     let seed_base: u64 = args[5].parse().unwrap();
     let dex = conformance::load_dex();
-    let teams: [Vec<PokemonSet>; 2] = [0, 1].map(|side| {
-        vec![
-            set("Electrode", &["Explosion"], true),
-            set("Raikou", &["Thunderbolt"], false),
-            if side == 0 {
-                set("Starmie", &["Return", "Surf"], true)
-            } else {
-                set("Wobbuffet", &["Counter", "Mirror Coat", "Safeguard"], true)
-            },
-            set("Snorlax", &["Body Slam"], true),
-            set("Marowak", &["Earthquake"], true),
-            set("Heracross", &["Megahorn"], true),
-        ]
-    });
+    let teams: [Vec<PokemonSet>; 2] = if family == "bond" {
+        bond::teams()
+    } else {
+        [0, 1].map(|side| {
+            vec![
+                set("Electrode", &["Explosion"], true),
+                set("Raikou", &["Thunderbolt"], false),
+                if side == 0 {
+                    set("Starmie", &["Return", "Surf"], true)
+                } else {
+                    set("Wobbuffet", &["Counter", "Mirror Coat", "Safeguard"], true)
+                },
+                set("Snorlax", &["Body Slam"], true),
+                set("Marowak", &["Earthquake"], true),
+                set("Heracross", &["Megahorn"], true),
+            ]
+        })
+    };
     let learnsets =
         Learnsets::from_json(&std::fs::read_to_string("data/learnsets-gen2.json").unwrap())
             .unwrap();
@@ -87,26 +103,35 @@ fn main() {
     let mut beliefs = [0, 1].map(|s| Belief::pinned_from_battle(&b, &obs[s]));
     let mut records = Vec::new();
     let mv = |name: &str| SearchChoice::Move(dex.moves.id(name).unwrap());
-    let prefix = [
-        [SearchChoice::Team([1, 2, 3]), SearchChoice::Team([2, 1, 3])],
-        [mv("explosion"), mv("thunderbolt")],
-        [SearchChoice::Switch(2), SearchChoice::Switch(2)],
-        [mv("thunderbolt"), mv("explosion")],
-        [SearchChoice::Switch(3), SearchChoice::Switch(3)],
-        [mv("return"), mv("mirrorcoat")],
-        [mv("surf"), mv("safeguard")],
-        [mv("return"), mv("counter")],
-    ];
-    for actions in prefix {
-        step(&dex, &mut b, &mut obs, &mut beliefs, actions, &mut records);
+    if family == "bond" {
+        bond::prefix(&dex, &mut b, &mut obs, &mut beliefs, &mut records);
+    } else {
+        let prefix = [
+            [SearchChoice::Team([1, 2, 3]), SearchChoice::Team([2, 1, 3])],
+            [mv("explosion"), mv("thunderbolt")],
+            [SearchChoice::Switch(2), SearchChoice::Switch(2)],
+            [mv("thunderbolt"), mv("explosion")],
+            [SearchChoice::Switch(3), SearchChoice::Switch(3)],
+            [mv("return"), mv("mirrorcoat")],
+            [mv("surf"), mv("safeguard")],
+            [mv("return"), mv("counter")],
+        ];
+        for actions in prefix {
+            step(
+                &dex,
+                &mut b,
+                &mut obs,
+                &mut beliefs,
+                actions.map(Some),
+                &mut records,
+            );
+        }
     }
     assert!(b.outcome().is_none());
-    assert!(b.sides.iter().all(|s| s
-        .party
-        .iter()
-        .filter(|&&i| !s.roster[i as usize].fainted)
-        .count()
-        == 1));
+    assert_eq!(
+        [0, 1].map(|s| b.sides[s].pokemon_left),
+        if family == "bond" { [1, 2] } else { [1, 1] }
+    );
     let decision = records.len();
     records.push(json!({"key":b.state_key128().to_string(),"choices":[0,0]}));
     let corpus = json!({"game":3000,"seed":seed,"teams":teams,"decisions":records,"samples":[decision],"outcome":null,"prefix_only":true});
@@ -193,6 +218,7 @@ fn main() {
     }
     let paths = [
         "crates/bot/examples/counter_mix_probe.rs",
+        "crates/bot/examples/counter_mix_probe/bond.rs",
         "crates/bot/src/bounds.rs",
         "crates/bot/src/exact.rs",
         "crates/bot/src/root_policy.rs",
@@ -206,7 +232,7 @@ fn main() {
         "data/gen2stadium2.json",
         "data/learnsets-gen2.json",
     ];
-    let output = json!({"schema":"nc2000-counter-mix-v1","state":b.essence(&dex),"state_key":b.state_key128().to_string(),
+    let output = json!({"schema":"nc2000-counter-mix-v1","family":family,"state":b.essence(&dex),"state_key":b.state_key128().to_string(),
         "validations":validations,"actions":actions.map(|aa|aa.into_iter().map(|a|a.to_input(&dex)).collect::<Vec<_>>()),
         "proof":proof,"rows":rows,"log":b.log,"source_hashes":paths.map(|p|(p,sha(&std::fs::read(p).unwrap()))),
         "search_seed_base":seed_base,"search_seeds":count,"iterations":iterations,

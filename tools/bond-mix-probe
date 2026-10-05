@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/bond-mix-v1'
+loss = runpy.run_path(str(root/'tools/counter-mix-probe'))['loss']
+specs = [('screen', '2,3,4,5', 32, 27000, 2026110601),
+         ('confirmation', '4,5,6,7', 16, 108000, 2026110701)]
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def controls(records):
+    cases = []
+    for stage, r in records.items():
+        n0, n1 = map(len, r['actions'])
+        for row in r['rows']:
+            if row['mode'] != 'pinned':
+                continue
+            side = row['side']
+            normal = {**row, 'actions': r['actions'][side]}
+            joint = []
+            for cell in row['joint']:
+                own = cell['own']
+                reply = r['actions'][1-side].index(cell['reply'])
+                i, j = (own, reply) if side == 0 else (reply, own)
+                lo, hi = r['proof']['cells'][i*n1+j]
+                value = (lo+hi)/2
+                if side == 1:
+                    value = 1-value
+                joint.append({**cell, 'mean': value})
+            for label, entry in [('actual', normal), ('oracle_means', {**normal, 'joint': joint})]:
+                cases.append(dict(id=f"{stage}:{side}:{row['seed_index']}:{label}", row=entry))
+    return cases
+
+
+def summarize(records, pilots, extracted):
+    assert list(records) == [s[0] for s in specs]
+    assert list(pilots) == [str(i) for i in range(1,6)]
+    assert pilots['1']['record'] is None and 'illegal prefix' in pilots['1']['log']
+    assert '"pokemonLeft":0' in pilots['1']['log']
+    for i in range(2,6):
+        assert pilots[str(i)]['record']['family'] == 'bond'
+    outputs = {row['id']: row['result'] for row in extracted['rows']}
+    assert list(outputs) == [c['id'] for c in controls(records)]
+    groups = []
+    for stage, seed, count, iterations, base in specs:
+        r = records[stage]
+        assert r['family'] == 'bond' and r['search_seeds'] == count and r['iterations'] == iterations
+        assert r['search_seed_base'] == base and all(v['ok'] for v in r['validations'])
+        assert [s['pokemonLeft'] for s in r['state']['sides']] == [1,2]
+        assert r['proof']['value'][1]-r['proof']['value'][0] < 2e-7
+        for side in range(2):
+            rows = [x for x in r['rows'] if x['mode'] == 'pinned' and x['side'] == side]
+            assert len(rows) == count
+            actions = r['actions'][side]
+            baseline = [sum(x['choice'] == a for x in rows)/count for a in actions]
+            policies, oracles = [], []
+            flags, oracle_flags = [], []
+            for row in rows:
+                actual = outputs[f"{stage}:{side}:{row['seed_index']}:actual"]
+                oracle = outputs[f"{stage}:{side}:{row['seed_index']}:oracle_means"]
+                policy = row['candidate_policy']
+                expected = policy if policy is not None else [float(a == row['choice']) for a in actions]
+                assert all(abs(a-b) < 1e-12 for a, b in zip(actual['policy'], expected))
+                assert actual['mixed'] == (policy is not None)
+                assert abs(sum(expected)-1) < 1e-12
+                total = 0
+                for i, p in enumerate(expected):
+                    total += p
+                    if row['play_draw'] < total:
+                        assert row['candidate_choice'] == actions[i]
+                        break
+                policies.append(expected)
+                oracles.append(oracle['policy'])
+                flags.append(actual['mixed'])
+                oracle_flags.append(oracle['mixed'])
+            average = lambda ps: [sum(p[i] for p in ps)/count for i in range(len(actions))]
+            mean = average(policies)
+            oracle_mean = average(oracles)
+            visits = average([[n/iterations for n in x['visits']] for x in rows])
+            groups.append(dict(stage=stage, side=side, actions=actions, count=count,
+                               active_hp=[s['pokemon'][0]['hp'] for s in r['state']['sides']],
+                               value=r['proof']['value'], equilibrium=r['proof']['lower_mix'][side],
+                               baseline_counts=dict(collections.Counter(x['choice'] for x in rows)),
+                               baseline_loss=loss(r, side, baseline),
+                               visit_policy=visits, visit_loss=loss(r, side, visits),
+                               candidate_mixed=sum(flags), candidate_policy=mean, candidate_loss=loss(r, side, mean),
+                               worst_candidate_loss_upper=max(loss(r, side, p)[1] for p in policies),
+                               oracle_means_mixed=sum(oracle_flags), oracle_means_policy=oracle_mean,
+                               oracle_means_loss=loss(r, side, oracle_mean)))
+    return dict(groups=groups,
+                scope=('Legally replayed Snorlax versus Gengar plus a revealed Magikarp reserve. Destiny Bond is legal because '
+                       'Gengar is not the last Pokemon. The fixed known-loadout root has an approximately 1:7 attack/wait '
+                       'equilibrium; all switches remain free in the certificate. Seed 1 ended during construction; seeds 2–5 '
+                       'were all retained as pilot evidence. Non-paralyzed seed 2 is the screen and seed 4 the larger-budget '
+                       'confirmation. Oracle-means controls replace search estimates with certified-matrix midpoints but retain '
+                       'sample counts and eligibility; they diagnose the selector margin rather than a runnable oracle bot. '
+                       'Loss bounds concern first-action distributions with optimal future play, not whole-policy exploitability. '
+                       'Default best() is unchanged.'))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only:
+        b = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(b['records'], b['pilots'], b['extracted']) == json.loads((archive/'summary.json').read_bytes())
+        assert b['extracted']['input_sha256'] == sha(json.dumps(controls(b['records']), separators=(',', ':')).encode())
+        print('bond-mix: verified legal-family metadata, native distributions and oracle-means controls')
+        return
+    assert not archive.exists()
+    env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+    if args.import_directory:
+        directory = args.import_directory
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe',
+                        '--example','root_mix_policy'],cwd=root,env=env,check=True)
+        directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-bond-mix-'))
+        jobs = [(f'pilot{i}', ','.join(str(i+j) for j in range(4)), 0, 27000, 2026110601) for i in range(1,6)] + specs
+        for name, seed, count, iterations, base in jobs:
+            with (directory/(name+'.log')).open('w') as log:
+                code = subprocess.run([str(root/'target/release/examples/counter_mix_probe'),str(directory/name),seed,
+                                       str(count),str(iterations),str(base),'bond'],cwd=root,env=env,stdout=log,stderr=log).returncode
+            assert (code != 0) == (name == 'pilot1')
+            print(name, code, flush=True)
+    records = {s[0]:json.loads((directory/s[0]/'records.json').read_bytes()) for s in specs}
+    pilots = {str(i):dict(record=json.loads((directory/f'pilot{i}'/'records.json').read_bytes()) if i>1 else None,
+                          log=(directory/f'pilot{i}.log').read_text()) for i in range(1,6)}
+    for r in [*records.values(), *(p['record'] for p in pilots.values() if p['record'])]:
+        assert all(sha((root/path).read_bytes()) == expected for path, expected in r['source_hashes'])
+    raw = json.dumps(controls(records), separators=(',', ':')).encode()
+    (directory/'controls.json').write_bytes(raw)
+    subprocess.run([str(root/'target/release/examples/root_mix_policy'),str(directory/'controls.json'),
+                    str(directory/'extracted.json')],cwd=root,env=env,check=True)
+    extracted = json.loads((directory/'extracted.json').read_bytes())
+    summary = summarize(records,pilots,extracted)
+    bundle = dict(records=records,pilots=pilots,extracted=extracted,
+                  corpora={name:(directory/name/'corpus.jsonl').read_text() for name in [s[0] for s in specs]+[f'pilot{i}' for i in range(2,6)]})
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',', ':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print(json.dumps(summary,indent=2))
+
+
+if __name__ == '__main__':
+    main()
