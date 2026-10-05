@@ -294,7 +294,7 @@ mod tests {
 }
 
 fn manifest(dex:&Dex,raw:&[u8])->Value {
-    let paths=["crates/bot/examples/fixed_reply_counterpolicy.rs","crates/bot/examples/fixed_reply_counterpolicy/pair_bound.rs","crates/bot/examples/fixed_reply_counterpolicy/hp_storage.rs","crates/bot/examples/fixed_reply_counterpolicy/retained.rs","crates/bot/examples/fixed_reply_counterpolicy/terminal_step.rs","crates/bot/examples/fixed_reply_counterpolicy/switch_kernel.rs","crates/bot/src/bounds.rs","crates/bot/src/hp_transition.rs",
+    let paths=["crates/bot/examples/fixed_reply_counterpolicy.rs","crates/bot/examples/fixed_reply_counterpolicy/pair_bound.rs","crates/bot/examples/fixed_reply_counterpolicy/best_first.rs","crates/bot/examples/fixed_reply_counterpolicy/hp_storage.rs","crates/bot/examples/fixed_reply_counterpolicy/retained.rs","crates/bot/examples/fixed_reply_counterpolicy/terminal_step.rs","crates/bot/examples/fixed_reply_counterpolicy/switch_kernel.rs","crates/bot/src/bounds.rs","crates/bot/src/hp_transition.rs",
         "crates/engine/src/state.rs","crates/engine/src/prng.rs","crates/engine/src/battle/enumerate.rs","crates/engine/src/battle/search.rs",
         "crates/engine/src/battle/actions.rs","crates/engine/src/battle/conditions.rs",
         "crates/engine/src/battle/moveexec.rs","crates/engine/src/battle/turn.rs","crates/engine/src/battle/events.rs",

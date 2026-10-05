@@ -1,0 +1,426 @@
+{
+  "schema": "nc2000-policy-best-first-v1",
+  "results": {
+    "control-work": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.8909038936687356
+      },
+      "runs": 2000000,
+      "elapsed_ms": 74138.37,
+      "max_depth": 4,
+      "peak_states": 40018,
+      "peak_templates": 68,
+      "memory_exhausted": false,
+      "cache": {
+        "observations": 2747736,
+        "eligible": 2666888,
+        "attack_eligible": 1500916,
+        "switch_eligible": 14400,
+        "hits": 1403270,
+        "attack_hits": 333850,
+        "switch_hits": 0,
+        "reset_hits": 65318,
+        "rejected_hp": 141669,
+        "runs": 1344466,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 140,
+          "healer_full_hp": 63920,
+          "healer_volatile": 15180,
+          "opponent_move": 1008
+        }
+      },
+      "boom_eager": {
+        "attempts": 740,
+        "completed": 739,
+        "runs": 655534,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 2568,
+        "eligible": 1296,
+        "hits": 1286,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 570,
+        "translated_leaves": 73302,
+        "observations_avoided": 1851840
+      },
+      "final": {
+        "depth": 4,
+        "runs": 2000000,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.10909610733128058,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.15578864312665444,
+        "frontier_mass": 0.7351152495420812,
+        "unknown_mass": 0.8909038926687356,
+        "frontier_states": 40018,
+        "frontier_templates": 68,
+        "enumeration_failures": 266,
+        "mass_error": 1.6209256159527285e-14,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.8909038936687356
+        }
+      }
+    },
+    "best-work": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9421262412292646
+      },
+      "runs": 713120,
+      "elapsed_ms": 53702.042833,
+      "max_depth": 8,
+      "peak_states": 96511,
+      "peak_templates": 262,
+      "memory_exhausted": true,
+      "cache": {
+        "observations": 1977753,
+        "eligible": 1729796,
+        "attack_eligible": 86272,
+        "switch_eligible": 17280,
+        "hits": 1445069,
+        "attack_hits": 66304,
+        "switch_hits": 0,
+        "reset_hits": 70690,
+        "rejected_hp": 1272,
+        "runs": 532684,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 68,
+          "healer_full_hp": 221725,
+          "healer_volatile": 12600,
+          "opponent_move": 12964
+        }
+      },
+      "boom_eager": {
+        "attempts": 114,
+        "completed": 114,
+        "runs": 180436,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 1705,
+        "eligible": 909,
+        "hits": 897,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 684,
+        "translated_leaves": 51129,
+        "observations_avoided": 1291680
+      },
+      "final": {
+        "expansions": 1819,
+        "runs": 713120,
+        "max_depth": 8,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.05787375977072199,
+        "failed_mass": 0.020053297744809413,
+        "horizon_mass": 0.0,
+        "frontier_mass": 0.9220729424844551,
+        "unknown_mass": 0.9421262402292646,
+        "frontier_states": 96511,
+        "frontier_templates": 262,
+        "mass_error": 1.3433698597964394e-14,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9421262412292646
+        }
+      }
+    },
+    "control-1": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9139441769862842
+      },
+      "runs": 1077594,
+      "elapsed_ms": 30026.892582999997,
+      "max_depth": 3,
+      "peak_states": 14590,
+      "peak_templates": 39,
+      "memory_exhausted": false,
+      "cache": {
+        "observations": 982518,
+        "eligible": 964130,
+        "attack_eligible": 867274,
+        "switch_eligible": 4320,
+        "hits": 322369,
+        "attack_hits": 238426,
+        "switch_hits": 0,
+        "reset_hits": 27450,
+        "rejected_hp": 58341,
+        "runs": 660149,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 518,
+        "completed": 518,
+        "runs": 417445,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 547,
+        "eligible": 56,
+        "hits": 53,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 171,
+        "translated_leaves": 3021,
+        "observations_avoided": 76320
+      },
+      "final": {
+        "depth": 3,
+        "runs": 1077594,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08605582401370382,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.019504446819539157,
+        "frontier_mass": 0.8944397291667451,
+        "unknown_mass": 0.9139441759862842,
+        "frontier_states": 14590,
+        "frontier_templates": 39,
+        "enumeration_failures": 54,
+        "mass_error": 1.199040866595169e-14,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9139441769862842
+        }
+      }
+    },
+    "best-1": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9673899568411181
+      },
+      "runs": 343035,
+      "elapsed_ms": 30016.892708,
+      "max_depth": 7,
+      "peak_states": 72317,
+      "peak_templates": 172,
+      "memory_exhausted": false,
+      "cache": {
+        "observations": 1217810,
+        "eligible": 1103636,
+        "attack_eligible": 48500,
+        "switch_eligible": 15840,
+        "hits": 884579,
+        "attack_hits": 31360,
+        "switch_hits": 0,
+        "reset_hits": 51518,
+        "rejected_hp": 1066,
+        "runs": 333231,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "healer_full_hp": 102024,
+          "healer_volatile": 11550
+        }
+      },
+      "boom_eager": {
+        "attempts": 6,
+        "completed": 6,
+        "runs": 9804,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 1134,
+        "eligible": 721,
+        "hits": 710,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 627,
+        "translated_leaves": 40470,
+        "observations_avoided": 1022400
+      },
+      "final": {
+        "expansions": 1140,
+        "runs": 343035,
+        "max_depth": 7,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.03261004415888783,
+        "failed_mass": 0.019664470436843502,
+        "horizon_mass": 0.0,
+        "frontier_mass": 0.9477254854042746,
+        "unknown_mass": 0.9673899558411181,
+        "frontier_states": 72317,
+        "frontier_templates": 172,
+        "mass_error": 5.995204332975845e-15,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9673899568411181
+        }
+      }
+    },
+    "best-2": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9728761353668509
+      },
+      "runs": 324534,
+      "elapsed_ms": 30044.665040999997,
+      "max_depth": 7,
+      "peak_states": 71047,
+      "peak_templates": 172,
+      "memory_exhausted": false,
+      "cache": {
+        "observations": 1160675,
+        "eligible": 1054693,
+        "attack_eligible": 32325,
+        "switch_eligible": 15840,
+        "hits": 842677,
+        "attack_hits": 17920,
+        "switch_hits": 0,
+        "reset_hits": 50468,
+        "rejected_hp": 980,
+        "runs": 317998,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "healer_full_hp": 93832,
+          "healer_volatile": 11550
+        }
+      },
+      "boom_eager": {
+        "attempts": 4,
+        "completed": 4,
+        "runs": 6536,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 1092,
+        "eligible": 720,
+        "hits": 709,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 627,
+        "translated_leaves": 40413,
+        "observations_avoided": 1020960
+      },
+      "final": {
+        "expansions": 1096,
+        "runs": 324534,
+        "max_depth": 7,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.027123865633152344,
+        "failed_mass": 0.01963619474553556,
+        "horizon_mass": 0.0,
+        "frontier_mass": 0.9532399396213154,
+        "unknown_mass": 0.9728761343668509,
+        "frontier_states": 71040,
+        "frontier_templates": 172,
+        "mass_error": 3.3306690738754696e-15,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9728761353668509
+        }
+      }
+    },
+    "control-2": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9134288383520807
+      },
+      "runs": 1155952,
+      "elapsed_ms": 30052.889,
+      "max_depth": 3,
+      "peak_states": 14732,
+      "peak_templates": 39,
+      "memory_exhausted": false,
+      "cache": {
+        "observations": 1066730,
+        "eligible": 1048342,
+        "attack_eligible": 951486,
+        "switch_eligible": 4320,
+        "hits": 332493,
+        "attack_hits": 248550,
+        "switch_hits": 0,
+        "reset_hits": 27450,
+        "rejected_hp": 68248,
+        "runs": 734237,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 539,
+        "completed": 539,
+        "runs": 421715,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 570,
+        "eligible": 56,
+        "hits": 53,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 171,
+        "translated_leaves": 3021,
+        "observations_avoided": 76320
+      },
+      "final": {
+        "depth": 3,
+        "runs": 1155952,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08657116264790364,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.018404713733542962,
+        "frontier_mass": 0.8950241236185378,
+        "unknown_mass": 0.9134288373520807,
+        "frontier_states": 14732,
+        "frontier_templates": 39,
+        "enumeration_failures": 56,
+        "mass_error": 1.5654144647214707e-14,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9134288383520807
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "work": {
+      "upper_reduction": -0.051222347560529013,
+      "elapsed_ratio": 0.7243488470679893,
+      "max_depth_gain": 4,
+      "memory_exhausted": true
+    },
+    "1": {
+      "upper_reduction": -0.0534457798548339,
+      "elapsed_ratio": 0.9996669693684634,
+      "max_depth_gain": 4,
+      "memory_exhausted": false
+    },
+    "2": {
+      "upper_reduction": -0.05944729701477025,
+      "elapsed_ratio": 0.9997263504683359,
+      "max_depth_gain": 4,
+      "memory_exhausted": false
+    }
+  },
+  "prior_archive_sha256": "1dacf8e418af8d84c1cc4887572b682fd013068a119215b35df9b40fca3e73b7",
+  "interpretation": "A probability-priority agenda retains pending states across depths and merges only same-depth guarded identities. Later arrivals to previously processed states are processed as new disjoint probability mass. Heap updates preserve exact accumulated priorities. HP templates are reference-counted and exact HP vectors are restored on removal. No pending state is pruned: exceeding the global concrete-state or template limit stops after the current cell, retaining every successor as unknown. Incomplete-cell probability and the depth horizon also remain unknown. The control reproduces the prior fixed-work result. Fixed-work arms precede control/best/best/control 30-second limits; memory stops are reported separately. Finite exhaustive comparisons cover work, time, memory and horizon stops, plus eager fallback accounting and terminal roots. These are fixed-policy-pair intervals, not unrestricted game value or deployed strength."
+}

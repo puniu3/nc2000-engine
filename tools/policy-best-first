@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-best-first-v1'
+names = ['control-work', 'best-work', 'control-1', 'best-1', 'best-2', 'control-2']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records, corpus):
+    assert set(records) == set(names)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert len({json.dumps(r['manifest']['source_hashes']) for r in records.values()}) == 1
+    assert len({r['manifest']['dex_fingerprint'] for r in records.values()}) == 1
+    assert all(r['manifest']['corpus_sha256'] == sha(corpus) for r in records.values())
+    old_path = root / 'findings/policy-mass-order-v1/records.json.gz'
+    old = json.loads(gzip.decompress(old_path.read_bytes()))['mass-work']
+    config = records['control-work']['config']
+    assert config == dict(old['config'], best_first=False)
+    baseline = records['control-work']['report']
+    for key, value in old['report'].items():
+        if key != 'elapsed_ms':
+            assert baseline[key] == value, key
+    results = {}
+    for name, record in records.items():
+        best = name.startswith('best')
+        timed = not name.endswith('work')
+        cfg = record['config']
+        assert cfg == dict(config, best_first=best, time_budget_ms=30000 if timed else 0, work_budget=100_000_000 if timed else 2_000_000)
+        assert record['schema'] == old['schema'] and record['state_key'] == old['state_key']
+        report = record['report']
+        rows = report['checkpoints' if best else 'layers']
+        assert rows and report['runs'] <= cfg['work_budget']
+        if report['time_exhausted']:
+            assert timed and 30000 <= report['elapsed_ms'] <= 35000
+        elif report.get('memory_exhausted'):
+            assert best and (rows[-1]['frontier_states'] > cfg['packed_state_cap'] or rows[-1]['frontier_templates'] > cfg['width'])
+        elif report['runs'] != cfg['work_budget']:
+            assert rows[-1]['frontier_states'] == 0 or (not best and len(rows) == cfg['steps'])
+        cache, boom, kernels = [report[k] for k in ['healing_cache', 'boom_eager', 'switch_kernels']]
+        assert cache['observations'] == cache['runs'] + cache['hits']
+        assert report['runs'] == cache['runs'] + boom['runs']
+        assert sum(cache['exclusions'].values()) + cache['eligible'] == cache['observations']
+        assert cache['peak_entries'] <= cfg['healing_capacity']
+        assert cache['hits'] + cache['rejected_hp'] <= cache['eligible'] <= cache['observations']
+        assert boom['completed'] <= boom['attempts'] and boom['terminal_replacements'] == 0
+        assert kernels['hits'] <= kernels['eligible'] <= kernels['calls']
+        assert kernels['peak_leaves'] <= cfg['switch_kernel_capacity']
+        monotone = ['runs', 'wins', 'ties', 'losses', 'failed_mass', 'horizon_mass' if best else 'dropped_mass']
+        previous = {k: 0 for k in monotone}
+        previous['score'] = dict(lo=0, hi=1)
+        for row in rows:
+            assert 0 <= row['frontier_templates'] <= row['frontier_states']
+            unknown = sum(row[k] for k in ['failed_mass', 'frontier_mass', 'horizon_mass' if best else 'dropped_mass'])
+            assert abs(row['unknown_mass']-unknown) < 1e-12
+            assert abs(sum(row[k] for k in ['wins', 'ties', 'losses', 'unknown_mass'])-1) < 1e-9
+            for key in monotone:
+                assert row[key] >= previous[key]
+            assert row['score']['lo'] >= previous['score']['lo']-1e-12
+            assert row['score']['hi'] <= previous['score']['hi']+1e-12
+            pad = report['numerical_envelope']
+            assert row['score']['lo'] == max(0, row['wins']+.5*row['ties']-pad)
+            assert row['score']['hi'] == min(1, row['wins']+.5*row['ties']+row['unknown_mass']+pad)
+            previous = row
+        assert report['score'] == previous['score'] and report['runs'] == previous['runs']
+        if best:
+            assert sum(report['expansions_by_depth']) == report['expansions'] == previous['expansions']
+            assert report['max_depth'] <= cfg['steps'] and report['schedule'] == 'best_first'
+        results[name] = dict(score=report['score'], runs=report['runs'], elapsed_ms=report['elapsed_ms'],
+                             max_depth=report['max_depth'] if best else len(rows),
+                             peak_states=report['peak_frontier'], peak_templates=report['peak_templates'],
+                             memory_exhausted=report.get('memory_exhausted', False),
+                             cache=cache, boom_eager=boom, switch_kernels=kernels, final=previous)
+    comparisons = {}
+    for suffix in ['work', '1', '2']:
+        control, best = [results[f'{arm}-{suffix}'] for arm in ['control', 'best']]
+        comparisons[suffix] = dict(upper_reduction=control['score']['hi']-best['score']['hi'],
+            elapsed_ratio=best['elapsed_ms']/control['elapsed_ms'], max_depth_gain=best['max_depth']-control['max_depth'],
+            memory_exhausted=best['memory_exhausted'])
+    return dict(schema='nc2000-policy-best-first-v1', results=results, comparisons=comparisons,
+                prior_archive_sha256=sha(old_path.read_bytes()),
+                interpretation='A probability-priority agenda retains pending states across depths and merges only same-depth guarded identities. Later arrivals to previously processed states are processed as new disjoint probability mass. Heap updates preserve exact accumulated priorities. HP templates are reference-counted and exact HP vectors are restored on removal. No pending state is pruned: exceeding the global concrete-state or template limit stops after the current cell, retaining every successor as unknown. Incomplete-cell probability and the depth horizon also remain unknown. The control reproduces the prior fixed-work result. Fixed-work arms precede control/best/best/control 30-second limits; memory stops are reported separately. Finite exhaustive comparisons cover work, time, memory and horizon stops, plus eager fallback accounting and terminal roots. These are fixed-policy-pair intervals, not unrestricted game value or deployed strength.')
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    assert all(records[name]['config'] == json.loads((archive / f'{name}.json').read_bytes()) for name in names)
+    assert summarize(records, corpus) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified baseline parity, stop accounting and conservative agenda intervals')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-best-first-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    command = [str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl')]
+    for name in names:
+        (directory / f'{name}.json').write_bytes((archive / f'{name}.json').read_bytes())
+        subprocess.run(command + ['certify', str(directory / f'{name}.json'), str(directory / f'{name}-result.json')], cwd=root, env=env, check=True)
+records = {name: json.loads((directory / f'{name}-result.json').read_bytes()) for name in names}
+corpus = (directory / 'corpus.jsonl').read_bytes()
+summary = summarize(records, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
+for name, row in summary['results'].items():
+    print(name, json.dumps(row))

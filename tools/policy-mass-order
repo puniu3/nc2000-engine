@@ -26,7 +26,10 @@ def summarize(records, corpus):
     old_path = root / 'findings/policy-switch-kernels-v1/records.json.gz'
     old = json.loads(gzip.decompress(old_path.read_bytes()))['kernel-work']
     config = records[names[0]]['config']
-    assert config == dict(old['config'], frontier_mass_order=False)
+    expected = dict(old['config'], frontier_mass_order=False)
+    if 'best_first' in config:
+        expected['best_first'] = False
+    assert config == expected
     baseline = records['control-work']['report']
     for key, value in old['report'].items():
         if key == 'healing_cache':

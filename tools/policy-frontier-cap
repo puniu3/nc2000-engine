@@ -27,7 +27,10 @@ def summarize(records, corpus):
     old_path = root / 'findings/policy-mass-order-v1/records.json.gz'
     old = json.loads(gzip.decompress(old_path.read_bytes()))['mass-1']
     config = records[names[0]]['config']
-    assert config == old['config']
+    expected = dict(old['config'])
+    if 'best_first' in config:
+        expected['best_first'] = False
+    assert config == expected
     results = {}
     for name in names:
         record = records[name]

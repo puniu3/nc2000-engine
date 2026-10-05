@@ -1,9 +1,9 @@
 use super::*;
 use std::collections::{BTreeMap,BTreeSet};
 
-type Key=(bool,bool,u128);
+pub(super) type Key=(bool,bool,u128);
 
-fn key(dex:&Dex,b:&Battle,guarded:bool)->Key {
+pub(super) fn key(dex:&Dex,b:&Battle,guarded:bool)->Key {
     let damage=guarded && !b.damage_bookkeeping_observable(dex);
     let claw=guarded && !b.quick_claw_roll_observable(dex);
     let hash=if claw {b.state_key128_without_quick_claw_roll(dex,damage)}
