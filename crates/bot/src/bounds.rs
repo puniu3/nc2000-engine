@@ -595,6 +595,16 @@ impl<'d> BoundSolver<'d> {
         self.value_certificates.len()
     }
 
+    pub fn into_value_certificates(self) -> ValueCertificates {
+        assert!(self.fixed_policy.is_none(), "restricted values require one-sided projection");
+        let entries = self.nodes.into_iter().map(|(key, node)|
+            (key, Bounds { lo: node.lo, hi: node.hi }))
+            .chain(self.closed)
+            .filter(|(_, value)| value.lo > 0.0 || value.hi < 1.0)
+            .collect();
+        ValueCertificates { dex_fingerprint: self.dex.replay_fingerprint, entries }
+    }
+
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
@@ -2421,6 +2431,47 @@ mod tests {
             let result = solver.solve(&root);
             assert!((result.guaranteed_score.lo - expected).abs() < 1e-8);
             assert!((result.guaranteed_score.hi - expected).abs() < 1e-8);
+        }
+    }
+
+    #[test]
+    fn unrestricted_descendant_certificates_preserve_exhaustive_values_and_actions() {
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Seismic Toss", "Protect"], &["Seismic Toss", "Protect"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 999;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = if side == 0 { 40 } else { 60 };
+        }
+        let exact = exhaustive_matrix(&dex, &root, 2);
+        let value = solve_matrix(&exact, 2, 2).0;
+        let actions = [0, 1].map(|side| root.legal_choices(&dex, side));
+        let children = enumerate_step(&dex, &root, [Some(actions[0][1]), Some(actions[1][1])], 100_000).unwrap();
+        let cfg = BoundConfig { eps: 1e-10, ..BoundConfig::default() };
+        for work_budget in [1, 1_000_000] {
+            let mut donor = BoundSolver::new(&dex, BoundConfig { work_budget, ..cfg.clone() });
+            for leaf in &children.leaves { donor.solve(&leaf.battle, None); }
+            let certificates = donor.into_value_certificates();
+            if work_budget > 1 { assert!(!certificates.is_empty()); }
+            let mut target = BoundSolver::new(&dex, cfg.clone());
+            target.import_value_certificates(certificates);
+            let report = target.solve_policy_losses(&root,
+                &[(0, vec![1.0, 0.0]), (1, vec![0.0, 1.0])], 1e-10);
+            assert!(report.bounds.lo <= value + 1e-10 && report.bounds.hi >= value - 1e-10);
+            let matrix = target.root_payoffs(&root).unwrap();
+            for (bound, exact) in matrix.cells.iter().zip(&exact) {
+                assert!(bound.lo <= exact + 1e-10 && bound.hi >= exact - 1e-10);
+            }
+            if work_budget > 1 { assert!(target.stats.certificate_hits > 0); }
+            let solved = target.solve(&root, None);
+            let mut imported = BoundSolver::new(&dex, cfg.clone());
+            imported.import_value_certificates(target.into_value_certificates());
+            let result = imported.solve(&root, None);
+            assert_eq!(result.runs, 0);
+            assert_eq!((result.bounds.lo, result.bounds.hi), (solved.bounds.lo, solved.bounds.hi));
+            assert!(result.strategies.is_none());
         }
     }
 

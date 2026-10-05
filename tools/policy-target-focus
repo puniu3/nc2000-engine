@@ -19,6 +19,7 @@ studies.add_argument("--transfer", action="store_true")
 studies.add_argument("--branches", action="store_true")
 studies.add_argument("--direction", action="store_true")
 studies.add_argument("--target-cut", action="store_true")
+studies.add_argument("--descendant", action="store_true")
 parser.add_argument("--verify-only", action="store_true")
 args = parser.parse_args()
 study = "policy-frontier-v1" if args.frontier else "policy-target-focus-v1"
@@ -35,6 +36,8 @@ if args.direction:
     study, targets = "policy-direction-v1", ["control", "default-check", "directed"]
 if args.target_cut:
     study, targets = "policy-target-cut-v1", ["control", "default-check", "targeted"]
+if args.descendant:
+    study, targets = "policy-descendant-v1", ["control", "default-check", "targeted"]
 source = root / "findings" / study
 spec = importlib.util.spec_from_file_location("policy_gap", root / "tools/policy-gap-report.py")
 verifier = importlib.util.module_from_spec(spec)
@@ -73,13 +76,20 @@ def verify(row):
     matrix = row["reference"]
     if "preparation" in row:
         preparation = row["preparation"]
-        assert row["total_runs"] == matrix["runs"] + sum(p["runs"] for p in preparation)
-        assert abs(row["total_elapsed_ms"] - matrix["elapsed_ms"] - sum(p["elapsed_ms"] for p in preparation)) < 1e-6
-        counts = [p["certificates"] for p in preparation]
+        descendants = row.get("descendant_preparation", [])
+        assert row["total_runs"] == matrix["runs"] + sum(p["runs"] for p in preparation) + sum(p["runs"] + p["enumeration_runs"] for p in descendants)
+        assert abs(row["total_elapsed_ms"] - matrix["elapsed_ms"] - sum(p["elapsed_ms"] for p in preparation + descendants)) < 1e-6
+        counts = [p["certificates"] for p in preparation + descendants]
         assert max(counts, default=0) <= matrix["imported_certificates"] <= sum(counts)
         assert 0 <= matrix["certificate_hits"] <= matrix["imported_certificates"]
         for prep in preparation:
             verify_projection(prep["side"], prep["guaranteed_score"], prep["unrestricted_game_value"])
+        for prep in descendants:
+            assert 0 < prep["mass"] <= 1 and prep["matching_leaves"] > 0
+            assert 0 <= prep["value"]["lo"] <= prep["value"]["hi"] <= 1
+            assert prep["matrix"]["value"] == prep["value"]
+            assert sum(c["runs"] for c in prep["root_chance"]) == prep["runs"]
+            assert len(prep["matrix"]["cells"]) == len(prep["matrix"]["actions"][0]) * len(prep["matrix"]["actions"][1])
     for endpoint in row["endpoints"]:
         for arm in ["archived", "uniform", "max_damage", "oracle"]:
             verifier.verify_assessment(matrix, endpoint["side"], endpoint[arm])
@@ -114,11 +124,35 @@ if args.verify_only:
             current, old = records[target]["result"], prior[previous]["result"]
             for field in ["value", "cells", "actions", "runs", "nodes", "stop"]:
                 assert current["reference"][field] == old["reference"][field], field
-    if args.direction or args.target_cut:
+    if args.direction or args.target_cut or args.descendant:
         prior = json.loads(gzip.decompress((root / "findings/policy-branches-v1/records.json.gz").read_bytes()))
         assert records["control"] == prior["large"]
         for field in ["value", "cells", "actions", "runs", "nodes", "stop"]:
             assert records["default-check"]["result"]["reference"][field] == prior["small"]["result"]["reference"][field]
+        if args.descendant:
+            corpus = gzip.decompress((source / 'corpus.jsonl.gz').read_bytes())
+            for name, record in records.items():
+                manifest = record['manifest']
+                protocol_bytes = (source / f'{name}.json').read_bytes()
+                assert hashlib.sha256(protocol_bytes).hexdigest() == manifest['protocol_sha256']
+                assert json.loads(protocol_bytes) == manifest['protocol']
+                assert hashlib.sha256(corpus).hexdigest() == manifest['protocol']['corpus_sha256']
+                baseline = (root / manifest['protocol']['baseline']).read_bytes()
+                assert hashlib.sha256(baseline).hexdigest() == manifest['protocol']['baseline_sha256']
+            row = records['targeted']['result']
+            p = records['targeted']['manifest']['protocol']['descendant_preparation']
+            assert row['state_key'] == p['root_state_key']
+            assert len(row['descendant_preparation']) == 1
+            prep = row['descendant_preparation'][0]
+            assert prep['semantic_key'] == p['semantic_key']
+            assert prep['actions'] == p['actions'] and prep['mass'] == p['mass']
+            child = next(c for c in prior['large']['result']['diagnostics']['root_chance'][0]['largest_children']
+                         if c['key'] == f"NoDamageBookkeeping({p['semantic_key']})")
+            assert prep['mass'] == child['mass']
+            assert max(prep['value']['lo'], child['bounds']['lo']) <= min(prep['value']['hi'], child['bounds']['hi'])
+            assert row['reference']['certificate_hits'] > 0
+            for cell, bounds in zip(prep['root_chance'], prep['matrix']['cells']):
+                assert abs(cell['pending_mass'] + cell['child_uncertainty'] - (bounds['hi'] - bounds['lo'])) < 1e-9
         if args.direction:
             for name in ["default-check", "directed"]:
                 diagnostic = records[name]["result"]["diagnostics"]
@@ -126,7 +160,7 @@ if args.verify_only:
                 assert (diagnostic["upper_directed_trials"] > 0) == (name == "directed")
         if args.target_cut:
             assert records["default-check"]["result"]["diagnostics"]["sufficient_reply_skips"] == 0
-    if args.transfer or args.branches or args.direction or args.target_cut:
+    if args.transfer or args.branches or args.direction or args.target_cut or args.descendant:
         summary = json.loads((source / "summary.json").read_text())
         prior_path = root / summary["prior_certificate"]
         assert hashlib.sha256(prior_path.read_bytes()).hexdigest() == summary["prior_certificate_sha256"]

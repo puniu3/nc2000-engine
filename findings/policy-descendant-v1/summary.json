@@ -1,0 +1,222 @@
+{
+  "schema": "nc2000-policy-descendant-v1",
+  "state": {
+    "game": 19,
+    "decision": 17,
+    "state_key": "160298700970866480479685871464306122045"
+  },
+  "arms": {
+    "control": {
+      "value": {
+        "lo": 0.098087777355609,
+        "hi": 0.13780788236355748
+      },
+      "runs": 5821259,
+      "total_runs": 5821259,
+      "elapsed_ms": 119168.814084,
+      "nodes": 480008,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.03972010502494848
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.03972010502494838
+        }
+      ]
+    },
+    "default-check": {
+      "value": {
+        "lo": 0.029437408762133445,
+        "hi": 0.139628453595585
+      },
+      "runs": 1717490,
+      "total_runs": 1717490,
+      "elapsed_ms": 31383.713917,
+      "nodes": 120003,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.11019104485045156
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.1101910448504515
+        }
+      ]
+    },
+    "targeted": {
+      "value": {
+        "lo": 0.0989257240545405,
+        "hi": 0.13641220299297127
+      },
+      "runs": 5890389,
+      "total_runs": 7223298,
+      "elapsed_ms": 156546.60820800002,
+      "nodes": 480038,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.037486478955430766
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.03748647895543078
+        }
+      ]
+    }
+  },
+  "descendant": {
+    "semantic_key": "335198304254042248407122083938512062892",
+    "mass": 0.058319091796875,
+    "value": {
+      "lo": 0.01162380119383761,
+      "hi": 0.282800471995122
+    },
+    "runs": 1332716,
+    "nodes": 120030,
+    "certificates": 452,
+    "enumeration_runs": 193
+  },
+  "combined": {
+    "matrix": {
+      "actions": [
+        [
+          "move bodyslam",
+          "move earthquake",
+          "move curse",
+          "move selfdestruct"
+        ],
+        [
+          "move thunder",
+          "move hiddenpower",
+          "move swagger",
+          "move substitute"
+        ]
+      ],
+      "cells": [
+        {
+          "lo": 0.10301947685914342,
+          "hi": 0.13641220299297127
+        },
+        {
+          "lo": 0.15370122728019764,
+          "hi": 0.49606312149639503
+        },
+        {
+          "lo": 0.3095418179834507,
+          "hi": 0.728381294788194
+        },
+        {
+          "lo": 0.10214936603500936,
+          "hi": 0.27595655369916317
+        },
+        {
+          "lo": 0.00257999278605395,
+          "hi": 0.08952189207535369
+        },
+        {
+          "lo": 0.004208746259963078,
+          "hi": 0.43202771860427913
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.6351142583058058
+        },
+        {
+          "lo": 2.7138730001979865e-05,
+          "hi": 0.35764716654261774
+        },
+        {
+          "lo": 0.0013237624697903664,
+          "hi": 0.08968211454702454
+        },
+        {
+          "lo": 0.004033166343113737,
+          "hi": 0.4320277186042792
+        },
+        {
+          "lo": 0.0010901613177510695,
+          "hi": 0.6353128079171583
+        },
+        {
+          "lo": 2.7138730001979865e-05,
+          "hi": 0.3555628241980677
+        },
+        {
+          "lo": 0.0011266201064154486,
+          "hi": 0.02153959290606733
+        },
+        {
+          "lo": 0.0028503121664444917,
+          "hi": 0.05367985703107535
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.10585842322129496
+        },
+        {
+          "lo": 2.7138730001979865e-05,
+          "hi": 0.07328176379073455
+        }
+      ],
+      "value": {
+        "lo": 0.10214936603500936,
+        "hi": 0.13641220299297127
+      }
+    },
+    "archived_first_decisions": [
+      {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.10214936603500936,
+          "hi": 0.13641220299297127
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.03426283705796191
+        }
+      },
+      {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.8635877970070287,
+          "hi": 0.8969805231408565
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.03426283705796195
+        }
+      }
+    ]
+  },
+  "prior_certificate": "findings/policy-target-cut-v1/summary.json",
+  "prior_certificate_sha256": "d46797fb296b2be46907f8e88031eca9784611c8edf20be99d55204891d1a97b",
+  "interpretation": "One preselected chance successor is solved as an unrestricted full-information game. Only certified value intervals transfer to a fresh parent graph; root actions are re-evaluated. Total work includes successor enumeration and dedicated preparation. Archived controls retain their original provenance. This does not certify deployed blind-policy exploitability or global optimality.",
+  "verification": {
+    "native_bot_tests": 167,
+    "workspace_all_targets_check": "passed",
+    "partial_and_complete_descendant_transfer_against_exhaustive_two_turn_game": "passed",
+    "default_reproduction": "exact"
+  },
+  "conclusions": [
+    "Dedicated preparation used 1,332,716 executions and 120,030 nodes. Its successor value interval is [0.0116238012, 0.2828004720], still wide. The root transition has probability 0.058319091796875; extraction cost 193 executions.",
+    "452 informative value certificates were exported; 291 were encountered in the parent graph. The parent used another 5,890,389 executions and stopped at 480,038 nodes. Total work was 7,223,298 executions versus 5,821,259 for the archived cold control. This is not an equal-work comparison.",
+    "Parent first-decision loss upper bounds improve from 0.0397201050 to 0.0374864790. Intersecting with all prior bounds gives 0.0342628371, compared with 0.0344535335 previously. Every loss lower bound remains zero.",
+    "The small gain does not justify scaling this successor allocation unchanged. The bottleneck is unresolved continuation within the successor, rather than only insufficient visits from the parent. No deployed policy change or strength claim."
+  ]
+}

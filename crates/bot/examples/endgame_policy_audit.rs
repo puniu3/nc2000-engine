@@ -50,6 +50,21 @@ struct Protocol {
     #[serde(default)]
     target_aware_refinement: bool,
     witness_preparation: Option<WitnessPreparation>,
+    descendant_preparation: Option<DescendantPreparation>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DescendantPreparation {
+    root_state_key: String,
+    actions: [String; 2],
+    semantic_key: String,
+    mass: f64,
+    enumeration_cap: usize,
+    reference_ms: u64,
+    work_budget: usize,
+    node_budget: usize,
+    tolerance: f64,
 }
 
 #[derive(Deserialize)]
@@ -168,6 +183,7 @@ fn audit(
     });
     if let Some(side) = protocol.fixed_policy_side {
         assert!(protocol.witness_preparation.is_none());
+        assert!(protocol.descendant_preparation.is_none());
         assert!(side < 2 && !legal[side].is_empty());
         let mut solver = FixedPolicySolver::new(dex, BoundConfig {
             time_budget: Some(Duration::from_millis(protocol.reference_ms)),
@@ -259,6 +275,55 @@ fn audit(
     let mut preparation_runs = 0;
     let mut preparation_ms = 0.0;
     let mut imported_certificates = 0;
+    let mut descendant_preparation = Vec::new();
+    if let Some(prep) = &protocol.descendant_preparation {
+        assert!(protocol.witness_preparation.is_none());
+        assert_eq!(battle.state_key128().to_string(), prep.root_state_key);
+        assert!(!battle.damage_bookkeeping_observable(dex));
+        assert!(prep.reference_ms > 0 && prep.work_budget > 0 && prep.node_budget > 0);
+        assert!(prep.tolerance.is_finite() && prep.tolerance > 0.0);
+        let started = Instant::now();
+        let choices = [0, 1].map(|side| Some(legal[side][names[side].iter()
+            .position(|name| *name == prep.actions[side]).unwrap()]));
+        let step = nc2000_engine::battle::enumerate::enumerate_step(dex, &battle, choices,
+            prep.enumeration_cap).unwrap();
+        assert!((step.leaves.iter().map(|l| l.prob).sum::<f64>() - 1.0).abs() < 1e-10);
+        let key: u128 = prep.semantic_key.parse().unwrap();
+        let matching: Vec<_> = step.leaves.iter().filter(|leaf|
+            leaf.battle.state_key128_without_damage_bookkeeping() == key).collect();
+        let mass: f64 = matching.iter().map(|leaf| leaf.prob).sum();
+        assert!(!matching.is_empty() && (mass - prep.mass).abs() < 1e-12);
+        let child = &matching[0].battle;
+        assert!(child.outcome().is_none() && !child.damage_bookkeeping_observable(dex));
+        let mut dedicated = BoundSolver::new(dex, BoundConfig {
+            time_budget: Some(Duration::from_millis(prep.reference_ms)),
+            work_budget: prep.work_budget,
+            node_budget: prep.node_budget,
+            eps: prep.tolerance,
+            ..cfg.clone()
+        });
+        let report = dedicated.solve(child, None);
+        let matrix = dedicated.root_payoffs(child).unwrap();
+        let nodes = dedicated.node_count();
+        let root_chance: Vec<_> = dedicated.root_chance_diagnostics(child).unwrap().iter()
+            .map(|c| chance_diagnostic(c, dex)).collect();
+        let certificates = dedicated.into_value_certificates();
+        let certificate_count = certificates.len();
+        imported_certificates = solver.import_value_certificates(certificates);
+        let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+        preparation_runs += step.runs + report.runs;
+        preparation_ms += elapsed_ms;
+        descendant_preparation.push(json!({"semantic_key":prep.semantic_key,
+            "actions":prep.actions,"mass":mass,"matching_leaves":matching.len(),
+            "state":child.essence(dex),"enumeration_runs":step.runs,
+            "value":bound(report.bounds),"stop":format!("{:?}",report.stop),
+            "runs":report.runs,"nodes":nodes,"elapsed_ms":elapsed_ms,
+            "certificates":certificate_count,"root_chance":root_chance,
+            "matrix":{"actions":matrix.actions.map(|aa|aa.into_iter().map(|a|a.map(|a|action_input(dex,a))).collect::<Vec<_>>()),
+                "cells":matrix.cells.iter().copied().map(bound).collect::<Vec<_>>(),"value":bound(matrix.value)}}));
+        eprintln!("descendant={} mass={mass} value=[{},{}] runs={} nodes={nodes}",
+            prep.semantic_key, report.bounds.lo, report.bounds.hi, report.runs);
+    }
     if let Some(prep) = &protocol.witness_preparation {
         assert!(prep.reference_ms > 0 && prep.work_budget > 0 && prep.node_budget > 0);
         assert!(prep.tolerance.is_finite() && prep.tolerance > 0.0);
@@ -429,6 +494,7 @@ fn audit(
     json!({"game":game.game,"decision":decision,"state_key":battle.state_key128().to_string(),
         "diagnostics":diagnostics,
         "preparation":preparation,"total_runs":preparation_runs+solved.runs,
+        "descendant_preparation":descendant_preparation,
         "total_elapsed_ms":preparation_ms+elapsed_ms,
         "turn":battle.turn,"alive":([0,1].map(|side|battle.sides[side].party.iter().filter(|&&i| !battle.sides[side].roster[i as usize].fainted).count())),
         "reference":{"value":bound(matrix.value),"cells":matrix.cells.iter().map(|b|bound(*b)).collect::<Vec<_>>(),
