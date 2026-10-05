@@ -23,13 +23,29 @@ struct Config {
     healing_capacity: usize,
     #[serde(default)]
     reuse_attacks: bool,
+    #[serde(default)]
+    boom_eager_cap: usize,
+    #[serde(default)]
+    boom_terminal_quotient: bool,
 }
+
+#[derive(Default,Serialize)]
+struct BoomStats {attempts:usize,completed:usize,runs:usize,terminal_replacements:usize}
 
 fn state_cap()->usize {100_000}
 
+fn collect_step(step:nc2000_engine::battle::enumerate::StepEnum)->Frontier {
+    let mut leaves=Frontier::new();
+    for leaf in step.leaves {
+        leaves.entry(leaf.battle.state_key128()).and_modify(|(_,mass)|*mass+=leaf.prob)
+            .or_insert((leaf.battle,leaf.prob));
+    }
+    leaves
+}
+
 type Frontier = BTreeMap<u128,(Battle,f64)>;
 
-fn partial_step(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],cap:usize,cache:&mut nc2000_bot::hp_transition::HpHealingCache)->(Frontier,f64,usize) {
+pub(super) fn partial_step(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],cap:usize,cache:&mut nc2000_bot::hp_transition::HpHealingCache)->(Frontier,f64,usize) {
     let mut pending=BinaryHeap::from([(1.0f64.to_bits(),Vec::<usize>::new())]);
     let mut leaves=Frontier::new();let mut runs=0;let mut observations=0;
     let mut runner=cache.prepare(dex,battle,choices);
@@ -63,6 +79,9 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
     assert!(cfg.healing_capacity<=100_000 && (cfg.healing_capacity==0 || cfg.lazy));
     let mut healing=nc2000_bot::hp_transition::HpHealingCache::new(cfg.healing_capacity);
     if cfg.reuse_attacks {healing=healing.with_attacks();}
+    assert!(cfg.boom_eager_cap<=1_000_000 && (cfg.boom_eager_cap==0 || cfg.lazy));
+    assert!(!cfg.boom_terminal_quotient || cfg.boom_eager_cap>0);
+    let mut boom=BoomStats::default();
     let started=Instant::now();
     assert!(cfg.packed_state_cap>0 && cfg.packed_state_cap<=1_000_000);
     let mut frontier=super::retained::Retained::new(cfg.packed_hp,cfg.guarded_keys);
@@ -81,14 +100,22 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
             if cap==0 {failed+=mass;continue;}
             let choices=choose(&mut battle,depth==0);
             let (leaves,unresolved,work)=if cfg.lazy {
-                partial_step(dex,&battle,choices,cap,&mut healing)
-            } else if let Some(step)=enumerate_step(dex,&battle,choices,cap) {
-                let mut leaves=Frontier::new();
-                for leaf in step.leaves {
-                    leaves.entry(leaf.battle.state_key128()).and_modify(|(_,mass)|*mass+=leaf.prob)
-                        .or_insert((leaf.battle,leaf.prob));
+                let mut eager_work=0;
+                let eager=if cfg.boom_eager_cap>0 && super::terminal_step::admitted(dex,&battle,choices) {
+                    boom.attempts+=1;
+                    let (result,work,replacements)=super::terminal_step::enumerate(dex,&battle,choices,
+                        cfg.boom_eager_cap.min(cfg.work_budget-runs),cfg.boom_terminal_quotient);
+                    eager_work=work;boom.runs+=work;boom.terminal_replacements+=replacements;
+                    boom.completed+=usize::from(result.is_some());result
+                } else {None};
+                if let Some(step)=eager {(collect_step(step),0.0,eager_work)}
+                else {
+                    let cap=cfg.cell_cap.min(cfg.work_budget-runs-eager_work);
+                    let (leaves,unknown,work)=partial_step(dex,&battle,choices,cap,&mut healing);
+                    (leaves,unknown,work+eager_work)
                 }
-                (leaves,0.0,step.runs)
+            } else if let Some(step)=enumerate_step(dex,&battle,choices,cap) {
+                let work=step.runs;(collect_step(step),0.0,work)
             } else {(Frontier::new(),1.0,cap)};
             runs+=work;failed+=mass*unresolved;failures+=usize::from(unresolved>0.0);
             let total:f64=leaves.values().map(|(_,prob)|prob).sum::<f64>()+unresolved;
@@ -121,7 +148,7 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
     }
     json!({"score":rows.last().unwrap()["score"],"layers":rows,"runs":runs,
         "peak_frontier":peak_frontier,"peak_templates":peak_templates,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0,
-        "numerical_envelope":1e-9,"healing_cache":healing.stats()})
+        "numerical_envelope":1e-9,"healing_cache":healing.stats(),"boom_eager":boom})
 }
 
 pub(super) fn execute(args:&[String]) {
@@ -135,7 +162,7 @@ pub(super) fn execute(args:&[String]) {
         choose_response(&dex,b,side,first,OwnPolicy::AfterBoom75,cfg.response)));
     let result=json!({"schema":"nc2000-fixed-pair-enumeration-v1","state_key":root.state_key128().to_string(),
         "config":cfg,"report":report,"manifest":manifest(&dex,&raw),
-        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. Default state aggregation uses full state_key128; optional guarded keys omit only unobservable damage history and Quick Claw rolls. Packed storage keeps each exact HP vector and its mass separately under a shared guarded template, and applies the width limit to templates plus a separate concrete-state cap. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Optional healing reuse admits only a strictly faster, below-full-HP Rest or restricted Sleep Talk user, and rejects changed HP-dependent control flow. Optional attack reuse uses the existing guarded positive-survivor translation domain. Work counts actual engine executions; each cell still caps scripted observations. Floating-point probability arithmetic uses the reported numerical envelope."});
+        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. Default state aggregation uses full state_key128; optional guarded keys omit only unobservable damage history and Quick Claw rolls. Packed storage keeps each exact HP vector and its mass separately under a shared guarded template, and applies the width limit to templates plus a separate concrete-state cap. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Optional healing reuse admits only a strictly faster, below-full-HP Rest or restricted Sleep Talk user, and rejects changed HP-dependent control flow. Optional attack reuse uses the existing guarded positive-survivor translation domain. Work counts actual engine executions; each cell still caps scripted observations. Optional eager enumeration for the admitted Body Slam / Selfdestruct domain may quotient only terminal states by outcome, retaining exact nonterminal states and downstream draw traces. Failed eager attempts are charged before lazy fallback. Floating-point probability arithmetic uses the reported numerical envelope."});
     std::fs::write(&args[4],serde_json::to_vec_pretty(&result).unwrap()).unwrap();
     println!("{}",serde_json::to_string(&result["report"]).unwrap());
 }
@@ -145,7 +172,7 @@ mod tests {
     use super::*;
     fn config(width:usize,steps:usize,cap:usize,work:usize)->Config {
         Config {response:CounterResponse {return_when:ReturnWhen::Always,ice_first:false,finish_low:false},
-            width,steps,cell_cap:cap,work_budget:work,lazy:false,hp_storage_census:false,guarded_keys:false,packed_hp:false,packed_state_cap:state_cap(),healing_capacity:0,reuse_attacks:false}
+            width,steps,cell_cap:cap,work_budget:work,lazy:false,hp_storage_census:false,guarded_keys:false,packed_hp:false,packed_state_cap:state_cap(),healing_capacity:0,reuse_attacks:false,boom_eager_cap:0,boom_terminal_quotient:false}
     }
     fn exhaustive(dex:&Dex,b:&Battle)->f64 {
         if let Some(outcome)=b.outcome() {return match outcome {Outcome::P1Win=>1.0,Outcome::Tie=>0.5,Outcome::P2Win=>0.0};}
@@ -182,4 +209,23 @@ mod tests {
         assert_eq!(report["runs"],0);
         assert_eq!(report["layers"][0]["unknown_mass"],0.0);
     }
+    #[test]
+    fn eager_terminal_attempts_and_fallback_share_one_work_budget() {
+        let dex=conformance::load_dex();
+        let mon=PokemonSet {name:"Snorlax".into(),species:"Snorlax".into(),item:String::new(),ability:String::new(),
+            moves:vec!["Body Slam".into(),"Self-Destruct".into()],level:50,evs:None,ivs:None,gender:None,happiness:None};
+        let mut b=Battle::from_fixture(&dex,"1,2,3,4",std::slice::from_ref(&mon),std::slice::from_ref(&mon)).unwrap();
+        let preview=[0,1].map(|side|b.legal_choices(&dex,side)[0]);b.apply_choices(&dex,preview.map(Some)).unwrap();
+        for side in 0..2 {let id=b.active_id(side).unwrap();b.poke_mut(id).hp=30;}
+        let choices=["bodyslam","selfdestruct"].map(|name|Some(SearchChoice::Move(dex.moves.id(name).unwrap())));
+        for (work,eager) in [(1,1),(9,1),(100_000,100_000)] {
+            let mut cfg=config(1000,2,4096,work);cfg.lazy=true;cfg.boom_eager_cap=eager;cfg.boom_terminal_quotient=true;
+            let report=analyze(&dex,&b,&cfg,|_,_|choices);
+            assert_eq!(report["runs"].as_u64().unwrap(),report["boom_eager"]["runs"].as_u64().unwrap()+report["healing_cache"]["runs"].as_u64().unwrap());
+            assert!(report["runs"].as_u64().unwrap()<=work as u64);
+            assert_eq!(report["score"]["hi"],1.0);
+            if work==100_000 {assert!(report["score"]["lo"].as_f64().unwrap()>1.0-3e-9);}
+        }
+    }
+
 }

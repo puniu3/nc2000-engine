@@ -5,6 +5,8 @@ mod pair_bound;
 mod hp_storage;
 #[path="fixed_reply_counterpolicy/retained.rs"]
 mod retained;
+#[path="fixed_reply_counterpolicy/terminal_step.rs"]
+mod terminal_step;
 use nc2000_engine::battle::{Outcome,PokemonSet,SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::{Battle,Status,DK};
@@ -290,7 +292,7 @@ mod tests {
 }
 
 fn manifest(dex:&Dex,raw:&[u8])->Value {
-    let paths=["crates/bot/examples/fixed_reply_counterpolicy.rs","crates/bot/examples/fixed_reply_counterpolicy/pair_bound.rs","crates/bot/examples/fixed_reply_counterpolicy/hp_storage.rs","crates/bot/examples/fixed_reply_counterpolicy/retained.rs","crates/bot/src/bounds.rs","crates/bot/src/hp_transition.rs",
+    let paths=["crates/bot/examples/fixed_reply_counterpolicy.rs","crates/bot/examples/fixed_reply_counterpolicy/pair_bound.rs","crates/bot/examples/fixed_reply_counterpolicy/hp_storage.rs","crates/bot/examples/fixed_reply_counterpolicy/retained.rs","crates/bot/examples/fixed_reply_counterpolicy/terminal_step.rs","crates/bot/src/bounds.rs","crates/bot/src/hp_transition.rs",
         "crates/engine/src/state.rs","crates/engine/src/prng.rs","crates/engine/src/battle/enumerate.rs","crates/engine/src/battle/search.rs",
         "crates/engine/src/battle/actions.rs","crates/engine/src/battle/conditions.rs",
         "crates/engine/src/battle/moveexec.rs","crates/engine/src/battle/turn.rs","crates/engine/src/battle/events.rs",

@@ -1,0 +1,176 @@
+{
+  "schema": "nc2000-policy-terminal-quotient-v1",
+  "results": {
+    "control": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9530969556136478
+      },
+      "runs": 2000000,
+      "elapsed_ms": 32717.715792,
+      "cache": {
+        "observations": 2231920,
+        "eligible": 842731,
+        "attack_eligible": 774771,
+        "hits": 231920,
+        "attack_hits": 171868,
+        "reset_hits": 26550,
+        "rejected_hp": 73460,
+        "runs": 2000000,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "boom_choice": 783618,
+          "frame_or_field": 32,
+          "healer_full_hp": 4096,
+          "healer_volatile": 10443,
+          "non_move_choice": 590400
+        }
+      },
+      "boom_eager": {
+        "attempts": 0,
+        "completed": 0,
+        "runs": 0,
+        "terminal_replacements": 0
+      },
+      "hit_fraction": 0.10391053442775727,
+      "peak_states": 26062,
+      "peak_templates": 44,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 2000000,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.0469030453863537,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.3807269742597436,
+        "frontier_mass": 0.5723699803539042,
+        "unknown_mass": 0.9530969546136479,
+        "frontier_states": 26062,
+        "frontier_templates": 44,
+        "enumeration_failures": 177,
+        "mass_error": 1.5543122344752192e-15,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9530969556136478
+        }
+      }
+    },
+    "eager": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9344132967645967
+      },
+      "runs": 2000000,
+      "elapsed_ms": 37540.990874999996,
+      "cache": {
+        "observations": 1997579,
+        "eligible": 1162327,
+        "attack_eligible": 1088471,
+        "hits": 311868,
+        "attack_hits": 245942,
+        "reset_hits": 28500,
+        "rejected_hp": 104824,
+        "runs": 1685711,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 36,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13593,
+          "non_move_choice": 816927
+        }
+      },
+      "boom_eager": {
+        "attempts": 428,
+        "completed": 428,
+        "runs": 314289,
+        "terminal_replacements": 0
+      },
+      "hit_fraction": 0.15612298687561293,
+      "peak_states": 31469,
+      "peak_templates": 44,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 2000000,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.0655867042354091,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.280129178394843,
+        "frontier_mass": 0.6542841173697538,
+        "unknown_mass": 0.9344132957645968,
+        "frontier_states": 31469,
+        "frontier_templates": 44,
+        "enumeration_failures": 44,
+        "mass_error": 5.773159728050814e-15,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9344132967645967
+        }
+      }
+    },
+    "terminal": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9344132967645967
+      },
+      "runs": 2000000,
+      "elapsed_ms": 38296.278791,
+      "cache": {
+        "observations": 1997579,
+        "eligible": 1162327,
+        "attack_eligible": 1088471,
+        "hits": 311868,
+        "attack_hits": 245942,
+        "reset_hits": 28500,
+        "rejected_hp": 104824,
+        "runs": 1685711,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 36,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13593,
+          "non_move_choice": 816927
+        }
+      },
+      "boom_eager": {
+        "attempts": 428,
+        "completed": 428,
+        "runs": 314289,
+        "terminal_replacements": 188132
+      },
+      "hit_fraction": 0.15612298687561293,
+      "peak_states": 31469,
+      "peak_templates": 44,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 2000000,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.06558670423540909,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.280129178394843,
+        "frontier_mass": 0.6542841173697538,
+        "unknown_mass": 0.9344132957645968,
+        "frontier_states": 31469,
+        "frontier_templates": 44,
+        "enumeration_failures": 44,
+        "mass_error": 5.773159728050814e-15,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9344132967645967
+        }
+      }
+    }
+  },
+  "prior_archive_sha256": "2dc60e6be5cf7ea6d4111b7a1d935cc6ee12b8abf5c9bcb8a09843db725cb2ab",
+  "interpretation": "Equal actual engine-execution budgets compare lazy enumeration, bounded eager enumeration of admitted Body Slam / Selfdestruct cells, and eager enumeration with terminal-only outcome equivalence. The admitted domain excludes HP-sensitive hooks, residual damage and arbitrary moves. Live successors and downstream chance traces remain exact. Failed eager attempts are charged before lazy fallback; all unexpanded probability stays unknown. Sixteen independent unmerged-script comparisons cover HP, action orientation and bench availability. These intervals concern a fixed policy pair, not unrestricted game value or deployed strength. Concurrent wall times do not establish speedup."
+}

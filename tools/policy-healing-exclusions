@@ -23,6 +23,9 @@ def summarize(record, corpus):
     expected = dict(old['config'])
     if 'reuse_attacks' in record['config']:
         expected['reuse_attacks'] = False
+    for key, value in dict(boom_eager_cap=0, boom_terminal_quotient=False).items():
+        if key in record['config']:
+            expected[key] = value
     assert record['config'] == expected
     assert record['manifest']['corpus_sha256'] == sha(corpus)
     assert record['manifest']['dex_fingerprint'] == old['manifest']['dex_fingerprint']
