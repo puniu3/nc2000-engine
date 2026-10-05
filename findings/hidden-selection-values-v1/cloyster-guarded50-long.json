@@ -1,0 +1,51 @@
+{
+  "schema": "nc2000-policy-gap-v1",
+  "corpus": "tmp/hidden-selection-values-v1/corpus.jsonl",
+  "corpus_sha256": "2f13cb1347c3c7f5d306d320b429ab23fb2c3f81d117deb20effd4b7eab775d9",
+  "baseline": "findings/policy-gap-v1/archived-baseline.json",
+  "baseline_sha256": "9b2c1c06296fa8dfb51bac6ed712fce3c9bc4f3bde5df2a19b3d1bf50ff83dc1",
+  "reference_ms": 60000,
+  "node_budget": 120000,
+  "work_budget": 2000000,
+  "cell_cap": 4096,
+  "tolerance": 1e-08,
+  "iterations": [],
+  "search_seeds": 1,
+  "seed": 2026100501,
+  "threads": 1,
+  "limit": null,
+  "interpretation": "Common observable policy: Psychic first; Recover at HP <= 50 percent only against a last remaining Cloyster or Machamp, awake and unfrozen; Psychic priority otherwise. All opposing actions remain free.",
+  "targets": "archived",
+  "diagnostics": true,
+  "certified_action_pruning": true,
+  "chance_fair_period": 32,
+  "aggregate_lazy_children": true,
+  "witness_preparation": null,
+  "resource_closure_nodes": 90000,
+  "fixed_policy_side": 1,
+  "fixed_first_action": "move psychic",
+  "fixed_priority_actions": [
+    "move psychic",
+    "move hydropump",
+    "move thunderwave",
+    "move recover"
+  ],
+  "dead_quick_claw_quotient": true,
+  "chance_status_groups": false,
+  "fixed_reply_action": null,
+  "fixed_reply_threshold": null,
+  "chance_material_order": true,
+  "fixed_rest_percent": null,
+  "fixed_rest_after_boom": false,
+  "fixed_rest_on_wake": false,
+  "hidden_selection": {
+    "side": 0,
+    "original_slot": 4,
+    "replacement_slot": 1
+  },
+  "fixed_recover_percent": 50,
+  "fixed_recover_last_foes": [
+    "cloyster",
+    "machamp"
+  ]
+}

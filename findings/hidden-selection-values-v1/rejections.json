@@ -1,0 +1,14 @@
+[
+  {
+    "name": "illegal-level",
+    "returncode": 101,
+    "expected_message": "illegal hidden-selection replay",
+    "matched": true
+  },
+  {
+    "name": "visible-change",
+    "returncode": 101,
+    "expected_message": "hidden selection changed public history",
+    "matched": true
+  }
+]

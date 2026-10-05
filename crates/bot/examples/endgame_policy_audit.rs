@@ -13,6 +13,9 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
+#[path="endgame_policy_audit/hidden_selection.rs"]
+mod hidden_selection;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Protocol {
@@ -53,6 +56,8 @@ struct Protocol {
     fixed_reply_action: Option<String>,
     fixed_reply_threshold: Option<f64>,
     fixed_rest_percent: Option<u8>,
+    fixed_recover_percent: Option<u8>,
+    fixed_recover_last_foes: Option<Vec<String>>,
     #[serde(default)]
     fixed_rest_after_boom: bool,
     #[serde(default)]
@@ -83,6 +88,7 @@ struct Protocol {
     target_aware_refinement: bool,
     witness_preparation: Option<WitnessPreparation>,
     descendant_preparation: Option<DescendantPreparation>,
+    hidden_selection: Option<hidden_selection::Config>,
 }
 
 #[derive(Deserialize)]
@@ -353,6 +359,12 @@ fn audit(
     protocol: &Protocol,
 ) -> Value {
     let mut battle = reconstruct(dex, game, decision);
+    let hidden_selection = protocol.hidden_selection.as_ref().map(|cfg| {
+        assert!(protocol.fixed_policy_side.is_some());
+        let (variant, evidence) = hidden_selection::replay(dex, game, decision, cfg);
+        battle = variant;
+        evidence
+    });
     let legal = [0, 1].map(|side| battle.legal_choices(dex, side));
     let names = legal.clone().map(|aa| {
         aa.into_iter()
@@ -441,6 +453,10 @@ fn audit(
         if protocol.fixed_sleep_talk { solver = solver.with_sleep_talk(); }
         if protocol.fixed_frozen_switch { solver = solver.with_frozen_switch(); }
         if let Some(percent)=protocol.fixed_rest_percent { solver=solver.with_rest_threshold(percent); }
+        if let Some(percent)=protocol.fixed_recover_percent { solver=solver.with_recover_threshold(percent); }
+        if let Some(species)=&protocol.fixed_recover_last_foes {
+            solver=solver.with_recover_against_last(species.iter().map(|name|dex.species.id(name).unwrap()).collect());
+        }
         if protocol.fixed_rest_after_boom { solver=solver.with_rest_after_boom(); }
         if protocol.fixed_rest_on_wake { solver=solver.with_rest_on_wake(); }
         let started = Instant::now();
@@ -452,9 +468,12 @@ fn audit(
             let census=protocol.frontier_key_census.then(||frontier_key_census(solver.retained_battles(),dex,protocol));
             let hp_audit=protocol.hp_translation_audit_limit.map(|limit|hp_translation_audit(solver.retained_battles(),dex,limit));
             return json!({"schema":"nc2000-fixed-reply-bound-v1","game":game.game,"decision":decision,
+                "hidden_selection":hidden_selection,
                 "state_key":battle.state_key128().to_string(),"side":side,"priority_actions":priority_names,
                 "fixed_first_action":protocol.fixed_first_action,"reply_action":reply,
                 "fixed_rest_percent":protocol.fixed_rest_percent,
+                "fixed_recover_percent":protocol.fixed_recover_percent,
+                "fixed_recover_last_foes":protocol.fixed_recover_last_foes,
                 "fixed_rest_after_boom":protocol.fixed_rest_after_boom,
                 "fixed_rest_on_wake":protocol.fixed_rest_on_wake,
                 "reply_value":bound(report.bounds),"threshold":protocol.fixed_reply_threshold,
@@ -487,12 +506,15 @@ fn audit(
         let stats = solver.stats();
         return json!({
             "schema":"nc2000-fixed-policy-bound-v1",
+            "hidden_selection":hidden_selection,
             "game":game.game,"decision":decision,"state_key":battle.state_key128().to_string(),
             "side":side,"priority_actions":priority_names,
             "fixed_first_action":protocol.fixed_first_action,
             "fixed_sleep_talk":protocol.fixed_sleep_talk,
             "fixed_frozen_switch":protocol.fixed_frozen_switch,
             "fixed_rest_percent":protocol.fixed_rest_percent,
+            "fixed_recover_percent":protocol.fixed_recover_percent,
+            "fixed_recover_last_foes":protocol.fixed_recover_last_foes,
             "fixed_rest_after_boom":protocol.fixed_rest_after_boom,
             "fixed_rest_on_wake":protocol.fixed_rest_on_wake,
             "guaranteed_score":bound(report.guaranteed_score),
@@ -518,6 +540,8 @@ fn audit(
     assert!(!protocol.fixed_sleep_talk);
     assert!(!protocol.fixed_frozen_switch);
     assert!(protocol.fixed_rest_percent.is_none());
+    assert!(protocol.fixed_recover_percent.is_none());
+    assert!(protocol.fixed_recover_last_foes.is_none());
     assert!(!protocol.fixed_rest_after_boom);
     assert!(!protocol.fixed_rest_on_wake);
     let mut targets = Vec::new();
@@ -975,6 +999,7 @@ fn main() {
         "crates/bot/src/bounds.rs",
         "crates/bot/src/hp_transition.rs",
         "crates/bot/examples/endgame_policy_audit.rs",
+        "crates/bot/examples/endgame_policy_audit/hidden_selection.rs",
         "crates/engine/src/battle/search.rs",
         "crates/engine/src/battle/enumerate.rs",
         "crates/engine/src/battle/pokemon.rs",

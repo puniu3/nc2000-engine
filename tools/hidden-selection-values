@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/hidden-selection-values-v1'
+corpus_path = root / 'findings/policy-choice-errors-v1/psychic/corpus.jsonl.gz'
+prior_path = root / 'findings/policy-choice-errors-v1/records.json.gz'
+slots = dict(cloyster=1, heracross=4, machamp=5)
+roles = ['game-floor', 'psychic-ceiling', 'hydro-witness', 'hydro-ceiling', 'recover50', 'guarded50', 'cloyster50']
+names = [f'{species}-{role}' for species in slots for role in roles] + ['cloyster-guarded50-long']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def load(path):
+    return json.loads(path.read_bytes())
+
+
+def summarize(records, protocols, rejections):
+    corpus = gzip.decompress(corpus_path.read_bytes())
+    previous = json.loads(gzip.decompress(prior_path.read_bytes()))['psychic']
+    public_logs = set()
+    states = {}
+    for name in names:
+        record = records[name]
+        cfg, row = record['manifest']['protocol'], record['result']
+        species, role = name.split('-', 1)
+        assert cfg == json.loads(protocols[name]) and record['manifest']['protocol_sha256'] == sha(protocols[name])
+        assert cfg['corpus_sha256'] == sha(corpus)
+        assert (row['game'], row['decision']) == (2, 11)
+        assert cfg['hidden_selection'] == dict(side=0, original_slot=4, replacement_slot=slots[species])
+        evidence = row['hidden_selection']
+        assert evidence['original_state_key'] == previous['search']['state_key']
+        assert evidence['state_key'] == row['state_key']
+        assert evidence['same_public_log'] and evidence['species'] == species
+        assert evidence['party'] == [3, 2, slots[species]] and evidence['total_level'] == evidence['cap'] == 155
+        assert evidence['side'] == 0 and evidence['original_slot'] == 4 and evidence['replacement_slot'] == slots[species]
+        public_logs.add(evidence['public_log_sha256'])
+        if species in states:
+            assert states[species] == evidence['state']
+        states[species] = evidence['state']
+        side = 0 if role in ['game-floor', 'hydro-witness'] else 1
+        assert cfg['fixed_policy_side'] == row['side'] == side
+        assert cfg['fixed_priority_actions'] == row['priority_actions'] == (
+            ['move earthquake', 'move rockslide', 'move hiddenpower', 'move swordsdance', 'switch 3'] if side == 0
+            else ['move psychic', 'move hydropump', 'move thunderwave', 'move recover'])
+        assert cfg['fixed_first_action'] == row['fixed_first_action'] == (
+            'move earthquake' if side == 0 else 'move hydropump' if role == 'hydro-ceiling' else 'move psychic')
+        assert cfg['fixed_rest_percent'] is None and not cfg['fixed_rest_after_boom'] and not cfg['fixed_rest_on_wake']
+        assert not cfg.get('fixed_sleep_talk', False) and not cfg.get('fixed_frozen_switch', False)
+        recover = 50 if role in ['recover50', 'cloyster50'] or role.startswith('guarded50') else None
+        foes = ['cloyster'] if role == 'cloyster50' else ['cloyster', 'machamp'] if role.startswith('guarded50') else None
+        assert cfg.get('fixed_recover_percent') == row.get('fixed_recover_percent') == recover
+        assert cfg.get('fixed_recover_last_foes') == row.get('fixed_recover_last_foes') == foes
+        matrix = row['restricted_matrix']
+        actions = [list(a) for a in previous['search']['rows'][0]['actions']]
+        actions[side] = [cfg['fixed_first_action']]
+        assert matrix['actions'] == actions
+        for value in matrix['cells'] + [matrix['value']]:
+            assert 0 <= value['lo'] <= value['hi'] <= 1
+        budget = 1560173 if name == 'cloyster-cloyster50' else 2000000
+        assert row['reference']['runs'] <= cfg['work_budget'] == budget
+        if role == 'hydro-witness':
+            assert row['schema'] == 'nc2000-fixed-reply-bound-v1'
+            assert cfg['fixed_reply_action'] == row['reply_action'] == 'move hydropump'
+            assert row['reply_value'] == matrix['cells'][0]
+        else:
+            assert row['schema'] == 'nc2000-fixed-policy-bound-v1' and cfg['fixed_reply_action'] is None
+            assert row['unrestricted_game_value'] == (dict(lo=matrix['value']['lo'], hi=1.0) if side == 0 else dict(lo=0.0, hi=matrix['value']['hi']))
+            score = row['guaranteed_score']
+            assert score == (matrix['value'] if side == 0 else dict(lo=1-matrix['value']['hi'], hi=1-matrix['value']['lo']))
+        if species == 'heracross':
+            assert row['state_key'] == previous['search']['state_key']
+            if role in ['game-floor', 'psychic-ceiling', 'hydro-witness', 'hydro-ceiling']:
+                key = 'reply_value' if role == 'hydro-witness' else 'guaranteed_score'
+                assert row[key] == previous['proofs'][role]['result'][key]
+    assert len(public_logs) == 1
+    reference = states['heracross']
+    for state in states.values():
+        for key in ['turn', 'prngSeed', 'requestState', 'field']:
+            assert state[key] == reference[key]
+        assert state['sides'][1] == reference['sides'][1]
+        assert state['sides'][0]['pokemon'][:2] == reference['sides'][0]['pokemon'][:2]
+    assert [(r['name'], r['matched'], r['returncode'] != 0) for r in rejections] == [
+        ('illegal-level', True, True), ('visible-change', True, True)]
+    policies = {role: {species: records[f'{species}-{role}']['result']['guaranteed_score'] for species in slots}
+                for role in ['psychic-ceiling', 'recover50', 'guarded50', 'cloyster50']}
+    tight = records['cloyster-guarded50-long']['result']['guaranteed_score']
+    short = policies['guarded50']['cloyster']
+    policies['guarded50']['cloyster'] = dict(lo=max(short['lo'], tight['lo']), hi=min(short['hi'], tight['hi']))
+    for values in policies.values():
+        assert all(v['lo'] <= v['hi'] for v in values.values())
+    upper = {species: 1-records[f'{species}-game-floor']['result']['unrestricted_game_value']['lo'] for species in slots}
+    pad = 1e-10
+    envelopes = {}
+    uniform_guarantees = {}
+    for role, values in policies.items():
+        lower_mean = sum(v['lo'] for v in values.values())/3
+        upper_policy_mean = sum(v['hi'] for v in values.values())/3
+        upper_mean = sum(upper.values())/3
+        assert lower_mean <= upper_mean + pad
+        uniform_guarantees[role] = dict(lo=max(0, lower_mean-pad), hi=min(1, upper_policy_mean+pad))
+        envelopes[role] = dict(uniform_type_game_value=dict(lo=max(0, lower_mean-pad), hi=min(1, upper_mean+pad)),
+            uniform_type_first_psychic_regret=dict(lo=0, hi=min(1, upper_mean-lower_mean+2*pad)),
+            adversarial_type_game_value=dict(lo=max(0, min(v['lo'] for v in values.values())-pad), hi=min(1, min(upper.values())+pad)))
+    rejected = records['cloyster-recover50']['result']
+    assert rejected['guaranteed_score'] == dict(lo=0.0, hi=0.0)
+    switch = rejected['restricted_matrix']['actions'][0].index('switch 3')
+    assert rejected['restricted_matrix']['cells'][switch] == dict(lo=1.0, hi=1.0)
+    improved = uniform_guarantees['cloyster50']
+    control = uniform_guarantees['psychic-ceiling']
+    gain = dict(lo=improved['lo']-control['hi'], hi=improved['hi']-control['lo'])
+    for species in ['heracross', 'machamp']:
+        assert policies['cloyster50'][species] == policies['psychic-ceiling'][species]
+    assert policies['cloyster50']['cloyster']['lo'] > policies['psychic-ceiling']['cloyster']['hi']
+    assert gain['lo'] > 0
+    return dict(schema='nc2000-hidden-selection-values-v1', public_log_sha256=next(iter(public_logs)),
+        common_policy_guarantees=policies, full_information_type_upper_bounds=upper,
+        uniform_guaranteed_scores=uniform_guarantees, cloyster_only_recovery_guaranteed_score_gain=gain,
+        conditional_information_set_envelopes=envelopes,
+        unguarded_recover_counterexample=dict(type='cloyster', first_reply='switch 3', side_one_guarantee=0.0),
+        replay_rejections=rejections, numerical_envelope=pad,
+        inputs={str(p.relative_to(root)): sha(p.read_bytes()) for p in [corpus_path, prior_path]},
+        interpretation='Scope: the frozen six known loadouts in this roster, with uncertainty only over the legal unseen third selection. All alternatives replay the entire prefix with identical public logs. Common side-one witnesses choose Psychic first and consult only own HP/status/PP, visible opponent species and public living count. Each lower bound allows a full-information opponent to optimize every action. The side-zero witnesses give upper bounds even to a type-informed side one. Weighted common-policy lower bounds and weighted type-informed upper bounds therefore bracket the value for a declared type distribution; equal weights describe the current conditional selection model, not an empirical or optimal opponent prior. Minimum bounds cover adversarial type selection. Cloyster-only recovery raises the guaranteed score against a full-information opponent relative to the always-attack witness; it is not a comparison to the deployed search bot. First-Psychic regret upper bounds permit optimal subsequent public play and do not certify the deployed continuation policy. The game-value intervals remain unresolved. No full-game ceiling, human calibration or deployed strength gain is established.')
+
+
+parser = argparse.ArgumentParser()
+group = parser.add_mutually_exclusive_group()
+group.add_argument('--verify-only', action='store_true')
+group.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    protocols = {name: (archive / f'{name}.json').read_bytes() for name in names}
+    assert summarize(records, protocols, load(archive / 'rejections.json')) == load(archive / 'summary.json')
+    print('Verified identical public histories, type-wise certificates, common-policy bounds and rejected invalid replays')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/hidden-selection-values-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress(corpus_path.read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    rejections = []
+    for name in names + ['illegal-level', 'visible-change']:
+        cfg = load(archive / f'{name}.json')
+        cfg['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(cfg, indent=2)+'\n')
+        result = subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, capture_output=name not in names, text=True)
+        if name in names:
+            result.check_returncode()
+        else:
+            expected = 'illegal hidden-selection replay' if name == 'illegal-level' else 'hidden selection changed public history'
+            assert result.returncode != 0 and expected in result.stderr
+            rejections.append(dict(name=name, returncode=result.returncode, expected_message=expected, matched=True))
+    (directory / 'rejections.json').write_text(json.dumps(rejections, indent=2)+'\n')
+records = {name: dict(manifest=load(directory / name / 'manifest.json'), result=load(directory / name / 'game-002-d0011.json')) for name in names}
+protocols = {name: (directory / f'{name}.json').read_bytes() for name in names}
+rejections = load(directory / 'rejections.json')
+assert (directory / 'corpus.jsonl').read_bytes() == gzip.decompress(corpus_path.read_bytes())
+summary = summarize(records, protocols, rejections)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    for name in names + ['illegal-level', 'visible-change']:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'rejections.json').write_bytes((directory / 'rejections.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
+print(json.dumps(summary['common_policy_guarantees'], indent=2))
+print(json.dumps(summary['conditional_information_set_envelopes'], indent=2))
