@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-freeze-branch-v1'
+fresh = ['census', 'default-check', 'switch', 'grouped', 'switch-grouped', 'switch-moves', 'switch-moves-grouped', 'switch-moves-grouped-extended']
+
+
+def module(name, filename):
+    spec = importlib.util.spec_from_file_location(name, root / 'tools' / filename)
+    result = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(result)
+    return result
+
+
+assessor = module('assessor', 'headroom-cases-report.py')
+verifier = module('verifier', 'policy-gap-report.py')
+
+
+def read_archive(path):
+    return json.loads(gzip.decompress(path.read_bytes()))
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def summarize(records):
+    assessor.calibrate_assessor()
+    assert set(records) == set(fresh + ['control'])
+    prior_path = root / 'findings/policy-ending-witness-v1/summary.json'
+    control_path = root / 'findings/policy-ending-witness-v1/records.json.gz'
+    prior = next(s for s in json.loads(prior_path.read_bytes())['states'] if s['game'] == 23)
+    assert records['control'] == read_archive(control_path)['g23']
+    control = records['control']['result']
+    replay = records['default-check']['result']
+    for key in ['guaranteed_score', 'unrestricted_game_value', 'restricted_matrix']:
+        assert control[key] == replay[key]
+    for key in ['runs', 'nodes', 'stop']:
+        assert control['reference'][key] == replay['reference'][key]
+    census = records['census']['result']
+    assert census['schema'] == 'nc2000-root-transition-census-v1'
+    assert census['state_key'] == prior['state_key']
+    assert len(census['cells']) == 4
+    assert sum(c['runs'] for c in census['cells']) == census['reference']['runs']
+    for i, cell in enumerate(census['cells']):
+        assert cell['actions'] == [prior['matrix']['actions'][0][i], 'move earthquake']
+        assert abs(sum(g['mass'] for g in cell['groups']) - 1) < 1e-10
+        assert all(g['mass'] > 0 and g['leaves'] > 0 for g in cell['groups'])
+    matrix = json.loads(json.dumps(prior['matrix']))
+    padding = 1e-10
+    for bound in matrix['cells'] + [matrix['value']]:
+        bound['lo'] = max(0, bound['lo'] - padding)
+        bound['hi'] = min(1, bound['hi'] + padding)
+    arms = {}
+    for name, record in records.items():
+        if name == 'census':
+            continue
+        row, p = record['result'], record['manifest']['protocol']
+        assert row['state_key'] == prior['state_key']
+        assert row['side'] == p['fixed_policy_side'] == 1
+        assert row['fixed_first_action'] == p['fixed_first_action'] == 'move earthquake'
+        expected_priority = [a for a in matrix['actions'][1] if a.startswith('move ')] if name.startswith('switch-moves') else matrix['actions'][1]
+        assert row['priority_actions'] == p['fixed_priority_actions'] == expected_priority
+        assert row.get('fixed_frozen_switch', False) == p.get('fixed_frozen_switch', False) == name.startswith('switch')
+        assert p.get('chance_status_groups', False) == ('grouped' in name)
+        scale = 2 if name.endswith('extended') else 1
+        assert p['node_budget'] == 120000 * scale and p['work_budget'] == 2000000 * scale
+        assert p['reference_ms'] == 90000 * scale
+        restricted = row['restricted_matrix']
+        assert restricted['actions'] == [matrix['actions'][0], ['move earthquake']]
+        assert len(restricted['cells']) == len(row['root_chance']) == 4
+        score = row['guaranteed_score']
+        assert 0 <= score['lo'] <= score['hi'] <= 1
+        assert abs(restricted['value']['hi'] - (1 - score['lo'])) < 1e-12
+        assert abs(restricted['value']['lo'] - (1 - score['hi'])) < 1e-12
+        assert sum(c['runs'] for c in row['root_chance']) == row['reference']['runs']
+        for i, (cell, chance) in enumerate(zip(restricted['cells'], row['root_chance'])):
+            assert abs(chance['pending_mass'] + chance['child_uncertainty'] - (cell['hi'] - cell['lo'])) < 1e-9
+            target = matrix['cells'][i * len(matrix['actions'][1])]
+            target['hi'] = min(target['hi'], cell['hi'] + padding)
+            assert target['lo'] <= target['hi']
+        matrix['value']['hi'] = min(matrix['value']['hi'], 1 - score['lo'] + padding)
+        arms[name] = {'guaranteed_score': score, 'budget_multiplier': scale, **row['reference']}
+    endpoints = []
+    for endpoint in prior['endpoints']:
+        assessment = assessor.assess(matrix, endpoint['side'], endpoint['assessment']['policy'])
+        verifier.verify_assessment(matrix, endpoint['side'], assessment)
+        endpoints.append({'side': endpoint['side'], 'archived_choice': endpoint['archived_choice'],
+                          'previous_loss': endpoint['assessment']['loss'], 'assessment': assessment})
+    return {'schema': 'nc2000-policy-freeze-branch-v1', 'state_key': prior['state_key'], 'arms': arms,
+            'census': census, 'matrix': matrix, 'endpoints': endpoints, 'numerical_envelope': padding,
+            'prior_hashes': {str(p.relative_to(root)): sha(p.read_bytes()) for p in [prior_path, control_path]},
+            'interpretation': 'Complete root transition census and fixed-policy/refinement-order comparisons. Classes contain alive counts, active status and request sides; every state and transition remains distinct. The frozen-switch strategy chooses the first legal nonfrozen bench only when its active Pokemon is frozen, after the root override. The original switch candidate still prioritized a voluntary switch after entering Suicune; switch-moves removes that return instruction so the normal fallback attacks. Standard arms share execution/node caps but can stop at different achieved work; the extended arm doubles both caps after observing the standard combined result. Only restricted side-one upper payoff bounds transfer to unrestricted values/cells. Intersecting guarantees does not rank the actual strengths of overlapping fixed-policy intervals. This is full-information first-decision certification, not deployed blind-policy or global optimality.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = read_archive(archive / 'records.json.gz')
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    for name, record in records.items():
+        manifest = record['manifest']
+        raw = (archive / f'{name}.json').read_bytes()
+        assert sha(raw) == manifest['protocol_sha256']
+        assert json.loads(raw) == manifest['protocol']
+        assert sha(corpus) == manifest['protocol']['corpus_sha256']
+        assert sha((root / manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified freeze census, default reproduction, strategy/scheduling comparisons and extended-budget bounds')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-freeze-branch-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in fresh:
+        p = json.loads((archive / f'{name}.json').read_bytes())
+        p['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(p, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {'control': read_archive(root / 'findings/policy-ending-witness-v1/records.json.gz')['g23']}
+for name in fresh:
+    records[name] = {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()),
+                     'result': json.loads((directory / name / 'game-023-d0017.json').read_bytes())}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    corpus = (root / records['control']['manifest']['protocol']['corpus']).read_bytes()
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    for name in fresh:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'control.json').write_bytes((root / 'findings/policy-ending-witness-v1/g23.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print('Combined losses:', [e['assessment']['loss'] for e in summary['endpoints']])

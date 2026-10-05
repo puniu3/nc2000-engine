@@ -45,9 +45,15 @@ struct Protocol {
     #[serde(default)]
     fixed_sleep_talk: bool,
     #[serde(default)]
+    root_census_only: bool,
+    #[serde(default)]
+    fixed_frozen_switch: bool,
+    #[serde(default)]
     aggregate_lazy_children: bool,
     #[serde(default)]
     chance_fair_period: usize,
+    #[serde(default)]
+    chance_status_groups: bool,
     resource_closure_nodes: Option<usize>,
     resource_closure_period: Option<usize>,
     #[serde(default)]
@@ -186,13 +192,53 @@ fn audit(
             .map(|a| action_input(dex, a))
             .collect::<Vec<_>>()
     });
+    if protocol.root_census_only {
+        let started = Instant::now();
+        let mut actions = legal.clone().map(|aa| if aa.is_empty() { vec![None] }
+            else { aa.into_iter().map(Some).collect() });
+        if let Some(side) = protocol.fixed_policy_side {
+            let first = protocol.fixed_first_action.as_ref().unwrap();
+            let index = names[side].iter().position(|name| name == first).unwrap();
+            actions[side] = vec![Some(legal[side][index])];
+        }
+        let mut runs = 0;
+        let mut cells = Vec::new();
+        for &a in &actions[0] { for &b in &actions[1] {
+            let step = nc2000_engine::battle::enumerate::enumerate_step(dex, &battle,
+                [a, b], protocol.cell_cap).unwrap();
+            runs += step.runs;
+            let mut groups = std::collections::BTreeMap::<String, Value>::new();
+            for leaf in &step.leaves {
+                let next = &leaf.battle;
+                let class = json!({"outcome":format!("{:?}",next.outcome()),
+                    "needs_choice":next.needs_choice(),"alive":[next.sides[0].pokemon_left,next.sides[1].pokemon_left],
+                    "status":([0,1].map(|side| next.active_id(side).map(|id|next.poke(id).status.as_str())))});
+                let hp = [0,1].map(|side| next.active_id(side).map_or(0, |id| next.poke(id).hp));
+                let group = groups.entry(class.to_string()).or_insert_with(|| json!({
+                    "class":class,"mass":0.0,"leaves":0,"hp_ranges":hp.map(|h|[h,h]),
+                    "first_semantic_key":next.state_key128_without_damage_bookkeeping().to_string()}));
+                group["mass"] = json!(group["mass"].as_f64().unwrap() + leaf.prob);
+                group["leaves"] = json!(group["leaves"].as_u64().unwrap() + 1);
+                for side in 0..2 {
+                    group["hp_ranges"][side][0] = json!(group["hp_ranges"][side][0].as_i64().unwrap().min(i64::from(hp[side])));
+                    group["hp_ranges"][side][1] = json!(group["hp_ranges"][side][1].as_i64().unwrap().max(i64::from(hp[side])));
+                }
+            }
+            assert!((groups.values().map(|g|g["mass"].as_f64().unwrap()).sum::<f64>() - 1.0).abs() < 1e-10);
+            cells.push(json!({"actions":([a,b].map(|a|a.map(|a|action_input(dex,a)))),
+                "runs":step.runs,"groups":groups.into_values().collect::<Vec<_>>()}));
+        }}
+        return json!({"schema":"nc2000-root-transition-census-v1","game":game.game,"decision":decision,
+            "state_key":battle.state_key128().to_string(),"cells":cells,
+            "reference":{"stop":"CensusOnly","runs":runs,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0}});
+    }
     if let Some(side) = protocol.fixed_policy_side {
         assert!(protocol.witness_preparation.is_none());
         assert!(protocol.descendant_preparation.is_none());
         assert!(side < 2 && !legal[side].is_empty());
         let priority_names = protocol.fixed_priority_actions.as_ref().unwrap_or(&names[side]);
-        assert_eq!(priority_names.len(), names[side].len());
-        assert!(names[side].iter().all(|name| priority_names.iter().filter(|p| *p == name).count() == 1));
+        assert!(priority_names.iter().all(|name| names[side].contains(name)
+            && priority_names.iter().filter(|p| *p == name).count() == 1));
         let priority: Vec<_> = priority_names.iter().map(|name|
             legal[side][names[side].iter().position(|n| n == name).unwrap()]).collect();
         let cfg = BoundConfig {
@@ -205,6 +251,7 @@ fn audit(
             certified_action_pruning: protocol.certified_action_pruning,
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
+            chance_status_groups: protocol.chance_status_groups,
             resource_closure_nodes: protocol.resource_closure_nodes,
             resource_closure_period: protocol.resource_closure_period.unwrap_or(1),
             directed_policy_refinement: protocol.directed_policy_refinement,
@@ -219,6 +266,7 @@ fn audit(
             FixedPolicySolver::new(dex, cfg, side, priority)
         };
         if protocol.fixed_sleep_talk { solver = solver.with_sleep_talk(); }
+        if protocol.fixed_frozen_switch { solver = solver.with_frozen_switch(); }
         let started = Instant::now();
         let report = solver.solve(&battle);
         let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
@@ -231,6 +279,7 @@ fn audit(
             "side":side,"priority_actions":priority_names,
             "fixed_first_action":protocol.fixed_first_action,
             "fixed_sleep_talk":protocol.fixed_sleep_talk,
+            "fixed_frozen_switch":protocol.fixed_frozen_switch,
             "guaranteed_score":bound(report.guaranteed_score),
             "unrestricted_game_value":bound(report.unrestricted_game_value),
             "restricted_matrix":{
@@ -251,6 +300,7 @@ fn audit(
     assert!(protocol.fixed_first_action.is_none());
     assert!(protocol.fixed_priority_actions.is_none());
     assert!(!protocol.fixed_sleep_talk);
+    assert!(!protocol.fixed_frozen_switch);
     let mut targets = Vec::new();
     let archived: [Option<&Value>; 2] = [0, 1].map(|side| {
         if legal[side].is_empty() {
@@ -289,6 +339,7 @@ fn audit(
             certified_action_pruning: protocol.certified_action_pruning,
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
+            chance_status_groups: protocol.chance_status_groups,
             resource_closure_nodes: protocol.resource_closure_nodes,
             resource_closure_period: protocol.resource_closure_period.unwrap_or(1),
             directed_policy_refinement: protocol.directed_policy_refinement,

@@ -85,6 +85,7 @@ pub struct BoundConfig {
     pub reuse_unchanged_backups: bool,
     pub aggregate_lazy_children: bool,
     pub chance_fair_period: usize,
+    pub chance_status_groups: bool,
     pub resource_closure_nodes: Option<usize>,
     pub resource_closure_period: usize,
     pub directed_policy_refinement: bool,
@@ -111,6 +112,7 @@ impl Default for BoundConfig {
             reuse_unchanged_backups: true,
             aggregate_lazy_children: false,
             chance_fair_period: 0,
+            chance_status_groups: false,
             resource_closure_nodes: None,
             resource_closure_period: 1,
             directed_policy_refinement: false,
@@ -403,6 +405,7 @@ struct StageWitness {
 }
 
 struct Node {
+    chance_class: u32,
     /// Expansion source; dropped once the node is resolved or fully
     /// expanded (bounds then update purely from children).
     battle: Option<Battle>,
@@ -435,6 +438,7 @@ pub struct BoundSolver<'d> {
     fixed_policy: Option<(usize, Vec<SearchChoice>)>,
     fixed_first_action: Option<(NodeKey, SearchChoice)>,
     fixed_sleep_talk: bool,
+    fixed_frozen_switch: bool,
     value_certificates: HashMap<NodeKey, Bounds>,
     pub stats: BoundStats,
 }
@@ -502,6 +506,13 @@ impl<'d> FixedPolicySolver<'d> {
         self
     }
 
+    pub fn with_frozen_switch(mut self) -> Self {
+        assert!(self.solver.nodes.is_empty() && self.solver.closed.is_empty(),
+            "fixed strategy must be configured before search");
+        self.solver.fixed_frozen_switch = true;
+        self
+    }
+
     pub fn node_count(&self) -> usize { self.solver.node_count() }
     pub fn graph_diagnostics(&self) -> GraphDiagnostics { self.solver.graph_diagnostics() }
     pub fn restricted_root_payoffs(&self, battle: &Battle) -> Option<RootPayoffs> {
@@ -563,6 +574,7 @@ impl<'d> BoundSolver<'d> {
             fixed_policy: None,
             fixed_first_action: None,
             fixed_sleep_talk: false,
+            fixed_frozen_switch: false,
             value_certificates: HashMap::new(),
             stats: BoundStats::default(),
         }
@@ -584,6 +596,7 @@ impl<'d> BoundSolver<'d> {
             fixed_policy: None,
             fixed_first_action: None,
             fixed_sleep_talk: false,
+            fixed_frozen_switch: false,
             value_certificates: cache.value_certificates,
             stats: cache.stats,
         }
@@ -985,6 +998,12 @@ impl<'d> BoundSolver<'d> {
         let certified = self.value_certificates.get(&key).copied();
         self.stats.certificate_hits += usize::from(certified.is_some());
         let initial = certified.unwrap_or(Bounds { lo: 0.0, hi: 1.0 });
+        let mut chance_class = b.sides[0].pokemon_left as u32 | (b.sides[1].pokemon_left as u32) << 4;
+        for side in 0..2 {
+            chance_class |= b.active_id(side).map_or(0, |id| b.poke(id).status as u32 + 1) << (8 + 4 * side);
+        }
+        let needs = b.needs_choice();
+        chance_class |= u32::from(needs[0]) << 16 | u32::from(needs[1]) << 17;
         let node = match b.outcome() {
             Some(o) => {
                 let v = match o {
@@ -993,6 +1012,7 @@ impl<'d> BoundSolver<'d> {
                     Outcome::P2Win => 0.0,
                 };
                 Node {
+                    chance_class,
                     battle: None,
                     acts0: vec![],
                     acts1: vec![],
@@ -1009,6 +1029,7 @@ impl<'d> BoundSolver<'d> {
                 }
             }
             None => Node {
+                chance_class,
                 battle: Some(b),
                 acts0: vec![],
                 acts1: vec![],
@@ -1061,6 +1082,16 @@ impl<'d> BoundSolver<'d> {
                                 assert!(legal.contains(&action));
                                 return vec![Some(action)];
                             }
+                        }
+                        if self.fixed_frozen_switch && probe.active_id(side)
+                            .is_some_and(|id| probe.poke(id).status == nc2000_engine::state::Status::Frz) {
+                            if let Some(&action) = legal.iter().find(|choice| match choice {
+                                SearchChoice::Switch(pos) => {
+                                    let team = &probe.sides[side];
+                                    team.roster[team.party[(*pos - 1) as usize] as usize].status != nc2000_engine::state::Status::Frz
+                                }
+                                _ => false,
+                            }) { return vec![Some(action)]; }
                         }
                         if self.fixed_sleep_talk && probe.active_id(side)
                             .is_some_and(|id| probe.poke(id).status == nc2000_engine::state::Status::Slp) {
@@ -1211,6 +1242,7 @@ impl<'d> BoundSolver<'d> {
             } else {
                 None
             }
+            .or_else(|| self.grouped_chance_child(cur, ci))
             .or_else(|| {
                 cell.resolved
                     .iter()
@@ -1263,6 +1295,23 @@ impl<'d> BoundSolver<'d> {
             }
         }
         did_work
+    }
+
+    fn grouped_chance_child(&self, key: NodeKey, ci: usize) -> Option<(f64, NodeKey)> {
+        if !self.cfg.chance_status_groups { return None; }
+        let mut groups = std::collections::BTreeMap::<u32, (f64, f64, NodeKey)>::new();
+        for &(mass, child) in &self.nodes[&key].cells[ci].resolved {
+            let node = &self.nodes[&child];
+            let uncertainty = mass * (node.hi - node.lo);
+            if uncertainty <= 1e-12 { continue; }
+            let group = groups.entry(node.chance_class).or_insert((0.0, uncertainty, child));
+            group.0 += uncertainty;
+            if uncertainty > group.1 || (uncertainty == group.1 && child < group.2) {
+                group.1 = uncertainty;
+                group.2 = child;
+            }
+        }
+        groups.into_values().max_by(|a,b|a.0.total_cmp(&b.0)).map(|(_,mass,child)|(mass,child))
     }
 
     fn fair_chance_child(&mut self, key: NodeKey, ci: usize) -> Option<(f64, NodeKey)> {
@@ -2538,6 +2587,111 @@ mod tests {
     }
 
     #[test]
+    fn frozen_strategy_switches_only_to_legal_nonfrozen_benches() {
+        use nc2000_engine::battle::{EffectHandle, SearchChoice};
+        let dex = conformance::load_dex();
+        let attack = SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
+        let splash = SearchChoice::Move(dex.moves.id("splash").unwrap());
+        let switch = SearchChoice::Switch(2);
+        for side in 0..2 {
+            for (frozen, bench_frozen, bench_fainted, first, selected) in [
+                (false, false, false, None, attack), (true, false, false, None, switch),
+                (true, true, false, None, attack), (true, false, true, None, attack),
+                (true, false, false, Some(splash), splash),
+            ] {
+                let team = [mon(&["Seismic Toss", "Splash"]), mon(&["Splash"])];
+                let foe = [mon(&["Splash"])];
+                let (a,b) = if side == 0 { (&team[..], &foe[..]) } else { (&foe[..], &team[..]) };
+                let mut root = Battle::from_fixture(&dex, "1,2,3,4", a, b).unwrap();
+                let preview = [0,1].map(|s| root.legal_choices(&dex,s).first().copied());
+                root.apply_choices(&dex, preview).unwrap();
+                root.turn = 1000;
+                let me = root.active_id(side).unwrap();
+                let target = root.active_id(1-side).unwrap();
+                root.poke_mut(target).hp = 1;
+                if frozen { root.set_status(&dex, me, "frz", Some(me), EffectHandle::None, true); }
+                let bench = root.sides[side].party[1] as usize;
+                let bench_id = PokeId { side: side as u8, slot: bench as u8 };
+                if bench_frozen { root.set_status(&dex, bench_id, "frz", Some(bench_id), EffectHandle::None, true); }
+                if bench_fainted {
+                    root.sides[side].roster[bench].hp = 0;
+                    root.sides[side].roster[bench].fainted = true;
+                    root.sides[side].pokemon_left = 1;
+                }
+                let mut choices = [Some(splash);2];
+                choices[side] = Some(selected);
+                let step = enumerate_step(&dex, &root, choices, 100_000).unwrap();
+                let expected: f64 = step.leaves.iter().map(|leaf| {
+                    let v = super::outcome_value(&leaf.battle).unwrap();
+                    leaf.prob * if side == 0 { v } else { 1.0-v }
+                }).sum();
+                let cfg = BoundConfig { eps: 1e-10, ..BoundConfig::default() };
+                let mut fixed = match first {
+                    Some(action) => super::FixedPolicySolver::new_with_first_action(&dex,
+                        cfg, side, vec![attack], &root, action),
+                    None => super::FixedPolicySolver::new(&dex, cfg, side, vec![attack]),
+                }.with_frozen_switch();
+                let report = fixed.solve(&root);
+                assert!((report.guaranteed_score.lo-expected).abs() < 1e-10);
+                assert!((report.guaranteed_score.hi-expected).abs() < 1e-10);
+                assert_eq!(fixed.restricted_root_payoffs(&root).unwrap().actions[side], vec![Some(selected)]);
+            }
+        }
+    }
+
+    #[test]
+    fn frozen_switch_continuation_uses_moves_when_switches_are_not_prioritized() {
+        use nc2000_engine::battle::{EffectHandle, SearchChoice};
+        let dex = conformance::load_dex();
+        let attack = SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
+        let surf = SearchChoice::Move(dex.moves.id("surf").unwrap());
+        let splash = SearchChoice::Move(dex.moves.id("splash").unwrap());
+        for keep_switch in [false,true] {
+            let mut root = Battle::from_fixture(&dex, "1,2,3,4",
+                &[mon(&["Seismic Toss"]),mon(&["Surf"])], &[mon(&["Splash"])]).unwrap();
+            let preview = [0,1].map(|s|root.legal_choices(&dex,s).first().copied());
+            root.apply_choices(&dex,preview).unwrap();
+            let active = root.active_id(0).unwrap();
+            root.set_status(&dex,active,"frz",Some(active),EffectHandle::None,true);
+            let mut priority = vec![attack];
+            if keep_switch { priority.push(SearchChoice::Switch(2)); }
+            let mut fixed = super::FixedPolicySolver::new(&dex,
+                BoundConfig { work_budget: 0, ..BoundConfig::default() },0,priority).with_frozen_switch();
+            fixed.solve(&root);
+            let key = fixed.solver.node_key(&root);
+            fixed.solver.init_cells(key);
+            assert_eq!(fixed.restricted_root_payoffs(&root).unwrap().actions[0],vec![Some(SearchChoice::Switch(2))]);
+            root.apply_choices(&dex,[Some(SearchChoice::Switch(2)),Some(splash)]).unwrap();
+            fixed.solve(&root);
+            let key = fixed.solver.node_key(&root);
+            fixed.solver.init_cells(key);
+            let expected = if keep_switch { SearchChoice::Switch(2) } else { surf };
+            assert_eq!(fixed.restricted_root_payoffs(&root).unwrap().actions[0],vec![Some(expected)]);
+        }
+    }
+
+    #[test]
+    fn a_frozen_bench_blocks_ice_beam_freeze_on_the_switch_in() {
+        use nc2000_engine::battle::{EffectHandle, SearchChoice};
+        use nc2000_engine::state::Status;
+        let dex = conformance::load_dex();
+        for frozen in [false,true] {
+            let mut root = Battle::from_fixture(&dex, "1,2,3,4",
+                &[mon(&["Splash"]),mon(&["Splash"])], &[mon(&["Ice Beam"])]).unwrap();
+            let preview = [0,1].map(|s| root.legal_choices(&dex,s).first().copied());
+            root.apply_choices(&dex,preview).unwrap();
+            let active = root.active_id(0).unwrap();
+            if frozen { root.set_status(&dex, active, "frz", Some(active), EffectHandle::None, true); }
+            let step = enumerate_step(&dex, &root, [Some(SearchChoice::Switch(2)),
+                Some(SearchChoice::Move(dex.moves.id("icebeam").unwrap()))],100_000).unwrap();
+            let mass: f64 = step.leaves.iter().filter(|leaf|
+                leaf.battle.poke(leaf.battle.active_id(0).unwrap()).status == Status::Frz)
+                .map(|leaf|leaf.prob).sum();
+            if frozen { assert_eq!(mass,0.0); } else { assert!(mass > 0.05); }
+        }
+    }
+
+    #[test]
     fn sleeping_fixed_strategy_matches_exhaustive_turn_and_respects_root_override() {
         use nc2000_engine::battle::SearchChoice;
         use nc2000_engine::battle::EffectHandle;
@@ -2922,6 +3076,7 @@ mod tests {
 
     fn synthetic_node(select_count: usize, fair_cursor: usize) -> Node {
         Node {
+            chance_class: 0,
             battle: None,
             acts0: vec![None, None],
             acts1: vec![None, None],
@@ -2948,6 +3103,25 @@ mod tests {
             stall_rank: None,
             resource_rank: None,
         }
+    }
+
+    #[test]
+    fn chance_groups_prioritize_total_uncertainty_without_merging_states() {
+        let dex = conformance::load_dex();
+        let mut solver = BoundSolver::new(&dex, BoundConfig {
+            chance_status_groups: true, ..BoundConfig::default()
+        });
+        let keys = [100,101,102,103].map(super::NodeKey::Exact);
+        for key in keys { solver.nodes.insert(key, synthetic_node(0,0)); }
+        solver.nodes.get_mut(&keys[2]).unwrap().chance_class = 1;
+        solver.nodes.get_mut(&keys[3]).unwrap().chance_class = 1;
+        solver.nodes.get_mut(&keys[0]).unwrap().cells[0].resolved = vec![(0.4,keys[1]),(0.3,keys[2]),(0.3,keys[3])];
+        assert_eq!(solver.grouped_chance_child(keys[0],0),Some((0.3,keys[2])));
+        assert_eq!(solver.nodes.len(),4);
+        solver.nodes.get_mut(&keys[2]).unwrap().hi = 0.0;
+        assert_eq!(solver.grouped_chance_child(keys[0],0),Some((0.4,keys[1])));
+        solver.cfg.chance_status_groups = false;
+        assert!(solver.grouped_chance_child(keys[0],0).is_none());
     }
 
     #[test]
@@ -3244,12 +3418,14 @@ mod tests {
         let targets: Vec<_> = (0..2).flat_map(|side| {
             [vec![1.0, 0.0], vec![0.0, 1.0], vec![0.3, 0.7]].map(|policy| (side, policy))
         }).collect();
-        for (period, directed, targeted) in [(0, false, false), (1, false, false),
-            (2, false, false), (1, true, false), (1, false, true), (1, true, true)] {
+        for (period, directed, targeted, grouped) in [(0, false, false, false), (1, false, false, false),
+            (2, false, false, false), (1, true, false, false), (1, false, true, false), (1, true, true, false),
+            (0, false, false, true), (1, true, true, true)] {
             let mut solver = BoundSolver::new(&dex, BoundConfig {
                 work_budget: 17, cell_cap: 0, eps: 1e-10,
                 resource_closure_nodes: Some(0), resource_closure_period: period,
                 directed_policy_refinement: directed, target_aware_refinement: targeted,
+                chance_status_groups: grouped,
                 ..BoundConfig::default()
             });
             let mut previous = super::Bounds { lo: 0.0, hi: 1.0 };
