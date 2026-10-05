@@ -301,6 +301,11 @@ fn sample_mixed(p: &[f64], rng: &mut SplitMix64) -> usize {
     pick
 }
 
+enum ForcedRoot {
+    Action { own: usize, reply: Option<SearchChoice> },
+    TypeProbe,
+}
+
 struct RootTypeStats {
     samples: u32,
     replies: usize,
@@ -530,7 +535,7 @@ impl BlindSearch {
         obs: &Observer,
         my_pick: usize,
     ) -> f64 {
-        self.step_forced_impl(dex, belief, obs, my_pick, None)
+        self.step_forced_impl(dex, belief, obs, ForcedRoot::Action { own: my_pick, reply: None })
     }
 
     // Unavailable replies use the sampled opponent's tree policy.
@@ -542,7 +547,7 @@ impl BlindSearch {
         my_pick: usize,
         reply: SearchChoice,
     ) -> f64 {
-        let value=self.step_forced_impl(dex, belief, obs, my_pick, Some(reply));
+        let value=self.step_forced_impl(dex, belief, obs, ForcedRoot::Action { own: my_pick, reply: Some(reply) });
         self.joint_probe_n[my_pick]+=1;
         value
     }
@@ -552,14 +557,12 @@ impl BlindSearch {
         dex: &Dex,
         belief: &Belief,
         obs: &Observer,
-        my_pick: usize,
-        reply: Option<SearchChoice>,
+        forcing: ForcedRoot,
     ) -> f64 {
-        assert!(my_pick < self.my_acts.len(), "forced root action out of range");
-        assert!(
-            self.my_mask.as_ref().map_or(true, |mask| mask[my_pick]),
-            "forced root action is masked"
-        );
+        if let ForcedRoot::Action { own, .. } = forcing {
+            assert!(own < self.my_acts.len(), "forced root action out of range");
+            assert!(self.my_mask.as_ref().map_or(true, |mask| mask[own]), "forced root action is masked");
+        }
         let pick = belief.sample(&mut self.rng);
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
@@ -585,7 +588,29 @@ impl BlindSearch {
                 self.nodes.len() - 1
             }
         };
-        self.my_n[my_pick] += 1;
+        let (my_pick, forced_reply, override_reply) = match forcing {
+            ForcedRoot::Action { own, reply } => {
+                self.my_n[own] += 1;
+                (own, reply.and_then(|a| self.nodes[root].acts[1 - self.side].iter().position(|&c| c == a)), reply.is_some())
+            }
+            ForcedRoot::TypeProbe => {
+                let replies = self.nodes[root].acts[1 - self.side].len();
+                let stats = self.root_type_index.get(&type_key).map(|&i| &self.root_types[i]);
+                let selected = (0..self.my_acts.len()).filter(|&own|
+                    !self.my_dominated[own] && self.my_mask.as_ref().map_or(true, |mask| mask[own]))
+                    .flat_map(|own| (0..replies).map(move |reply| (own, reply)))
+                    .min_by_key(|&(own, reply)| stats.map_or(0, |t| t.cells[own * replies + reply].0));
+                match selected {
+                    Some((own, reply)) => {
+                        self.my_n[own] += 1;
+                        self.joint_probe_n[own] += 1;
+                        (own, Some(reply), true)
+                    }
+                    None => (select_global(&self.cfg, &mut self.rng, &mut self.my_n,
+                        &self.my_w, self.my_mask.as_deref()), None, false),
+                }
+            }
+        };
         let mut force = [None, None];
         force[self.side] = Some(my_pick);
         if self.opponent_preview_prior && self.is_preview() {
@@ -593,8 +618,8 @@ impl BlindSearch {
                 pick, obs, &self.nodes[root].acts[1 - self.side], &mut self.rng,
             );
         }
-        if let Some(reply) = reply {
-            force[1-self.side] = self.nodes[root].acts[1-self.side].iter().position(|&a| a == reply);
+        if override_reply {
+            force[1 - self.side] = forced_reply;
         }
         let mut joint = [0usize; 2];
         let r = run_iteration(
@@ -1010,12 +1035,31 @@ impl BlindSearch {
         self.done
     }
 
+    pub fn step_typed_joint_probes(&mut self, dex: &Dex, belief: &Belief, obs: &Observer, n: u32) -> u32 {
+        if self.is_preview() { return self.step(dex, belief, obs, n); }
+        for _ in 0..n {
+            self.step_forced_impl(dex, belief, obs, ForcedRoot::TypeProbe);
+        }
+        self.done
+    }
+
     pub fn finish_with_mixed_probes(&mut self,dex:&Dex,belief:&Belief,obs:&Observer,total:u32,reserved:u32) -> u32 {
+        self.finish_mixed_probes(dex, belief, obs, total, reserved, false)
+    }
+
+    pub fn finish_with_typed_mixed_probes(&mut self,dex:&Dex,belief:&Belief,obs:&Observer,total:u32,reserved:u32) -> u32 {
+        self.finish_mixed_probes(dex, belief, obs, total, reserved, true)
+    }
+
+    fn finish_mixed_probes(&mut self,dex:&Dex,belief:&Belief,obs:&Observer,total:u32,reserved:u32,typed:bool) -> u32 {
         assert!(reserved<total && self.done<=total-reserved);
         self.step(dex,belief,obs,total-reserved-self.done);
         let probe=reserved>0 && self.estimated_mix_gain().is_some_and(|gain|gain>0.02) && self.mixed_policy().is_none();
-        if probe {self.step_joint_probes(dex,belief,obs,reserved);reserved}
-        else {self.step(dex,belief,obs,reserved);0}
+        if probe {
+            if typed { self.step_typed_joint_probes(dex,belief,obs,reserved); }
+            else { self.step_joint_probes(dex,belief,obs,reserved); }
+            reserved
+        } else {self.step(dex,belief,obs,reserved);0}
     }
 
     pub fn sample_mixed(&self, draw: f64) -> Option<SearchChoice> {

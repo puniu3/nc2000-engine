@@ -64,3 +64,48 @@ fn joint_probes_force_legal_replies_and_preserve_the_unavailable_reply_fallback(
     assert_eq!(plain.means(), adaptive.means());
     assert_eq!(plain.root_matrix(), adaptive.root_matrix());
 }
+
+
+#[test]
+fn typed_probes_balance_each_private_type_even_with_disjoint_reply_sets() {
+    let dex = load_dex();
+    let set = |moves: &[&str]| -> PokemonSet {
+        serde_json::from_value(json!({"name":"Starmie", "species":"Starmie",
+            "level":50, "ability":"", "moves":moves})).unwrap()
+    };
+    let own = set(&["Return", "Surf"]);
+    let opponents = [set(&["Thunderbolt", "Ice Beam"]), set(&["Psychic", "Recover"])];
+    let pool = nc2000_bot::preview::MetaPool {
+        teams: opponents.iter().enumerate().map(|(i, set)| nc2000_bot::preview::MetaTeam {
+            id: format!("type-{i}"), sets: vec![set.clone()], weight: None,
+        }).collect(),
+    };
+    let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &[own], &opponents[..1]).unwrap();
+    let mut observer = Observer::new(&battle, 0);
+    let mut belief = Belief::new(&dex, &pool, &observer);
+    let choices = [0, 1].map(|side| Some(battle.legal_choices(&dex, side)[0]));
+    battle.apply_choices(&dex, choices).unwrap();
+    observer.observe(&battle, &dex);
+    belief.sync(&dex, &observer);
+    assert_eq!(belief.candidate_count(), 2);
+    let mut search = BlindSearch::new(&battle, &dex, RmConfig::default(), 0, 17);
+    search.step_typed_joint_probes(&dex, &belief, &observer, 240);
+    let (eligible, types) = search.root_policy_evidence();
+    assert_eq!(eligible, [true, true]);
+    assert_eq!(types.len(), 2);
+    assert_eq!(search.joint_probe_visits().iter().sum::<u32>(), 240);
+    assert_eq!(types.iter().map(|t| t.samples).sum::<u32>(), 240);
+    assert_eq!(search.root_replies().len(), 4);
+    for t in &types {
+        assert_eq!(t.replies, 2);
+        assert_eq!(t.cells.len(), 4);
+        let min = t.cells.iter().map(|c| c.samples).min().unwrap();
+        let max = t.cells.iter().map(|c| c.samples).max().unwrap();
+        assert!(min > 10 && max - min <= 1, "{min}..{max}");
+    }
+    search.mask_actions(&[false, true]);
+    let excluded = search.visits()[0];
+    search.step_typed_joint_probes(&dex, &belief, &observer, 40);
+    assert_eq!(search.visits()[0], excluded);
+    assert_eq!(search.joint_probe_visits().iter().sum::<u32>(), 280);
+}

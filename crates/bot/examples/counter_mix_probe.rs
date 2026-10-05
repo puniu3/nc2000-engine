@@ -59,7 +59,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert!(
         (6..=9).contains(&args.len()),
-        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive]"
+        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed]"
     );
     let family = args.get(6).map(String::as_str).unwrap_or("counter");
     assert!(matches!(family, "counter" | "bond"));
@@ -71,7 +71,8 @@ fn main() {
     let seed_base: u64 = args[5].parse().unwrap();
     let probe_iterations: u32 = args.get(7).map(|s| s.parse().unwrap()).unwrap_or(0);
     assert!(probe_iterations < iterations);
-    let adaptive = args.get(8).map(String::as_str) == Some("adaptive");
+    let typed = args.get(8).map(String::as_str) == Some("typed");
+    let adaptive = typed || args.get(8).map(String::as_str) == Some("adaptive");
     let dex = conformance::load_dex();
     let teams: [Vec<PokemonSet>; 2] = if family == "bond" {
         bond::teams()
@@ -203,7 +204,9 @@ fn main() {
                 s,
                 search_seed,
             );
-            let probes_used = if adaptive {
+            let probes_used = if typed {
+                pinned.finish_with_typed_mixed_probes(&dex, &beliefs[s], &obs[s], iterations, probe_iterations)
+            } else if adaptive {
                 pinned.finish_with_mixed_probes(
                     &dex,
                     &beliefs[s],
@@ -251,7 +254,7 @@ fn main() {
     let output = json!({"schema":"nc2000-counter-mix-v1","family":family,"state":b.essence(&dex),"state_key":b.state_key128().to_string(),
         "validations":validations,"actions":actions.map(|aa|aa.into_iter().map(|a|a.to_input(&dex)).collect::<Vec<_>>()),
         "proof":proof,"rows":rows,"log":b.log,"source_hashes":paths.map(|p|(p,sha(&std::fs::read(p).unwrap()))),
-        "search_seed_base":seed_base,"search_seeds":count,"iterations":iterations,"probe_iterations":probe_iterations,"adaptive_probes":adaptive,
+        "search_seed_base":seed_base,"search_seeds":count,"iterations":iterations,"probe_iterations":probe_iterations,"adaptive_probes":adaptive,"typed_probes":typed,
         "binary_sha256":sha(&std::fs::read(std::env::current_exe().unwrap()).unwrap()),
         "interpretation":"Legal prefix; fixed known loadouts. Pinned beliefs reconstructed from preview. No shipped-pool or human calibration claim. Matrix continuation values bound the first-action distribution with optimal subsequent play."});
     std::fs::write(

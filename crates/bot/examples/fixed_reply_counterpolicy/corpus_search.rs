@@ -14,6 +14,8 @@ struct Config {
     probe_iterations:Option<u32>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     root_diagnostics:Option<bool>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    typed_probes:Option<bool>,
 }
 
 fn search_seed(cfg:&Config,index:usize)->u64 {
@@ -47,7 +49,9 @@ fn observed_search(dex:&Dex,game:&Game,cfg:&Config,root:&Battle)->Value {
             for &iterations in &cfg.iterations {
                 let probes_used=if let Some(probes)=cfg.probe_iterations {
                     assert_eq!(cfg.iterations.len(),1);
-                    search.finish_with_mixed_probes(dex,belief,&obs,iterations,probes)
+                    if cfg.typed_probes.unwrap_or(false) {
+                        search.finish_with_typed_mixed_probes(dex,belief,&obs,iterations,probes)
+                    } else { search.finish_with_mixed_probes(dex,belief,&obs,iterations,probes) }
                 } else {search.step(dex,belief,&obs,iterations-search.iterations());0};
                 let mixed=search.mixed_policy();
                 let mut row = json!({"mode":mode,"seed_index":index,"seed":seed,"iterations":iterations,

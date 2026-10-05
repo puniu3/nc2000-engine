@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import pathlib
+import runpy
+
+root = pathlib.Path(__file__).resolve().parents[1]
+destination = root / 'findings/root-type-probes-v1/continuations.json'
+source = root / 'findings/root-type-probes-v1/records.json.gz'
+helpers = runpy.run_path(str(root / 'tools/mixed-continuations'))
+archive = root / 'findings/mixed-continuations-v1'
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def report():
+    records = json.loads(gzip.decompress(source.read_bytes()))['records']
+    row = next(r for r in records['g015-d0016-s1']['after']['observed']['rows'] if r['mode'] == 'blind' and r['seed_index'] == 1)
+    assert row['candidate_policy'] is not None and row['choice'] == 'move curse'
+    policy = {a:p for a,p in zip(row['actions'],row['candidate_policy']) if p > 0}
+    assert set(policy) == {'move return', 'move curse'} and abs(sum(policy.values()) - 1) < 1e-10
+    groups = []
+    hashes = {}
+    for label in ['screen', 'curse-confirm', 'extra-screen']:
+        path = archive / label / 'records.json.gz'
+        bundle = json.loads(gzip.decompress(path.read_bytes()))
+        assert bundle['manifest']['state_key'] == records['g015-d0016-s1']['after']['state_key']
+        summary = helpers['summarize'](bundle)
+        assert all(c['censored'] == 0 for c in summary['cells'])
+        hashes[label] = sha(path)
+        values = {tuple(c['actions']): c['sample_score_interval'][0] for c in summary['cells']}
+        for reply in dict.fromkeys(pair[0] for pair in values):
+            if not all((reply,a) in values for a in policy):
+                continue
+            score = sum(p * (1-values[(reply,a)]) for a,p in policy.items())
+            default = 1-values[(reply,'move curse')]
+            groups.append(dict(source=label, reply=reply, trials=bundle['manifest']['config']['trials'],
+                               continuation_iterations=summary['iterations'], candidate_sample_score=score,
+                               default_sample_score=default, difference=score-default))
+    assert {g['reply'] for g in groups} == {'move doubleedge','move earthquake','move selfdestruct','move curse','switch 2'}
+    return dict(policy=policy, policy_source_sha256=sha(source), continuation_source_sha256=hashes, results=groups,
+                scope='The newly accepted blind mixture is projected onto previously frozen terminal samples at the actual hidden state. Counts and continuation budgets differ by source. Scores do not certify other hidden types, optimal continuations, or general strength; complete first-action coverage does not close those gaps.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    result = report()
+    if args.verify_only:
+        assert json.loads(destination.read_text()) == result
+        print('typed-mix-continuations: verified frozen terminal projection and all five first replies')
+    else:
+        assert not destination.exists()
+        destination.write_text(json.dumps(result,indent=2)+'\n')
+        print(json.dumps(result,indent=2))
+
+
+if __name__ == '__main__':
+    main()

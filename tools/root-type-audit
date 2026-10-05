@@ -92,15 +92,45 @@ def summarize(records):
                 cases=cases, scope='Six previously probe-active corpus endpoints, paired seeds and pinned/blind views. Diagnostics reconstruct heuristic margins from type-conditional cells; they are not confidence intervals or optimal game values. Warm and final searches use 16200 and 27000 iterations respectively.')
 
 
+def report(records, typed):
+    result = summarize(records)
+    if not typed:
+        return result
+    path = root / 'findings/root-type-audit-v1/records.json.gz'
+    baseline = json.loads(gzip.decompress(path.read_bytes()))['records']
+    prior = {c['id']:c for c in summarize(baseline)['cases']}
+    changed = []
+    for name, stages in records.items():
+        for stage in ['warm', 'after']:
+            for row, before in zip(stages[stage]['observed']['rows'], baseline[name][stage]['observed']['rows']):
+                assert row['probes_used'] == before['probes_used']
+                if stage == 'warm' or row['probes_used'] == 0:
+                    for field in before:
+                        if field != 'elapsed_ms':
+                            assert row[field] == before[field], (name,stage,field)
+    for case in result['cases']:
+        before = prior[case['id']]
+        if case['probed']:
+            changed.append(dict(id=case['id'], before=before['after'], after=case['after']))
+    result['comparison'] = dict(baseline_sha256=sha(path.read_bytes()),
+        unchanged_warm_searches=len(result['cases']), unchanged_unprobed_searches=sum(not c['probed'] for c in result['cases']),
+        changed=changed, newly_accepted=[c['id'] for c in changed if c['before']['reason'] != 'accepted' and c['after']['reason'] == 'accepted'],
+        no_longer_accepted=[c['id'] for c in changed if c['before']['reason'] == 'accepted' and c['after']['reason'] != 'accepted'])
+    result['scope'] += ' Typed probes allocate within the sampled private type. Acceptance changes measure this heuristic gate, not playing strength.'
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--typed', action='store_true')
     args = parser.parse_args()
+    archive = root / ('findings/root-type-probes-v1' if args.typed else 'findings/root-type-audit-v1')
     if args.verify_only:
         bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
         assert bundle['source_sha256'] == sha(source.read_bytes())
         assert bundle['corpus_sha256'] == sha(gzip.decompress(corpus_path.read_bytes()))
-        assert summarize(bundle['records']) == json.loads((archive/'summary.json').read_text())
+        assert report(bundle['records'], args.typed) == json.loads((archive/'summary.json').read_text())
         print('root-type-audit: verified type counts, reconstructed margins and probe fallback invariants')
         return
     assert not archive.exists()
@@ -115,6 +145,7 @@ def main():
         results = {}
         for stage in ['warm', 'after']:
             cfg = dict(previous[name]['config'], root_diagnostics=True)
+            if args.typed: cfg['typed_probes'] = True
             if stage == 'warm':
                 cfg.pop('probe_iterations')
                 cfg['iterations'] = [16200]
@@ -132,7 +163,7 @@ def main():
         return name, results
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         records = dict(executor.map(run, sorted(previous)))
-    summary = summarize(records)
+    summary = report(records, args.typed)
     archive.mkdir()
     bundle = dict(records=records, source_sha256=sha(source.read_bytes()), corpus_sha256=sha(corpus), binary_sha256=sha(binary.read_bytes()))
     (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))

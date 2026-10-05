@@ -1,0 +1,69 @@
+{
+  "policy": {
+    "move return": 0.37098997577203474,
+    "move curse": 0.6290100242279653
+  },
+  "policy_source_sha256": "d80b69b7c7bfc060f46ca3e5d5e82e451d654aa57cb48975662822fec0c6268e",
+  "continuation_source_sha256": {
+    "screen": "5c93e2ca83e5e083e7d0c8677e39da7c85234befbd1df835b5de517398b2913f",
+    "curse-confirm": "b2fb147706e63311e042ae65983e606d1f5eba6911362dd0b280e8794c406131",
+    "extra-screen": "4a12534b35a0deb138676fc419f5b51f93ae9a2226097dfb263049506cde5d71"
+  },
+  "results": [
+    {
+      "source": "screen",
+      "reply": "move doubleedge",
+      "trials": 64,
+      "continuation_iterations": 27000,
+      "candidate_sample_score": 0.41357201648608366,
+      "default_sample_score": 0.1875,
+      "difference": 0.22607201648608366
+    },
+    {
+      "source": "screen",
+      "reply": "move selfdestruct",
+      "trials": 64,
+      "continuation_iterations": 27000,
+      "candidate_sample_score": 0.37247219582836305,
+      "default_sample_score": 0.5,
+      "difference": -0.12752780417163695
+    },
+    {
+      "source": "curse-confirm",
+      "reply": "move curse",
+      "trials": 32,
+      "continuation_iterations": 27000,
+      "candidate_sample_score": 0.4899318613717696,
+      "default_sample_score": 0.28125,
+      "difference": 0.20868186137176958
+    },
+    {
+      "source": "extra-screen",
+      "reply": "move earthquake",
+      "trials": 16,
+      "continuation_iterations": 2700,
+      "candidate_sample_score": 0.6159343674287608,
+      "default_sample_score": 0.5,
+      "difference": 0.11593436742876084
+    },
+    {
+      "source": "extra-screen",
+      "reply": "move curse",
+      "trials": 16,
+      "continuation_iterations": 2700,
+      "candidate_sample_score": 0.4425556083432739,
+      "default_sample_score": 0.1875,
+      "difference": 0.2550556083432739
+    },
+    {
+      "source": "extra-screen",
+      "reply": "switch 2",
+      "trials": 16,
+      "continuation_iterations": 2700,
+      "candidate_sample_score": 0.8356868734857522,
+      "default_sample_score": 0.8125,
+      "difference": 0.023186873485752213
+    }
+  ],
+  "scope": "The newly accepted blind mixture is projected onto previously frozen terminal samples at the actual hidden state. Counts and continuation budgets differ by source. Scores do not certify other hidden types, optimal continuations, or general strength; complete first-action coverage does not close those gaps."
+}

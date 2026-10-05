@@ -36,12 +36,13 @@ def counterexample():
                 scope='An exact one-step Bayesian counterexample, not an observed Pokemon position. Type-aware replies L and R dominate row A by B and bound every policy by 1/4; pure B attains 1/4.')
 
 
-def summarize(records):
+def summarize(records, typed=False):
     previous = json.loads(gzip.decompress(previous_path.read_bytes()))['records']
     groups = []
     for name, seed, count, seed_base, family in specs:
         row, old = records[name], previous[name]
         assert row['adaptive_probes'] and row['probe_iterations'] == 10800
+        assert row.get('typed_probes', False) == typed
         assert (row['search_seeds'], row['iterations'], row['search_seed_base'], row['family']) == (count, 27000, seed_base, family)
         assert row['state_key'] == old['state_key'] and row['state'] == old['state']
         assert all(v['ok'] for v in row['validations'])
@@ -55,7 +56,7 @@ def summarize(records):
             for r, b in zip(current, before):
                 assert r['seed'] == b['seed'] and r['probes_used'] in (0, 10800)
                 same_branch = r['probes_used'] == b['probes_used']
-                if same_branch:
+                if same_branch and (not typed or r['probes_used'] == 0):
                     for field in ['choice', 'visits', 'means', 'dominated', 'joint', 'reply_availability', 'play_draw']:
                         assert r[field] == b[field], (name, side, r['seed'], field)
                 p = r['candidate_policy'] if r['candidate_policy'] is not None else [float(a == r['choice']) for a in actions]
@@ -76,11 +77,13 @@ def summarize(records):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--typed', action='store_true')
     args = parser.parse_args()
+    archive = root / ('findings/typed-mix-fixtures-v1' if args.typed else 'findings/bayesian-mix-v1')
     if args.verify_only:
         bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
         assert bundle['previous_sha256'] == sha(previous_path.read_bytes())
-        assert summarize(bundle['records']) == json.loads((archive / 'summary.json').read_text())
+        assert summarize(bundle['records'], args.typed) == json.loads((archive / 'summary.json').read_text())
         print('bayesian-mix-audit: verified exact counterexample, branch parity and 64 fixture policies')
         return
     assert not archive.exists()
@@ -91,12 +94,12 @@ def main():
     records = {}
     for name, seed, count, seed_base, family in specs:
         with (directory / (name + '.log')).open('w') as log:
-            subprocess.run([str(binary), str(directory / name), seed, str(count), '27000', str(seed_base), family, '10800', 'adaptive'],
+            subprocess.run([str(binary), str(directory / name), seed, str(count), '27000', str(seed_base), family, '10800', 'typed' if args.typed else 'adaptive'],
                            cwd=root, env=env, stdout=log, stderr=log, check=True)
         records[name] = json.loads((directory / name / 'records.json').read_text())
         print(name + ' complete', flush=True)
     assert all(sha((root / p).read_bytes()) == value for r in records.values() for p, value in r['source_hashes'])
-    summary = summarize(records)
+    summary = summarize(records, args.typed)
     archive.mkdir()
     bundle = dict(records=records, previous_sha256=sha(previous_path.read_bytes()), binary_sha256=sha(binary.read_bytes()))
     (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
