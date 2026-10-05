@@ -216,10 +216,6 @@ impl Node {
     }
 }
 
-/// Probe statistics over the top-m×top-m root joint cells: the estimated
-/// stage-game payoff matrix (side-0 perspective). Probes run against the
-/// already-mature tree, so plain per-cell means are unbiased and every
-/// sample counts (an EMA was tried and starved the estimate).
 struct ProbeStats {
     /// Per-side probed action indices (into the root's action lists).
     support: [Vec<usize>; 2],
@@ -372,8 +368,7 @@ pub(crate) fn select_ucb(
 /// `force_root` fixes that side's root action index instead of UCB
 /// selection (the probe phase forces both sides; the blind search forces
 /// only its own, globally-selected action); forced picks still feed the
-/// root's per-action means (an unconditional sample of an action is an
-/// unbiased sample of it), and everything below the root selects normally.
+/// root's per-action means, and everything below the root selects normally.
 /// Returns the iteration's side-0 reward and writes the root joint's action
 /// indices into `root_joint`.
 #[allow(clippy::too_many_arguments)]
@@ -414,7 +409,7 @@ pub(crate) fn run_iteration_with_leaf(
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
 ) -> f64 {
-    let mut path: Vec<(usize, usize, usize)> = Vec::new(); // (node, side, act)
+    let mut path: Vec<(usize, usize, usize)> = Vec::new();
     let mut exp3_path = Vec::new();
     let mut node_idx = start;
 
@@ -503,7 +498,6 @@ pub(crate) fn run_iteration_with_leaf(
         trace(SearchTrace::Result { battle: sim, reward0 });
     }
 
-    // ---- backprop: UCB stats along the path
     for (ni, s, ai) in path {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
     }
