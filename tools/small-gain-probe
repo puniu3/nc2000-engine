@@ -19,7 +19,7 @@ def sha(raw):
 
 def summarize(record):
     assert record['family'] == 'bond' and record['search_seeds'] == 1
-    assert record['typed_probes'] and record['adaptive_probes']
+    assert (record['typed_probes'] and record['adaptive_probes']) or record.get('fresh_probes')
     assert all(v['ok'] for v in record['validations'])
     rows = []
     for r in record['rows']:
@@ -36,6 +36,28 @@ def summarize(record):
                          margin=margin, probed=r['probes_used'], loss=loss(record, side, policy),
                          fallback_loss=loss(record, side, fallback),
                          same_evidence_passes_old_floor=margin is not None and margin > .02))
+        if record.get('fresh_probes'):
+            evidence = r['fresh_evidence']
+            phase = evidence['phase_types'][0]
+            assert phase['samples'] == r['probes_used'] == record['probe_iterations']
+            assert sum(c['samples'] for c in phase['cells']) == phase['samples']
+            assert max(c['samples'] for c in phase['cells'])-min(c['samples'] for c in phase['cells']) <= 1
+            assert [b-a for a,b in zip(evidence['warm_visits'], r['visits'])] == r['joint_probe_visits']
+            old = {(c['own'],c['reply']):c for c in evidence['warm_joint']}
+            final = {(c['own'],c['reply']):c for c in r['joint']}
+            for c in phase['cells']:
+                key = (c['own'],record['actions'][1-side][c['reply']])
+                a = old.get(key,dict(samples=0,mean=0))
+                b = final[key]
+                assert a['samples']+c['samples'] == b['samples']
+                assert abs(a['samples']*a['mean']+c['samples']*c['mean']-b['samples']*b['mean']) < 1e-5
+            rows[-1]['analyses'] = {}
+            for name in ['phase_analysis','cumulative_analysis']:
+                a = evidence[name]
+                margin = a['lower_guarantee']-a['upper_best_pure']
+                rows[-1]['analyses'][name] = dict(policy=a['policy'],margin=margin,
+                    loss=loss(record,side,a['policy']),passes_positive_margin=margin>1e-8,
+                    passes_old_floor=margin>.02)
     return dict(iterations=record['iterations'], seed=record['search_seed_base'], rows=rows,
         scope='A single paired search seed at a larger iteration budget on the certified Bond fixture. Loss intervals concern only first-action distributions with optimal continuation. The old-floor comparison applies the former threshold to the same final evidence; it is not a separately executed old agent.')
 
@@ -45,9 +67,12 @@ def main():
     parser.add_argument('--iterations', type=int, default=864000)
     parser.add_argument('--verify-only', action='store_true')
     parser.add_argument('--probe-iterations', type=int)
+    parser.add_argument('--fresh', action='store_true')
     args = parser.parse_args()
     probes = args.iterations*2//5 if args.probe_iterations is None else args.probe_iterations
     label = str(args.iterations) if args.probe_iterations is None else f'{args.iterations}-probes{probes}'
+    if args.fresh:
+        label += '-fresh'
     archive = root / 'findings/small-gain-probe-v1' / label
     if args.verify_only:
         bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
@@ -60,7 +85,7 @@ def main():
     subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
     directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-small-gain-'))
     with (directory/'run.log').open('w') as log:
-        subprocess.run([str(binary),str(directory/'run'),'2,3,4,5','1',str(args.iterations),'2026110801','bond',str(probes),'typed'],
+        subprocess.run([str(binary),str(directory/'run'),'2,3,4,5','1',str(args.iterations),'2026110801','bond',str(probes),'fresh' if args.fresh else 'typed'],
                        cwd=root,env=env,stdout=log,stderr=log,check=True)
     record = json.loads((directory/'run/records.json').read_text())
     assert all(sha((root/p).read_bytes()) == value for p,value in record['source_hashes'])

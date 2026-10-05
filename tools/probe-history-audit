@@ -58,15 +58,57 @@ def summarize():
                       'would return, or certify sampled continuation policies.')
 
 
+def summarize_fresh():
+    warm, warm_sha = read('518400-probes0')
+    fresh, fresh_sha = read('864000-fresh')
+    baseline = summarize()
+    assert fresh['fresh_probes'] and not fresh['adaptive_probes']
+    for key in ['state_key', 'actions', 'search_seed_base', 'search_seeds', 'family']:
+        assert warm[key] == fresh[key]
+    changed = [p for p, h in warm['source_hashes'] if dict(fresh['source_hashes'])[p] != h]
+    assert changed == ['crates/bot/examples/counter_mix_probe.rs']
+    rows = []
+    for r in fresh['rows']:
+        if r['mode'] != 'pinned':
+            continue
+        a = next(a for a in warm['rows'] if a['mode'] == 'pinned' and a['side'] == r['side'])
+        evidence = r['fresh_evidence']
+        assert evidence['warm_joint'] == a['joint']
+        assert evidence['warm_visits'] == a['visits']
+        if r['side'] != 1:
+            continue
+        for c in evidence['phase_types'][0]['cells']:
+            own = fresh['actions'][1][c['own']]
+            reply = fresh['actions'][0][c['reply']]
+            old = next(v for v in baseline['rows'] if v['own'] == own and v['reply'] == reply)
+            final = next(v for v in r['joint'] if v['own'] == c['own'] and v['reply'] == reply)
+            lo, hi = fresh['proof']['cells'][c['reply']*len(fresh['actions'][1])+c['own']]
+            optimal = [1-hi, 1-lo]
+            assert c['samples'] == 57600
+            rows.append(dict(own=own, reply=reply, fresh_samples=c['samples'],
+                             stale_mean=old['final_mean'], cumulative_mean=final['mean'],
+                             fresh_mean=c['mean'], optimal_continuation=optimal,
+                             fresh_bias=[c['mean']-optimal[1], c['mean']-optimal[0]]))
+    return dict(inputs={'518400-probes0':warm_sha,'864000-fresh':fresh_sha,
+                        '864000':baseline['inputs']['864000']}, changed_sources=changed,
+                verified_warm_sides=2, rows=rows,
+                scope='One known-type fixture and one search seed. Both warm prefixes match exactly. '
+                      'The fresh phase forces every eligible action pair equally, regardless of the '
+                      'adaptive gate. Fresh means still reflect changing search continuations and '
+                      'are not certified game values. This isolates probe history within this fixture; '
+                      'it is not a general strength comparison or a production selection rule.')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--fresh', action='store_true')
     args = parser.parse_args()
-    report = summarize()
-    path = archive / 'history.json'
+    report = summarize_fresh() if args.fresh else summarize()
+    path = archive / ('fresh-history.json' if args.fresh else 'history.json')
     if args.verify_only:
         assert json.loads(path.read_text()) == report
-        print('probe-history: verified warm replay, probe increments, stale cell and certified bias')
+        print('probe-history: verified source identity, warm replay, probe increments and certified bias')
     else:
         path.write_text(json.dumps(report, indent=2)+'\n')
         print(json.dumps(report, indent=2))

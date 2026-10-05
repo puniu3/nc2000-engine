@@ -1,0 +1,104 @@
+{
+  "iterations": 864000,
+  "seed": 2026110801,
+  "rows": [
+    {
+      "side": 0,
+      "policy": [
+        0.18565932926676051,
+        0.8143406707332395
+      ],
+      "mixed": true,
+      "margin": 0.1617796065144969,
+      "probed": 345600,
+      "loss": [
+        0.007925556585740049,
+        0.007925805082525416
+      ],
+      "fallback_loss": [
+        0.1143263565904275,
+        0.11432647715078127
+      ],
+      "same_evidence_passes_old_floor": true,
+      "analyses": {
+        "phase_analysis": {
+          "policy": [
+            0.1718001261034048,
+            0.8281998738965952
+          ],
+          "margin": 0.14224025580665053,
+          "loss": [
+            0.00611472930300005,
+            0.006114979977126003
+          ],
+          "passes_positive_margin": true,
+          "passes_old_floor": true
+        },
+        "cumulative_analysis": {
+          "policy": [
+            0.18565932926676051,
+            0.8143406707332395
+          ],
+          "margin": 0.1617796065144969,
+          "loss": [
+            0.007925556585740049,
+            0.007925805082525416
+          ],
+          "passes_positive_margin": true,
+          "passes_old_floor": true
+        }
+      }
+    },
+    {
+      "side": 1,
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "mixed": false,
+      "margin": null,
+      "probed": 345600,
+      "loss": [
+        0.01633219666008435,
+        0.01633247432475115
+      ],
+      "fallback_loss": [
+        0.01633219666008435,
+        0.01633247432475115
+      ],
+      "same_evidence_passes_old_floor": false,
+      "analyses": {
+        "phase_analysis": {
+          "policy": [
+            0.14563880664996587,
+            0.8543611933500341,
+            0.0
+          ],
+          "margin": 0.006780121514193604,
+          "loss": [
+            0.018876495617647378,
+            0.018876616898936487
+          ],
+          "passes_positive_margin": true,
+          "passes_old_floor": false
+        },
+        "cumulative_analysis": {
+          "policy": [
+            0.1459208293190169,
+            0.8540791706809832,
+            0.0
+          ],
+          "margin": 0.013335977279593125,
+          "loss": [
+            0.01913443688185979,
+            0.019134558164544894
+          ],
+          "passes_positive_margin": true,
+          "passes_old_floor": false
+        }
+      }
+    }
+  ],
+  "scope": "A single paired search seed at a larger iteration budget on the certified Bond fixture. Loss intervals concern only first-action distributions with optimal continuation. The old-floor comparison applies the former threshold to the same final evidence; it is not a separately executed old agent."
+}
