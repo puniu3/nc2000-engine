@@ -4,7 +4,7 @@
 //! A persistent search graph over decision states: every node carries a
 //! sound value interval (side-0 win probability), unexpanded chance mass
 //! counts as [0, 1], and one trial = walk root→frontier by LP-support ×
-//! uncertainty, expand ONE pending chance script (one engine run), back
+//! uncertainty, expand one pending chance script, back
 //! bounds up the visited path (matrix-game values are monotone in
 //! payoffs, so lo/hi matrices bracket soundly — same principle as
 //! `exact`, applied incrementally). Work limits stop expansion, never
@@ -61,6 +61,7 @@ pub struct BoundConfig {
     /// solver reused across safe and unsafe corpus roots cannot cross-merge.
     pub dead_damage_quotient: bool,
     pub dead_quick_claw_quotient: bool,
+    pub hp_transition_capacity: usize,
     /// Fold terminal successor mass directly into its parent cell instead
     /// of retaining one graph node per terminal fingerprint.
     pub fold_terminal_nodes: bool,
@@ -106,6 +107,7 @@ impl Default for BoundConfig {
             descend_floor: 0.1,
             dead_damage_quotient: true,
             dead_quick_claw_quotient: false,
+            hp_transition_capacity: 0,
             fold_terminal_nodes: true,
             fold_closed_nodes: true,
             monotone_stall_scheduling: true,
@@ -292,6 +294,10 @@ pub struct BoundStats {
     pub resource_closure_visits: usize,
     pub first_resource_closure_nodes: Option<usize>,
     pub runs: usize,
+    pub hp_transition_hits: usize,
+    pub hp_transition_eligible: usize,
+    pub hp_transition_rejected: usize,
+    pub hp_transition_peak: usize,
     pub eager_runs: usize,
     pub eager_failures: usize,
     pub reused_nodes: usize,
@@ -448,6 +454,7 @@ pub struct BoundSolver<'d> {
     fixed_frozen_switch: bool,
     fixed_rest_percent: Option<u8>,
     value_certificates: HashMap<NodeKey, Bounds>,
+    hp_transitions: crate::hp_transition::HpTransitionCache,
     pub stats: BoundStats,
 }
 
@@ -639,6 +646,7 @@ impl<'d> BoundSolver<'d> {
             fixed_frozen_switch: false,
             fixed_rest_percent: None,
             value_certificates: HashMap::new(),
+            hp_transitions: crate::hp_transition::HpTransitionCache::default(),
             stats: BoundStats::default(),
         }
     }
@@ -662,6 +670,7 @@ impl<'d> BoundSolver<'d> {
             fixed_frozen_switch: false,
             fixed_rest_percent: None,
             value_certificates: cache.value_certificates,
+            hp_transitions: crate::hp_transition::HpTransitionCache::default(),
             stats: cache.stats,
         }
     }
@@ -1657,8 +1666,8 @@ impl<'d> BoundSolver<'d> {
         true
     }
 
-    /// Expand the largest-mass pending script of one cell: one engine run
-    /// yields the representative leaf; every non-default class after the
+    /// Expand the largest-mass pending script of one cell: execution or
+    /// guarded reuse yields the representative leaf; every non-default class after the
     /// prefix becomes a pending sibling at its exact mass. The leaf plus
     /// siblings partition the expanded mass exactly.
     fn expand(&mut self, key: NodeKey, ci: usize) {
@@ -1683,10 +1692,21 @@ impl<'d> BoundSolver<'d> {
             )
         };
 
-        let (leaf, trace) = run_scripted(self.dex, &battle, choices, &pending.script);
+        let (leaf, trace, runs) = if self.cfg.hp_transition_capacity>0
+            && self.cfg.dead_damage_quotient && self.cfg.dead_quick_claw_quotient {
+            let step=self.hp_transitions.run(self.dex,&battle,choices,&pending.script,self.cfg.hp_transition_capacity);
+            self.stats.hp_transition_hits+=usize::from(step.hit);
+            self.stats.hp_transition_eligible+=usize::from(step.eligible);
+            self.stats.hp_transition_rejected+=usize::from(step.rejected_hp);
+            self.stats.hp_transition_peak=self.stats.hp_transition_peak.max(self.hp_transitions.len());
+            (step.battle,step.trace,usize::from(!step.hit))
+        } else {
+            let (leaf,trace)=run_scripted(self.dex,&battle,choices,&pending.script);
+            (leaf,trace,1)
+        };
         self.check_stall_edge(&battle, &leaf);
         self.nodes.get_mut(&key).unwrap().battle = Some(battle);
-        self.stats.runs += 1;
+        self.stats.runs += runs;
         self.stats.expansions += 1;
 
         // masses from the trace: prefix[p] = Π_{q<p} prob(q)
@@ -2140,6 +2160,33 @@ mod tests {
 
     fn battle(dex: &nc2000_engine::dex::Dex, moves0: &[&str], moves1: &[&str]) -> Battle {
         Battle::from_fixture(dex, "1,2,3,4", &[mon(moves0)], &[mon(moves1)]).unwrap()
+    }
+
+    #[test]
+    fn hp_cached_search_matches_exhaustive_values_and_counts_actual_runs() {
+        let dex=conformance::load_dex();
+        let mut base=battle(&dex,&["Seismic Toss"],&["Seismic Toss"]);
+        let preview=[0,1].map(|side|base.legal_choices(&dex,side)[0]);
+        base.apply_choices(&dex,preview.map(Some)).unwrap();
+        base.turn=999;
+        for capacity in [0,128] {
+            let mut solver=BoundSolver::new(&dex,BoundConfig {
+                hp_transition_capacity:capacity,dead_quick_claw_quotient:true,
+                cell_cap:0,eps:1e-10,work_budget:10_000,..BoundConfig::default()
+            });
+            for hp in [[100,100],[90,80],[60,90],[40,90]] {
+                let mut root=base.clone();
+                for side in 0..2 {let id=root.active_id(side).unwrap();root.poke_mut(id).hp=hp[side];}
+                let exact=exhaustive_matrix(&dex,&root,2)[0];
+                let report=solver.solve(&root,None);
+                assert!(report.bounds.width()<1e-9,"{:?}",report);
+                assert!((report.bounds.lo-exact).abs()<1e-9);
+                assert!((report.bounds.hi-exact).abs()<1e-9);
+            }
+            assert_eq!(solver.stats.runs+solver.stats.hp_transition_hits,solver.stats.expansions);
+            assert_eq!(solver.stats.hp_transition_hits>0,capacity>0);
+            assert!(solver.stats.hp_transition_peak<=capacity);
+        }
     }
 
     #[test]

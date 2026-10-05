@@ -2,6 +2,7 @@ use nc2000_engine::battle::{enumerate::run_scripted,SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::prng::Draw;
 use nc2000_engine::state::{Battle, PokeId, RequestState, Status};
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HpTransitionKey {
@@ -70,6 +71,10 @@ impl HpTransition {
     /// control flow or capped damage can differ from the recorded trace.
     fn new(dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], script: &[usize], result: Battle, trace: Vec<Draw>) -> Option<Self> {
         let key=HpTransitionKey::new(dex,base,choices,script)?;
+        Self::from_key(key, base, result, trace)
+    }
+
+    fn from_key(key: HpTransitionKey, base: &Battle, result: Battle, trace: Vec<Draw>) -> Option<Self> {
         if result.outcome().is_some() || result.needs_choice()!=[true,true] || result.request_state!=RequestState::Move { return None; }
         let active=[base.active_id(0)?,base.active_id(1)?];
         let mut damage=[0;2];
@@ -96,11 +101,60 @@ impl HpTransition {
 
     pub fn translate(&self, dex: &Dex, target: &Battle, choices: [Option<SearchChoice>;2], script: &[usize]) -> Option<(Battle,Vec<Draw>)> {
         if HpTransitionKey::new(dex,target,choices,script).as_ref()!=Some(&self.key) { return None; }
+        self.translate_hp(target)
+    }
+
+    fn translate_hp(&self, target: &Battle) -> Option<(Battle,Vec<Draw>)> {
         let hp=[0,1].map(|side|target.poke(self.active[side]).hp-self.damage[side]);
         if hp.iter().any(|&hp|hp<=0) { return None; }
         let mut result=self.result.clone();
         for side in 0..2 { result.poke_mut(self.active[side]).hp=hp[side]; }
         Some((result,self.trace.clone()))
+    }
+}
+
+
+#[derive(Default)]
+pub(crate) struct HpTransitionCache {
+    entries: HashMap<HpTransitionKey, HpTransition>,
+    order: VecDeque<HpTransitionKey>,
+}
+
+pub(crate) struct CachedStep {
+    pub battle: Battle,
+    pub trace: Vec<Draw>,
+    pub eligible: bool,
+    pub hit: bool,
+    pub rejected_hp: bool,
+}
+
+impl HpTransitionCache {
+    pub fn len(&self) -> usize { self.entries.len() }
+
+    pub fn run(&mut self, dex: &Dex, base: &Battle, choices: [Option<SearchChoice>;2], script: &[usize], capacity: usize) -> CachedStep {
+        while self.entries.len()>capacity {
+            self.entries.remove(&self.order.pop_front().unwrap());
+        }
+        let key=(capacity>0).then(||HpTransitionKey::new(dex,base,choices,script)).flatten();
+        let eligible=key.is_some();
+        let mut rejected_hp=false;
+        if let Some(entry)=key.as_ref().and_then(|key|self.entries.get(key)) {
+            if let Some((battle,trace))=entry.translate_hp(base) {
+                return CachedStep {battle,trace,eligible,hit:true,rejected_hp:false};
+            }
+            rejected_hp=true;
+        }
+        let (battle,trace)=run_scripted(dex,base,choices,script);
+        if let Some(key)=key.filter(|key|!self.entries.contains_key(key)) {
+            if let Some(entry)=HpTransition::from_key(key.clone(),base,battle.clone(),trace.clone()) {
+                if self.entries.len()==capacity {
+                    self.entries.remove(&self.order.pop_front().unwrap());
+                }
+                self.order.push_back(key.clone());
+                self.entries.insert(key,entry);
+            }
+        }
+        CachedStep {battle,trace,eligible,hit:false,rejected_hp}
     }
 }
 
@@ -138,10 +192,17 @@ mod tests {
         let mut found=HashMap::<u128,f64>::new();
         let mut pending=vec![Vec::<usize>::new()];
         let mut count=0;
+        let mut cache=HpTransitionCache::default();
         while let Some(script)=pending.pop() {
             let (_,trace,entry)=HpTransition::run(&dex,&base,choices,&script);
             let entry=entry.expect("both full-HP source mons survive");
             let (translated,translated_trace)=entry.translate(&dex,&target,choices,&script).unwrap();
+            let source=cache.run(&dex,&base,choices,&script,4096);
+            assert!(!source.hit && source.eligible);
+            let cached=cache.run(&dex,&target,choices,&script,4096);
+            assert!(cached.hit);
+            assert_eq!(cached.battle.state_key128(),translated.state_key128());
+            assert_eq!(trace_signature(&cached.trace),trace_signature(&translated_trace));
             let (actual,actual_trace)=run_scripted(&dex,&target,choices,&script);
             assert_eq!(translated.state_key128(),actual.state_key128());
             assert_eq!(trace_signature(&translated_trace),trace_signature(&actual_trace));
@@ -183,6 +244,27 @@ mod tests {
         assert!(entry.translate(&dex,&base,choices,&[0]).is_none());
         changed=base.clone();changed.turn+=1;
         assert!(entry.translate(&dex,&changed,choices,&[]).is_none());
+    }
+
+    #[test]
+    fn bounded_cache_evicts_and_disables_without_changing_execution() {
+        let dex=conformance::load_dex();
+        let base=battle(&dex,[&["Seismic Toss"],&["Splash"]],["",""]);
+        let choices=["seismictoss","splash"].map(|name|Some(SearchChoice::Move(dex.moves.id(name).unwrap())));
+        let mut cache=HpTransitionCache::default();
+        for turn in 1..5 {
+            let mut target=base.clone();target.turn=turn;
+            let step=cache.run(&dex,&target,choices,&[],2);
+            assert!(!step.hit && step.eligible);
+            assert_eq!(step.battle.state_key128(),run_scripted(&dex,&target,choices,&[]).0.state_key128());
+            assert!(cache.len()<=2);
+        }
+        assert_eq!(cache.len(),2);
+        assert!(!cache.run(&dex,&base,choices,&[],2).hit);
+        assert!(cache.run(&dex,&base,choices,&[],2).hit);
+        let disabled=cache.run(&dex,&base,choices,&[],0);
+        assert!(!disabled.hit && !disabled.eligible);
+        assert_eq!(cache.len(),0);
     }
 
     #[test]
