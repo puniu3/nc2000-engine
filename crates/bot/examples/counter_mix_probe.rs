@@ -59,8 +59,8 @@ fn step(
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert!(
-        (6..=9).contains(&args.len()),
-        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed|fresh]"
+        (6..=10).contains(&args.len()),
+        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed|fresh] [hp-buckets]"
     );
     let family = args.get(6).map(String::as_str).unwrap_or("counter");
     assert!(matches!(family, "counter" | "bond"));
@@ -75,6 +75,7 @@ fn main() {
     let typed = args.get(8).map(String::as_str) == Some("typed");
     let fresh = args.get(8).map(String::as_str) == Some("fresh");
     let adaptive = typed || args.get(8).map(String::as_str) == Some("adaptive");
+    let hp_buckets: i64 = args.get(9).map(|s| s.parse().unwrap()).unwrap_or(16);
     let dex = conformance::load_dex();
     let teams: [Vec<PokemonSet>; 2] = if family == "bond" {
         bond::teams()
@@ -188,6 +189,7 @@ fn main() {
             &dex,
             RmConfig {
                 c: 0.4,
+                hp_buckets,
                 ..Default::default()
             },
             search_seed,
@@ -201,6 +203,7 @@ fn main() {
                 &dex,
                 RmConfig {
                     c: 0.4,
+                    hp_buckets,
                     ..Default::default()
                 },
                 s,
@@ -294,6 +297,7 @@ fn main() {
         "binary_sha256":sha(&std::fs::read(std::env::current_exe().unwrap()).unwrap()),
         "interpretation":"Legal prefix; fixed known loadouts. Pinned beliefs reconstructed from preview. No shipped-pool or human calibration claim. Matrix continuation values bound the first-action distribution with optimal subsequent play."});
     if fresh { output["fresh_probes"] = json!(true); }
+    if hp_buckets != 16 { output["hp_buckets"] = json!(hp_buckets); }
     std::fs::write(
         out.join("records.json"),
         serde_json::to_vec_pretty(&output).unwrap(),

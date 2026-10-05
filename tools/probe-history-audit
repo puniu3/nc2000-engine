@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import pathlib
+import runpy
 
 root = pathlib.Path(__file__).resolve().parents[1]
 archive = root / 'findings/small-gain-probe-v1'
@@ -99,13 +100,51 @@ def summarize_fresh():
                       'it is not a general strength comparison or a production selection rule.')
 
 
+def summarize_hp():
+    coarse, coarse_sha = read('864000-fresh')
+    exact, exact_sha = read('864000-fresh-hp0')
+    summarize_run = runpy.run_path(str(root/'tools/small-gain-probe'))['summarize']
+    for key in ['state_key', 'actions', 'search_seed_base', 'search_seeds', 'family',
+                'iterations', 'probe_iterations', 'fresh_probes']:
+        assert coarse[key] == exact[key]
+    assert coarse.get('hp_buckets',16) == 16 and exact['hp_buckets'] == 0
+    changed = [p for p, h in coarse['source_hashes'] if dict(exact['source_hashes'])[p] != h]
+    assert changed == ['crates/bot/examples/counter_mix_probe.rs']
+    rows = []
+    for name, record in [('bucketed',coarse),('exact_hp',exact)]:
+        summary = summarize_run(record)
+        for r in record['rows']:
+            if r['mode'] != 'pinned':
+                continue
+            own = record['actions'][1].index('move destinybond') if r['side'] == 1 else record['actions'][0].index('move curse')
+            reply = record['actions'][0].index('move curse') if r['side'] == 1 else record['actions'][1].index('move destinybond')
+            cell = next(c for c in r['fresh_evidence']['phase_types'][0]['cells'] if c['own']==own and c['reply']==reply)
+            columns = len(record['actions'][1])
+            lo, hi = record['proof']['cells'][reply*columns+own if r['side']==1 else own*columns+reply]
+            if r['side'] == 1:
+                lo, hi = 1-hi, 1-lo
+            rows.append(dict(variant=name, side=r['side'], samples=cell['samples'],
+                             fresh_mean=cell['mean'], optimal_continuation=[lo,hi],
+                             fresh_bias=[cell['mean']-hi,cell['mean']-lo],
+                             policy_results=summary['rows'][r['side']]))
+    return dict(inputs={'864000-fresh':coarse_sha,'864000-fresh-hp0':exact_sha},
+                changed_sources=changed, rows=rows,
+                scope='One seed and one known-type fixture at equal iteration and probe budgets. '
+                      'HP bucketing is disabled throughout warm search and forced fresh probes. '
+                      'Different state keys can change random-number consumption and tree allocation; '
+                      'this is not a matched-trajectory comparison, a general convergence proof, or a '
+                      'comparison at matched thinking time.')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--verify-only', action='store_true')
     parser.add_argument('--fresh', action='store_true')
+    parser.add_argument('--hp-ablation', action='store_true')
     args = parser.parse_args()
-    report = summarize_fresh() if args.fresh else summarize()
-    path = archive / ('fresh-history.json' if args.fresh else 'history.json')
+    assert not (args.fresh and args.hp_ablation)
+    report = summarize_hp() if args.hp_ablation else summarize_fresh() if args.fresh else summarize()
+    path = archive / ('hp-ablation.json' if args.hp_ablation else 'fresh-history.json' if args.fresh else 'history.json')
     if args.verify_only:
         assert json.loads(path.read_text()) == report
         print('probe-history: verified source identity, warm replay, probe increments and certified bias')
