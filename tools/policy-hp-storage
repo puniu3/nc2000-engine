@@ -23,7 +23,7 @@ def summarize(record, corpus):
     assert record['state_key'] == previous['state_key']
     assert record['manifest']['corpus_sha256'] == sha(corpus)
     expected = dict(previous['config'], hp_storage_census=True)
-    for key, value in dict(guarded_keys=False, packed_hp=False, packed_state_cap=100000, healing_capacity=0, reuse_attacks=False, boom_eager_cap=0, boom_terminal_quotient=False, reuse_switches=False).items():
+    for key, value in dict(guarded_keys=False, packed_hp=False, packed_state_cap=100000, healing_capacity=0, reuse_attacks=False, boom_eager_cap=0, boom_terminal_quotient=False, reuse_switches=False, time_budget_ms=0).items():
         if key in record['config']:
             expected[key] = value
     assert record['config'] == expected

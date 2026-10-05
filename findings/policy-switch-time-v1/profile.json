@@ -1,0 +1,23 @@
+{
+  "schema": "nc2000-policy-switch-profile-v1",
+  "sample_sha256": "b8efd4e06b56f21de42da6f304625713035b836f827b645bd03677fa562e8e26",
+  "duration_seconds": 10,
+  "interval_ms": 1,
+  "main_thread_samples": 7698,
+  "selected_top_of_stack": [
+    {
+      "symbol": "_RNvXs3_NtNtCsedRpiqSkYaQ_4core4hash3sipINtB5_6HasherNtB5_11Sip13RoundsENtB7_6Hasher5writeCs8nQkv4dckFf_25fixed_reply_counterpolicy",
+      "samples": 2330
+    },
+    {
+      "symbol": "_RNvMs_NtNtCsiUJM42X8V9v_13nc2000_engine6battle6searchNtNtB8_5state6Battle17state_key128_with",
+      "samples": 1446
+    },
+    {
+      "symbol": "_RINvMs_NtNtCsiUJM42X8V9v_13nc2000_engine6battle6searchNtNtB9_5state6Battle15state_hash_intoQNtNtNtCskP2HG43Jt7g_3std4hash6random13DefaultHasherEB9_",
+      "samples": 1158
+    }
+  ],
+  "selected_fraction": 0.6409457001818655,
+  "interpretation": "Separate sampled run, excluded from timed comparisons. The three disjoint top-of-stack groups identify state-key traversal and SipHash write work in the first ten seconds. Sampling proportions are a workload diagnostic, not exact CPU accounting or a guaranteed optimization gain."
+}

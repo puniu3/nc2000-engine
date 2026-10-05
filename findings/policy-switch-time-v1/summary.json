@@ -1,0 +1,249 @@
+{
+  "schema": "nc2000-policy-switch-time-v1",
+  "results": {
+    "control-1": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.952135302680147
+      },
+      "runs": 1385318,
+      "elapsed_ms": 30022.501542,
+      "cache": {
+        "observations": 1396931,
+        "eligible": 806812,
+        "attack_eligible": 739752,
+        "switch_eligible": 0,
+        "hits": 226826,
+        "attack_hits": 167674,
+        "switch_hits": 0,
+        "reset_hits": 25650,
+        "rejected_hp": 68753,
+        "runs": 1170105,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 30,
+          "healer_full_hp": 4096,
+          "healer_volatile": 9393,
+          "non_move_choice": 576000
+        }
+      },
+      "boom_eager": {
+        "attempts": 297,
+        "completed": 297,
+        "runs": 215213,
+        "terminal_replacements": 0
+      },
+      "hit_fraction": 0.16237451957183283,
+      "peak_states": 25734,
+      "peak_templates": 44,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1385318,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.04786469831985447,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.38158316042745083,
+        "frontier_mass": 0.5705521412526962,
+        "unknown_mass": 0.952135301680147,
+        "frontier_states": 25734,
+        "frontier_templates": 44,
+        "enumeration_failures": 34,
+        "mass_error": 1.5543122344752192e-15,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.952135302680147
+        }
+      }
+    },
+    "switch-1": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9511205847196643
+      },
+      "runs": 879381,
+      "elapsed_ms": 30006.32075,
+      "cache": {
+        "observations": 1439827,
+        "eligible": 1424656,
+        "attack_eligible": 769176,
+        "switch_eligible": 587520,
+        "hits": 783156,
+        "attack_hits": 166254,
+        "switch_hits": 567360,
+        "reset_hits": 24450,
+        "rejected_hp": 69194,
+        "runs": 656671,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 32,
+          "healer_full_hp": 4096,
+          "healer_volatile": 10443
+        }
+      },
+      "boom_eager": {
+        "attempts": 305,
+        "completed": 305,
+        "runs": 222710,
+        "terminal_replacements": 0
+      },
+      "hit_fraction": 0.5439236797198552,
+      "peak_states": 25998,
+      "peak_templates": 44,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 879381,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.04887941628033594,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.37866456440929,
+        "frontier_mass": 0.5724560193103744,
+        "unknown_mass": 0.9511205837196643,
+        "frontier_states": 25998,
+        "frontier_templates": 44,
+        "enumeration_failures": 34,
+        "mass_error": 2.220446049250313e-16,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9511205847196643
+        }
+      }
+    },
+    "switch-2": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9504877716404089
+      },
+      "runs": 897413,
+      "elapsed_ms": 30003.272500000003,
+      "cache": {
+        "observations": 1466098,
+        "eligible": 1450927,
+        "attack_eligible": 786807,
+        "switch_eligible": 596160,
+        "hits": 794100,
+        "attack_hits": 168558,
+        "switch_hits": 576000,
+        "reset_hits": 24450,
+        "rejected_hp": 71414,
+        "runs": 671998,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 32,
+          "healer_full_hp": 4096,
+          "healer_volatile": 10443
+        }
+      },
+      "boom_eager": {
+        "attempts": 308,
+        "completed": 308,
+        "runs": 225415,
+        "terminal_replacements": 0
+      },
+      "hit_fraction": 0.541641827490386,
+      "peak_states": 26203,
+      "peak_templates": 44,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 897413,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.04951222935959194,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.3777642604997306,
+        "frontier_mass": 0.5727235101406783,
+        "unknown_mass": 0.9504877706404089,
+        "frontier_states": 26203,
+        "frontier_templates": 44,
+        "enumeration_failures": 34,
+        "mass_error": 8.881784197001252e-16,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9504877716404089
+        }
+      }
+    },
+    "control-2": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9515502634572887
+      },
+      "runs": 1410716,
+      "elapsed_ms": 30049.828583,
+      "cache": {
+        "observations": 1422472,
+        "eligible": 825541,
+        "attack_eligible": 757581,
+        "switch_eligible": 0,
+        "hits": 230046,
+        "attack_hits": 169994,
+        "switch_hits": 0,
+        "reset_hits": 26550,
+        "rejected_hp": 71002,
+        "runs": 1192426,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 32,
+          "healer_full_hp": 4096,
+          "healer_volatile": 10443,
+          "non_move_choice": 581760
+        }
+      },
+      "boom_eager": {
+        "attempts": 302,
+        "completed": 302,
+        "runs": 218290,
+        "terminal_replacements": 0
+      },
+      "hit_fraction": 0.16172269120235758,
+      "peak_states": 25871,
+      "peak_templates": 44,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1410716,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.04844973754271095,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.3792443389434846,
+        "frontier_mass": 0.5723059235138042,
+        "unknown_mass": 0.9515502624572887,
+        "frontier_states": 25871,
+        "frontier_templates": 44,
+        "enumeration_failures": 34,
+        "mass_error": 3.3306690738754696e-16,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9515502634572887
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "1": {
+      "upper_reduction": 0.0010147179604826917,
+      "elapsed_ratio": 0.9994610445109856,
+      "engine_runs_ratio": 0.6347863811774626
+    },
+    "2": {
+      "upper_reduction": 0.0010624918168797848,
+      "elapsed_ratio": 0.9984507038743531,
+      "engine_runs_ratio": 0.636140087728501
+    }
+  },
+  "prior_archive_sha256": "7bdd2a72560f68cc98cac38f3d2e2957a388dd5440dacb549bc7f87181a602ec",
+  "interpretation": "Serial control/switch/switch/control runs use the same 30-second limit and nonbinding engine-execution budget. The deadline is checked between input states; each current cell and final mass accounting finish before elapsed time is recorded. Unprocessed probability stays unknown. Two reversed-order pairs diagnose whether voluntary-switch reuse improves the fixed-policy-pair interval per wall time on this workload; they do not establish general speedup, unrestricted game value or deployed strength."
+}
