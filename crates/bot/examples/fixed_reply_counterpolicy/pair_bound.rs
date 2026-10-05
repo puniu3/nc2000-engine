@@ -24,6 +24,8 @@ struct Config {
     #[serde(default)]
     reuse_attacks: bool,
     #[serde(default)]
+    reuse_switches: bool,
+    #[serde(default)]
     boom_eager_cap: usize,
     #[serde(default)]
     boom_terminal_quotient: bool,
@@ -79,6 +81,7 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
     assert!(cfg.healing_capacity<=100_000 && (cfg.healing_capacity==0 || cfg.lazy));
     let mut healing=nc2000_bot::hp_transition::HpHealingCache::new(cfg.healing_capacity);
     if cfg.reuse_attacks {healing=healing.with_attacks();}
+    if cfg.reuse_switches {healing=healing.with_switches();}
     assert!(cfg.boom_eager_cap<=1_000_000 && (cfg.boom_eager_cap==0 || cfg.lazy));
     assert!(!cfg.boom_terminal_quotient || cfg.boom_eager_cap>0);
     let mut boom=BoomStats::default();
@@ -162,7 +165,7 @@ pub(super) fn execute(args:&[String]) {
         choose_response(&dex,b,side,first,OwnPolicy::AfterBoom75,cfg.response)));
     let result=json!({"schema":"nc2000-fixed-pair-enumeration-v1","state_key":root.state_key128().to_string(),
         "config":cfg,"report":report,"manifest":manifest(&dex,&raw),
-        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. Default state aggregation uses full state_key128; optional guarded keys omit only unobservable damage history and Quick Claw rolls. Packed storage keeps each exact HP vector and its mass separately under a shared guarded template, and applies the width limit to templates plus a separate concrete-state cap. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Optional healing reuse admits only a strictly faster, below-full-HP Rest or restricted Sleep Talk user, and rejects changed HP-dependent control flow. Optional attack reuse uses the existing guarded positive-survivor translation domain. Work counts actual engine executions; each cell still caps scripted observations. Optional eager enumeration for the admitted Body Slam / Selfdestruct domain may quotient only terminal states by outcome, retaining exact nonterminal states and downstream draw traces. Failed eager attempts are charged before lazy fallback. Floating-point probability arithmetic uses the reported numerical envelope."});
+        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. Default state aggregation uses full state_key128; optional guarded keys omit only unobservable damage history and Quick Claw rolls. Packed storage keeps each exact HP vector and its mass separately under a shared guarded template, and applies the width limit to templates plus a separate concrete-state cap. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Optional healing reuse admits only a strictly faster, below-full-HP Rest or restricted Sleep Talk user, and rejects changed HP-dependent control flow. Optional attack reuse uses the existing guarded positive-survivor translation domain. Optional voluntary-switch reuse preserves incoming HP and separately restores the two original actives' unchanged HP. Work counts actual engine executions; each cell still caps scripted observations. Optional eager enumeration for the admitted Body Slam / Selfdestruct domain may quotient only terminal states by outcome, retaining exact nonterminal states and downstream draw traces. Failed eager attempts are charged before lazy fallback. Floating-point probability arithmetic uses the reported numerical envelope."});
     std::fs::write(&args[4],serde_json::to_vec_pretty(&result).unwrap()).unwrap();
     println!("{}",serde_json::to_string(&result["report"]).unwrap());
 }
@@ -172,7 +175,7 @@ mod tests {
     use super::*;
     fn config(width:usize,steps:usize,cap:usize,work:usize)->Config {
         Config {response:CounterResponse {return_when:ReturnWhen::Always,ice_first:false,finish_low:false},
-            width,steps,cell_cap:cap,work_budget:work,lazy:false,hp_storage_census:false,guarded_keys:false,packed_hp:false,packed_state_cap:state_cap(),healing_capacity:0,reuse_attacks:false,boom_eager_cap:0,boom_terminal_quotient:false}
+            width,steps,cell_cap:cap,work_budget:work,lazy:false,hp_storage_census:false,guarded_keys:false,packed_hp:false,packed_state_cap:state_cap(),healing_capacity:0,reuse_attacks:false,reuse_switches:false,boom_eager_cap:0,boom_terminal_quotient:false}
     }
     fn exhaustive(dex:&Dex,b:&Battle)->f64 {
         if let Some(outcome)=b.outcome() {return match outcome {Outcome::P1Win=>1.0,Outcome::Tie=>0.5,Outcome::P2Win=>0.0};}

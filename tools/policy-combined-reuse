@@ -33,7 +33,7 @@ def summarize(records, corpus):
             assert baseline[key] == value, key
     config = records['control']['config']
     expected = dict(old['config'], reuse_attacks=False)
-    for key, value in dict(boom_eager_cap=0, boom_terminal_quotient=False).items():
+    for key, value in dict(boom_eager_cap=0, boom_terminal_quotient=False, reuse_switches=False).items():
         if key in config:
             expected[key] = value
     assert config == expected

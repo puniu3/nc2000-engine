@@ -32,7 +32,10 @@ def summarize(records, corpus):
         elif key != 'elapsed_ms':
             assert baseline[key] == value, key
     config = records['control']['config']
-    assert config == dict(old['config'], boom_eager_cap=0, boom_terminal_quotient=False)
+    expected = dict(old['config'], boom_eager_cap=0, boom_terminal_quotient=False)
+    if 'reuse_switches' in config:
+        expected['reuse_switches'] = False
+    assert config == expected
     results = {}
     for name in names:
         record = records[name]

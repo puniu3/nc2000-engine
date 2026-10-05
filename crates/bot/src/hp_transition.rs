@@ -24,7 +24,7 @@ pub struct HpTransition {
 
 impl HpTransitionKey {
     pub fn new(dex: &Dex, battle: &Battle, choices: [Option<SearchChoice>; 2], script: &[usize]) -> Option<Self> {
-        Self::new_domain(dex,battle,choices,script,None).ok()
+        Self::new_domain(dex,battle,choices,script,None,None).ok()
     }
 
     pub fn new_healing(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize])->Option<Self> {
@@ -33,10 +33,19 @@ impl HpTransitionKey {
 
     fn healing_domain(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize])->Result<Self,&'static str> {
         let healer=healing_side(dex,choices).ok_or("no_single_healer")?;
-        Self::new_domain(dex,battle,choices,script,Some(healer))
+        Self::new_domain(dex,battle,choices,script,Some(healer),None)
     }
 
-    fn new_domain(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize],healer:Option<usize>)->Result<Self,&'static str> {
+    pub fn new_switching(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize])->Option<Self> {
+        Self::switching_domain(dex,battle,choices,script).ok()
+    }
+
+    fn switching_domain(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize])->Result<Self,&'static str> {
+        let switcher=switching_side(choices).ok_or("not_single_switch")?;
+        Self::new_domain(dex,battle,choices,script,None,Some(switcher))
+    }
+
+    fn new_domain(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize],healer:Option<usize>,switcher:Option<usize>)->Result<Self,&'static str> {
         if !battle.started || battle.ended || battle.turn==0 || battle.mid_turn
             || battle.request_state!=RequestState::Move || battle.needs_choice()!=[true,true]
             || !battle.queue.is_empty() || !battle.faint_queue.is_empty()
@@ -56,6 +65,19 @@ impl HpTransitionKey {
                 || !matches!(pokemon.status,Status::None|Status::Par|Status::Slp|Status::Frz) {return Err("health_status_or_transform");}
             if pokemon.volatiles.iter().any(|(id,_)|dex.conds.key(*id)!="parspeeddrop") {return Err("volatile");}
             if pokemon.item.is_some_and(|item|!matches!(dex.items.key(item),"mintberry"|"miracleberry"|"brightpowder"|"quickclaw")) {return Err("active_item");}
+            if switcher==Some(side) {
+                let Some(SearchChoice::Switch(pos))=choices[side] else {return Err("non_switch_choice");};
+                if pokemon.trapped || pos<=1 {return Err("illegal_switch");}
+                let slot=*team.party.get(pos as usize-1).ok_or("illegal_switch")?;
+                let incoming=team.roster.get(slot as usize).ok_or("illegal_switch")?;
+                if incoming.hp<=0 || incoming.hp>incoming.maxhp || incoming.fainted || incoming.transformed
+                    || incoming.is_active || !incoming.volatiles.is_empty()
+                    || !matches!(incoming.status,Status::None|Status::Par|Status::Slp|Status::Frz)
+                    || incoming.item.is_some_and(|id|!matches!(dex.items.key(id),"mintberry"|"miracleberry"|"brightpowder"|"quickclaw"|"leftovers")) {
+                    return Err("incoming_state");
+                }
+                continue;
+            }
             let Some(SearchChoice::Move(id))=choices[side] else {return Err("non_move_choice");};
             if !pokemon.move_slots.iter().any(|slot|slot.id==id && slot.pp>0 && !slot.disabled) {return Err("unavailable_move");}
             if healer==Some(side) {
@@ -211,13 +233,50 @@ impl HpHealingTransition {
 }
 
 
+fn switching_side(choices:[Option<SearchChoice>;2])->Option<usize> {
+    let sides=(0..2).filter(|&side|matches!(choices[side],Some(SearchChoice::Switch(_)))).collect::<Vec<_>>();
+    (sides.len()==1).then(||sides[0])
+}
+
+struct HpSwitchTransition {
+    original_active:[PokeId;2],
+    result:Battle,
+    trace:Vec<Draw>,
+}
+
+impl HpSwitchTransition {
+    fn from_result(base:&Battle,choices:[Option<SearchChoice>;2],result:&Battle,trace:&[Draw])->Option<Self> {
+        if result.outcome().is_some() {return None;}
+        let side=switching_side(choices)?;
+        let original_active=[base.active_id(0)?,base.active_id(1)?];
+        if result.active_id(1-side)!=Some(original_active[1-side])
+            || result.active_id(side)==Some(original_active[side]) {return None;}
+        for id in original_active {
+            if result.poke(id).hp!=base.poke(id).hp || result.poke(id).fainted {return None;}
+        }
+        Some(Self {original_active,result:result.clone(),trace:trace.to_vec()})
+    }
+
+    /// The key retains the incoming Pokemon's exact HP. Only the two original
+    /// actives vary; admitted attacks cannot hit the outgoing Pokemon or
+    /// change the attacker's HP, and neither original HP changes during reuse.
+    fn translate_hp(&self,target:&Battle)->Option<(Battle,Vec<Draw>)> {
+        let mut result=self.result.clone();
+        for id in self.original_active {result.poke_mut(id).hp=target.poke(id).hp;}
+        Some((result,self.trace.clone()))
+    }
+}
+
+
 #[derive(Default,Clone,serde::Serialize)]
 pub struct HpHealingStats {
     pub observations:usize,
     pub eligible:usize,
     pub attack_eligible:usize,
+    pub switch_eligible:usize,
     pub hits:usize,
     pub attack_hits:usize,
+    pub switch_hits:usize,
     pub reset_hits:usize,
     pub rejected_hp:usize,
     pub runs:usize,
@@ -225,11 +284,11 @@ pub struct HpHealingStats {
     pub exclusions:BTreeMap<&'static str,usize>,
 }
 
-enum HpSharedTransition {Healing(HpHealingTransition),Attack(HpTransition)}
+enum HpSharedTransition {Healing(HpHealingTransition),Attack(HpTransition),Switch(HpSwitchTransition)}
 
 impl HpSharedTransition {
     fn translate_hp(&self,target:&Battle)->Option<(Battle,Vec<Draw>)> {
-        match self {Self::Healing(entry)=>entry.translate_hp(target),Self::Attack(entry)=>entry.translate_hp(target)}
+        match self {Self::Healing(entry)=>entry.translate_hp(target),Self::Attack(entry)=>entry.translate_hp(target),Self::Switch(entry)=>entry.translate_hp(target)}
     }
     fn resets_hp(&self)->bool {matches!(self,Self::Healing(entry) if entry.resets_hp())}
 }
@@ -237,6 +296,7 @@ impl HpSharedTransition {
 pub struct HpHealingCache {
     capacity:usize,
     attacks:bool,
+    switches:bool,
     entries:HashMap<HpTransitionKey,HpSharedTransition>,
     order:VecDeque<HpTransitionKey>,
     stats:HpHealingStats,
@@ -250,22 +310,26 @@ pub struct HpHealingRunner<'a> {
     key:Option<HpTransitionKey>,
     exclusion:Option<&'static str>,
     attack:bool,
+    switch:bool,
 }
 
 impl HpHealingCache {
     pub fn new(capacity:usize)->Self {
-        Self {capacity,attacks:false,entries:HashMap::new(),order:VecDeque::new(),stats:HpHealingStats::default()}
+        Self {capacity,attacks:false,switches:false,entries:HashMap::new(),order:VecDeque::new(),stats:HpHealingStats::default()}
     }
     pub fn with_attacks(mut self)->Self {
         assert_eq!(self.stats.observations,0);self.attacks=true;self
     }
+    pub fn with_switches(mut self)->Self {
+        assert_eq!(self.stats.observations,0);self.switches=true;self
+    }
     pub fn stats(&self)->HpHealingStats {self.stats.clone()}
     pub fn prepare<'a>(&'a mut self,dex:&'a Dex,base:&'a Battle,choices:[Option<SearchChoice>;2])->HpHealingRunner<'a> {
         let mut attack=false;
-        let (key,exclusion)=if self.capacity==0 {(None,Some("disabled"))} else {
+        let (mut key,mut exclusion)=if self.capacity==0 {(None,Some("disabled"))} else {
             match HpTransitionKey::healing_domain(dex,base,choices,&[]) {
                 Ok(key)=>(Some(key),None),
-                Err(reason)=>match self.attacks.then(||HpTransitionKey::new_domain(dex,base,choices,&[],None)) {
+                Err(reason)=>match self.attacks.then(||HpTransitionKey::new_domain(dex,base,choices,&[],None,None)) {
                     Some(Ok(key))=>{attack=true;(Some(key),None)},
                     Some(Err(attack_reason))=> {
                         let reason=if reason=="no_single_healer" {
@@ -279,7 +343,14 @@ impl HpHealingCache {
                 },
             }
         };
-        HpHealingRunner {cache:self,dex,base,choices,key,exclusion,attack}
+        let mut switch=false;
+        if key.is_none() && self.capacity>0 && self.switches {
+            match HpTransitionKey::switching_domain(dex,base,choices,&[]) {
+                Ok(found)=>{key=Some(found);exclusion=None;switch=true;},
+                Err(reason)=>if choices.iter().any(|choice|matches!(choice,Some(SearchChoice::Switch(_)))) {exclusion=Some(reason);},
+            }
+        }
+        HpHealingRunner {cache:self,dex,base,choices,key,exclusion,attack,switch}
     }
 }
 
@@ -290,10 +361,12 @@ impl HpHealingRunner<'_> {
         let key=self.key.as_ref().map(|key| {let mut key=key.clone();key.script=script.to_vec();key});
         self.cache.stats.eligible+=usize::from(key.is_some());
         self.cache.stats.attack_eligible+=usize::from(self.attack);
+        self.cache.stats.switch_eligible+=usize::from(self.switch);
         if let Some(entry)=key.as_ref().and_then(|key|self.cache.entries.get(key)) {
             if let Some((battle,trace))=entry.translate_hp(self.base) {
                 self.cache.stats.hits+=1;self.cache.stats.reset_hits+=usize::from(entry.resets_hp());
                 self.cache.stats.attack_hits+=usize::from(self.attack);
+                self.cache.stats.switch_hits+=usize::from(self.switch);
                 return (battle,trace,false);
             }
             self.cache.stats.rejected_hp+=1;
@@ -301,7 +374,8 @@ impl HpHealingRunner<'_> {
         let (battle,trace)=run_scripted(self.dex,self.base,self.choices,script);
         self.cache.stats.runs+=1;
         if let Some(key)=key.filter(|key|!self.cache.entries.contains_key(key)) {
-            let entry=if self.attack {HpTransition::from_key(key.clone(),self.base,&battle,&trace).map(HpSharedTransition::Attack)}
+            let entry=if self.switch {HpSwitchTransition::from_result(self.base,self.choices,&battle,&trace).map(HpSharedTransition::Switch)}
+                else if self.attack {HpTransition::from_key(key.clone(),self.base,&battle,&trace).map(HpSharedTransition::Attack)}
                 else {HpHealingTransition::from_result(self.dex,key.clone(),self.base,self.choices,&battle,&trace).map(HpSharedTransition::Healing)};
             if let Some(entry)=entry {
                 if self.cache.entries.len()==self.cache.capacity {
@@ -710,6 +784,78 @@ mod tests {
         let stats=cache.stats();assert!(stats.attack_hits>100 && stats.rejected_hp>0);
         assert_eq!(stats.attack_hits,stats.hits);assert_eq!(stats.attack_eligible,stats.eligible);
         assert_eq!(stats.observations,stats.hits+stats.runs);
+    }
+
+
+    fn switching_battle(dex:&Dex,switcher:usize,sleeping:bool)->(Battle,[Option<SearchChoice>;2]) {
+        let mon=|species:&str,moves:&[&str],item:&str|PokemonSet {
+            name:species.into(),species:species.into(),item:item.into(),ability:String::new(),
+            moves:moves.iter().map(|m|(*m).into()).collect(),level:50,evs:None,ivs:None,gender:None,happiness:None};
+        let attacker=vec![mon("Snorlax",&["Body Slam"],"Mint Berry")];
+        let switching=vec![mon("Vaporeon",&["Hydro Pump","Rest"],"Bright Powder"),mon("Snorlax",&["Self-Destruct"],"Leftovers")];
+        let teams=if switcher==0 {[switching,attacker]} else {[attacker,switching]};
+        let mut b=Battle::from_fixture(dex,"1,2,3,4",&teams[0],&teams[1]).unwrap();
+        let preview=[0,1].map(|side|b.legal_choices(dex,side).first().copied());b.apply_choices(dex,preview).unwrap();
+        if sleeping {
+            let id=b.active_id(switcher).unwrap();b.poke_mut(id).status=Status::Slp;
+            b.poke_mut(id).status_state.set_int(DK::Time,1);b.poke_mut(id).status_state.set_int(DK::StartTime,3);
+            b.refresh_poke_mask(dex,id);
+        }
+        let choices=[0,1].map(|side|Some(if side==switcher {SearchChoice::Switch(2)} else {SearchChoice::Move(dex.moves.id("bodyslam").unwrap())}));
+        (b,choices)
+    }
+
+    #[test]
+    fn prepared_switch_cache_matches_full_kernels_including_incoming_ko() {
+        use nc2000_engine::battle::enumerate::{enumerate_step,enumerate_step_with_runner};
+        let dex=conformance::load_dex();let mut hits=0;let mut replacement_hits=0;
+        for switcher in 0..2 {for sleeping in [false,true] {for incoming_hp in [20,133,200] {
+            let (mut base,choices)=switching_battle(&dex,switcher,sleeping);
+            let incoming=base.sides[switcher].party[1] as usize;base.sides[switcher].roster[incoming].hp=incoming_hp;
+            let mut cache=HpHealingCache::new(4096).with_attacks().with_switches();
+            for hp in [[200,200],[1,200],[150,1],[1,1]] {
+                let mut target=base.clone();
+                for side in 0..2 {let id=target.active_id(side).unwrap();target.poke_mut(id).hp=hp[side];}
+                let expected=enumerate_step(&dex,&target,choices,100_000).unwrap();
+                let mut runner=cache.prepare(&dex,&target,choices);
+                let found=enumerate_step_with_runner(&dex,&target,choices,100_000,&mut |script| {
+                    let found=runner.run(script);let actual=run_scripted(&dex,&target,choices,script);
+                    if !found.2 {hits+=1;replacement_hits+=usize::from(found.0.request_state==RequestState::Switch);}
+                    assert_eq!(found.0.state_key128(),actual.0.state_key128());
+                    assert_eq!(trace_signature(&found.1),trace_signature(&actual.1));found
+                }).unwrap();
+                let aggregate=|leaves:Vec<nc2000_engine::battle::enumerate::ChanceLeaf>| {
+                    let mut map=HashMap::<u128,f64>::new();
+                    for leaf in leaves {*map.entry(leaf.battle.state_key128()).or_default()+=leaf.prob;}
+                    map
+                };
+                let found=aggregate(found.leaves);let expected=aggregate(expected.leaves);
+                assert_eq!(found.len(),expected.len());
+                for (key,mass) in found {assert!((mass-expected[&key]).abs()<1e-10);}
+            }
+            let stats=cache.stats();assert_eq!(stats.switch_hits,stats.hits);
+            assert_eq!(stats.switch_eligible,stats.eligible);assert_eq!(stats.observations,stats.runs+stats.hits);
+        }}}
+        assert!(hits>1000 && replacement_hits>100);
+    }
+
+    #[test]
+    fn switching_keys_preserve_incoming_hp_and_reject_hp_sensitive_paths() {
+        let dex=conformance::load_dex();let (base,choices)=switching_battle(&dex,1,false);
+        let original=HpTransitionKey::new_switching(&dex,&base,choices,&[]).unwrap();
+        let mut b=base.clone();for side in 0..2 {let id=b.active_id(side).unwrap();b.poke_mut(id).hp=1;}
+        assert_eq!(HpTransitionKey::new_switching(&dex,&b,choices,&[]),Some(original.clone()));
+        let incoming=b.sides[1].party[1] as usize;b.sides[1].roster[incoming].hp-=1;
+        assert_ne!(HpTransitionKey::new_switching(&dex,&b,choices,&[]),Some(original));
+        let outgoing=base.active_id(1).unwrap();let attacker=base.active_id(0).unwrap();
+        let mut b=base.clone();b.poke_mut(outgoing).trapped=true;assert!(HpTransitionKey::new_switching(&dex,&b,choices,&[]).is_none());
+        for pos in [0,1,99] {let mut choices=choices;choices[1]=Some(SearchChoice::Switch(pos));assert!(HpTransitionKey::new_switching(&dex,&base,choices,&[]).is_none());}
+        for name in ["pursuit","doubleedge","reversal"] {
+            let mut b=base.clone();let mv=dex.moves.id(name).unwrap();b.poke_mut(attacker).move_slots[0].id=mv;
+            let mut choices=choices;choices[0]=Some(SearchChoice::Move(mv));assert!(HpTransitionKey::new_switching(&dex,&b,choices,&[]).is_none());
+        }
+        let mut b=base.clone();b.poke_mut(attacker).item=dex.items.id("leftovers");assert!(HpTransitionKey::new_switching(&dex,&b,choices,&[]).is_none());
+        let mut b=base.clone();b.sides[1].roster[incoming].item=dex.items.id("focusband");assert!(HpTransitionKey::new_switching(&dex,&b,choices,&[]).is_none());
     }
 
 }

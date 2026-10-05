@@ -35,7 +35,7 @@ def summarize(records, corpus):
     expected = dict(old['config'], healing_capacity=0)
     if 'reuse_attacks' in config:
         expected['reuse_attacks'] = False
-    for key, value in dict(boom_eager_cap=0, boom_terminal_quotient=False).items():
+    for key, value in dict(boom_eager_cap=0, boom_terminal_quotient=False, reuse_switches=False).items():
         if key in config:
             expected[key] = value
     assert config == expected

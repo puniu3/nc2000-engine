@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-switch-reuse-v1'
+names = ['control', 'switch']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records, corpus):
+    assert set(records) == set(names)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert len({json.dumps(r['manifest']['source_hashes']) for r in records.values()}) == 1
+    assert len({r['manifest']['dex_fingerprint'] for r in records.values()}) == 1
+    assert all(r['manifest']['corpus_sha256'] == sha(corpus) for r in records.values())
+    old_path = root / 'findings/policy-terminal-quotient-v1/records.json.gz'
+    old = json.loads(gzip.decompress(old_path.read_bytes()))['eager']
+    baseline = records['control']['report']
+    for key, value in old['report'].items():
+        if key == 'healing_cache':
+            assert all(baseline[key][field] == count for field, count in value.items())
+        elif key != 'elapsed_ms':
+            assert baseline[key] == value, key
+    config = records['control']['config']
+    expected = dict(old['config'], reuse_switches=False)
+    assert config == expected
+    results = {}
+    for name in names:
+        record = records[name]
+        capacity = config['healing_capacity']
+        assert record['config'] == dict(config, reuse_switches=name == 'switch')
+        assert record['schema'] == old['schema'] and record['state_key'] == old['state_key']
+        report = record['report']
+        cache = report['healing_cache']
+        assert cache['observations'] == cache['runs'] + cache['hits']
+        boom = report['boom_eager']
+        assert cache['runs'] + boom['runs'] == report['runs']
+        assert boom['completed'] <= boom['attempts']
+        assert boom['terminal_replacements'] <= boom['runs']
+        assert boom['terminal_replacements'] == 0
+        assert cache['switch_hits'] <= cache['switch_eligible'] <= cache['eligible']
+        if name == 'control':
+            assert cache['switch_hits'] == cache['switch_eligible'] == 0
+        assert cache['attack_hits'] <= cache['attack_eligible'] <= cache['eligible']
+        assert cache['reset_hits'] <= cache['hits'] - cache['attack_hits'] - cache['switch_hits']
+        assert sum(cache['exclusions'].values()) + cache['eligible'] == cache['observations']
+        assert cache['hits'] + cache['rejected_hp'] <= cache['eligible'] <= cache['observations']
+        assert cache['peak_entries'] <= capacity
+        previous = dict(runs=0, wins=0, ties=0, losses=0, dropped_mass=0, failed_mass=0, score=dict(lo=0, hi=1))
+        for depth, row in enumerate(report['layers'], 1):
+            assert row['depth'] == depth and row['runs'] <= config['work_budget']
+            assert 0 <= row['frontier_templates'] <= min(row['frontier_states'], config['width'])
+            assert row['frontier_states'] <= config['packed_state_cap']
+            assert abs(row['unknown_mass'] - sum(row[k] for k in ['dropped_mass', 'failed_mass', 'frontier_mass'])) < 1e-12
+            assert abs(sum(row[k] for k in ['wins', 'ties', 'losses', 'unknown_mass']) - 1) < 1e-9
+            for key in ['runs', 'wins', 'ties', 'losses', 'dropped_mass', 'failed_mass']:
+                assert row[key] >= previous[key]
+            assert row['score']['lo'] >= previous['score']['lo'] - 1e-12
+            assert row['score']['hi'] <= previous['score']['hi'] + 1e-12
+            pad = report['numerical_envelope']
+            assert row['score']['lo'] == max(0, row['wins'] + .5 * row['ties'] - pad)
+            assert row['score']['hi'] == min(1, row['wins'] + .5 * row['ties'] + row['unknown_mass'] + pad)
+            previous = row
+        assert report['score'] == previous['score'] and report['runs'] == previous['runs']
+        results[name] = dict(score=report['score'], runs=report['runs'], elapsed_ms=report['elapsed_ms'], cache=cache, boom_eager=boom,
+                             hit_fraction=cache['hits'] / max(1, cache['observations']),
+                             peak_states=report['peak_frontier'], peak_templates=report['peak_templates'],
+                             depth=len(report['layers']), final=previous)
+    return dict(schema='nc2000-policy-switch-reuse-v1', results=results,
+                prior_archive_sha256=sha(old_path.read_bytes()),
+                interpretation='Equal actual engine-execution budgets compare guarded attack/healing reuse plus eager Body Slam / Selfdestruct enumeration with added voluntary-switch reuse. Switch keys preserve incoming HP; only the unchanged HP of the two original actives varies. The domain excludes Pursuit, recoil, HP-sensitive moves and residual damage to the attacker. Forty-eight exhaustive kernel comparisons cover both orientations, outgoing sleep, incoming HP and incoming KO. Every cached script matches direct state and draw traces. Unknown probability remains unknown. These are fixed-policy-pair intervals, not unrestricted game value or deployed strength. Wall times do not establish speedup.')
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    assert all(records[name]['config'] == json.loads((archive / f'{name}.json').read_bytes()) for name in names)
+    assert summarize(records, corpus) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified unchanged control, actual-execution accounting and conservative intervals')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-switch-reuse-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    command = [str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl')]
+    for name in names:
+        (directory / f'{name}.json').write_bytes((archive / f'{name}.json').read_bytes())
+        subprocess.run(command + ['certify', str(directory / f'{name}.json'), str(directory / f'{name}-result.json')], cwd=root, env=env, check=True)
+records = {name: json.loads((directory / f'{name}-result.json').read_bytes()) for name in names}
+corpus = (directory / 'corpus.jsonl').read_bytes()
+summary = summarize(records, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for name, row in summary['results'].items():
+    print(name, json.dumps(row))
