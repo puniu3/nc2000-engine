@@ -193,7 +193,7 @@ impl BlindAgent {
             if let Some(mixture) = self.adaptive_mixture.as_mut() {
                 let mut search = BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
                 debug_assert_eq!(search.actions(), choices);
-                let probes = search.finish_with_mixed_probes(dex, &g.belief, &g.observer, self.cfg.iterations, mixture.probe_iterations);
+                let probes = search.finish_with_typed_mixed_probes(dex, &g.belief, &g.observer, self.cfg.iterations, mixture.probe_iterations);
                 self.root_stats.probed_searches += u64::from(probes > 0);
                 self.root_stats.probe_iterations += u64::from(probes);
                 self.rng = search.rng.clone();
@@ -1419,7 +1419,7 @@ mod mixed_selection_tests {
             let cfg = RmConfig {iterations, c:0.4, ..Default::default()};
             let reserve = iterations * 2 / 5;
             let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 7);
-            let probes = reference.finish_with_mixed_probes(&dex, &belief, &observer, iterations, reserve);
+            let probes = reference.finish_with_typed_mixed_probes(&dex, &belief, &observer, iterations, reserve);
             assert_eq!(reference.mixed_policy().is_some(), expect_mix, "{:?}", reference.root_matrix());
             let mut draws = SplitMix64::new(7 ^ 0xa24baed4963ee407);
             let expected = reference.sample_mixed(draws.next_f64()).unwrap();

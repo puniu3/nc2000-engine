@@ -56,7 +56,7 @@ def summarize(records, typed=False):
             for r, b in zip(current, before):
                 assert r['seed'] == b['seed'] and r['probes_used'] in (0, 10800)
                 same_branch = r['probes_used'] == b['probes_used']
-                if same_branch and (not typed or r['probes_used'] == 0):
+                if same_branch:
                     for field in ['choice', 'visits', 'means', 'dominated', 'joint', 'reply_availability', 'play_draw']:
                         assert r[field] == b[field], (name, side, r['seed'], field)
                 p = r['candidate_policy'] if r['candidate_policy'] is not None else [float(a == r['choice']) for a in actions]

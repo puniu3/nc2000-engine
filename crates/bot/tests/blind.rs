@@ -131,8 +131,11 @@ fn active_mixture_is_identical_across_ambiguous_hidden_stats() {
         let belief = agent.belief().unwrap(); let observer = agent.observer().unwrap();
         assert_eq!(belief.candidate_count(), 2);
         let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, before_rng);
-        reference.finish_with_mixed_probes(&dex, belief, observer, 27000, 10800);
+        reference.finish_with_typed_mixed_probes(&dex, belief, observer, 27000, 10800);
         assert!(reference.mixed_policy().is_some());
+        let probes = reference.joint_probe_visits().iter().sum::<u32>();
+        reference.step_typed_joint_probes(&dex, belief, observer, 240);
+        assert_eq!(reference.joint_probe_visits().iter().sum::<u32>(), probes + 240);
         observations.push((choice, agent.search_rng_state(), reference.root_matrix(),
             projection(&dex, belief, &battle, observer, 0)));
     }
