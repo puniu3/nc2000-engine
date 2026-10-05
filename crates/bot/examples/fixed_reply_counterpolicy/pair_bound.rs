@@ -1,6 +1,6 @@
 use super::*;
 use std::collections::{BTreeMap,BinaryHeap};
-use nc2000_engine::battle::enumerate::{enumerate_step,run_scripted};
+use nc2000_engine::battle::enumerate::enumerate_step;
 
 #[derive(Serialize,Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -19,18 +19,21 @@ struct Config {
     packed_hp: bool,
     #[serde(default="state_cap")]
     packed_state_cap: usize,
+    #[serde(default)]
+    healing_capacity: usize,
 }
 
 fn state_cap()->usize {100_000}
 
 type Frontier = BTreeMap<u128,(Battle,f64)>;
 
-fn partial_step(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],cap:usize)->(Frontier,f64,usize) {
+fn partial_step(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],cap:usize,cache:&mut nc2000_bot::hp_transition::HpHealingCache)->(Frontier,f64,usize) {
     let mut pending=BinaryHeap::from([(1.0f64.to_bits(),Vec::<usize>::new())]);
-    let mut leaves=Frontier::new();let mut runs=0;
-    while runs<cap {
+    let mut leaves=Frontier::new();let mut runs=0;let mut observations=0;
+    let mut runner=cache.prepare(dex,battle,choices);
+    while observations<cap {
         let Some((mass,script))=pending.pop() else {break;};
-        let (leaf,trace)=run_scripted(dex,battle,choices,&script);runs+=1;
+        let (leaf,trace,executed)=runner.run(&script);runs+=usize::from(executed);observations+=1;
         let mut prefix=1.0;let mut siblings=0.0;
         for (p,draw) in trace.iter().enumerate() {
             if p>=script.len() {
@@ -55,6 +58,8 @@ fn partial_step(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],cap:usi
 fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
     mut choose:impl FnMut(&mut Battle,bool)->[Option<SearchChoice>;2])->Value {
     assert!(cfg.width>0 && cfg.width<=100_000 && cfg.steps>0 && cfg.steps<=2048 && cfg.cell_cap>0);
+    assert!(cfg.healing_capacity<=100_000 && (cfg.healing_capacity==0 || cfg.lazy));
+    let mut healing=nc2000_bot::hp_transition::HpHealingCache::new(cfg.healing_capacity);
     let started=Instant::now();
     assert!(cfg.packed_state_cap>0 && cfg.packed_state_cap<=1_000_000);
     let mut frontier=super::retained::Retained::new(cfg.packed_hp,cfg.guarded_keys);
@@ -73,7 +78,7 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
             if cap==0 {failed+=mass;continue;}
             let choices=choose(&mut battle,depth==0);
             let (leaves,unresolved,work)=if cfg.lazy {
-                partial_step(dex,&battle,choices,cap)
+                partial_step(dex,&battle,choices,cap,&mut healing)
             } else if let Some(step)=enumerate_step(dex,&battle,choices,cap) {
                 let mut leaves=Frontier::new();
                 for leaf in step.leaves {
@@ -113,7 +118,7 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
     }
     json!({"score":rows.last().unwrap()["score"],"layers":rows,"runs":runs,
         "peak_frontier":peak_frontier,"peak_templates":peak_templates,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0,
-        "numerical_envelope":1e-9})
+        "numerical_envelope":1e-9,"healing_cache":healing.stats()})
 }
 
 pub(super) fn execute(args:&[String]) {
@@ -127,7 +132,7 @@ pub(super) fn execute(args:&[String]) {
         choose_response(&dex,b,side,first,OwnPolicy::AfterBoom75,cfg.response)));
     let result=json!({"schema":"nc2000-fixed-pair-enumeration-v1","state_key":root.state_key128().to_string(),
         "config":cfg,"report":report,"manifest":manifest(&dex,&raw),
-        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. Default state aggregation uses full state_key128; optional guarded keys omit only unobservable damage history and Quick Claw rolls. Packed storage keeps each exact HP vector and its mass separately under a shared guarded template, and applies the width limit to templates plus a separate concrete-state cap. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Floating-point probability arithmetic uses the reported numerical envelope."});
+        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. Default state aggregation uses full state_key128; optional guarded keys omit only unobservable damage history and Quick Claw rolls. Packed storage keeps each exact HP vector and its mass separately under a shared guarded template, and applies the width limit to templates plus a separate concrete-state cap. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Optional healing reuse admits only a strictly faster, below-full-HP Rest or restricted Sleep Talk user, and rejects changed HP-dependent control flow. Work counts actual engine executions; each cell still caps scripted observations. Floating-point probability arithmetic uses the reported numerical envelope."});
     std::fs::write(&args[4],serde_json::to_vec_pretty(&result).unwrap()).unwrap();
     println!("{}",serde_json::to_string(&result["report"]).unwrap());
 }
@@ -137,7 +142,7 @@ mod tests {
     use super::*;
     fn config(width:usize,steps:usize,cap:usize,work:usize)->Config {
         Config {response:CounterResponse {return_when:ReturnWhen::Always,ice_first:false,finish_low:false},
-            width,steps,cell_cap:cap,work_budget:work,lazy:false,hp_storage_census:false,guarded_keys:false,packed_hp:false,packed_state_cap:state_cap()}
+            width,steps,cell_cap:cap,work_budget:work,lazy:false,hp_storage_census:false,guarded_keys:false,packed_hp:false,packed_state_cap:state_cap(),healing_capacity:0}
     }
     fn exhaustive(dex:&Dex,b:&Battle)->f64 {
         if let Some(outcome)=b.outcome() {return match outcome {Outcome::P1Win=>1.0,Outcome::Tie=>0.5,Outcome::P2Win=>0.0};}

@@ -1,7 +1,7 @@
 use nc2000_engine::battle::{enumerate::run_scripted,SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::prng::Draw;
-use nc2000_engine::state::{Battle, PokeId, RequestState, Status};
+use nc2000_engine::state::{Battle, PokeId, RequestState, Status, DK};
 use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -24,6 +24,15 @@ pub struct HpTransition {
 
 impl HpTransitionKey {
     pub fn new(dex: &Dex, battle: &Battle, choices: [Option<SearchChoice>; 2], script: &[usize]) -> Option<Self> {
+        Self::new_domain(dex,battle,choices,script,None)
+    }
+
+    pub fn new_healing(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize])->Option<Self> {
+        let healer=healing_side(dex,choices)?;
+        Self::new_domain(dex,battle,choices,script,Some(healer))
+    }
+
+    fn new_domain(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize],healer:Option<usize>)->Option<Self> {
         if !battle.started || battle.ended || battle.turn==0 || battle.mid_turn
             || battle.request_state!=RequestState::Move || battle.needs_choice()!=[true,true]
             || !battle.queue.is_empty() || !battle.faint_queue.is_empty()
@@ -46,10 +55,29 @@ impl HpTransitionKey {
                 return None;
             }
             let Some(SearchChoice::Move(id))=choices[side] else { return None; };
-            if !matches!(dex.moves.key(id),"bodyslam"|"hydropump"|"icebeam"|"fireblast"|"thunderbolt"|"thunder"|"earthquake"|"seismictoss"|"tackle"|"splash")
-                || !pokemon.move_slots.iter().any(|slot|slot.id==id && slot.pp>0 && !slot.disabled) {
+            if !pokemon.move_slots.iter().any(|slot|slot.id==id && slot.pp>0 && !slot.disabled) {return None;}
+            if healer==Some(side) {
+                if pokemon.hp==pokemon.maxhp || !pokemon.volatiles.is_empty()
+                    || pokemon.item.is_some_and(|item|dex.items.key(item)!="brightpowder") {return None;}
+                match dex.moves.key(id) {
+                    "rest" if pokemon.status==Status::None || (pokemon.status==Status::Slp && pokemon.status_state.get_int(DK::Time)<=1)=>{},
+                    "sleeptalk" if pokemon.status==Status::Slp && pokemon.status_state.get_int(DK::Time)>1=> {
+                        if pokemon.move_slots.iter().any(|slot| {
+                            let mv=dex.move_static(slot.id);
+                            !mv.has_flag(dex,"nosleeptalk") && !mv.has_flag(dex,"charge")
+                                && !matches!(dex.moves.key(slot.id),"hydropump"|"icebeam"|"rest")
+                        }) {return None;}
+                    },
+                    _=>return None,
+                }
+            } else if !matches!(dex.moves.key(id),"bodyslam"|"hydropump"|"icebeam"|"fireblast"|"thunderbolt"|"thunder"|"earthquake"|"seismictoss"|"tackle"|"splash") {
                 return None;
             }
+        }
+        if let Some(healer)=healer {
+            if battle.quick_claw_roll_observable(dex)
+                || battle.get_pokemon_action_speed(dex,battle.active_id(healer)?)
+                    <=battle.get_pokemon_action_speed(dex,battle.active_id(1-healer)?) {return None;}
         }
         let mut canonical=battle.clone();
         for side in 0..2 {
@@ -110,6 +138,137 @@ impl HpTransition {
         let mut result=self.result.clone();
         for side in 0..2 { result.poke_mut(self.active[side]).hp=hp[side]; }
         Some((result,self.trace.clone()))
+    }
+}
+
+
+fn healing_side(dex:&Dex,choices:[Option<SearchChoice>;2])->Option<usize> {
+    let healers=(0..2).filter(|&side|matches!(choices[side],Some(SearchChoice::Move(id))
+        if matches!(dex.moves.key(id),"rest"|"sleeptalk"))).collect::<Vec<_>>();
+    (healers.len()==1).then(||healers[0])
+}
+
+pub struct HpHealingTransition {
+    key:HpTransitionKey,
+    active:[PokeId;2],
+    damage:[i32;2],
+    reset:Option<usize>,
+    result:Battle,
+    trace:Vec<Draw>,
+}
+
+impl HpHealingTransition {
+    pub fn run(dex:&Dex,base:&Battle,choices:[Option<SearchChoice>;2],script:&[usize])->(Battle,Vec<Draw>,Option<Self>) {
+        let key=HpTransitionKey::new_healing(dex,base,choices,script);
+        let (result,trace)=run_scripted(dex,base,choices,script);
+        let entry=key.and_then(|key|Self::from_result(dex,key,base,choices,&result,&trace));
+        (result,trace,entry)
+    }
+
+    fn from_result(dex:&Dex,key:HpTransitionKey,base:&Battle,choices:[Option<SearchChoice>;2],result:&Battle,trace:&[Draw])->Option<Self> {
+        if result.outcome().is_some() || result.needs_choice()!=[true,true] || result.request_state!=RequestState::Move {return None;}
+        let healer=healing_side(dex,choices)?;
+        let active=[base.active_id(0)?,base.active_id(1)?];
+        let called=result.poke(active[healer]).last_move_used?;
+        let reset=match dex.moves.key(called) {"rest"=>Some(healer),"hydropump"|"icebeam"=>None,_=>return None};
+        let mut damage=[0;2];
+        for side in 0..2 {
+            let id=active[side];
+            if result.active_id(side)!=Some(id) || result.poke(id).fainted || result.poke(id).hp<=0 {return None;}
+            if reset!=Some(side) {
+                damage[side]=base.poke(id).hp-result.poke(id).hp;
+                if damage[side]<0 {return None;}
+            }
+        }
+        Some(Self {key,active,damage,reset,result:result.clone(),trace:trace.to_vec()})
+    }
+
+    pub fn key(&self)->&HpTransitionKey {&self.key}
+    pub fn resets_hp(&self)->bool {self.reset.is_some()}
+
+    /// The admitted healer acts first and starts below full HP. Rest resets
+    /// its HP before the only opposing attack; attack branches only decrease
+    /// HP, so strictly positive translated survivors preserve the draw trace.
+    pub fn translate(&self,dex:&Dex,target:&Battle,choices:[Option<SearchChoice>;2],script:&[usize])->Option<(Battle,Vec<Draw>)> {
+        if HpTransitionKey::new_healing(dex,target,choices,script).as_ref()!=Some(&self.key) {return None;}
+        self.translate_hp(target)
+    }
+
+    fn translate_hp(&self,target:&Battle)->Option<(Battle,Vec<Draw>)> {
+        let mut result=self.result.clone();
+        for side in 0..2 {
+            if self.reset!=Some(side) {
+                let hp=target.poke(self.active[side]).hp-self.damage[side];
+                if hp<=0 {return None;}
+                result.poke_mut(self.active[side]).hp=hp;
+            }
+        }
+        Some((result,self.trace.clone()))
+    }
+}
+
+
+#[derive(Default,Clone,Copy,serde::Serialize)]
+pub struct HpHealingStats {
+    pub observations:usize,
+    pub eligible:usize,
+    pub hits:usize,
+    pub reset_hits:usize,
+    pub rejected_hp:usize,
+    pub runs:usize,
+    pub peak_entries:usize,
+}
+
+pub struct HpHealingCache {
+    capacity:usize,
+    entries:HashMap<HpTransitionKey,HpHealingTransition>,
+    order:VecDeque<HpTransitionKey>,
+    stats:HpHealingStats,
+}
+
+pub struct HpHealingRunner<'a> {
+    cache:&'a mut HpHealingCache,
+    dex:&'a Dex,
+    base:&'a Battle,
+    choices:[Option<SearchChoice>;2],
+    key:Option<HpTransitionKey>,
+}
+
+impl HpHealingCache {
+    pub fn new(capacity:usize)->Self {
+        Self {capacity,entries:HashMap::new(),order:VecDeque::new(),stats:HpHealingStats::default()}
+    }
+    pub fn stats(&self)->HpHealingStats {self.stats}
+    pub fn prepare<'a>(&'a mut self,dex:&'a Dex,base:&'a Battle,choices:[Option<SearchChoice>;2])->HpHealingRunner<'a> {
+        let key=(self.capacity>0).then(||HpTransitionKey::new_healing(dex,base,choices,&[])).flatten();
+        HpHealingRunner {cache:self,dex,base,choices,key}
+    }
+}
+
+impl HpHealingRunner<'_> {
+    pub fn run(&mut self,script:&[usize])->(Battle,Vec<Draw>,bool) {
+        self.cache.stats.observations+=1;
+        let key=self.key.as_ref().map(|key| {let mut key=key.clone();key.script=script.to_vec();key});
+        self.cache.stats.eligible+=usize::from(key.is_some());
+        if let Some(entry)=key.as_ref().and_then(|key|self.cache.entries.get(key)) {
+            if let Some((battle,trace))=entry.translate_hp(self.base) {
+                self.cache.stats.hits+=1;self.cache.stats.reset_hits+=usize::from(entry.resets_hp());
+                return (battle,trace,false);
+            }
+            self.cache.stats.rejected_hp+=1;
+        }
+        let (battle,trace)=run_scripted(self.dex,self.base,self.choices,script);
+        self.cache.stats.runs+=1;
+        if let Some(key)=key.filter(|key|!self.cache.entries.contains_key(key)) {
+            if let Some(entry)=HpHealingTransition::from_result(self.dex,key.clone(),self.base,self.choices,&battle,&trace) {
+                if self.cache.entries.len()==self.cache.capacity {
+                    self.cache.entries.remove(&self.cache.order.pop_front().unwrap());
+                }
+                self.cache.order.push_back(key.clone());self.cache.entries.insert(key,entry);
+                self.cache.stats.peak_entries=self.cache.stats.peak_entries.max(self.cache.entries.len());
+            }
+        }
+        (battle,trace,true)
     }
 }
 
@@ -365,4 +524,117 @@ mod tests {
         base.add_volatile(&dex,id,"substitute",None,EffectHandle::None);
         assert!(HpTransitionKey::new(&dex,&base,choices,&[]).is_none());
     }
+
+    fn healing_battle(dex:&Dex,healer:usize,mode:&str)->(Battle,[Option<SearchChoice>;2]) {
+        let kit=&["Hydro Pump","Ice Beam","Sleep Talk","Rest"][..];
+        let moves=if healer==0 {[kit,&["Seismic Toss"][..]]} else {[&["Seismic Toss"][..],kit]};
+        let items=if healer==0 {["Bright Powder","Mint Berry"]} else {["Mint Berry","Bright Powder"]};
+        let mut b=battle(dex,moves,items);
+        let id=b.active_id(healer).unwrap();
+        b.poke_mut(id).hp-=1;b.poke_mut(id).stored_stats[4]=200;
+        b.update_speed(dex,id);
+        if mode!="awake" {
+            b.poke_mut(id).status=Status::Slp;
+            b.poke_mut(id).status_state.set_int(DK::Time,if mode=="waking" {1} else {2});
+        }
+        b.refresh_poke_mask(dex,id);
+        let choices=[0,1].map(|side|Some(SearchChoice::Move(dex.moves.id(
+            if side!=healer {"seismictoss"} else if mode=="talk" {"sleeptalk"} else {"rest"}).unwrap())));
+        (b,choices)
+    }
+
+    #[test]
+    fn healing_translation_matches_complete_kernels_on_both_sides() {
+        use nc2000_engine::battle::enumerate::{enumerate_step,enumerate_step_with_runner,ChanceLeaf};
+        let dex=conformance::load_dex();let mut resets=0;let mut attacks=0;let mut rejected=0;
+        let aggregate=|leaves:Vec<ChanceLeaf>| {
+            let mut out=HashMap::<u128,f64>::new();
+            for leaf in leaves {*out.entry(leaf.battle.state_key128()).or_default()+=leaf.prob;}
+            out
+        };
+        for healer in 0..2 {for mode in ["awake","waking","talk"] {
+            let (base,choices)=healing_battle(&dex,healer,mode);
+            assert!(HpTransitionKey::new_healing(&dex,&base,choices,&[]).is_some());
+            for healer_hp in [1,50,100] {for other_hp in [1,80,200] {
+                let mut target=base.clone();
+                for (side,hp) in [(healer,healer_hp),(1-healer,other_hp)] {
+                    let id=target.active_id(side).unwrap();target.poke_mut(id).hp=hp;
+                }
+                let actual=enumerate_step(&dex,&target,choices,100_000).unwrap();
+                let shared=enumerate_step_with_runner(&dex,&target,choices,100_000,&mut |script| {
+                    let (_,_,entry)=HpHealingTransition::run(&dex,&base,choices,script);
+                    let entry=entry.expect("high HP reference must survive");
+                    let direct=run_scripted(&dex,&target,choices,script);
+                    if let Some(found)=entry.translate(&dex,&target,choices,script) {
+                        resets+=usize::from(entry.resets_hp());attacks+=usize::from(!entry.resets_hp());
+                        assert_eq!(found.0.state_key128(),direct.0.state_key128());
+                        assert_eq!(trace_signature(&found.1),trace_signature(&direct.1));
+                        (found.0,found.1,false)
+                    } else {rejected+=1;(direct.0,direct.1,true)}
+                }).unwrap();
+                let expected=aggregate(actual.leaves);let found=aggregate(shared.leaves);
+                assert_eq!(found.len(),expected.len());
+                for (key,mass) in found {assert!((mass-expected[&key]).abs()<1e-10);}
+            }}
+        }}
+        assert!(resets>100 && attacks>100 && rejected>100);
+    }
+
+    #[test]
+    fn healing_guards_full_hp_action_order_status_and_called_pool() {
+        let dex=conformance::load_dex();
+        for mode in ["awake","waking","talk"] {
+            let (base,choices)=healing_battle(&dex,1,mode);
+            let id=base.active_id(1).unwrap();let foe=base.active_id(0).unwrap();
+            let rejects=|b:&Battle|assert!(HpTransitionKey::new_healing(&dex,b,choices,&[]).is_none());
+            let mut b=base.clone();b.poke_mut(id).hp=b.poke(id).maxhp;rejects(&b);
+            b=base.clone();b.poke_mut(id).stored_stats[4]=1;rejects(&b);
+            b=base.clone();b.poke_mut(id).stored_stats[4]=b.poke(foe).stored_stats[4];rejects(&b);
+            b=base.clone();b.poke_mut(id).status=Status::Par;rejects(&b);
+            b=base.clone();b.poke_mut(id).status=Status::Frz;rejects(&b);
+            for name in ["Quick Claw","Leftovers","Gold Berry","Mint Berry"] {
+                b=base.clone();b.poke_mut(id).item=Some(dex.items.id(&name.to_lowercase().replace(' ',"")).unwrap());rejects(&b);
+            }
+            b=base.clone();b.poke_mut(foe).item=dex.known_items.quickclaw;rejects(&b);
+            b=base.clone();b.poke_mut(id).status=Status::Slp;b.poke_mut(id).status_state.set_int(DK::Time,if mode=="talk" {1} else {2});rejects(&b);
+            if mode=="talk" {
+                b=base.clone();b.poke_mut(id).move_slots[0].id=dex.moves.id("selfdestruct").unwrap();rejects(&b);
+            }
+        }
+    }
+
+
+    #[test]
+    fn prepared_healing_cache_matches_kernels_and_counts_actual_work() {
+        use nc2000_engine::battle::enumerate::{enumerate_step,enumerate_step_with_runner};
+        let dex=conformance::load_dex();let (base,choices)=healing_battle(&dex,1,"talk");
+        for capacity in [0,3,4096] {
+            let mut cache=HpHealingCache::new(capacity);
+            for hp in [200,150,1,100] {
+                let mut target=base.clone();let id=target.active_id(1).unwrap();target.poke_mut(id).hp=hp;
+                let before=cache.stats().runs;
+                let mut runner=cache.prepare(&dex,&target,choices);
+                let found=enumerate_step_with_runner(&dex,&target,choices,100_000,&mut |script| {
+                    let found=runner.run(script);let actual=run_scripted(&dex,&target,choices,script);
+                    assert_eq!(found.0.state_key128(),actual.0.state_key128());
+                    assert_eq!(trace_signature(&found.1),trace_signature(&actual.1));
+                    found
+                }).unwrap();
+                assert_eq!(found.runs,cache.stats().runs-before);
+                let expected=enumerate_step(&dex,&target,choices,100_000).unwrap();
+                let aggregate=|leaves:Vec<nc2000_engine::battle::enumerate::ChanceLeaf>| {
+                    let mut map=HashMap::<u128,f64>::new();
+                    for leaf in leaves {*map.entry(leaf.battle.state_key128()).or_default()+=leaf.prob;}
+                    map
+                };
+                let found=aggregate(found.leaves);let expected=aggregate(expected.leaves);
+                assert_eq!(found.len(),expected.len());
+                for (key,mass) in found {assert!((mass-expected[&key]).abs()<1e-10);}
+            }
+            let stats=cache.stats();assert!(stats.peak_entries<=capacity);
+            assert_eq!(stats.observations,stats.runs+stats.hits);
+            if capacity==0 {assert_eq!(stats.hits,0);} else if capacity==4096 {assert!(stats.hits>100 && stats.reset_hits>0 && stats.rejected_hp>0);}
+        }
+    }
+
 }
