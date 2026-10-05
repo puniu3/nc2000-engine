@@ -1,0 +1,271 @@
+{
+  "schema": "nc2000-policy-frontier-v1",
+  "state": {
+    "game": 19,
+    "decision": 17,
+    "state_key": "160298700970866480479685871464306122045"
+  },
+  "arms": {
+    "diagnostic": {
+      "value": {
+        "lo": 0.024978727985879325,
+        "hi": 0.1584228600106577
+      },
+      "runs": 1591411,
+      "nodes": 119996,
+      "closed": 4,
+      "elapsed_ms": 34322.278167,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.13344413204177838
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.1334441320417783
+        }
+      ],
+      "max_visited_depth": 10,
+      "depth_limit_trials": 0,
+      "eager_failures": 3158,
+      "eager_failure_runs": 808448,
+      "dominated_actions": 0
+    },
+    "pruned": {
+      "value": {
+        "lo": 0.024978727985879325,
+        "hi": 0.1584228600106577
+      },
+      "runs": 1591411,
+      "nodes": 119996,
+      "closed": 4,
+      "elapsed_ms": 35401.612,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.13344413204177838
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.1334441320417783
+        }
+      ],
+      "max_visited_depth": 10,
+      "depth_limit_trials": 0,
+      "eager_failures": 3158,
+      "eager_failure_runs": 808448,
+      "dominated_actions": 24
+    },
+    "pruned-eager": {
+      "value": {
+        "lo": 0.02691650390625,
+        "hi": 0.14640816212260332
+      },
+      "runs": 1703764,
+      "nodes": 120006,
+      "closed": 0,
+      "elapsed_ms": 34000.243708,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.11949165823335332
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.11949165823335328
+        }
+      ],
+      "max_visited_depth": 9,
+      "depth_limit_trials": 0,
+      "eager_failures": 130,
+      "eager_failure_runs": 532480,
+      "dominated_actions": 0
+    },
+    "pruned-lazy": {
+      "value": {
+        "lo": 0.008882719403090641,
+        "hi": 0.2113763295539392
+      },
+      "runs": 695777,
+      "nodes": 120000,
+      "closed": 0,
+      "elapsed_ms": 60484.8875,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.20249361016784856
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.20249361016784861
+        }
+      ],
+      "max_visited_depth": 13,
+      "depth_limit_trials": 0,
+      "eager_failures": 0,
+      "eager_failure_runs": 0,
+      "dominated_actions": 0
+    },
+    "refined": {
+      "value": {
+        "lo": 0.06458745081133352,
+        "hi": 0.143475286919966
+      },
+      "runs": 6330872,
+      "nodes": 500035,
+      "closed": 0,
+      "elapsed_ms": 131633.505917,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.07888783612563248
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.07888783612563244
+        }
+      ],
+      "max_visited_depth": 15,
+      "depth_limit_trials": 0,
+      "eager_failures": 346,
+      "eager_failure_runs": 1417216,
+      "dominated_actions": 0
+    }
+  },
+  "combined": {
+    "matrix": {
+      "actions": [
+        [
+          "move bodyslam",
+          "move earthquake",
+          "move curse",
+          "move selfdestruct"
+        ],
+        [
+          "move thunder",
+          "move hiddenpower",
+          "move swagger",
+          "move substitute"
+        ]
+      ],
+      "cells": [
+        {
+          "lo": 0.09740885722600329,
+          "hi": 0.143475286919966
+        },
+        {
+          "lo": 0.15370122728019764,
+          "hi": 0.4987183982805539
+        },
+        {
+          "lo": 0.3081383337796879,
+          "hi": 0.7295735854985166
+        },
+        {
+          "lo": 0.06458745081133352,
+          "hi": 0.3019799298029174
+        },
+        {
+          "lo": 0.0010317653154564186,
+          "hi": 0.11484676494985677
+        },
+        {
+          "lo": 0.0014384113399564093,
+          "hi": 0.43202771860427913
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.6351142583058058
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.3829370733608902
+        },
+        {
+          "lo": 0.0011002588471994254,
+          "hi": 0.11492988321850156
+        },
+        {
+          "lo": 0.0014384113399564093,
+          "hi": 0.4320277186042792
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.6353128079171583
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.3829370733608902
+        },
+        {
+          "lo": 0.000918281281021317,
+          "hi": 0.028177046481342956
+        },
+        {
+          "lo": 0.0014384113399564093,
+          "hi": 0.09494996490514393
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.10585842322129496
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.09573426834022256
+        }
+      ],
+      "value": {
+        "lo": 0.06458745081133352,
+        "hi": 0.143475286919966
+      }
+    },
+    "archived": [
+      {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.06458745081133352,
+          "hi": 0.143475286919966
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.07888783620863248
+        }
+      },
+      {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.856524713080034,
+          "hi": 0.9025911427739968
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.07888783620863248
+        }
+      }
+    ]
+  },
+  "verification": {
+    "diagnostics_preserve_baseline": true,
+    "root_uncertainty_decomposition": true,
+    "trial_histogram_totals": true,
+    "independent_policy_interval_checks": true,
+    "shared_solver_source_hash": true,
+    "intersections_nonempty": true
+  },
+  "interpretation": "All results remain unresolved at tolerance 0.02. Intersections are valid only for this same concrete state with optimal full-information continuation. Depth caps were never reached. The 256-run eager cap spent 808448 engine runs on failed attempts; cap zero was slower and gave wider bounds. Pruning removed 24 actions in the baseline configuration but did not alter its result. The best tested equal-budget arm used cap 4096. Its larger-budget follow-up further tightened the certificate; no bot policy was changed and no positive policy-loss lower bound was found. Reproduction protocol descriptions are updated; raw manifests preserve the descriptions actually executed."
+}

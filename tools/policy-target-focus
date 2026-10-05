@@ -1,15 +1,48 @@
 #!/usr/bin/env python3
 import datetime
+import argparse
 import gzip
 import hashlib
+import importlib.util
 import json
 import os
 import pathlib
 import subprocess
 
 root = pathlib.Path(__file__).resolve().parents[1]
-source = root / "findings/policy-target-focus-v1"
-run = root / "tmp/policy-target-focus-v1" / datetime.datetime.now().strftime("run-%Y%m%d-%H%M%S")
+parser = argparse.ArgumentParser()
+parser.add_argument("--frontier", action="store_true")
+parser.add_argument("--verify-only", action="store_true")
+args = parser.parse_args()
+study = "policy-frontier-v1" if args.frontier else "policy-target-focus-v1"
+targets = ["diagnostic", "pruned", "pruned-eager", "pruned-lazy", "refined"] if args.frontier else ["all_actions", "archived"]
+source = root / "findings" / study
+spec = importlib.util.spec_from_file_location("policy_gap", root / "tools/policy-gap-report.py")
+verifier = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(verifier)
+
+
+def verify(row):
+    matrix = row["reference"]
+    for endpoint in row["endpoints"]:
+        for arm in ["archived", "uniform", "max_damage", "oracle"]:
+            verifier.verify_assessment(matrix, endpoint["side"], endpoint[arm])
+    if diagnostics := row.get("diagnostics"):
+        assert sum(diagnostics["trial_depth_counts"]) == diagnostics["trials"]
+        assert len(diagnostics["root_chance"]) == len(matrix["cells"])
+        for cell, bounds in zip(diagnostics["root_chance"], matrix["cells"]):
+            assert abs(cell["pending_mass"] + cell["child_uncertainty"] - (bounds["hi"] - bounds["lo"])) < 1e-9
+
+
+if args.verify_only:
+    records = json.loads(gzip.decompress((source / "records.json.gz").read_bytes()))
+    assert set(records) == set(targets)
+    for target in targets:
+        verify(records[target]["result"])
+    print(f"Verified {len(targets)} archived arms")
+    raise SystemExit(0)
+
+run = root / "tmp" / study / datetime.datetime.now().strftime("run-%Y%m%d-%H%M%S")
 run.mkdir(parents=True)
 corpus = gzip.decompress((source / "corpus.jsonl.gz").read_bytes())
 (run / "corpus.jsonl").write_bytes(corpus)
@@ -18,7 +51,7 @@ subprocess.run(
     ["cargo", "build", "--release", "-p", "nc2000-bot", "--example", "endgame_policy_audit"],
     cwd=root, env=environment, check=True,
 )
-for target in ["all_actions", "archived"]:
+for target in targets:
     protocol = json.loads((source / f"{target}.json").read_text())
     assert hashlib.sha256(corpus).hexdigest() == protocol["corpus_sha256"]
     protocol["corpus"] = str((run / "corpus.jsonl").relative_to(root))
@@ -29,6 +62,7 @@ for target in ["all_actions", "archived"]:
         cwd=root, env=environment, check=True,
     )
     row = json.loads((run / target / "game-019-d0017.json").read_text())
+    verify(row)
     print(target, json.dumps({
         "stop": row["reference"]["stop"],
         "runs": row["reference"]["runs"],

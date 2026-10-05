@@ -34,6 +34,10 @@ struct Protocol {
     interpretation: String,
     #[serde(default)]
     targets: TargetSet,
+    #[serde(default)]
+    diagnostics: bool,
+    #[serde(default)]
+    certified_action_pruning: bool,
 }
 
 #[derive(Default, Deserialize)]
@@ -155,7 +159,7 @@ fn audit(
             work_budget: protocol.work_budget,
             node_budget: protocol.node_budget,
             cell_cap: protocol.cell_cap,
-            certified_action_pruning: false,
+            certified_action_pruning: protocol.certified_action_pruning,
             ..BoundConfig::default()
         },
     );
@@ -265,7 +269,31 @@ fn audit(
             endpoint["budget_ladder"] = json!(rows);
         }
     }
+    let diagnostics = protocol.diagnostics.then(|| {
+        let stats = &solver.stats;
+        json!({
+            "trial_depth_counts": stats.trial_depth_counts,
+            "depth_limit_trials": stats.depth_limit_trials,
+            "trials": stats.trials,
+            "eager_runs": stats.eager_runs,
+            "eager_failures": stats.eager_failures,
+            "reused_nodes": stats.reused_nodes,
+            "dominated_rows": stats.dominated_rows,
+            "dominated_cols": stats.dominated_cols,
+            "avoided_cells": stats.avoided_cells,
+            "root_chance": solver.root_chance_diagnostics(&battle).unwrap().iter().map(|cell| json!({
+                "pending_mass": cell.pending_mass,
+                "pending_scripts": cell.pending_scripts,
+                "resolved_edges": cell.resolved_edges,
+                "unique_children": cell.unique_children,
+                "child_uncertainty": cell.child_uncertainty,
+                "largest_edge_uncertainty": cell.largest_edge_uncertainty,
+                "largest_child_uncertainty": cell.largest_child_uncertainty,
+            })).collect::<Vec<_>>(),
+        })
+    });
     json!({"game":game.game,"decision":decision,"state_key":battle.state_key128().to_string(),
+        "diagnostics":diagnostics,
         "turn":battle.turn,"alive":([0,1].map(|side|battle.sides[side].party.iter().filter(|&&i| !battle.sides[side].roster[i as usize].fainted).count())),
         "reference":{"value":bound(matrix.value),"cells":matrix.cells.iter().map(|b|bound(*b)).collect::<Vec<_>>(),
             "actions":matrix.actions.map(|aa|aa.into_iter().map(|a|a.map(|a|action_input(dex,a))).collect::<Vec<_>>()),

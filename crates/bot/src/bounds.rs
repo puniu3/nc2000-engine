@@ -284,6 +284,19 @@ pub struct BoundStats {
     pub upper_br_picks: usize,
     pub legacy_support_picks: usize,
     pub fair_cell_picks: usize,
+    pub trial_depth_counts: Vec<usize>,
+    pub depth_limit_trials: usize,
+}
+
+#[derive(Debug)]
+pub struct ChanceDiagnostics {
+    pub pending_mass: f64,
+    pub pending_scripts: usize,
+    pub resolved_edges: usize,
+    pub unique_children: usize,
+    pub child_uncertainty: f64,
+    pub largest_edge_uncertainty: f64,
+    pub largest_child_uncertainty: f64,
 }
 
 struct Pending {
@@ -426,6 +439,29 @@ impl<'d> BoundSolver<'d> {
 
     pub fn closed_count(&self) -> usize {
         self.closed.len()
+    }
+
+    pub fn root_chance_diagnostics(&self, b: &Battle) -> Option<Vec<ChanceDiagnostics>> {
+        let node = self.nodes.get(&self.node_key(b))?;
+        Some(node.cells.iter().map(|cell| {
+            let mut children = HashMap::<NodeKey, f64>::new();
+            let mut largest_edge_uncertainty: f64 = 0.0;
+            for &(mass, key) in &cell.resolved {
+                let child = &self.nodes[&key];
+                let uncertainty = mass * (child.hi - child.lo);
+                largest_edge_uncertainty = largest_edge_uncertainty.max(uncertainty);
+                *children.entry(key).or_default() += uncertainty;
+            }
+            ChanceDiagnostics {
+                pending_mass: cell.pending_mass,
+                pending_scripts: cell.pending.len(),
+                resolved_edges: cell.resolved.len(),
+                unique_children: children.len(),
+                child_uncertainty: children.values().sum(),
+                largest_edge_uncertainty,
+                largest_child_uncertainty: children.values().copied().fold(0.0, f64::max),
+            }
+        }).collect())
     }
 
     /// Tighten the root's certified interval until a stop condition fires.
@@ -813,7 +849,10 @@ impl<'d> BoundSolver<'d> {
         let mut did_work = false;
         let mut path: Vec<NodeKey> = Vec::new();
         let mut cur = root;
+        let mut visited_depth = 0;
+        let mut hit_depth_limit = false;
         for depth in 0..self.cfg.trial_depth {
+            visited_depth = depth + 1;
             let n = &self.nodes[&cur];
             if n.hi - n.lo <= 1e-12 && !(depth == 0 && root_cell.is_some()) {
                 break; // resolved (incl. terminals)
@@ -898,6 +937,7 @@ impl<'d> BoundSolver<'d> {
             match best_child {
                 Some((cw, k)) if cw > cell.pending_mass.max(self.cfg.descend_floor) => {
                     cur = k;
+                    hit_depth_limit = depth + 1 == self.cfg.trial_depth;
                     continue;
                 }
                 _ if !cell.pending.is_empty() => {
@@ -910,11 +950,19 @@ impl<'d> BoundSolver<'d> {
                     // floor: descend anyway — a zero-work trial would spin
                     // the solve loop forever (runs never advance).
                     cur = k;
+                    hit_depth_limit = depth + 1 == self.cfg.trial_depth;
                     continue;
                 }
                 None => break,
             }
         }
+        if hit_depth_limit {
+            self.stats.depth_limit_trials += 1;
+        }
+        if self.stats.trial_depth_counts.len() <= visited_depth {
+            self.stats.trial_depth_counts.resize(visited_depth + 1, 0);
+        }
+        self.stats.trial_depth_counts[visited_depth] += 1;
         for &k in path.iter().rev() {
             if !self.backup(k) {
                 break; // bounds unchanged ⇒ ancestors can't change either
