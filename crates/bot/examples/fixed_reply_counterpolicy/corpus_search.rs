@@ -8,6 +8,8 @@ struct Config {
     game:usize,decision:usize,iterations:Vec<u32>,search_seeds:usize,seed:u64,
     #[serde(default,skip_serializing_if="Option::is_none")]
     observed_side:Option<usize>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    full_state:Option<bool>,
 }
 
 fn search_seed(cfg:&Config,index:usize)->u64 {
@@ -66,7 +68,7 @@ pub(super) fn execute(args:&[String]) {
     let game=std::str::from_utf8(&raw).unwrap().lines().map(|line|serde_json::from_str::<Game>(line).unwrap())
         .find(|game|game.game==cfg.game).unwrap();
     let root=reconstruct(&dex,&game,cfg.decision);let mut rows=Vec::new();
-    for index in 0..cfg.search_seeds {
+    for index in 0..if cfg.full_state.unwrap_or(true) {cfg.search_seeds} else {0} {
         let seed=search_seed(&cfg,index);
         let mut search=SkuctSearch::new(&root,&dex,RmConfig {c:0.4,..Default::default()},seed);
         let dimensions=[0,1].map(|side|search.actions(side).len().max(1));

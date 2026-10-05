@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/certified-blind-census-v1'
+corpus_path = root / 'findings/policy-gap-v1/corpus.jsonl.gz'
+reference_path = root / 'findings/policy-gap-v1/records.json.gz'
+proof_names = ['attack-floor', 'rest-ceiling', 'game-ceiling', 'rest-floor']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def load(path):
+    return json.loads(path.read_bytes())
+
+
+def selected(reference):
+    return [(p, e, f"g{p['game']:03}-d{p['decision']:04}-s{e['side']}")
+            for p in reference for e in p['endpoints'] if any(v['loss']['lo'] > 1e-6 for v in e['pure_actions'])]
+
+
+def validate_search(record, raw_config, corpus):
+    cfg = json.loads(raw_config)
+    assert cfg == record['config'] and record['config_sha256'] == sha(raw_config)
+    assert cfg['full_state'] is False and record['rows'] == []
+    assert record['manifest']['corpus_sha256'] == sha(corpus)
+    observed = record['observed']
+    assert observed['side'] == cfg['observed_side']
+    assert observed['pool_sha256'] == sha((root / 'data/belief-pool-v3/belief-pool.json').read_bytes())
+    expected = [(mode, i, n) for mode in ['pinned', 'blind'] for i in range(cfg['search_seeds']) for n in cfg['iterations']]
+    assert [(r['mode'], r['seed_index'], r['iterations']) for r in observed['rows']] == expected
+    for row in observed['rows']:
+        seed = cfg['seed'] ^ ((cfg['game']*0x9e3779b97f4a7c15) % (1 << 64)) ^ ((cfg['decision']*0xbf58476d1ce4e5b9) % (1 << 64)) ^ ((row['seed_index']*0x94d049bb133111eb) % (1 << 64))
+        assert row['seed'] == seed
+        assert row['choice'] in row['actions']
+        assert sum(row['visits']) == row['iterations']
+        if not row['reply_availability']:
+            assert record['state']['requestState'] == 'switch' and row['joint'] == []
+            continue
+        assert sum(c['samples'] for c in row['joint']) == row['iterations']
+        for i, visits in enumerate(row['visits']):
+            cells = [c for c in row['joint'] if c['own'] == i]
+            assert sum(c['samples'] for c in cells) == visits
+            if visits:
+                assert abs(sum(c['samples']*c['mean'] for c in cells)/visits-row['means'][i]) < 1e-10
+
+
+def summarize(records, configs, rest_corpus):
+    reference = json.loads(gzip.decompress(reference_path.read_bytes()))
+    corpus = gzip.decompress(corpus_path.read_bytes())
+    selection = selected(reference)
+    assert len(selection) == 18 and len({(p['game'], p['decision']) for p, _, _ in selection}) == 13
+    assert list(records['screen']) == [name for _, _, name in selection]
+    screening = []
+    for position, endpoint, name in selection:
+        record = records['screen'][name]
+        validate_search(record, configs[name], corpus)
+        assert record['config'] == dict(game=position['game'], decision=position['decision'], observed_side=endpoint['side'],
+            iterations=[27000], search_seeds=4, seed=2026103001, full_state=False)
+        assert record['state_key'] == position['state_key']
+        losses = dict(zip(endpoint['actions'], endpoint['pure_actions']))
+        rows = record['observed']['rows']
+        for row in rows:
+            assert row['actions'] == endpoint['actions']
+        screening.append(dict(name=name, game=position['game'], decision=position['decision'], side=endpoint['side'],
+            choices={mode: [r['choice'] for r in rows if r['mode'] == mode] for mode in ['pinned', 'blind']},
+            archived_conditional_loss={a: losses[a]['loss'] for a in sorted({r['choice'] for r in rows})},
+            belief=record['observed']['belief']))
+    old = records['screen']['g001-d0021-s0']
+    rows_by_stage = {'screen': old}
+    rest = records['rest']
+    assert json.loads(rest_corpus)['game'] == 1 and json.loads(rest_corpus)['samples'] == [21]
+    expected_game = next(json.loads(line) for line in corpus.decode().splitlines() if json.loads(line)['game'] == 1)
+    expected_game['samples'] = [21]
+    assert json.loads(rest_corpus) == expected_game
+    for stage in ['confirmation', 'ladder']:
+        record = rest[stage]
+        validate_search(record, configs[stage], rest_corpus)
+        cfg = record['config']
+        assert cfg == dict(game=1, decision=21, observed_side=0, full_state=False,
+            iterations=[27000] if stage == 'confirmation' else [27000, 108000, 432000],
+            search_seeds=32 if stage == 'confirmation' else 4, seed=2026103101 if stage == 'confirmation' else 2026103001)
+        assert record['state_key'] == old['state_key'] and record['state'] == old['state']
+        assert record['observed']['observations'] == old['observed']['observations']
+        rows_by_stage[stage] = record
+    original_seeds = {r['seed'] for r in old['observed']['rows']}
+    fresh_seeds = {r['seed'] for r in rest['confirmation']['observed']['rows']}
+    assert not original_seeds.intersection(fresh_seeds)
+    for before, after in zip(old['observed']['rows'], [r for r in rest['ladder']['observed']['rows'] if r['iterations'] == 27000]):
+        for key in ['mode', 'seed_index', 'seed', 'choice', 'actions', 'visits', 'means', 'nodes', 'dominated']:
+            assert before[key] == after[key], key
+    for name in proof_names:
+        proof = rest['proofs'][name]
+        cfg, row = proof['manifest']['protocol'], proof['result']
+        assert cfg == json.loads(configs[name]) and proof['manifest']['protocol_sha256'] == sha(configs[name])
+        assert cfg['corpus_sha256'] == sha(rest_corpus)
+        assert row['state_key'] == old['state_key'] and (row['game'], row['decision']) == (1, 21)
+        side = 0 if name in ['attack-floor', 'rest-floor'] else 1
+        first = 'move thunderbolt' if side == 1 else 'move rest' if name == 'rest-floor' else 'move doubleedge'
+        assert cfg['fixed_policy_side'] == row['side'] == side
+        assert cfg['fixed_first_action'] == row['fixed_first_action'] == first
+        assert cfg['fixed_priority_actions'] == row['priority_actions'] == (
+            ['move doubleedge', 'move earthquake', 'move curse', 'move rest'] if side == 0 else
+            ['move thunderbolt', 'move hiddenpower', 'move reflect', 'move rest'])
+        for field in ['fixed_rest_percent', 'fixed_recover_percent', 'fixed_recover_last_foes', 'hidden_selection']:
+            assert cfg.get(field) is None and row.get(field) is None
+        for field in ['fixed_rest_after_boom', 'fixed_rest_on_wake', 'fixed_sleep_talk', 'fixed_frozen_switch']:
+            assert not cfg.get(field, False) and not row.get(field, False)
+        matrix = row['restricted_matrix']
+        assert matrix['actions'][side] == [first] and len(matrix['actions'][1-side]) == 4
+        for value in matrix['cells'] + [matrix['value']]:
+            assert 0 <= value['lo'] <= value['hi'] <= 1
+        assert row['reference']['runs'] <= cfg['work_budget'] == 2000000
+        if name == 'rest-ceiling':
+            assert cfg['fixed_reply_action'] == row['reply_action'] == 'move rest'
+            assert row['reply_value'] == matrix['cells'][matrix['actions'][0].index('move rest')]
+        else:
+            assert cfg['fixed_reply_action'] is None
+            assert row['unrestricted_game_value'] == (dict(lo=matrix['value']['lo'], hi=1.0) if side == 0 else dict(lo=0.0, hi=matrix['value']['hi']))
+            assert row['guaranteed_score'] == (matrix['value'] if side == 0 else dict(lo=1-matrix['value']['hi'], hi=1-matrix['value']['lo']))
+    for field in ['binary_sha256', 'source_hashes', 'revision']:
+        assert len({json.dumps(r['manifest'][field], sort_keys=True) for r in rest['proofs'].values()}) == 1
+    for field in ['fixed_priority_actions', 'fixed_first_action', 'fixed_policy_side']:
+        assert rest['proofs']['rest-ceiling']['manifest']['protocol'][field] == rest['proofs']['game-ceiling']['manifest']['protocol'][field]
+    value = rest['proofs']['attack-floor']['result']['unrestricted_game_value']['lo']
+    assert value == rest['proofs']['game-ceiling']['result']['unrestricted_game_value']['hi']
+    rest_upper = rest['proofs']['rest-ceiling']['result']['reply_value']['hi']
+    rest_lower = rest['proofs']['rest-floor']['result']['guaranteed_score']['lo']
+    assert 0 <= rest_lower <= rest_upper < value <= 1
+    pad = 1e-10
+    loss = dict(lo=max(0, value-rest_upper-pad), hi=min(1, value-rest_lower+pad))
+    stages = {}
+    for stage, record in rows_by_stage.items():
+        obs = record['observed']
+        assert obs['belief'] == dict(alive=1, fallback=False, species_prior=False, candidate_ids=['rental-cban-14'])
+        assert {m['species'] for m in obs['observations'] if m['appeared']} == {'porygon2', 'snorlax', 'zapdos'}
+        pinned = [r for r in obs['rows'] if r['mode'] == 'pinned']
+        blind = [r for r in obs['rows'] if r['mode'] == 'blind']
+        for a, b in zip(pinned, blind):
+            for key in ['seed', 'iterations', 'choice', 'visits', 'means', 'nodes']:
+                assert a[key] == b[key], key
+        stages[stage] = []
+        for n in record['config']['iterations']:
+            rows = [r for r in blind if r['iterations'] == n]
+            assert all(r['choice'] in ['move doubleedge', 'move rest'] for r in rows)
+            count = sum(r['choice'] == 'move rest' for r in rows)
+            weight = count/len(rows)
+            stages[stage].append(dict(iterations=n, seeds=len(rows), rest=count, doubleedge=len(rows)-count,
+                rest_seed_indices=[r['seed_index'] for r in rows if r['choice'] == 'move rest'],
+                empirical_first_action_mixture_loss=dict(lo=max(0, weight*(value-rest_upper)-pad), hi=min(1, weight*(value-rest_lower)+pad))))
+    skip, include = records['flag_parity']['skip-full'], records['flag_parity']['include-full']
+    assert not skip['rows'] and len(include['rows']) == 1
+    assert skip['state_key'] == include['state_key'] == old['state_key']
+    assert skip['config']['full_state'] is False and 'full_state' not in include['config']
+    assert len(skip['observed']['rows']) == len(include['observed']['rows']) == 2
+    for name, record in records['flag_parity'].items():
+        assert record['config'] == json.loads(configs[name]) and record['config_sha256'] == sha(configs[name])
+        assert record['manifest']['corpus_sha256'] == sha(corpus)
+    assert {k: v for k, v in skip['config'].items() if k != 'full_state'} == include['config']
+    for a, b in zip(skip['observed']['rows'], include['observed']['rows']):
+        for key in a:
+            if key == 'elapsed_ms':
+                continue
+            if key in ['joint', 'reply_availability']:
+                assert sorted(json.dumps(x, sort_keys=True) for x in a[key]) == sorted(json.dumps(x, sort_keys=True) for x in b[key])
+            else:
+                assert a[key] == b[key], key
+    return dict(schema='nc2000-certified-blind-census-v1', selection_rule='Every archived endpoint with any pure-action loss lower bound greater than 1e-6; selected before these searches.',
+        screening=screening, fresh_rest_state_game_value=dict(lo=max(0, value-pad), hi=min(1, value+pad)),
+        rest_first_value=dict(lo=max(0, rest_lower-pad), hi=min(1, rest_upper+pad)), rest_first_loss=loss,
+        rest_search=stages, skipped_full_search_preserves_observed_statistics=True,
+        inputs={str(p.relative_to(root)): sha(p.read_bytes()) for p in [corpus_path, reference_path]},
+        interpretation='The 18 endpoints in 13 self-play states are an oracle-selected screen, not a representative game sample. Archived action losses only screen current choices; the Rest finding uses fresh opposite one-sided certificates on the current engine. The game value closes at the Double-Edge policy guarantee. Rest-first upper bounds allow every later side-zero action against the same fixed Thunderbolt opponent used for the game upper bound; a separate Rest-first witness supplies a lower bound. This common counterpolicy justifies the empirical mixed first-action loss lower bound; averaging pure-action regrets alone would not. Bounds concern the concrete state and frozen loadouts with optimal subsequent play, not the deployed continuation policy or all possible hidden sets. Four pilot seeds and thirty-two disjoint confirmation seeds are finite observations, not an infinite-seed error rate. Pinned and pool-based searches match in the Rest state and all actual opposing selections have appeared. Increasing budget corrects the pilot seeds; no global benefit from longer search or strength patch is asserted.')
+
+
+parser = argparse.ArgumentParser()
+group = parser.add_mutually_exclusive_group()
+group.add_argument('--verify-only', action='store_true')
+group.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+reference = json.loads(gzip.decompress(reference_path.read_bytes()))
+selection = selected(reference)
+config_names = [name for _, _, name in selection] + proof_names + ['confirmation', 'ladder', 'skip-full', 'include-full']
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    configs = {name: (archive / f'{name}.json').read_bytes() for name in config_names}
+    rest_corpus = gzip.decompress((archive / 'rest-corpus.jsonl.gz').read_bytes())
+    assert summarize(records, configs, rest_corpus) == load(archive / 'summary.json')
+    print('Verified 18-endpoint screen, fresh Rest loss bounds, disjoint confirmation and budget ladder')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/certified-blind-census-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress(corpus_path.read_bytes()))
+    target = directory / 'rest-check'
+    target.mkdir()
+    (target / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'rest-corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in config_names:
+        is_rest = name in proof_names + ['confirmation', 'ladder']
+        base = target if is_rest else directory
+        cfg = load(archive / f'{name}.json')
+        if name in proof_names:
+            cfg['corpus'] = str((target / 'corpus.jsonl').relative_to(root))
+        (base / f'{name}.json').write_text(json.dumps(cfg, indent=2)+'\n')
+        if name in proof_names:
+            command = [str(root / 'target/release/examples/endgame_policy_audit'), str(base / f'{name}.json'), str(base / name)]
+        else:
+            command = [str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(base / 'corpus.jsonl'), 'corpus-search', str(base / f'{name}.json'), str(base / f'{name}-result.json')]
+        subprocess.run(command, cwd=root, env=env, check=True)
+target = directory / 'rest-check'
+records = dict(screen={name: load(directory / f'{name}-result.json') for _, _, name in selection},
+    rest=dict(proofs={name: dict(manifest=load(target / name / 'manifest.json'), result=load(target / name / 'game-001-d0021.json')) for name in proof_names},
+              **{name: load(target / f'{name}-result.json') for name in ['confirmation', 'ladder']}),
+    flag_parity={name: load(directory / f'{name}-result.json') for name in ['skip-full', 'include-full']})
+configs = {name: ((target if name in proof_names + ['confirmation', 'ladder'] else directory) / f'{name}.json').read_bytes() for name in config_names}
+rest_corpus = (target / 'corpus.jsonl').read_bytes()
+summary = summarize(records, configs, rest_corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    for name, raw in configs.items():
+        (archive / f'{name}.json').write_bytes(raw)
+    (archive / 'rest-corpus.jsonl.gz').write_bytes(gzip.compress(rest_corpus, mtime=0))
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
+print('Rest-first loss:', summary['rest_first_loss'])
+print(json.dumps(summary['rest_search'], indent=2))
