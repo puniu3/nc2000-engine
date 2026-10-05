@@ -21,6 +21,14 @@ struct ProbeTrace {
     capped_leaf: u32,
 }
 
+#[derive(Clone, Default, serde::Serialize)]
+struct CutoffCell {
+    requests: u32,
+    replacements: u32,
+    runs: usize,
+    max_error: f64,
+}
+
 fn sha(raw: &[u8]) -> String {
     format!("{:x}", Sha256::digest(raw))
 }
@@ -69,7 +77,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert!(
         (6..=11).contains(&args.len()),
-        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed|fresh|fresh-trace] [hp-buckets] [ucb|exp3]"
+        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed|fresh|fresh-trace|fresh-profile|fresh-cutoff|fresh-cutoff-focus] [hp-buckets] [ucb|exp3]"
     );
     let family = args.get(6).map(String::as_str).unwrap_or("counter");
     assert!(matches!(family, "counter" | "bond"));
@@ -83,7 +91,11 @@ fn main() {
     assert!(probe_iterations < iterations);
     let typed = args.get(8).map(String::as_str) == Some("typed");
     let trace = args.get(8).map(String::as_str) == Some("fresh-trace");
-    let fresh = trace || args.get(8).map(String::as_str) == Some("fresh");
+    let cutoff_focus = args.get(8).map(String::as_str) == Some("fresh-cutoff-focus");
+    assert!(!cutoff_focus || family == "bond");
+    let cutoff = cutoff_focus || args.get(8).map(String::as_str) == Some("fresh-cutoff");
+    let profile = cutoff || args.get(8).map(String::as_str) == Some("fresh-profile");
+    let fresh = trace || profile || args.get(8).map(String::as_str) == Some("fresh");
     let adaptive = typed || args.get(8).map(String::as_str) == Some("adaptive");
     let hp_buckets: i64 = args.get(9).map(|s| s.parse().unwrap()).unwrap_or(16);
     let continuation_exp3_ix = match args.get(10).map(String::as_str).unwrap_or("ucb") {
@@ -214,6 +226,7 @@ fn main() {
         for s in 0..2 {
             rows.push(json!({"mode":"full","side":s,"seed_index":index,"seed":search_seed,"iterations":iterations,
                 "choice":full.best(s).map(|a|a.to_input(&dex)),"visits":full.visits(s),"means":full.means(s)}));
+            let search_started = Instant::now();
             let mut pinned = BlindSearch::new(
                 &b,
                 &dex,
@@ -240,9 +253,40 @@ fn main() {
                 assert!(!schedule.is_empty() && probe_iterations > 0);
                 let mut cells = vec![(0u32, 0.); actions[s].len()*replies];
                 let mut traces = vec![ProbeTrace::default(); cells.len()];
+                let mut cutoff_cells = vec![CutoffCell::default(); cells.len()];
+                let mut continuation = cutoff.then(|| BoundSolver::new(&dex,BoundConfig {
+                    work_budget:1000,node_budget:12000,eps:0.005,..Default::default()
+                }));
+                let mut solver_ms = 0.;
                 for k in 0..probe_iterations {
                     let (own, reply) = schedule[k as usize % schedule.len()];
-                    let r = if trace {
+                    let r = if let Some(solver) = continuation.as_mut() {
+                        let stats = &mut cutoff_cells[own*replies+reply];
+                        pinned.step_forced_joint_with_root_child_value(&dex,&beliefs[s],&obs[s],own,actions[1-s][reply],
+                            &mut |child| {
+                                if cutoff_focus {
+                                    let pair = if s == 0 { [actions[s][own],actions[1-s][reply]] }
+                                        else { [actions[1-s][reply],actions[s][own]] };
+                                    if pair != [SearchChoice::Move(dex.moves.id("curse").unwrap()),
+                                        SearchChoice::Move(dex.moves.id("destinybond").unwrap())] { return None; }
+                                }
+                                stats.requests += 1;
+                                let started = Instant::now();
+                                let mut bounds = solver.peek(child);
+                                if !bounds.is_some_and(|b| b.width()<=0.005) && solver.stats.runs<40000 {
+                                    solver.cfg.work_budget = (40000-solver.stats.runs).min(1000);
+                                    let report = solver.solve(child,None);
+                                    stats.runs += report.runs;
+                                    bounds = Some(report.bounds);
+                                }
+                                solver_ms += started.elapsed().as_secs_f64()*1000.;
+                                bounds.filter(|b| b.width()<=0.005).map(|b| {
+                                    stats.replacements += 1;
+                                    stats.max_error = stats.max_error.max(b.width()*0.5);
+                                    b.mid()
+                                })
+                            })
+                    } else if trace {
                         let stats = &mut traces[own*replies+reply];
                         pinned.step_forced_joint_observed(&dex, &beliefs[s], &obs[s], own, actions[1-s][reply],
                             &mut |event| match event {
@@ -275,6 +319,13 @@ fn main() {
                     "phase_analysis":analyze_bayesian_root(&eligible,probe_iterations,&phase),
                     "cumulative_analysis":analyze_bayesian_root(&eligible,iterations,&cumulative)}));
                 if trace { fresh_evidence.as_mut().unwrap()["probe_trace"] = json!(traces); }
+                if profile {
+                    fresh_evidence.as_mut().unwrap()["profile"] = json!({
+                        "milliseconds":search_started.elapsed().as_secs_f64()*1000.,
+                        "solver_ms":solver_ms,"solver_runs":continuation.as_ref().map_or(0,|s|s.stats.runs),
+                        "solver_nodes":continuation.as_ref().map_or(0,|s|s.node_count()+s.closed_count()),
+                        "cells":cutoff_cells});
+                }
                 probe_iterations
             } else if typed {
                 pinned.finish_with_typed_mixed_probes(&dex, &beliefs[s], &obs[s], iterations, probe_iterations)
@@ -335,6 +386,8 @@ fn main() {
     if fresh { output["fresh_probes"] = json!(true); }
     if trace { output["trace_probes"] = json!(true); }
     if continuation_exp3_ix { output["continuation_exp3_ix"] = json!(true); }
+    if profile { output["continuation_cutoff"] = json!(cutoff); }
+    if cutoff_focus { output["continuation_cutoff_focus"] = json!(true); }
     if hp_buckets != 16 { output["hp_buckets"] = json!(hp_buckets); }
     std::fs::write(
         out.join("records.json"),

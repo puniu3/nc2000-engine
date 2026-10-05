@@ -136,8 +136,22 @@ fn active_mixture_is_identical_across_ambiguous_hidden_stats() {
         let probes = reference.joint_probe_visits().iter().sum::<u32>();
         reference.step_typed_joint_probes(&dex, belief, observer, 240);
         assert_eq!(reference.joint_probe_visits().iter().sum::<u32>(), probes + 240);
+        let mut cutoff = BlindSearch::new(&battle, &dex, cfg.clone(), 0, before_rng);
+        let mut sampled_children = Vec::new();
+        let reply = nc2000_engine::battle::SearchChoice::Move(dex.moves.id("mirrorcoat").unwrap());
+        for i in 0..120 {
+            cutoff.step_forced_joint_with_root_child_value(&dex, belief, observer, i % 2, reply,
+                &mut |child| {
+                    let key = child.state_key128();
+                    sampled_children.push(key);
+                    (key % 2 == 0).then_some(0.375)
+                });
+        }
+        assert!(!sampled_children.is_empty());
+        cutoff.step(&dex, belief, observer, 120);
         observations.push((choice, agent.search_rng_state(), reference.root_matrix(),
-            projection(&dex, belief, &battle, observer, 0)));
+            projection(&dex, belief, &battle, observer, 0), sampled_children,
+            cutoff.root_matrix(), cutoff.visits().to_vec()));
     }
     assert_eq!(observations[0], observations[1]);
 }

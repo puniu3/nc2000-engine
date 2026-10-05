@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import statistics
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive_base=root/'findings/continuation-cutoff-v1'
+summarize_run=runpy.run_path(str(root/'tools/small-gain-probe'))['summarize']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    old=json.loads(gzip.decompress((root/'findings/continuation-exp3-v1/27000/records.json.gz').read_bytes()))['ucb']
+    plain=copy.deepcopy(records['control']['rows'])
+    for r in plain:
+        if r['mode']=='pinned': del r['fresh_evidence']['profile']
+    assert plain==old['rows']
+    assert records['control']['source_hashes']==records['cutoff']['source_hashes']
+    assert records['control']['binary_sha256']==records['cutoff']['binary_sha256']
+    assert records['control']['state_key']==records['cutoff']['state_key']
+    rows=[]
+    for mode,record in records.items():
+        assert record['actions']==[['move earthquake','move curse'],['move thunderbolt','move destinybond','switch 3']]
+        assert record['continuation_cutoff']==(mode=='cutoff')
+        assert record['iterations']==27000 and record['probe_iterations']==10800
+        assert record['search_seeds']==4 and len(record['rows'])==16
+        for index in range(4):
+            subset=[r for r in record['rows'] if r['seed_index']==index]
+            assert [(r['mode'],r['side']) for r in subset]==[('full',0),('pinned',0),('full',1),('pinned',1)]
+            seed=2026110901 ^ ((index*0x94d049bb133111eb)%(1<<64))
+            assert all(r['seed']==seed for r in subset)
+            report=summarize_run({**record,'search_seeds':1,'rows':subset})
+            for r in subset:
+                if r['mode']!='pinned': continue
+                side=r['side']
+                profile=r['fresh_evidence']['profile']
+                evidence=r['fresh_evidence']['phase_types'][0]
+                assert sum(c['samples'] for c in evidence['cells'])==10800
+                for c in evidence['cells']:
+                    stats=profile['cells'][c['own']*evidence['replies']+c['reply']]
+                    assert 0<=stats['replacements']<=stats['requests']<=c['samples']
+                    assert 0<=stats['max_error']<=.0025+1e-12
+                    if mode=='control': assert all(value==0 for value in stats.values())
+                    if record.get('continuation_cutoff_focus') and (c['own'],c['reply'])!=(1,1):
+                        assert all(value==0 for value in stats.values())
+                if mode=='control': assert profile['solver_runs']==0
+                else:
+                    assert profile['solver_runs']<=40000
+                    if all('runs' in c for c in profile['cells']):
+                        assert sum(c['runs'] for c in profile['cells'])==profile['solver_runs']
+                    before=next(a for a in records['control']['rows'] if a['mode']=='pinned' and a['seed_index']==index and a['side']==side)
+                    for key in ['warm_joint','warm_visits']:
+                        assert r['fresh_evidence'][key]==before['fresh_evidence'][key]
+                critical=next(c for c in evidence['cells'] if (c['own'],c['reply'])==(1,1))
+                interval=record['proof']['cells'][4]
+                if side==1: interval=[1-interval[1],1-interval[0]]
+                cell_bias=[]
+                for c in evidence['cells']:
+                    cell_index=c['own']*3+c['reply'] if side==0 else c['reply']*3+c['own']
+                    lo,hi=record['proof']['cells'][cell_index]
+                    if side==1: lo,hi=1-hi,1-lo
+                    cell_bias.append(dict(own=c['own'],reply=c['reply'],
+                        bias=[c['mean']-hi,c['mean']-lo]))
+                rows.append(dict(mode=mode,seed=seed,side=side,profile=profile,result=report['rows'][side],
+                    cell_bias=cell_bias,
+                    critical_cell=dict(mean=critical['mean'],bias=[critical['mean']-interval[1],critical['mean']-interval[0]],
+                        **profile['cells'][evidence['replies']+1])))
+    groups=[]
+    for mode in records:
+        for side in range(2):
+            rr=[r for r in rows if r['mode']==mode and r['side']==side]
+            groups.append(dict(mode=mode,side=side,
+                milliseconds=statistics.mean(r['profile']['milliseconds'] for r in rr),
+                solver_ms=statistics.mean(r['profile']['solver_ms'] for r in rr),
+                solver_runs=[r['profile']['solver_runs'] for r in rr],
+                replacements=[sum(c['replacements'] for c in r['profile']['cells']) for r in rr],
+                critical_replacements=[r['critical_cell']['replacements'] for r in rr],
+                critical_bias=[statistics.mean(r['critical_cell']['bias'][k] for r in rr) for k in [0,1]],
+                cell_bias=[dict(own=c['own'],reply=c['reply'],
+                    mean_bias=[statistics.mean(r['cell_bias'][index]['bias'][k] for r in rr) for k in [0,1]])
+                    for index,c in enumerate(rr[0]['cell_bias'])],
+                phases={phase:dict(mean_loss=[statistics.mean(r['result']['analyses'][phase]['loss'][k] for r in rr) for k in [0,1]],
+                    worst_loss_upper=max(r['result']['analyses'][phase]['loss'][1] for r in rr),
+                    worse_than_fallback=sum(r['result']['analyses'][phase]['loss'][0]>r['result']['fallback_loss'][1] for r in rr))
+                    for phase in ['cumulative_analysis','phase_analysis']}))
+    return dict(groups=groups,rows=rows,focused=records['cutoff'].get('continuation_cutoff_focus',False),
+        default_parity='All four control seeds match archived pre-hook rows exactly.',
+        decision=('Not adopted. The focused diagnostic replaces over 98% of Curse/Destiny Bond '
+                  'and improves side 1 first-action loss, but side 0 worsens and remaining cells are biased. '
+                  'This is not a matched-time strength result.' if records['cutoff'].get('continuation_cutoff_focus')
+                  else 'Not adopted. Broad allocation never replaces Curse/Destiny Bond and increases '
+                  'runtime without improving the fresh-phase mean first-action loss on either side.'),
+        scope='One known-type Bond fixture, four paired seeds. Warm ordinary searches are identical; '
+              'only fresh root probes may stop at the sampled nonterminal first child. Returned values '
+              'have certified width at most 0.005 for that concrete state, including already expanded '
+              'children. Unresolved values use the original continuation search. Additional solver '
+              'work is charged and reported; this is not a matched-time strength comparison, a '
+              'certificate for a hidden-information strategy, or a production change. '
+              'The focused ablation, when enabled, spends its entire solver budget on Curse/Destiny Bond, '
+              'the cell identified by the previously archived terminal traces; it is a fixture-specific diagnostic.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--focus',action='store_true')
+    args=parser.parse_args()
+    archive=archive_base.with_name(archive_base.name+'-focused') if args.focus else archive_base
+    if args.verify_only:
+        records=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(records)==json.loads((archive/'summary.json').read_text())
+        print('continuation-cutoff: verified null controls, warm parity, replacement counts, widths and policy losses')
+        return
+    assert not archive.exists()
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    binary=root/'target/release/examples/counter_mix_probe'
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
+    directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-continuation-cutoff-'))
+    print(directory,flush=True)
+    records={}
+    for mode,probe_mode in [('control','fresh-profile'),('cutoff','fresh-cutoff-focus' if args.focus else 'fresh-cutoff')]:
+        with (directory/f'{mode}.log').open('w') as log:
+            subprocess.run([str(binary),str(directory/mode),'2,3,4,5','4','27000','2026110901','bond','10800',probe_mode,'16','ucb'],
+                cwd=root,env=env,stdout=log,stderr=log,check=True)
+        records[mode]=json.loads((directory/mode/'records.json').read_text())
+        assert all(sha((root/p).read_bytes())==h for p,h in records[mode]['source_hashes'])
+        assert sha(binary.read_bytes())==records[mode]['binary_sha256']
+        print(f'{mode} complete',flush=True)
+    report=summarize(records)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(records,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report['groups'],indent=2))
+
+
+if __name__=='__main__': main()

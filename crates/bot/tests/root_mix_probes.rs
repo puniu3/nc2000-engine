@@ -90,6 +90,39 @@ fn joint_probes_force_legal_replies_and_preserve_the_unavailable_reply_fallback(
     assert_eq!(reference.root_matrix(), observed.root_matrix());
     assert_eq!(reference.joint_probe_visits(), observed.joint_probe_visits());
     assert_eq!(reference.node_count(), observed.node_count());
+
+    let mut unresolved = BlindSearch::new(&b,&dex,RmConfig::default(),0,41);
+    let mut control = BlindSearch::new(&b,&dex,RmConfig::default(),0,41);
+    let mut calls = 0;
+    for i in 0..100 {
+        let value = unresolved.step_forced_joint_with_root_child_value(&dex,&belief,&obs,i%2,surf,
+            &mut |child| { assert!(child.outcome().is_none()); calls += 1; None });
+        assert_eq!(value,control.step_forced_joint(&dex,&belief,&obs,i%2,surf));
+    }
+    assert!(calls>0);
+    unresolved.step(&dex,&belief,&obs,100);
+    control.step(&dex,&belief,&obs,100);
+    assert_eq!(unresolved.root_matrix(),control.root_matrix());
+    assert_eq!(unresolved.means(),control.means());
+    assert_eq!(unresolved.visits(),control.visits());
+    assert_eq!(unresolved.node_count(),control.node_count());
+    assert_eq!(unresolved.joint_probe_visits(),control.joint_probe_visits());
+
+    let return_move = SearchChoice::Move(dex.moves.id("return").unwrap());
+    for side in 0..2 {
+        let observer = Observer::new(&b,side);
+        let belief = Belief::pinned_from_battle(&b,&observer);
+        let mut cut = BlindSearch::new(&b,&dex,RmConfig::default(),side,51);
+        cut.step(&dex,&belief,&observer,100);
+        assert!(cut.node_count()>1);
+        let nodes = cut.node_count();
+        for _ in 0..20 {
+            assert_eq!(cut.step_forced_joint_with_root_child_value(&dex,&belief,&observer,0,return_move,
+                &mut |child| { assert_ne!(child.state_key128(),b.state_key128()); Some(0.375) }),0.375);
+        }
+        assert_eq!(cut.node_count(),nodes);
+        assert_eq!(cut.joint_probe_visits(),&[20,0]);
+    }
 }
 
 

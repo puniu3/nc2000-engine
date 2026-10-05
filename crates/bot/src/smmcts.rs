@@ -407,7 +407,28 @@ pub(crate) fn run_iteration_with_leaf(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
+    trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+) -> f64 {
+    run_iteration_with_root_child_value(cfg,rng,nodes,table,sim,dex,turn_cap,start,
+        force_root,root_joint,depth_out,leaf,trace,None)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_with_root_child_value(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+    mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
 ) -> f64 {
     let mut path: Vec<(usize, usize, usize)> = Vec::new();
     let mut exp3_path = Vec::new();
@@ -468,6 +489,12 @@ pub(crate) fn run_iteration_with_leaf(
             .expect("cached legal choice rejected (state_key collision?)");
         if let Some(o) = sim.outcome() {
             break outcome_reward(o);
+        }
+        if at_root {
+            if let Some(value) = root_child_value.as_deref_mut().and_then(|evaluate| evaluate(sim)) {
+                assert!((0. ..=1.).contains(&value));
+                break value;
+            }
         }
         if sim.turn > turn_cap {
             if let Some(trace) = trace.as_deref_mut() {

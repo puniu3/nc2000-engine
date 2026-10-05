@@ -585,6 +585,33 @@ impl BlindSearch {
         forcing: ForcedRoot,
         trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
     ) -> f64 {
+        self.step_forced_impl_with_root_child_value(dex,belief,obs,forcing,trace,None)
+    }
+
+    pub fn step_forced_joint_with_root_child_value(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        my_pick: usize,
+        reply: SearchChoice,
+        evaluate: &mut impl FnMut(&Battle) -> Option<f64>,
+    ) -> f64 {
+        let value = self.step_forced_impl_with_root_child_value(dex,belief,obs,
+            ForcedRoot::Action {own:my_pick,reply:Some(reply)},None,Some(evaluate));
+        self.joint_probe_n[my_pick] += 1;
+        value
+    }
+
+    fn step_forced_impl_with_root_child_value(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        forcing: ForcedRoot,
+        trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
+        root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
+    ) -> f64 {
         if let ForcedRoot::Action { own, .. } = forcing {
             assert!(own < self.my_acts.len(), "forced root action out of range");
             assert!(self.my_mask.as_ref().map_or(true, |mask| mask[own]), "forced root action is masked");
@@ -648,7 +675,14 @@ impl BlindSearch {
             force[1 - self.side] = forced_reply;
         }
         let mut joint = [0usize; 2];
-        let r = if let Some(trace) = trace {
+        let r = if let Some(evaluate) = root_child_value {
+            crate::smmcts::run_iteration_with_root_child_value(
+                &self.cfg,&mut self.rng,&mut self.nodes,&mut self.table,&mut sim,dex,
+                self.turn_cap,root,force,&mut joint,&mut 0,
+                &mut |sim,rng,rollout| crate::smmcts::default_leaf(&self.cfg,sim,dex,self.turn_cap,rng,rollout),
+                trace,Some(evaluate),
+            )
+        } else if let Some(trace) = trace {
             crate::smmcts::run_iteration_with_leaf(
                 &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
                 &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
