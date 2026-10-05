@@ -1,0 +1,121 @@
+{
+  "schema": "nc2000-policy-choice-errors-v1",
+  "rest_game_value": {
+    "lo": 0.019264881414002843,
+    "hi": 0.019264881414002843
+  },
+  "rest_first_side_zero_value": {
+    "lo": 0.01949772170759045,
+    "hi": 0.05071868684491461
+  },
+  "rest_first_side_one_loss": {
+    "lo": 0.00023284019358760713,
+    "hi": 0.03145380553091177
+  },
+  "psychic_game_side_zero_value": {
+    "lo": 0.791015625,
+    "hi": 0.791015625
+  },
+  "hydro_first_side_zero_value": {
+    "lo": 0.833465576171875,
+    "hi": 0.833465576171875
+  },
+  "hydro_first_side_one_loss": {
+    "lo": 0.042449951071875,
+    "hi": 0.042449951271875
+  },
+  "search": {
+    "rest-search": [
+      {
+        "iterations": 27000,
+        "trials": 4,
+        "choices": {
+          "move doubleedge": 3,
+          "move earthquake": 0,
+          "move curse": 0,
+          "move rest": 1
+        }
+      },
+      {
+        "iterations": 108000,
+        "trials": 4,
+        "choices": {
+          "move doubleedge": 4,
+          "move earthquake": 0,
+          "move curse": 0,
+          "move rest": 0
+        }
+      }
+    ],
+    "psychic-search": [
+      {
+        "iterations": 27000,
+        "trials": 4,
+        "choices": {
+          "move hydropump": 1,
+          "move psychic": 3,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      },
+      {
+        "iterations": 108000,
+        "trials": 4,
+        "choices": {
+          "move hydropump": 1,
+          "move psychic": 3,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      },
+      {
+        "iterations": 432000,
+        "trials": 4,
+        "choices": {
+          "move hydropump": 0,
+          "move psychic": 4,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      }
+    ],
+    "psychic-confirmation": [
+      {
+        "iterations": 27000,
+        "trials": 32,
+        "choices": {
+          "move hydropump": 0,
+          "move psychic": 32,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      },
+      {
+        "iterations": 108000,
+        "trials": 32,
+        "choices": {
+          "move hydropump": 0,
+          "move psychic": 32,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      },
+      {
+        "iterations": 432000,
+        "trials": 32,
+        "choices": {
+          "move hydropump": 0,
+          "move psychic": 32,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      }
+    ]
+  },
+  "prior_hashes": {
+    "findings/policy-gap-v1/records.json.gz": "e97b42095359d87daba81593e75169d4b742b97b8f757a01f8fea08bb2cb246e",
+    "findings/policy-rockslide-v1/summary.json": "0ab23e16fe0d83684ed14c748c1130eb4e6629779929fffbcf0db11b19146e86"
+  },
+  "numerical_envelope": 1e-10,
+  "interpretation": "Independent fixed-policy witnesses keep every opposing continuation action free. Opposite one-sided projections bracket each unrestricted game value and the value after side-one Rest or Hydro Pump first. Their differences bound first-action loss. Four fresh game-2 witnesses close both value intervals and sharpen the previous matrix certificate. Current full-information search reproduces the old four-seed choices and node counts exactly; fresh confirmation uses thirty-two disjoint search seeds. Counts are finite-seed observations, not population error probabilities or blind-policy certificates. No human calibration, average whole-game strength gain, or deployment claim is made."
+}

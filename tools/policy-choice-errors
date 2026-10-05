@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-choice-errors-v1'
+proof_names = {'rest': ['witness', 'witness-tight', 'ceiling', 'rest-ceiling', 'floor'],
+               'psychic': ['hydro-witness', 'psychic-ceiling', 'game-floor', 'hydro-ceiling']}
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def load_gzip(path):
+    return json.loads(gzip.decompress(path.read_bytes()))
+
+
+def summarize(records, corpora):
+    prior_path = root / 'findings/policy-gap-v1/records.json.gz'
+    matrix_path = root / 'findings/policy-rockslide-v1/summary.json'
+    prior = load_gzip(prior_path)
+    matrix = json.loads(matrix_path.read_bytes())['combined']['matrix']
+    proofs = records['rest']['proofs']
+    assert set(proofs) == set(proof_names['rest'])
+    for key in ['binary_sha256', 'source_hashes', 'revision']:
+        assert len({json.dumps(r['manifest'][key], sort_keys=True) for r in proofs.values()}) == 1
+    for name, record in proofs.items():
+        cfg, row = record['manifest']['protocol'], record['result']
+        assert cfg['corpus_sha256'] == sha(corpora['rest'])
+        assert (row['game'], row['decision']) == (16, 26)
+        assert row['state_key'] == records['rest']['search']['state_key']
+        assert row['reference']['runs'] <= cfg['work_budget'] == 2000000
+        side = 0 if name in ['witness', 'witness-tight', 'floor'] else 1
+        assert cfg['fixed_policy_side'] == row['side'] == side
+        assert row['priority_actions'] == cfg['fixed_priority_actions']
+        assert row['fixed_first_action'] == cfg['fixed_first_action'] == ('move thunderbolt' if side == 0 else 'move rest' if name == 'rest-ceiling' else 'move doubleedge')
+        assert cfg['fixed_rest_percent'] is None and not cfg['fixed_rest_after_boom'] and not cfg['fixed_rest_on_wake']
+        m = row['restricted_matrix']
+        assert m['actions'][side] == [row['fixed_first_action']]
+        assert len(m['actions'][1-side]) == 4
+        for cell in m['cells'] + [m['value']]:
+            assert 0 <= cell['lo'] <= cell['hi'] <= 1
+        if name.startswith('witness'):
+            assert row['schema'] == 'nc2000-fixed-reply-bound-v1'
+            assert row['reply_action'] == cfg['fixed_reply_action'] == 'move rest'
+            index = m['actions'][1].index('move rest')
+            assert row['reply_value'] == m['cells'][index]
+            assert row['root_chance'][index]['runs'] == row['reference']['runs']
+            assert all(c['runs'] == 0 for i, c in enumerate(row['root_chance']) if i != index)
+        else:
+            assert row['schema'] == 'nc2000-fixed-policy-bound-v1'
+            assert cfg['fixed_reply_action'] is None
+            projected = row['unrestricted_game_value']
+            assert projected == (dict(lo=m['value']['lo'], hi=1.0) if side == 0 else dict(lo=0.0, hi=m['value']['hi']))
+    value = dict(lo=proofs['floor']['result']['unrestricted_game_value']['lo'], hi=proofs['ceiling']['result']['unrestricted_game_value']['hi'])
+    rest_value = dict(lo=proofs['witness-tight']['result']['reply_value']['lo'], hi=proofs['rest-ceiling']['result']['unrestricted_game_value']['hi'])
+    assert 0 <= value['lo'] <= value['hi'] <= 1
+    assert 0 <= rest_value['lo'] <= rest_value['hi'] <= 1
+    rest_loss = dict(lo=max(0, rest_value['lo'] - value['hi'] - 1e-10), hi=max(0, rest_value['hi'] - value['lo'] + 1e-10))
+    search_records = [records['rest']['search'], records['psychic']['search'], records['psychic']['confirmation']]
+    for key in ['binary_sha256', 'source_hashes', 'revision', 'dex_fingerprint']:
+        assert len({json.dumps(r['manifest'][key], sort_keys=True) for r in search_records}) == 1
+    tables = {}
+    for case in ['rest', 'psychic']:
+        for stage in ['search'] + (['confirmation'] if case == 'psychic' else []):
+            r = records[case][stage]
+            cfg = r['config']
+            game, decision = (16, 26) if case == 'rest' else (2, 11)
+            assert (cfg['game'], cfg['decision']) == (game, decision)
+            assert r['manifest']['corpus_sha256'] == sha(corpora[case])
+            assert cfg['iterations'] == ([27000, 108000] if case == 'rest' else [27000, 108000, 432000])
+            assert cfg['search_seeds'] == (32 if stage == 'confirmation' else 4)
+            assert cfg['seed'] == (2026102601 if stage == 'confirmation' else 2026100501)
+            old = next(a for a in prior if (a['game'], a['decision']) == (game, decision))
+            assert r['state_key'] == old['state_key']
+            assert [(a['seed_index'], a['iterations']) for a in r['rows']] == [(i, n) for i in range(cfg['search_seeds']) for n in cfg['iterations']]
+            for row in r['rows']:
+                seed = cfg['seed'] ^ ((game * 0x9e3779b97f4a7c15) % (1 << 64)) ^ ((decision * 0xbf58476d1ce4e5b9) % (1 << 64)) ^ ((row['seed_index'] * 0x94d049bb133111eb) % (1 << 64))
+                assert row['seed'] == seed
+                for side in range(2):
+                    assert sum(row['visits'][side]) == row['iterations']
+                    assert len(row['means'][side]) == len(row['actions'][side]) == len(row['visits'][side])
+                    assert row['choices'][side] in row['actions'][side]
+                if case == 'psychic':
+                    assert row['actions'] == matrix['actions']
+                if stage == 'search':
+                    before = next(a for a in old['search_records'] if (a['seed_index'], a['iterations']) == (row['seed_index'], row['iterations']))
+                    for key in ['seed', 'choices', 'nodes']:
+                        assert before[key] == row[key], key
+            tables[f'{case}-{stage}'] = [dict(iterations=n, trials=cfg['search_seeds'],
+                choices={action: sum(a['choices'][1] == action for a in r['rows'] if a['iterations'] == n) for action in r['rows'][0]['actions'][1]}) for n in cfg['iterations']]
+    seeds = [{r['seed'] for r in records['psychic'][stage]['rows']} for stage in ['search', 'confirmation']]
+    assert not seeds[0].intersection(seeds[1])
+    hydro = matrix['actions'][1].index('move hydropump')
+    n = len(matrix['actions'][1])
+    column = [matrix['cells'][i*n+hydro] for i in range(len(matrix['actions'][0]))]
+    prior_hydro_loss = dict(lo=max(0, max(c['lo'] for c in column) - matrix['value']['hi'] - 1e-10),
+                      hi=max(0, max(c['hi'] for c in column) - matrix['value']['lo'] + 1e-10))
+    fresh = records['psychic']['proofs']
+    assert set(fresh) == set(proof_names['psychic'])
+    for name, record in fresh.items():
+        cfg, row = record['manifest']['protocol'], record['result']
+        assert cfg['corpus_sha256'] == sha(corpora['psychic'])
+        assert (row['game'], row['decision']) == (2, 11)
+        assert row['state_key'] == records['psychic']['search']['state_key']
+        assert record['manifest']['binary_sha256'] == proofs['floor']['manifest']['binary_sha256']
+        assert record['manifest']['source_hashes'] == proofs['floor']['manifest']['source_hashes']
+        assert row['reference']['runs'] <= cfg['work_budget'] == 2000000
+        side = 0 if name in ['hydro-witness', 'game-floor'] else 1
+        assert row['side'] == cfg['fixed_policy_side'] == side
+        assert row['fixed_first_action'] == cfg['fixed_first_action'] == ('move earthquake' if side == 0 else 'move hydropump' if name == 'hydro-ceiling' else 'move psychic')
+        assert row['priority_actions'] == cfg['fixed_priority_actions']
+        assert cfg['fixed_rest_percent'] is None and not cfg['fixed_rest_after_boom'] and not cfg['fixed_rest_on_wake']
+        restricted = row['restricted_matrix']
+        expected = list(matrix['actions'])
+        expected[side] = [row['fixed_first_action']]
+        assert restricted['actions'] == expected
+        for cell in restricted['cells'] + [restricted['value']]:
+            assert 0 <= cell['lo'] <= cell['hi'] <= 1
+        if name == 'hydro-witness':
+            assert row['schema'] == 'nc2000-fixed-reply-bound-v1'
+            assert row['reply_action'] == cfg['fixed_reply_action'] == 'move hydropump'
+            assert row['reply_value'] == restricted['cells'][hydro]
+            assert row['root_chance'][hydro]['runs'] == row['reference']['runs']
+            assert all(c['runs'] == 0 for i, c in enumerate(row['root_chance']) if i != hydro)
+        else:
+            assert row['schema'] == 'nc2000-fixed-policy-bound-v1'
+            assert cfg['fixed_reply_action'] is None
+            assert row['unrestricted_game_value'] == (dict(lo=restricted['value']['lo'], hi=1.0) if side == 0 else dict(lo=0.0, hi=restricted['value']['hi']))
+    game_value = dict(lo=fresh['game-floor']['result']['unrestricted_game_value']['lo'], hi=fresh['psychic-ceiling']['result']['unrestricted_game_value']['hi'])
+    hydro_value = dict(lo=fresh['hydro-witness']['result']['reply_value']['lo'], hi=fresh['hydro-ceiling']['result']['unrestricted_game_value']['hi'])
+    assert game_value['lo'] == game_value['hi'] and hydro_value['lo'] == hydro_value['hi']
+    hydro_loss = dict(lo=max(0, hydro_value['lo'] - game_value['hi'] - 1e-10), hi=max(0, hydro_value['hi'] - game_value['lo'] + 1e-10))
+    assert prior_hydro_loss['lo'] <= hydro_loss['lo'] <= hydro_loss['hi'] <= prior_hydro_loss['hi']
+    return dict(schema='nc2000-policy-choice-errors-v1', rest_game_value=value,
+                rest_first_side_zero_value=rest_value, rest_first_side_one_loss=rest_loss,
+                psychic_game_side_zero_value=game_value, hydro_first_side_zero_value=hydro_value,
+                hydro_first_side_one_loss=hydro_loss, search=tables,
+                prior_hashes={str(p.relative_to(root)): sha(p.read_bytes()) for p in [prior_path, matrix_path]},
+                numerical_envelope=1e-10,
+                interpretation='Independent fixed-policy witnesses keep every opposing continuation action free. Opposite one-sided projections bracket each unrestricted game value and the value after side-one Rest or Hydro Pump first. Their differences bound first-action loss. Four fresh game-2 witnesses close both value intervals and sharpen the previous matrix certificate. Current full-information search reproduces the old four-seed choices and node counts exactly; fresh confirmation uses thirty-two disjoint search seeds. Counts are finite-seed observations, not population error probabilities or blind-policy certificates. No human calibration, average whole-game strength gain, or deployment claim is made.')
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = load_gzip(archive / 'records.json.gz')
+    corpora = {case: gzip.decompress((archive / case / 'corpus.jsonl.gz').read_bytes()) for case in ['rest', 'psychic']}
+    for case in ['rest', 'psychic']:
+        for name, r in records[case]['proofs'].items():
+            raw = (archive / case / f'{name}.json').read_bytes()
+            assert r['manifest']['protocol_sha256'] == sha(raw) and r['manifest']['protocol'] == json.loads(raw)
+    for case in ['rest', 'psychic']:
+        for stage in ['search'] + (['confirmation'] if case == 'psychic' else []):
+            raw = (archive / case / f'{stage}.json').read_bytes()
+            assert records[case][stage]['config_sha256'] == sha(raw) and records[case][stage]['config'] == json.loads(raw)
+    assert summarize(records, corpora) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified two game-derived first-action loss bounds, old-seed parity and fresh confirmation')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-choice-errors-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for case in ['rest', 'psychic']:
+        target = directory / case
+        target.mkdir()
+        (target / 'corpus.jsonl').write_bytes(gzip.decompress((archive / case / 'corpus.jsonl.gz').read_bytes()))
+        for name in proof_names[case]:
+            cfg = json.loads((archive / case / f'{name}.json').read_bytes())
+            cfg['corpus'] = str((target / 'corpus.jsonl').relative_to(root))
+            (target / f'{name}.json').write_text(json.dumps(cfg, indent=2) + '\n')
+            subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(target / f'{name}.json'), str(target / name)], cwd=root, env=env, check=True)
+        for stage in ['search'] + (['confirmation'] if case == 'psychic' else []):
+            (target / f'{stage}.json').write_bytes((archive / case / f'{stage}.json').read_bytes())
+            subprocess.run([str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(target / 'corpus.jsonl'), 'corpus-search', str(target / f'{stage}.json'), str(target / f'{stage}-result.json')], cwd=root, env=env, check=True)
+records = {case: {stage: json.loads((directory / case / f'{stage}-result.json').read_bytes()) for stage in ['search'] + (['confirmation'] if case == 'psychic' else [])} for case in ['rest', 'psychic']}
+for case in ['rest', 'psychic']:
+    filename = 'game-016-d0026.json' if case == 'rest' else 'game-002-d0011.json'
+    records[case]['proofs'] = {name: dict(manifest=json.loads((directory / case / name / 'manifest.json').read_bytes()), result=json.loads((directory / case / name / filename).read_bytes())) for name in proof_names[case]}
+corpora = {case: (directory / case / 'corpus.jsonl').read_bytes() for case in ['rest', 'psychic']}
+summary = summarize(records, corpora)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    for case in ['rest', 'psychic']:
+        target = archive / case
+        target.mkdir(exist_ok=True)
+        (target / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpora[case], mtime=0))
+        for name in proof_names[case] + ['search'] + (['confirmation'] if case == 'psychic' else []):
+            (target / f'{name}.json').write_bytes((directory / case / f'{name}.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print('Rest first loss:', summary['rest_first_side_one_loss'])
+print('Hydro first loss:', summary['hydro_first_side_one_loss'])
+print(json.dumps(summary['search'], indent=2))
