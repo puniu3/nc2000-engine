@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-hp-time-v1'
+names = ['attack-0', 'rest-4096', 'attack-4096', 'rest-0']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    assert set(records) == set(names)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert all(r['manifest']['source_hashes'] == records[names[0]]['manifest']['source_hashes'] for r in records.values())
+    prior_path = root / 'findings/policy-hp-eager-v1/records.json.gz'
+    previous = json.loads(gzip.decompress(prior_path.read_bytes()))
+    arms = {}
+    for name, record in records.items():
+        policy, capacity = name.split('-')
+        capacity = int(capacity)
+        row, protocol = record['result'], record['manifest']['protocol']
+        assert row['schema'] == 'nc2000-fixed-reply-bound-v1'
+        assert row['state_key'] == '199433906935569759004884428941975153695'
+        assert row['side'] == 0 and row['reply_action'] == 'switch 2' and row['fixed_first_action'] == 'move bodyslam'
+        assert row['fixed_rest_percent'] == protocol['fixed_rest_percent'] == (75 if policy == 'rest' else None)
+        assert protocol['dead_quick_claw_quotient'] and protocol['hp_transition_capacity'] == capacity
+        assert protocol['hp_transition_eager']
+        stats = row['hp_transition_cache']
+        assert stats['capacity'] == capacity and 0 <= stats['peak'] <= capacity
+        assert stats['eager_enabled']
+        assert 0 <= stats['hits'] <= stats['eligible'] <= row['reference']['runs'] + stats['hits']
+        assert 0 <= stats['eager_hits'] <= stats['eager_eligible'] <= stats['eligible']
+        assert stats['eager_hits'] <= stats['hits']
+        assert stats['eager_eligible'] <= stats['eager_runs'] + stats['eager_hits']
+        assert 0 <= stats['rejected_hp'] <= stats['eligible'] - stats['hits']
+        if capacity == 0:
+            assert stats['eligible'] == stats['hits'] == stats['peak'] == 0
+        assert protocol['reference_ms'] == 60000 and protocol['work_budget'] == 100000000
+        assert row['reference']['runs'] < protocol['work_budget']
+        assert row['reference']['stop'] in ['TimeBudget', 'NodeBudget']
+        if row['reference']['stop'] == 'TimeBudget':
+            assert 60000 <= row['reference']['elapsed_ms'] <= 65000
+        else:
+            assert row['reference']['nodes'] >= protocol['node_budget']
+        before, after = dict(previous[name]['manifest']['protocol']), dict(protocol)
+        for field in ['reference_ms', 'work_budget', 'corpus', 'interpretation']:
+            before.pop(field)
+            after.pop(field)
+        assert before == after
+        arms[name] = {'reference': row['reference'], 'reply_value': row['reply_value'], 'cache': stats}
+    comparisons = {}
+    for policy in ['attack', 'rest']:
+        control, cached = [arms[f'{policy}-{c}'] for c in [0, 4096]]
+        protocols = [dict(records[f'{policy}-{c}']['manifest']['protocol']) for c in [0, 4096]]
+        for p in protocols:
+            del p['hp_transition_capacity']
+        assert protocols[0] == protocols[1]
+        comparisons[policy] = {
+            'cached_over_control_elapsed': cached['reference']['elapsed_ms'] / control['reference']['elapsed_ms'],
+            'same_reply_bounds': cached['reply_value'] == control['reply_value'],
+            'engine_runs_avoided': cached['cache']['hits'],
+            'eager_fraction_control': control['cache']['eager_runs'] / control['reference']['runs'],
+            'eager_hits': cached['cache']['eager_hits'],
+            'cached_over_control_nodes': cached['reference']['nodes'] / control['reference']['nodes'],
+            'cached_over_control_executions_plus_hits': (cached['reference']['runs'] + cached['cache']['hits']) / control['reference']['runs'],
+            'fixed_reply_value_lower_delta': cached['reply_value']['lo'] - control['reply_value']['lo'],
+        }
+    return {'schema': 'nc2000-policy-hp-time-v1', 'arms': arms, 'comparisons': comparisons,
+            'prior_hashes': {str(prior_path.relative_to(root)): sha(prior_path.read_bytes())},
+            'interpretation': 'Optional bounded FIFO cache reuses admitted surviving HP translations in both eager enumeration and lazy expansions. Every chance trace is reused unchanged; KO-boundary predictions fall back to the engine. Both arms have a 60-second search limit, a nonbinding engine-work limit, and the same node limit. The HP-normalized input key is computed once per eager cell. Actual execution counts and cache hits are reported separately; more processed scripts or nodes alone do not prove better bounds. One run per policy and arm is a performance diagnostic, not a precise speed estimate or a policy-strength claim. The cache is disabled by default. Full-information first-decision bounds do not certify the deployed blind policy.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    for name, record in records.items():
+        manifest = record['manifest']
+        raw = (archive / f'{name}.json').read_bytes()
+        assert sha(raw) == manifest['protocol_sha256'] and json.loads(raw) == manifest['protocol']
+        assert sha(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())) == manifest['protocol']['corpus_sha256']
+        assert sha((root / manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified matched time limits, nonbinding work limits, cache accounting and archived comparisons')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-hp-time-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in names:
+        protocol = json.loads((archive / f'{name}.json').read_bytes())
+        protocol['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(protocol, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {name: {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()),
+                  'result': json.loads((directory / name / 'game-017-d0021.json').read_bytes())} for name in names}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress((directory / 'corpus.jsonl').read_bytes(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(json.dumps(summary['comparisons'], indent=2))

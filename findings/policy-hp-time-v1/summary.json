@@ -1,0 +1,127 @@
+{
+  "schema": "nc2000-policy-hp-time-v1",
+  "arms": {
+    "attack-0": {
+      "reference": {
+        "stop": "TimeBudget",
+        "runs": 1780237,
+        "nodes": 40743,
+        "elapsed_ms": 60051.806417
+      },
+      "reply_value": {
+        "lo": 0.0,
+        "hi": 0.9660387003357098
+      },
+      "cache": {
+        "capacity": 0,
+        "eligible": 0,
+        "hits": 0,
+        "eager_enabled": true,
+        "eager_hits": 0,
+        "eager_eligible": 0,
+        "rejected_hp": 0,
+        "peak": 0,
+        "expansions": 31205,
+        "eager_runs": 1749929
+      }
+    },
+    "rest-4096": {
+      "reference": {
+        "stop": "TimeBudget",
+        "runs": 1560218,
+        "nodes": 74138,
+        "elapsed_ms": 60001.848209
+      },
+      "reply_value": {
+        "lo": 0.0,
+        "hi": 0.9579870060087807
+      },
+      "cache": {
+        "capacity": 4096,
+        "eligible": 505825,
+        "hits": 935,
+        "eager_enabled": true,
+        "eager_hits": 816,
+        "eager_eligible": 503916,
+        "rejected_hp": 0,
+        "peak": 4096,
+        "expansions": 4507,
+        "eager_runs": 1556920
+      }
+    },
+    "attack-4096": {
+      "reference": {
+        "stop": "TimeBudget",
+        "runs": 1480108,
+        "nodes": 36512,
+        "elapsed_ms": 60008.635833
+      },
+      "reply_value": {
+        "lo": 0.0,
+        "hi": 0.9625497396079009
+      },
+      "cache": {
+        "capacity": 4096,
+        "eligible": 501026,
+        "hits": 127695,
+        "eager_enabled": true,
+        "eager_hits": 123564,
+        "eager_eligible": 479863,
+        "rejected_hp": 2255,
+        "peak": 4096,
+        "expansions": 24111,
+        "eager_runs": 1460935
+      }
+    },
+    "rest-0": {
+      "reference": {
+        "stop": "TimeBudget",
+        "runs": 1735390,
+        "nodes": 78867,
+        "elapsed_ms": 60026.315333
+      },
+      "reply_value": {
+        "lo": 0.0,
+        "hi": 0.9579870060087807
+      },
+      "cache": {
+        "capacity": 0,
+        "eligible": 0,
+        "hits": 0,
+        "eager_enabled": true,
+        "eager_hits": 0,
+        "eager_eligible": 0,
+        "rejected_hp": 0,
+        "peak": 0,
+        "expansions": 4904,
+        "eager_runs": 1731740
+      }
+    }
+  },
+  "comparisons": {
+    "attack": {
+      "cached_over_control_elapsed": 0.999281110984402,
+      "same_reply_bounds": false,
+      "engine_runs_avoided": 127695,
+      "eager_fraction_control": 0.9829753004796552,
+      "eager_hits": 123564,
+      "cached_over_control_nodes": 0.8961539405542056,
+      "cached_over_control_executions_plus_hits": 0.9031398628384872,
+      "fixed_reply_value_lower_delta": 0.0
+    },
+    "rest": {
+      "cached_over_control_elapsed": 0.999592393371736,
+      "same_reply_bounds": true,
+      "engine_runs_avoided": 935,
+      "eager_fraction_control": 0.997896726384271,
+      "eager_hits": 816,
+      "cached_over_control_nodes": 0.9400382923149099,
+      "cached_over_control_executions_plus_hits": 0.899597784935951,
+      "fixed_reply_value_lower_delta": 0.0
+    }
+  },
+  "prior_hashes": {
+    "findings/policy-hp-eager-v1/records.json.gz": "747d39c15c71e5827ca8b8359399076bac140857fc040744ed2118cd83a6a350"
+  },
+  "interpretation": "Optional bounded FIFO cache reuses admitted surviving HP translations in both eager enumeration and lazy expansions. Every chance trace is reused unchanged; KO-boundary predictions fall back to the engine. Both arms have a 60-second search limit, a nonbinding engine-work limit, and the same node limit. The HP-normalized input key is computed once per eager cell. Actual execution counts and cache hits are reported separately; more processed scripts or nodes alone do not prove better bounds. One run per policy and arm is a performance diagnostic, not a precise speed estimate or a policy-strength claim. The cache is disabled by default. Full-information first-decision bounds do not certify the deployed blind policy."
+}

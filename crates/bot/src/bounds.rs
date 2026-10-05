@@ -1631,15 +1631,13 @@ impl<'d> BoundSolver<'d> {
             let stats=&mut self.stats;
             let dex=self.dex;
             let capacity=self.cfg.hp_transition_capacity;
-            nc2000_engine::battle::enumerate::enumerate_step_with_runner(dex,&battle,choices,cap,&mut |script| {
-                let step=cache.run(dex,&battle,choices,script,capacity);
+            cache.enumerate(dex,&battle,choices,cap,capacity,|step,len| {
                 stats.hp_transition_hits+=usize::from(step.hit);
                 stats.hp_transition_eligible+=usize::from(step.eligible);
                 stats.hp_transition_eager_hits+=usize::from(step.hit);
                 stats.hp_transition_eager_eligible+=usize::from(step.eligible);
                 stats.hp_transition_rejected+=usize::from(step.rejected_hp);
-                stats.hp_transition_peak=stats.hp_transition_peak.max(cache.len());
-                (step.battle,step.trace,!step.hit)
+                stats.hp_transition_peak=stats.hp_transition_peak.max(len);
             })
         } else {
             enumerate_step(self.dex,&battle,choices,cap)

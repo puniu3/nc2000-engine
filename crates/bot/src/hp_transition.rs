@@ -69,12 +69,12 @@ impl HpTransition {
     /// In the admitted move/item domain HP only decreases during the step.
     /// Both translated survivors must stay positive, so no KO-dependent
     /// control flow or capped damage can differ from the recorded trace.
-    fn new(dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], script: &[usize], result: Battle, trace: Vec<Draw>) -> Option<Self> {
+    fn new(dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], script: &[usize], result: &Battle, trace: &[Draw]) -> Option<Self> {
         let key=HpTransitionKey::new(dex,base,choices,script)?;
         Self::from_key(key, base, result, trace)
     }
 
-    fn from_key(key: HpTransitionKey, base: &Battle, result: Battle, trace: Vec<Draw>) -> Option<Self> {
+    fn from_key(key: HpTransitionKey, base: &Battle, result: &Battle, trace: &[Draw]) -> Option<Self> {
         if result.outcome().is_some() || result.needs_choice()!=[true,true] || result.request_state!=RequestState::Move { return None; }
         let active=[base.active_id(0)?,base.active_id(1)?];
         let mut damage=[0;2];
@@ -84,7 +84,7 @@ impl HpTransition {
             damage[side]=base.poke(id).hp-result.poke(id).hp;
             if damage[side]<0 { return None; }
         }
-        Some(Self {key,active,damage,result,trace})
+        Some(Self {key,active,damage,result:result.clone(),trace:trace.to_vec()})
     }
 
     pub fn key(&self) -> &HpTransitionKey { &self.key }
@@ -95,7 +95,7 @@ impl HpTransition {
 
     pub fn run(dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], script: &[usize]) -> (Battle,Vec<Draw>,Option<Self>) {
         let (result,trace)=run_scripted(dex,base,choices,script);
-        let entry=Self::new(dex,base,choices,script,result.clone(),trace.clone());
+        let entry=Self::new(dex,base,choices,script,&result,&trace);
         (result,trace,entry)
     }
 
@@ -132,10 +132,28 @@ impl HpTransitionCache {
     pub fn len(&self) -> usize { self.entries.len() }
 
     pub fn run(&mut self, dex: &Dex, base: &Battle, choices: [Option<SearchChoice>;2], script: &[usize], capacity: usize) -> CachedStep {
+        let key=(capacity>0).then(||HpTransitionKey::new(dex,base,choices,script)).flatten();
+        self.run_key(dex,base,choices,script,capacity,key)
+    }
+
+    pub fn enumerate(&mut self, dex: &Dex, base: &Battle, choices: [Option<SearchChoice>;2], cap: usize, capacity: usize,
+        mut observe: impl FnMut(&CachedStep,usize)) -> Option<nc2000_engine::battle::enumerate::StepEnum> {
+        let template=(capacity>0).then(||HpTransitionKey::new(dex,base,choices,&[])).flatten();
+        nc2000_engine::battle::enumerate::enumerate_step_with_runner(dex,base,choices,cap,&mut |script| {
+            let key=template.as_ref().map(|template| {
+                let mut key=template.clone();key.script=script.to_vec();key
+            });
+            let step=self.run_key(dex,base,choices,script,capacity,key);
+            observe(&step,self.len());
+            (step.battle,step.trace,!step.hit)
+        })
+    }
+
+    fn run_key(&mut self, dex: &Dex, base: &Battle, choices: [Option<SearchChoice>;2], script: &[usize], capacity: usize,
+        key: Option<HpTransitionKey>) -> CachedStep {
         while self.entries.len()>capacity {
             self.entries.remove(&self.order.pop_front().unwrap());
         }
-        let key=(capacity>0).then(||HpTransitionKey::new(dex,base,choices,script)).flatten();
         let eligible=key.is_some();
         let mut rejected_hp=false;
         if let Some(entry)=key.as_ref().and_then(|key|self.entries.get(key)) {
@@ -146,7 +164,7 @@ impl HpTransitionCache {
         }
         let (battle,trace)=run_scripted(dex,base,choices,script);
         if let Some(key)=key.filter(|key|!self.entries.contains_key(key)) {
-            if let Some(entry)=HpTransition::from_key(key.clone(),base,battle.clone(),trace.clone()) {
+            if let Some(entry)=HpTransition::from_key(key.clone(),base,&battle,&trace) {
                 if self.entries.len()==capacity {
                     self.entries.remove(&self.order.pop_front().unwrap());
                 }
@@ -273,7 +291,17 @@ mod tests {
                 for leaf in leaves {*mass.entry(leaf.battle.state_key128()).or_default()+=leaf.prob;}
                 mass
             };
+            let mut prepared_cache=HpTransitionCache::default();
+            let prepared=prepared_cache.enumerate(&dex,&target,choices,100_000,4096,|_,_|{}).unwrap();
+            assert_eq!(prepared.runs,exact.runs);
+            let prepared=aggregate(prepared.leaves);
             let found=aggregate(cached.leaves);let expected=aggregate(exact.leaves);
+            assert_eq!(prepared.len(),expected.len());
+            for (key,mass) in prepared {assert!((mass-expected[&key]).abs()<1e-10);}
+            let warm=prepared_cache.enumerate(&dex,&target,choices,100_000,4096,|_,_|{}).unwrap();
+            let warm=aggregate(warm.leaves);
+            assert_eq!(warm.len(),expected.len());
+            for (key,mass) in warm {assert!((mass-expected[&key]).abs()<1e-10);}
             assert_eq!(found.len(),expected.len());
             for (key,mass) in found {assert!((mass-expected[&key]).abs()<1e-10);}
         }
