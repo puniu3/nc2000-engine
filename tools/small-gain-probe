@@ -69,13 +69,20 @@ def main():
     parser.add_argument('--probe-iterations', type=int)
     parser.add_argument('--fresh', action='store_true')
     parser.add_argument('--hp-buckets', type=int, default=16)
+    parser.add_argument('--trace', action='store_true')
+    parser.add_argument('--seed', type=int, default=2026110801)
     args = parser.parse_args()
+    assert not args.trace or args.fresh
     probes = args.iterations*2//5 if args.probe_iterations is None else args.probe_iterations
     label = str(args.iterations) if args.probe_iterations is None else f'{args.iterations}-probes{probes}'
     if args.fresh:
         label += '-fresh'
     if args.hp_buckets != 16:
         label += f'-hp{args.hp_buckets}'
+    if args.trace:
+        label += '-trace'
+    if args.seed != 2026110801:
+        label += f'-seed{args.seed}'
     archive = root / 'findings/small-gain-probe-v1' / label
     if args.verify_only:
         bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
@@ -88,7 +95,8 @@ def main():
     subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
     directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-small-gain-'))
     with (directory/'run.log').open('w') as log:
-        subprocess.run([str(binary),str(directory/'run'),'2,3,4,5','1',str(args.iterations),'2026110801','bond',str(probes),'fresh' if args.fresh else 'typed',str(args.hp_buckets)],
+        mode = 'fresh-trace' if args.trace else 'fresh' if args.fresh else 'typed'
+        subprocess.run([str(binary),str(directory/'run'),'2,3,4,5','1',str(args.iterations),str(args.seed),'bond',str(probes),mode,str(args.hp_buckets)],
                        cwd=root,env=env,stdout=log,stderr=log,check=True)
     record = json.loads((directory/'run/records.json').read_text())
     assert all(sha((root/p).read_bytes()) == value for p,value in record['source_hashes'])

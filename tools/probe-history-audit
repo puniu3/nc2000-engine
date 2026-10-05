@@ -136,15 +136,102 @@ def summarize_hp():
                       'comparison at matched thinking time.')
 
 
+def summarize_trace():
+    control, control_sha = read('864000-fresh')
+    traced, trace_sha = read('864000-fresh-trace')
+    assert traced['trace_probes']
+    for key in ['state_key','actions','search_seed_base','search_seeds','iterations','probe_iterations']:
+        assert control[key] == traced[key]
+    changed = [p for p,h in control['source_hashes'] if dict(traced['source_hashes'])[p] != h]
+    assert changed == ['crates/bot/examples/counter_mix_probe.rs','crates/bot/src/blind.rs']
+    rows = []
+    assert len(control['rows']) == len(traced['rows'])
+    for a,b in zip(control['rows'],traced['rows']):
+        stripped = dict(b)
+        if b['mode'] == 'pinned':
+            stripped['fresh_evidence'] = {k:v for k,v in b['fresh_evidence'].items() if k != 'probe_trace'}
+        assert a == stripped
+        if b['mode'] != 'pinned':
+            continue
+        evidence = b['fresh_evidence']
+        phase = evidence['phase_types'][0]
+        side = b['side']
+        for cell in phase['cells']:
+            stats = evidence['probe_trace'][cell['own']*phase['replies']+cell['reply']]
+            n = cell['samples']
+            assert stats['samples'] == n
+            terminal = stats['terminal']
+            weight = stats['terminal_reward']
+            assert 0 <= terminal <= n and 0 <= weight <= terminal
+            assert 0 <= stats['expanded_leaf']+stats['capped_leaf'] <= n
+            missing = n-terminal
+            unobserved_reward = cell['mean']*n-weight
+            assert -1e-7 <= unobserved_reward <= missing+1e-7
+            own,reply = cell['own'],cell['reply']
+            n1 = len(traced['actions'][1])
+            lo,hi = traced['proof']['cells'][own*n1+reply if side==0 else reply*n1+own]
+            if side==1:
+                lo,hi = 1-hi,1-lo
+            envelope = [weight/n,(weight+missing)/n]
+            rollout_envelope = [max(0,envelope[0]-stats['expanded_leaf']/n),
+                                min(1,envelope[1]+stats['expanded_leaf']/n)]
+            rows.append(dict(side=side,own=traced['actions'][side][own],
+                             reply=traced['actions'][1-side][reply],trace=stats,
+                             mean=cell['mean'],optimal_continuation=[lo,hi],
+                             arbitrary_nonterminal_values=envelope,
+                             arbitrary_nonterminal_and_rollout_values=rollout_envelope,
+                             residual_bias=[envelope[0]-hi,envelope[1]-lo],
+                             cutoff_and_rollout_values_cannot_remove_sample_bias=rollout_envelope[1]<lo or rollout_envelope[0]>hi,
+                             cutoff_values_cannot_remove_sample_bias=envelope[1]<lo or envelope[0]>hi))
+    return dict(inputs={'864000-fresh':control_sha,'864000-fresh-trace':trace_sha},
+                changed_sources=changed,rows=rows,
+                scope='The instrumented run reproduces all uninstrumented search statistics and '
+                      'policies exactly. The envelope allows every nonterminal sample any reward in '
+                      '[0,1], holding observed terminal outcomes fixed. A wider envelope also allows '
+                      'any newly expanded rollout return to change by up to one. This isolates how much cutoff '
+                      'evaluation could change these recorded sample means. It is not a confidence '
+                      'interval for expected returns or a certificate for continuation policies.')
+
+
+def summarize_floor_counterexample():
+    label = '864000-seed13722711268216851060'
+    record, digest = read(label)
+    warm, _ = read('518400-probes0')
+    assert dict(record['source_hashes'])['crates/bot/src/root_policy.rs'] == dict(warm['source_hashes'])['crates/bot/src/root_policy.rs']
+    assert record['typed_probes'] and record['adaptive_probes'] and not record.get('fresh_probes',False)
+    report = runpy.run_path(str(root/'tools/small-gain-probe'))['summarize'](record)
+    side = report['rows'][1]
+    assert side['side'] == 1 and side['mixed'] and side['margin'] > .02
+    assert side['probed'] == record['probe_iterations']
+    gap = [side['loss'][0]-side['fallback_loss'][1],side['loss'][1]-side['fallback_loss'][0]]
+    assert gap[0] > .0235
+    return dict(input={label:digest},threshold=.02,seed=record['search_seed_base'],
+                policy=side['policy'],search_margin=side['margin'],certified_loss=side['loss'],
+                fallback_loss=side['fallback_loss'],certified_excess_loss=gap,
+                scope='The cumulative type-conditioned adaptive probing path accepts a mixture at '
+                      'the restored 0.02 threshold. Its certified first-action loss exceeds the pure '
+                      'fallback loss by more than 0.0235. This is a counterexample to treating that '
+                      'threshold as a game-value guarantee; raising a fixed threshold is not a repair. '
+                      'The default ordinary agent does not use this experimental selector.')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--verify-only', action='store_true')
     parser.add_argument('--fresh', action='store_true')
     parser.add_argument('--hp-ablation', action='store_true')
+    parser.add_argument('--trace', action='store_true')
+    parser.add_argument('--floor-counterexample', action='store_true')
     args = parser.parse_args()
-    assert not (args.fresh and args.hp_ablation)
-    report = summarize_hp() if args.hp_ablation else summarize_fresh() if args.fresh else summarize()
-    path = archive / ('hp-ablation.json' if args.hp_ablation else 'fresh-history.json' if args.fresh else 'history.json')
+    modes = [(args.fresh,summarize_fresh,'fresh-history.json'),
+             (args.hp_ablation,summarize_hp,'hp-ablation.json'),
+             (args.trace,summarize_trace,'trace.json'),
+             (args.floor_counterexample,summarize_floor_counterexample,'floor-counterexample.json')]
+    selected = [(fn,name) for enabled,fn,name in modes if enabled]
+    assert len(selected) <= 1
+    fn,name = selected[0] if selected else (summarize,'history.json')
+    report = fn()
+    path = archive / name
     if args.verify_only:
         assert json.loads(path.read_text()) == report
         print('probe-history: verified source identity, warm replay, probe increments and certified bias')

@@ -66,8 +66,15 @@ def summarize(records):
                 analyses[phase] = dict(mean_loss=[sum(a['loss'][k] for a in aa)/seed_count for k in [0,1]],
                     max_loss_upper=max(a['loss'][1] for a in aa),
                     positive_margins=sum(a['passes_positive_margin'] for a in aa),
+                    accepted_positive_margin_worse_than_fallback=sum(
+                        r['result']['analyses'][phase]['passes_positive_margin'] and
+                        r['result']['analyses'][phase]['loss'][0]>r['result']['fallback_loss'][1] for r in rows),
                     worse_than_fallback=sum(r['result']['analyses'][phase]['loss'][0]>r['result']['fallback_loss'][1] for r in rows))
             groups.append(dict(variant=name,side=side,analyses=analyses,
+                               selected_mixtures=sum(r['result']['mixed'] for r in rows),
+                               selected_mixtures_worse_than_fallback=sum(r['result']['mixed'] and
+                                   r['result']['loss'][0]>r['result']['fallback_loss'][1] for r in rows),
+                               actual_mean_loss=[sum(r['result']['loss'][k] for r in rows)/seed_count for k in [0,1]],
                                fresh_bias_range=[min(r['fresh_bias'][0] for r in rows),max(r['fresh_bias'][1] for r in rows)]))
     pairs = []
     for i in range(seed_count):

@@ -11,6 +11,7 @@
           ],
           "max_loss_upper": 0.00994919716720787,
           "positive_margins": 4,
+          "accepted_positive_margin_worse_than_fallback": 0,
           "worse_than_fallback": 0
         },
         "phase_analysis": {
@@ -20,9 +21,16 @@
           ],
           "max_loss_upper": 0.011920880788603877,
           "positive_margins": 4,
+          "accepted_positive_margin_worse_than_fallback": 0,
           "worse_than_fallback": 0
         }
       },
+      "selected_mixtures": 4,
+      "selected_mixtures_worse_than_fallback": 0,
+      "actual_mean_loss": [
+        0.005294044970859503,
+        0.005294233225048095
+      ],
       "fresh_bias_range": [
         -0.014426192026289683,
         0.01696285396691216
@@ -39,6 +47,7 @@
           ],
           "max_loss_upper": 0.03731828394484548,
           "positive_margins": 4,
+          "accepted_positive_margin_worse_than_fallback": 1,
           "worse_than_fallback": 1
         },
         "phase_analysis": {
@@ -48,9 +57,16 @@
           ],
           "max_loss_upper": 0.01844323809812575,
           "positive_margins": 3,
+          "accepted_positive_margin_worse_than_fallback": 1,
           "worse_than_fallback": 1
         }
       },
+      "selected_mixtures": 1,
+      "selected_mixtures_worse_than_fallback": 1,
+      "actual_mean_loss": [
+        0.02157868813599937,
+        0.021578926729774732
+      ],
       "fresh_bias_range": [
         -0.024098270633578833,
         0.030624108692956398
@@ -67,6 +83,7 @@
           ],
           "max_loss_upper": 0.005468686416629334,
           "positive_margins": 4,
+          "accepted_positive_margin_worse_than_fallback": 0,
           "worse_than_fallback": 0
         },
         "phase_analysis": {
@@ -76,9 +93,16 @@
           ],
           "max_loss_upper": 0.007831317339597304,
           "positive_margins": 4,
+          "accepted_positive_margin_worse_than_fallback": 0,
           "worse_than_fallback": 0
         }
       },
+      "selected_mixtures": 4,
+      "selected_mixtures_worse_than_fallback": 0,
+      "actual_mean_loss": [
+        0.0026738682576930273,
+        0.0026741230691138492
+      ],
       "fresh_bias_range": [
         -0.007724803137400801,
         0.056077437300245475
@@ -95,6 +119,7 @@
           ],
           "max_loss_upper": 0.03236201225438883,
           "positive_margins": 4,
+          "accepted_positive_margin_worse_than_fallback": 1,
           "worse_than_fallback": 1
         },
         "phase_analysis": {
@@ -104,9 +129,16 @@
           ],
           "max_loss_upper": 0.025962091333654784,
           "positive_margins": 3,
+          "accepted_positive_margin_worse_than_fallback": 1,
           "worse_than_fallback": 1
         }
       },
+      "selected_mixtures": 0,
+      "selected_mixtures_worse_than_fallback": 0,
+      "actual_mean_loss": [
+        0.01633219666008435,
+        0.01633247432475115
+      ],
       "fresh_bias_range": [
         -0.03486215952246774,
         0.030537303137400773

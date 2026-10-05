@@ -12,6 +12,15 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 
+#[derive(Clone, Default, serde::Serialize)]
+struct ProbeTrace {
+    samples: u32,
+    terminal: u32,
+    terminal_reward: f64,
+    expanded_leaf: u32,
+    capped_leaf: u32,
+}
+
 fn sha(raw: &[u8]) -> String {
     format!("{:x}", Sha256::digest(raw))
 }
@@ -60,7 +69,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert!(
         (6..=10).contains(&args.len()),
-        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed|fresh] [hp-buckets]"
+        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed|fresh|fresh-trace] [hp-buckets]"
     );
     let family = args.get(6).map(String::as_str).unwrap_or("counter");
     assert!(matches!(family, "counter" | "bond"));
@@ -73,7 +82,8 @@ fn main() {
     let probe_iterations: u32 = args.get(7).map(|s| s.parse().unwrap()).unwrap_or(0);
     assert!(probe_iterations < iterations);
     let typed = args.get(8).map(String::as_str) == Some("typed");
-    let fresh = args.get(8).map(String::as_str) == Some("fresh");
+    let trace = args.get(8).map(String::as_str) == Some("fresh-trace");
+    let fresh = trace || args.get(8).map(String::as_str) == Some("fresh");
     let adaptive = typed || args.get(8).map(String::as_str) == Some("adaptive");
     let hp_buckets: i64 = args.get(9).map(|s| s.parse().unwrap()).unwrap_or(16);
     let dex = conformance::load_dex();
@@ -222,9 +232,26 @@ fn main() {
                     .flat_map(|own| (0..replies).map(move |reply| (own, reply))).collect();
                 assert!(!schedule.is_empty() && probe_iterations > 0);
                 let mut cells = vec![(0u32, 0.); actions[s].len()*replies];
+                let mut traces = vec![ProbeTrace::default(); cells.len()];
                 for k in 0..probe_iterations {
                     let (own, reply) = schedule[k as usize % schedule.len()];
-                    let r = pinned.step_forced_joint(&dex, &beliefs[s], &obs[s], own, actions[1-s][reply]);
+                    let r = if trace {
+                        let stats = &mut traces[own*replies+reply];
+                        pinned.step_forced_joint_observed(&dex, &beliefs[s], &obs[s], own, actions[1-s][reply],
+                            &mut |event| match event {
+                                nc2000_bot::smmcts::SearchTrace::Leaf { rollout, .. } => {
+                                    if rollout { stats.expanded_leaf += 1; } else { stats.capped_leaf += 1; }
+                                }
+                                nc2000_bot::smmcts::SearchTrace::Result { battle, reward0 } => {
+                                    stats.samples += 1;
+                                    if battle.outcome().is_some() {
+                                        stats.terminal += 1;
+                                        stats.terminal_reward += if s==0 { reward0 } else { 1.-reward0 };
+                                    }
+                                }
+                                _ => {}
+                            })
+                    } else { pinned.step_forced_joint(&dex, &beliefs[s], &obs[s], own, actions[1-s][reply]) };
                     let cell = &mut cells[own*replies+reply];
                     cell.0 += 1;
                     cell.1 += if s == 0 { r } else { 1.-r };
@@ -240,6 +267,7 @@ fn main() {
                     "phase_types":phase,"eligible":eligible,
                     "phase_analysis":analyze_bayesian_root(&eligible,probe_iterations,&phase),
                     "cumulative_analysis":analyze_bayesian_root(&eligible,iterations,&cumulative)}));
+                if trace { fresh_evidence.as_mut().unwrap()["probe_trace"] = json!(traces); }
                 probe_iterations
             } else if typed {
                 pinned.finish_with_typed_mixed_probes(&dex, &beliefs[s], &obs[s], iterations, probe_iterations)
@@ -297,6 +325,7 @@ fn main() {
         "binary_sha256":sha(&std::fs::read(std::env::current_exe().unwrap()).unwrap()),
         "interpretation":"Legal prefix; fixed known loadouts. Pinned beliefs reconstructed from preview. No shipped-pool or human calibration claim. Matrix continuation values bound the first-action distribution with optimal subsequent play."});
     if fresh { output["fresh_probes"] = json!(true); }
+    if trace { output["trace_probes"] = json!(true); }
     if hp_buckets != 16 { output["hp_buckets"] = json!(hp_buckets); }
     std::fs::write(
         out.join("records.json"),

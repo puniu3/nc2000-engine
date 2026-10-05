@@ -1,0 +1,385 @@
+{
+  "inputs": {
+    "864000-fresh": "0d1f25d3bd7f3f102b1cd63091df8f7a53a0f03cf5f7dff5285311fc1bd0323c",
+    "864000-fresh-trace": "3d5d19bdb98b5c2abb9f87aaf23548a0eae50f6943218dfa5d9aac7a37132e3f"
+  },
+  "changed_sources": [
+    "crates/bot/examples/counter_mix_probe.rs",
+    "crates/bot/src/blind.rs"
+  ],
+  "rows": [
+    {
+      "side": 0,
+      "own": "move earthquake",
+      "reply": "move thunderbolt",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 52541.0,
+        "expanded_leaf": 138,
+        "capped_leaf": 0
+      },
+      "mean": 0.9121701388888889,
+      "optimal_continuation": [
+        0.9146118114560909,
+        0.91461181640625
+      ],
+      "arbitrary_nonterminal_values": [
+        0.9121701388888889,
+        0.9121701388888889
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0.9097743055555555,
+        0.9145659722222222
+      ],
+      "residual_bias": [
+        -0.0024416775173611294,
+        -0.002441672567202069
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": true,
+      "cutoff_values_cannot_remove_sample_bias": true
+    },
+    {
+      "side": 0,
+      "own": "move earthquake",
+      "reply": "move destinybond",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 0.0,
+        "expanded_leaf": 0,
+        "capped_leaf": 0
+      },
+      "mean": 0.0,
+      "optimal_continuation": [
+        0.0,
+        0.0
+      ],
+      "arbitrary_nonterminal_values": [
+        0.0,
+        0.0
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0,
+        0.0
+      ],
+      "residual_bias": [
+        0.0,
+        0.0
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": false,
+      "cutoff_values_cannot_remove_sample_bias": false
+    },
+    {
+      "side": 0,
+      "own": "move earthquake",
+      "reply": "switch 3",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 52798.0,
+        "expanded_leaf": 24,
+        "capped_leaf": 0
+      },
+      "mean": 0.9166319444444444,
+      "optimal_continuation": [
+        0.91461181640625,
+        0.91461181640625
+      ],
+      "arbitrary_nonterminal_values": [
+        0.9166319444444444,
+        0.9166319444444444
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0.9162152777777778,
+        0.917048611111111
+      ],
+      "residual_bias": [
+        0.002020128038194402,
+        0.002020128038194402
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": true,
+      "cutoff_values_cannot_remove_sample_bias": true
+    },
+    {
+      "side": 0,
+      "own": "move curse",
+      "reply": "move thunderbolt",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 43.0,
+        "expanded_leaf": 102,
+        "capped_leaf": 0
+      },
+      "mean": 0.0007465277777777778,
+      "optimal_continuation": [
+        0.0,
+        0.0
+      ],
+      "arbitrary_nonterminal_values": [
+        0.0007465277777777778,
+        0.0007465277777777778
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0,
+        0.002517361111111111
+      ],
+      "residual_bias": [
+        0.0007465277777777778,
+        0.0007465277777777778
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": false,
+      "cutoff_values_cannot_remove_sample_bias": true
+    },
+    {
+      "side": 0,
+      "own": "move curse",
+      "reply": "move destinybond",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 10942.0,
+        "expanded_leaf": 209,
+        "capped_leaf": 0
+      },
+      "mean": 0.18996527777777777,
+      "optimal_continuation": [
+        0.13065867381086563,
+        0.13065883091517858
+      ],
+      "arbitrary_nonterminal_values": [
+        0.18996527777777777,
+        0.18996527777777777
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0.18633680555555554,
+        0.19359375
+      ],
+      "residual_bias": [
+        0.0593064468625992,
+        0.05930660396691215
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": true,
+      "cutoff_values_cannot_remove_sample_bias": true
+    },
+    {
+      "side": 0,
+      "own": "move curse",
+      "reply": "switch 3",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 52883.0,
+        "expanded_leaf": 174,
+        "capped_leaf": 0
+      },
+      "mean": 0.9181076388888889,
+      "optimal_continuation": [
+        0.91461181640625,
+        0.9146118164068284
+      ],
+      "arbitrary_nonterminal_values": [
+        0.9181076388888889,
+        0.9181076388888889
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0.9150868055555555,
+        0.9211284722222223
+      ],
+      "residual_bias": [
+        0.0034958224820604844,
+        0.0034958224826389106
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": true,
+      "cutoff_values_cannot_remove_sample_bias": true
+    },
+    {
+      "side": 1,
+      "own": "move thunderbolt",
+      "reply": "move earthquake",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 5013.0,
+        "expanded_leaf": 194,
+        "capped_leaf": 0
+      },
+      "mean": 0.08703125,
+      "optimal_continuation": [
+        0.08538818359375,
+        0.08538818854390906
+      ],
+      "arbitrary_nonterminal_values": [
+        0.08703125,
+        0.08703125
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0.08366319444444445,
+        0.09039930555555556
+      ],
+      "residual_bias": [
+        0.001643061456090944,
+        0.0016430664062500044
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": false,
+      "cutoff_values_cannot_remove_sample_bias": true
+    },
+    {
+      "side": 1,
+      "own": "move thunderbolt",
+      "reply": "move curse",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 57534.0,
+        "expanded_leaf": 193,
+        "capped_leaf": 0
+      },
+      "mean": 0.9988541666666667,
+      "optimal_continuation": [
+        1.0,
+        1.0
+      ],
+      "arbitrary_nonterminal_values": [
+        0.9988541666666667,
+        0.9988541666666667
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0.9955034722222222,
+        1
+      ],
+      "residual_bias": [
+        -0.0011458333333332904,
+        -0.0011458333333332904
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": false,
+      "cutoff_values_cannot_remove_sample_bias": true
+    },
+    {
+      "side": 1,
+      "own": "move destinybond",
+      "reply": "move earthquake",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 57600.0,
+        "expanded_leaf": 0,
+        "capped_leaf": 0
+      },
+      "mean": 1.0,
+      "optimal_continuation": [
+        1.0,
+        1.0
+      ],
+      "arbitrary_nonterminal_values": [
+        1.0,
+        1.0
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        1.0,
+        1
+      ],
+      "residual_bias": [
+        0.0,
+        0.0
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": false,
+      "cutoff_values_cannot_remove_sample_bias": false
+    },
+    {
+      "side": 1,
+      "own": "move destinybond",
+      "reply": "move curse",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 48647.0,
+        "expanded_leaf": 135,
+        "capped_leaf": 0
+      },
+      "mean": 0.8445659722222222,
+      "optimal_continuation": [
+        0.8693411690848214,
+        0.8693413261891344
+      ],
+      "arbitrary_nonterminal_values": [
+        0.8445659722222222,
+        0.8445659722222222
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0.8422222222222222,
+        0.8469097222222222
+      ],
+      "residual_bias": [
+        -0.024775353966912217,
+        -0.024775196862599214
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": true,
+      "cutoff_values_cannot_remove_sample_bias": true
+    },
+    {
+      "side": 1,
+      "own": "switch 3",
+      "reply": "move earthquake",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 4740.0,
+        "expanded_leaf": 26,
+        "capped_leaf": 0
+      },
+      "mean": 0.08229166666666667,
+      "optimal_continuation": [
+        0.08538818359375,
+        0.08538818359375
+      ],
+      "arbitrary_nonterminal_values": [
+        0.08229166666666667,
+        0.08229166666666667
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0.08184027777777778,
+        0.08274305555555556
+      ],
+      "residual_bias": [
+        -0.0030965169270833343,
+        -0.0030965169270833343
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": true,
+      "cutoff_values_cannot_remove_sample_bias": true
+    },
+    {
+      "side": 1,
+      "own": "switch 3",
+      "reply": "move curse",
+      "trace": {
+        "samples": 57600,
+        "terminal": 57600,
+        "terminal_reward": 4757.0,
+        "expanded_leaf": 163,
+        "capped_leaf": 0
+      },
+      "mean": 0.08258680555555556,
+      "optimal_continuation": [
+        0.08538818359317157,
+        0.08538818359375
+      ],
+      "arbitrary_nonterminal_values": [
+        0.08258680555555556,
+        0.08258680555555556
+      ],
+      "arbitrary_nonterminal_and_rollout_values": [
+        0.07975694444444445,
+        0.08541666666666667
+      ],
+      "residual_bias": [
+        -0.002801378038194441,
+        -0.0028013780376160147
+      ],
+      "cutoff_and_rollout_values_cannot_remove_sample_bias": false,
+      "cutoff_values_cannot_remove_sample_bias": true
+    }
+  ],
+  "scope": "The instrumented run reproduces all uninstrumented search statistics and policies exactly. The envelope allows every nonterminal sample any reward in [0,1], holding observed terminal outcomes fixed. A wider envelope also allows any newly expanded rollout return to change by up to one. This isolates how much cutoff evaluation could change these recorded sample means. It is not a confidence interval for expected returns or a certificate for continuation policies."
+}

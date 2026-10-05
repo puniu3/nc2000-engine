@@ -63,6 +63,33 @@ fn joint_probes_force_legal_replies_and_preserve_the_unavailable_reply_fallback(
     assert_eq!(plain.visits(), adaptive.visits());
     assert_eq!(plain.means(), adaptive.means());
     assert_eq!(plain.root_matrix(), adaptive.root_matrix());
+
+    let mut reference = BlindSearch::new(&b, &dex, RmConfig::default(), 0, 31);
+    let mut observed = BlindSearch::new(&b, &dex, RmConfig::default(), 0, 31);
+    reference.step(&dex, &belief, &obs, 100);
+    observed.step(&dex, &belief, &obs, 100);
+    let mut results = 0;
+    for i in 0..100 {
+        let reply = if i % 7 == 0 { missing } else { surf };
+        let mut traced_reward = None;
+        let value = observed.step_forced_joint_observed(&dex, &belief, &obs, i % 2, reply,
+            &mut |event| {
+                if let nc2000_bot::smmcts::SearchTrace::Result { reward0, .. } = event {
+                    assert!(traced_reward.replace(reward0).is_none());
+                    results += 1;
+                }
+            });
+        assert_eq!(Some(value), traced_reward);
+        assert_eq!(value, reference.step_forced_joint(&dex, &belief, &obs, i % 2, reply));
+    }
+    assert_eq!(results, 100);
+    reference.step(&dex, &belief, &obs, 100);
+    observed.step(&dex, &belief, &obs, 100);
+    assert_eq!(reference.visits(), observed.visits());
+    assert_eq!(reference.means(), observed.means());
+    assert_eq!(reference.root_matrix(), observed.root_matrix());
+    assert_eq!(reference.joint_probe_visits(), observed.joint_probe_visits());
+    assert_eq!(reference.node_count(), observed.node_count());
 }
 
 

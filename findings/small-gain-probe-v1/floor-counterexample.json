@@ -1,0 +1,26 @@
+{
+  "input": {
+    "864000-seed13722711268216851060": "2b6878f014183e8ec1f321d2f9cdb7329da2f5d1705dc44b5bf3b1b1a373c511"
+  },
+  "threshold": 0.02,
+  "seed": 13722711268216851060,
+  "policy": [
+    0.16857479470862116,
+    0.8314252052913789,
+    0.0
+  ],
+  "search_margin": 0.02128984394118294,
+  "certified_loss": [
+    0.039854021203509345,
+    0.03985414259833519
+  ],
+  "fallback_loss": [
+    0.01633219666008435,
+    0.01633247432475115
+  ],
+  "certified_excess_loss": [
+    0.023521546878758195,
+    0.02352194593825084
+  ],
+  "scope": "The cumulative type-conditioned adaptive probing path accepts a mixture at the restored 0.02 threshold. Its certified first-action loss exceeds the pure fallback loss by more than 0.0235. This is a counterexample to treating that threshold as a game-value guarantee; raising a fixed threshold is not a repair. The default ordinary agent does not use this experimental selector."
+}

@@ -559,6 +559,32 @@ impl BlindSearch {
         obs: &Observer,
         forcing: ForcedRoot,
     ) -> f64 {
+        self.step_forced_impl_observed(dex, belief, obs, forcing, None)
+    }
+
+    pub fn step_forced_joint_observed(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        my_pick: usize,
+        reply: SearchChoice,
+        trace: &mut impl FnMut(crate::smmcts::SearchTrace<'_>),
+    ) -> f64 {
+        let value = self.step_forced_impl_observed(dex, belief, obs,
+            ForcedRoot::Action { own: my_pick, reply: Some(reply) }, Some(trace));
+        self.joint_probe_n[my_pick] += 1;
+        value
+    }
+
+    fn step_forced_impl_observed(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        forcing: ForcedRoot,
+        trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
+    ) -> f64 {
         if let ForcedRoot::Action { own, .. } = forcing {
             assert!(own < self.my_acts.len(), "forced root action out of range");
             assert!(self.my_mask.as_ref().map_or(true, |mask| mask[own]), "forced root action is masked");
@@ -622,7 +648,14 @@ impl BlindSearch {
             force[1 - self.side] = forced_reply;
         }
         let mut joint = [0usize; 2];
-        let r = run_iteration(
+        let r = if let Some(trace) = trace {
+            crate::smmcts::run_iteration_with_leaf(
+                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
+                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
+                &mut |sim, rng, rollout| crate::smmcts::default_leaf(
+                    &self.cfg, sim, dex, self.turn_cap, rng, rollout), Some(trace),
+            )
+        } else { run_iteration(
             &self.cfg,
             &mut self.rng,
             &mut self.nodes,
@@ -634,7 +667,7 @@ impl BlindSearch {
             force,
             &mut joint,
             &mut 0,
-        );
+        ) };
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         self.scratch = Some(sim);
         self.record_joint(root, type_key, my_pick, joint, r);
