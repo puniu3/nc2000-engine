@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+source = root / 'findings/policy-expansion-v1'
+
+
+def module(name, filename):
+    spec = importlib.util.spec_from_file_location(name, root / 'tools' / filename)
+    result = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(result)
+    return result
+
+
+assessor = module('assessor', 'headroom-cases-report.py')
+verifier = module('verifier', 'policy-gap-report.py')
+
+
+def read_archive(path):
+    return json.loads(gzip.decompress(path.read_bytes()))
+
+
+def summarize(records):
+    assessor.calibrate_assessor()
+    prior_paths = [root / 'findings/policy-gap-v1/records.json.gz', root / 'findings/headroom-cases-v1/records.json.gz']
+    original = read_archive(prior_paths[0])
+    refined = read_archive(prior_paths[1])['references']
+    expected = {(11, 15), (17, 21), (23, 17)}
+    rows = records['results']
+    assert {(r['game'], r['decision']) for r in rows} == expected
+    assert len(rows) == records['manifest']['expected_positions'] == len(expected)
+    summaries = []
+    for row in rows:
+        current = row['reference']
+        priors = [r for r in original + refined if (r['game'], r['decision']) == (row['game'], row['decision'])]
+        assert len(priors) == 2
+        matrices = [r['reference'] for r in priors] + [current]
+        assert all(r['state_key'] == row['state_key'] for r in priors)
+        assert all(m['actions'] == current['actions'] for m in matrices)
+        for e in row['endpoints']:
+            for arm in ['archived', 'uniform', 'max_damage', 'oracle']:
+                verifier.verify_assessment(current, e['side'], e[arm])
+        cells = [{'lo': max(m['cells'][i]['lo'] for m in matrices), 'hi': min(m['cells'][i]['hi'] for m in matrices)} for i in range(len(current['cells']))]
+        assert all(c['lo'] <= c['hi'] for c in cells)
+        nr, nc = map(len, current['actions'])
+        value = {'lo': max(max(m['value']['lo'] for m in matrices), max(min(cells[i * nc + j]['lo'] for j in range(nc)) for i in range(nr))),
+                 'hi': min(min(m['value']['hi'] for m in matrices), min(max(cells[i * nc + j]['hi'] for i in range(nr)) for j in range(nc)))}
+        assert value['lo'] <= value['hi']
+        matrix = {'actions': current['actions'], 'cells': cells, 'value': value}
+        endpoints = []
+        for e in row['endpoints']:
+            assessment = assessor.assess(matrix, e['side'], e['archived']['policy'])
+            verifier.verify_assessment(matrix, e['side'], assessment)
+            endpoints.append({'side': e['side'], 'archived_choice': e['archived_choice'], 'assessment': assessment})
+        summaries.append({'game': row['game'], 'decision': row['decision'], 'state_key': row['state_key'], 'alive': row['alive'],
+                          'runs': current['runs'], 'elapsed_ms': current['elapsed_ms'], 'nodes': current['nodes'], 'stop': current['stop'],
+                          'matrix': matrix, 'endpoints': endpoints})
+    return {'schema': 'nc2000-policy-expansion-v1', 'states': summaries,
+            'prior_hashes': {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in prior_paths},
+            'interpretation': 'Three preselected previously unresolved 1v2 states. Intersect same-state certificates and pure maximin/minimax value bounds. First decisions are archived; continuation is optimal with full information. This does not measure deployed blind-policy exploitability or global optimality.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = read_archive(source / 'records.json.gz')
+    assert summarize(records) == json.loads((source / 'summary.json').read_text())
+    print('Verified 3 archived states and combined certificates')
+    raise SystemExit(0)
+if args.record_existing:
+    directory = args.record_existing
+else:
+    directory = root / 'tmp/policy-expansion-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    corpus = gzip.decompress((source / 'corpus.jsonl.gz').read_bytes())
+    (directory / 'corpus.jsonl').write_bytes(corpus)
+    protocol = json.loads((source / 'protocol.json').read_text())
+    assert hashlib.sha256(corpus).hexdigest() == protocol['corpus_sha256']
+    protocol['corpus'] = str(directory / 'corpus.jsonl')
+    (directory / 'protocol.json').write_text(json.dumps(protocol, indent=2) + '\n')
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / 'protocol.json'), str(directory / 'reference')], cwd=root, env=env, check=True)
+    directory /= 'reference'
+records = {'manifest': json.loads((directory / 'manifest.json').read_text()),
+           'results': [json.loads(p.read_text()) for p in sorted(directory.glob('game-*.json'))]}
+summary = summarize(records)
+if args.record_existing:
+    source.mkdir(exist_ok=True)
+    protocol = records['manifest']['protocol']
+    corpus = (root / protocol['corpus']).read_bytes()
+    assert hashlib.sha256(corpus).hexdigest() == protocol['corpus_sha256']
+    (source / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (source / 'protocol.json').write_text(json.dumps(protocol, indent=2) + '\n')
+    (source / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (source / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for row in summary['states']:
+    print(row['game'], row['decision'], row['stop'], row['runs'], [e['assessment']['loss'] for e in row['endpoints']])

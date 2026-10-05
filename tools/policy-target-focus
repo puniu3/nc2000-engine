@@ -25,7 +25,7 @@ if args.witness:
 if args.allocation:
     study, targets = "policy-allocation-v1", ["control", "fair", "side-0-fair", "unrestricted-fair", "side-0-refined"]
 if args.transfer:
-    study, targets = "policy-transfer-v1", ["cold", "staged", "cold-total", "staged-lower", "staged-lower-refined", "cold-large", "staged-lower-fixed", "cold-fixed"]
+    study, targets = "policy-transfer-v1", ["cold", "staged", "cold-total", "staged-lower", "staged-lower-refined", "cold-large", "staged-lower-fixed", "cold-fixed", "cold-extended"]
 source = root / "findings" / study
 spec = importlib.util.spec_from_file_location("policy_gap", root / "tools/policy-gap-report.py")
 verifier = importlib.util.module_from_spec(spec)
@@ -104,7 +104,7 @@ if args.verify_only:
                                      "hi": min(pure_upper, min(m["value"]["hi"] for m in matrices))}
         for side, assessment in enumerate(summary["combined"]["archived_first_decisions"]):
             verifier.verify_assessment(combined, side, assessment)
-        for small, large in [("cold", "cold-fixed"), ("staged-lower", "staged-lower-fixed")]:
+        for small, large in [("cold", "cold-fixed"), ("staged-lower", "staged-lower-fixed"), ("cold-fixed", "cold-extended")]:
             before, after = (records[name]["result"] for name in (small, large))
             assert after["reference"]["value"]["lo"] >= before["reference"]["value"]["lo"]
             assert after["reference"]["value"]["hi"] <= before["reference"]["value"]["hi"]

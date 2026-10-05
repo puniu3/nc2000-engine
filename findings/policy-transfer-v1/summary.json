@@ -329,6 +329,35 @@
       "resource_closure_visits": 116569,
       "first_resource_closure_nodes": 91278,
       "two_sided_invalidations": 0
+    },
+    "cold-extended": {
+      "value": {
+        "lo": 0.10093601158455913,
+        "hi": 0.1377258938420443
+      },
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.03678988227448518
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.0367898822744851
+        }
+      ],
+      "phase_runs": 9626665,
+      "total_runs": 9626665,
+      "phase_elapsed_ms": 198411.188834,
+      "total_elapsed_ms": 198411.188834,
+      "phase_nodes": 800022,
+      "stop": "NodeBudget",
+      "preparation": [],
+      "imported_certificates": 0,
+      "certificate_hits": 0,
+      "resource_closure_nodes": 90000,
+      "resource_closure_visits": 227336,
+      "first_resource_closure_nodes": 91278,
+      "two_sided_invalidations": 0
     }
   },
   "combined": {
@@ -361,7 +390,7 @@
           "hi": 0.728381294788194
         },
         {
-          "lo": 0.10031140256904261,
+          "lo": 0.10214936603500936,
           "hi": 0.2787395499217525
         },
         {
@@ -378,7 +407,7 @@
         },
         {
           "lo": 0.0,
-          "hi": 0.36073579915960335
+          "hi": 0.35764716654261774
         },
         {
           "lo": 0.0013237624697903664,
@@ -394,7 +423,7 @@
         },
         {
           "lo": 0.0,
-          "hi": 0.36073579915960335
+          "hi": 0.3555628241980677
         },
         {
           "lo": 0.0011266201064154486,
@@ -414,7 +443,7 @@
         }
       ],
       "value": {
-        "lo": 0.10031140256904261,
+        "lo": 0.10214936603500936,
         "hi": 0.1370062310479637
       }
     },
@@ -427,12 +456,12 @@
           0.0
         ],
         "guarantee": {
-          "lo": 0.10031140256904261,
+          "lo": 0.10214936603500936,
           "hi": 0.1370062310479637
         },
         "loss": {
           "lo": 0,
-          "hi": 0.03669482857892108
+          "hi": 0.034856865112954334
         }
       },
       {
@@ -448,7 +477,7 @@
         },
         "loss": {
           "lo": 0,
-          "hi": 0.03669482857892114
+          "hi": 0.034856865112954376
         }
       }
     ]
@@ -459,7 +488,7 @@
   "verification": {
     "native_bot_tests": 161,
     "workspace_all_targets_check": "passed",
-    "archived_arms_verified": 8,
+    "archived_arms_verified": 9,
     "combined_interval_assessments": "passed",
     "combined_value_method": "Intersect same-state value and cell certificates, then tighten value with pure maximin lower and pure minimax upper bounds.",
     "fixed_threshold_larger_search_contains_small_search_bounds": true
@@ -469,6 +498,7 @@
     "At an explicit 90000-node closure threshold, the larger cold and staged-lower searches both contain the corresponding small-budget intervals; resource invariants had zero invalidations.",
     "With matched total allowances of 6M executions, 480k node slots across phases and 300 seconds, direct search stopped at 5,821,259 executions and 116.66 seconds with a 0.0397201050 loss upper bound. Lower-witness transfer used 5,192,690 executions and 123.32 seconds with a 0.0487881387 loss upper bound. Transfer does not improve the bound or measured wall time in this comparison.",
     "The stronger result comes primarily from fixing resource-closure scheduling, not certificate transfer. Actual work and peak memory differ; these are allowance-matched single-state experiments, not equal-work or universal performance claims.",
-    "Combining all sound same-state certificates bounds each archived first-decision loss in [0,0.0366948286]. No positive loss is proved. This is a first-action/full-information continuation result, not a blind-policy exploitability certificate."
+    "Combining all sound same-state certificates bounds each archived first-decision loss above by 0.0348568651. No positive loss is proved. This is a first-action/full-information continuation result, not a blind-policy exploitability certificate.",
+    "Increasing the fixed-threshold direct search from 480k to 800k node slots consumed 9,626,665 executions and 198.41 seconds. The combined loss ceiling improved only from 0.0366948286 to 0.0348568651. The largest Body Slam/Thunder child uncertainty remained exactly 0.017515251342315047; no trial reached the depth limit. Further brute-force scaling is deferred in favor of inspecting unresolved chance children."
   ]
 }
