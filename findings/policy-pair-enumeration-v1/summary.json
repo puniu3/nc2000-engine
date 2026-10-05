@@ -1,0 +1,44 @@
+{
+  "schema": "nc2000-policy-pair-enumeration-v1",
+  "results": {
+    "eager": {
+      "score": {
+        "lo": 0.0,
+        "hi": 1.0
+      },
+      "runs": 1144128,
+      "elapsed_ms": 22833.360290999997,
+      "depth": 3,
+      "peak_frontier": 582,
+      "final_mass": {
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.0,
+        "dropped_mass": 0.2086189500176567,
+        "failed_mass": 0.7913810499823424,
+        "frontier_mass": -0.0
+      }
+    },
+    "lazy": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9882730862399378
+      },
+      "runs": 2000000,
+      "elapsed_ms": 47228.586,
+      "depth": 4,
+      "peak_frontier": 3294,
+      "final_mass": {
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.01172691476006159,
+        "dropped_mass": 0.9695793162355094,
+        "failed_mass": 0.01785659310301407,
+        "frontier_mass": 0.0008371759014144204
+      }
+    }
+  },
+  "target_fixed_reply_lower_bound": 0.027,
+  "prior_archive_sha256": "1d761ed86bf877aab312bccc741a480dba9182f8467cd778e67d5e9a5080a5f7",
+  "interpretation": "Both sides are fixed policies. Enumerated chance mass determines a pair-score interval, with unexpanded and discarded mass left in [0,1]. Its upper endpoint also bounds this fixed side-zero policy against an unrestricted opponent from above. It does not upper-bound the unrestricted game value. No sampled score enters these intervals. Full-state hashing and floating-point numerical envelopes match the engine enumeration assumptions. The frontier-width and per-cell limits are computational limits, not game horizons."
+}

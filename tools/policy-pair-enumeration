@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-pair-enumeration-v1'
+names = ['eager', 'lazy']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records, corpus):
+    assert set(records) == {'eager', 'lazy', 'regression'}
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert len({json.dumps(r['manifest']['source_hashes']) for r in records.values()}) == 1
+    assert len({r['manifest']['dex_fingerprint'] for r in records.values()}) == 1
+    assert all(r['manifest']['corpus_sha256'] == sha(corpus) for r in records.values())
+    prior_path = root / 'findings/policy-counterresponse-v1/records.json.gz'
+    prior = json.loads(gzip.decompress(prior_path.read_bytes()))
+    previous, regression = prior['pilot'], records['regression']
+    assert len(previous['arms']) == len(regression['arms']) == 20
+    for before, after in zip(previous['arms'], regression['arms']):
+        for key in before:
+            if key != 'elapsed_ms':
+                assert before[key] == after[key], key
+    response = min(previous['arms'], key=lambda a: a['mean_score'])['counter_response']
+    config = dict(records['eager']['config'])
+    results = {}
+    for name in names:
+        record = records[name]
+        assert record['schema'] == 'nc2000-fixed-pair-enumeration-v1'
+        assert record['state_key'] == '199433906935569759004884428941975153695'
+        assert record['config'] == dict(config, lazy=name == 'lazy')
+        assert record['config']['response'] == response
+        report = record['report']
+        rows = report['layers']
+        assert 0 < len(rows) <= config['steps']
+        last = dict(runs=0, wins=0, ties=0, losses=0, dropped_mass=0, failed_mass=0, score=dict(lo=0, hi=1))
+        for depth, row in enumerate(rows, 1):
+            assert row['depth'] == depth
+            assert row['runs'] <= config['work_budget']
+            assert 0 <= row['frontier_states'] <= config['width']
+            assert abs(row['unknown_mass'] - sum(row[k] for k in ['dropped_mass', 'failed_mass', 'frontier_mass'])) < 1e-12
+            assert abs(sum(row[k] for k in ['wins', 'ties', 'losses', 'unknown_mass']) - 1) < 1e-9
+            for key in ['runs', 'wins', 'ties', 'losses', 'dropped_mass', 'failed_mass']:
+                assert row[key] >= last[key]
+            assert row['score']['lo'] >= last['score']['lo'] - 1e-12
+            assert row['score']['hi'] <= last['score']['hi'] + 1e-12
+            pad = report['numerical_envelope']
+            assert row['score']['lo'] == max(0, row['wins'] + .5 * row['ties'] - pad)
+            assert row['score']['hi'] == min(1, row['wins'] + .5 * row['ties'] + row['unknown_mass'] + pad)
+            last = row
+        assert report['score'] == last['score'] and report['runs'] == last['runs']
+        results[name] = dict(score=report['score'], runs=report['runs'], elapsed_ms=report['elapsed_ms'],
+                             depth=len(rows), peak_frontier=report['peak_frontier'],
+                             final_mass={k: last[k] for k in ['wins', 'ties', 'losses', 'dropped_mass', 'failed_mass', 'frontier_mass']})
+    return dict(schema='nc2000-policy-pair-enumeration-v1', results=results,
+                target_fixed_reply_lower_bound=.027, prior_archive_sha256=sha(prior_path.read_bytes()),
+                interpretation='Both sides are fixed policies. Enumerated chance mass determines a pair-score interval, with unexpanded and discarded mass left in [0,1]. Its upper endpoint also bounds this fixed side-zero policy against an unrestricted opponent from above. It does not upper-bound the unrestricted game value. No sampled score enters these intervals. Full-state hashing and floating-point numerical envelopes match the engine enumeration assumptions. The frontier-width and per-cell limits are computational limits, not game horizons.')
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    for name in names:
+        assert records[name]['config'] == json.loads((archive / f'{name}.json').read_bytes())
+    assert summarize(records, corpus) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified policy regression, enumeration accounting, monotone intervals and unknown mass')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-pair-enumeration-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    command = [str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl')]
+    for name in names:
+        (directory / f'{name}.json').write_bytes((archive / f'{name}.json').read_bytes())
+        subprocess.run(command + ['certify', str(directory / f'{name}.json'), str(directory / f'{name}-result.json')], cwd=root, env=env, check=True)
+    subprocess.run(command + ['10000', '2026100901', str(directory / 'regression.json'), 'counter-search'], cwd=root, env=env, check=True)
+records = {name: json.loads((directory / f'{name}-result.json').read_bytes()) for name in names}
+records['regression'] = json.loads((directory / 'regression.json').read_bytes())
+corpus = (directory / 'corpus.jsonl').read_bytes()
+summary = summarize(records, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(json.dumps(summary['results'], indent=2))

@@ -1,4 +1,6 @@
 use std::time::Instant;
+#[path="fixed_reply_counterpolicy/pair_bound.rs"]
+mod pair_bound;
 use nc2000_engine::battle::{Outcome,PokemonSet,SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::{Battle,Status,DK};
@@ -160,7 +162,9 @@ fn run(dex:&Dex,root:&Battle,n:usize,base:u64,own:OwnPolicy,opponent_rest:Option
 
 fn sha(bytes:&[u8])->String {format!("{:x}",Sha256::digest(bytes))}
 fn main() {
-    let args:Vec<_>=std::env::args().collect();assert!(matches!(args.len(),5|6),"corpus samples seed output [late-rest|counter-search|responses.json]");
+    let args:Vec<_>=std::env::args().collect();
+    if args.get(2).is_some_and(|mode|mode=="certify") {pair_bound::execute(&args);return;}
+    assert!(matches!(args.len(),5|6),"corpus samples seed output [late-rest|counter-search|responses.json]");
     let extended=args.get(5).is_some_and(|mode|mode=="late-rest");
     let responses:Option<Vec<CounterResponse>>=args.get(5).filter(|mode|*mode!="late-rest").map(|mode| {
         if mode=="counter-search" {
@@ -195,19 +199,9 @@ fn main() {
             handles.into_iter().map(|handle|handle.join().unwrap()).collect::<Vec<_>>()
         }));
     }
-    let paths=["crates/bot/examples/fixed_reply_counterpolicy.rs","crates/bot/src/bounds.rs",
-        "crates/engine/src/state.rs","crates/engine/src/prng.rs","crates/engine/src/battle/search.rs",
-        "crates/engine/src/battle/actions.rs","crates/engine/src/battle/conditions.rs",
-        "crates/engine/src/battle/moveexec.rs","crates/engine/src/battle/turn.rs","crates/engine/src/battle/events.rs",
-        "crates/engine/src/battle/mod.rs","crates/engine/src/battle/dmg.rs","crates/engine/src/battle/items.rs"];
-    let sources=paths.map(|p|(p,sha(&std::fs::read(p).unwrap())));
-    let revision=std::process::Command::new("git").args(["rev-parse","HEAD"]).output().unwrap();
-    assert!(revision.status.success());
     let result=json!({"schema":if responses.is_some() {"nc2000-counterresponse-v1"} else if extended {"nc2000-late-rest-counterpolicy-v1"} else {"nc2000-fixed-reply-counterpolicy-v1"},"game":17,"decision":21,
         "state_key":root.state_key128().to_string(),"state":root.essence(&dex),"arms":arms,
-        "manifest":{"revision":String::from_utf8(revision.stdout).unwrap().trim(),"corpus_sha256":sha(&raw),"source_hashes":sources,
-            "dex_fingerprint":format!("{:?}",dex.replay_fingerprint),
-            "binary_sha256":sha(&std::fs::read(std::env::current_exe().unwrap()).unwrap())},
+        "manifest":manifest(&dex,&raw),
         "interpretation":"Seeded full-state policy-pair rollouts after fixed first Body Slam / switch-2 actions. Side zero uses the existing attack priority, optionally Rest at <=75% HP while awake and unfrozen. Side one returns to any legal Snorlax, uses Selfdestruct, then Hydro Pump / Ice Beam on Vaporeon; Sleep Talk only when the remaining sleep counter exceeds one, with optional Rest at <=75% while awake or <=99% also on the waking turn. All trials run to a true engine terminal. The optional late-rest study also keeps Vaporeon active as a counterpolicy and adds a side-zero rule withholding threshold Rest while a selected living opponent carries Selfdestruct or Explosion. The counter-search mode tests state-based return timing (always, never, foe HP <=50%, foe frozen, or own HP <=50%), optional Ice Beam priority, and optional Hydro Pump before Rest when foe HP <=40%. These rules read only the current battle state, not the opponent action or PRNG. Scores count ties as one half. This screens concrete counterpolicies, not human calibration, an optimal-opponent assumption, or an exact enumeration certificate."});
     std::fs::write(&args[4],serde_json::to_vec_pretty(&result).unwrap()).unwrap();
     for arm in &result["arms"].as_array().unwrap()[..] {println!("own={} return={} rest={:?} response={} mean={} samples={} steps={}",arm["own_policy"],arm["opponent_return_boom"],arm["opponent_rest_percent"],arm["counter_response"],arm["mean_score"],arm["samples"],arm["steps"]);}
@@ -220,7 +214,7 @@ mod tests {
         PokemonSet {name:species.into(),species:species.into(),item:String::new(),ability:String::new(),
             moves:moves.iter().map(|name|(*name).into()).collect(),level:50,evs:None,ivs:None,gender:None,happiness:None}
     }
-    fn battle(dex:&Dex,bench:bool)->Battle {
+    pub(super) fn battle(dex:&Dex,bench:bool)->Battle {
         let own=mon("Snorlax",&["Body Slam","Fire Blast","Rest","Self-Destruct"]);
         let mut opponents=vec![mon("Vaporeon",&["Hydro Pump","Ice Beam","Sleep Talk","Rest"])];
         if bench {opponents.push(mon("Snorlax",&["Self-Destruct","Double-Edge","Earthquake","Curse"]));}
@@ -289,4 +283,18 @@ mod tests {
         let seeds=(0..200_000).map(|i|seed(2026100601,i)).collect::<std::collections::HashSet<_>>();
         assert_eq!(seeds.len(),200_000);
     }
+}
+
+fn manifest(dex:&Dex,raw:&[u8])->Value {
+    let paths=["crates/bot/examples/fixed_reply_counterpolicy.rs","crates/bot/examples/fixed_reply_counterpolicy/pair_bound.rs","crates/bot/src/bounds.rs",
+        "crates/engine/src/state.rs","crates/engine/src/prng.rs","crates/engine/src/battle/enumerate.rs","crates/engine/src/battle/search.rs",
+        "crates/engine/src/battle/actions.rs","crates/engine/src/battle/conditions.rs",
+        "crates/engine/src/battle/moveexec.rs","crates/engine/src/battle/turn.rs","crates/engine/src/battle/events.rs",
+        "crates/engine/src/battle/mod.rs","crates/engine/src/battle/dmg.rs","crates/engine/src/battle/items.rs"];
+    let sources=paths.map(|p|(p,sha(&std::fs::read(p).unwrap())));
+    let revision=std::process::Command::new("git").args(["rev-parse","HEAD"]).output().unwrap();
+    assert!(revision.status.success());
+    json!({"revision":String::from_utf8(revision.stdout).unwrap().trim(),"corpus_sha256":sha(raw),"source_hashes":sources,
+        "dex_fingerprint":format!("{:?}",dex.replay_fingerprint),
+        "binary_sha256":sha(&std::fs::read(std::env::current_exe().unwrap()).unwrap())})
 }
