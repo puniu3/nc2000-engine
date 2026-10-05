@@ -44,6 +44,7 @@ struct Protocol {
     #[serde(default)]
     chance_fair_period: usize,
     resource_closure_nodes: Option<usize>,
+    resource_closure_period: Option<usize>,
     witness_preparation: Option<WitnessPreparation>,
 }
 
@@ -89,7 +90,7 @@ fn bound(b: Bounds) -> Value {
     json!({"lo": b.lo, "hi": b.hi})
 }
 
-fn chance_diagnostic(cell: &ChanceDiagnostics) -> Value {
+fn chance_diagnostic(cell: &ChanceDiagnostics, dex: &Dex) -> Value {
     json!({
         "visits":cell.visits,"runs":cell.runs,
         "pending_mass":cell.pending_mass,"pending_scripts":cell.pending_scripts,
@@ -99,6 +100,15 @@ fn chance_diagnostic(cell: &ChanceDiagnostics) -> Value {
         "largest_child_uncertainty":cell.largest_child_uncertainty,
         "expanded_children":cell.expanded_children,"max_child_runs":cell.max_child_runs,
         "total_child_runs":cell.total_child_runs,
+        "largest_children":cell.largest_children.iter().map(|child| json!({
+            "key":child.key,"mass":child.mass,"bounds":bound(child.bounds),
+            "uncertainty":child.uncertainty,"runs":child.runs,"visits":child.visits,
+            "resource_rank":child.resource_rank.map(|r| json!({"pp_total":r.pp_total,
+                "healing_pp":r.healing_pp,"turns_remaining":r.turns_remaining})),
+            "state":child.battle.as_ref().map(|b| b.essence(dex)),
+            "actions":child.actions.iter().map(|actions| actions.iter().map(|a| a.map(|a|action_input(dex,a))).collect::<Vec<_>>()).collect::<Vec<_>>(),
+            "cells":child.cells.iter().copied().map(bound).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
     })
 }
 
@@ -165,6 +175,7 @@ fn audit(
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
             resource_closure_nodes: protocol.resource_closure_nodes,
+            resource_closure_period: protocol.resource_closure_period.unwrap_or(1),
             ..BoundConfig::default()
         }, side, legal[side].clone());
         let started = Instant::now();
@@ -184,7 +195,7 @@ fn audit(
                 "cells":matrix.cells.iter().map(|cell|bound(*cell)).collect::<Vec<_>>(),
                 "value":bound(matrix.value),
             },
-            "root_chance":solver.root_chance_diagnostics(&battle).unwrap().iter().map(chance_diagnostic).collect::<Vec<_>>(),
+            "root_chance":solver.root_chance_diagnostics(&battle).unwrap().iter().map(|c| chance_diagnostic(c, dex)).collect::<Vec<_>>(),
             "trial_depth_counts":stats.trial_depth_counts,"depth_limit_trials":stats.depth_limit_trials,
             "eager_failures":stats.eager_failures,"lazy_edge_merges":stats.lazy_edge_merges,
             "reference":{"stop":format!("{:?}",report.stop),"runs":report.runs,
@@ -232,6 +243,7 @@ fn audit(
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
             resource_closure_nodes: protocol.resource_closure_nodes,
+            resource_closure_period: protocol.resource_closure_period.unwrap_or(1),
             ..BoundConfig::default()
         };
     let mut solver = BoundSolver::new(dex, cfg.clone());
@@ -399,7 +411,7 @@ fn audit(
             "dominated_cols": stats.dominated_cols,
             "avoided_cells": stats.avoided_cells,
             "lazy_edge_merges": stats.lazy_edge_merges,
-            "root_chance": solver.root_chance_diagnostics(&battle).unwrap().iter().map(chance_diagnostic).collect::<Vec<_>>(),
+            "root_chance": solver.root_chance_diagnostics(&battle).unwrap().iter().map(|c| chance_diagnostic(c, dex)).collect::<Vec<_>>(),
         })
     });
     json!({"game":game.game,"decision":decision,"state_key":battle.state_key128().to_string(),

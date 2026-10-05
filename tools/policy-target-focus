@@ -16,6 +16,7 @@ studies.add_argument("--frontier", action="store_true")
 studies.add_argument("--witness", action="store_true")
 studies.add_argument("--allocation", action="store_true")
 studies.add_argument("--transfer", action="store_true")
+studies.add_argument("--branches", action="store_true")
 parser.add_argument("--verify-only", action="store_true")
 args = parser.parse_args()
 study = "policy-frontier-v1" if args.frontier else "policy-target-focus-v1"
@@ -26,6 +27,8 @@ if args.allocation:
     study, targets = "policy-allocation-v1", ["control", "fair", "side-0-fair", "unrestricted-fair", "side-0-refined"]
 if args.transfer:
     study, targets = "policy-transfer-v1", ["cold", "staged", "cold-total", "staged-lower", "staged-lower-refined", "cold-large", "staged-lower-fixed", "cold-fixed", "cold-extended"]
+if args.branches:
+    study, targets = "policy-branches-v1", ["small", "large", "interleaved"]
 source = root / "findings" / study
 spec = importlib.util.spec_from_file_location("policy_gap", root / "tools/policy-gap-report.py")
 verifier = importlib.util.module_from_spec(spec)
@@ -79,6 +82,15 @@ def verify(row):
         assert len(diagnostics["root_chance"]) == len(matrix["cells"])
         for cell, bounds in zip(diagnostics["root_chance"], matrix["cells"]):
             assert abs(cell["pending_mass"] + cell["child_uncertainty"] - (bounds["hi"] - bounds["lo"])) < 1e-9
+            if children := cell.get("largest_children"):
+                assert len(children) == min(5, cell["unique_children"])
+                assert len({c["key"] for c in children}) == len(children)
+                assert abs(children[0]["uncertainty"] - cell["largest_child_uncertainty"]) < 1e-12
+                assert all(a["uncertainty"] >= b["uncertainty"] for a, b in zip(children, children[1:]))
+                for child in children:
+                    width = child["bounds"]["hi"] - child["bounds"]["lo"]
+                    assert abs(child["mass"] * width - child["uncertainty"]) < 1e-12
+                    assert len(child["cells"]) == len(child["actions"][0]) * len(child["actions"][1])
 
 
 if args.verify_only:
@@ -86,7 +98,13 @@ if args.verify_only:
     assert set(records) == set(targets)
     for target in targets:
         verify(records[target]["result"])
-    if args.transfer:
+    if args.branches:
+        prior = json.loads(gzip.decompress((root / "findings/policy-transfer-v1/records.json.gz").read_bytes()))
+        for target, previous in [("small", "cold"), ("large", "cold-fixed")]:
+            current, old = records[target]["result"], prior[previous]["result"]
+            for field in ["value", "cells", "actions", "runs", "nodes", "stop"]:
+                assert current["reference"][field] == old["reference"][field], field
+    if args.transfer or args.branches:
         summary = json.loads((source / "summary.json").read_text())
         prior_path = root / summary["prior_certificate"]
         assert hashlib.sha256(prior_path.read_bytes()).hexdigest() == summary["prior_certificate_sha256"]
@@ -104,13 +122,14 @@ if args.verify_only:
                                      "hi": min(pure_upper, min(m["value"]["hi"] for m in matrices))}
         for side, assessment in enumerate(summary["combined"]["archived_first_decisions"]):
             verifier.verify_assessment(combined, side, assessment)
-        for small, large in [("cold", "cold-fixed"), ("staged-lower", "staged-lower-fixed"), ("cold-fixed", "cold-extended")]:
-            before, after = (records[name]["result"] for name in (small, large))
-            assert after["reference"]["value"]["lo"] >= before["reference"]["value"]["lo"]
-            assert after["reference"]["value"]["hi"] <= before["reference"]["value"]["hi"]
-            assert after["diagnostics"]["resource_closure_visits"] > 0
-            assert after["diagnostics"]["first_resource_closure_nodes"] >= 90_000
-            assert after["diagnostics"]["two_sided_invalidations"] == 0
+        if args.transfer:
+            for small, large in [("cold", "cold-fixed"), ("staged-lower", "staged-lower-fixed"), ("cold-fixed", "cold-extended")]:
+                before, after = (records[name]["result"] for name in (small, large))
+                assert after["reference"]["value"]["lo"] >= before["reference"]["value"]["lo"]
+                assert after["reference"]["value"]["hi"] <= before["reference"]["value"]["hi"]
+                assert after["diagnostics"]["resource_closure_visits"] > 0
+                assert after["diagnostics"]["first_resource_closure_nodes"] >= 90_000
+                assert after["diagnostics"]["two_sided_invalidations"] == 0
     print(f"Verified {len(targets)} archived arms")
     raise SystemExit(0)
 

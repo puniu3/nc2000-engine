@@ -86,6 +86,7 @@ pub struct BoundConfig {
     pub aggregate_lazy_children: bool,
     pub chance_fair_period: usize,
     pub resource_closure_nodes: Option<usize>,
+    pub resource_closure_period: usize,
 }
 
 impl Default for BoundConfig {
@@ -109,6 +110,7 @@ impl Default for BoundConfig {
             aggregate_lazy_children: false,
             chance_fair_period: 0,
             resource_closure_nodes: None,
+            resource_closure_period: 1,
         }
     }
 }
@@ -312,6 +314,21 @@ pub struct ChanceDiagnostics {
     pub expanded_children: usize,
     pub max_child_runs: usize,
     pub total_child_runs: usize,
+    pub largest_children: Vec<ChanceChildDiagnostics>,
+}
+
+#[derive(Debug)]
+pub struct ChanceChildDiagnostics {
+    pub key: String,
+    pub mass: f64,
+    pub bounds: Bounds,
+    pub uncertainty: f64,
+    pub runs: usize,
+    pub visits: usize,
+    pub resource_rank: Option<ResourceRank>,
+    pub battle: Option<Battle>,
+    pub actions: [Vec<Option<SearchChoice>>; 2],
+    pub cells: Vec<Bounds>,
 }
 
 #[derive(Debug, Default)]
@@ -567,14 +584,32 @@ impl<'d> BoundSolver<'d> {
         let node = self.nodes.get(&self.node_key(b))?;
         Some(node.cells.iter().map(|cell| {
             let mut children = HashMap::<NodeKey, f64>::new();
+            let mut masses = HashMap::<NodeKey, f64>::new();
             let mut largest_edge_uncertainty: f64 = 0.0;
             for &(mass, key) in &cell.resolved {
                 let child = &self.nodes[&key];
                 let uncertainty = mass * (child.hi - child.lo);
                 largest_edge_uncertainty = largest_edge_uncertainty.max(uncertainty);
                 *children.entry(key).or_default() += uncertainty;
+                *masses.entry(key).or_default() += mass;
             }
+            let mut ordered: Vec<_> = children.iter().map(|(&key, &width)| (key, width)).collect();
+            ordered.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+            let largest_children = ordered.into_iter().take(5).map(|(key, uncertainty)| {
+                let child = &self.nodes[&key];
+                ChanceChildDiagnostics {
+                    key: format!("{key:?}"), mass: masses[&key],
+                    bounds: Bounds { lo: child.lo, hi: child.hi }, uncertainty,
+                    runs: child.cells.iter().map(|c| c.runs).sum(),
+                    visits: child.cells.iter().map(|c| c.visits).sum(),
+                    resource_rank: child.resource_rank.as_ref().map(|(_, rank, _)| *rank),
+                    battle: child.battle.clone(),
+                    actions: [child.acts0.clone(), child.acts1.clone()],
+                    cells: child.cells.iter().map(|c| Bounds { lo: c.lo, hi: c.hi }).collect(),
+                }
+            }).collect();
             ChanceDiagnostics {
+                largest_children,
                 visits: cell.visits,
                 runs: cell.runs,
                 pending_mass: cell.pending_mass,
@@ -1033,6 +1068,8 @@ impl<'d> BoundSolver<'d> {
             // Expand pending mass while it dominates the cell's remaining
             // uncertainty; otherwise descend into the widest child term.
             let closure_mode = (self.active_stall.is_some() || self.active_two_sided.is_some())
+                && self.cfg.resource_closure_period > 0
+                && (cell.visits + 1) % self.cfg.resource_closure_period == 0
                 && self.cfg.resource_closure_nodes.map_or_else(
                     || self.nodes.len().saturating_mul(4) >= self.cfg.node_budget.saturating_mul(3),
                     |threshold| self.nodes.len() >= threshold,
@@ -2951,6 +2988,43 @@ mod tests {
     }
 
     #[test]
+    fn interleaved_resource_search_encloses_exhaustive_two_turn_value() {
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Recover", "Seismic Toss"], &["Recover", "Seismic Toss"]);
+        let choices = [0, 1].map(|side| root.legal_choices(&dex, side)[0]);
+        root.apply_choices(&dex, choices.map(Some)).unwrap();
+        root.turn = 999;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = if side == 0 { 60 } else { 40 };
+        }
+        assert!(crate::stall::classify_two_sided_heal(&root, &dex).is_ok());
+        let matrix = exhaustive_matrix(&dex, &root, 2);
+        let value = solve_matrix(&matrix, 2, 2).0;
+        for period in [0, 1, 2] {
+            let mut solver = BoundSolver::new(&dex, BoundConfig {
+                work_budget: 17, cell_cap: 0, eps: 1e-10,
+                resource_closure_nodes: Some(0), resource_closure_period: period,
+                ..BoundConfig::default()
+            });
+            let mut previous = super::Bounds { lo: 0.0, hi: 1.0 };
+            for _ in 0..2_000 {
+                let report = solver.solve(&root, None);
+                assert!(report.bounds.lo <= value + 1e-10);
+                assert!(report.bounds.hi >= value - 1e-10);
+                assert!(report.bounds.lo >= previous.lo);
+                assert!(report.bounds.hi <= previous.hi);
+                previous = report.bounds;
+                if previous.width() < 1e-10 { break; }
+                assert!(report.runs > 0, "period={period}, bounds={:?}, stop={:?}", report.bounds, report.stop);
+            }
+            assert!(previous.width() < 1e-10);
+            assert_eq!(solver.stats.resource_closure_visits > 0, period > 0);
+            assert_eq!(solver.stats.two_sided_invalidations, 0);
+        }
+    }
+
+    #[test]
     fn explicit_resource_threshold_preserves_prefix_across_node_budgets() {
         let dex = conformance::load_dex();
         let mut root = battle(&dex, &["Rest", "Tackle", "Protect"], &["Rest", "Tackle", "Protect"]);
@@ -2968,6 +3042,7 @@ mod tests {
                 node_budget,
                 cell_cap: 0,
                 resource_closure_nodes: Some(0),
+                resource_closure_period: 2,
                 ..BoundConfig::default()
             });
             let report = solver.solve_policy_losses(&root, &targets, 0.02);
