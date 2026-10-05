@@ -1,0 +1,101 @@
+{
+  "cells": [
+    {
+      "actions": [
+        "move doubleedge",
+        "move return"
+      ],
+      "unrestricted_continuation_value": {
+        "lo": 6.274915728533393e-07,
+        "hi": 0.9995219241487663
+      },
+      "reference": [
+        {
+          "stop": "WorkExhausted",
+          "runs": 2000000,
+          "nodes": 79946,
+          "elapsed_ms": 56522.566875000004
+        },
+        {
+          "stop": "NodeBudget",
+          "runs": 789436,
+          "nodes": 120029,
+          "elapsed_ms": 22420.79375
+        }
+      ]
+    },
+    {
+      "actions": [
+        "move doubleedge",
+        "move curse"
+      ],
+      "unrestricted_continuation_value": {
+        "lo": 0.0015341644858092134,
+        "hi": 0.9999997706742265
+      },
+      "reference": [
+        {
+          "stop": "WorkExhausted",
+          "runs": 2000000,
+          "nodes": 23348,
+          "elapsed_ms": 47550.401667000006
+        },
+        {
+          "stop": "NodeBudget",
+          "runs": 715248,
+          "nodes": 119999,
+          "elapsed_ms": 20509.515874999997
+        }
+      ]
+    },
+    {
+      "actions": [
+        "move selfdestruct",
+        "move return"
+      ],
+      "unrestricted_continuation_value": {
+        "lo": 0.05542694469864719,
+        "hi": 0.9994077543498608
+      },
+      "reference": [
+        {
+          "stop": "WorkExhausted",
+          "runs": 2000000,
+          "nodes": 29503,
+          "elapsed_ms": 47462.844709000005
+        },
+        {
+          "stop": "NodeBudget",
+          "runs": 812451,
+          "nodes": 120032,
+          "elapsed_ms": 23236.310166
+        }
+      ]
+    },
+    {
+      "actions": [
+        "move selfdestruct",
+        "move curse"
+      ],
+      "unrestricted_continuation_value": {
+        "lo": 0.036034392259486514,
+        "hi": 0.9950979050351246
+      },
+      "reference": [
+        {
+          "stop": "WorkExhausted",
+          "runs": 2000000,
+          "nodes": 27099,
+          "elapsed_ms": 43202.935167
+        },
+        {
+          "stop": "NodeBudget",
+          "runs": 865410,
+          "nodes": 120007,
+          "elapsed_ms": 26590.587875
+        }
+      ]
+    }
+  ],
+  "scope": "Actual full-state game 15 decision 16. Each cell fixes both first actions. The lower bound fixes only P0 continuation; the upper bound fixes only P1 continuation. All later opponent actions remain available. These four cells alone cannot certify a root policy, because the full root game also contains other actions. No blind information-set or whole-policy optimality claim."
+}

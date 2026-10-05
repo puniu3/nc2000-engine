@@ -416,10 +416,22 @@ fn audit(
         assert!(protocol.descendant_preparation.is_none());
         assert!(side < 2 && !legal[side].is_empty());
         let priority_names = protocol.fixed_priority_actions.as_ref().unwrap_or(&names[side]);
-        assert!(priority_names.iter().all(|name| names[side].contains(name)
-            && priority_names.iter().filter(|p| *p == name).count() == 1));
-        let priority: Vec<_> = priority_names.iter().map(|name|
-            legal[side][names[side].iter().position(|n| n == name).unwrap()]).collect();
+        let mut continuation_choices = legal[side].clone();
+        for &slot in &battle.sides[side].party {
+            let pokemon = &battle.sides[side].roster[slot as usize];
+            if pokemon.fainted { continue; }
+            for slot in pokemon.move_slots.iter().chain(pokemon.base_move_slots.iter()) {
+                let choice = nc2000_engine::battle::SearchChoice::Move(slot.id);
+                if !continuation_choices.contains(&choice) { continuation_choices.push(choice); }
+            }
+        }
+        let priority: Vec<_> = priority_names.iter().flat_map(|name| {
+            assert_eq!(priority_names.iter().filter(|p| *p == name).count(), 1);
+            let choices: Vec<_> = continuation_choices.iter().copied()
+                .filter(|&choice| action_input(dex, choice) == *name).collect();
+            assert!(!choices.is_empty(), "unknown continuation action: {name}");
+            choices
+        }).collect();
         let cfg = BoundConfig {
             time_budget: Some(Duration::from_millis(protocol.reference_ms)),
             work_budget: protocol.work_budget,

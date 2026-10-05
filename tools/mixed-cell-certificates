@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+import argparse
+import concurrent.futures
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/mixed-cell-certificates-v1'
+actions = [['move doubleedge', 'move selfdestruct'], ['move return', 'move curse']]
+priorities = [
+    ['move selfdestruct', 'move return', 'move doubleedge', 'move earthquake', 'move icebeam'],
+    ['move return', 'move submission', 'move hydropump', 'move icebeam'],
+]
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    cells = []
+    for a in range(2):
+        for b in range(2):
+            pair = [actions[0][a], actions[1][b]]
+            rows = [records[f'{a}-{b}-{side}']['row'] for side in range(2)]
+            for side, row in enumerate(rows):
+                protocol = records[f'{a}-{b}-{side}']['manifest']['protocol']
+                assert (row['game'], row['decision'], row['side']) == (15, 16, side)
+                assert row['state_key'] == '37265433501576256670682083754528748577'
+                assert row['fixed_first_action'] == pair[side]
+                assert row['reply_action'] == pair[1-side]
+                assert row['priority_actions'] == protocol['fixed_priority_actions'] == priorities[side]
+                assert row['fixed_recover_percent'] == protocol['fixed_recover_percent'] == 50
+                assert 0 <= row['reply_value']['lo'] <= row['reply_value']['hi'] <= 1
+            lo = rows[0]['reply_value']['lo']
+            hi = rows[1]['reply_value']['hi']
+            assert lo <= hi + 1e-10
+            cells.append(dict(actions=pair, unrestricted_continuation_value=dict(lo=lo, hi=hi),
+                              reference=[r['reference'] for r in rows]))
+    return dict(cells=cells, scope=(
+        'Actual full-state game 15 decision 16. Each cell fixes both first actions. '
+        'The lower bound fixes only P0 continuation; the upper bound fixes only P1 continuation. '
+        'All later opponent actions remain available. These four cells alone cannot certify '
+        'a root policy, because the full root game also contains other actions. '
+        'No blind information-set or whole-policy optimality claim.'))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert sha((root / 'findings/policy-gap-v1/corpus.jsonl.gz').read_bytes()) == bundle['source_corpus_sha256']
+        for record in bundle['records'].values():
+            protocol = record['manifest']['protocol']
+            assert record['manifest']['protocol_sha256'] == sha(record['protocol_text'].encode())
+            assert protocol == json.loads(record['protocol_text'])
+            assert protocol['corpus_sha256'] == bundle['corpus_sha256']
+            assert sha((root / protocol['baseline']).read_bytes()) == protocol['baseline_sha256']
+        game = next(g for g in map(json.loads, gzip.decompress(
+            (root / 'findings/policy-gap-v1/corpus.jsonl.gz').read_bytes()).splitlines()) if g['game'] == 15)
+        game['samples'] = [16]
+        assert sha((json.dumps(game) + '\n').encode()) == bundle['corpus_sha256']
+        assert summarize(bundle['records']) == json.loads((archive / 'summary.json').read_text())
+        print('mixed-cell-certificates: verified eight one-sided bounds')
+        return
+    assert not archive.exists()
+    env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    scratch = pathlib.Path(tempfile.mkdtemp(prefix='nc-mixed-cells-'))
+    source = (root / 'findings/policy-gap-v1/corpus.jsonl.gz').read_bytes()
+    game = next(g for g in map(json.loads, gzip.decompress(source).splitlines()) if g['game'] == 15)
+    game['samples'] = [16]
+    corpus = (json.dumps(game) + '\n').encode()
+    (scratch / 'corpus.jsonl').write_bytes(corpus)
+    template = json.loads((root / 'findings/certified-blind-census-v1/attack-floor.json').read_text())
+    template.update(corpus=str(scratch / 'corpus.jsonl'), corpus_sha256=sha(corpus),
+                    fixed_recover_percent=50, interpretation='One-sided continuation certificate for a candidate mixed root cell; all subsequent opponent actions remain free.')
+
+    def run(job):
+        a, b, side = job
+        name = f'{a}-{b}-{side}'
+        pair = [actions[0][a], actions[1][b]]
+        protocol = {**template, 'fixed_policy_side': side, 'fixed_first_action': pair[side],
+                    'fixed_reply_action': pair[1-side], 'fixed_priority_actions': priorities[side]}
+        protocol_text = json.dumps(protocol, indent=2) + '\n'
+        path = scratch / f'{name}.json'
+        path.write_text(protocol_text)
+        output = scratch / name
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(path), str(output)], cwd=root, env=env, check=True)
+        return name, dict(protocol_text=protocol_text, manifest=json.loads((output / 'manifest.json').read_text()),
+                          row=json.loads((output / 'game-015-d0016.json').read_text()))
+
+    jobs = [(a, b, side) for a in range(2) for b in range(2) for side in range(2)]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        records = dict(executor.map(run, jobs))
+    summary = summarize(records)
+    archive.mkdir()
+    bundle = dict(source_corpus_sha256=sha(source), corpus_sha256=sha(corpus), records=records)
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, sort_keys=True).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == '__main__':
+    main()
