@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import itertools
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/hidden-pick-legality-v1'
+corpus_path = root / 'findings/policy-choice-errors-v1/psychic/corpus.jsonl.gz'
+search_path = root / 'findings/policy-blind-choice-v1/record.json.gz'
+search_config_path = root / 'findings/policy-blind-choice-v1/search.json'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def load(path):
+    return json.loads(path.read_bytes())
+
+
+def summarize(records, config):
+    corpus = gzip.decompress(corpus_path.read_bytes())
+    original = json.loads(gzip.decompress(search_path.read_bytes()))
+    cfg = json.loads(config)
+    assert cfg == dict(game=2, decision=11, side=1, samples=10000, seed=2026102801)
+    before, after = records['before'], records['after']
+    for record in [before, after]:
+        assert record['schema'] == 'nc2000-hidden-pick-census-v1'
+        assert record['config'] == cfg and record['config_sha256'] == sha(config)
+        assert record['state_key'] == original['state_key']
+        assert record['manifest']['corpus_sha256'] == sha(corpus)
+        assert record['pool_sha256'] == original['observed']['pool_sha256']
+        assert record['cap'] == 155
+        assert [r['mode'] for r in record['rows']] == ['pinned', 'blind', 'fallback']
+    assert before['public_roster'] == after['public_roster']
+    public = after['public_roster']
+    appeared = {i for i, mon in enumerate(public) if mon['appeared']}
+    assert appeared == {2, 3}
+    eligible = {tuple(sorted(party)) for party in itertools.combinations(range(len(public)), 3)
+                if appeared.issubset(party) and sum(public[i]['level'] for i in party) <= after['cap']}
+    assert eligible == {(1, 2, 3), (2, 3, 4), (2, 3, 5)}
+    census = {}
+    for stage in ['before', 'after']:
+        census[stage] = {}
+        for row in records[stage]['rows']:
+            assert sum(x['samples'] for x in row['selections']) == cfg['samples']
+            observed = set()
+            for item in row['selections']:
+                party = item['party']
+                assert len(party) == len(set(party)) == 3 and appeared.issubset(party)
+                assert item['species'] == [public[i]['species'] for i in party]
+                assert item['total_level'] == sum(public[i]['level'] for i in party)
+                assert item['legal'] == (item['total_level'] <= records[stage]['cap'])
+                assert item['samples'] > 0
+                observed.add(tuple(sorted(party)))
+            illegal = sum(x['samples'] for x in row['selections'] if not x['legal'])
+            if stage == 'after':
+                assert illegal == 0 and observed == eligible
+            else:
+                assert illegal > 0 and observed == eligible | {(0, 2, 3)}
+            census[stage][row['mode']] = dict(samples=cfg['samples'], illegal=illegal,
+                selections=[dict(species=x['species'], samples=x['samples']) for x in row['selections']])
+        assert records[stage]['rows'][0]['selections'] == records[stage]['rows'][1]['selections']
+    for path in ['crates/bot/src/belief.rs', 'crates/bot/src/pick_prior.rs']:
+        original_source = subprocess.check_output(['git', 'show', f"{before['manifest']['revision']}:{path}"], cwd=root)
+        assert sha(original_source) == dict(before['source_hashes'])[path]
+        assert dict(after['source_hashes'])[path] != dict(before['source_hashes'])[path]
+    search = records['search_after']
+    assert search['config'] == original['config'] and search['state_key'] == original['state_key']
+    assert search['config_sha256'] == sha(search_config_path.read_bytes())
+    assert search['manifest']['corpus_sha256'] == sha(corpus)
+    assert len(search['rows']) == len(original['rows'])
+    for new, old in zip(search['rows'], original['rows']):
+        for key in ['seed_index', 'seed', 'iterations', 'choices', 'actions', 'visits', 'means', 'nodes',
+                    'joint_samples', 'joint_side_zero_rewards']:
+            assert new[key] == old[key], key
+    assert search['observed']['observations'] == original['observed']['observations']
+    assert search['observed']['belief'] == original['observed']['belief']
+    assert search['observed']['pool_sha256'] == original['observed']['pool_sha256']
+    rows = search['observed']['rows']
+    assert len(rows) == len(original['observed']['rows'])
+    for new, old in zip(rows, original['observed']['rows']):
+        for key in ['mode', 'seed_index', 'seed', 'iterations', 'actions']:
+            assert new[key] == old[key], key
+        assert sum(new['visits']) == new['iterations']
+        assert sum(c['samples'] for c in new['joint']) == new['iterations']
+    pinned = [r for r in rows if r['mode'] == 'pinned']
+    blind = [r for r in rows if r['mode'] == 'blind']
+    for a, b in zip(pinned, blind):
+        for key in ['choice', 'visits', 'means', 'nodes', 'dominated']:
+            assert a[key] == b[key], key
+    choices = {mode: [dict(iterations=n, trials=search['config']['search_seeds'],
+                choices={action: sum(r['choice'] == action for r in rows if r['mode'] == mode and r['iterations'] == n)
+                         for action in rows[0]['actions']}) for n in search['config']['iterations']]
+               for mode in ['pinned', 'blind']}
+    return dict(schema='nc2000-hidden-pick-legality-v1', census=census, observed_search=choices,
+                full_information_search_unchanged=True, pinned_blind_parity=True,
+                inputs={str(p.relative_to(root)): sha(p.read_bytes()) for p in [corpus_path, search_path, search_config_path]},
+                interpretation='Public levels and the side-specific engine preview cap exclude Raikou as the unseen third selection: 55 + 50 + 55 exceeds 155. The old determinizer sampled this impossible party. The fix retains every legal completion and conditions either uniform selections or the installed joint prior on legal masks. An initially legal draw is unchanged; an illegal draw is replaced by an independent draw from the conditional law, yielding that same conditional law overall. Unknown true picks never enter the constraint. All-legal sampling retains its random stream. The corpus census covers pinned, pool and fallback paths; integration tests compare one/two-hidden-slot support with engine preview legality and exercise a prior favoring an illegal selection. Removing impossible states proves model consistency, not average win-rate improvement or information-set optimality.')
+
+
+parser = argparse.ArgumentParser()
+group = parser.add_mutually_exclusive_group()
+group.add_argument('--verify-only', action='store_true')
+group.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    assert summarize(records, (archive / 'config.json').read_bytes()) == load(archive / 'summary.json')
+    print('Verified illegal-selection removal, legal support, baseline provenance and full-search parity')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/hidden-pick-legality-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    previous = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    (directory / 'before.json').write_text(json.dumps(previous['before']))
+    (directory / 'config.json').write_bytes((archive / 'config.json').read_bytes())
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress(corpus_path.read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    executable = str(root / 'target/release/examples/fixed_reply_counterpolicy')
+    for mode, config, output in [('pick-census', directory / 'config.json', 'after.json'),
+                                 ('corpus-search', search_config_path, 'search-after.json')]:
+        subprocess.run([executable, str(directory / 'corpus.jsonl'), mode, str(config), str(directory / output)], cwd=root, env=env, check=True)
+records = {key: load(directory / filename) for key, filename in [
+    ('before', 'before.json'), ('after', 'after.json'), ('search_after', 'search-after.json')]}
+config = (directory / 'config.json').read_bytes()
+assert (directory / 'corpus.jsonl').read_bytes() == gzip.decompress(corpus_path.read_bytes())
+summary = summarize(records, config)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'config.json').write_bytes(config)
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for stage, modes in summary['census'].items():
+    print(stage, {mode: f"{row['illegal']}/{row['samples']} illegal" for mode, row in modes.items()})
+print(json.dumps(summary['observed_search'], indent=2))

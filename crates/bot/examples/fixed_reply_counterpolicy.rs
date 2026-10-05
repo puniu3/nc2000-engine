@@ -17,6 +17,8 @@ mod waking_continuation;
 mod continuation_search;
 #[path="fixed_reply_counterpolicy/corpus_search.rs"]
 mod corpus_search;
+#[path="fixed_reply_counterpolicy/pick_census.rs"]
+mod pick_census;
 use nc2000_engine::battle::{Outcome,PokemonSet,SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::{Battle,Status,DK};
@@ -184,6 +186,7 @@ fn main() {
     if args.get(2).is_some_and(|mode|mode=="continuations") {waking_continuation::execute(&args);return;}
     if args.get(2).is_some_and(|mode|mode=="continuation-search") {continuation_search::execute(&args);return;}
     if args.get(2).is_some_and(|mode|mode=="corpus-search") {corpus_search::execute(&args);return;}
+    if args.get(2).is_some_and(|mode|mode=="pick-census") {pick_census::execute(&args);return;}
     assert!(matches!(args.len(),5|6),"corpus samples seed output [late-rest|counter-search|waking-rest|responses.json]");
     let extended=args.get(5).is_some_and(|mode|mode=="late-rest");
     let waking=args.get(5).is_some_and(|mode|mode=="waking-rest");

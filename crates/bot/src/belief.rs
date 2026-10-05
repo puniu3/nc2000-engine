@@ -55,8 +55,8 @@
 //!   triaged public/hidden, the `state_key` trick);
 //! - the identity of never-appeared opponent picks: which of the 6 roster
 //!   mons occupy the unseen party slots is resampled from the unappeared
-//!   roster, uniformly unless a selection prior is installed and conditioned
-//!   on the current observation revision;
+//!   roster subject to the public total-level cap, uniformly unless a selection
+//!   prior is installed and conditioned on the current observation revision;
 //! - a pending, not-yet-executed opponent `Move` action in the queue (only
 //!   reachable at a mid-turn Baton Pass switch request — on faints gen 2
 //!   cancels all pending moves): its move id is *chosen but unannounced*,
@@ -805,22 +805,42 @@ impl Belief {
                 .collect();
             let mut pool: Vec<u8> =
                 (0..roster_len as u8).filter(|&s| !appeared[s as usize]).collect();
-            if party_len == 3 && !hidden_positions.is_empty() {
-                if let Some(distribution) = self.pick_draws.as_ref()
+            let distribution = if party_len == 3 && !hidden_positions.is_empty() {
+                self.pick_draws.as_ref()
                     .filter(|(revision, _)| *revision == obs.revision())
                     .and_then(|(_, plans)| pick.and_then(|i| plans[i].as_ref()))
-                {
-                    let mask = distribution.sample(rng);
-                    let selected: Vec<u8> = pool.iter().copied()
-                        .filter(|slot| mask & (1 << slot) != 0).collect();
-                    if selected.len() == hidden_positions.len() {
-                        pool = selected;
-                    }
+            } else { None };
+            if let Some(distribution) = distribution {
+                let mask = distribution.sample(rng);
+                let selected: Vec<u8> = pool.iter().copied()
+                    .filter(|slot| mask & (1 << slot) != 0).collect();
+                if selected.len() == hidden_positions.len() {
+                    pool = selected;
                 }
             }
             for &pos in &hidden_positions {
                 let new_slot = pool.swap_remove(rng.below(pool.len()));
                 out.sides[opp].party[pos] = new_slot;
+            }
+            if let Some(cap) = out.preview_level_caps[opp].filter(|_| !hidden_positions.is_empty()) {
+                let level = |mask: u8| obs.mons().iter().enumerate()
+                    .filter(|(slot, _)| mask & (1 << slot) != 0)
+                    .map(|(_, mon)| u32::from(mon.level)).sum::<u32>();
+                let mask = out.sides[opp].party.iter().fold(0u8, |mask, slot| mask | (1 << slot));
+                if level(mask) > cap {
+                    let public = appeared.iter().enumerate()
+                        .fold(0u8, |mask, (slot, &seen)| mask | (u8::from(seen) << slot));
+                    let legal: Vec<u8> = (0..1u8 << roster_len)
+                        .filter(|mask| mask.count_ones() as usize == party_len && mask & public == public && level(*mask) <= cap)
+                        .collect();
+                    assert!(!legal.is_empty(), "public reveals have no level-legal selection");
+                    let mask = distribution.and_then(|d| d.sample_allowed(&legal, rng))
+                        .unwrap_or_else(|| legal[rng.below(legal.len())]);
+                    pool = (0..roster_len as u8).filter(|slot| mask & (1 << slot) != 0 && !appeared[*slot as usize]).collect();
+                    for &pos in &hidden_positions {
+                        out.sides[opp].party[pos] = pool.swap_remove(rng.below(pool.len()));
+                    }
+                }
             }
             if !hidden_positions.is_empty() {
                 // party members carry their display index; the rest are
