@@ -100,12 +100,7 @@ enum AgentSpec {
     SkUctThr { iterations: u32, c: f64, buckets: i64 },
     /// Threshold key + damage-bookkeeping-free key (the full abstraction).
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
-    /// The shipped ladder agent. `mask` is the A/B seam: `RmAgent` never
-    /// calls `best()`, so `skuct`/`rm` duels are exactly blind to the root
-    /// mask; two blind agents in one process differing only in
-    /// `RmConfig::mask_rules` is the only CRN-paired A/B there is
-    /// (`smmcts::SkuctSearch::root_dominated`).
-    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c },
+    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool },
     Open { iterations: u32, c: f64, buckets: i64, perish: PerishRollout, m16c: M16c },
     Exploit(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
@@ -172,6 +167,7 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
     let mut nums: Vec<&str> = Vec::new();
     let mut perish = PerishRollout::shipped();
     let mut m16c = M16c::default();
+    let mut mixed = false;
     for part in &parts[1..] {
         if part.is_empty() {
             return Err("empty field in a blind spec".into());
@@ -180,7 +176,9 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
             nums.push(part);
         } else {
             for tok in part.split(',').filter(|t| !t.is_empty()) {
-                if !apply_rollout_token(&mut perish, &mut m16c, tok) {
+                if tok == "mix" {
+                    mixed = true;
+                } else if !apply_rollout_token(&mut perish, &mut m16c, tok) {
                     apply_mask_token(&mut mask, tok)?;
                 }
             }
@@ -189,13 +187,16 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
     if nums.len() > 3 {
         return Err(format!("too many numeric fields in a blind spec: {nums:?}"));
     }
+    let iterations = opt_num(&nums, 0, "iters")?.unwrap_or(1000);
+    if mixed && iterations == 0 { return Err("mixed search needs a positive iteration budget".into()); }
     Ok(AgentSpec::Blind {
-        iterations: opt_num(&nums, 0, "iters")?.unwrap_or(1000),
+        iterations,
         c: opt_num(&nums, 1, "c")?.unwrap_or(1.0),
         buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
         mask,
         perish,
         m16c,
+        mixed,
     })
 }
 
@@ -486,23 +487,26 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c } => Box::new(BlindAgent::new(
-                RmConfig {
-                    iterations: *iterations,
-                    rule: SelRule::Ucb,
-                    c: *c,
-                    hp_buckets: *buckets,
-                    mask_rules: *mask,
-                    rollout_perish: *perish == PerishRollout::Escape,
-                    rollout_combo: *perish == PerishRollout::Combo,
-                    rollout_status: m16c.status,
-                    rollout_switch: m16c.switch,
-                    ..Default::default()
-                },
-                pool.expect("blind agents need the meta pool").clone(),
-                tables.cloned(),
-                seed,
-            )),
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed } => {
+                let agent = BlindAgent::new(
+                    RmConfig {
+                        iterations: *iterations,
+                        rule: SelRule::Ucb,
+                        c: *c,
+                        hp_buckets: *buckets,
+                        mask_rules: *mask,
+                        rollout_perish: *perish == PerishRollout::Escape,
+                        rollout_combo: *perish == PerishRollout::Combo,
+                        rollout_status: m16c.status,
+                        rollout_switch: m16c.switch,
+                        ..Default::default()
+                    },
+                    pool.expect("blind agents need the meta pool").clone(),
+                    tables.cloned(),
+                    seed,
+                );
+                Box::new(if *mixed {agent.with_adaptive_mixture((u64::from(*iterations) * 2 / 5) as u32)} else {agent})
+            },
             AgentSpec::Open { iterations, c, buckets, perish, m16c } => Box::new(OpenAgent::new(
                 RmConfig {
                     iterations: *iterations,
@@ -562,10 +566,8 @@ impl AgentSpec {
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c } => {
-                let rollout = format!("{}{}", perish.label(), m16c.label());
-                // The one pre-existing named ablation keeps its own label, so
-                // every artifact written before 2026-08-20 still compares.
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed } => {
+                let rollout = format!("{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""});
                 if *mask == legacy_mask() {
                     return format!("blindlegacy:{iterations}:{c}:{buckets}{rollout}");
                 }
@@ -1056,6 +1058,18 @@ fn load_team_pool() -> Vec<Vec<PokemonSet>> {
 #[cfg(test)]
 mod artifact_tests {
     use super::*;
+
+    #[test]
+    fn mixed_agent_specs_keep_their_mode_when_labeled() {
+        for input in ["blind:27000:0.4:mix", "blindlegacy:100:mix", "blind:100:mix,-perish_combo"] {
+            let spec = AgentSpec::parse(input).unwrap();
+            assert!(matches!(spec, AgentSpec::Blind {mixed:true, ..}));
+            let label = spec.label();
+            assert!(matches!(AgentSpec::parse(&label).unwrap(), AgentSpec::Blind {mixed:true, ..}));
+        }
+        assert!(matches!(AgentSpec::parse("blind:27000:0.4").unwrap(), AgentSpec::Blind {mixed:false, ..}));
+        assert!(AgentSpec::parse("blind:0:mix").is_err());
+    }
 
     fn row() -> serde_json::Value {
         serde_json::json!({

@@ -32,7 +32,7 @@ use std::sync::Arc;
 use conformance::fixture::repo_root;
 use conformance::load_dex;
 use nc2000_bot::preview::{load_meta_pool, MetaPool};
-use nc2000_bot::{Agent, Belief, BlindAgent, Observer, RmConfig, SplitMix64};
+use nc2000_bot::{Agent, Belief, BlindAgent, BlindSearch, Observer, RmConfig, SplitMix64};
 use nc2000_engine::battle::{PokemonSet, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
@@ -91,6 +91,55 @@ fn projection(
 
 #[test]
 fn no_psychic_tells_on_the_collision_pair() {
+    collision_invariance(false);
+}
+
+#[test]
+fn adaptive_mixture_has_no_psychic_tells_on_the_collision_pair() {
+    collision_invariance(true);
+}
+
+#[test]
+fn active_mixture_is_identical_across_ambiguous_hidden_stats() {
+    let dex = load_dex();
+    let set = |species: &str, moves: &[&str], atk: i32| -> PokemonSet {
+        serde_json::from_value(serde_json::json!({"name":species,"species":species,"ability":"",
+            "level":50,"moves":moves,"happiness":255,
+            "evs":{"hp":255,"atk":atk,"def":255,"spa":255,"spd":255,"spe":255},
+            "ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30}})).unwrap()
+    };
+    let own = vec![set("Starmie", &["Return", "Surf"], 255)];
+    let opponents = [255, 4].map(|atk|vec![set("Wobbuffet", &["Counter", "Mirror Coat", "Safeguard"], atk)]);
+    let meta = Arc::new(MetaPool {teams:opponents.iter().enumerate().map(|(i, sets)|nc2000_bot::preview::MetaTeam {
+        id:format!("counter-{i}"), sets:sets.clone(), weight:None,
+    }).collect()});
+    let cfg = RmConfig {iterations:27000, c:0.4, ..Default::default()};
+    let mut observations = Vec::new();
+    for opponent in &opponents {
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &own, opponent).unwrap();
+        let mut agent = BlindAgent::new(cfg.clone(), meta.clone(), None, 7).with_adaptive_mixture(10800);
+        let legal = battle.legal_choices(&dex, 0);
+        let pick = agent.choose(&battle, &dex, 0, &legal);
+        let other = battle.legal_choices(&dex, 1)[0];
+        battle.apply_choices(&dex, [Some(pick), Some(other)]).unwrap();
+        for (side, hp) in [(0, 68), (1, 120)] {
+            let id = battle.active_id(side).unwrap(); battle.poke_mut(id).hp = hp;
+        }
+        let before_rng = agent.search_rng_state();
+        let legal = battle.legal_choices(&dex, 0);
+        let choice = agent.choose(&battle, &dex, 0, &legal);
+        let belief = agent.belief().unwrap(); let observer = agent.observer().unwrap();
+        assert_eq!(belief.candidate_count(), 2);
+        let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, before_rng);
+        reference.finish_with_mixed_probes(&dex, belief, observer, 27000, 10800);
+        assert!(reference.mixed_policy().is_some());
+        observations.push((choice, agent.search_rng_state(), reference.root_matrix(),
+            projection(&dex, belief, &battle, observer, 0)));
+    }
+    assert_eq!(observations[0], observations[1]);
+}
+
+fn collision_invariance(mixed: bool) {
     let dex = load_dex();
     let meta = pool();
     let (ci, cj) = collision_pair(&meta);
@@ -111,6 +160,10 @@ fn no_psychic_tells_on_the_collision_pair() {
         let agent_seed = 0xB11D + run as u64;
         let mut agent_a = BlindAgent::new(cfg.clone(), meta.clone(), None, agent_seed);
         let mut agent_b = BlindAgent::new(cfg.clone(), meta.clone(), None, agent_seed);
+        if mixed {
+            agent_a = agent_a.with_adaptive_mixture(38);
+            agent_b = agent_b.with_adaptive_mixture(38);
+        }
 
         // test-owned observers/beliefs (independent of the agents') define
         // the public-agreement region
@@ -164,6 +217,11 @@ fn no_psychic_tells_on_the_collision_pair() {
             if !cs_a.is_empty() {
                 let pa = agent_a.choose(&battle_a, &dex, 0, &cs_a);
                 let pb = agent_b.choose(&battle_b, &dex, 0, &cs_b);
+                if mixed && points == 0 {
+                    let mut baseline = BlindAgent::new(cfg.clone(), meta.clone(), None, agent_seed);
+                    assert_eq!(pa, baseline.choose(&battle_a, &dex, 0, &cs_a));
+                    assert_eq!(agent_a.search_rng_state(), baseline.search_rng_state());
+                }
                 assert_eq!(
                     pa, pb,
                     "GATE B LEAK: blind decision diverged between hidden truths \

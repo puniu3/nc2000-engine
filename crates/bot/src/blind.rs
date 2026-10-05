@@ -83,6 +83,11 @@ struct GameState {
     belief: Belief,
 }
 
+struct AdaptiveMixture {
+    probe_iterations: u32,
+    rng: SplitMix64,
+}
+
 pub struct BlindAgent {
     cfg: RmConfig,
     rng: SplitMix64,
@@ -93,6 +98,7 @@ pub struct BlindAgent {
     /// imputation exactly as shipped.
     prior: Option<Arc<BeliefPrior>>,
     game: Option<GameState>,
+    adaptive_mixture: Option<AdaptiveMixture>,
 }
 
 impl BlindAgent {
@@ -129,7 +135,17 @@ impl BlindAgent {
             fallback_policy,
             prior: None,
             game: None,
+            adaptive_mixture: None,
         }
+    }
+
+    pub fn with_adaptive_mixture(mut self, probe_iterations: u32) -> Self {
+        assert!(probe_iterations < self.cfg.iterations);
+        self.adaptive_mixture = Some(AdaptiveMixture {
+            probe_iterations,
+            rng: SplitMix64::new(self.rng.0 ^ 0xa24baed4963ee407),
+        });
+        self
     }
 
     /// M18: consume a community belief prior for the hidden-team fallback
@@ -168,6 +184,15 @@ impl BlindAgent {
 
     fn search(&mut self, battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoice]) -> SearchChoice {
         let g = self.game.as_ref().expect("search after lifecycle setup");
+        if !matches!(choices[0], SearchChoice::Team(_)) {
+            if let Some(mixture) = self.adaptive_mixture.as_mut() {
+                let mut search = BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
+                debug_assert_eq!(search.actions(), choices);
+                search.finish_with_mixed_probes(dex, &g.belief, &g.observer, self.cfg.iterations, mixture.probe_iterations);
+                self.rng = search.rng.clone();
+                return search.sample_mixed(mixture.rng.next_f64()).expect("search called with a non-empty choice list");
+            }
+        }
         search_choose(&self.cfg, &mut self.rng, g, battle, dex, side, choices)
     }
 }
@@ -1112,7 +1137,11 @@ impl Agent for OpenAgent {
 
 impl Agent for BlindAgent {
     fn name(&self) -> String {
-        format!("blind:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets)
+        let mut name = format!("blind:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets);
+        if let Some(mixture) = &self.adaptive_mixture {
+            name.push_str(&format!(":mix-probes={}", mixture.probe_iterations));
+        }
+        name
     }
 
     fn choose(
@@ -1257,6 +1286,55 @@ pub struct PrincipalLine {
 #[cfg(test)]
 mod mixed_selection_tests {
     use super::*;
+
+    #[test]
+    fn adaptive_agent_uses_the_search_mixture_and_a_separate_draw_stream() {
+        let dex = conformance::load_dex();
+        let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
+            serde_json::from_value(serde_json::json!({"name":species,"species":species,"ability":"",
+                "level":50,"moves":moves,"happiness":255,
+                "evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},
+                "ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30}})).unwrap()
+        };
+        for (foe, moves, iterations, expect_mix) in [
+            ("Wobbuffet", vec!["Counter", "Mirror Coat", "Safeguard"], 27000, true),
+            ("Magikarp", vec!["Splash"], 200, false),
+        ] {
+            let mut battle = Battle::from_fixture(&dex, "1,2,3,4",
+                &[set("Starmie", &["Return", "Surf"])], &[set(foe, &moves)]).unwrap();
+            let mut observer = Observer::new(&battle, 0);
+            let mut belief = Belief::pinned_from_battle(&battle, &observer);
+            battle.choose(&dex, 0, "team 1").unwrap();
+            battle.choose(&dex, 1, "team 1").unwrap();
+            for (side, hp) in [(0, 68), (1, 120)] {
+                let id = battle.active_id(side).unwrap(); battle.poke_mut(id).hp = hp;
+            }
+            observer.observe(&battle, &dex); belief.sync(&dex, &observer);
+            let cfg = RmConfig {iterations, c:0.4, ..Default::default()};
+            let reserve = iterations * 2 / 5;
+            let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 7);
+            let probes = reference.finish_with_mixed_probes(&dex, &belief, &observer, iterations, reserve);
+            assert_eq!(reference.mixed_policy().is_some(), expect_mix, "{:?}", reference.root_matrix());
+            let mut draws = SplitMix64::new(7 ^ 0xa24baed4963ee407);
+            let expected = reference.sample_mixed(draws.next_f64()).unwrap();
+            let mut agent = BlindAgent::new(cfg.clone(), Arc::new(MetaPool {teams:vec![]}), None, 7)
+                .with_adaptive_mixture(reserve);
+            agent.game = Some(GameState {side:0, last_turn:battle.turn, observer, belief});
+            let legal = battle.legal_choices(&dex, 0);
+            assert_eq!(agent.choose(&battle, &dex, 0, &legal), expected);
+            assert_eq!(agent.search_rng_state(), reference.rng.0);
+            assert_eq!(agent.adaptive_mixture.as_ref().unwrap().rng.0, draws.0);
+            if !expect_mix {
+                assert_eq!(probes, 0);
+                let g = agent.game.as_ref().unwrap();
+                let mut plain = BlindSearch::new(&battle, &dex, cfg, 0, 7);
+                plain.step(&dex, &g.belief, &g.observer, iterations);
+                assert_eq!(plain.best(), Some(expected));
+                assert_eq!(plain.rng.0, agent.search_rng_state());
+                assert_eq!(plain.root_matrix(), reference.root_matrix());
+            }
+        }
+    }
 
     #[test]
     fn mixed_sampling_respects_masks_without_consuming_search_randomness() {
