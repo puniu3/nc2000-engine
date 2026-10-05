@@ -37,6 +37,8 @@ def summarize(records, corpus):
         expected['reuse_switches'] = False
     if 'time_budget_ms' in config:
         expected['time_budget_ms'] = 0
+    if 'switch_kernel_capacity' in config:
+        expected['switch_kernel_capacity'] = 0
     assert config == expected
     results = {}
     for name in names:

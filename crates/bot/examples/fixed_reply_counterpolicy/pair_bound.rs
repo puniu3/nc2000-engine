@@ -28,6 +28,8 @@ struct Config {
     #[serde(default)]
     reuse_switches: bool,
     #[serde(default)]
+    switch_kernel_capacity: usize,
+    #[serde(default)]
     boom_eager_cap: usize,
     #[serde(default)]
     boom_terminal_quotient: bool,
@@ -47,7 +49,7 @@ fn collect_step(step:nc2000_engine::battle::enumerate::StepEnum)->Frontier {
     leaves
 }
 
-type Frontier = BTreeMap<u128,(Battle,f64)>;
+pub(super) type Frontier = BTreeMap<u128,(Battle,f64)>;
 
 pub(super) fn partial_step(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],cap:usize,cache:&mut nc2000_bot::hp_transition::HpHealingCache)->(Frontier,f64,usize) {
     let mut pending=BinaryHeap::from([(1.0f64.to_bits(),Vec::<usize>::new())]);
@@ -93,6 +95,8 @@ fn analyze_until(dex:&Dex,root:&Battle,cfg:&Config,
     if cfg.reuse_switches {healing=healing.with_switches();}
     assert!(cfg.boom_eager_cap<=1_000_000 && (cfg.boom_eager_cap==0 || cfg.lazy));
     assert!(!cfg.boom_terminal_quotient || cfg.boom_eager_cap>0);
+    assert!(cfg.switch_kernel_capacity<=100_000 && (cfg.switch_kernel_capacity==0 || cfg.lazy));
+    let mut kernels=super::switch_kernel::Cache::new(cfg.switch_kernel_capacity);
     let mut boom=BoomStats::default();
     let mut time_exhausted=false;
     assert!(cfg.packed_state_cap>0 && cfg.packed_state_cap<=1_000_000);
@@ -124,7 +128,7 @@ fn analyze_until(dex:&Dex,root:&Battle,cfg:&Config,
                 if let Some(step)=eager {(collect_step(step),0.0,eager_work)}
                 else {
                     let cap=cfg.cell_cap.min(cfg.work_budget-runs-eager_work);
-                    let (leaves,unknown,work)=partial_step(dex,&battle,choices,cap,&mut healing);
+                    let (leaves,unknown,work)=kernels.run(dex,&battle,choices,cap,&mut healing);
                     (leaves,unknown,work+eager_work)
                 }
             } else if let Some(step)=enumerate_step(dex,&battle,choices,cap) {
@@ -161,7 +165,7 @@ fn analyze_until(dex:&Dex,root:&Battle,cfg:&Config,
     }
     json!({"score":rows.last().unwrap()["score"],"layers":rows,"runs":runs,
         "peak_frontier":peak_frontier,"peak_templates":peak_templates,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0,
-        "time_exhausted":time_exhausted,"numerical_envelope":1e-9,"healing_cache":healing.stats(),"boom_eager":boom})
+        "time_exhausted":time_exhausted,"numerical_envelope":1e-9,"healing_cache":healing.stats(),"boom_eager":boom,"switch_kernels":kernels.stats})
 }
 
 pub(super) fn execute(args:&[String]) {
@@ -175,7 +179,7 @@ pub(super) fn execute(args:&[String]) {
         choose_response(&dex,b,side,first,OwnPolicy::AfterBoom75,cfg.response)));
     let result=json!({"schema":"nc2000-fixed-pair-enumeration-v1","state_key":root.state_key128().to_string(),
         "config":cfg,"report":report,"manifest":manifest(&dex,&raw),
-        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. Default state aggregation uses full state_key128; optional guarded keys omit only unobservable damage history and Quick Claw rolls. Packed storage keeps each exact HP vector and its mass separately under a shared guarded template, and applies the width limit to templates plus a separate concrete-state cap. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Optional healing reuse admits only a strictly faster, below-full-HP Rest or restricted Sleep Talk user, and rejects changed HP-dependent control flow. Optional attack reuse uses the existing guarded positive-survivor translation domain. Optional voluntary-switch reuse preserves incoming HP and separately restores the two original actives' unchanged HP. Work counts actual engine executions; each cell still caps scripted observations. Optional eager enumeration for the admitted Body Slam / Selfdestruct domain may quotient only terminal states by outcome, retaining exact nonterminal states and downstream draw traces. Failed eager attempts are charged before lazy fallback. An optional time limit is checked between input states; the current cell completes and all unprocessed mass stays unknown. Reported elapsed time includes final accounting and may exceed the limit. Floating-point probability arithmetic uses the reported numerical envelope."});
+        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. Default state aggregation uses full state_key128; optional guarded keys omit only unobservable damage history and Quick Claw rolls. Packed storage keeps each exact HP vector and its mass separately under a shared guarded template, and applies the width limit to templates plus a separate concrete-state cap. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Optional healing reuse admits only a strictly faster, below-full-HP Rest or restricted Sleep Talk user, and rejects changed HP-dependent control flow. Optional attack reuse uses the existing guarded positive-survivor translation domain. Optional voluntary-switch reuse preserves incoming HP and separately restores the two original actives' unchanged HP. Optional switch-kernel reuse retains the exact incoming HP and script cap, restores unchanged original-active HP in aggregated successors, and carries the same unresolved probability. Work counts actual engine executions; each cell still caps scripted observations. Optional eager enumeration for the admitted Body Slam / Selfdestruct domain may quotient only terminal states by outcome, retaining exact nonterminal states and downstream draw traces. Failed eager attempts are charged before lazy fallback. An optional time limit is checked between input states; the current cell completes and all unprocessed mass stays unknown. Reported elapsed time includes final accounting and may exceed the limit. Floating-point probability arithmetic uses the reported numerical envelope."});
     std::fs::write(&args[4],serde_json::to_vec_pretty(&result).unwrap()).unwrap();
     println!("{}",serde_json::to_string(&result["report"]).unwrap());
 }
@@ -185,7 +189,7 @@ mod tests {
     use super::*;
     fn config(width:usize,steps:usize,cap:usize,work:usize)->Config {
         Config {response:CounterResponse {return_when:ReturnWhen::Always,ice_first:false,finish_low:false},
-            width,steps,cell_cap:cap,work_budget:work,time_budget_ms:0,lazy:false,hp_storage_census:false,guarded_keys:false,packed_hp:false,packed_state_cap:state_cap(),healing_capacity:0,reuse_attacks:false,reuse_switches:false,boom_eager_cap:0,boom_terminal_quotient:false}
+            width,steps,cell_cap:cap,work_budget:work,time_budget_ms:0,lazy:false,hp_storage_census:false,guarded_keys:false,packed_hp:false,packed_state_cap:state_cap(),healing_capacity:0,reuse_attacks:false,reuse_switches:false,switch_kernel_capacity:0,boom_eager_cap:0,boom_terminal_quotient:false}
     }
     #[test]
     fn time_stop_preserves_unexpanded_mass_and_completed_results() {
