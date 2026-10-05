@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use nc2000_bot::bounds::{BoundConfig, BoundSolver, Bounds, FixedPolicySolver, RootPayoffs};
+use nc2000_bot::bounds::{BoundConfig, BoundSolver, Bounds, ChanceDiagnostics, FixedPolicySolver, RootPayoffs};
 use nc2000_bot::player::action_input;
 use nc2000_bot::{Agent, MaxDamageAgent, RmConfig, SkuctSearch};
 use nc2000_engine::battle::PokemonSet;
@@ -41,6 +41,8 @@ struct Protocol {
     fixed_policy_side: Option<usize>,
     #[serde(default)]
     aggregate_lazy_children: bool,
+    #[serde(default)]
+    chance_fair_period: usize,
 }
 
 #[derive(Default, Deserialize)]
@@ -73,6 +75,19 @@ fn sha(bytes: &[u8]) -> String {
 
 fn bound(b: Bounds) -> Value {
     json!({"lo": b.lo, "hi": b.hi})
+}
+
+fn chance_diagnostic(cell: &ChanceDiagnostics) -> Value {
+    json!({
+        "visits":cell.visits,"runs":cell.runs,
+        "pending_mass":cell.pending_mass,"pending_scripts":cell.pending_scripts,
+        "resolved_edges":cell.resolved_edges,"unique_children":cell.unique_children,
+        "child_uncertainty":cell.child_uncertainty,
+        "largest_edge_uncertainty":cell.largest_edge_uncertainty,
+        "largest_child_uncertainty":cell.largest_child_uncertainty,
+        "expanded_children":cell.expanded_children,"max_child_runs":cell.max_child_runs,
+        "total_child_runs":cell.total_child_runs,
+    })
 }
 
 fn assessment(matrix: &RootPayoffs, side: usize, policy: &[f64]) -> Value {
@@ -135,18 +150,29 @@ fn audit(
             eps: protocol.tolerance,
             certified_action_pruning: protocol.certified_action_pruning,
             aggregate_lazy_children: protocol.aggregate_lazy_children,
+            chance_fair_period: protocol.chance_fair_period,
             ..BoundConfig::default()
         }, side, legal[side].clone());
         let started = Instant::now();
         let report = solver.solve(&battle);
         let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
         let graph = solver.graph_diagnostics();
+        let matrix = solver.restricted_root_payoffs(&battle).unwrap();
+        let stats = solver.stats();
         return json!({
             "schema":"nc2000-fixed-policy-bound-v1",
             "game":game.game,"decision":decision,"state_key":battle.state_key128().to_string(),
             "side":side,"priority_actions":names[side],
             "guaranteed_score":bound(report.guaranteed_score),
             "unrestricted_game_value":bound(report.unrestricted_game_value),
+            "restricted_matrix":{
+                "actions":matrix.actions.map(|actions|actions.into_iter().map(|a|a.map(|a|action_input(dex,a))).collect::<Vec<_>>()),
+                "cells":matrix.cells.iter().map(|cell|bound(*cell)).collect::<Vec<_>>(),
+                "value":bound(matrix.value),
+            },
+            "root_chance":solver.root_chance_diagnostics(&battle).unwrap().iter().map(chance_diagnostic).collect::<Vec<_>>(),
+            "trial_depth_counts":stats.trial_depth_counts,"depth_limit_trials":stats.depth_limit_trials,
+            "eager_failures":stats.eager_failures,"lazy_edge_merges":stats.lazy_edge_merges,
             "reference":{"stop":format!("{:?}",report.stop),"runs":report.runs,
                 "elapsed_ms":elapsed_ms,"nodes":solver.node_count()},
             "graph":{"unexpanded_nodes":graph.unexpanded_nodes,"initialized_nodes":graph.initialized_nodes,
@@ -193,6 +219,7 @@ fn audit(
             cell_cap: protocol.cell_cap,
             certified_action_pruning: protocol.certified_action_pruning,
             aggregate_lazy_children: protocol.aggregate_lazy_children,
+            chance_fair_period: protocol.chance_fair_period,
             ..BoundConfig::default()
         },
     );
@@ -323,15 +350,7 @@ fn audit(
             "dominated_cols": stats.dominated_cols,
             "avoided_cells": stats.avoided_cells,
             "lazy_edge_merges": stats.lazy_edge_merges,
-            "root_chance": solver.root_chance_diagnostics(&battle).unwrap().iter().map(|cell| json!({
-                "pending_mass": cell.pending_mass,
-                "pending_scripts": cell.pending_scripts,
-                "resolved_edges": cell.resolved_edges,
-                "unique_children": cell.unique_children,
-                "child_uncertainty": cell.child_uncertainty,
-                "largest_edge_uncertainty": cell.largest_edge_uncertainty,
-                "largest_child_uncertainty": cell.largest_child_uncertainty,
-            })).collect::<Vec<_>>(),
+            "root_chance": solver.root_chance_diagnostics(&battle).unwrap().iter().map(chance_diagnostic).collect::<Vec<_>>(),
         })
     });
     json!({"game":game.game,"decision":decision,"state_key":battle.state_key128().to_string(),

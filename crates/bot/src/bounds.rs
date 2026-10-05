@@ -84,6 +84,7 @@ pub struct BoundConfig {
     pub support_br_scheduling: bool,
     pub reuse_unchanged_backups: bool,
     pub aggregate_lazy_children: bool,
+    pub chance_fair_period: usize,
 }
 
 impl Default for BoundConfig {
@@ -105,6 +106,7 @@ impl Default for BoundConfig {
             support_br_scheduling: true,
             reuse_unchanged_backups: true,
             aggregate_lazy_children: false,
+            chance_fair_period: 0,
         }
     }
 }
@@ -293,6 +295,8 @@ pub struct BoundStats {
 
 #[derive(Debug)]
 pub struct ChanceDiagnostics {
+    pub visits: usize,
+    pub runs: usize,
     pub pending_mass: f64,
     pub pending_scripts: usize,
     pub resolved_edges: usize,
@@ -300,6 +304,9 @@ pub struct ChanceDiagnostics {
     pub child_uncertainty: f64,
     pub largest_edge_uncertainty: f64,
     pub largest_child_uncertainty: f64,
+    pub expanded_children: usize,
+    pub max_child_runs: usize,
+    pub total_child_runs: usize,
 }
 
 #[derive(Debug, Default)]
@@ -325,6 +332,9 @@ enum NodeKey {
 }
 
 struct Cell {
+    visits: usize,
+    runs: usize,
+    fair_cursor: usize,
     resolved: Vec<(f64, NodeKey)>,
     /// Exact contribution from terminal/closed successors already folded
     /// out of the live graph.
@@ -420,6 +430,13 @@ impl<'d> FixedPolicySolver<'d> {
 
     pub fn node_count(&self) -> usize { self.solver.node_count() }
     pub fn graph_diagnostics(&self) -> GraphDiagnostics { self.solver.graph_diagnostics() }
+    pub fn restricted_root_payoffs(&self, battle: &Battle) -> Option<RootPayoffs> {
+        self.solver.root_payoffs(battle)
+    }
+    pub fn root_chance_diagnostics(&self, battle: &Battle) -> Option<Vec<ChanceDiagnostics>> {
+        self.solver.root_chance_diagnostics(battle)
+    }
+    pub fn stats(&self) -> &BoundStats { &self.solver.stats }
 }
 
 #[derive(Default)]
@@ -510,6 +527,8 @@ impl<'d> BoundSolver<'d> {
                 *children.entry(key).or_default() += uncertainty;
             }
             ChanceDiagnostics {
+                visits: cell.visits,
+                runs: cell.runs,
                 pending_mass: cell.pending_mass,
                 pending_scripts: cell.pending.len(),
                 resolved_edges: cell.resolved.len(),
@@ -517,6 +536,9 @@ impl<'d> BoundSolver<'d> {
                 child_uncertainty: children.values().sum(),
                 largest_edge_uncertainty,
                 largest_child_uncertainty: children.values().copied().fold(0.0, f64::max),
+                expanded_children: children.keys().filter(|key| !self.nodes[key].cells.is_empty()).count(),
+                max_child_runs: children.keys().map(|key| self.nodes[key].cells.iter().map(|c|c.runs).sum()).max().unwrap_or(0),
+                total_child_runs: children.keys().map(|key| self.nodes[key].cells.iter().map(|c|c.runs).sum::<usize>()).sum(),
             }
         }).collect())
     }
@@ -901,6 +923,9 @@ impl<'d> BoundSolver<'d> {
         let n_cells = a0.len().max(1) * a1.len().max(1);
         node.cells = (0..n_cells)
             .map(|_| Cell {
+                visits: 0,
+                runs: 0,
+                fair_cursor: 0,
                 resolved: vec![],
                 fixed_lo: 0.0,
                 fixed_hi: 0.0,
@@ -929,7 +954,8 @@ impl<'d> BoundSolver<'d> {
     fn trial_from_cell(&mut self, root: NodeKey, work_limit: usize, root_cell: Option<usize>) -> bool {
         self.stats.trials += 1;
         let mut did_work = false;
-        let mut path: Vec<NodeKey> = Vec::new();
+        let mut path: Vec<(NodeKey, usize)> = Vec::new();
+        let start_runs = self.stats.runs;
         let mut cur = root;
         let mut visited_depth = 0;
         let mut hit_depth_limit = false;
@@ -942,9 +968,9 @@ impl<'d> BoundSolver<'d> {
             if n.cells.is_empty() {
                 self.init_cells(cur);
             }
-            path.push(cur);
             let ci = if depth == 0 { root_cell.unwrap_or_else(|| self.select_cell(cur)) }
                 else { self.select_cell(cur) };
+            path.push((cur, ci));
             if self.try_eager(cur, ci, work_limit) {
                 did_work = true;
                 break;
@@ -1016,13 +1042,16 @@ impl<'d> BoundSolver<'d> {
                     })
                     .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
             });
+            let pending_mass = cell.pending_mass;
+            let has_pending = !cell.pending.is_empty();
+            let best_child = self.fair_chance_child(cur, ci).or(best_child);
             match best_child {
-                Some((cw, k)) if cw > cell.pending_mass.max(self.cfg.descend_floor) => {
+                Some((cw, k)) if cw > pending_mass.max(self.cfg.descend_floor) => {
                     cur = k;
                     hit_depth_limit = depth + 1 == self.cfg.trial_depth;
                     continue;
                 }
-                _ if !cell.pending.is_empty() => {
+                _ if has_pending => {
                     self.expand(cur, ci);
                     did_work = true;
                     break;
@@ -1045,12 +1074,33 @@ impl<'d> BoundSolver<'d> {
             self.stats.trial_depth_counts.resize(visited_depth + 1, 0);
         }
         self.stats.trial_depth_counts[visited_depth] += 1;
-        for &k in path.iter().rev() {
+        for &(key, ci) in &path {
+            let cell = &mut self.nodes.get_mut(&key).unwrap().cells[ci];
+            cell.visits += 1;
+            cell.runs += self.stats.runs - start_runs;
+        }
+        for &(k, _) in path.iter().rev() {
             if !self.backup(k) {
                 break; // bounds unchanged ⇒ ancestors can't change either
             }
         }
         did_work
+    }
+
+    fn fair_chance_child(&mut self, key: NodeKey, ci: usize) -> Option<(f64, NodeKey)> {
+        let period = self.cfg.chance_fair_period;
+        let cell = &self.nodes[&key].cells[ci];
+        if period == 0 || (cell.visits + 1) % period != 0 { return None; }
+        let eligible: Vec<_> = cell.resolved.iter().filter_map(|&(mass, child)| {
+            let node = &self.nodes[&child];
+            let uncertainty = mass * (node.hi - node.lo);
+            (uncertainty > 1e-12).then_some((uncertainty, child))
+        }).collect();
+        if eligible.is_empty() { return None; }
+        let cell = &mut self.nodes.get_mut(&key).unwrap().cells[ci];
+        let selected = eligible[cell.fair_cursor % eligible.len()];
+        cell.fair_cursor = cell.fair_cursor.wrapping_add(1);
+        Some(selected)
     }
 
     /// Cell choice alternates the two certificate witnesses. For the lower
@@ -2169,7 +2219,8 @@ mod tests {
             let score = if side == 0 { value } else { 1.0 - value };
             let mut solver = super::FixedPolicySolver::new(&dex, BoundConfig {
                 work_budget: 1, cell_cap: 0, eps: 1e-8,
-                aggregate_lazy_children: aggregate, ..BoundConfig::default()
+                aggregate_lazy_children: aggregate, chance_fair_period: if aggregate { 2 } else { 0 },
+                ..BoundConfig::default()
             }, side, vec![SearchChoice::Move(dex.moves.id("seismictoss").unwrap())]);
             let mut closed = false;
             for _ in 0..1000 {
@@ -2448,6 +2499,9 @@ mod tests {
 
     fn synthetic_cell(lo: f64, hi: f64) -> Cell {
         Cell {
+            visits: 0,
+            runs: 0,
+            fair_cursor: 0,
             resolved: Vec::new(),
             fixed_lo: 0.0,
             fixed_hi: 0.0,
@@ -2487,6 +2541,26 @@ mod tests {
             stall_rank: None,
             resource_rank: None,
         }
+    }
+
+    #[test]
+    fn chance_fairness_visits_small_unresolved_branches_and_skips_closed_ones() {
+        let dex = conformance::load_dex();
+        let mut solver = BoundSolver::new(&dex, BoundConfig {
+            chance_fair_period: 32, ..BoundConfig::default()
+        });
+        let keys = [100, 101, 102, 103].map(super::NodeKey::Exact);
+        for key in keys { solver.nodes.insert(key, synthetic_node(0, 0)); }
+        solver.nodes.get_mut(&keys[3]).unwrap().hi = 0.0;
+        let root = solver.nodes.get_mut(&keys[0]).unwrap();
+        root.cells[0].resolved = vec![(0.8, keys[1]), (0.19, keys[2]), (0.01, keys[3])];
+        assert!(solver.fair_chance_child(keys[0], 0).is_none());
+        solver.nodes.get_mut(&keys[0]).unwrap().cells[0].visits = 31;
+        for expected in [keys[1], keys[2], keys[1], keys[2]] {
+            assert_eq!(solver.fair_chance_child(keys[0], 0).unwrap().1, expected);
+        }
+        solver.cfg.chance_fair_period = 0;
+        assert!(solver.fair_chance_child(keys[0], 0).is_none());
     }
 
     #[test]
