@@ -44,6 +44,7 @@ struct Protocol {
     fixed_priority_actions: Option<Vec<String>>,
     fixed_reply_action: Option<String>,
     fixed_reply_threshold: Option<f64>,
+    fixed_rest_percent: Option<u8>,
     #[serde(default)]
     fixed_sleep_talk: bool,
     #[serde(default)]
@@ -90,6 +91,7 @@ struct DescendantPreparation {
     lower_threshold: Option<f64>,
     fixed_policy_side: Option<usize>,
     fixed_priority_actions: Option<Vec<String>>,
+    fixed_rest_percent: Option<u8>,
     #[serde(default)]
     fixed_sleep_talk: bool,
 }
@@ -285,6 +287,7 @@ fn audit(
         };
         if protocol.fixed_sleep_talk { solver = solver.with_sleep_talk(); }
         if protocol.fixed_frozen_switch { solver = solver.with_frozen_switch(); }
+        if let Some(percent)=protocol.fixed_rest_percent { solver=solver.with_rest_threshold(percent); }
         let started = Instant::now();
         if let Some(reply) = &protocol.fixed_reply_action {
             let reply_choice = legal[1-side][names[1-side].iter().position(|name|name==reply).unwrap()];
@@ -293,6 +296,7 @@ fn audit(
             return json!({"schema":"nc2000-fixed-reply-bound-v1","game":game.game,"decision":decision,
                 "state_key":battle.state_key128().to_string(),"side":side,"priority_actions":priority_names,
                 "fixed_first_action":protocol.fixed_first_action,"reply_action":reply,
+                "fixed_rest_percent":protocol.fixed_rest_percent,
                 "reply_value":bound(report.bounds),"threshold":protocol.fixed_reply_threshold,
                 "restricted_matrix":{"actions":matrix.actions.map(|aa|aa.into_iter().map(|a|a.map(|a|action_input(dex,a))).collect::<Vec<_>>()),
                     "cells":matrix.cells.iter().copied().map(bound).collect::<Vec<_>>(),"value":bound(matrix.value)},
@@ -313,6 +317,7 @@ fn audit(
             "fixed_first_action":protocol.fixed_first_action,
             "fixed_sleep_talk":protocol.fixed_sleep_talk,
             "fixed_frozen_switch":protocol.fixed_frozen_switch,
+            "fixed_rest_percent":protocol.fixed_rest_percent,
             "guaranteed_score":bound(report.guaranteed_score),
             "unrestricted_game_value":bound(report.unrestricted_game_value),
             "restricted_matrix":{
@@ -335,6 +340,7 @@ fn audit(
     assert!(protocol.fixed_priority_actions.is_none());
     assert!(!protocol.fixed_sleep_talk);
     assert!(!protocol.fixed_frozen_switch);
+    assert!(protocol.fixed_rest_percent.is_none());
     let mut targets = Vec::new();
     let archived: [Option<&Value>; 2] = [0, 1].map(|side| {
         if legal[side].is_empty() {
@@ -510,6 +516,7 @@ fn audit(
             let priority_names: Vec<_> = priority.iter().map(|a|action_input(dex,*a)).collect();
             let mut dedicated = FixedPolicySolver::new(dex,dedicated_config,side,priority);
             if prep.fixed_sleep_talk { dedicated = dedicated.with_sleep_talk(); }
+            if let Some(percent)=prep.fixed_rest_percent { dedicated=dedicated.with_rest_threshold(percent); }
             let report = dedicated.solve(child);
             let matrix = dedicated.restricted_root_payoffs(child).unwrap();
             let nodes = dedicated.node_count();
@@ -518,9 +525,11 @@ fn audit(
             (report.unrestricted_game_value,report.stop,report.runs,matrix,nodes,chance,
                 dedicated.into_value_certificates(),json!({"side":side,"priority_actions":priority_names,
                     "sleep_talk":prep.fixed_sleep_talk,
+                    "rest_percent":prep.fixed_rest_percent,
                     "guaranteed_score":bound(report.guaranteed_score)}))
         } else {
             assert!(prep.fixed_priority_actions.is_none() && !prep.fixed_sleep_talk);
+            assert!(prep.fixed_rest_percent.is_none());
             let mut dedicated = BoundSolver::new(dex,dedicated_config);
             let report = dedicated.solve(child,prep.lower_threshold.map(|t|(t,t)));
             let matrix = dedicated.root_payoffs(child).unwrap();

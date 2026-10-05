@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-rest-witness-v1'
+names = ['attack', 'rest', 'attack-material', 'rest-material']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    assert set(records) == set(names)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert all(r['manifest']['source_hashes'] == records['attack']['manifest']['source_hashes'] for r in records.values())
+    prior_path = root / 'findings/policy-fire-switch-v1/summary.json'
+    prior_records_path = root / 'findings/policy-fire-switch-v1/records.json.gz'
+    prior = json.loads(prior_path.read_bytes())
+    previous_records = json.loads(gzip.decompress(prior_records_path.read_bytes()))
+    for name, previous in [('attack', 'control'), ('attack-material', 'material')]:
+        before, after = previous_records[previous]['result'], records[name]['result']
+        assert before['restricted_matrix'] == after['restricted_matrix']
+        assert all(before['reference'][k] == after['reference'][k] for k in ['runs', 'nodes', 'stop'])
+    matrix = json.loads(json.dumps(prior['matrix']))
+    rows, cols = map(len, matrix['actions'])
+    assert matrix['actions'][0][0] == 'move bodyslam'
+    switch = matrix['actions'][1].index('switch 2')
+    padding = 1e-10
+    common = None
+    arms = {}
+    for name in names:
+        row, protocol = records[name]['result'], records[name]['manifest']['protocol']
+        percent = 75 if name.startswith('rest') else None
+        assert row['schema'] == 'nc2000-fixed-reply-bound-v1'
+        assert row['state_key'] == '199433906935569759004884428941975153695'
+        assert row['side'] == protocol['fixed_policy_side'] == 0
+        assert row['fixed_first_action'] == protocol['fixed_first_action'] == 'move bodyslam'
+        assert row['reply_action'] == protocol['fixed_reply_action'] == 'switch 2'
+        assert row['fixed_rest_percent'] == protocol['fixed_rest_percent'] == percent
+        assert protocol['chance_material_order'] == name.endswith('material')
+        assert row['priority_actions'] == protocol['fixed_priority_actions'] == ['move bodyslam', 'move fireblast', 'move rest', 'move selfdestruct']
+        config = {k: v for k, v in protocol.items() if k not in ['fixed_rest_percent', 'chance_material_order']}
+        if common is None:
+            common = config
+        assert config == common
+        restricted = row['restricted_matrix']
+        assert restricted['actions'] == [['move bodyslam'], matrix['actions'][1]]
+        assert restricted['cells'][switch] == row['reply_value']
+        assert row['root_chance'][switch]['runs'] == row['reference']['runs']
+        assert all(c['runs'] == 0 for i, c in enumerate(row['root_chance']) if i != switch)
+        for target, bound in zip(matrix['cells'], restricted['cells']):
+            target['lo'] = max(target['lo'], bound['lo'] - padding)
+        arms[name] = {'rest_percent': percent, 'reply_value': row['reply_value'], **row['reference']}
+    matrix['value']['lo'] = max(matrix['value']['lo'], max(min(b['lo'] for b in matrix['cells'][i:i + cols]) for i in range(0, rows * cols, cols)))
+    assert all(0 <= b['lo'] <= b['hi'] <= 1 for b in matrix['cells'] + [matrix['value']])
+    differences = json.loads(json.dumps(prior['difference_certificates']))
+    for difference in differences:
+        i, j = [matrix['actions'][side].index(action) for side, action in enumerate(difference['upper_actions'])]
+        k, l = [matrix['actions'][side].index(action) for side, action in enumerate(difference['lower_actions'])]
+        upper = 0 if (i, j) == (k, l) else matrix['cells'][i * cols + j]['hi'] - matrix['cells'][k * cols + l]['lo'] + padding
+        if upper < difference['difference_upper']:
+            difference['difference_upper'] = upper
+            difference['source'] = 'matrix_intervals_with_rest_witness'
+    loss_upper = min(prior['archived_first_decisions'][0]['loss']['hi'], max(0, max(d['difference_upper'] for d in differences)) + padding)
+    return {'schema': 'nc2000-policy-rest-witness-v1', 'arms': arms, 'matrix': matrix,
+            'difference_certificates': differences,
+            'remaining_above_two_points': [d for d in differences if d['difference_upper'] > .02],
+            'archived_first_decisions': [{'side': side, 'loss': {'lo': 0, 'hi': loss_upper}} for side in range(2)],
+            'numerical_envelope': padding, 'prior_hashes': {str(p.relative_to(root)): sha(p.read_bytes()) for p in [prior_path, prior_records_path]},
+            'interpretation': 'The fixed strategy uses Rest at or below the configured HP percentage only while awake and unfrozen and only when legal; the root action override takes precedence. Every later opponent action remains available. Rest and attack strategies are crossed with two refinement orders at identical configured caps and the same binary. Only side-zero lower bounds transfer into unrestricted cells. Overlapping strategy intervals do not rank true strength. The existing difference proof bounds full-information first-decision regret, not deployed blind-policy strength or global optimality.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    subprocess.run([str(root / 'tools/policy-fire-switch'), '--verify-only'], check=True)
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    for name, record in records.items():
+        manifest = record['manifest']
+        raw = (archive / f'{name}.json').read_bytes()
+        assert sha(raw) == manifest['protocol_sha256'] and json.loads(raw) == manifest['protocol']
+        assert sha(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())) == manifest['protocol']['corpus_sha256']
+        assert sha((root / manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified fixed Rest rules, same-binary factorial controls and one-sided first-decision certificates')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-rest-witness-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in names:
+        protocol = json.loads((archive / f'{name}.json').read_bytes())
+        protocol['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(protocol, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {name: {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()),
+                  'result': json.loads((directory / name / 'game-017-d0021.json').read_bytes())} for name in names}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress((directory / 'corpus.jsonl').read_bytes(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(summary['arms'])
+print(summary['remaining_above_two_points'])
