@@ -88,6 +88,7 @@ pub struct BoundConfig {
     pub resource_closure_nodes: Option<usize>,
     pub resource_closure_period: usize,
     pub directed_policy_refinement: bool,
+    pub target_aware_refinement: bool,
 }
 
 impl Default for BoundConfig {
@@ -113,6 +114,7 @@ impl Default for BoundConfig {
             resource_closure_nodes: None,
             resource_closure_period: 1,
             directed_policy_refinement: false,
+            target_aware_refinement: false,
         }
     }
 }
@@ -171,13 +173,22 @@ impl RootPayoffs {
         }
     }
 
-    fn refinement_cell(&self, side: usize, policy: &[f64]) -> Option<(usize, f64)> {
+    fn refinement_cell(&self, side: usize, policy: &[f64], tolerance: Option<f64>) -> (Option<(usize, f64)>, usize) {
         let guarantee = self.policy_value(side, policy);
+        let target = tolerance.map(|tolerance| {
+            let ceiling = if side == 0 { self.value.hi } else { 1.0 - self.value.lo };
+            ceiling - tolerance + 1e-12 * (self.cells.len() + 1) as f64 + 1e-10
+        });
         let mut best = None;
+        let mut sufficient = 0;
         for reply in 0..self.actions[1 - side].len() {
             let lower: f64 = policy.iter().enumerate()
                 .map(|(action, &mass)| mass * self.cell(side, action, reply).lo).sum();
             if lower > guarantee.hi + 1e-10 { continue; }
+            if target.is_some_and(|target| lower >= target) {
+                sufficient += 1;
+                continue;
+            }
             for (action, &mass) in policy.iter().enumerate() {
                 let score = mass * self.cell(side, action, reply).width();
                 let index = if side == 0 { action * self.actions[1].len() + reply }
@@ -187,7 +198,7 @@ impl RootPayoffs {
                 }
             }
         }
-        best
+        (best, sufficient)
     }
 }
 
@@ -268,6 +279,8 @@ impl SolveReport {
 #[derive(Clone, Debug, Default)]
 pub struct BoundStats {
     pub certificate_hits: usize,
+    pub sufficient_reply_skips: usize,
+    pub target_filtered_trials: usize,
     pub lower_directed_trials: usize,
     pub upper_directed_trials: usize,
     pub resource_closure_visits: usize,
@@ -881,7 +894,10 @@ impl<'d> BoundSolver<'d> {
             }
             let (side, policy) = pending[cursor % pending.len()];
             cursor += 1;
-            let refine = payoffs.refinement_cell(*side, policy);
+            let (refine, sufficient) = payoffs.refinement_cell(*side, policy,
+                self.cfg.target_aware_refinement.then_some(tolerance));
+            self.stats.sufficient_reply_skips += sufficient;
+            self.stats.target_filtered_trials += usize::from(sufficient > 0);
             let refine_value = (payoffs.value.width() > tolerance * 0.5 && cursor % 4 == 0)
                 || refine.is_none();
             let direction = self.cfg.directed_policy_refinement.then(|| {
@@ -2172,6 +2188,37 @@ mod tests {
     }
 
     #[test]
+    fn policy_target_skips_sufficient_replies_without_changing_certificates() {
+        let cells = [(0.5, 0.7), (0.65, 1.0), (0.0, 0.4), (0.0, 0.4)];
+        for side in 0..2 {
+            let matrix = super::RootPayoffs {
+                actions: [vec![None; 2], vec![None; 2]],
+                cells: (0..4).map(|i| {
+                    let (lo, hi) = if side == 0 { cells[i] } else { cells[(i % 2) * 2 + i / 2] };
+                    if side == 0 { super::Bounds { lo, hi } }
+                    else { super::Bounds { lo: 1.0 - hi, hi: 1.0 - lo } }
+                }).collect(),
+                value: if side == 0 { super::Bounds { lo: 0.5, hi: 0.7 } }
+                    else { super::Bounds { lo: 0.3, hi: 0.5 } },
+            };
+            let before = matrix.policy_loss(side, &[1.0, 0.0]);
+            let (original, skipped) = matrix.refinement_cell(side, &[1.0, 0.0], None);
+            assert_eq!(original.unwrap().0, if side == 0 { 1 } else { 2 });
+            assert_eq!(skipped, 0);
+            let (targeted, skipped) = matrix.refinement_cell(side, &[1.0, 0.0], Some(0.1));
+            assert_eq!(targeted.unwrap().0, 0);
+            assert_eq!(skipped, 1);
+            let (tightened, skipped) = matrix.refinement_cell(side, &[1.0, 0.0], Some(0.01));
+            assert_eq!(tightened.unwrap().0, original.unwrap().0);
+            assert_eq!(skipped, 0);
+            let after = matrix.policy_loss(side, &[1.0, 0.0]);
+            assert_eq!(before.lo, after.lo);
+            assert_eq!(before.hi, after.hi);
+            assert!(after.hi > 0.1);
+        }
+    }
+
+    #[test]
     fn forced_action_has_zero_loss_even_when_the_value_is_unknown() {
         let matrix = super::RootPayoffs {
             actions: [vec![None], vec![None; 2]],
@@ -3027,11 +3074,12 @@ mod tests {
         let targets: Vec<_> = (0..2).flat_map(|side| {
             [vec![1.0, 0.0], vec![0.0, 1.0], vec![0.3, 0.7]].map(|policy| (side, policy))
         }).collect();
-        for (period, directed) in [(0, false), (1, false), (2, false), (1, true)] {
+        for (period, directed, targeted) in [(0, false, false), (1, false, false),
+            (2, false, false), (1, true, false), (1, false, true), (1, true, true)] {
             let mut solver = BoundSolver::new(&dex, BoundConfig {
                 work_budget: 17, cell_cap: 0, eps: 1e-10,
                 resource_closure_nodes: Some(0), resource_closure_period: period,
-                directed_policy_refinement: directed,
+                directed_policy_refinement: directed, target_aware_refinement: targeted,
                 ..BoundConfig::default()
             });
             let mut previous = super::Bounds { lo: 0.0, hi: 1.0 };

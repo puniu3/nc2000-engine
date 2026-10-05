@@ -18,6 +18,7 @@ studies.add_argument("--allocation", action="store_true")
 studies.add_argument("--transfer", action="store_true")
 studies.add_argument("--branches", action="store_true")
 studies.add_argument("--direction", action="store_true")
+studies.add_argument("--target-cut", action="store_true")
 parser.add_argument("--verify-only", action="store_true")
 args = parser.parse_args()
 study = "policy-frontier-v1" if args.frontier else "policy-target-focus-v1"
@@ -32,6 +33,8 @@ if args.branches:
     study, targets = "policy-branches-v1", ["small", "large", "interleaved"]
 if args.direction:
     study, targets = "policy-direction-v1", ["control", "default-check", "directed"]
+if args.target_cut:
+    study, targets = "policy-target-cut-v1", ["control", "default-check", "targeted"]
 source = root / "findings" / study
 spec = importlib.util.spec_from_file_location("policy_gap", root / "tools/policy-gap-report.py")
 verifier = importlib.util.module_from_spec(spec)
@@ -83,6 +86,8 @@ def verify(row):
     if diagnostics := row.get("diagnostics"):
         directed = diagnostics.get("lower_directed_trials", 0) + diagnostics.get("upper_directed_trials", 0)
         assert directed in (0, diagnostics["trials"])
+        assert 0 <= diagnostics.get("target_filtered_trials", 0) <= diagnostics["trials"]
+        assert diagnostics.get("sufficient_reply_skips", 0) >= diagnostics.get("target_filtered_trials", 0)
         assert sum(diagnostics["trial_depth_counts"]) == diagnostics["trials"]
         assert len(diagnostics["root_chance"]) == len(matrix["cells"])
         for cell, bounds in zip(diagnostics["root_chance"], matrix["cells"]):
@@ -109,16 +114,19 @@ if args.verify_only:
             current, old = records[target]["result"], prior[previous]["result"]
             for field in ["value", "cells", "actions", "runs", "nodes", "stop"]:
                 assert current["reference"][field] == old["reference"][field], field
-    if args.direction:
+    if args.direction or args.target_cut:
         prior = json.loads(gzip.decompress((root / "findings/policy-branches-v1/records.json.gz").read_bytes()))
         assert records["control"] == prior["large"]
         for field in ["value", "cells", "actions", "runs", "nodes", "stop"]:
             assert records["default-check"]["result"]["reference"][field] == prior["small"]["result"]["reference"][field]
-        for name in ["default-check", "directed"]:
-            diagnostic = records[name]["result"]["diagnostics"]
-            assert (diagnostic["lower_directed_trials"] > 0) == (name == "directed")
-            assert (diagnostic["upper_directed_trials"] > 0) == (name == "directed")
-    if args.transfer or args.branches or args.direction:
+        if args.direction:
+            for name in ["default-check", "directed"]:
+                diagnostic = records[name]["result"]["diagnostics"]
+                assert (diagnostic["lower_directed_trials"] > 0) == (name == "directed")
+                assert (diagnostic["upper_directed_trials"] > 0) == (name == "directed")
+        if args.target_cut:
+            assert records["default-check"]["result"]["diagnostics"]["sufficient_reply_skips"] == 0
+    if args.transfer or args.branches or args.direction or args.target_cut:
         summary = json.loads((source / "summary.json").read_text())
         prior_path = root / summary["prior_certificate"]
         assert hashlib.sha256(prior_path.read_bytes()).hexdigest() == summary["prior_certificate_sha256"]

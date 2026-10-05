@@ -33,6 +33,10 @@ def summarize(records):
     prior_paths = [root / 'findings/policy-gap-v1/records.json.gz', root / 'findings/headroom-cases-v1/records.json.gz']
     original = read_archive(prior_paths[0])
     refined = read_archive(prior_paths[1])['references']
+    previous = []
+    if args.target_cut:
+        prior_paths.append(root / 'findings/policy-expansion-v1/records.json.gz')
+        previous = read_archive(prior_paths[-1])['results']
     expected = {(11, 15), (17, 21), (23, 17)}
     rows = records['results']
     assert {(r['game'], r['decision']) for r in rows} == expected
@@ -40,8 +44,8 @@ def summarize(records):
     summaries = []
     for row in rows:
         current = row['reference']
-        priors = [r for r in original + refined if (r['game'], r['decision']) == (row['game'], row['decision'])]
-        assert len(priors) == 2
+        priors = [r for r in original + refined + previous if (r['game'], r['decision']) == (row['game'], row['decision'])]
+        assert len(priors) == (3 if args.target_cut else 2)
         matrices = [r['reference'] for r in priors] + [current]
         assert all(r['state_key'] == row['state_key'] for r in priors)
         assert all(m['actions'] == current['actions'] for m in matrices)
@@ -63,16 +67,27 @@ def summarize(records):
         summaries.append({'game': row['game'], 'decision': row['decision'], 'state_key': row['state_key'], 'alive': row['alive'],
                           'runs': current['runs'], 'elapsed_ms': current['elapsed_ms'], 'nodes': current['nodes'], 'stop': current['stop'],
                           'matrix': matrix, 'endpoints': endpoints})
-    return {'schema': 'nc2000-policy-expansion-v1', 'states': summaries,
+        if args.target_cut:
+            control = next(r['reference'] for r in previous if (r['game'], r['decision']) == (row['game'], row['decision']))
+            diagnostic = row['diagnostics']
+            summaries[-1]['comparison'] = {
+                'control_fields_equal': {key: control[key] == current[key] for key in ['value', 'cells', 'actions', 'runs', 'nodes', 'stop']},
+                'sufficient_reply_skips': diagnostic['sufficient_reply_skips'],
+                'target_filtered_trials': diagnostic['target_filtered_trials'],
+            }
+    return {'schema': 'nc2000-policy-cut-expansion-v1' if args.target_cut else 'nc2000-policy-expansion-v1', 'states': summaries,
             'prior_hashes': {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in prior_paths},
             'interpretation': 'Three preselected previously unresolved 1v2 states. Intersect same-state certificates and pure maximin/minimax value bounds. First decisions are archived; continuation is optimal with full information. This does not measure deployed blind-policy exploitability or global optimality.'}
 
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--target-cut', action='store_true')
 mode = parser.add_mutually_exclusive_group()
 mode.add_argument('--verify-only', action='store_true')
 mode.add_argument('--record-existing', type=pathlib.Path)
 args = parser.parse_args()
+if args.target_cut:
+    source = root / 'findings/policy-cut-expansion-v1'
 if args.verify_only:
     records = read_archive(source / 'records.json.gz')
     assert summarize(records) == json.loads((source / 'summary.json').read_text())
@@ -81,7 +96,7 @@ if args.verify_only:
 if args.record_existing:
     directory = args.record_existing
 else:
-    directory = root / 'tmp/policy-expansion-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory = root / 'tmp' / source.name / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
     directory.mkdir(parents=True)
     corpus = gzip.decompress((source / 'corpus.jsonl.gz').read_bytes())
     (directory / 'corpus.jsonl').write_bytes(corpus)

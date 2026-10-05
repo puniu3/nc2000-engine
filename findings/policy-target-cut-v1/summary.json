@@ -1,0 +1,730 @@
+{
+  "schema": "nc2000-policy-target-cut-v1",
+  "state": {
+    "game": 19,
+    "decision": 17,
+    "state_key": "160298700970866480479685871464306122045"
+  },
+  "arms": {
+    "control": {
+      "value": {
+        "lo": 0.098087777355609,
+        "hi": 0.13780788236355748
+      },
+      "runs": 5821259,
+      "nodes": 480008,
+      "elapsed_ms": 119168.814084,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.03972010502494848
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.03972010502494838
+        }
+      ],
+      "resource_closure_period": 1,
+      "resource_closure_visits": 116569,
+      "two_sided_invalidations": 0,
+      "largest_children": {
+        "0": [
+          {
+            "key": "NoDamageBookkeeping(335198304254042248407122083938512062892)",
+            "mass": 0.058319091796875,
+            "bounds": {
+              "lo": 0.0006486385557944204,
+              "hi": 0.3009834140581385
+            },
+            "uncertainty": 0.017515251342315047,
+            "runs": 184897,
+            "visits": 2143,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(63702398752629056644174863556481176123)",
+            "mass": 0.017852783203125,
+            "bounds": {
+              "lo": 0.0006486385557944204,
+              "hi": 0.3009834140581385
+            },
+            "uncertainty": 0.005361811635402566,
+            "runs": 7491,
+            "visits": 20,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(109116220551016228461867277537047689546)",
+            "mass": 0.008871406325019343,
+            "bounds": {
+              "lo": 0.2512986301592457,
+              "hi": 0.299905330541575
+            },
+            "uncertainty": 0.0004312097892101161,
+            "runs": 95196,
+            "visits": 512,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(148884763365776507964249481056765805644)",
+            "mass": 0.008871406325019343,
+            "bounds": {
+              "lo": 0.2512986301592457,
+              "hi": 0.299905330541575
+            },
+            "uncertainty": 0.0004312097892101161,
+            "runs": 96305,
+            "visits": 517,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(261882698263851735272411645362438635521)",
+            "mass": 0.008871406298167385,
+            "bounds": {
+              "lo": 0.2512986301592457,
+              "hi": 0.299905330541575
+            },
+            "uncertainty": 0.000431209787904931,
+            "runs": 94537,
+            "visits": 495,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          }
+        ],
+        "3": [
+          {
+            "key": "NoDamageBookkeeping(147115276015653498586877031057255436515)",
+            "mass": 0.57421875,
+            "bounds": {
+              "lo": 0.13385000925596421,
+              "hi": 0.2862403023497954
+            },
+            "uncertainty": 0.08750536361247338,
+            "runs": 2051383,
+            "visits": 17138,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(92292943881293253875361159471207245831)",
+            "mass": 0.19140625,
+            "bounds": {
+              "lo": 0.0,
+              "hi": 0.29822142750033964
+            },
+            "uncertainty": 0.05708144510748688,
+            "runs": 27200,
+            "visits": 147,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(91583015569418834847961057332709822705)",
+            "mass": 0.17578125,
+            "bounds": {
+              "lo": 0.13341705993440378,
+              "hi": 0.2867225933161373
+            },
+            "uncertainty": 0.026948238289757846,
+            "runs": 26031,
+            "visits": 142,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(196671488645437577958959623087093283815)",
+            "mass": 0.05859375,
+            "bounds": {
+              "lo": 0.0,
+              "hi": 0.2971859237997058
+            },
+            "uncertainty": 0.017413237722639013,
+            "runs": 44686,
+            "visits": 138,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          }
+        ]
+      },
+      "sufficient_reply_skips": 0,
+      "target_filtered_trials": 0,
+      "root_cell_runs": [
+        2240454,
+        1149259,
+        1852,
+        2148843,
+        137984,
+        6985,
+        17454,
+        6729,
+        89215,
+        8806,
+        3235,
+        3899,
+        1130,
+        485,
+        4442,
+        487
+      ]
+    },
+    "default-check": {
+      "value": {
+        "lo": 0.029437408762133445,
+        "hi": 0.139628453595585
+      },
+      "runs": 1717490,
+      "nodes": 120003,
+      "elapsed_ms": 34316.625917000005,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.11019104485045156
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.1101910448504515
+        }
+      ],
+      "resource_closure_period": 1,
+      "resource_closure_visits": 5919,
+      "two_sided_invalidations": 0,
+      "largest_children": {
+        "0": [
+          {
+            "key": "NoDamageBookkeeping(335198304254042248407122083938512062892)",
+            "mass": 0.058319091796875,
+            "bounds": {
+              "lo": 0.0006486385557944204,
+              "hi": 0.3011783659508093
+            },
+            "uncertainty": 0.01752662075963969,
+            "runs": 183398,
+            "visits": 2131,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(63702398752629056644174863556481176123)",
+            "mass": 0.017852783203125,
+            "bounds": {
+              "lo": 0.0006486385557944204,
+              "hi": 0.3009834140581385
+            },
+            "uncertainty": 0.005361811635402566,
+            "runs": 6811,
+            "visits": 13,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(155728203901052886044171880105960038833)",
+            "mass": 0.002957135450623767,
+            "bounds": {
+              "lo": 0.0,
+              "hi": 0.3046875
+            },
+            "uncertainty": 0.0009010022076119291,
+            "runs": 427,
+            "visits": 9,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(293737222882373898811898195844671767458)",
+            "mass": 0.002957135423771809,
+            "bounds": {
+              "lo": 0.0,
+              "hi": 0.3046875
+            },
+            "uncertainty": 0.000901002199430473,
+            "runs": 397,
+            "visits": 7,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(82022335993686841120176382626246004518)",
+            "mass": 0.002715736630107962,
+            "bounds": {
+              "lo": 0.0,
+              "hi": 0.3046875
+            },
+            "uncertainty": 0.0008274510044860197,
+            "runs": 397,
+            "visits": 7,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          }
+        ],
+        "3": [
+          {
+            "key": "NoDamageBookkeeping(147115276015653498586877031057255436515)",
+            "mass": 0.57421875,
+            "bounds": {
+              "lo": 0.046875,
+              "hi": 0.29796314853875605
+            },
+            "uncertainty": 0.14417952279373883,
+            "runs": 165351,
+            "visits": 1058,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(92292943881293253875361159471207245831)",
+            "mass": 0.19140625,
+            "bounds": {
+              "lo": 0.0,
+              "hi": 0.3046875
+            },
+            "uncertainty": 0.058319091796875,
+            "runs": 5979,
+            "visits": 15,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(91583015569418834847961057332709822705)",
+            "mass": 0.17578125,
+            "bounds": {
+              "lo": 0.014341147624581378,
+              "hi": 0.30305845282947286
+            },
+            "uncertainty": 0.05075108880554733,
+            "runs": 5752,
+            "visits": 14,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(196671488645437577958959623087093283815)",
+            "mass": 0.05859375,
+            "bounds": {
+              "lo": 0.0,
+              "hi": 0.3046875
+            },
+            "uncertainty": 0.017852783203125,
+            "runs": 1798,
+            "visits": 9,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          }
+        ]
+      },
+      "sufficient_reply_skips": 0,
+      "target_filtered_trials": 0,
+      "root_cell_runs": [
+        258784,
+        1105057,
+        662,
+        178437,
+        86949,
+        506,
+        301,
+        75,
+        83521,
+        357,
+        1802,
+        60,
+        23,
+        191,
+        292,
+        473
+      ]
+    },
+    "targeted": {
+      "value": {
+        "lo": 0.09795183893616555,
+        "hi": 0.13781350285317312
+      },
+      "runs": 5806606,
+      "nodes": 480012,
+      "elapsed_ms": 116077.344708,
+      "stop": "NodeBudget",
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.03986166393400757
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.039861663934007474
+        }
+      ],
+      "resource_closure_period": 1,
+      "resource_closure_visits": 115897,
+      "two_sided_invalidations": 0,
+      "largest_children": {
+        "0": [
+          {
+            "key": "NoDamageBookkeeping(335198304254042248407122083938512062892)",
+            "mass": 0.058319091796875,
+            "bounds": {
+              "lo": 0.0006486385557944204,
+              "hi": 0.3009834140581385
+            },
+            "uncertainty": 0.017515251342315047,
+            "runs": 184896,
+            "visits": 2142,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(63702398752629056644174863556481176123)",
+            "mass": 0.017852783203125,
+            "bounds": {
+              "lo": 0.0006486385557944204,
+              "hi": 0.3009834140581385
+            },
+            "uncertainty": 0.005361811635402566,
+            "runs": 7491,
+            "visits": 20,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(109116220551016228461867277537047689546)",
+            "mass": 0.008871406325019343,
+            "bounds": {
+              "lo": 0.25094405964797367,
+              "hi": 0.29990569479104934
+            },
+            "uncertainty": 0.0004343585596915708,
+            "runs": 93980,
+            "visits": 505,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(148884763365776507964249481056765805644)",
+            "mass": 0.008871406325019343,
+            "bounds": {
+              "lo": 0.25094405964797367,
+              "hi": 0.29990569479104934
+            },
+            "uncertainty": 0.0004343585596915708,
+            "runs": 93871,
+            "visits": 501,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(261882698263851735272411645362438635521)",
+            "mass": 0.008871406298167385,
+            "bounds": {
+              "lo": 0.25094405964797367,
+              "hi": 0.29990569479104934
+            },
+            "uncertainty": 0.00043435855837685504,
+            "runs": 92994,
+            "visits": 485,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          }
+        ],
+        "3": [
+          {
+            "key": "NoDamageBookkeeping(147115276015653498586877031057255436515)",
+            "mass": 0.57421875,
+            "bounds": {
+              "lo": 0.13386061402172872,
+              "hi": 0.2862306339434613
+            },
+            "uncertainty": 0.0874937223769324,
+            "runs": 2084134,
+            "visits": 17292,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(92292943881293253875361159471207245831)",
+            "mass": 0.19140625,
+            "bounds": {
+              "lo": 0.0,
+              "hi": 0.29718592379970576
+            },
+            "uncertainty": 0.05688324322728743,
+            "runs": 27850,
+            "visits": 148,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(91583015569418834847961057332709822705)",
+            "mass": 0.17578125,
+            "bounds": {
+              "lo": 0.13310054252217998,
+              "hi": 0.2867260143053153
+            },
+            "uncertainty": 0.027004477461879256,
+            "runs": 22276,
+            "visits": 144,
+            "resource_rank": {
+              "pp_total": 132,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          },
+          {
+            "key": "NoDamageBookkeeping(196671488645437577958959623087093283815)",
+            "mass": 0.05859375,
+            "bounds": {
+              "lo": 0.0,
+              "hi": 0.2971859237997058
+            },
+            "uncertainty": 0.017413237722639013,
+            "runs": 45426,
+            "visits": 139,
+            "resource_rank": {
+              "pp_total": 133,
+              "healing_pp": 0,
+              "turns_remaining": 986
+            }
+          }
+        ]
+      },
+      "sufficient_reply_skips": 15818,
+      "target_filtered_trials": 15818,
+      "root_cell_runs": [
+        2211455,
+        1133168,
+        1837,
+        2179197,
+        138106,
+        7178,
+        17473,
+        6729,
+        89215,
+        8569,
+        3220,
+        3884,
+        1129,
+        485,
+        4442,
+        519
+      ]
+    }
+  },
+  "combined": {
+    "matrix": {
+      "actions": [
+        [
+          "move bodyslam",
+          "move earthquake",
+          "move curse",
+          "move selfdestruct"
+        ],
+        [
+          "move thunder",
+          "move hiddenpower",
+          "move swagger",
+          "move substitute"
+        ]
+      ],
+      "cells": [
+        {
+          "lo": 0.10301947685914342,
+          "hi": 0.13660289940363418
+        },
+        {
+          "lo": 0.15370122728019764,
+          "hi": 0.49606312149639503
+        },
+        {
+          "lo": 0.3095418179834507,
+          "hi": 0.728381294788194
+        },
+        {
+          "lo": 0.10214936603500936,
+          "hi": 0.27595655369916317
+        },
+        {
+          "lo": 0.00257999278605395,
+          "hi": 0.08952189207535369
+        },
+        {
+          "lo": 0.004208746259963078,
+          "hi": 0.43202771860427913
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.6351142583058058
+        },
+        {
+          "lo": 2.7138730001979865e-05,
+          "hi": 0.35764716654261774
+        },
+        {
+          "lo": 0.0013237624697903664,
+          "hi": 0.08968211454702454
+        },
+        {
+          "lo": 0.004033166343113737,
+          "hi": 0.4320277186042792
+        },
+        {
+          "lo": 0.0010901613177510695,
+          "hi": 0.6353128079171583
+        },
+        {
+          "lo": 2.7138730001979865e-05,
+          "hi": 0.3555628241980677
+        },
+        {
+          "lo": 0.0011266201064154486,
+          "hi": 0.021673826915728896
+        },
+        {
+          "lo": 0.0028503121664444917,
+          "hi": 0.05367985703107535
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.10585842322129496
+        },
+        {
+          "lo": 2.7138730001979865e-05,
+          "hi": 0.07328176379073455
+        }
+      ],
+      "value": {
+        "lo": 0.10214936603500936,
+        "hi": 0.13660289940363418
+      }
+    },
+    "archived_first_decisions": [
+      {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.10214936603500936,
+          "hi": 0.13660289940363418
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.03445353346862482
+        }
+      },
+      {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.8633971005963659,
+          "hi": 0.8969805231408565
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.03445353346862478
+        }
+      }
+    ]
+  },
+  "prior_certificate": "findings/policy-direction-v1/summary.json",
+  "prior_certificate_sha256": "9c902cf530fea3848a0df813946b184bda1327e22216571c274ac11e5385c0ba",
+  "interpretation": "Same-state full-information first-decision certification. A reply is omitted only from the refinement candidate list after its padded lower guarantee exceeds the current value ceiling minus the requested loss tolerance. It remains in every matrix backup and every reported assessment. The archived large control is reused verbatim; the new-code default path is checked separately. No human calibration, blind-policy exploitability certificate, or global optimality claim.",
+  "conclusions": [
+    "The default path reproduced the archived 120k-node run exactly. The target-aware 480k run excluded a sufficient reply on 15,818 refinement iterations, but did not improve its standalone certificate: loss upper bound 0.0398616639 versus 0.0397201050 in the archived control.",
+    "Engine work changed from 5,821,259 to 5,806,606 executions, and measured reference time from 119.17 to 116.08 seconds. Both reached the node allowance. This small single-state difference is not evidence of a strength gain or a robust performance improvement.",
+    "The accumulated loss upper bound remains 0.0344535335 for both archived first decisions, with lower bound zero.",
+    "On all three preselected 1v2 states, target-aware filtering reproduced every root cell, value, node count, execution count and stopping reason from policy-expansion-v1 exactly. Sufficient-reply skip counts were 0, 186,690 and 16,632; these count repeated candidate exclusions, not avoided engine executions.",
+    "The filter remains opt-in. Further global scheduling and root-candidate sweeps are deferred; the next question is whether finite-horizon state equivalence can reduce the frontier itself."
+  ],
+  "verification": {
+    "finite_two_turn_pure_and_mixed_policy_oracle": "passed",
+    "tighter_tolerance_restores_candidates": "passed",
+    "default_reproduction": "exact",
+    "combined_interval_assessments": "passed",
+    "native_bot_tests": 163,
+    "workspace_all_targets_check": "passed",
+    "three_1v2_raw_bound_and_work_comparisons": "exact match to controls"
+  }
+}
