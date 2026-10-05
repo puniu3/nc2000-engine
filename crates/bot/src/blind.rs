@@ -301,7 +301,19 @@ fn sample_mixed(p: &[f64], rng: &mut SplitMix64) -> usize {
     pick
 }
 
-// --------------------------------------------------- stepped search (M10c)
+struct RootTypeStats {
+    samples: u32,
+    replies: usize,
+    cells: Vec<(u32, f64)>,
+}
+
+fn root_type_key(battle: &mut Battle) -> u64 {
+    let coin = battle.quick_claw_roll;
+    battle.quick_claw_roll = false;
+    let key = battle.search_key(None, false);
+    battle.quick_claw_roll = coin;
+    key
+}
 
 /// Persistent, incrementally steppable blind search over ONE decision point
 /// — `BlindAgent`'s search loop in the form the wasm bridge's ponder loop
@@ -340,20 +352,12 @@ pub struct BlindSearch {
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
     done: u32,
-    /// Root joint statistics: `(own root action index, the opponent action
-    /// it met, samples, summed reward from THIS side)`. Free — every entry
-    /// comes from an iteration the search was running anyway — and it is the
-    /// only place the simultaneous structure is visible at all: the per-side
-    /// visit counts marginalize it away, so "this move is good, but only
-    /// because they rarely stay in" cannot be read off `visits()`.
-    ///
-    /// Keyed by the opponent's `SearchChoice`, never by its index: the
-    /// opponent's legal list is determinization-dependent (an imputed set
-    /// decides which moves exist), so an index means nothing across
-    /// iterations while a `Move(id)` means the same move every time.
+    /// Diagnostic columns use SearchChoice because legal reply lists vary by type.
     joint: Vec<(usize, SearchChoice, u32, f64)>,
     joint_index: FxHashMap<(usize, SearchChoice), usize>,
     root_avail: FxHashMap<usize, Vec<usize>>,
+    root_types: Vec<RootTypeStats>,
+    root_type_index: FxHashMap<u64, usize>,
     /// How often each opponent action was even LEGAL, across iterations.
     /// A blind root's opponent action list is determinization-dependent — a
     /// move exists only in the candidates that carry it — so a column's
@@ -411,6 +415,8 @@ impl BlindSearch {
             joint: Vec::new(),
             joint_index: FxHashMap::default(),
             root_avail: FxHashMap::default(),
+            root_types: Vec::new(),
+            root_type_index: FxHashMap::default(),
             avail: Vec::new(),
         }
     }
@@ -439,6 +445,7 @@ impl BlindSearch {
         };
         belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+        let type_key = root_type_key(&mut sim);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
@@ -505,7 +512,7 @@ impl BlindSearch {
         };
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         self.scratch = Some(sim);
-        self.record_joint(root, my_pick, joint, r);
+        self.record_joint(root, type_key, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
         r
@@ -563,6 +570,7 @@ impl BlindSearch {
         };
         belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+        let type_key = root_type_key(&mut sim);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
@@ -604,18 +612,30 @@ impl BlindSearch {
         );
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         self.scratch = Some(sim);
-        self.record_joint(root, my_pick, joint, r);
+        self.record_joint(root, type_key, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
         r
     }
 
-    /// Fold one iteration's root joint into the matrix. Silently drops the
-    /// iterations where the opponent owed nothing (a forced switch on our
-    /// side alone) — there is no cell for "they did not act".
-    fn record_joint(&mut self, root: usize, my_pick: usize, joint: [usize; 2], r: f64) {
+    fn record_joint(&mut self, root: usize, type_key: u64, my_pick: usize, joint: [usize; 2], r: f64) {
         let opp = 1 - self.side;
         let acts = &self.nodes[root].acts[opp];
+        let type_index = *self.root_type_index.entry(type_key).or_insert_with(|| {
+            self.root_types.push(RootTypeStats {
+                samples: 0,
+                replies: acts.len(),
+                cells: vec![(0, 0.); self.my_acts.len() * acts.len()],
+            });
+            self.root_types.len() - 1
+        });
+        let stats = &mut self.root_types[type_index];
+        stats.samples += 1;
+        if joint[opp] < stats.replies {
+            let cell = &mut stats.cells[my_pick * stats.replies + joint[opp]];
+            cell.0 += 1;
+            cell.1 += if self.side == 0 { r } else { 1. - r };
+        }
         let indices = self.root_avail.entry(root).or_insert_with(|| {
             acts.iter().map(|&choice| {
                 match self.avail.iter().position(|(action, _)| *action == choice) {
@@ -947,27 +967,30 @@ impl BlindSearch {
             .map(|i|self.my_acts[i])
     }
 
-    fn root_policy_inputs(&self) -> (Vec<bool>,Vec<u32>,Vec<crate::root_policy::RootCell>) {
+    fn root_policy_inputs(&self) -> (Vec<bool>, Vec<crate::root_policy::RootType>) {
         let eligible: Vec<bool> = (0..self.my_acts.len()).map(|i|
             self.my_mask.as_ref().map_or(true, |m| m[i]) && !self.my_dominated[i]).collect();
-        let availability: Vec<u32> = self.avail.iter().map(|&(_, n)| n).collect();
-        let cells: Vec<crate::root_policy::RootCell> = self.root_matrix().into_iter().map(|(own, reply, samples, mean)| {
-            let reply = self.avail.iter().position(|&(a, _)| a == reply).unwrap();
-            crate::root_policy::RootCell { own, reply, samples, mean }
+        let types = self.root_types.iter().map(|t| crate::root_policy::RootType {
+            samples: t.samples,
+            replies: t.replies,
+            cells: t.cells.iter().enumerate().filter(|(_, (n, _))| *n > 0)
+                .map(|(i, &(samples, sum))| crate::root_policy::RootCell {
+                    own: i / t.replies, reply: i % t.replies, samples, mean: sum / f64::from(samples),
+                }).collect(),
         }).collect();
-        (eligible,availability,cells)
+        (eligible, types)
     }
 
     pub fn mixed_policy(&self) -> Option<crate::root_policy::MixedRoot> {
         if self.my_acts.iter().any(|a|matches!(a,SearchChoice::Team(_))) {return None;}
-        let (eligible,availability,cells)=self.root_policy_inputs();
-        crate::root_policy::mixed_root(&eligible,self.done,&availability,&cells)
+        let (eligible, types) = self.root_policy_inputs();
+        crate::root_policy::bayesian_mixed_root(&eligible, self.done, &types)
     }
 
     pub fn estimated_mix_gain(&self) -> Option<f64> {
         if self.my_acts.iter().any(|a|matches!(a,SearchChoice::Team(_))) {return None;}
-        let (eligible,availability,cells)=self.root_policy_inputs();
-        crate::root_policy::estimated_mix_gain(&eligible,self.done,&availability,&cells)
+        let (eligible, types) = self.root_policy_inputs();
+        crate::root_policy::estimated_bayesian_mix_gain(&eligible, self.done, &types)
     }
 
     pub fn step_joint_probes(&mut self,dex:&Dex,belief:&Belief,obs:&Observer,n:u32) -> u32 {
@@ -1394,6 +1417,32 @@ mod mixed_selection_tests {
     }
 
     #[test]
+    fn root_types_distinguish_exact_hp_but_do_not_reveal_the_turn_coin() {
+        let dex = conformance::load_dex();
+        let set: nc2000_engine::battle::PokemonSet = serde_json::from_value(serde_json::json!({
+            "name":"starmie", "species":"starmie", "ability":"", "level":50, "moves":["Return", "Surf"]
+        })).unwrap();
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &[set.clone()], &[set]).unwrap();
+        let choices = [0, 1].map(|side| Some(battle.legal_choices(&dex, side)[0]));
+        battle.apply_choices(&dex, choices).unwrap();
+        battle.quick_claw_roll = false;
+        let key = root_type_key(&mut battle);
+        let rng = battle.prng.clone();
+        battle.quick_claw_roll = true;
+        assert_eq!(root_type_key(&mut battle), key);
+        assert!(battle.quick_claw_roll);
+        assert_eq!(format!("{rng:?}"), format!("{:?}", battle.prng));
+        let cfg = RmConfig { hp_buckets: 4, threshold_key: false, ..Default::default() };
+        let opponent = battle.active_id(1).unwrap();
+        battle.poke_mut(opponent).hp = 100;
+        let key = root_type_key(&mut battle);
+        let abstract_key = key_of(&cfg, &dex, &mut battle);
+        battle.poke_mut(opponent).hp = 101;
+        assert_eq!(key_of(&cfg, &dex, &mut battle), abstract_key);
+        assert_ne!(root_type_key(&mut battle), key);
+    }
+
+    #[test]
     fn mixed_sampling_respects_masks_without_consuming_search_randomness() {
         let dex=conformance::load_dex();
         let set: nc2000_engine::battle::PokemonSet=serde_json::from_value(serde_json::json!({
@@ -1407,6 +1456,8 @@ mod mixed_selection_tests {
         search.avail=vec![(actions[1],40000),(actions[0],40000)];
         search.joint=vec![(0,actions[0],10000,0.),(0,actions[1],10000,10000.),
             (1,actions[0],10000,10000.),(1,actions[1],10000,0.)];
+        search.root_types = vec![RootTypeStats { samples: 40000, replies: 2,
+            cells: vec![(10000, 0.), (10000, 10000.), (10000, 10000.), (10000, 0.)] }];
         let rng=search.rng.0;
         assert_eq!(search.sample_mixed(0.),Some(actions[0]));
         assert_eq!(search.sample_mixed(0.5),Some(actions[1]));

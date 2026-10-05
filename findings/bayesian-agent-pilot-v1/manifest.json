@@ -1,0 +1,12 @@
+{
+  "binary_sha256": "4d9710c8885acbb068aac0114705bf00a9e408986cba98b8aa9ec7bf168d13d5",
+  "source_sha256": {
+    "crates/bot/src/agent.rs": "a769a190c0eae40f89e7c13cdd700916dc70f815fa0f638621941037f33342d0",
+    "crates/bot/src/blind.rs": "3469ccc00dd2ce7927cd71c9774e1b642844cf5ae0f705a431ae85c203e5b1ae",
+    "crates/bot/src/duel.rs": "ca5866bd9d9e463dd10221df09130b404479e017a19620ce914e55febe3ba7f7",
+    "crates/bot/src/root_policy.rs": "ab326b6db579b6614ab453ec2cb6a66cc7ea0af6bdb94a5e5e214a4c0b41313b",
+    "crates/bot/examples/arena.rs": "a0b2cbd266a98ed1a598359c6c8f7ef0c8858f703fba4557bcc8dcb9ffb84989",
+    "data/team-pool-v2/team-pool.json": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+  }
+}

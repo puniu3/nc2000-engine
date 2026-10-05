@@ -35,7 +35,9 @@ def check(row, games, iterations):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--bayesian', action='store_true')
     args = parser.parse_args()
+    destination = root / ('findings/bayesian-agent-pilot-v1' if args.bayesian else 'findings/adaptive-agent-pilot-v1')
     env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
     binary = root / 'target/release/examples/arena'
     if not args.verify_only:
@@ -72,6 +74,8 @@ def main():
         mean_think_ms={side:row['timing'][side]['mean_ms'] for side in ['a','b']},
         games_with_mixing=sum(pair[0]['mixed_searches']>0 for pair in row['root_search']['games']),
         scope='Uniform scheduling from the current 24-team catalog with the weighted 103-candidate belief pool; both agents use 27000 iterations. Timing is measured, not forced equal wall time. Root telemetry counts non-preview decisions with at least two legal actions. Sixteen paired schedule blocks screen activation and regressions, not optimality or general strength.')
+    if args.bayesian:
+        summary['scope'] += ' Opponent replies are now optimized per sampled private type; the unrevealed Quick Claw coin is averaged within types.'
     path = destination/'summary.json'
     if args.verify_only:
         assert summary == json.loads(path.read_text())

@@ -1,0 +1,11 @@
+24 teams in pool (meta)
+0 baked pair tables loaded from /Volumes/Work/puniu/nc2000-engine/data/preview-tables-v0
+  10/32 games (66s)
+  20/32 games (119s)
+  30/32 games (188s)
+  32/32 games (198s)
+A=blind:27000:0.4:16:mix vs B=blind:27000:0.4:16   32 games, seed 2026111601, 4 threads
+A: 15W 17L 0T   score 0.469 +/- 0.141 (95% CI)
+avg turns 15.5   197.6s total   0.16 games/s   think ms/move A 640.9 B 639.8
+turn caps 0   think p95/p99 ms A 905.3/993.2 B 890.3/1006.1
+split pairs 5/16   crn agent seeds true

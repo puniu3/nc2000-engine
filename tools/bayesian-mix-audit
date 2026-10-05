@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/bayesian-mix-v1'
+previous_path = root / 'findings/adaptive-mix-fixtures-v1/records.json.gz'
+helpers = runpy.run_path(str(root / 'tools/mix-budget-audit'))
+specs, loss = helpers['specs'], helpers['loss']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def counterexample():
+    types = [[[F(0), F(1, 2)], [F(0), F(1)]], [[F(1), F(0)], [F(1, 2), F(1, 2)]]]
+    naive = [F(2, 3), F(1, 3)]
+    correct = [F(0), F(1)]
+    value = lambda p: sum(min(sum(p[i] * t[i][j] for i in range(2)) for j in range(2)) for t in types) / 2
+    average = [[sum(t[i][j] for t in types) / 2 for j in range(2)] for i in range(2)]
+    naive_estimate = min(sum(naive[i] * average[i][j] for i in range(2)) for j in range(2))
+    assert naive_estimate == F(5, 12) and value(naive) == F(1, 12) and value(correct) == F(1, 4)
+    assert all(min(t[0][j], t[1][j]) == t[0][j] for t, j in zip(types, [0, 1]))
+    return dict(types=[[[str(v) for v in row] for row in t] for t in types],
+                type_weights=['1/2', '1/2'], naive_policy=list(map(str, naive)), correct_policy=list(map(str, correct)),
+                naive_estimate=str(naive_estimate), naive_actual=str(value(naive)), correct_value=str(value(correct)),
+                scope='An exact one-step Bayesian counterexample, not an observed Pokemon position. Type-aware replies L and R dominate row A by B and bound every policy by 1/4; pure B attains 1/4.')
+
+
+def summarize(records):
+    previous = json.loads(gzip.decompress(previous_path.read_bytes()))['records']
+    groups = []
+    for name, seed, count, seed_base, family in specs:
+        row, old = records[name], previous[name]
+        assert row['adaptive_probes'] and row['probe_iterations'] == 10800
+        assert (row['search_seeds'], row['iterations'], row['search_seed_base'], row['family']) == (count, 27000, seed_base, family)
+        assert row['state_key'] == old['state_key'] and row['state'] == old['state']
+        assert all(v['ok'] for v in row['validations'])
+        assert [r for r in row['rows'] if r['mode'] == 'full'] == [r for r in old['rows'] if r['mode'] == 'full']
+        for side in range(2):
+            actions = row['actions'][side]
+            current = [r for r in row['rows'] if r['mode'] == 'pinned' and r['side'] == side]
+            before = [r for r in old['rows'] if r['mode'] == 'pinned' and r['side'] == side]
+            assert len(current) == len(before) == count
+            policies, per_seed = [], []
+            for r, b in zip(current, before):
+                assert r['seed'] == b['seed'] and r['probes_used'] in (0, 10800)
+                same_branch = r['probes_used'] == b['probes_used']
+                if same_branch:
+                    for field in ['choice', 'visits', 'means', 'dominated', 'joint', 'reply_availability', 'play_draw']:
+                        assert r[field] == b[field], (name, side, r['seed'], field)
+                p = r['candidate_policy'] if r['candidate_policy'] is not None else [float(a == r['choice']) for a in actions]
+                bp = b['candidate_policy'] if b['candidate_policy'] is not None else [float(a == b['choice']) for a in actions]
+                assert sum(r['visits']) == 27000 and abs(sum(p) - 1) < 1e-10 and min(p) >= 0
+                assert all(v == 0 for v, excluded in zip(p, r['dominated']) if excluded)
+                policies.append(p)
+                per_seed.append(dict(seed=r['seed'], probed=r['probes_used'] > 0, mixed=r['candidate_policy'] is not None,
+                                     same_search_branch=same_branch, policy=p, loss=loss(row, side, p), before_loss=loss(old, side, bp)))
+            mean = [sum(p[i] for p in policies) / count for i in range(len(actions))]
+            groups.append(dict(case=name, side=side, count=count, mixed=sum(p['mixed'] for p in per_seed),
+                               probed=sum(p['probed'] for p in per_seed), policy=mean, loss=loss(row, side, mean),
+                               worst_loss_upper=max(p['loss'][1] for p in per_seed), per_seed=per_seed))
+    return dict(counterexample=counterexample(), groups=groups,
+                scope='Regression study at identical seeds and 27000 total iterations. Typed roots exclude the unrevealed Quick Claw coin. Margins are heuristic and conditional on sampled type weights and nonstationary continuations. Certified fixture losses assess only first-action distributions with optimal continuation in fixed-loadout states. No general-strength or game-optimality claim.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert bundle['previous_sha256'] == sha(previous_path.read_bytes())
+        assert summarize(bundle['records']) == json.loads((archive / 'summary.json').read_text())
+        print('bayesian-mix-audit: verified exact counterexample, branch parity and 64 fixture policies')
+        return
+    assert not archive.exists()
+    env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+    binary = root / 'target/release/examples/counter_mix_probe'
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'counter_mix_probe'], cwd=root, env=env, check=True)
+    directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-bayesian-mix-'))
+    records = {}
+    for name, seed, count, seed_base, family in specs:
+        with (directory / (name + '.log')).open('w') as log:
+            subprocess.run([str(binary), str(directory / name), seed, str(count), '27000', str(seed_base), family, '10800', 'adaptive'],
+                           cwd=root, env=env, stdout=log, stderr=log, check=True)
+        records[name] = json.loads((directory / name / 'records.json').read_text())
+        print(name + ' complete', flush=True)
+    assert all(sha((root / p).read_bytes()) == value for r in records.values() for p, value in r['source_hashes'])
+    summary = summarize(records)
+    archive.mkdir()
+    bundle = dict(records=records, previous_sha256=sha(previous_path.read_bytes()), binary_sha256=sha(binary.read_bytes()))
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    print(json.dumps([{k: g[k] for k in ['case', 'side', 'mixed', 'probed', 'loss', 'worst_loss_upper']} for g in summary['groups']], indent=2))
+
+
+if __name__ == '__main__':
+    main()
