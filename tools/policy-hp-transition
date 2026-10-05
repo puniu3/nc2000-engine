@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-hp-transition-v1'
+names = ['attack', 'rest']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    assert set(records) == set(names)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert records['attack']['manifest']['source_hashes'] == records['rest']['manifest']['source_hashes']
+    sources = dict(records['attack']['manifest']['source_hashes'])
+    assert all(path in sources for path in ['crates/bot/src/hp_transition.rs', 'crates/engine/src/state.rs', 'crates/engine/src/prng.rs'])
+    prior_path = root / 'findings/policy-frontier-census-v1/records.json.gz'
+    previous = json.loads(gzip.decompress(prior_path.read_bytes()))
+    arms = {}
+    for name, record in records.items():
+        row, protocol = record['result'], record['manifest']['protocol']
+        prior = previous[name]['result']
+        assert row['schema'] == 'nc2000-fixed-reply-bound-v1'
+        assert row['state_key'] == '199433906935569759004884428941975153695'
+        assert row['side'] == 0 and row['reply_action'] == 'switch 2' and row['fixed_first_action'] == 'move bodyslam'
+        assert row['fixed_rest_percent'] == protocol['fixed_rest_percent'] == (75 if name == 'rest' else None)
+        assert row['restricted_matrix'] == prior['restricted_matrix']
+        for field in ['runs', 'nodes', 'stop']:
+            assert row['reference'][field] == prior['reference'][field]
+        assert len(row['root_chance']) == len(prior['root_chance'])
+        for after, before in zip(row['root_chance'], prior['root_chance']):
+            after, before = dict(after), dict(before)
+            assert abs(after.pop('child_uncertainty') - before.pop('child_uncertainty')) < 1e-12
+            assert after == before
+        audit = row['hp_translation_audit']
+        assert audit['schema'] == 'nc2000-hp-translation-audit-v1'
+        total = audit['available']
+        limit = protocol['hp_translation_audit_limit']
+        assert total == prior['frontier_key_census']['retained']
+        assert audit['stride'] == max(1, (total + limit - 1) // limit)
+        assert audit['sampled'] == min(limit, (total + audit['stride'] - 1) // audit['stride'])
+        assert audit['engine_runs'] == audit['eligible_steps'] <= audit['candidate_steps']
+        assert 0 <= audit['changed_hp'] <= audit['translated'] <= audit['eligible_steps']
+        assert audit['cache_entries'] + audit['translated'] + audit['rejected_hp_boundary'] <= audit['eligible_steps']
+        assert audit['semantic_mismatches'] == audit['trace_mismatches'] == 0
+        arms[name] = {'reference': row['reference'], 'audit': audit,
+                      'eligible_reuse_fraction': audit['translated'] / audit['eligible_steps'] if audit['eligible_steps'] else None,
+                      'all_candidate_reuse_fraction': audit['translated'] / audit['candidate_steps'] if audit['candidate_steps'] else None}
+    return {'schema': 'nc2000-policy-hp-transition-v1', 'arms': arms,
+            'prior_hashes': {str(prior_path.relative_to(root)): sha(prior_path.read_bytes())},
+            'diagnostic_sum_tolerance': 1e-12,
+            'interpretation': 'The certified search itself is unchanged. The postsolve audit samples retained states deterministically and checks one empty-prefix scripted representative per eligible legal joint action against a fresh engine execution. The cache admits only specified HP-independent attacks, no active healing items or initial damage-over-time conditions, and strictly surviving translated outcomes. States keep their exact HP. Read-only audit results measure reuse potential in this workload, not whole-kernel equivalence, search speedup, stronger policy guarantees or deployment strength. Unit tests separately cover exhaustive probability kernels and rejected KO/healing/HP-sensitive boundaries.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    for name, record in records.items():
+        manifest = record['manifest']
+        raw = (archive / f'{name}.json').read_bytes()
+        assert sha(raw) == manifest['protocol_sha256'] and json.loads(raw) == manifest['protocol']
+        assert sha(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())) == manifest['protocol']['corpus_sha256']
+        assert sha((root / manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified unchanged search, deterministic HP-reuse audit, boundary rejections and exact trace checks')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-hp-transition-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in names:
+        protocol = json.loads((archive / f'{name}.json').read_bytes())
+        protocol['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(protocol, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {name: {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()),
+                  'result': json.loads((directory / name / 'game-017-d0021.json').read_bytes())} for name in names}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress((directory / 'corpus.jsonl').read_bytes(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for name, arm in summary['arms'].items():
+    print(name, arm['audit'], arm['eligible_reuse_fraction'])

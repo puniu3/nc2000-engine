@@ -39,6 +39,7 @@ struct Protocol {
     diagnostics: bool,
     #[serde(default)]
     frontier_key_census: bool,
+    hp_translation_audit_limit: Option<usize>,
     #[serde(default)]
     certified_action_pruning: bool,
     fixed_policy_side: Option<usize>,
@@ -190,6 +191,57 @@ fn frontier_key_census<'a>(battles: impl Iterator<Item=&'a Battle>, dex: &Dex, p
     json!({"schema":"nc2000-retained-key-ablation-v1","retained":retained,"requests":requests,
         "projections":projections,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0,
         "interpretation":"Read-only ablation of retained concrete battles after solving; expanded nodes whose battles were released are excluded. Projections are diagnostic, not certified equivalences. In particular HP, PP, turn and move-history deletion can change the game and are never used by the solver."})
+}
+
+fn hp_translation_audit<'a>(battles: impl Iterator<Item=&'a Battle>, dex: &Dex, limit: usize) -> Value {
+    use nc2000_bot::hp_transition::{HpTransition,HpTransitionKey};
+    use std::collections::HashMap;
+    assert!(limit>0);
+    let started=Instant::now();
+    let mut states=battles.map(|b|(b.state_key128(),b)).collect::<Vec<_>>();
+    states.sort_unstable_by_key(|(key,_)|*key);
+    let available=states.len();
+    let stride=available.div_ceil(limit).max(1);
+    let mut cache=HashMap::<HpTransitionKey,HpTransition>::new();
+    let mut samples=0;let mut candidates=0;let mut eligible=0;let mut translated=0;let mut changed_hp=0;let mut rejected_hp=0;
+    let mut max_cache=0;
+    let key=|b:&Battle| {
+        let damage=!b.damage_bookkeeping_observable(dex);
+        let claw=!b.quick_claw_roll_observable(dex);
+        let value=if claw {b.state_key128_without_quick_claw_roll(dex,damage)}
+            else if damage {b.state_key128_without_damage_bookkeeping()} else {b.state_key128()};
+        (damage,claw,value)
+    };
+    for (_,state) in states.into_iter().step_by(stride).take(limit) {
+        samples+=1;
+        let mut probe=state.clone();
+        let choices=[0,1].map(|side|probe.legal_choices(dex,side));
+        for &a in &choices[0] { for &b in &choices[1] {
+            candidates+=1;
+            let choices=[Some(a),Some(b)];
+            let Some(input)=HpTransitionKey::new(dex,state,choices,&[]) else {continue;};
+            eligible+=1;
+            let (actual,trace,entry)=HpTransition::run(dex,state,choices,&[]);
+            if let Some(old)=cache.get(&input) {
+                if let Some((predicted,predicted_trace))=old.translate(dex,state,choices,&[]) {
+                    assert_eq!(key(&predicted),key(&actual),"translated semantic state mismatch");
+                    assert_eq!(predicted_trace.len(),trace.len());
+                    for (a,b) in predicted_trace.iter().zip(&trace) {
+                        assert_eq!((a.label,&a.counts,a.chosen),(b.label,&b.counts,b.chosen));
+                    }
+                    translated+=1;
+                    changed_hp+=usize::from(old.input_hp()!=[0,1].map(|side|state.poke(state.active_id(side).unwrap()).hp));
+                } else {rejected_hp+=1;}
+            }
+            if let Some(entry)=entry {cache.entry(input).or_insert(entry);}
+            max_cache=max_cache.max(cache.len());
+        }}
+    }
+    json!({"schema":"nc2000-hp-translation-audit-v1","available":available,"sampled":samples,"stride":stride,
+        "candidate_steps":candidates,"eligible_steps":eligible,"engine_runs":eligible,"translated":translated,
+        "changed_hp":changed_hp,"rejected_hp_boundary":rejected_hp,"cache_entries":max_cache,
+        "semantic_mismatches":0,"trace_mismatches":0,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0,
+        "interpretation":"Read-only audit after solving, using one empty-prefix scripted representative for every eligible legal joint action in sampled retained states. Every predicted result is checked against a fresh engine run; all chance labels, weights and choices must match. This is reuse potential for this sampled workload, not measured search speedup or a complete-kernel audit."})
 }
 
 #[derive(Default, Deserialize)]
@@ -381,12 +433,14 @@ fn audit(
             let elapsed_ms=started.elapsed().as_secs_f64()*1000.0;
             let matrix = solver.restricted_root_payoffs(&battle).unwrap();
             let census=protocol.frontier_key_census.then(||frontier_key_census(solver.retained_battles(),dex,protocol));
+            let hp_audit=protocol.hp_translation_audit_limit.map(|limit|hp_translation_audit(solver.retained_battles(),dex,limit));
             return json!({"schema":"nc2000-fixed-reply-bound-v1","game":game.game,"decision":decision,
                 "state_key":battle.state_key128().to_string(),"side":side,"priority_actions":priority_names,
                 "fixed_first_action":protocol.fixed_first_action,"reply_action":reply,
                 "fixed_rest_percent":protocol.fixed_rest_percent,
                 "reply_value":bound(report.bounds),"threshold":protocol.fixed_reply_threshold,
                 "frontier_key_census":census,
+                "hp_translation_audit":hp_audit,
                 "restricted_matrix":{"actions":matrix.actions.map(|aa|aa.into_iter().map(|a|a.map(|a|action_input(dex,a))).collect::<Vec<_>>()),
                     "cells":matrix.cells.iter().copied().map(bound).collect::<Vec<_>>(),"value":bound(matrix.value)},
                 "reference":{"stop":format!("{:?}",report.stop),"runs":report.runs,
@@ -878,11 +932,19 @@ fn main() {
     };
     let sources = [
         "crates/bot/src/bounds.rs",
+        "crates/bot/src/hp_transition.rs",
         "crates/bot/examples/endgame_policy_audit.rs",
         "crates/engine/src/battle/search.rs",
         "crates/engine/src/battle/enumerate.rs",
         "crates/engine/src/battle/pokemon.rs",
         "crates/engine/src/battle/moveexec.rs",
+        "crates/engine/src/battle/events.rs",
+        "crates/engine/src/battle/conditions.rs",
+        "crates/engine/src/battle/actions.rs",
+        "crates/engine/src/battle/turn.rs",
+        "crates/engine/src/battle/mod.rs",
+        "crates/engine/src/state.rs",
+        "crates/engine/src/prng.rs",
     ];
     let manifest = json!({"protocol":serde_json::from_slice::<Value>(&bytes).unwrap(),
         "protocol_sha256":sha(&bytes),"revision":git(&["rev-parse","HEAD"]),"dirty":git(&["status","--porcelain"]),

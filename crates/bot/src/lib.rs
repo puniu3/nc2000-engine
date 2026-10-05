@@ -41,6 +41,7 @@ pub mod exploit;
 pub mod fork;
 pub mod frozen;
 pub mod horizon_pp;
+pub mod hp_transition;
 pub mod import;
 pub mod learning;
 pub mod learned;
