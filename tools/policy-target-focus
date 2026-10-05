@@ -14,12 +14,15 @@ parser = argparse.ArgumentParser()
 studies = parser.add_mutually_exclusive_group()
 studies.add_argument("--frontier", action="store_true")
 studies.add_argument("--witness", action="store_true")
+studies.add_argument("--allocation", action="store_true")
 parser.add_argument("--verify-only", action="store_true")
 args = parser.parse_args()
 study = "policy-frontier-v1" if args.frontier else "policy-target-focus-v1"
 targets = ["diagnostic", "pruned", "pruned-eager", "pruned-lazy", "refined"] if args.frontier else ["all_actions", "archived"]
 if args.witness:
     study, targets = "policy-witness-v1", ["control", "side-0", "side-1", "side-1-merged", "side-1-refined"]
+if args.allocation:
+    study, targets = "policy-allocation-v1", ["control", "fair", "side-0-fair", "unrestricted-fair", "side-0-refined"]
 source = root / "findings" / study
 spec = importlib.util.spec_from_file_location("policy_gap", root / "tools/policy-gap-report.py")
 verifier = importlib.util.module_from_spec(spec)
@@ -37,6 +40,18 @@ def verify(row):
         graph = row["graph"]
         assert graph["initialized_nodes"] + graph["unexpanded_nodes"] == row["reference"]["nodes"]
         assert graph["unique_child_edges"] <= graph["resolved_edges"]
+        if matrix := row.get("restricted_matrix"):
+            assert len(matrix["actions"][row["side"]]) == 1
+            expected_score = matrix["value"] if row["side"] == 0 else {
+                "lo": 1 - matrix["value"]["hi"], "hi": 1 - matrix["value"]["lo"],
+            }
+            assert all(abs(score[key] - expected_score[key]) < 1e-12 for key in score)
+            assert len(row["root_chance"]) == len(matrix["cells"])
+            assert sum(cell["runs"] for cell in row["root_chance"]) == row["reference"]["runs"]
+            assert sum(cell["visits"] for cell in row["root_chance"]) == sum(row["trial_depth_counts"])
+            for cell, bounds in zip(row["root_chance"], matrix["cells"]):
+                assert abs(cell["pending_mass"] + cell["child_uncertainty"] - (bounds["hi"] - bounds["lo"])) < 1e-9
+                assert cell["expanded_children"] <= cell["unique_children"]
         return
     matrix = row["reference"]
     for endpoint in row["endpoints"]:

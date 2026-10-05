@@ -1,0 +1,434 @@
+{
+  "schema": "nc2000-policy-allocation-v1",
+  "state": {
+    "game": 19,
+    "decision": 17,
+    "state_key": "160298700970866480479685871464306122045"
+  },
+  "arms": {
+    "control": {
+      "runs": 2000000,
+      "nodes": 72195,
+      "elapsed_ms": 74146.779542,
+      "stop": "WorkExhausted",
+      "guaranteed_score": {
+        "lo": 0.7484895598476334,
+        "hi": 0.9844993355581972
+      },
+      "root_chance": [
+        {
+          "visits": 131813,
+          "runs": 1908405,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 66,
+          "unique_children": 66,
+          "child_uncertainty": 0.23600977571056383,
+          "largest_edge_uncertainty": 0.016591834885339895,
+          "largest_child_uncertainty": 0.016591834885339895,
+          "expanded_children": 2,
+          "max_child_runs": 1923136,
+          "total_child_runs": 1923786
+        },
+        {
+          "visits": 1061,
+          "runs": 43605,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 4,
+          "unique_children": 4,
+          "child_uncertainty": 0.08751330091406342,
+          "largest_edge_uncertainty": 0.05018329647782784,
+          "largest_child_uncertainty": 0.05018329647782784,
+          "expanded_children": 4,
+          "max_child_runs": 1923136,
+          "total_child_runs": 1967376
+        },
+        {
+          "visits": 1060,
+          "runs": 32397,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 4,
+          "unique_children": 4,
+          "child_uncertainty": 0.087512104979699,
+          "largest_edge_uncertainty": 0.050182100543463413,
+          "largest_child_uncertainty": 0.050182100543463413,
+          "expanded_children": 4,
+          "max_child_runs": 1923136,
+          "total_child_runs": 1956168
+        },
+        {
+          "visits": 1056,
+          "runs": 15593,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 2,
+          "unique_children": 2,
+          "child_uncertainty": 0.02177637727306382,
+          "largest_edge_uncertainty": 0.016591834885339895,
+          "largest_child_uncertainty": 0.016591834885339895,
+          "expanded_children": 2,
+          "max_child_runs": 1923136,
+          "total_child_runs": 1923786
+        }
+      ]
+    },
+    "fair": {
+      "runs": 2000000,
+      "nodes": 95871,
+      "elapsed_ms": 53044.359667000004,
+      "stop": "WorkExhausted",
+      "guaranteed_score": {
+        "lo": 0.8629690366690649,
+        "hi": 0.8768808780980991
+      },
+      "root_chance": [
+        {
+          "visits": 66393,
+          "runs": 1957172,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 66,
+          "unique_children": 66,
+          "child_uncertainty": 0.013911841429034247,
+          "largest_edge_uncertainty": 0.006972202979253722,
+          "largest_child_uncertainty": 0.006972202979253722,
+          "expanded_children": 66,
+          "max_child_runs": 1307812,
+          "total_child_runs": 1957558
+        },
+        {
+          "visits": 59,
+          "runs": 21072,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 4,
+          "unique_children": 4,
+          "child_uncertainty": 0.07546486274640521,
+          "largest_edge_uncertainty": 0.05079644200444049,
+          "largest_child_uncertainty": 0.05079644200444049,
+          "expanded_children": 4,
+          "max_child_runs": 1307812,
+          "total_child_runs": 1329597
+        },
+        {
+          "visits": 59,
+          "runs": 21160,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 4,
+          "unique_children": 4,
+          "child_uncertainty": 0.07545923589998958,
+          "largest_edge_uncertainty": 0.05079081515802485,
+          "largest_child_uncertainty": 0.05079081515802485,
+          "expanded_children": 4,
+          "max_child_runs": 1307812,
+          "total_child_runs": 1329685
+        },
+        {
+          "visits": 38,
+          "runs": 596,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 2,
+          "unique_children": 2,
+          "child_uncertainty": 0.009114793578792958,
+          "largest_edge_uncertainty": 0.006972202979253722,
+          "largest_child_uncertainty": 0.006972202979253722,
+          "expanded_children": 2,
+          "max_child_runs": 1307812,
+          "total_child_runs": 1308541
+        }
+      ]
+    },
+    "side-0-fair": {
+      "runs": 1192690,
+      "nodes": 120013,
+      "elapsed_ms": 42019.499416,
+      "stop": "NodeBudget",
+      "guaranteed_score": {
+        "lo": 0.04499699519237765,
+        "hi": 0.13606263576631253
+      },
+      "root_chance": [
+        {
+          "visits": 6537,
+          "runs": 670658,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 66,
+          "unique_children": 66,
+          "child_uncertainty": 0.038754495469727875,
+          "largest_edge_uncertainty": 0.016265369637030954,
+          "largest_child_uncertainty": 0.016265369637030954,
+          "expanded_children": 66,
+          "max_child_runs": 414560,
+          "total_child_runs": 670465
+        },
+        {
+          "visits": 334,
+          "runs": 43015,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 858,
+          "unique_children": 858,
+          "child_uncertainty": 0.5268610266772433,
+          "largest_edge_uncertainty": 0.006883982962085593,
+          "largest_child_uncertainty": 0.006883982962085593,
+          "expanded_children": 132,
+          "max_child_runs": 7305,
+          "total_child_runs": 40603
+        },
+        {
+          "visits": 1,
+          "runs": 399,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 130,
+          "unique_children": 130,
+          "child_uncertainty": 0.6918616662203122,
+          "largest_edge_uncertainty": 0.08560943603515625,
+          "largest_child_uncertainty": 0.08560943603515625,
+          "expanded_children": 0,
+          "max_child_runs": 0,
+          "total_child_runs": 0
+        },
+        {
+          "visits": 5933,
+          "runs": 478618,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 4,
+          "unique_children": 4,
+          "child_uncertainty": 0.19128711948496846,
+          "largest_edge_uncertainty": 0.09683523657903016,
+          "largest_child_uncertainty": 0.09683523657903016,
+          "expanded_children": 4,
+          "max_child_runs": 447430,
+          "total_child_runs": 478599
+        }
+      ]
+    },
+    "unrestricted-fair": {
+      "runs": 1717490,
+      "nodes": 120003,
+      "elapsed_ms": 33402.663459,
+      "stop": "NodeBudget",
+      "value": {
+        "lo": 0.029437408762133445,
+        "hi": 0.139628453595585
+      },
+      "loss": [
+        {
+          "lo": 0.0,
+          "hi": 0.11019104485045156
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.1101910448504515
+        }
+      ]
+    },
+    "side-0-refined": {
+      "runs": 5463324,
+      "nodes": 397775,
+      "elapsed_ms": 180016.17920800002,
+      "stop": "TimeBudget",
+      "guaranteed_score": {
+        "lo": 0.04643472311416712,
+        "hi": 0.13428498589683094
+      },
+      "root_chance": [
+        {
+          "visits": 26718,
+          "runs": 2699059,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 66,
+          "unique_children": 66,
+          "child_uncertainty": 0.03126550903768751,
+          "largest_edge_uncertainty": 0.014215179943888209,
+          "largest_child_uncertainty": 0.014215179943888209,
+          "expanded_children": 66,
+          "max_child_runs": 2302272,
+          "total_child_runs": 2698866
+        },
+        {
+          "visits": 845,
+          "runs": 259895,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 858,
+          "unique_children": 858,
+          "child_uncertainty": 0.5186803826935139,
+          "largest_edge_uncertainty": 0.006624071926338687,
+          "largest_child_uncertainty": 0.006624071926338687,
+          "expanded_children": 173,
+          "max_child_runs": 52685,
+          "total_child_runs": 257483
+        },
+        {
+          "visits": 1,
+          "runs": 399,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 130,
+          "unique_children": 130,
+          "child_uncertainty": 0.6918616662203126,
+          "largest_edge_uncertainty": 0.08560943603515625,
+          "largest_child_uncertainty": 0.08560943603515625,
+          "expanded_children": 0,
+          "max_child_runs": 0,
+          "total_child_runs": 0
+        },
+        {
+          "visits": 24781,
+          "runs": 2503971,
+          "pending_mass": 0.0,
+          "pending_scripts": 0,
+          "resolved_edges": 4,
+          "unique_children": 4,
+          "child_uncertainty": 0.18356300114208618,
+          "largest_edge_uncertainty": 0.09421548122739622,
+          "largest_child_uncertainty": 0.09421548122739622,
+          "expanded_children": 4,
+          "max_child_runs": 2391154,
+          "total_child_runs": 2503952
+        }
+      ]
+    }
+  },
+  "combined": {
+    "matrix": {
+      "actions": [
+        [
+          "move bodyslam",
+          "move earthquake",
+          "move curse",
+          "move selfdestruct"
+        ],
+        [
+          "move thunder",
+          "move hiddenpower",
+          "move swagger",
+          "move substitute"
+        ]
+      ],
+      "cells": [
+        {
+          "lo": 0.10301947685914342,
+          "hi": 0.13703096333093512
+        },
+        {
+          "lo": 0.15370122728019764,
+          "hi": 0.4987183982805539
+        },
+        {
+          "lo": 0.3081383337796879,
+          "hi": 0.7295735854985166
+        },
+        {
+          "lo": 0.06458745081133352,
+          "hi": 0.3005398953614196
+        },
+        {
+          "lo": 0.0010317653154564186,
+          "hi": 0.09177020706698645
+        },
+        {
+          "lo": 0.0014384113399564093,
+          "hi": 0.43202771860427913
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.6351142583058058
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.3829370733608902
+        },
+        {
+          "lo": 0.0011002588471994254,
+          "hi": 0.09177091104491576
+        },
+        {
+          "lo": 0.0014384113399564093,
+          "hi": 0.4320277186042792
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.6353128079171583
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.3829370733608902
+        },
+        {
+          "lo": 0.000918281281021317,
+          "hi": 0.02215642597005291
+        },
+        {
+          "lo": 0.0014384113399564093,
+          "hi": 0.09458760194746922
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.10585842322129496
+        },
+        {
+          "lo": 0.0,
+          "hi": 0.076171875
+        }
+      ],
+      "value": {
+        "lo": 0.06458745081133352,
+        "hi": 0.13703096333093512
+      }
+    },
+    "archived_first_decisions": [
+      {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.06458745081133352,
+          "hi": 0.13703096333093512
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.0724435126196016
+        }
+      },
+      {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.8629690366690649,
+          "hi": 0.8969805231408565
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.07244351261960157
+        }
+      }
+    ]
+  },
+  "prior_certificate": "findings/policy-frontier-v1/summary.json",
+  "prior_certificate_sha256": "d42cd31dd2760d9a59cc649eeb826ab7ab7578e4e789e36cdeef351d9d082ca3",
+  "verification": {
+    "control_reproduces_prior_guarantee_and_work": true,
+    "matched_2m_work_for_chance_comparison": true,
+    "matrix_interval_assessments": "passed",
+    "native_bot_tests": 157,
+    "workspace_all_targets_check": "passed"
+  },
+  "interpretation": "Chance scheduling changes only expansion order. At 2M executions the control expanded 2 of 66 retained children of Body Slam/Thunder and spent 1,923,136 executions through one child. Period-32 fairness expands all 66 and tightens the fixed side-1 guarantee width from 0.2360097757 to 0.0139118414. The unrestricted 120k-node comparison also improves, but side-0 fixed-policy lower bounds remain limited by Hidden Power and Substitute. Restricted side-0 root cells supply only lower bounds on matching unrestricted cells; restricted side-1 cells supply only upper bounds. The combined certificate intersects these one-sided cuts with earlier unrestricted certificates. It fixes the archived first decisions and assumes optimal full-information continuation; it does not certify the deployed blind policy or global optimality. All first-decision loss lower bounds remain zero. Fair scheduling stays opt-in pending broader coverage."
+}
