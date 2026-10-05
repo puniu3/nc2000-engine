@@ -261,6 +261,7 @@ impl SolveReport {
 
 #[derive(Clone, Debug, Default)]
 pub struct BoundStats {
+    pub certificate_hits: usize,
     pub runs: usize,
     pub eager_runs: usize,
     pub eager_failures: usize,
@@ -388,12 +389,23 @@ pub struct BoundSolver<'d> {
     active_stall: Option<OneSidedHeal>,
     active_two_sided: Option<TwoSidedHeal>,
     fixed_policy: Option<(usize, Vec<SearchChoice>)>,
+    value_certificates: HashMap<NodeKey, Bounds>,
     pub stats: BoundStats,
 }
 
 pub struct FixedPolicySolver<'d> {
     solver: BoundSolver<'d>,
     side: usize,
+}
+
+pub struct ValueCertificates {
+    dex_fingerprint: [u8; 16],
+    entries: HashMap<NodeKey, Bounds>,
+}
+
+impl ValueCertificates {
+    pub fn len(&self) -> usize { self.entries.len() }
+    pub fn is_empty(&self) -> bool { self.entries.is_empty() }
 }
 
 pub struct PolicyBoundReport {
@@ -437,6 +449,19 @@ impl<'d> FixedPolicySolver<'d> {
         self.solver.root_chance_diagnostics(battle)
     }
     pub fn stats(&self) -> &BoundStats { &self.solver.stats }
+
+    pub fn into_value_certificates(self) -> ValueCertificates {
+        let side = self.side;
+        let bounds = self.solver.nodes.into_iter().map(|(key, node)|
+            (key, Bounds { lo: node.lo, hi: node.hi }))
+            .chain(self.solver.closed);
+        let entries = bounds.filter_map(|(key, value)| {
+            let value = if side == 0 { Bounds { lo: value.lo, hi: 1.0 } }
+                else { Bounds { lo: 0.0, hi: value.hi } };
+            (value.lo > 0.0 || value.hi < 1.0).then_some((key, value))
+        }).collect();
+        ValueCertificates { dex_fingerprint: self.solver.dex.replay_fingerprint, entries }
+    }
 }
 
 #[derive(Default)]
@@ -447,11 +472,12 @@ pub struct BoundCache {
     closed_strategies: HashMap<NodeKey, [StrategyCertificate; 2]>,
     roots: HashSet<NodeKey>,
     stats: BoundStats,
+    value_certificates: HashMap<NodeKey, Bounds>,
 }
 
 impl BoundCache {
     pub fn len(&self) -> usize {
-        self.nodes.len() + self.closed.len()
+        self.nodes.len() + self.closed.len() + self.value_certificates.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -473,6 +499,7 @@ impl<'d> BoundSolver<'d> {
             active_stall: None,
             active_two_sided: None,
             fixed_policy: None,
+            value_certificates: HashMap::new(),
             stats: BoundStats::default(),
         }
     }
@@ -491,6 +518,7 @@ impl<'d> BoundSolver<'d> {
             active_stall: None,
             active_two_sided: None,
             fixed_policy: None,
+            value_certificates: cache.value_certificates,
             stats: cache.stats,
         }
     }
@@ -504,7 +532,23 @@ impl<'d> BoundSolver<'d> {
             closed_strategies: self.closed_strategies,
             roots: self.roots,
             stats: self.stats,
+            value_certificates: self.value_certificates,
         }
+    }
+
+    /// Imports bounds on unrestricted values, before constructing a search graph.
+    /// Fixed-policy values must first be projected onto their valid one-sided bounds.
+    pub fn import_value_certificates(&mut self, certificates: ValueCertificates) -> usize {
+        assert!(self.fixed_policy.is_none());
+        assert!(self.nodes.is_empty() && self.closed.is_empty());
+        assert_eq!(certificates.dex_fingerprint, self.dex.replay_fingerprint);
+        for (key, value) in certificates.entries {
+            let entry = self.value_certificates.entry(key).or_insert(Bounds { lo: 0.0, hi: 1.0 });
+            entry.lo = entry.lo.max(value.lo);
+            entry.hi = entry.hi.min(value.hi);
+            assert!(entry.lo <= entry.hi, "inconsistent value certificates");
+        }
+        self.value_certificates.len()
     }
 
     pub fn node_count(&self) -> usize {
@@ -834,6 +878,9 @@ impl<'d> BoundSolver<'d> {
             }
             return key;
         }
+        let certified = self.value_certificates.get(&key).copied();
+        self.stats.certificate_hits += usize::from(certified.is_some());
+        let initial = certified.unwrap_or(Bounds { lo: 0.0, hi: 1.0 });
         let node = match b.outcome() {
             Some(o) => {
                 let v = match o {
@@ -862,8 +909,8 @@ impl<'d> BoundSolver<'d> {
                 acts0: vec![],
                 acts1: vec![],
                 cells: vec![],
-                lo: 0.0,
-                hi: 1.0,
+                lo: initial.lo,
+                hi: initial.hi,
                 strat: None,
                 active_rows: Vec::new(),
                 active_cols: Vec::new(),
@@ -2162,6 +2209,83 @@ mod tests {
                 else { assert_eq!(report.unrestricted_game_value.lo, 0.0); }
             }
         }
+    }
+
+    #[test]
+    fn imported_policy_certificates_bound_values_without_certifying_actions() {
+        use nc2000_engine::battle::SearchChoice;
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Seismic Toss", "Splash"], &["Seismic Toss", "Splash"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 1000;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = 1;
+        }
+        let cfg = BoundConfig { eps: 1e-8, ..BoundConfig::default() };
+        let mut target = BoundSolver::new(&dex, cfg.clone());
+        for side in 0..2 {
+            for name in ["splash", "seismictoss"] {
+                let mut witness = super::FixedPolicySolver::new(&dex, cfg.clone(), side,
+                    vec![SearchChoice::Move(dex.moves.id(name).unwrap())]);
+                witness.solve(&root);
+                let certificates = witness.into_value_certificates();
+                if name == "splash" { assert!(certificates.is_empty()); }
+                else { assert_eq!(certificates.len(), 1); }
+                target.import_value_certificates(certificates);
+            }
+        }
+        let cache = target.into_cache();
+        assert!(!cache.is_empty());
+        let mut target = BoundSolver::from_cache(&dex, cfg, cache);
+        let solved = target.solve(&root, None);
+        assert_eq!(solved.runs, 0);
+        assert_eq!(target.stats.certificate_hits, 1);
+        assert!((solved.bounds.lo - 0.5).abs() < 1e-8);
+        assert!((solved.bounds.hi - 0.5).abs() < 1e-8);
+        assert!(solved.strategies.is_none());
+        let report = target.solve_policy_losses(&root, &[(0, vec![0.0, 1.0])], 1e-8);
+        assert!(report.runs > 0);
+        let loss = target.root_payoffs(&root).unwrap().policy_loss(0, &[0.0, 1.0]);
+        assert!((loss.lo - 0.5).abs() < 1e-8 && (loss.hi - 0.5).abs() < 1e-8);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion `left == right` failed")]
+    fn value_certificate_import_rejects_a_different_dex() {
+        let dex = conformance::load_dex();
+        let witness = super::FixedPolicySolver::new(&dex, BoundConfig::default(), 0, vec![]);
+        let mut certificates = witness.into_value_certificates();
+        certificates.dex_fingerprint[0] ^= 1;
+        BoundSolver::new(&dex, BoundConfig::default()).import_value_certificates(certificates);
+    }
+
+    #[test]
+    fn imported_descendant_bounds_preserve_a_two_turn_game() {
+        use nc2000_engine::battle::SearchChoice;
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Seismic Toss", "Protect"], &["Seismic Toss", "Protect"]);
+        let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+        root.apply_choices(&dex, preview).unwrap();
+        root.turn = 999;
+        for side in 0..2 {
+            let id = root.active_id(side).unwrap();
+            root.poke_mut(id).hp = if side == 0 { 40 } else { 60 };
+        }
+        let cfg = BoundConfig { eps: 1e-8, ..BoundConfig::default() };
+        let exact = BoundSolver::new(&dex, cfg.clone()).solve(&root, None).bounds;
+        let mut witness = super::FixedPolicySolver::new(&dex, cfg.clone(), 1,
+            vec![SearchChoice::Move(dex.moves.id("seismictoss").unwrap())]);
+        witness.solve(&root);
+        let certificates = witness.into_value_certificates();
+        assert!(certificates.len() > 1);
+        let mut target = BoundSolver::new(&dex, cfg);
+        target.import_value_certificates(certificates);
+        let result = target.solve(&root, None).bounds;
+        assert!(target.stats.certificate_hits > 1);
+        assert!((result.lo - exact.lo).abs() < 1e-8);
+        assert!((result.hi - exact.hi).abs() < 1e-8);
     }
 
     #[test]

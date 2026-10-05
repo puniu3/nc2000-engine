@@ -43,6 +43,17 @@ struct Protocol {
     aggregate_lazy_children: bool,
     #[serde(default)]
     chance_fair_period: usize,
+    witness_preparation: Option<WitnessPreparation>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WitnessPreparation {
+    sides: Vec<usize>,
+    reference_ms: u64,
+    work_budget: usize,
+    node_budget: usize,
+    tolerance: f64,
 }
 
 #[derive(Default, Deserialize)]
@@ -141,6 +152,7 @@ fn audit(
             .collect::<Vec<_>>()
     });
     if let Some(side) = protocol.fixed_policy_side {
+        assert!(protocol.witness_preparation.is_none());
         assert!(side < 2 && !legal[side].is_empty());
         let mut solver = FixedPolicySolver::new(dex, BoundConfig {
             time_budget: Some(Duration::from_millis(protocol.reference_ms)),
@@ -209,10 +221,7 @@ fn audit(
             vec![1.0 / legal[side].len() as f64; legal[side].len()],
         ));
     }
-    let started = Instant::now();
-    let mut solver = BoundSolver::new(
-        dex,
-        BoundConfig {
+    let cfg = BoundConfig {
             time_budget: Some(Duration::from_millis(protocol.reference_ms)),
             work_budget: protocol.work_budget,
             node_budget: protocol.node_budget,
@@ -221,8 +230,41 @@ fn audit(
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
             ..BoundConfig::default()
-        },
-    );
+        };
+    let mut solver = BoundSolver::new(dex, cfg.clone());
+    let mut preparation = Vec::new();
+    let mut preparation_runs = 0;
+    let mut preparation_ms = 0.0;
+    let mut imported_certificates = 0;
+    if let Some(prep) = &protocol.witness_preparation {
+        assert!(prep.reference_ms > 0 && prep.work_budget > 0 && prep.node_budget > 0);
+        assert!(prep.tolerance.is_finite() && prep.tolerance > 0.0);
+        for &side in &prep.sides {
+            assert!(side < 2);
+            let started = Instant::now();
+            let mut witness = FixedPolicySolver::new(dex, BoundConfig {
+                time_budget: Some(Duration::from_millis(prep.reference_ms)),
+                work_budget: prep.work_budget,
+                node_budget: prep.node_budget,
+                eps: prep.tolerance,
+                ..cfg.clone()
+            }, side, legal[side].clone());
+            let report = witness.solve(&battle);
+            let nodes = witness.node_count();
+            let certificates = witness.into_value_certificates();
+            let certificate_count = certificates.len();
+            imported_certificates = solver.import_value_certificates(certificates);
+            let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+            preparation_runs += report.runs;
+            preparation_ms += elapsed_ms;
+            preparation.push(json!({"side":side,"priority_actions":names[side],
+                "guaranteed_score":bound(report.guaranteed_score),
+                "unrestricted_game_value":bound(report.unrestricted_game_value),
+                "stop":format!("{:?}",report.stop),"runs":report.runs,"nodes":nodes,
+                "elapsed_ms":elapsed_ms,"certificates":certificate_count}));
+        }
+    }
+    let started = Instant::now();
     let solved = solver.solve_policy_losses(&battle, &targets, protocol.tolerance);
     let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
     let matrix = solver.root_payoffs(&battle).unwrap();
@@ -355,10 +397,13 @@ fn audit(
     });
     json!({"game":game.game,"decision":decision,"state_key":battle.state_key128().to_string(),
         "diagnostics":diagnostics,
+        "preparation":preparation,"total_runs":preparation_runs+solved.runs,
+        "total_elapsed_ms":preparation_ms+elapsed_ms,
         "turn":battle.turn,"alive":([0,1].map(|side|battle.sides[side].party.iter().filter(|&&i| !battle.sides[side].roster[i as usize].fainted).count())),
         "reference":{"value":bound(matrix.value),"cells":matrix.cells.iter().map(|b|bound(*b)).collect::<Vec<_>>(),
             "actions":matrix.actions.map(|aa|aa.into_iter().map(|a|a.map(|a|action_input(dex,a))).collect::<Vec<_>>()),
             "stop":format!("{:?}",solved.stop),"runs":solved.runs,"elapsed_ms":elapsed_ms,
+            "imported_certificates":imported_certificates,"certificate_hits":solver.stats.certificate_hits,
             "nodes":solver.node_count(),"closed":solver.closed_count()},
         "discriminating":discriminating,"endpoints":endpoints,"search_records":search_records})
 }
