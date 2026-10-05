@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-lower-order-v1'
+names = ['control', 'lazy', 'lazy-floor', 'directed', 'eager-directed']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    assert set(records) == set(names)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert all(r['manifest']['source_hashes'] == records['control']['manifest']['source_hashes'] for r in records.values())
+    prior_path = root / 'findings/policy-rest-witness-v1/summary.json'
+    prior_records_path = root / 'findings/policy-rest-witness-v1/records.json.gz'
+    prior = json.loads(prior_path.read_bytes())
+    previous = json.loads(gzip.decompress(prior_records_path.read_bytes()))['attack-material']['result']
+    control = records['control']['result']
+    assert control['restricted_matrix'] == previous['restricted_matrix']
+    for field in ['runs', 'nodes', 'stop']:
+        assert control['reference'][field] == previous['reference'][field]
+    matrix = json.loads(json.dumps(prior['matrix']))
+    rows, cols = map(len, matrix['actions'])
+    assert matrix['actions'][0][0] == 'move bodyslam'
+    switch = matrix['actions'][1].index('switch 2')
+    padding = 1e-10
+    common = None
+    arms = {}
+    for name in names:
+        row, protocol = records[name]['result'], records[name]['manifest']['protocol']
+        assert row['schema'] == 'nc2000-fixed-reply-bound-v1'
+        assert row['state_key'] == '199433906935569759004884428941975153695'
+        assert row['side'] == protocol['fixed_policy_side'] == 0
+        assert row['fixed_first_action'] == 'move bodyslam' and row['reply_action'] == 'switch 2'
+        assert row['fixed_rest_percent'] is None and protocol['chance_material_order']
+        assert protocol['cell_cap'] == (4096 if name in ['control', 'eager-directed'] else 0)
+        assert protocol['descend_floor'] == (.1 if name in ['control', 'lazy', 'eager-directed'] else 0)
+        assert protocol['material_descent_period'] == (4 if name in ['directed', 'eager-directed'] else 0)
+        assert protocol.get('hp_transition_capacity', 0) == 0
+        config = {k: v for k, v in protocol.items() if k not in ['cell_cap', 'descend_floor', 'material_descent_period', 'interpretation']}
+        if common is None:
+            common = config
+        assert config == common
+        refinement = row['refinement']
+        assert sum(refinement['trial_depth_counts']) == refinement['trials']
+        assert refinement['depth_limit_trials'] <= refinement['trials']
+        assert refinement['lower_directed_trials'] == refinement['trials'] and refinement['upper_directed_trials'] == 0
+        if name not in ['directed', 'eager-directed']:
+            assert refinement['material_descent_bypasses'] == 0
+        else:
+            assert refinement['material_descent_bypasses'] > 0
+        restricted = row['restricted_matrix']
+        assert restricted['actions'] == [['move bodyslam'], matrix['actions'][1]]
+        assert restricted['cells'][switch] == row['reply_value']
+        assert row['root_chance'][switch]['runs'] == row['reference']['runs']
+        assert all(c['runs'] == 0 for i, c in enumerate(row['root_chance']) if i != switch)
+        for target, bound in zip(matrix['cells'], restricted['cells']):
+            target['lo'] = max(target['lo'], bound['lo'] - padding)
+        arms[name] = {'reply_value': row['reply_value'], 'refinement': refinement, **row['reference']}
+    matrix['value']['lo'] = max(matrix['value']['lo'], max(min(b['lo'] for b in matrix['cells'][i:i + cols]) for i in range(0, rows * cols, cols)))
+    assert all(0 <= b['lo'] <= b['hi'] <= 1 for b in matrix['cells'] + [matrix['value']])
+    differences = json.loads(json.dumps(prior['difference_certificates']))
+    for difference in differences:
+        i, j = [matrix['actions'][side].index(action) for side, action in enumerate(difference['upper_actions'])]
+        k, l = [matrix['actions'][side].index(action) for side, action in enumerate(difference['lower_actions'])]
+        upper = 0 if (i, j) == (k, l) else matrix['cells'][i * cols + j]['hi'] - matrix['cells'][k * cols + l]['lo'] + padding
+        if upper < difference['difference_upper']:
+            difference['difference_upper'] = upper
+            difference['source'] = 'matrix_intervals_with_directed_descent'
+    loss_upper = min(prior['archived_first_decisions'][0]['loss']['hi'], max(0, max(d['difference_upper'] for d in differences)) + padding)
+    return {'schema': 'nc2000-policy-lower-order-v1', 'arms': arms, 'matrix': matrix,
+            'difference_certificates': differences,
+            'remaining_above_two_points': [d for d in differences if d['difference_upper'] > .02],
+            'archived_first_decisions': [{'side': side, 'loss': {'lo': 0, 'hi': loss_upper}} for side in range(2)],
+            'numerical_envelope': padding, 'prior_hashes': {str(p.relative_to(root)): sha(p.read_bytes()) for p in [prior_path, prior_records_path]},
+            'interpretation': 'All arms fix the same side-zero continuation while keeping every later opponent choice. Changes affect chance refinement order only: lazy enumeration, zero descent floor, and periodic descent before pending mass is exhausted. Unknown chance mass retains its original sound interval. Only fixed-strategy lower bounds transfer to the unrestricted first-reply cell. Depth counts diagnose the actual traversal; they are not value estimates. First-decision certificates apply to this full-information state, not the deployed blind policy or global optimality.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    for name, record in records.items():
+        manifest = record['manifest']
+        raw = (archive / f'{name}.json').read_bytes()
+        assert sha(raw) == manifest['protocol_sha256'] and json.loads(raw) == manifest['protocol']
+        assert sha(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())) == manifest['protocol']['corpus_sha256']
+        assert sha((root / manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified control reproduction, refinement accounting and one-sided certificate transfer')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-lower-order-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in names:
+        protocol = json.loads((archive / f'{name}.json').read_bytes())
+        protocol['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(protocol, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {name: {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()),
+                  'result': json.loads((directory / name / 'game-017-d0021.json').read_bytes())} for name in names}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress((directory / 'corpus.jsonl').read_bytes(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for name, arm in summary['arms'].items():
+    print(name, arm['reply_value'], arm['runs'], arm['nodes'], arm['refinement'])
+print('first-decision loss upper', summary['archived_first_decisions'][0]['loss']['hi'])

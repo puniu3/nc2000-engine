@@ -90,6 +90,7 @@ pub struct BoundConfig {
     pub chance_fair_period: usize,
     pub chance_status_groups: bool,
     pub chance_material_order: bool,
+    pub material_descent_period: usize,
     pub resource_closure_nodes: Option<usize>,
     pub resource_closure_period: usize,
     pub directed_policy_refinement: bool,
@@ -121,6 +122,7 @@ impl Default for BoundConfig {
             chance_fair_period: 0,
             chance_status_groups: false,
             chance_material_order: false,
+            material_descent_period: 0,
             resource_closure_nodes: None,
             resource_closure_period: 1,
             directed_policy_refinement: false,
@@ -330,6 +332,7 @@ pub struct BoundStats {
     pub fair_cell_picks: usize,
     pub trial_depth_counts: Vec<usize>,
     pub depth_limit_trials: usize,
+    pub material_descent_bypasses: usize,
     pub lazy_edge_merges: usize,
 }
 
@@ -1356,9 +1359,14 @@ impl<'d> BoundSolver<'d> {
             });
             let pending_mass = cell.pending_mass;
             let has_pending = !cell.pending.is_empty();
+            let directed_descent = self.cfg.chance_material_order && direction.is_some()
+                && self.cfg.material_descent_period>0 && depth+1<self.cfg.trial_depth
+                && (cell.visits+1)%self.cfg.material_descent_period==0;
             let best_child = self.fair_chance_child(cur, ci).or(best_child);
             match best_child {
-                Some((cw, k)) if cw > pending_mass.max(self.cfg.descend_floor) => {
+                Some((cw, k)) if cw > pending_mass.max(self.cfg.descend_floor)
+                    || (directed_descent && cw>1e-12) => {
+                    self.stats.material_descent_bypasses+=usize::from(has_pending && cw<=pending_mass.max(self.cfg.descend_floor));
                     cur = k;
                     hit_depth_limit = depth + 1 == self.cfg.trial_depth;
                     continue;
@@ -3110,24 +3118,31 @@ mod tests {
         root.turn=999;
         for side in 0..2 { let id=root.active_id(side).unwrap();root.poke_mut(id).hp=if side==0 {40} else {60}; }
         let attack=SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
-        for (side,material) in [(0,false),(1,false),(0,true),(1,true)] { for reply in root.legal_choices(&dex,1-side) {
+        let mut bypasses=0;
+        for (side,material,period) in [(0,false,0),(1,false,0),(0,true,0),(1,true,0),(0,true,2),(1,true,2),(0,true,4),(1,true,4)] { for reply in root.legal_choices(&dex,1-side) {
             let expected=exact(&dex,&root,side,Some(reply));
             let mut solver=super::FixedPolicySolver::new(&dex,BoundConfig {
-                work_budget:1,cell_cap:0,eps:1e-8,chance_material_order:material,
+                work_budget:1,cell_cap:0,eps:1e-8,chance_material_order:material,material_descent_period:period,
                 chance_fair_period:2,..BoundConfig::default()
             },side,vec![attack]);
             let mut closed=false;
+            let mut previous=super::Bounds {lo:0.0,hi:1.0};
             for _ in 0..1000 {
                 let report=solver.solve_reply(&root,reply,None);
                 assert!(report.runs<=1 && report.strategies.is_none());
+                assert!(report.bounds.lo>=previous.lo && report.bounds.hi<=previous.hi);
+                previous=report.bounds;
                 assert!(report.bounds.lo<=expected+1e-10 && report.bounds.hi>=expected-1e-10);
                 assert_eq!(solver.restricted_root_payoffs(&root).unwrap().actions[1-side].len(),2);
                 if report.stop==super::Stop::WidthMet { closed=true;break; }
             }
             assert!(closed);
+            if period==0 {assert_eq!(solver.stats().material_descent_bypasses,0);}
+            bypasses+=solver.stats().material_descent_bypasses;
             let chance=solver.root_chance_diagnostics(&root).unwrap();
             assert_eq!(chance.iter().filter(|cell|cell.runs>0).count(),1);
         }}
+        assert!(bypasses>0);
     }
 
     #[test]

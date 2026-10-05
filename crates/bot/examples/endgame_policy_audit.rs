@@ -26,6 +26,7 @@ struct Protocol {
     work_budget: usize,
     cell_cap: usize,
     trial_depth: Option<usize>,
+    descend_floor: Option<f64>,
     tolerance: f64,
     iterations: Vec<u32>,
     search_seeds: usize,
@@ -66,6 +67,8 @@ struct Protocol {
     chance_status_groups: bool,
     #[serde(default)]
     chance_material_order: bool,
+    #[serde(default)]
+    material_descent_period: usize,
     #[serde(default)]
     dead_quick_claw_quotient: bool,
     resource_closure_nodes: Option<usize>,
@@ -407,12 +410,14 @@ fn audit(
             node_budget: protocol.node_budget,
             cell_cap: protocol.cell_cap,
             trial_depth: protocol.trial_depth.unwrap_or_else(|| BoundConfig::default().trial_depth),
+            descend_floor: protocol.descend_floor.unwrap_or_else(|| BoundConfig::default().descend_floor),
             eps: protocol.tolerance,
             certified_action_pruning: protocol.certified_action_pruning,
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
             chance_status_groups: protocol.chance_status_groups,
             chance_material_order: protocol.chance_material_order,
+            material_descent_period: protocol.material_descent_period,
             dead_quick_claw_quotient: protocol.dead_quick_claw_quotient,
             hp_transition_capacity: protocol.hp_transition_capacity,
             hp_transition_eager: protocol.hp_transition_eager,
@@ -447,6 +452,12 @@ fn audit(
                 "reply_value":bound(report.bounds),"threshold":protocol.fixed_reply_threshold,
                 "frontier_key_census":census,
                 "hp_translation_audit":hp_audit,
+                "refinement":{"trials":solver.stats().trials,
+                    "trial_depth_counts":solver.stats().trial_depth_counts,"depth_limit_trials":solver.stats().depth_limit_trials,
+                    "eager_failures":solver.stats().eager_failures,"lp_solves":solver.stats().lp_solves,
+                    "material_descent_bypasses":solver.stats().material_descent_bypasses,
+                    "resource_closure_visits":solver.stats().resource_closure_visits,
+                    "lower_directed_trials":solver.stats().lower_directed_trials,"upper_directed_trials":solver.stats().upper_directed_trials},
                 "hp_transition_cache":{"capacity":protocol.hp_transition_capacity,
                     "eligible":solver.stats().hp_transition_eligible,"hits":solver.stats().hp_transition_hits,
                     "eager_enabled":protocol.hp_transition_eager,
@@ -531,11 +542,13 @@ fn audit(
             node_budget: protocol.node_budget,
             cell_cap: protocol.cell_cap,
             trial_depth: protocol.trial_depth.unwrap_or_else(|| BoundConfig::default().trial_depth),
+            descend_floor: protocol.descend_floor.unwrap_or_else(|| BoundConfig::default().descend_floor),
             certified_action_pruning: protocol.certified_action_pruning,
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
             chance_status_groups: protocol.chance_status_groups,
             chance_material_order: protocol.chance_material_order,
+            material_descent_period: protocol.material_descent_period,
             dead_quick_claw_quotient: protocol.dead_quick_claw_quotient,
             hp_transition_capacity: protocol.hp_transition_capacity,
             hp_transition_eager: protocol.hp_transition_eager,
@@ -910,6 +923,7 @@ fn main() {
     assert_eq!(protocol.schema, "nc2000-policy-gap-v1");
     assert!(protocol.threads > 0 && protocol.search_seeds > 0 && protocol.reference_ms > 0);
     assert!(protocol.trial_depth.is_none_or(|depth| depth > 0));
+    assert!(protocol.descend_floor.is_none_or(|floor|floor.is_finite() && (0.0..=1.0).contains(&floor)));
     assert!(protocol.iterations.windows(2).all(|w| w[0] < w[1]));
     let corpus = std::fs::read(&protocol.corpus).unwrap();
     let baseline = std::fs::read(&protocol.baseline).unwrap();

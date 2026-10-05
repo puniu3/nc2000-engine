@@ -1,0 +1,570 @@
+{
+  "schema": "nc2000-policy-lower-order-v1",
+  "arms": {
+    "control": {
+      "reply_value": {
+        "lo": 2.445754875870042e-08,
+        "hi": 0.9979479544752913
+      },
+      "refinement": {
+        "trials": 33950,
+        "trial_depth_counts": [
+          0,
+          1,
+          510,
+          629,
+          12223,
+          20142,
+          159,
+          23,
+          22,
+          19,
+          19,
+          18,
+          17,
+          16,
+          15,
+          14,
+          14,
+          14,
+          13,
+          10,
+          10,
+          10,
+          10,
+          5,
+          37
+        ],
+        "depth_limit_trials": 33,
+        "eager_failures": 65,
+        "lp_solves": 0,
+        "material_descent_bypasses": 0,
+        "resource_closure_visits": 0,
+        "lower_directed_trials": 33950,
+        "upper_directed_trials": 0
+      },
+      "stop": "WorkExhausted",
+      "runs": 2000000,
+      "nodes": 69566,
+      "elapsed_ms": 81178.487083
+    },
+    "lazy": {
+      "reply_value": {
+        "lo": 8.334083545547536e-11,
+        "hi": 0.9999470592165212
+      },
+      "refinement": {
+        "trials": 381928,
+        "trial_depth_counts": [
+          0,
+          600,
+          19581,
+          17113,
+          27253,
+          316979,
+          402
+        ],
+        "depth_limit_trials": 0,
+        "eager_failures": 0,
+        "lp_solves": 0,
+        "material_descent_bypasses": 0,
+        "resource_closure_visits": 0,
+        "lower_directed_trials": 381928,
+        "upper_directed_trials": 0
+      },
+      "stop": "TimeBudget",
+      "runs": 381928,
+      "nodes": 15832,
+      "elapsed_ms": 90000.11349999999
+    },
+    "lazy-floor": {
+      "reply_value": {
+        "lo": 5.608428053286851e-11,
+        "hi": 0.9999560435512843
+      },
+      "refinement": {
+        "trials": 393332,
+        "trial_depth_counts": [
+          0,
+          587,
+          18779,
+          16927,
+          27363,
+          329520,
+          156
+        ],
+        "depth_limit_trials": 0,
+        "eager_failures": 0,
+        "lp_solves": 0,
+        "material_descent_bypasses": 0,
+        "resource_closure_visits": 0,
+        "lower_directed_trials": 393332,
+        "upper_directed_trials": 0
+      },
+      "stop": "TimeBudget",
+      "runs": 393332,
+      "nodes": 15861,
+      "elapsed_ms": 90000.099792
+    },
+    "directed": {
+      "reply_value": {
+        "lo": 6.576754799851512e-11,
+        "hi": 0.9999562005194322
+      },
+      "refinement": {
+        "trials": 440827,
+        "trial_depth_counts": [
+          0,
+          586,
+          16690,
+          17044,
+          22090,
+          288117,
+          93181,
+          3043,
+          73,
+          3
+        ],
+        "depth_limit_trials": 0,
+        "eager_failures": 0,
+        "lp_solves": 0,
+        "material_descent_bypasses": 126598,
+        "resource_closure_visits": 0,
+        "lower_directed_trials": 440827,
+        "upper_directed_trials": 0
+      },
+      "stop": "TimeBudget",
+      "runs": 440827,
+      "nodes": 17911,
+      "elapsed_ms": 90000.011291
+    },
+    "eager-directed": {
+      "reply_value": {
+        "lo": 3.699953883786808e-08,
+        "hi": 0.99794415092002
+      },
+      "refinement": {
+        "trials": 19915,
+        "trial_depth_counts": [
+          0,
+          1,
+          302,
+          412,
+          4170,
+          10533,
+          1920,
+          1946,
+          487,
+          15,
+          14,
+          14,
+          12,
+          12,
+          11,
+          10,
+          10,
+          9,
+          8,
+          8,
+          8,
+          5,
+          4,
+          2,
+          2
+        ],
+        "depth_limit_trials": 0,
+        "eager_failures": 71,
+        "lp_solves": 0,
+        "material_descent_bypasses": 4619,
+        "resource_closure_visits": 0,
+        "lower_directed_trials": 19915,
+        "upper_directed_trials": 0
+      },
+      "stop": "WorkExhausted",
+      "runs": 2000000,
+      "nodes": 67860,
+      "elapsed_ms": 78807.14779199999
+    }
+  },
+  "matrix": {
+    "actions": [
+      [
+        "move bodyslam",
+        "move fireblast",
+        "move rest",
+        "move selfdestruct"
+      ],
+      [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move selfdestruct",
+        "switch 2"
+      ]
+    ],
+    "cells": [
+      {
+        "lo": 0,
+        "hi": 0.9672053601352656
+      },
+      {
+        "lo": 0,
+        "hi": 0.9991512602369627
+      },
+      {
+        "lo": 0,
+        "hi": 0.9899074941620833
+      },
+      {
+        "lo": 0,
+        "hi": 0.046293368058149605
+      },
+      {
+        "lo": 3.689953883786808e-08,
+        "hi": 0.9968931612958795
+      },
+      {
+        "lo": 0,
+        "hi": 0.9679540077406539
+      },
+      {
+        "lo": 0,
+        "hi": 1
+      },
+      {
+        "lo": 0,
+        "hi": 0.9989027370258503
+      },
+      {
+        "lo": 0,
+        "hi": 0.018228705220125888
+      },
+      {
+        "lo": 0,
+        "hi": 0.9972501172900244
+      },
+      {
+        "lo": 0,
+        "hi": 0.9687500005000242
+      },
+      {
+        "lo": 0,
+        "hi": 1
+      },
+      {
+        "lo": 0,
+        "hi": 0.9989281820142092
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 1
+      },
+      {
+        "lo": 0,
+        "hi": 5e-10
+      },
+      {
+        "lo": 0,
+        "hi": 5e-10
+      },
+      {
+        "lo": 0,
+        "hi": 5e-10
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 5e-10
+      }
+    ],
+    "value": {
+      "lo": 0,
+      "hi": 0.046293368058149605
+    }
+  },
+  "difference_certificates": [
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move doubleedge"
+      ],
+      "difference_upper": 0.016933411160976367,
+      "source": "shared_successor"
+    },
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move earthquake"
+      ],
+      "difference_upper": 0.016933411160976367,
+      "source": "shared_successor"
+    },
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move curse"
+      ],
+      "difference_upper": 0.016933411160976367,
+      "source": "shared_successor"
+    },
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "difference_upper": 0.0,
+      "source": "shared_matrix_entry"
+    },
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "switch 2"
+      ],
+      "difference_upper": 0.046293331258610765,
+      "source": "matrix_intervals_with_directed_descent"
+    },
+    {
+      "upper_actions": [
+        "move fireblast",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move doubleedge"
+      ],
+      "difference_upper": 0.018228705220125888,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move fireblast",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move earthquake"
+      ],
+      "difference_upper": 0.018228705220125888,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move fireblast",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move curse"
+      ],
+      "difference_upper": 0.018228705220125888,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move fireblast",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "difference_upper": 0.018228705220125888,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move fireblast",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "switch 2"
+      ],
+      "difference_upper": 0.01822866842058705,
+      "source": "matrix_intervals_with_directed_descent"
+    },
+    {
+      "upper_actions": [
+        "move rest",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move doubleedge"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move rest",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move earthquake"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move rest",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move curse"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move rest",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move rest",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "switch 2"
+      ],
+      "difference_upper": -3.649953883786808e-08,
+      "source": "matrix_intervals_with_directed_descent"
+    },
+    {
+      "upper_actions": [
+        "move selfdestruct",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move doubleedge"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move selfdestruct",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move earthquake"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move selfdestruct",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move curse"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move selfdestruct",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move selfdestruct",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "switch 2"
+      ],
+      "difference_upper": -3.649953883786808e-08,
+      "source": "matrix_intervals_with_directed_descent"
+    }
+  ],
+  "remaining_above_two_points": [
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "switch 2"
+      ],
+      "difference_upper": 0.046293331258610765,
+      "source": "matrix_intervals_with_directed_descent"
+    }
+  ],
+  "archived_first_decisions": [
+    {
+      "side": 0,
+      "loss": {
+        "lo": 0,
+        "hi": 0.046293331358610766
+      }
+    },
+    {
+      "side": 1,
+      "loss": {
+        "lo": 0,
+        "hi": 0.046293331358610766
+      }
+    }
+  ],
+  "numerical_envelope": 1e-10,
+  "prior_hashes": {
+    "findings/policy-rest-witness-v1/summary.json": "346b4a51a2e0de91c217ea41890148be0069dd03bd54dafaed31a01017d99b22",
+    "findings/policy-rest-witness-v1/records.json.gz": "3cf22ffb8d4e6e44dce7d621187f70e96b2baa9f2410741e14c21f6730d36870"
+  },
+  "interpretation": "All arms fix the same side-zero continuation while keeping every later opponent choice. Changes affect chance refinement order only: lazy enumeration, zero descent floor, and periodic descent before pending mass is exhausted. Unknown chance mass retains its original sound interval. Only fixed-strategy lower bounds transfer to the unrestricted first-reply cell. Depth counts diagnose the actual traversal; they are not value estimates. First-decision certificates apply to this full-information state, not the deployed blind policy or global optimality."
+}
