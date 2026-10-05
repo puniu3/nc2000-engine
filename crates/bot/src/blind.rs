@@ -474,6 +474,29 @@ impl BlindSearch {
         obs: &Observer,
         my_pick: usize,
     ) -> f64 {
+        self.step_forced_impl(dex, belief, obs, my_pick, None)
+    }
+
+    // Unavailable replies use the sampled opponent's tree policy.
+    pub fn step_forced_joint(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        my_pick: usize,
+        reply: SearchChoice,
+    ) -> f64 {
+        self.step_forced_impl(dex, belief, obs, my_pick, Some(reply))
+    }
+
+    fn step_forced_impl(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        my_pick: usize,
+        reply: Option<SearchChoice>,
+    ) -> f64 {
         assert!(my_pick < self.my_acts.len(), "forced root action out of range");
         assert!(
             self.my_mask.as_ref().map_or(true, |mask| mask[my_pick]),
@@ -510,6 +533,9 @@ impl BlindSearch {
             force[1 - self.side] = belief.sample_preview_prior(
                 pick, obs, &self.nodes[root].acts[1 - self.side], &mut self.rng,
             );
+        }
+        if let Some(reply) = reply {
+            force[1-self.side] = self.nodes[root].acts[1-self.side].iter().position(|&a| a == reply);
         }
         let mut joint = [0usize; 2];
         let r = run_iteration(

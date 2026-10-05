@@ -35,12 +35,13 @@ fn step(
     let indices = [0, 1].map(|s| {
         let legal = b.legal_choices(dex, s);
         match actions[s] {
-            Some(action) => Some(
-                legal
-                    .iter()
-                    .position(|a| *a == action)
-                    .unwrap_or_else(||panic!("illegal prefix side={s} turn={} wanted={action:?} legal={legal:?} state={}",b.turn,b.essence(dex))),
-            ),
+            Some(action) => Some(legal.iter().position(|a| *a == action).unwrap_or_else(|| {
+                panic!(
+                    "illegal prefix side={s} turn={} wanted={action:?} legal={legal:?} state={}",
+                    b.turn,
+                    b.essence(dex)
+                )
+            })),
             None => {
                 assert!(legal.is_empty());
                 None
@@ -57,8 +58,8 @@ fn step(
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert!(
-        (6..=7).contains(&args.len()),
-        "output seed search-seeds iterations search-seed-base [family]"
+        (6..=8).contains(&args.len()),
+        "output seed search-seeds iterations search-seed-base [family] [probe-iterations]"
     );
     let family = args.get(6).map(String::as_str).unwrap_or("counter");
     assert!(matches!(family, "counter" | "bond"));
@@ -68,6 +69,8 @@ fn main() {
     let count: usize = args[3].parse().unwrap();
     let iterations: u32 = args[4].parse().unwrap();
     let seed_base: u64 = args[5].parse().unwrap();
+    let probe_iterations: u32 = args.get(7).map(|s| s.parse().unwrap()).unwrap_or(0);
+    assert!(probe_iterations < iterations);
     let dex = conformance::load_dex();
     let teams: [Vec<PokemonSet>; 2] = if family == "bond" {
         bond::teams()
@@ -199,7 +202,34 @@ fn main() {
                 s,
                 search_seed,
             );
-            pinned.step(&dex, &beliefs[s], &obs[s], iterations);
+            pinned.step(&dex, &beliefs[s], &obs[s], iterations - probe_iterations);
+            for _ in 0..probe_iterations {
+                let mut selected = None;
+                let joint = pinned.root_matrix();
+                for own in 0..pinned.actions().len() {
+                    if pinned.dominated()[own] {
+                        continue;
+                    }
+                    for &(reply, available) in pinned.root_replies() {
+                        if available != pinned.iterations() {
+                            continue;
+                        }
+                        let count = joint
+                            .iter()
+                            .find(|&&(i, a, _, _)| i == own && a == reply)
+                            .map(|c| c.2)
+                            .unwrap_or(0);
+                        if selected.as_ref().map_or(true, |&(_, _, n)| count < n) {
+                            selected = Some((own, reply, count));
+                        }
+                    }
+                }
+                if let Some((own, reply, _)) = selected {
+                    pinned.step_forced_joint(&dex, &beliefs[s], &obs[s], own, reply);
+                } else {
+                    pinned.step(&dex, &beliefs[s], &obs[s], 1);
+                }
+            }
             let mut play_rng = nc2000_bot::rng::SplitMix64::new(
                 search_seed ^ (s as u64 + 1).wrapping_mul(0xa24baed4963ee407),
             );
@@ -235,7 +265,7 @@ fn main() {
     let output = json!({"schema":"nc2000-counter-mix-v1","family":family,"state":b.essence(&dex),"state_key":b.state_key128().to_string(),
         "validations":validations,"actions":actions.map(|aa|aa.into_iter().map(|a|a.to_input(&dex)).collect::<Vec<_>>()),
         "proof":proof,"rows":rows,"log":b.log,"source_hashes":paths.map(|p|(p,sha(&std::fs::read(p).unwrap()))),
-        "search_seed_base":seed_base,"search_seeds":count,"iterations":iterations,
+        "search_seed_base":seed_base,"search_seeds":count,"iterations":iterations,"probe_iterations":probe_iterations,
         "binary_sha256":sha(&std::fs::read(std::env::current_exe().unwrap()).unwrap()),
         "interpretation":"Legal prefix; fixed known loadouts. Pinned beliefs reconstructed from preview. No shipped-pool or human calibration claim. Matrix continuation values bound the first-action distribution with optimal subsequent play."});
     std::fs::write(

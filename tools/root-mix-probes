@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/root-mix-probes-v1'
+loss = runpy.run_path(str(root/'tools/counter-mix-probe'))['loss']
+specs = [('bond-screen', '2,3,4,5', 16, 27000, 2026110601, 'bond', 2700),
+         ('bond-confirmation', '4,5,6,7', 8, 108000, 2026110701, 'bond', 10800),
+         ('counter-control', '1,2,3,4', 8, 27000, 2026110301, 'counter', 2700)]
+base_paths = [root/'findings/bond-mix-v1/records.json.gz', root/'findings/root-mix-v1/records.json.gz']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def baselines():
+    bond, counter = [json.loads(gzip.decompress(p.read_bytes())) for p in base_paths]
+    return {'bond-screen': bond['records']['screen'], 'bond-confirmation': bond['records']['confirmation'],
+            'counter-control': counter['records']['fresh']}
+
+
+def summarize(records):
+    bases = baselines()
+    assert list(records) == [s[0] for s in specs]
+    groups = []
+    for name, seed, count, iterations, seed_base, family, probes in specs:
+        r, base = records[name], bases[name]
+        assert (r['family'], r['search_seeds'], r['iterations'], r['search_seed_base'], r['probe_iterations']) == (family, count, iterations, seed_base, probes)
+        assert r['state_key'] == base['state_key'] and r['state'] == base['state']
+        for row in [x for x in r['rows'] if x['mode'] == 'full']:
+            old = next(x for x in base['rows'] if x['mode'] == 'full' and x['side'] == row['side'] and x['seed_index'] == row['seed_index'])
+            assert row == old
+        for side in range(2):
+            rows = [x for x in r['rows'] if x['mode'] == 'pinned' and x['side'] == side]
+            old = [x for x in base['rows'] if x['mode'] == 'pinned' and x['side'] == side and x['seed_index'] < count]
+            assert len(rows) == len(old) == count
+            assert [x['seed'] for x in rows] == [x['seed'] for x in old]
+            actions = r['actions'][side]
+            def policies(rs):
+                return [x['candidate_policy'] if x['candidate_policy'] is not None else [float(a == x['choice']) for a in actions] for x in rs]
+            current, before = policies(rows), policies(old)
+            average = lambda ps: [sum(p[i] for p in ps)/count for i in range(len(actions))]
+            for row, policy in zip(rows, current):
+                assert sum(row['visits']) == iterations and sum(c['samples'] for c in row['joint']) == iterations
+                assert all(p == 0 for p, excluded in zip(policy, row['dominated']) if excluded)
+                assert abs(sum(policy)-1) < 1e-12
+                cumulative = 0
+                for i, p in enumerate(policy):
+                    cumulative += p
+                    if row['play_draw'] < cumulative:
+                        assert row['candidate_choice'] == actions[i]
+                        break
+            new_mean, old_mean = average(current), average(before)
+            baseline = [sum(x['choice'] == a for x in old)/count for a in actions]
+            per_seed = [dict(seed_index=row['seed_index'], mixed=row['candidate_policy'] is not None,
+                             before=loss(r, side, previous), after=loss(r, side, following))
+                        for row, previous, following in zip(rows, before, current)]
+            groups.append(dict(case=name, side=side, count=count, iterations=iterations, probe_iterations=probes,
+                               baseline_loss=loss(r, side, baseline),
+                               candidate_before_policy=old_mean, candidate_before_loss=loss(r, side, old_mean),
+                               candidate_after_policy=new_mean, candidate_after_loss=loss(r, side, new_mean),
+                               mixed_before=sum(x['candidate_policy'] is not None for x in old),
+                               mixed_after=sum(x['candidate_policy'] is not None for x in rows),
+                               worst_after_loss_upper=max(x['after'][1] for x in per_seed), per_seed=per_seed))
+    return dict(groups=groups,
+                scope=('Paired search seeds and equal total iteration counts. The final 10% of iterations target the least-sampled '
+                       'eligible own-action/opponent-reply pair, using only replies available in every determinization sampled so far. '
+                       'An unavailable reply in a new determinization uses its ordinary tree policy. Full-information control searches '
+                       'remain bit-identical. This experiment does not establish matched wall-time performance or whole-policy exploitability. '
+                       'Loss bounds concern first-action distributions with optimal continuation in legally replayed fixed-loadout states. '
+                       'Neither joint probes nor mixed selection are enabled in default play.'))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only:
+        b = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert b['baseline_sha256'] == [sha(p.read_bytes()) for p in base_paths]
+        assert summarize(b['records']) == json.loads((archive/'summary.json').read_bytes())
+        print('root-mix-probes: verified paired budgets, unchanged controls, sampler mapping and conditional losses')
+        return
+    assert not archive.exists()
+    env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+    if args.import_directory:
+        directory = args.import_directory
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
+        directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-root-mix-probes-'))
+        for name, seed, count, iterations, base, family, probes in specs:
+            with (directory/(name+'.log')).open('w') as log:
+                subprocess.run([str(root/'target/release/examples/counter_mix_probe'),str(directory/name),seed,
+                                str(count),str(iterations),str(base),family,str(probes)],cwd=root,env=env,stdout=log,stderr=log,check=True)
+            print(name, flush=True)
+    records = {s[0]:json.loads((directory/s[0]/'records.json').read_bytes()) for s in specs}
+    for r in records.values():
+        assert all(sha((root/path).read_bytes()) == expected for path, expected in r['source_hashes'])
+    summary = summarize(records)
+    bundle = dict(records=records, baseline_sha256=[sha(p.read_bytes()) for p in base_paths],
+                  corpora={s[0]:(directory/s[0]/'corpus.jsonl').read_text() for s in specs})
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',', ':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print(json.dumps(summary,indent=2))
+
+
+if __name__ == '__main__':
+    main()
