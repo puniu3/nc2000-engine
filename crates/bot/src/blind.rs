@@ -901,8 +901,7 @@ impl BlindSearch {
             .map(|a| self.my_acts[a])
     }
 
-    pub fn mixed_policy(&self) -> Option<crate::root_policy::MixedRoot> {
-        if self.my_acts.iter().any(|a| matches!(a, SearchChoice::Team(_))) { return None; }
+    fn root_policy_inputs(&self) -> (Vec<bool>,Vec<u32>,Vec<crate::root_policy::RootCell>) {
         let eligible: Vec<bool> = (0..self.my_acts.len()).map(|i|
             self.my_mask.as_ref().map_or(true, |m| m[i]) && !self.my_dominated[i]).collect();
         let availability: Vec<u32> = self.avail.iter().map(|&(_, n)| n).collect();
@@ -910,7 +909,44 @@ impl BlindSearch {
             let reply = self.avail.iter().position(|&(a, _)| a == reply).unwrap();
             crate::root_policy::RootCell { own, reply, samples, mean }
         }).collect();
-        crate::root_policy::mixed_root(&eligible, self.done, &availability, &cells)
+        (eligible,availability,cells)
+    }
+
+    pub fn mixed_policy(&self) -> Option<crate::root_policy::MixedRoot> {
+        if self.my_acts.iter().any(|a|matches!(a,SearchChoice::Team(_))) {return None;}
+        let (eligible,availability,cells)=self.root_policy_inputs();
+        crate::root_policy::mixed_root(&eligible,self.done,&availability,&cells)
+    }
+
+    pub fn estimated_mix_gain(&self) -> Option<f64> {
+        if self.my_acts.iter().any(|a|matches!(a,SearchChoice::Team(_))) {return None;}
+        let (eligible,availability,cells)=self.root_policy_inputs();
+        crate::root_policy::estimated_mix_gain(&eligible,self.done,&availability,&cells)
+    }
+
+    pub fn step_joint_probes(&mut self,dex:&Dex,belief:&Belief,obs:&Observer,n:u32) -> u32 {
+        for _ in 0..n {
+            let mut selected=None;
+            for own in 0..self.my_acts.len() {
+                if self.my_dominated[own] || !self.my_mask.as_ref().map_or(true,|m|m[own]) {continue;}
+                for &(reply,available) in &self.avail {
+                    if available!=self.done {continue;}
+                    let count=self.joint.iter().find(|&&(i,a,_,_)|i==own && a==reply).map(|c|c.2).unwrap_or(0);
+                    if selected.as_ref().map_or(true,|&(_,_,n)|count<n) {selected=Some((own,reply,count));}
+                }
+            }
+            if let Some((own,reply,_))=selected {self.step_forced_joint(dex,belief,obs,own,reply);}
+            else {self.step_one(dex,belief,obs);}
+        }
+        self.done
+    }
+
+    pub fn finish_with_mixed_probes(&mut self,dex:&Dex,belief:&Belief,obs:&Observer,total:u32,reserved:u32) -> u32 {
+        assert!(reserved<total && self.done<=total-reserved);
+        self.step(dex,belief,obs,total-reserved-self.done);
+        let probe=reserved>0 && self.estimated_mix_gain().is_some_and(|gain|gain>0.02) && self.mixed_policy().is_none();
+        if probe {self.step_joint_probes(dex,belief,obs,reserved);reserved}
+        else {self.step(dex,belief,obs,reserved);0}
     }
 
     pub fn sample_mixed(&self, draw: f64) -> Option<SearchChoice> {

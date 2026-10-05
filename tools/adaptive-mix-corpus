@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+import argparse
+import concurrent.futures
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/adaptive-mix-corpus-v1'
+old_path=root/'findings/mixed-root-corpus-v1/records.json.gz'
+reference_path=root/'findings/policy-gap-v1/records.json.gz'
+corpus_path=root/'findings/policy-gap-v1/corpus.jsonl.gz'
+helpers=runpy.run_path(str(root/'tools/mixed-root-corpus'))
+
+
+def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    old=json.loads(gzip.decompress(old_path.read_bytes()))['records']
+    selection=helpers['selected']()
+    assert list(records)==list(old)==[name for _,_,name in selection]
+    probed=[];changed=[]
+    for position,endpoint,name in selection:
+        r=records[name];baseline=old[name]
+        assert r['config']=={**baseline['config'],'probe_iterations':10800}
+        assert r['state_key']==baseline['state_key'] and r['state']==baseline['state']
+        assert r['rows']==[] and len(r['observed']['rows'])==4
+        for row,before in zip(r['observed']['rows'],baseline['observed']['rows']):
+            assert (row['mode'],row['seed_index'],row['seed'],row['iterations'])==(before['mode'],before['seed_index'],before['seed'],27000)
+            assert sum(row['visits'])==27000 and row['actions']==before['actions']
+            identifier=f"{name}:{row['mode']}:{row['seed_index']}"
+            if row['probes_used']==0:
+                for field,value in before.items():
+                    if field!='elapsed_ms':assert row[field]==value,(identifier,field)
+                assert row['candidate_policy'] is None
+            else:
+                assert row['probes_used']==10800
+                probed.append(identifier)
+            policy=row['candidate_policy']
+            if policy is None:policy=[float(a==row['choice']) for a in row['actions']]
+            assert len(policy)==len(row['actions']) and min(policy)>=0 and abs(sum(policy)-1)<1e-10
+            fallback=[float(a==before['choice']) for a in row['actions']]
+            if policy!=fallback:
+                changed.append(dict(id=identifier,game=position['game'],decision=position['decision'],side=endpoint['side'],
+                                    actions=row['actions'],before=before['choice'],after_policy=policy,mixed=row['candidate_policy'] is not None,
+                                    before_loss=helpers['loss'](position['reference'],endpoint['side'],fallback),
+                                    after_loss=helpers['loss'](position['reference'],endpoint['side'],policy),
+                                    belief=r['observed']['belief']))
+    return dict(searches=372,probed=probed,unchanged_searches=372-len(probed),changed_policies=changed,
+                scope=('Paired with the frozen 372-search census, at the same 27000 total iterations. The scheduler reserves 10800 '
+                       'iterations, uses them as least-sampled-joint probes only when the warm search estimates a mixing gain above '
+                       '0.02 but fails the mixed-policy margin, and otherwise finishes ordinary search bit-identically. '
+                       'Archived full-state bounds may remain uninformative for triggered positions; policy changes are not evidence '
+                       'of strength improvement without a separate certificate or controlled continuation measurement. Default play is unchanged.'))
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true');args=parser.parse_args()
+    if args.verify_only:
+        b=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert b['baseline_sha256']==sha(old_path.read_bytes()) and b['reference_sha256']==sha(reference_path.read_bytes())
+        s=summarize(b['records']);assert s==json.loads((archive/'summary.json').read_bytes())
+        print(f"adaptive-mix-corpus: {len(s['probed'])} probed searches, {len(s['changed_policies'])} changed policies verified")
+        return
+    assert not archive.exists()
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','fixed_reply_counterpolicy'],cwd=root,env=env,check=True)
+    directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-adaptive-mix-'));print(directory,flush=True)
+    corpus=gzip.decompress(corpus_path.read_bytes());(directory/'corpus.jsonl').write_bytes(corpus)
+    def run(entry):
+        p,e,name=entry
+        cfg=dict(game=p['game'],decision=p['decision'],observed_side=e['side'],iterations=[27000],search_seeds=2,
+                 seed=2026110501,full_state=False,probe_iterations=10800)
+        raw=json.dumps(cfg).encode();(directory/(name+'.config.json')).write_bytes(raw)
+        with (directory/(name+'.log')).open('w') as log:
+            subprocess.run([str(root/'target/release/examples/fixed_reply_counterpolicy'),str(directory/'corpus.jsonl'),
+                            'corpus-search',str(directory/(name+'.config.json')),str(directory/(name+'.json'))],
+                           cwd=root,env=env,stdout=log,stderr=log,check=True)
+        r=json.loads((directory/(name+'.json')).read_bytes())
+        assert r['config_sha256']==sha(raw) and r['manifest']['corpus_sha256']==sha(corpus)
+        assert all(sha((root/path).read_bytes())==value for path,value in r['search_source_hashes'])
+        print(name,flush=True);return name,r
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:records=dict(executor.map(run,helpers['selected']()))
+    summary=summarize(records)
+    bundle=dict(records=records,baseline_sha256=sha(old_path.read_bytes()),reference_sha256=sha(reference_path.read_bytes()))
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print(json.dumps(summary,indent=2))
+
+
+if __name__=='__main__':main()

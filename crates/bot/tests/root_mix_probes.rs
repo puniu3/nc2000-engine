@@ -44,4 +44,23 @@ fn joint_probes_force_legal_replies_and_preserve_the_unavailable_reply_fallback(
         .iter()
         .all(|&(own, reply, _, _)| own == 0 && reply == surf));
     assert_eq!(forced.root_matrix().iter().map(|c| c.2).sum::<u32>(), 20);
+    forced.step_joint_probes(&dex, &belief, &obs, 80);
+    assert_eq!(forced.iterations(), 100);
+    assert!(forced.root_matrix().iter().all(|c| c.2 == 25));
+    forced.mask_actions(&[true, false]);
+    let blocked = forced.visits()[1];
+    forced.step_joint_probes(&dex, &belief, &obs, 4);
+    assert_eq!(forced.visits()[1], blocked);
+    let mut plain = BlindSearch::new(&b, &dex, RmConfig::default(), 0, 11);
+    let mut adaptive = BlindSearch::new(&b, &dex, RmConfig::default(), 0, 11);
+    plain.mask_actions(&[false, true]);
+    adaptive.mask_actions(&[false, true]);
+    plain.step(&dex, &belief, &obs, 100);
+    assert_eq!(
+        adaptive.finish_with_mixed_probes(&dex, &belief, &obs, 100, 40),
+        0
+    );
+    assert_eq!(plain.visits(), adaptive.visits());
+    assert_eq!(plain.means(), adaptive.means());
+    assert_eq!(plain.root_matrix(), adaptive.root_matrix());
 }

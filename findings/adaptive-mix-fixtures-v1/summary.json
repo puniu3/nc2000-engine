@@ -1,0 +1,692 @@
+{
+  "groups": [
+    {
+      "case": "bond",
+      "side": 0,
+      "count": 16,
+      "probed": 16,
+      "mixed": 16,
+      "policy": [
+        0.16093935354124483,
+        0.8390606464587552
+      ],
+      "loss": [
+        0.004695673457192568,
+        0.00469592583759274
+      ],
+      "worst_loss_upper": 0.010650194194268025,
+      "per_seed": [
+        {
+          "seed_index": 0,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.008548634505168276,
+            0.008548882252764114
+          ]
+        },
+        {
+          "seed_index": 1,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.0012528082560858632,
+            0.0012530647761906989
+          ]
+        },
+        {
+          "seed_index": 2,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.007763267465076046,
+            0.007763516156998001
+          ]
+        },
+        {
+          "seed_index": 3,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.003489589803808543,
+            0.0034898436344049434
+          ]
+        },
+        {
+          "seed_index": 4,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.010649948973294876,
+            0.010650194194268025
+          ]
+        },
+        {
+          "seed_index": 5,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.004089716017535336,
+            0.0040898371745235525
+          ]
+        },
+        {
+          "seed_index": 6,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.007170981771479632,
+            0.007171231175566525
+          ]
+        },
+        {
+          "seed_index": 7,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.006929551184554581,
+            0.006929800878937872
+          ]
+        },
+        {
+          "seed_index": 8,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.002310785800478493,
+            0.002311041048470025
+          ]
+        },
+        {
+          "seed_index": 9,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.005774370212701227,
+            0.005774621296075302
+          ]
+        },
+        {
+          "seed_index": 10,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.004766543547848579,
+            0.004766795843034471
+          ]
+        },
+        {
+          "seed_index": 11,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.00853409481189959,
+            0.008534215944833464
+          ]
+        },
+        {
+          "seed_index": 12,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.001247291614971524,
+            0.0012475481417095675
+          ]
+        },
+        {
+          "seed_index": 13,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.004233478638052563,
+            0.004233731574196256
+          ]
+        },
+        {
+          "seed_index": 14,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.009327592613835834,
+            0.00932783942481164
+          ]
+        },
+        {
+          "seed_index": 15,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.0034696078127387313,
+            0.003469861667361496
+          ]
+        }
+      ]
+    },
+    {
+      "case": "bond",
+      "side": 1,
+      "count": 16,
+      "probed": 8,
+      "mixed": 0,
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "loss": [
+        0.01633219666008435,
+        0.01633247432475115
+      ],
+      "worst_loss_upper": 0.01633247432475115,
+      "per_seed": [
+        {
+          "seed_index": 0,
+          "probes": 10800,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 1,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 2,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 3,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 4,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 5,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 6,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 7,
+          "probes": 10800,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 8,
+          "probes": 10800,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 9,
+          "probes": 10800,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 10,
+          "probes": 10800,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 11,
+          "probes": 10800,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 12,
+          "probes": 10800,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 13,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 14,
+          "probes": 10800,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        },
+        {
+          "seed_index": 15,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.01633219666008435,
+            0.01633247432475115
+          ]
+        }
+      ]
+    },
+    {
+      "case": "hp82",
+      "side": 0,
+      "count": 8,
+      "probed": 7,
+      "mixed": 8,
+      "policy": [
+        0.1318036253463953,
+        0.8681963746536048
+      ],
+      "loss": [
+        0,
+        0.0021579329179284763
+      ],
+      "worst_loss_upper": 0.03457738486040957,
+      "per_seed": [
+        {
+          "seed_index": 0,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.006653014721669815,
+            0.008930817330142537
+          ]
+        },
+        {
+          "seed_index": 1,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.00019340929847796445,
+            0.0025390086284530406
+          ]
+        },
+        {
+          "seed_index": 2,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.0014791320411899288,
+            0.003811237081497726
+          ]
+        },
+        {
+          "seed_index": 3,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.0003782534998406861,
+            0.0027219127994238036
+          ]
+        },
+        {
+          "seed_index": 4,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0,
+            0.0012280333976443015
+          ]
+        },
+        {
+          "seed_index": 5,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.03288124532374682,
+            0.03457738486040957
+          ]
+        },
+        {
+          "seed_index": 6,
+          "probes": 10800,
+          "mixed": true,
+          "loss": [
+            0.0027059301313519467,
+            0.004395309502509678
+          ]
+        },
+        {
+          "seed_index": 7,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0004989768652663511,
+            0.0021878618134414025
+          ]
+        }
+      ]
+    },
+    {
+      "case": "hp82",
+      "side": 1,
+      "count": 8,
+      "probed": 1,
+      "mixed": 0,
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "loss": [
+        0.015185174170491486,
+        0.017718770598183047
+      ],
+      "worst_loss_upper": 0.017718770598183047,
+      "per_seed": [
+        {
+          "seed_index": 0,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.015185174170491486,
+            0.017718770598183047
+          ]
+        },
+        {
+          "seed_index": 1,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.015185174170491486,
+            0.017718770598183047
+          ]
+        },
+        {
+          "seed_index": 2,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.015185174170491486,
+            0.017718770598183047
+          ]
+        },
+        {
+          "seed_index": 3,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.015185174170491486,
+            0.017718770598183047
+          ]
+        },
+        {
+          "seed_index": 4,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.015185174170491486,
+            0.017718770598183047
+          ]
+        },
+        {
+          "seed_index": 5,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.015185174170491486,
+            0.017718770598183047
+          ]
+        },
+        {
+          "seed_index": 6,
+          "probes": 0,
+          "mixed": false,
+          "loss": [
+            0.015185174170491486,
+            0.017718770598183047
+          ]
+        },
+        {
+          "seed_index": 7,
+          "probes": 10800,
+          "mixed": false,
+          "loss": [
+            0.015185174170491486,
+            0.017718770598183047
+          ]
+        }
+      ]
+    },
+    {
+      "case": "counter",
+      "side": 0,
+      "count": 8,
+      "probed": 0,
+      "mixed": 8,
+      "policy": [
+        0.48448607485733286,
+        0.5155139251426671
+      ],
+      "loss": [
+        8.359441503825444e-05,
+        8.359461503825443e-05
+      ],
+      "worst_loss_upper": 0.0018644298312223613,
+      "per_seed": [
+        {
+          "seed_index": 0,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            6.007855668611334e-05,
+            6.007875668611334e-05
+          ]
+        },
+        {
+          "seed_index": 1,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0018644296312223612,
+            0.0018644298312223613
+          ]
+        },
+        {
+          "seed_index": 2,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0003645472511173503,
+            0.00036454745111735024
+          ]
+        },
+        {
+          "seed_index": 3,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            8.635070709062937e-05,
+            8.635090709062936e-05
+          ]
+        },
+        {
+          "seed_index": 4,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0008265627920478551,
+            0.0008265629920478552
+          ]
+        },
+        {
+          "seed_index": 5,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0003909193501711122,
+            0.00039091955017111216
+          ]
+        },
+        {
+          "seed_index": 6,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0002777555879004495,
+            0.00027775578790044945
+          ]
+        },
+        {
+          "seed_index": 7,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0007268609232487038,
+            0.0007268611232487039
+          ]
+        }
+      ]
+    },
+    {
+      "case": "counter",
+      "side": 1,
+      "count": 8,
+      "probed": 0,
+      "mixed": 8,
+      "policy": [
+        0.48316476971727507,
+        0.5168352302827249,
+        0.0
+      ],
+      "loss": [
+        4.2482588632494714e-05,
+        4.2482788632494714e-05
+      ],
+      "worst_loss_upper": 0.000965904465499537,
+      "per_seed": [
+        {
+          "seed_index": 0,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            6.646672690758521e-05,
+            6.64669269075852e-05
+          ]
+        },
+        {
+          "seed_index": 1,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0009659042654995369,
+            0.000965904465499537
+          ]
+        },
+        {
+          "seed_index": 2,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0005437842653018914,
+            0.0005437844653018915
+          ]
+        },
+        {
+          "seed_index": 3,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.00015396233241644347,
+            0.00015396253241644348
+          ]
+        },
+        {
+          "seed_index": 4,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            9.455864365332795e-05,
+            9.455884365332794e-05
+          ]
+        },
+        {
+          "seed_index": 5,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.00043978843642256956,
+            0.0004397886364225695
+          ]
+        },
+        {
+          "seed_index": 6,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0003117154598175714,
+            0.00031171565981757135
+          ]
+        },
+        {
+          "seed_index": 7,
+          "probes": 0,
+          "mixed": true,
+          "loss": [
+            0.0007246208024698857,
+            0.0007246210024698858
+          ]
+        }
+      ]
+    }
+  ],
+  "scope": "Adaptive branch chooses between ordinary search and 40% joint probing at 16200 iterations. Every final search is bit-identical to the corresponding previously measured branch at the same seed. Certified losses concern first-action distributions with optimal continuation in fixed-loadout states. A passing warm-search margin can later fail as nonstationary search estimates change; final mix/fallback outcomes are retained. Default play remains unchanged."
+}

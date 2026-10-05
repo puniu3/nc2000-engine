@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/adaptive-mix-fixtures-v1'
+baseline_path=root/'findings/mix-budget-v1/records.json.gz'
+helpers=runpy.run_path(str(root/'tools/mix-budget-audit'))
+loss=helpers['loss'];specs=helpers['specs']
+
+
+def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    base=json.loads(gzip.decompress(baseline_path.read_bytes()))['records']
+    assert list(records)==[s[0] for s in specs]
+    groups=[]
+    for name,seed,count,seed_base,family in specs:
+        r=records[name]
+        assert r['adaptive_probes'] is True and r['probe_iterations']==10800
+        assert (r['search_seeds'],r['iterations'],r['search_seed_base'],r['family'])==(count,27000,seed_base,family)
+        assert r['state_key']==base[name]['base']['state_key']
+        for side in range(2):
+            actions=r['actions'][side]
+            rows=[x for x in r['rows'] if x['mode']=='pinned' and x['side']==side]
+            assert len(rows)==count
+            policies=[];per_seed=[]
+            for row in rows:
+                assert row['probes_used'] in (0,10800)
+                arm='probe' if row['probes_used'] else 'base'
+                old=next(x for x in base[name][arm]['rows'] if x['mode']=='pinned' and x['side']==side and x['seed_index']==row['seed_index'])
+                for field,value in old.items():assert row[field]==value,(name,side,row['seed_index'],field)
+                p=row['candidate_policy'] if row['candidate_policy'] is not None else [float(a==row['choice']) for a in actions]
+                policies.append(p)
+                per_seed.append(dict(seed_index=row['seed_index'],probes=row['probes_used'],mixed=row['candidate_policy'] is not None,loss=loss(r,side,p)))
+            mean=[sum(p[i] for p in policies)/count for i in range(len(actions))]
+            groups.append(dict(case=name,side=side,count=count,probed=sum(x['probes_used']>0 for x in rows),
+                               mixed=sum(x['candidate_policy'] is not None for x in rows),policy=mean,loss=loss(r,side,mean),
+                               worst_loss_upper=max(x['loss'][1] for x in per_seed),per_seed=per_seed))
+    return dict(groups=groups,scope=('Adaptive branch chooses between ordinary search and 40% joint probing at 16200 iterations. '
+        'Every final search is bit-identical to the corresponding previously measured branch at the same seed. '
+        'Certified losses concern first-action distributions with optimal continuation in fixed-loadout states. '
+        'A passing warm-search margin can later fail as nonstationary search estimates change; final mix/fallback outcomes are retained. '
+        'Default play remains unchanged.'))
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true');parser.add_argument('--import-directory',type=pathlib.Path);args=parser.parse_args()
+    if args.verify_only:
+        b=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert b['baseline_sha256']==sha(baseline_path.read_bytes())
+        assert summarize(b['records'])==json.loads((archive/'summary.json').read_bytes())
+        print('adaptive-mix-fixtures: verified branch parity and certified losses for 64 policies')
+        return
+    assert not archive.exists();env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if args.import_directory:directory=args.import_directory
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
+        directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-adaptive-mix-fixtures-'))
+        for name,seed,count,base,family in specs:
+            with (directory/(name+'.log')).open('w') as log:
+                subprocess.run([str(root/'target/release/examples/counter_mix_probe'),str(directory/name),seed,str(count),
+                                '27000',str(base),family,'10800','adaptive'],cwd=root,env=env,stdout=log,stderr=log,check=True)
+            print(name,flush=True)
+    records={s[0]:json.loads((directory/s[0]/'records.json').read_bytes()) for s in specs}
+    for r in records.values():assert all(sha((root/path).read_bytes())==value for path,value in r['source_hashes'])
+    summary=summarize(records)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(dict(records=records,baseline_sha256=sha(baseline_path.read_bytes())),separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print(json.dumps(summary,indent=2))
+
+
+if __name__=='__main__':main()

@@ -12,6 +12,47 @@ pub struct MixedRoot {
     pub estimated_advantage: f64,
 }
 
+pub fn estimated_mix_gain(
+    eligible: &[bool],
+    iterations: u32,
+    availability: &[u32],
+    cells: &[RootCell],
+) -> Option<f64> {
+    let actions: Vec<usize> = (0..eligible.len()).filter(|&i| eligible[i]).collect();
+    let n = actions.len();
+    let m = availability.len();
+    if iterations == 0 || n < 2 || m < 2 || availability.iter().any(|&a| a != iterations) {
+        return None;
+    }
+    let mut matrix = vec![0.5; n * m];
+    for (i, &own) in actions.iter().enumerate() {
+        for j in 0..m {
+            if let Some(cell) = cells.iter().find(|c| c.own == own && c.reply == j) {
+                if cell.samples == 0 || !(0.0..=1.0).contains(&cell.mean) {
+                    return None;
+                }
+                matrix[i * m + j] = cell.mean;
+            }
+        }
+    }
+    let solution = solve_matrix_full(&matrix, n, m);
+    if solution.gap > 1e-8 {
+        return None;
+    }
+    let guarantee = (0..m)
+        .map(|j| {
+            (0..n)
+                .map(|i| solution.x[i] * matrix[i * m + j])
+                .sum::<f64>()
+        })
+        .fold(f64::INFINITY, f64::min);
+    let pure = matrix
+        .chunks(m)
+        .map(|row| row.iter().copied().fold(f64::INFINITY, f64::min))
+        .fold(f64::NEG_INFINITY, f64::max);
+    Some((guarantee - pure).max(0.))
+}
+
 // Search continuations are nonstationary; these margins do not certify game values.
 pub fn mixed_root(
     eligible: &[bool],
@@ -117,6 +158,29 @@ mod tests {
         assert!(mixed_root(&[true, true], 0, &[0, 0], &values).is_none());
         assert!(mixed_root(&[true, true], 4, &[4, 4], &cells(&[0., 1., 1., 0.], 2, 1)).is_none());
         assert!(mixed_root(&[true, true], 40000, &[40000, 40000], &values[..3]).is_none());
+    }
+
+    #[test]
+    fn promising_but_uncertain_matrices_request_more_evidence() {
+        let crossed = cells(&[0., 1., 1., 0.], 2, 1);
+        assert_eq!(
+            estimated_mix_gain(&[true, true], 4, &[4, 4], &crossed),
+            Some(0.5)
+        );
+        assert!(mixed_root(&[true, true], 4, &[4, 4], &crossed).is_none());
+        assert_eq!(
+            estimated_mix_gain(&[true, true], 4, &[4, 3], &crossed),
+            None
+        );
+        assert_eq!(
+            estimated_mix_gain(
+                &[true, true],
+                4,
+                &[4, 4],
+                &cells(&[0.8, 0.9, 0.2, 0.3], 2, 1)
+            ),
+            Some(0.)
+        );
     }
 
     #[test]

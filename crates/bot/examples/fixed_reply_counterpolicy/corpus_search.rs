@@ -10,6 +10,8 @@ struct Config {
     observed_side:Option<usize>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     full_state:Option<bool>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    probe_iterations:Option<u32>,
 }
 
 fn search_seed(cfg:&Config,index:usize)->u64 {
@@ -41,8 +43,13 @@ fn observed_search(dex:&Dex,game:&Game,cfg:&Config,root:&Battle)->Value {
             let seed=search_seed(cfg,index);let started=Instant::now();
             let mut search=BlindSearch::new(&b,dex,RmConfig {c:0.4,..Default::default()},side,seed);
             for &iterations in &cfg.iterations {
-                search.step(dex,belief,&obs,iterations-search.iterations());
+                let probes_used=if let Some(probes)=cfg.probe_iterations {
+                    assert_eq!(cfg.iterations.len(),1);
+                    search.finish_with_mixed_probes(dex,belief,&obs,iterations,probes)
+                } else {search.step(dex,belief,&obs,iterations-search.iterations());0};
+                let mixed=search.mixed_policy();
                 rows.push(json!({"mode":mode,"seed_index":index,"seed":seed,"iterations":iterations,
+                    "probes_used":probes_used,"candidate_policy":mixed.map(|m|m.policy),
                     "choice":search.best().map(|a|nc2000_bot::player::action_input(dex,a)),
                     "actions":search.actions().iter().map(|&a|nc2000_bot::player::action_input(dex,a)).collect::<Vec<_>>(),
                     "visits":search.visits(),"means":search.means(),"dominated":search.dominated(),"nodes":search.node_count(),
@@ -90,7 +97,7 @@ pub(super) fn execute(args:&[String]) {
     let observed=observed_search(&dex,&game,&cfg,&root);
     let paths=["crates/bot/examples/fixed_reply_counterpolicy/corpus_search.rs","crates/bot/src/smmcts.rs",
         "crates/bot/src/mcts.rs","crates/bot/src/eval.rs","crates/bot/src/agent.rs","crates/bot/src/rng.rs",
-        "crates/bot/src/blind.rs","crates/bot/src/belief.rs","crates/bot/src/observe.rs"];
+        "crates/bot/src/blind.rs","crates/bot/src/belief.rs","crates/bot/src/observe.rs","crates/bot/src/root_policy.rs"];
     let output=json!({"schema":"nc2000-corpus-search-v1","config":cfg,"config_sha256":sha(&cfg_raw),
         "state_key":root.state_key128().to_string(),"state":root.essence(&dex),"rows":rows,"observed":observed,
         "manifest":manifest(&dex,&raw),"search_source_hashes":paths.map(|p|(p,sha(&std::fs::read(p).unwrap()))),

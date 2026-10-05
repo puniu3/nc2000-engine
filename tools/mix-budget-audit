@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/mix-budget-v1'
+loss = runpy.run_path(str(root/'tools/counter-mix-probe'))['loss']
+specs = [('bond', '2,3,4,5', 16, 2026110801, 'bond'),
+         ('hp82', '5,6,7,8', 8, 2026110901, 'bond'),
+         ('counter', '1,2,3,4', 8, 2026111001, 'counter')]
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    assert list(records) == [s[0] for s in specs]
+    groups = []
+    for name, seed, count, base, family in specs:
+        baseline, probed = records[name]['base'], records[name]['probe']
+        assert baseline['state_key'] == probed['state_key'] and baseline['state'] == probed['state']
+        for r, n in [(baseline,0),(probed,10800)]:
+            assert (r['family'],r['iterations'],r['search_seeds'],r['search_seed_base'],r['probe_iterations']) == (family,27000,count,base,n)
+            assert all(v['ok'] for v in r['validations'])
+        assert [r for r in baseline['rows'] if r['mode']=='full'] == [r for r in probed['rows'] if r['mode']=='full']
+        for side in range(2):
+            actions = probed['actions'][side]
+            result = {}
+            for mode, r in [('base',baseline),('probe',probed)]:
+                rows = [row for row in r['rows'] if row['mode']=='pinned' and row['side']==side]
+                assert len(rows) == count
+                policies = [row['candidate_policy'] if row['candidate_policy'] is not None else [float(a==row['choice']) for a in actions] for row in rows]
+                for row, p in zip(rows,policies):
+                    assert sum(row['visits']) == 27000 and abs(sum(p)-1)<1e-12
+                    assert row['candidate_choice'] in actions
+                    assert all(v==0 for v,excluded in zip(p,row['dominated']) if excluded)
+                mean = [sum(p[i] for p in policies)/count for i in range(len(actions))]
+                default = [sum(row['choice']==a for row in rows)/count for a in actions]
+                result[mode] = dict(mixed=sum(row['candidate_policy'] is not None for row in rows),
+                                    policy=mean,loss=loss(probed,side,mean),default_loss=loss(probed,side,default),
+                                    worst_loss_upper=max(loss(probed,side,p)[1] for p in policies),
+                                    per_seed=[dict(seed=row['seed'],policy=p,loss=loss(probed,side,p)) for row,p in zip(rows,policies)])
+            assert [p['seed'] for p in result['base']['per_seed']] == [p['seed'] for p in result['probe']['per_seed']]
+            groups.append(dict(case=name,side=side,count=count,actions=actions,value=probed['proof']['value'],**result))
+    return dict(groups=groups, scope=('Fresh paired seeds, 27000 total search iterations in both arms. Probe arm uses 16200 ordinary '
+        'iterations followed by 10800 least-sampled-joint probes. Default selection remains unchanged. Loss bounds assess '
+        'first-action probability distributions with optimal continuation in fixed-loadout states. The HP82 reference retains '
+        'a roughly 0.00114 value interval. Group averages do not certify every individual search; per-seed losses are retained.'))
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only:
+        b=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(b['records']) == json.loads((archive/'summary.json').read_bytes())
+        print('mix-budget: verified 64 paired distributions, fixed total budgets and unchanged full-state controls')
+        return
+    assert not archive.exists()
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if args.import_directory:
+        directory=args.import_directory
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
+        directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-mix-budget-'))
+        for name,seed,count,base,family in specs:
+            for mode,probes in [('base',0),('probe',10800)]:
+                with (directory/(name+'-'+mode+'.log')).open('w') as log:
+                    subprocess.run([str(root/'target/release/examples/counter_mix_probe'),str(directory/(name+'-'+mode)),
+                                    seed,str(count),'27000',str(base),family,str(probes)],cwd=root,env=env,stdout=log,stderr=log,check=True)
+                print(name,mode,flush=True)
+    records={name:{mode:json.loads((directory/(name+'-'+mode)/'records.json').read_bytes()) for mode in ['base','probe']} for name,*_ in specs}
+    for modes in records.values():
+        for r in modes.values():
+            assert all(sha((root/p).read_bytes()) == value for p,value in r['source_hashes'])
+    summary=summarize(records)
+    bundle=dict(records=records,corpora={name:{mode:(directory/(name+'-'+mode)/'corpus.jsonl').read_text() for mode in ['base','probe']} for name,*_ in specs})
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print('mix-budget: archived paired 40% probe study')
+
+
+if __name__=='__main__':
+    main()
