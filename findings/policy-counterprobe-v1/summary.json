@@ -1,0 +1,111 @@
+{
+  "schema": "nc2000-policy-counterprobe-v1",
+  "arms": [
+    {
+      "own_rest_percent": null,
+      "opponent_rest_percent": null,
+      "opponent_waking_rest": false,
+      "samples": 1000000,
+      "wins": 96576,
+      "ties": 0,
+      "losses": 903424,
+      "mean_score": 0.096576,
+      "nominal_score_upper": 0.09763596877456611,
+      "screen_below_required_lower_bound": false
+    },
+    {
+      "own_rest_percent": 75,
+      "opponent_rest_percent": null,
+      "opponent_waking_rest": false,
+      "samples": 1000000,
+      "wins": 9835,
+      "ties": 0,
+      "losses": 990165,
+      "mean_score": 0.009835,
+      "nominal_score_upper": 0.010192165127497268,
+      "screen_below_required_lower_bound": true
+    },
+    {
+      "own_rest_percent": null,
+      "opponent_rest_percent": 75,
+      "opponent_waking_rest": false,
+      "samples": 1000000,
+      "wins": 42237,
+      "ties": 0,
+      "losses": 957763,
+      "mean_score": 0.042237,
+      "nominal_score_upper": 0.042960317132421044,
+      "screen_below_required_lower_bound": false
+    },
+    {
+      "own_rest_percent": 75,
+      "opponent_rest_percent": 75,
+      "opponent_waking_rest": false,
+      "samples": 1000000,
+      "wins": 5957,
+      "ties": 0,
+      "losses": 994043,
+      "mean_score": 0.005957,
+      "nominal_score_upper": 0.0062364725067392554,
+      "screen_below_required_lower_bound": true
+    },
+    {
+      "own_rest_percent": null,
+      "opponent_rest_percent": 99,
+      "opponent_waking_rest": true,
+      "samples": 1000000,
+      "wins": 24215,
+      "ties": 0,
+      "losses": 975785,
+      "mean_score": 0.024215,
+      "nominal_score_upper": 0.02476888321557963,
+      "screen_below_required_lower_bound": true
+    },
+    {
+      "own_rest_percent": 75,
+      "opponent_rest_percent": 99,
+      "opponent_waking_rest": true,
+      "samples": 1000000,
+      "wins": 3403,
+      "ties": 0,
+      "losses": 996597,
+      "mean_score": 0.003403,
+      "nominal_score_upper": 0.0036155573618606445,
+      "screen_below_required_lower_bound": true
+    }
+  ],
+  "best_observed_counterpolicies": [
+    {
+      "own_rest_percent": null,
+      "opponent_rest_percent": 99,
+      "opponent_waking_rest": true,
+      "samples": 1000000,
+      "wins": 24215,
+      "ties": 0,
+      "losses": 975785,
+      "mean_score": 0.024215,
+      "nominal_score_upper": 0.02476888321557963,
+      "screen_below_required_lower_bound": true
+    },
+    {
+      "own_rest_percent": 75,
+      "opponent_rest_percent": 99,
+      "opponent_waking_rest": true,
+      "samples": 1000000,
+      "wins": 3403,
+      "ties": 0,
+      "losses": 996597,
+      "mean_score": 0.003403,
+      "nominal_score_upper": 0.0036155573618606445,
+      "screen_below_required_lower_bound": true
+    }
+  ],
+  "target_fixed_reply_lower_bound": 0.027,
+  "family_alpha": 0.01,
+  "comparisons": 6,
+  "sampling_model": "One-sided binomial KL upper bounds for non-loss indicators; ties count as successes for the upper bound and half for mean score. Bonferroni covers six predeclared confirmation comparisons. Coverage is nominal under an independent-trial model; these are deterministic pseudorandom seed sweeps, not exact chance enumeration.",
+  "prior_hashes": {
+    "findings/policy-lower-order-v1/summary.json": "fce41b121e0ead0527fedb82344aeeb91705cc36fbe7042588425dfea6f1b1f4"
+  },
+  "interpretation": "A concrete counterpolicy can upper-bound a fixed strategy guarantee when its pair value is known. These sampled pair values screen whether the existing deterministic strategies are promising witnesses for the 0.027 obligation. They do not upper-bound the unrestricted game value, establish optimal opponent play, calibrate against humans, or replace any exact first-decision certificate. No sampled value is transferred into the certified matrix."
+}

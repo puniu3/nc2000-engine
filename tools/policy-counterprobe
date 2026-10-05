@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import math
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-counterprobe-v1'
+stages = {'pilot': (20000, 2026100701), 'confirmation': (1000000, 2026100737)}
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def nominal_upper(successes, n, delta):
+    p = successes / n
+    if p == 1:
+        return 1.0
+    target = math.log(1 / delta) / n
+    lo, hi = p, 1.0
+    for _ in range(80):
+        q = (lo + hi) / 2
+        if q == 1:
+            break
+        divergence = (p * math.log(p / q) if p else 0) + (1 - p) * math.log((1 - p) / (1 - q))
+        if divergence <= target:
+            lo = q
+        else:
+            hi = q
+    return hi
+
+
+def summarize(records):
+    assert set(records) == set(stages)
+    assert len({r['manifest']['binary_sha256'] for r in records.values()}) == 1
+    assert records['pilot']['manifest']['source_hashes'] == records['confirmation']['manifest']['source_hashes']
+    assert records['pilot']['manifest']['dex_fingerprint'] == records['confirmation']['manifest']['dex_fingerprint']
+    layouts = [(None, None), (75, None), (None, 75), (75, 75), (None, 99), (75, 99)]
+    seed_inputs = []
+    for stage, record in records.items():
+        n, seed = stages[stage]
+        assert record['schema'] == 'nc2000-fixed-reply-counterpolicy-v1'
+        assert record['state_key'] == '199433906935569759004884428941975153695'
+        assert record['game'] == 17 and record['decision'] == 21
+        assert len(record['arms']) == len(layouts)
+        for arm, layout in zip(record['arms'], layouts):
+            assert (arm['own_rest_percent'], arm['opponent_rest_percent']) == layout
+            assert arm['opponent_waking_rest'] == (layout[1] == 99)
+            assert arm['samples'] == n and arm['seed'] == seed
+            assert arm['wins'] + arm['ties'] + arm['losses'] == n
+            assert arm['mean_score'] == (arm['wins'] + .5 * arm['ties']) / n
+            assert 0 < arm['max_steps'] <= 2048 and n <= arm['steps'] <= 2048 * n
+            assert arm['first_trial_prefix'][0]['choices'] == ['move bodyslam', 'switch 2']
+            assert arm['first_trial_prefix'][1]['choices'] == ['move rest' if layout[0] else 'move bodyslam', 'switch 2']
+        seed_inputs.append({(seed + i * 0x9e3779b97f4a7c15) % (1 << 64) for i in range(n)})
+    assert not seed_inputs[0].intersection(seed_inputs[1])
+    alpha = .01
+    threshold = .027
+    arms = []
+    for arm in records['confirmation']['arms']:
+        upper = nominal_upper(arm['wins'] + arm['ties'], arm['samples'], alpha / len(layouts))
+        arms.append({key: arm[key] for key in ['own_rest_percent', 'opponent_rest_percent', 'opponent_waking_rest', 'samples', 'wins', 'ties', 'losses', 'mean_score']} | {
+            'nominal_score_upper': upper,
+            'screen_below_required_lower_bound': upper < threshold,
+        })
+    best = [min((a for a in arms if a['own_rest_percent'] == own), key=lambda a: a['nominal_score_upper']) for own in [None, 75]]
+    previous = root / 'findings/policy-lower-order-v1/summary.json'
+    return {'schema': 'nc2000-policy-counterprobe-v1', 'arms': arms, 'best_observed_counterpolicies': best,
+            'target_fixed_reply_lower_bound': threshold, 'family_alpha': alpha, 'comparisons': len(layouts),
+            'sampling_model': 'One-sided binomial KL upper bounds for non-loss indicators; ties count as successes for the upper bound and half for mean score. Bonferroni covers six predeclared confirmation comparisons. Coverage is nominal under an independent-trial model; these are deterministic pseudorandom seed sweeps, not exact chance enumeration.',
+            'prior_hashes': {str(previous.relative_to(root)): sha(previous.read_bytes())},
+            'interpretation': 'A concrete counterpolicy can upper-bound a fixed strategy guarantee when its pair value is known. These sampled pair values screen whether the existing deterministic strategies are promising witnesses for the 0.027 obligation. They do not upper-bound the unrestricted game value, establish optimal opponent play, calibrate against humans, or replace any exact first-decision certificate. No sampled value is transferred into the certified matrix.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    raw = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    assert all(r['manifest']['corpus_sha256'] == sha(raw) for r in records.values())
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    assert abs(nominal_upper(0, 100, .01) - (1 - .01 ** .01)) < 1e-12
+    assert nominal_upper(100, 100, .01) == 1
+    print('Verified terminal counts, disjoint stage seeds, nominal sampling bounds and no certificate transfer')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-counterprobe-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    for stage, (n, seed) in stages.items():
+        subprocess.run([str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl'), str(n), str(seed), str(directory / f'final-{stage}.json')], cwd=root, env=env, check=True)
+records = {stage: json.loads((directory / f'final-{stage}.json').read_bytes()) for stage in stages}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    raw = (directory / 'corpus.jsonl').read_bytes()
+    assert all(r['manifest']['corpus_sha256'] == sha(raw) for r in records.values())
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(raw, mtime=0))
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for row in summary['best_observed_counterpolicies']:
+    print(row)
