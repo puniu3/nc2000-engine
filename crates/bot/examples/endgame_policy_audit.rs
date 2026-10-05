@@ -81,6 +81,10 @@ struct DescendantPreparation {
     replacement_semantic_key: Option<String>,
     #[serde(default)]
     quick_claw_kernel_audit: bool,
+    #[serde(default)]
+    quotient_quick_claw: bool,
+    lower_threshold: Option<f64>,
+    fixed_policy_side: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -372,8 +376,20 @@ fn audit(
             prep.enumeration_cap).unwrap();
         assert!((step.leaves.iter().map(|l| l.prob).sum::<f64>() - 1.0).abs() < 1e-10);
         let key: u128 = prep.semantic_key.parse().unwrap();
+        if prep.quotient_quick_claw {
+            assert!(protocol.dead_quick_claw_quotient);
+            assert!(step.leaves.iter().all(|leaf| !leaf.battle.quick_claw_roll_observable(dex)
+                && !leaf.battle.damage_bookkeeping_observable(dex)));
+        }
+        let successor_key = |state: &Battle| if prep.quotient_quick_claw {
+            state.state_key128_without_quick_claw_roll(dex,true)
+        } else { state.state_key128_without_damage_bookkeeping() };
+        let mut successor_distribution = std::collections::BTreeMap::<String,f64>::new();
+        for leaf in &step.leaves {
+            *successor_distribution.entry(successor_key(&leaf.battle).to_string()).or_default() += leaf.prob;
+        }
         let matching: Vec<_> = step.leaves.iter().filter(|leaf|
-            leaf.battle.state_key128_without_damage_bookkeeping() == key).collect();
+            successor_key(&leaf.battle) == key).collect();
         let mass: f64 = matching.iter().map(|leaf| leaf.prob).sum();
         assert!(!matching.is_empty() && (mass - prep.mass).abs() < 1e-12);
         let mut child = matching[0].battle.clone();
@@ -443,37 +459,58 @@ fn audit(
             quick_claw_kernel = json!({"semantic_keys":[child.state_key128_without_damage_bookkeeping().to_string(),
                 alternate.state_key128_without_damage_bookkeeping().to_string()],"cells":cells});
         }
-        let mut dedicated = BoundSolver::new(dex, BoundConfig {
+        let dedicated_config = BoundConfig {
             time_budget: Some(Duration::from_millis(prep.reference_ms)),
             work_budget: prep.work_budget,
             node_budget: prep.node_budget,
             eps: prep.tolerance,
             ..cfg.clone()
-        });
-        let report = dedicated.solve(child, None);
-        let matrix = dedicated.root_payoffs(child).unwrap();
-        let nodes = dedicated.node_count();
-        let root_chance: Vec<_> = dedicated.root_chance_diagnostics(child).unwrap().iter()
-            .map(|c| chance_diagnostic(c, dex)).collect();
-        let certificates = dedicated.into_value_certificates();
+        };
+        assert!(prep.lower_threshold.is_none_or(|threshold|threshold.is_finite() && (0.0..=1.0).contains(&threshold)));
+        let (value, stop, runs, matrix, nodes, root_chance, certificates, strategy) = if let Some(side) = prep.fixed_policy_side {
+            assert!(side < 2 && prep.lower_threshold.is_none());
+            let mut probe = child.clone();
+            let priority = probe.legal_choices(dex,side);
+            assert!(!priority.is_empty());
+            let priority_names: Vec<_> = priority.iter().map(|a|action_input(dex,*a)).collect();
+            let mut dedicated = FixedPolicySolver::new(dex,dedicated_config,side,priority);
+            let report = dedicated.solve(child);
+            let matrix = dedicated.restricted_root_payoffs(child).unwrap();
+            let nodes = dedicated.node_count();
+            let chance: Vec<_> = dedicated.root_chance_diagnostics(child).unwrap().iter()
+                .map(|c|chance_diagnostic(c,dex)).collect();
+            (report.unrestricted_game_value,report.stop,report.runs,matrix,nodes,chance,
+                dedicated.into_value_certificates(),json!({"side":side,"priority_actions":priority_names,
+                    "guaranteed_score":bound(report.guaranteed_score)}))
+        } else {
+            let mut dedicated = BoundSolver::new(dex,dedicated_config);
+            let report = dedicated.solve(child,prep.lower_threshold.map(|t|(t,t)));
+            let matrix = dedicated.root_payoffs(child).unwrap();
+            let nodes = dedicated.node_count();
+            let chance: Vec<_> = dedicated.root_chance_diagnostics(child).unwrap().iter()
+                .map(|c|chance_diagnostic(c,dex)).collect();
+            (report.bounds,report.stop,report.runs,matrix,nodes,chance,dedicated.into_value_certificates(),Value::Null)
+        };
         let certificate_count = certificates.len();
         imported_certificates = solver.import_value_certificates(certificates);
         let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
-        preparation_runs += enumeration_runs + report.runs;
+        preparation_runs += enumeration_runs + runs;
         preparation_ms += elapsed_ms;
         descendant_preparation.push(json!({"semantic_key":prep.semantic_key,
+            "quotient_quick_claw":prep.quotient_quick_claw,"successor_distribution":successor_distribution,
+            "lower_threshold":prep.lower_threshold,"strategy":strategy,
             "actions":prep.actions,"mass":mass,"matching_leaves":matching.len(),
             "state":child.essence(dex),"enumeration_runs":enumeration_runs,"replacement":replacement,
             "one_sided_resource_class":format!("{:?}",nc2000_bot::stall::classify_one_sided_heal(child,dex)),
             "quick_claw_roll":child.quick_claw_roll,
             "quick_claw_kernel":quick_claw_kernel,
-            "value":bound(report.bounds),"stop":format!("{:?}",report.stop),
-            "runs":report.runs,"nodes":nodes,"elapsed_ms":elapsed_ms,
+            "value":bound(value),"stop":format!("{:?}",stop),
+            "runs":runs,"nodes":nodes,"elapsed_ms":elapsed_ms,
             "certificates":certificate_count,"root_chance":root_chance,
             "matrix":{"actions":matrix.actions.map(|aa|aa.into_iter().map(|a|a.map(|a|action_input(dex,a))).collect::<Vec<_>>()),
                 "cells":matrix.cells.iter().copied().map(bound).collect::<Vec<_>>(),"value":bound(matrix.value)}}));
         eprintln!("descendant={} mass={mass} value=[{},{}] runs={} nodes={nodes}",
-            prep.semantic_key, report.bounds.lo, report.bounds.hi, report.runs);
+            prep.semantic_key, value.lo, value.hi, runs);
     }
     if let Some(prep) = &protocol.witness_preparation {
         assert!(prep.reference_ms > 0 && prep.work_budget > 0 && prep.node_budget > 0);

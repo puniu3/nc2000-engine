@@ -1,0 +1,42 @@
+{
+  "schema": "nc2000-policy-gap-v1",
+  "corpus": "tmp/policy-substitute-gap-v1/corpus.jsonl",
+  "corpus_sha256": "c8684a9f6f566e771f20ae970e24bbe9973f3960c2cb0afcef117baaed64af8b",
+  "baseline": "findings/policy-gap-v1/archived-baseline.json",
+  "baseline_sha256": "9b2c1c06296fa8dfb51bac6ed712fce3c9bc4f3bde5df2a19b3d1bf50ff83dc1",
+  "reference_ms": 10000,
+  "node_budget": 10000,
+  "work_budget": 1000,
+  "cell_cap": 4096,
+  "tolerance": 0.02,
+  "iterations": [],
+  "search_seeds": 1,
+  "seed": 2026100501,
+  "threads": 1,
+  "limit": null,
+  "interpretation": "Target the fully-paralyzed successor of Body Slam versus Substitute. Merge only the certified inert Quick Claw bit, retain every continuation action, and stop once its lower value exceeds 0.0286. Correlated root-policy regret will be checked separately from independent value intervals.",
+  "targets": "archived",
+  "diagnostics": true,
+  "certified_action_pruning": true,
+  "chance_fair_period": 32,
+  "aggregate_lazy_children": true,
+  "witness_preparation": null,
+  "resource_closure_nodes": 90000,
+  "descendant_preparation": {
+    "root_state_key": "160298700970866480479685871464306122045",
+    "actions": [
+      "move bodyslam",
+      "move substitute"
+    ],
+    "semantic_key": "92292943881293253875361159471207245831",
+    "mass": 0.25,
+    "enumeration_cap": 100000,
+    "reference_ms": 180000,
+    "work_budget": 2000000,
+    "node_budget": 120000,
+    "tolerance": 0.02,
+    "quotient_quick_claw": true,
+    "lower_threshold": 0.0286
+  },
+  "dead_quick_claw_quotient": true
+}

@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+
+from interval_policy_gap import certify, verify
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/policy-substitute-gap-v1'
+
+
+def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+
+spec=importlib.util.spec_from_file_location('assessor',root/'tools/headroom-cases-report.py')
+assessor=importlib.util.module_from_spec(spec);spec.loader.exec_module(assessor)
+
+
+def summarize(records):
+    assert set(records)=={'paralyzed','witness'}
+    record=records['paralyzed']
+    prior_path=root/'findings/policy-fainted-claw-v1/summary.json'
+    records_path=root/'findings/policy-fainted-claw-v1/records.json.gz'
+    prior=next(s for s in json.loads(prior_path.read_bytes())['states'] if s['game']==19)
+    old=json.loads(gzip.decompress(records_path.read_bytes()))['g19-quotient']['result']
+    row,p=record['result'],record['manifest']['protocol']
+    prep=row['descendant_preparation'][0];config=p['descendant_preparation']
+    assert row['state_key']==config['root_state_key']=='160298700970866480479685871464306122045'
+    assert prep['quotient_quick_claw']==config['quotient_quick_claw']==p['dead_quick_claw_quotient']==True
+    assert prep['semantic_key']==config['semantic_key']=='92292943881293253875361159471207245831'
+    assert prep['mass']==config['mass']==.25
+    assert prep['actions']==config['actions']==['move bodyslam','move substitute']
+    assert prep['successor_distribution']=={'147115276015653498586877031057255436515':.75,'92292943881293253875361159471207245831':.25}
+    assert prep['matrix']['value']==prep['value']
+    assert sum(c['runs'] for c in prep['root_chance'])==prep['runs']
+    assert row['total_runs']==row['reference']['runs']+prep['runs']+prep['enumeration_runs']
+    witness_row=records['witness']['result']
+    witness=witness_row['descendant_preparation'][0]
+    assert witness['semantic_key']==prep['semantic_key'] and witness['mass']==prep['mass']
+    assert witness['state']==prep['state'] and witness['successor_distribution']==prep['successor_distribution']
+    assert witness['strategy']['side']==0
+    assert witness['strategy']['priority_actions']==['move bodyslam','move earthquake','move curse','move selfdestruct']
+    assert witness['matrix']['actions']==[['move bodyslam'],prep['matrix']['actions'][1]]
+    assert witness['matrix']['value']==witness['strategy']['guaranteed_score']
+    assert witness['value']=={'lo':witness['strategy']['guaranteed_score']['lo'],'hi':1.0}
+    assert sum(c['runs'] for c in witness['root_chance'])==witness['runs']
+    assert witness_row['total_runs']==witness_row['reference']['runs']+witness['runs']+witness['enumeration_runs']
+    combined={'lo':max(prep['value']['lo'],witness['value']['lo']), 'hi':prep['value']['hi']}
+    assert combined['lo']<=combined['hi']
+    chance=old['diagnostics']['root_chance'][3]
+    assert chance['pending_mass']==0 and chance['unique_children']==len(chance['largest_children'])==2
+    assert abs(sum(c['mass'] for c in chance['largest_children'])-1)<1e-12
+    padding=1e-10
+    cell={'lo':0.0,'hi':0.0}
+    for child in chance['largest_children']:
+        b=dict(child['bounds'])
+        if child['key'] == f"NoDamageOrQuickClawRoll({prep['semantic_key']})":
+            b['lo']=max(b['lo'],combined['lo']-padding)
+            b['hi']=min(b['hi'],prep['value']['hi']+padding)
+        for bound in cell:cell[bound]+=child['mass']*b[bound]
+    matrix=json.loads(json.dumps(prior['matrix']))
+    for b in matrix['cells']+[matrix['value']]:
+        b['lo']=max(0,b['lo']-padding);b['hi']=min(1,b['hi']+padding)
+    matrix['cells'][3]['lo']=max(matrix['cells'][3]['lo'],cell['lo']-padding)
+    matrix['cells'][3]['hi']=min(matrix['cells'][3]['hi'],cell['hi']+padding)
+    assert matrix['cells'][3]['lo']<=matrix['cells'][3]['hi']
+    assessor.calibrate_assessor()
+    endpoints=[]
+    for e in prior['endpoints']:
+        side=e['side'];policy=e['assessment']['policy']
+        before=certify(prior['matrix'],side,policy);verify(prior['matrix'],before)
+        after=certify(matrix,side,policy);verify(matrix,after)
+        interval=assessor.assess(matrix,side,policy)
+        loss={'lo':interval['loss']['lo'],'hi':min(interval['loss']['hi'],after['loss_upper'])}
+        endpoints.append({'side':side,'previous_interval_loss':e['assessment']['loss'],
+                          'previous_correlated_certificate':before,'interval_assessment':interval,
+                          'correlated_certificate':after,'certified_loss':loss,'verdict':assessor.verdict(loss)})
+    return {'schema':'nc2000-policy-substitute-gap-v1','matrix':matrix,'endpoints':endpoints,
+            'selected_successor':{k:prep[k] for k in ['semantic_key','mass','value','runs','nodes','stop','elapsed_ms','lower_threshold','successor_distribution']},
+            'witness':{k:witness[k] for k in ['value','strategy','runs','nodes','stop','elapsed_ms']},
+            'combined_successor_value':combined,'combined_substitute_cell':cell,'numerical_envelope':padding,
+            'proof':'For any fixed opponent reply s, V <= max_i B[i,s], while the candidate policy guarantees min_j sum_a p[a] B[a,j]. Therefore its loss is at most max_(i,j) (B[i,s] - sum_a p[a] B[a,j]). Expand each difference into coefficients of the same matrix entries before taking interval extrema; the shared term cancels. The certificate records s and every difference upper bound. This holds for every completion of the interval matrix and does not require the scalar value interval to close.',
+            'prior_hashes':{str(p.relative_to(root)):sha(p.read_bytes()) for p in [prior_path,records_path]},
+            'interpretation':'Full-information first-decision regret with optimal continuation. The targeted successor solve and correlated interval algebra are separate sound refinements. No deployed blind-bot improvement or global optimality is established.'}
+
+
+parser=argparse.ArgumentParser();mode=parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only',action='store_true');mode.add_argument('--record-existing',type=pathlib.Path)
+args=parser.parse_args()
+if args.verify_only:
+    records=json.loads(gzip.decompress((archive/'record.json.gz').read_bytes()))
+    for name,record in records.items():
+        manifest=record['manifest'];raw=(archive/f'{name}.json').read_bytes()
+        assert sha(raw)==manifest['protocol_sha256'] and json.loads(raw)==manifest['protocol']
+        assert sha(gzip.decompress((archive/'corpus.jsonl.gz').read_bytes()))==manifest['protocol']['corpus_sha256']
+        assert sha((root/manifest['protocol']['baseline']).read_bytes())==manifest['protocol']['baseline_sha256']
+    assert summarize(records)==json.loads((archive/'summary.json').read_bytes())
+    print('Verified successor partition, projected strategy guarantees and correlated policy-gap witnesses')
+    raise SystemExit(0)
+directory=args.record_existing
+if directory is None:
+    directory=root/'tmp/policy-substitute-gap-v1'/datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S');directory.mkdir(parents=True)
+    (directory/'corpus.jsonl').write_bytes(gzip.decompress((archive/'corpus.jsonl.gz').read_bytes()))
+    env=dict(os.environ,NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','endgame_policy_audit'],cwd=root,env=env,check=True)
+    for name in ['paralyzed','witness']:
+        p=json.loads((archive/f'{name}.json').read_bytes());p['corpus']=str((directory/'corpus.jsonl').relative_to(root))
+        (directory/f'{name}.json').write_text(json.dumps(p,indent=2)+'\n')
+        subprocess.run([str(root/'target/release/examples/endgame_policy_audit'),str(directory/f'{name}.json'),str(directory/name)],cwd=root,env=env,check=True)
+records={name:{'manifest':json.loads((directory/name/'manifest.json').read_bytes()),'result':json.loads((directory/name/'game-019-d0017.json').read_bytes())} for name in ['paralyzed','witness']}
+summary=summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive/'corpus.jsonl.gz').write_bytes(gzip.compress((directory/'corpus.jsonl').read_bytes(),mtime=0))
+    for name in ['paralyzed','witness']:(archive/f'{name}.json').write_bytes((directory/f'{name}.json').read_bytes())
+    (archive/'record.json.gz').write_bytes(gzip.compress(json.dumps(records,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+print(summary['selected_successor'])
+print([e['certified_loss'] for e in summary['endpoints']])

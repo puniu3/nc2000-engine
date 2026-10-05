@@ -1,0 +1,326 @@
+{
+  "schema": "nc2000-policy-substitute-gap-v1",
+  "matrix": {
+    "actions": [
+      [
+        "move bodyslam",
+        "move earthquake",
+        "move curse",
+        "move selfdestruct"
+      ],
+      [
+        "move thunder",
+        "move hiddenpower",
+        "move swagger",
+        "move substitute"
+      ]
+    ],
+    "cells": [
+      {
+        "lo": 0.10538615431916547,
+        "hi": 0.13494945842477857
+      },
+      {
+        "lo": 0.15370122708019762,
+        "hi": 0.491503439462094
+      },
+      {
+        "lo": 0.3095418177834507,
+        "hi": 0.728381294988194
+      },
+      {
+        "lo": 0.11660308338205946,
+        "hi": 0.24513547672287445
+      },
+      {
+        "lo": 0.007055610617304152,
+        "hi": 0.0886886123781238
+      },
+      {
+        "lo": 0.004208746059963079,
+        "hi": 0.43202771880427915
+      },
+      {
+        "lo": 0,
+        "hi": 0.6351142585058058
+      },
+      {
+        "lo": 2.7138530001979865e-05,
+        "hi": 0.30060314243591096
+      },
+      {
+        "lo": 0.006123668430590516,
+        "hi": 0.08842055449643357
+      },
+      {
+        "lo": 0.004033166143113738,
+        "hi": 0.4320277188042792
+      },
+      {
+        "lo": 0.0010901611177510694,
+        "hi": 0.6353128081171583
+      },
+      {
+        "lo": 2.7138530001979865e-05,
+        "hi": 0.30060314243591096
+      },
+      {
+        "lo": 0.002859956501269226,
+        "hi": 0.02049667477988824
+      },
+      {
+        "lo": 0.0028503119664444916,
+        "hi": 0.05367985723107535
+      },
+      {
+        "lo": 0,
+        "hi": 0.10585842342129495
+      },
+      {
+        "lo": 2.7138530001979865e-05,
+        "hi": 0.07208751743591095
+      }
+    ],
+    "value": {
+      "lo": 0.10538615431916547,
+      "hi": 0.13494945842477857
+    }
+  },
+  "endpoints": [
+    {
+      "side": 0,
+      "previous_interval_loss": {
+        "lo": 0,
+        "hi": 0.0295633040056131
+      },
+      "previous_correlated_certificate": {
+        "schema": "nc2000-correlated-policy-gap-v1",
+        "side": 0,
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "opponent_reply": 0,
+        "difference_upper_bounds": [
+          0.0,
+          -0.01875176885541907,
+          -0.17459235955867214,
+          0.027135437417719094,
+          -0.01669754214104166,
+          -0.06501261490207383,
+          -0.2208532056053269,
+          -0.019125408628935664,
+          -0.016965600022731883,
+          -0.06528067278376405,
+          -0.2211212634870171,
+          -0.019393466510625887,
+          -0.08488947973927723,
+          -0.13320455250030938,
+          -0.28904514320356245,
+          -0.08731734622717123
+        ],
+        "loss_upper": 0.027135437517719095,
+        "numerical_envelope": 1e-10
+      },
+      "interval_assessment": {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.10538615431916547,
+          "hi": 0.13494945842477857
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.0295633042056131
+        }
+      },
+      "correlated_certificate": {
+        "schema": "nc2000-correlated-policy-gap-v1",
+        "side": 0,
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "opponent_reply": 0,
+        "difference_upper_bounds": [
+          0.0,
+          -0.018751768655419054,
+          -0.17459235935867212,
+          0.018346375042719104,
+          -0.01669754194104167,
+          -0.06501261470207383,
+          -0.22085320540532688,
+          -0.027914471003935667,
+          -0.016965599822731894,
+          -0.06528067258376405,
+          -0.22112126328701712,
+          -0.02818252888562589,
+          -0.08488947953927722,
+          -0.1332045523003094,
+          -0.28904514300356243,
+          -0.09610640860217122
+        ],
+        "loss_upper": 0.018346375142719105,
+        "numerical_envelope": 1e-10
+      },
+      "certified_loss": {
+        "lo": 0,
+        "hi": 0.018346375142719105
+      },
+      "verdict": "near_optimal"
+    },
+    {
+      "side": 1,
+      "previous_interval_loss": {
+        "lo": 0,
+        "hi": 0.029563304005613127
+      },
+      "previous_correlated_certificate": {
+        "schema": "nc2000-correlated-policy-gap-v1",
+        "side": 1,
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "opponent_reply": 0,
+        "difference_upper_bounds": [
+          0.0,
+          -0.016697542141041577,
+          -0.01696560002273184,
+          -0.08488947973927718,
+          -0.01875176885541907,
+          -0.06501261490207377,
+          -0.06528067278376404,
+          -0.13320455250030938,
+          -0.17459235955867214,
+          -0.22085320560532684,
+          -0.2211212634870171,
+          -0.28904514320356245,
+          0.027135437417719066,
+          -0.019125408628935636,
+          -0.0193934665106259,
+          -0.08731734622717124
+        ],
+        "loss_upper": 0.027135437517719067,
+        "numerical_envelope": 1e-10
+      },
+      "interval_assessment": {
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "guarantee": {
+          "lo": 0.8650505415752214,
+          "hi": 0.8946138456808346
+        },
+        "loss": {
+          "lo": 0,
+          "hi": 0.029563304205613143
+        }
+      },
+      "correlated_certificate": {
+        "schema": "nc2000-correlated-policy-gap-v1",
+        "side": 1,
+        "policy": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "opponent_reply": 0,
+        "difference_upper_bounds": [
+          0.0,
+          -0.01669754194104167,
+          -0.016965599822731825,
+          -0.08488947953927717,
+          -0.018751768655419054,
+          -0.06501261470207387,
+          -0.06528067258376402,
+          -0.13320455230030936,
+          -0.17459235935867212,
+          -0.22085320540532694,
+          -0.2211212632870171,
+          -0.28904514300356243,
+          0.018346375042719076,
+          -0.027914471003935737,
+          -0.02818252888562589,
+          -0.09610640860217123
+        ],
+        "loss_upper": 0.018346375142719078,
+        "numerical_envelope": 1e-10
+      },
+      "certified_loss": {
+        "lo": 0,
+        "hi": 0.018346375142719078
+      },
+      "verdict": "near_optimal"
+    }
+  ],
+  "selected_successor": {
+    "semantic_key": "92292943881293253875361159471207245831",
+    "mass": 0.25,
+    "value": {
+      "lo": 0.011438867910034095,
+      "hi": 0.23195735310369164
+    },
+    "runs": 1362393,
+    "nodes": 120004,
+    "stop": "NodeBudget",
+    "elapsed_ms": 75689.626084,
+    "lower_threshold": 0.0286,
+    "successor_distribution": {
+      "147115276015653498586877031057255436515": 0.75,
+      "92292943881293253875361159471207245831": 0.25
+    }
+  },
+  "witness": {
+    "value": {
+      "lo": 0.03515625,
+      "hi": 1.0
+    },
+    "strategy": {
+      "side": 0,
+      "priority_actions": [
+        "move bodyslam",
+        "move earthquake",
+        "move curse",
+        "move selfdestruct"
+      ],
+      "guaranteed_score": {
+        "lo": 0.03515625,
+        "hi": 0.14741999691765084
+      }
+    },
+    "runs": 1451536,
+    "nodes": 120000,
+    "stop": "NodeBudget",
+    "elapsed_ms": 109644.18241699999
+  },
+  "combined_successor_value": {
+    "lo": 0.03515625,
+    "hi": 0.23195735310369164
+  },
+  "combined_substitute_cell": {
+    "lo": 0.11660308348205946,
+    "hi": 0.24513547662287444
+  },
+  "numerical_envelope": 1e-10,
+  "proof": "For any fixed opponent reply s, V <= max_i B[i,s], while the candidate policy guarantees min_j sum_a p[a] B[a,j]. Therefore its loss is at most max_(i,j) (B[i,s] - sum_a p[a] B[a,j]). Expand each difference into coefficients of the same matrix entries before taking interval extrema; the shared term cancels. The certificate records s and every difference upper bound. This holds for every completion of the interval matrix and does not require the scalar value interval to close.",
+  "prior_hashes": {
+    "findings/policy-fainted-claw-v1/summary.json": "dca91a10a9b2606d9352b775f9cf6d7872ae9d0eed2166b9a0afa4b89b47ad3f",
+    "findings/policy-fainted-claw-v1/records.json.gz": "18e2b359ab9bdcf3b5ca2122e501b90f7aaec91fe4420ea4eeb1866ab907d2c9"
+  },
+  "interpretation": "Full-information first-decision regret with optimal continuation. The targeted successor solve and correlated interval algebra are separate sound refinements. No deployed blind-bot improvement or global optimality is established."
+}
