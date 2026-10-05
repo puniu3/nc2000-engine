@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-hp-storage-v1'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(record, corpus):
+    previous_path = root / 'findings/policy-pair-enumeration-v1/records.json.gz'
+    previous = json.loads(gzip.decompress(previous_path.read_bytes()))['lazy']
+    assert record['schema'] == previous['schema']
+    assert record['state_key'] == previous['state_key']
+    assert record['manifest']['corpus_sha256'] == sha(corpus)
+    assert record['config'] == dict(previous['config'], hp_storage_census=True)
+    report, old = record['report'], previous['report']
+    for key in ['score', 'runs', 'peak_frontier', 'numerical_envelope']:
+        assert report[key] == old[key], key
+    assert len(report['layers']) == len(old['layers'])
+    census = []
+    for row, control in zip(report['layers'], old['layers']):
+        fields = dict(row)
+        count = fields.pop('hp_storage_census')
+        assert fields == control
+        assert 0 <= count['affine_eligible_states'] <= count['candidate_states']
+        assert 0 <= count['affine_eligible_mass'] <= count['candidate_mass'] + 1e-12
+        assert 0 <= count['hp_shapes'] <= count['candidate_states']
+        assert 0 <= count['multi_action_shapes'] <= count['hp_shapes']
+        assert count['roundtrip_checks'] >= count['candidate_states']
+        assert count['stored_hp_scalars'] >= count['candidate_states']
+        assert count['top_state_mass'] <= count['top_shape_mass'] + 1e-12
+        assert count['top_shape_mass'] <= count['candidate_mass'] + 1e-12
+        assert count['width'] == record['config']['width']
+        count = dict(count, depth=row['depth'])
+        if count['candidate_states']:
+            count['states_per_shape'] = count['candidate_states'] / count['hp_shapes']
+            count['affine_eligible_fraction'] = count['affine_eligible_states'] / count['candidate_states']
+            count['state_retained_fraction'] = count['top_state_mass'] / count['candidate_mass']
+            count['shape_retained_fraction'] = count['top_shape_mass'] / count['candidate_mass']
+        census.append(count)
+    return dict(schema='nc2000-policy-hp-storage-v1', census=census, unchanged_pair_score=report['score'],
+                runs=report['runs'], audit_elapsed_ms=report['elapsed_ms'],
+                prior_archive_sha256=sha(previous_path.read_bytes()),
+                interpretation='Read-only census of every generated nonterminal successor before frontier truncation, restricted to the parents actually expanded. Existing guarded damage-history and Quick Claw equivalences define concrete states. A shape replaces positive roster HP by max HP, while each concrete HP vector and mass remain separate in the census storage prototype. Shape counts are storage potential, not an equivalence of different HP values, a measured speedup or a stronger proof. The top-width mass comparison ranks candidates globally; the solver itself retains its original incremental pruning and unchanged intervals. Affine eligibility uses the existing guarded HP transition domain and does not establish whole-kernel reuse. Every observed HP vector is restored from the shared shape template; its original guarded state key and both policy actions are rechecked. No bot policy or solver decisions change.')
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    record = json.loads(gzip.decompress((archive / 'record.json.gz').read_bytes()))
+    corpus = gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())
+    assert record['config'] == json.loads((archive / 'audit.json').read_bytes())
+    assert summarize(record, corpus) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified unchanged enumeration, HP storage census and probability accounting')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-hp-storage-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    (directory / 'audit.json').write_bytes((archive / 'audit.json').read_bytes())
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    subprocess.run([str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl'),
+                    'certify', str(directory / 'audit.json'), str(directory / 'result.json')], cwd=root, env=env, check=True)
+record = json.loads((directory / 'result.json').read_bytes())
+corpus = (directory / 'corpus.jsonl').read_bytes()
+summary = summarize(record, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+    (archive / 'record.json.gz').write_bytes(gzip.compress(json.dumps(record, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'audit.json').write_bytes((directory / 'audit.json').read_bytes())
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+for row in summary['census']:
+    print(json.dumps(row))

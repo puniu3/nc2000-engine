@@ -1,0 +1,13 @@
+{
+  "response": {
+    "return_when": "self_low",
+    "ice_first": false,
+    "finish_low": true
+  },
+  "width": 256,
+  "steps": 32,
+  "cell_cap": 4096,
+  "work_budget": 2000000,
+  "lazy": true,
+  "hp_storage_census": true
+}

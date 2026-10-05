@@ -11,6 +11,8 @@ struct Config {
     cell_cap: usize,
     work_budget: usize,
     lazy: bool,
+    #[serde(default)]
+    hp_storage_census: bool,
 }
 
 type Frontier = BTreeMap<u128,(Battle,f64)>;
@@ -59,6 +61,7 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
     let mut runs=0;let mut rows=Vec::new();let mut peak_frontier=1;
     for depth in 0..cfg.steps {
         let mut next=Frontier::new();let mut failures=0;
+        let mut census=super::hp_storage::Census::default();
         for (_, (mut battle,mass)) in frontier {
             if let Some(outcome)=battle.outcome() {
                 match outcome {Outcome::P1Win=>wins+=mass,Outcome::Tie=>ties+=mass,Outcome::P2Win=>losses+=mass};
@@ -85,6 +88,7 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
                 if let Some(outcome)=leaf.outcome() {
                     match outcome {Outcome::P1Win=>wins+=probability,Outcome::Tie=>ties+=probability,Outcome::P2Win=>losses+=probability};
                 } else {
+                    if cfg.hp_storage_census {census.observe(dex,&leaf,probability,cfg.response);}
                     next.entry(leaf.state_key128()).and_modify(|(_,p)|*p+=probability)
                         .or_insert((leaf,probability));
                 }
@@ -100,6 +104,7 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
         rows.push(json!({"depth":depth+1,"runs":runs,"wins":wins,"ties":ties,"losses":losses,
             "dropped_mass":dropped,"failed_mass":failed,"frontier_mass":unresolved,"unknown_mass":unknown,
             "frontier_states":next.len(),"enumeration_failures":failures,"mass_error":mass_error,
+            "hp_storage_census":cfg.hp_storage_census.then(||census.report(cfg.width)),
             "score":{"lo":(wins+0.5*ties-1e-9).max(0.0),"hi":(wins+0.5*ties+unknown+1e-9).min(1.0)}}));
         frontier=next;
         if frontier.is_empty() || runs==cfg.work_budget {break;}
@@ -130,7 +135,7 @@ mod tests {
     use super::*;
     fn config(width:usize,steps:usize,cap:usize,work:usize)->Config {
         Config {response:CounterResponse {return_when:ReturnWhen::Always,ice_first:false,finish_low:false},
-            width,steps,cell_cap:cap,work_budget:work,lazy:false}
+            width,steps,cell_cap:cap,work_budget:work,lazy:false,hp_storage_census:false}
     }
     fn exhaustive(dex:&Dex,b:&Battle)->f64 {
         if let Some(outcome)=b.outcome() {return match outcome {Outcome::P1Win=>1.0,Outcome::Tie=>0.5,Outcome::P2Win=>0.0};}
