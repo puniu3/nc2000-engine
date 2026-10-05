@@ -13,17 +13,17 @@ struct Config {
     lazy: bool,
     #[serde(default)]
     hp_storage_census: bool,
+    #[serde(default)]
+    guarded_keys: bool,
+    #[serde(default)]
+    packed_hp: bool,
+    #[serde(default="state_cap")]
+    packed_state_cap: usize,
 }
+
+fn state_cap()->usize {100_000}
 
 type Frontier = BTreeMap<u128,(Battle,f64)>;
-
-fn prune(frontier:&mut Frontier,width:usize)->f64 {
-    if frontier.len()<=width {return 0.0;}
-    let mut ordered=std::mem::take(frontier).into_iter().collect::<Vec<_>>();
-    ordered.sort_by(|a,b|b.1.1.total_cmp(&a.1.1).then_with(||a.0.cmp(&b.0)));
-    let dropped=ordered[width..].iter().map(|(_,(_,mass))|mass).sum();
-    frontier.extend(ordered.into_iter().take(width));dropped
-}
 
 fn partial_step(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],cap:usize)->(Frontier,f64,usize) {
     let mut pending=BinaryHeap::from([(1.0f64.to_bits(),Vec::<usize>::new())]);
@@ -56,13 +56,15 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
     mut choose:impl FnMut(&mut Battle,bool)->[Option<SearchChoice>;2])->Value {
     assert!(cfg.width>0 && cfg.width<=100_000 && cfg.steps>0 && cfg.steps<=2048 && cfg.cell_cap>0);
     let started=Instant::now();
-    let mut frontier=Frontier::from([(root.state_key128(),(root.clone(),1.0))]);
+    assert!(cfg.packed_state_cap>0 && cfg.packed_state_cap<=1_000_000);
+    let mut frontier=super::retained::Retained::new(cfg.packed_hp,cfg.guarded_keys);
+    frontier.insert(dex,root.clone(),1.0);
     let (mut wins,mut ties,mut losses,mut dropped,mut failed)=(0.0,0.0,0.0,0.0,0.0);
-    let mut runs=0;let mut rows=Vec::new();let mut peak_frontier=1;
+    let mut runs=0;let mut rows=Vec::new();let mut peak_frontier=1;let mut peak_templates=1;
     for depth in 0..cfg.steps {
-        let mut next=Frontier::new();let mut failures=0;
+        let mut next=super::retained::Retained::new(cfg.packed_hp,cfg.guarded_keys);let mut failures=0;
         let mut census=super::hp_storage::Census::default();
-        for (_, (mut battle,mass)) in frontier {
+        for (mut battle,mass) in frontier.into_states() {
             if let Some(outcome)=battle.outcome() {
                 match outcome {Outcome::P1Win=>wins+=mass,Outcome::Tie=>ties+=mass,Outcome::P2Win=>losses+=mass};
                 continue;
@@ -89,28 +91,28 @@ fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
                     match outcome {Outcome::P1Win=>wins+=probability,Outcome::Tie=>ties+=probability,Outcome::P2Win=>losses+=probability};
                 } else {
                     if cfg.hp_storage_census {census.observe(dex,&leaf,probability,cfg.response);}
-                    next.entry(leaf.state_key128()).and_modify(|(_,p)|*p+=probability)
-                        .or_insert((leaf,probability));
+                    next.insert(dex,leaf,probability);
                 }
             }
             peak_frontier=peak_frontier.max(next.len());
-            if next.len()>cfg.width*2 {dropped+=prune(&mut next,cfg.width);}
+            peak_templates=peak_templates.max(next.templates());
+            if next.templates()>cfg.width*2 || (cfg.packed_hp && next.len()>cfg.packed_state_cap*2) {dropped+=next.prune(cfg.width,cfg.packed_state_cap);}
         }
-        dropped+=prune(&mut next,cfg.width);
-        let unresolved:f64=next.values().map(|(_,mass)|mass).sum();
+        dropped+=next.prune(cfg.width,cfg.packed_state_cap);
+        let unresolved=next.mass();
         let unknown=dropped+failed+unresolved;
         let mass_error=(wins+ties+losses+unknown-1.0).abs();
         assert!(mass_error<1e-9);
         rows.push(json!({"depth":depth+1,"runs":runs,"wins":wins,"ties":ties,"losses":losses,
             "dropped_mass":dropped,"failed_mass":failed,"frontier_mass":unresolved,"unknown_mass":unknown,
-            "frontier_states":next.len(),"enumeration_failures":failures,"mass_error":mass_error,
+            "frontier_states":next.len(),"frontier_templates":next.templates(),"enumeration_failures":failures,"mass_error":mass_error,
             "hp_storage_census":cfg.hp_storage_census.then(||census.report(cfg.width)),
             "score":{"lo":(wins+0.5*ties-1e-9).max(0.0),"hi":(wins+0.5*ties+unknown+1e-9).min(1.0)}}));
         frontier=next;
-        if frontier.is_empty() || runs==cfg.work_budget {break;}
+        if frontier.len()==0 || runs==cfg.work_budget {break;}
     }
     json!({"score":rows.last().unwrap()["score"],"layers":rows,"runs":runs,
-        "peak_frontier":peak_frontier,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0,
+        "peak_frontier":peak_frontier,"peak_templates":peak_templates,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0,
         "numerical_envelope":1e-9})
 }
 
@@ -125,7 +127,7 @@ pub(super) fn execute(args:&[String]) {
         choose_response(&dex,b,side,first,OwnPolicy::AfterBoom75,cfg.response)));
     let result=json!({"schema":"nc2000-fixed-pair-enumeration-v1","state_key":root.state_key128().to_string(),
         "config":cfg,"report":report,"manifest":manifest(&dex,&raw),
-        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. State aggregation uses the engine full state_key128. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Floating-point probability arithmetic uses the reported numerical envelope."});
+        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. Default state aggregation uses full state_key128; optional guarded keys omit only unobservable damage history and Quick Claw rolls. Packed storage keeps each exact HP vector and its mass separately under a shared guarded template, and applies the width limit to templates plus a separate concrete-state cap. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Floating-point probability arithmetic uses the reported numerical envelope."});
     std::fs::write(&args[4],serde_json::to_vec_pretty(&result).unwrap()).unwrap();
     println!("{}",serde_json::to_string(&result["report"]).unwrap());
 }
@@ -135,7 +137,7 @@ mod tests {
     use super::*;
     fn config(width:usize,steps:usize,cap:usize,work:usize)->Config {
         Config {response:CounterResponse {return_when:ReturnWhen::Always,ice_first:false,finish_low:false},
-            width,steps,cell_cap:cap,work_budget:work,lazy:false,hp_storage_census:false}
+            width,steps,cell_cap:cap,work_budget:work,lazy:false,hp_storage_census:false,guarded_keys:false,packed_hp:false,packed_state_cap:state_cap()}
     }
     fn exhaustive(dex:&Dex,b:&Battle)->f64 {
         if let Some(outcome)=b.outcome() {return match outcome {Outcome::P1Win=>1.0,Outcome::Tie=>0.5,Outcome::P2Win=>0.0};}
@@ -149,15 +151,15 @@ mod tests {
         for side in 0..2 {let id=b.active_id(side).unwrap();b.poke_mut(id).hp=80;}
         let exact=exhaustive(&dex,&b);
         assert!(exact>0.0 && exact<1.0);
-        for lazy in [false,true] {
+        for (lazy,packed) in [(false,false),(true,false),(false,true),(true,true)] {
         for mut cfg in [config(1,1,1,1),config(1,2,100_000,200_000),config(10_000,2,100_000,1_000_000)] {
-            cfg.lazy=lazy;
+            cfg.lazy=lazy;cfg.packed_hp=packed;cfg.guarded_keys=packed;
             let report=analyze(&dex,&b,&cfg,|b,_|[0,1].map(|s|b.needs_choice()[s].then(||b.legal_choices(&dex,s)[0])));
             assert!(report["score"]["lo"].as_f64().unwrap()<=exact);
             assert!(report["score"]["hi"].as_f64().unwrap()>=exact);
             assert!(report["runs"].as_u64().unwrap()<=cfg.work_budget as u64);
             if cfg.cell_cap==1 {assert!(report["layers"][0]["failed_mass"].as_f64().unwrap()>0.0);}
-            if cfg.width==1 && cfg.cell_cap>1 {assert!(report["layers"][0]["dropped_mass"].as_f64().unwrap()>0.0);}
+            if !packed && cfg.width==1 && cfg.cell_cap>1 {assert!(report["layers"][0]["dropped_mass"].as_f64().unwrap()>0.0);}
             if cfg.width==10_000 {assert!(report["score"]["hi"].as_f64().unwrap()-report["score"]["lo"].as_f64().unwrap()<3e-9);}
         }
     }

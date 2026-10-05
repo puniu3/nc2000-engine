@@ -22,7 +22,11 @@ def summarize(record, corpus):
     assert record['schema'] == previous['schema']
     assert record['state_key'] == previous['state_key']
     assert record['manifest']['corpus_sha256'] == sha(corpus)
-    assert record['config'] == dict(previous['config'], hp_storage_census=True)
+    expected = dict(previous['config'], hp_storage_census=True)
+    for key, value in dict(guarded_keys=False, packed_hp=False, packed_state_cap=100000).items():
+        if key in record['config']:
+            expected[key] = value
+    assert record['config'] == expected
     report, old = record['report'], previous['report']
     for key in ['score', 'runs', 'peak_frontier', 'numerical_envelope']:
         assert report[key] == old[key], key
@@ -31,6 +35,7 @@ def summarize(record, corpus):
     for row, control in zip(report['layers'], old['layers']):
         fields = dict(row)
         count = fields.pop('hp_storage_census')
+        assert fields.pop('frontier_templates', fields['frontier_states']) == fields['frontier_states']
         assert fields == control
         assert 0 <= count['affine_eligible_states'] <= count['candidate_states']
         assert 0 <= count['affine_eligible_mass'] <= count['candidate_mass'] + 1e-12
