@@ -26,7 +26,10 @@ def summarize(records, corpus):
     old_path = root / 'findings/policy-mass-order-v1/records.json.gz'
     old = json.loads(gzip.decompress(old_path.read_bytes()))['mass-work']
     config = records['control-work']['config']
-    assert config == dict(old['config'], best_first=False)
+    expected = dict(old['config'], best_first=False)
+    if 'healing_kernel_capacity' in config:
+        expected['healing_kernel_capacity'] = 0
+    assert config == expected
     baseline = records['control-work']['report']
     for key, value in old['report'].items():
         if key != 'elapsed_ms':

@@ -78,6 +78,7 @@ pub(super) fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
     if cfg.reuse_attacks {healing=healing.with_attacks();}
     if cfg.reuse_switches {healing=healing.with_switches();}
     let mut kernels=super::super::switch_kernel::Cache::new(cfg.switch_kernel_capacity);
+    let mut healing_kernels=super::super::healing_kernel::Cache::new(cfg.healing_kernel_capacity);
     let mut boom=BoomStats::default();let mut rows=Vec::new();let mut depths=vec![0usize;cfg.steps];
     let mut peak_frontier=agenda.cells.len();let mut peak_templates=agenda.templates.len();
     let mut time_exhausted=false;let mut memory_exhausted=false;
@@ -97,7 +98,7 @@ pub(super) fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
         } else {None};
         let (leaves,unknown,work)=if let Some(step)=eager {(collect_step(step),0.0,eager_work)} else {
             let cap=cfg.cell_cap.min(cfg.work_budget-totals.runs-eager_work);
-            let (leaves,unknown,work)=kernels.run(dex,&battle,choices,cap,&mut healing);(leaves,unknown,work+eager_work)
+            let (leaves,unknown,work)=healing_kernels.run(dex,&battle,choices,cap,&mut healing,&mut kernels);(leaves,unknown,work+eager_work)
         };
         assert!((leaves.values().map(|(_,prob)|prob).sum::<f64>()+unknown-1.0).abs()<1e-10);
         totals.runs+=work;totals.failed+=mass*unknown;totals.expansions+=1;totals.max_depth=totals.max_depth.max(depth+1);depths[depth]+=1;
@@ -116,7 +117,7 @@ pub(super) fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
         "expansions":totals.expansions,"expansions_by_depth":depths,"max_depth":totals.max_depth,
         "peak_frontier":peak_frontier,"peak_templates":peak_templates,"merges":agenda.merges,"heap_rebuilds":agenda.heap_rebuilds,
         "elapsed_ms":started.elapsed().as_secs_f64()*1000.0,"time_exhausted":time_exhausted,"memory_exhausted":memory_exhausted,
-        "numerical_envelope":1e-9,"healing_cache":healing.stats(),"boom_eager":boom,"switch_kernels":kernels.stats})
+        "numerical_envelope":1e-9,"healing_cache":healing.stats(),"boom_eager":boom,"switch_kernels":kernels.stats,"healing_kernels":healing_kernels.stats})
 }
 
 #[cfg(test)]

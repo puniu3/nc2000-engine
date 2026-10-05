@@ -1,0 +1,676 @@
+{
+  "schema": "nc2000-policy-healing-kernels-v1",
+  "results": {
+    "control-work": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.8909038936687356
+      },
+      "runs": 2000000,
+      "elapsed_ms": 73258.467334,
+      "cache": {
+        "observations": 2747736,
+        "eligible": 2666888,
+        "attack_eligible": 1500916,
+        "switch_eligible": 14400,
+        "hits": 1403270,
+        "attack_hits": 333850,
+        "switch_hits": 0,
+        "reset_hits": 65318,
+        "rejected_hp": 141669,
+        "runs": 1344466,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 140,
+          "healer_full_hp": 63920,
+          "healer_volatile": 15180,
+          "opponent_move": 1008
+        }
+      },
+      "boom_eager": {
+        "attempts": 740,
+        "completed": 739,
+        "runs": 655534,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 2568,
+        "eligible": 1296,
+        "hits": 1286,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 570,
+        "translated_leaves": 73302,
+        "observations_avoided": 1851840
+      },
+      "healing_kernels": {
+        "calls": 2568,
+        "eligible": 0,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0,
+        "reset_leaves": 0,
+        "observations_avoided": 0
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 2146,
+          "input_mass": 0.9968234231755768,
+          "processed_states": 2146,
+          "processed_mass": 0.9968234231755768,
+          "top_mass_same_count": 0.9968234231755768
+        },
+        {
+          "depth": 4,
+          "input_states": 38303,
+          "input_mass": 0.8990017279110193,
+          "processed_states": 1122,
+          "processed_mass": 0.7615420466298572,
+          "top_mass_same_count": 0.7615420466298572
+        }
+      ],
+      "hit_fraction": 0.510700445748791,
+      "peak_states": 40018,
+      "peak_templates": 68,
+      "depth": 4,
+      "final": {
+        "depth": 4,
+        "runs": 2000000,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.10909610733128058,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.15578864312665444,
+        "frontier_mass": 0.7351152495420812,
+        "unknown_mass": 0.8909038926687356,
+        "frontier_states": 40018,
+        "frontier_templates": 68,
+        "enumeration_failures": 266,
+        "mass_error": 1.6209256159527285e-14,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.8909038936687356
+        }
+      }
+    },
+    "healing-work": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.8909038936687356
+      },
+      "runs": 2000000,
+      "elapsed_ms": 75593.99799999999,
+      "cache": {
+        "observations": 2720736,
+        "eligible": 2639888,
+        "attack_eligible": 1500916,
+        "switch_eligible": 14400,
+        "hits": 1376270,
+        "attack_hits": 333850,
+        "switch_hits": 0,
+        "reset_hits": 38318,
+        "rejected_hp": 141669,
+        "runs": 1344466,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 140,
+          "healer_full_hp": 63920,
+          "healer_volatile": 15180,
+          "opponent_move": 1008
+        }
+      },
+      "boom_eager": {
+        "attempts": 740,
+        "completed": 739,
+        "runs": 655534,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 2538,
+        "eligible": 1296,
+        "hits": 1286,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 570,
+        "translated_leaves": 73302,
+        "observations_avoided": 1851840
+      },
+      "healing_kernels": {
+        "calls": 2568,
+        "eligible": 393,
+        "hits": 30,
+        "rejected_hp": 0,
+        "rejected_source": 361,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 152,
+        "translated_leaves": 2280,
+        "reset_leaves": 2280,
+        "observations_avoided": 27000
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 2146,
+          "input_mass": 0.9968234231755768,
+          "processed_states": 2146,
+          "processed_mass": 0.9968234231755768,
+          "top_mass_same_count": 0.9968234231755768
+        },
+        {
+          "depth": 4,
+          "input_states": 38303,
+          "input_mass": 0.8990017279110193,
+          "processed_states": 1122,
+          "processed_mass": 0.7615420466298572,
+          "top_mass_same_count": 0.7615420466298572
+        }
+      ],
+      "hit_fraction": 0.5058447420109853,
+      "peak_states": 40018,
+      "peak_templates": 68,
+      "depth": 4,
+      "final": {
+        "depth": 4,
+        "runs": 2000000,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.10909610733128058,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.15578864312665444,
+        "frontier_mass": 0.7351152495420812,
+        "unknown_mass": 0.8909038926687356,
+        "frontier_states": 40018,
+        "frontier_templates": 68,
+        "enumeration_failures": 266,
+        "mass_error": 1.6209256159527285e-14,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.8909038936687356
+        }
+      }
+    },
+    "control-1": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9138536675313678
+      },
+      "runs": 1094694,
+      "elapsed_ms": 30003.028333,
+      "cache": {
+        "observations": 1001418,
+        "eligible": 983030,
+        "attack_eligible": 886174,
+        "switch_eligible": 4320,
+        "hits": 324169,
+        "attack_hits": 240226,
+        "switch_hits": 0,
+        "reset_hits": 27450,
+        "rejected_hp": 60816,
+        "runs": 677249,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 518,
+        "completed": 518,
+        "runs": 417445,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 552,
+        "eligible": 56,
+        "hits": 53,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 171,
+        "translated_leaves": 3021,
+        "observations_avoided": 76320
+      },
+      "healing_kernels": {
+        "calls": 552,
+        "eligible": 0,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0,
+        "reset_leaves": 0,
+        "observations_avoided": 0
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 2146,
+          "input_mass": 0.9968234231755768,
+          "processed_states": 1031,
+          "processed_mass": 0.9908273253986788,
+          "top_mass_same_count": 0.9908273253986788
+        }
+      ],
+      "hit_fraction": 0.3237099792494243,
+      "peak_states": 14614,
+      "peak_templates": 39,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1094694,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08614633346861852,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.01935003673830583,
+        "frontier_mass": 0.894503629793062,
+        "unknown_mass": 0.9138536665313678,
+        "frontier_states": 14614,
+        "frontier_templates": 39,
+        "enumeration_failures": 54,
+        "mass_error": 1.3655743202889425e-14,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9138536675313678
+        }
+      }
+    },
+    "healing-1": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9136788604296502
+      },
+      "runs": 1128490,
+      "elapsed_ms": 30034.445375,
+      "cache": {
+        "observations": 1014364,
+        "eligible": 995976,
+        "attack_eligible": 924320,
+        "switch_eligible": 4320,
+        "hits": 303319,
+        "attack_hits": 244576,
+        "switch_hits": 0,
+        "reset_hits": 2250,
+        "rejected_hp": 65391,
+        "runs": 711045,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 518,
+        "completed": 518,
+        "runs": 417445,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 534,
+        "eligible": 56,
+        "hits": 53,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 171,
+        "translated_leaves": 3021,
+        "observations_avoided": 76320
+      },
+      "healing_kernels": {
+        "calls": 562,
+        "eligible": 46,
+        "hits": 28,
+        "rejected_hp": 0,
+        "rejected_source": 16,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 152,
+        "translated_leaves": 2128,
+        "reset_leaves": 2128,
+        "observations_avoided": 25200
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 2146,
+          "input_mass": 0.9968234231755768,
+          "processed_states": 1041,
+          "processed_mass": 0.9911361455605847,
+          "top_mass_same_count": 0.9911361455605847
+        }
+      ],
+      "hit_fraction": 0.2990238218233297,
+      "peak_states": 14679,
+      "peak_templates": 39,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1128490,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08632114057033467,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.019041216951016994,
+        "frontier_mass": 0.8946376424786332,
+        "unknown_mass": 0.9136788594296502,
+        "frontier_states": 14679,
+        "frontier_templates": 39,
+        "enumeration_failures": 55,
+        "mass_error": 1.509903313490213e-14,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9136788604296502
+        }
+      }
+    },
+    "healing-2": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9137842769492648
+      },
+      "runs": 1108194,
+      "elapsed_ms": 30025.766916999997,
+      "cache": {
+        "observations": 991518,
+        "eligible": 973130,
+        "attack_eligible": 901474,
+        "switch_eligible": 4320,
+        "hits": 300769,
+        "attack_hits": 242026,
+        "switch_hits": 0,
+        "reset_hits": 2250,
+        "rejected_hp": 62616,
+        "runs": 690749,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 518,
+        "completed": 518,
+        "runs": 417445,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 528,
+        "eligible": 56,
+        "hits": 53,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 171,
+        "translated_leaves": 3021,
+        "observations_avoided": 76320
+      },
+      "healing_kernels": {
+        "calls": 556,
+        "eligible": 46,
+        "hits": 28,
+        "rejected_hp": 0,
+        "rejected_source": 16,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 152,
+        "translated_leaves": 2128,
+        "reset_leaves": 2128,
+        "observations_avoided": 25200
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 2146,
+          "input_mass": 0.9968234231755768,
+          "processed_states": 1035,
+          "processed_mass": 0.9909508534636655,
+          "top_mass_same_count": 0.9909508534636655
+        }
+      ],
+      "hit_fraction": 0.3033419463892738,
+      "peak_states": 14648,
+      "peak_templates": 39,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1108194,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08621572405072064,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.01922650867331917,
+        "frontier_mass": 0.8945577672759456,
+        "unknown_mass": 0.9137842759492648,
+        "frontier_states": 14648,
+        "frontier_templates": 39,
+        "enumeration_failures": 54,
+        "mass_error": 1.454392162258955e-14,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9137842769492648
+        }
+      }
+    },
+    "control-2": {
+      "score": {
+        "lo": 0.0,
+        "hi": 0.9135345338301931
+      },
+      "runs": 1132462,
+      "elapsed_ms": 30002.009791,
+      "cache": {
+        "observations": 1039834,
+        "eligible": 1021446,
+        "attack_eligible": 924590,
+        "switch_eligible": 4320,
+        "hits": 328743,
+        "attack_hits": 244800,
+        "switch_hits": 0,
+        "reset_hits": 27450,
+        "rejected_hp": 65398,
+        "runs": 711091,
+        "peak_entries": 16384,
+        "exclusions": {
+          "active_item": 600,
+          "frame_or_field": 42,
+          "healer_full_hp": 4096,
+          "healer_volatile": 13650
+        }
+      },
+      "boom_eager": {
+        "attempts": 531,
+        "completed": 531,
+        "runs": 421371,
+        "terminal_replacements": 0
+      },
+      "switch_kernels": {
+        "calls": 563,
+        "eligible": 56,
+        "hits": 53,
+        "rejected": 0,
+        "evictions": 0,
+        "peak_leaves": 171,
+        "translated_leaves": 3021,
+        "observations_avoided": 76320
+      },
+      "healing_kernels": {
+        "calls": 563,
+        "eligible": 0,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0,
+        "reset_leaves": 0,
+        "observations_avoided": 0
+      },
+      "frontier_order": [
+        {
+          "depth": 1,
+          "input_states": 1,
+          "input_mass": 1.0,
+          "processed_states": 1,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 2,
+          "input_states": 38,
+          "input_mass": 1.0,
+          "processed_states": 38,
+          "processed_mass": 1.0,
+          "top_mass_same_count": 1.0
+        },
+        {
+          "depth": 3,
+          "input_states": 2146,
+          "input_mass": 0.9968234231755768,
+          "processed_states": 1055,
+          "processed_mass": 0.9914605596559954,
+          "top_mass_same_count": 0.9914605596559954
+        }
+      ],
+      "hit_fraction": 0.3161495007857023,
+      "peak_states": 14684,
+      "peak_templates": 39,
+      "depth": 3,
+      "final": {
+        "depth": 3,
+        "runs": 1132462,
+        "wins": 0.0,
+        "ties": 0.0,
+        "losses": 0.08646546716979182,
+        "dropped_mass": 0.0,
+        "failed_mass": 0.01871680285560631,
+        "frontier_mass": 0.8948177299745869,
+        "unknown_mass": 0.9135345328301931,
+        "frontier_states": 14684,
+        "frontier_templates": 39,
+        "enumeration_failures": 55,
+        "mass_error": 1.4988010832439613e-14,
+        "hp_storage_census": null,
+        "score": {
+          "lo": 0.0,
+          "hi": 0.9135345338301931
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "1": {
+      "upper_reduction": 0.00017480710171757785,
+      "elapsed_ratio": 1.0010471290314866,
+      "engine_runs_ratio": 1.0308725543393862
+    },
+    "2": {
+      "upper_reduction": -0.0002497431190716659,
+      "elapsed_ratio": 1.0007918511514893,
+      "engine_runs_ratio": 0.9785705833838133
+    },
+    "work": {
+      "upper_reduction": 0.0
+    }
+  },
+  "prior_archive_sha256": "7c3ed5599de09aa0a2d98f944d989746d3b1bc8b6473ab81241e8104ae96b96f",
+  "interpretation": "Aggregated healing kernels use the existing strictly-faster, below-full-HP healer admission domain. Every stored source successor must be nonterminal with both original actives surviving. Rest-reset HP is retained; non-reset HP translates by the source damage, guarded by the maximum required HP across all stored leaves. A failed guard falls back to ordinary enumeration. Script caps and unresolved probability remain unchanged. Ninety direct probability-map comparisons cover both sides, awake/waking Rest, Sleep Talk, low/full HP, and partial caps; separate cases cover eviction, disabled storage and terminal-source rejection. The control reproduces all prior fixed-work report fields. Two fixed-work arms precede control/healing/healing/control 30-second runs. These are fixed-policy-pair intervals, not unrestricted game value or deployed strength."
+}

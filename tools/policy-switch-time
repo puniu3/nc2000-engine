@@ -34,6 +34,8 @@ def summarize(records, corpus):
         expected['frontier_mass_order'] = False
     if 'best_first' in config:
         expected['best_first'] = False
+    if 'healing_kernel_capacity' in config:
+        expected['healing_kernel_capacity'] = 0
     assert config == expected
     results = {}
     for name in names:
