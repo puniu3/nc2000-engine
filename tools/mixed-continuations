@@ -105,6 +105,84 @@ def compare():
     return report
 
 
+def frozen_roots():
+    path = root / 'findings/adaptive-mix-visits-v1/records.json.gz'
+    records = json.loads(gzip.decompress(path.read_bytes()))['records']
+    return [records[f'g015-d0016-s{side}'] for side in range(2)]
+
+
+def extra_pairs():
+    records = frozen_roots()
+    rows = [record['observed']['rows'][0] for record in records]
+    assert all(row['mode'] == 'pinned' for row in rows)
+    support = [{a for a, p in zip(row['actions'], row['candidate_policy']) if p > 0} for row in rows]
+    return [[a, b] for a in rows[0]['actions'] for b in rows[1]['actions']
+            if (a in support[0]) != (b in support[1])]
+
+
+def extra_report():
+    bundles = {label: json.loads(gzip.decompress((archive / label / 'records.json.gz').read_bytes()))
+               for label in ['shallow', 'extra-screen']}
+    cfg = bundles['extra-screen']['manifest']['config']
+    old = bundles['shallow']['manifest']['config']
+    assert cfg['pairs'] == extra_pairs()
+    assert all(cfg[k] == old[k] for k in ['game', 'decision', 'seed', 'iterations', 'max_steps'])
+    assert cfg['trials'] <= old['trials']
+    scores = {}
+    for bundle in bundles.values():
+        summarize(bundle)
+        for index, pair in enumerate(bundle['manifest']['config']['pairs']):
+            rows = [r for r in bundle['rows'] if r['pair'] == index and r['trial'] < cfg['trials']]
+            assert len(rows) == cfg['trials'] and all(r['score'] is not None for r in rows)
+            assert tuple(pair) not in scores
+            scores[tuple(pair)] = sum(r['score'] for r in rows) / len(rows)
+    records = frozen_roots()
+    actions = [r['observed']['rows'][0]['actions'] for r in records]
+    results = []
+    for side in range(2):
+        assert records[side]['state_key'] == bundles['extra-screen']['manifest']['state_key']
+        for row in records[side]['observed']['rows']:
+            if row['mode'] != 'pinned':
+                continue
+            support = [(a, p) for a, p in zip(row['actions'], row['candidate_policy']) if p > 0]
+            values = []
+            for reply in actions[1-side]:
+                value = sum(p * (scores[(a, reply)] if side == 0 else 1-scores[(reply, a)]) for a, p in support)
+                default = scores[(row['choice'], reply)] if side == 0 else 1-scores[(reply, row['choice'])]
+                values.append(dict(reply=reply, candidate_sample_score=value, default_sample_score=default))
+            results.append(dict(side=side, seed_index=row['seed_index'], replies=values,
+                                candidate_worst_reply=min(values, key=lambda x:x['candidate_sample_score'])['reply'],
+                                candidate_worst_sample_score=min(v['candidate_sample_score'] for v in values),
+                                default_worst_sample_score=min(v['default_sample_score'] for v in values)))
+    return dict(trials_per_cell=cfg['trials'], iterations=cfg['iterations'], pairs=len(scores),
+                source_hashes={label:sha((archive / label / 'records.json.gz').read_bytes()) for label in bundles},
+                candidate_scores=results,
+                scope='All legal opposing first actions against each frozen candidate support, with the same trial prefix and fixed ordinary pinned-team continuations. Sample minima screen counterpolicies; neither continuation optimality nor game-value bounds follow from complete first-action coverage.')
+
+
+def curse_report():
+    path = archive / 'curse-confirm/records.json.gz'
+    bundle = json.loads(gzip.decompress(path.read_bytes()))
+    cfg = bundle['manifest']['config']
+    assert cfg['pairs'] == [['move curse', 'move return'], ['move curse', 'move curse']]
+    assert cfg['iterations'] == 27000 and cfg['trials'] == 32 and cfg['seed'] == 2026111401
+    cells = summarize(bundle)['cells']
+    assert all(c['censored'] == 0 for c in cells)
+    record = frozen_roots()[1]
+    assert record['state_key'] == bundle['manifest']['state_key']
+    results = []
+    for row in record['observed']['rows']:
+        if row['mode'] != 'pinned':
+            continue
+        weights = [row['candidate_policy'][row['actions'].index(a)] for a in ['move return', 'move curse']]
+        assert abs(sum(weights)-1) < 1e-10
+        results.append(dict(seed_index=row['seed_index'], side=1,
+                            candidate_sample_score=sum(p*(1-c['sample_score_interval'][0]) for p,c in zip(weights,cells)),
+                            default_sample_score=1-cells[1]['sample_score_interval'][0]))
+    return dict(cells=cells, candidate_scores=results, source_sha256=sha(path.read_bytes()),
+                scope='Fresh battle/search seeds after the 2700-iteration response screen. Both sides continue with ordinary pinned-team 27000-iteration search. Only the newly screened Curse first action is confirmed here; these are sample scores, not optimal-continuation certificates.')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--label', default='screen')
@@ -114,10 +192,14 @@ def main():
     parser.add_argument('--verify-only', action='store_true')
     parser.add_argument('--compare', action='store_true')
     parser.add_argument('--counter', action='store_true')
+    parser.add_argument('--extra-replies', action='store_true')
+    parser.add_argument('--extra-report', action='store_true')
+    parser.add_argument('--curse-report', action='store_true')
+    parser.add_argument('--pairs', type=pathlib.Path)
     args = parser.parse_args()
-    if args.compare:
-        report = compare()
-        path = archive / 'comparison.json'
+    if args.compare or args.extra_report or args.curse_report:
+        report = curse_report() if args.curse_report else extra_report() if args.extra_report else compare()
+        path = archive / ('curse-comparison.json' if args.curse_report else 'extra-comparison.json' if args.extra_report else 'comparison.json')
         if args.verify_only:
             assert report == json.loads(path.read_text())
             print('mixed-continuations: paired budget comparison and frozen policy scores verified')
@@ -149,6 +231,7 @@ def main():
         subprocess.run([str(binary), str(corpus), 'verify-root-continuations', str(output)], cwd=root, env=env, check=True)
         return
     assert not destination.exists()
+    assert sum([args.counter, args.extra_replies, args.pairs is not None]) <= 1
     cfg = dict(game=15, decision=16, pairs=[[a, b] for a in ['move doubleedge', 'move selfdestruct']
                                          for b in ['move return', 'move curse']],
                trials=args.trials, seed=args.seed, iterations=args.iterations, max_steps=1024, threads=4)
@@ -157,6 +240,10 @@ def main():
         cfg.update(game=game['game'], decision=game['samples'][0],
                    pairs=[[a, b] for a in ['move return', 'move surf']
                           for b in ['move counter', 'move mirrorcoat', 'move safeguard']])
+    if args.extra_replies:
+        cfg['pairs'] = extra_pairs()
+    if args.pairs is not None:
+        cfg['pairs'] = json.loads(args.pairs.read_text())
     config = scratch / 'config.json'
     config.write_text(json.dumps(cfg, indent=2) + '\n')
     output = scratch / 'run'

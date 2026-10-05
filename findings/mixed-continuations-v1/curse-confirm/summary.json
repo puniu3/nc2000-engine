@@ -1,0 +1,38 @@
+{
+  "iterations": 27000,
+  "cells": [
+    {
+      "actions": [
+        "move curse",
+        "move return"
+      ],
+      "trials": 32,
+      "wins": 5,
+      "ties": 0,
+      "losses": 27,
+      "censored": 0,
+      "sample_score_interval": [
+        0.15625,
+        0.15625
+      ],
+      "max_steps": 57
+    },
+    {
+      "actions": [
+        "move curse",
+        "move curse"
+      ],
+      "trials": 32,
+      "wins": 23,
+      "ties": 0,
+      "losses": 9,
+      "censored": 0,
+      "sample_score_interval": [
+        0.71875,
+        0.71875
+      ],
+      "max_steps": 82
+    }
+  ],
+  "scope": "Paired terminal samples under concrete pinned-team bot continuations. Intervals only account for censored games; they are not sampling confidence intervals or game-value bounds. No optimal-opponent assumption. Root cells share battle and decision-index search seeds; divergent trajectories can consume random numbers differently."
+}

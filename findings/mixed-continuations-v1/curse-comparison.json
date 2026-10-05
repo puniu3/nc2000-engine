@@ -1,0 +1,52 @@
+{
+  "cells": [
+    {
+      "actions": [
+        "move curse",
+        "move return"
+      ],
+      "trials": 32,
+      "wins": 5,
+      "ties": 0,
+      "losses": 27,
+      "censored": 0,
+      "sample_score_interval": [
+        0.15625,
+        0.15625
+      ],
+      "max_steps": 57
+    },
+    {
+      "actions": [
+        "move curse",
+        "move curse"
+      ],
+      "trials": 32,
+      "wins": 23,
+      "ties": 0,
+      "losses": 9,
+      "censored": 0,
+      "sample_score_interval": [
+        0.71875,
+        0.71875
+      ],
+      "max_steps": 82
+    }
+  ],
+  "candidate_scores": [
+    {
+      "seed_index": 0,
+      "side": 1,
+      "candidate_sample_score": 0.47753152045280267,
+      "default_sample_score": 0.28125
+    },
+    {
+      "seed_index": 1,
+      "side": 1,
+      "candidate_sample_score": 0.4661809505128121,
+      "default_sample_score": 0.28125
+    }
+  ],
+  "source_sha256": "b2fb147706e63311e042ae65983e606d1f5eba6911362dd0b280e8794c406131",
+  "scope": "Fresh battle/search seeds after the 2700-iteration response screen. Both sides continue with ordinary pinned-team 27000-iteration search. Only the newly screened Curse first action is confirmed here; these are sample scores, not optimal-continuation certificates."
+}
