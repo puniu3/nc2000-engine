@@ -80,12 +80,130 @@ def summarize(records):
             'interpretation': 'Three preselected previously unresolved 1v2 states. Intersect same-state certificates and pure maximin/minimax value bounds. First decisions are archived; continuation is optimal with full information. This does not measure deployed blind-policy exploitability or global optimality.'}
 
 
+def summarize_witnesses(records):
+    assessor.calibrate_assessor()
+    prior_path = root / 'findings/policy-cut-expansion-v1/summary.json'
+    prior = json.loads(prior_path.read_bytes())
+    assert set(records) == {'g11', 'g17', 'g23', 'g17-talk', 'g17-deep'}
+    base = records['g17']['manifest']['protocol']
+    deep = records['g17-deep']['manifest']['protocol']
+    assert deep['trial_depth'] == 64 and 'trial_depth' not in base
+    assert {k: v for k, v in deep.items() if k not in ['trial_depth', 'interpretation']} == {k: v for k, v in base.items() if k != 'interpretation'}
+    assert records['g17']['result']['reference']['runs'] == records['g17-deep']['result']['reference']['runs'] == 2_000_000
+    states = []
+    padding = 1e-10
+    for previous in prior['states']:
+        matrix = json.loads(json.dumps(previous['matrix']))
+        for bound in matrix['cells'] + [matrix['value']]:
+            bound['lo'] = max(0, bound['lo'] - padding)
+            bound['hi'] = min(1, bound['hi'] + padding)
+        witnesses = []
+        for name, record in records.items():
+            row = record['result']
+            if row['game'] != previous['game']:
+                continue
+            protocol = record['manifest']['protocol']
+            assert (row['game'], row['decision'], row['state_key']) == (previous['game'], previous['decision'], previous['state_key'])
+            assert row['side'] == protocol['fixed_policy_side'] == 1
+            assert row['fixed_first_action'] == protocol['fixed_first_action'] == previous['endpoints'][1]['archived_choice']
+            assert row.get('fixed_sleep_talk', False) == protocol.get('fixed_sleep_talk', False) == (name == 'g17-talk')
+            assert row['priority_actions'] == protocol['fixed_priority_actions']
+            assert sorted(row['priority_actions']) == sorted(matrix['actions'][1])
+            restricted = row['restricted_matrix']
+            assert restricted['actions'] == [matrix['actions'][0], [row['fixed_first_action']]]
+            assert len(restricted['cells']) == len(matrix['actions'][0])
+            score = row['guaranteed_score']
+            assert 0 <= score['lo'] <= score['hi'] <= 1
+            assert abs(restricted['value']['hi'] - (1 - score['lo'])) < 1e-12
+            assert abs(restricted['value']['lo'] - (1 - score['hi'])) < 1e-12
+            assert row['unrestricted_game_value']['lo'] == 0
+            assert abs(row['unrestricted_game_value']['hi'] - (1 - score['lo'])) < 1e-12
+            assert sum(c['runs'] for c in row['root_chance']) == row['reference']['runs']
+            column = matrix['actions'][1].index(row['fixed_first_action'])
+            columns = len(matrix['actions'][1])
+            for i, bound in enumerate(restricted['cells']):
+                chance = row['root_chance'][i]
+                assert abs(chance['pending_mass'] + chance['child_uncertainty'] - (bound['hi'] - bound['lo'])) < 1e-9
+                cell = matrix['cells'][i * columns + column]
+                cell['hi'] = min(cell['hi'], bound['hi'] + padding)
+                assert cell['lo'] <= cell['hi']
+            matrix['value']['hi'] = min(matrix['value']['hi'], 1 - score['lo'] + padding)
+            witnesses.append({'arm': name, 'guaranteed_score': score, 'sleep_talk': protocol.get('fixed_sleep_talk', False),
+                              'trial_depth': protocol.get('trial_depth', 24), 'depth_limit_trials': row['depth_limit_trials'], **row['reference']})
+        assert len(witnesses) == (3 if previous['game'] == 17 else 1)
+        assert matrix['value']['lo'] <= matrix['value']['hi']
+        endpoints = []
+        for endpoint in previous['endpoints']:
+            assessment = assessor.assess(matrix, endpoint['side'], endpoint['assessment']['policy'])
+            verifier.verify_assessment(matrix, endpoint['side'], assessment)
+            endpoints.append({'side': endpoint['side'], 'archived_choice': endpoint['archived_choice'],
+                              'previous_loss': endpoint['assessment']['loss'], 'assessment': assessment})
+        states.append({'game': previous['game'], 'decision': previous['decision'], 'state_key': previous['state_key'],
+                       'matrix': matrix, 'endpoints': endpoints, 'witnesses': witnesses})
+    return {'schema': 'nc2000-policy-ending-witness-v1', 'states': states, 'numerical_envelope': padding,
+            'prior_certificate': str(prior_path.relative_to(root)), 'prior_sha256': hashlib.sha256(prior_path.read_bytes()).hexdigest(),
+            'interpretation': 'Frozen archived first actions with deterministic side-one continuation priorities. All side-zero actions remain legal. Optional Sleep Talk applies only while currently asleep, outside the first-action override. Only restricted side-one upper payoff bounds transfer to unrestricted values/cells. Bounds compare certificates, not actual strengths of the two fixed policies. First-decision assessments assume optimal full-information continuation; no deployed blind-policy or global optimality claim.'}
+
+
+def run_witnesses(args):
+    destination = root / 'findings/policy-ending-witness-v1'
+    arms = ['g11', 'g17', 'g23', 'g17-talk', 'g17-deep']
+    if args.verify_only:
+        records = read_archive(destination / 'records.json.gz')
+        for name, record in records.items():
+            protocol_bytes = (destination / f'{name}.json').read_bytes()
+            p = record['manifest']['protocol']
+            assert hashlib.sha256(protocol_bytes).hexdigest() == record['manifest']['protocol_sha256']
+            assert json.loads(protocol_bytes) == p
+            assert hashlib.sha256(gzip.decompress((destination / f'{name}.jsonl.gz').read_bytes())).hexdigest() == p['corpus_sha256']
+            assert hashlib.sha256((root / p['baseline']).read_bytes()).hexdigest() == p['baseline_sha256']
+        assert summarize_witnesses(records) == json.loads((destination / 'summary.json').read_bytes())
+        print('Verified five fixed-strategy analyses across three 1v2 states')
+        return
+    directory = args.record_existing
+    if directory is None:
+        directory = root / 'tmp/policy-ending-witness-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+        directory.mkdir(parents=True)
+        env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+        subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+        for name in arms:
+            corpus = gzip.decompress((destination / f'{name}.jsonl.gz').read_bytes())
+            (directory / f'{name}.jsonl').write_bytes(corpus)
+            protocol = json.loads((destination / f'{name}.json').read_bytes())
+            protocol['corpus'] = str((directory / f'{name}.jsonl').relative_to(root))
+            (directory / f'{name}.json').write_text(json.dumps(protocol, indent=2) + '\n')
+            subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+    records = {}
+    for name in arms:
+        files = list((directory / name).glob('game-*.json'))
+        assert len(files) == 1
+        records[name] = {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()), 'result': json.loads(files[0].read_bytes())}
+    summary = summarize_witnesses(records)
+    if args.record_existing:
+        destination.mkdir(exist_ok=True)
+        for name, record in records.items():
+            p = record['manifest']['protocol']
+            corpus = (root / p['corpus']).read_bytes()
+            assert hashlib.sha256(corpus).hexdigest() == p['corpus_sha256']
+            (destination / f'{name}.jsonl.gz').write_bytes(gzip.compress(corpus, mtime=0))
+            (destination / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+        (destination / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+        (destination / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    for row in summary['states']:
+        print(row['game'], [e['assessment']['loss'] for e in row['endpoints']])
+
+
 parser = argparse.ArgumentParser()
-parser.add_argument('--target-cut', action='store_true')
+study = parser.add_mutually_exclusive_group()
+study.add_argument('--target-cut', action='store_true')
+study.add_argument('--witness', action='store_true')
 mode = parser.add_mutually_exclusive_group()
 mode.add_argument('--verify-only', action='store_true')
 mode.add_argument('--record-existing', type=pathlib.Path)
 args = parser.parse_args()
+if args.witness:
+    run_witnesses(args)
+    raise SystemExit(0)
 if args.target_cut:
     source = root / 'findings/policy-cut-expansion-v1'
 if args.verify_only:

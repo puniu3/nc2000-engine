@@ -25,6 +25,7 @@ struct Protocol {
     node_budget: usize,
     work_budget: usize,
     cell_cap: usize,
+    trial_depth: Option<usize>,
     tolerance: f64,
     iterations: Vec<u32>,
     search_seeds: usize,
@@ -41,6 +42,8 @@ struct Protocol {
     fixed_policy_side: Option<usize>,
     fixed_first_action: Option<String>,
     fixed_priority_actions: Option<Vec<String>>,
+    #[serde(default)]
+    fixed_sleep_talk: bool,
     #[serde(default)]
     aggregate_lazy_children: bool,
     #[serde(default)]
@@ -197,6 +200,7 @@ fn audit(
             work_budget: protocol.work_budget,
             node_budget: protocol.node_budget,
             cell_cap: protocol.cell_cap,
+            trial_depth: protocol.trial_depth.unwrap_or_else(|| BoundConfig::default().trial_depth),
             eps: protocol.tolerance,
             certified_action_pruning: protocol.certified_action_pruning,
             aggregate_lazy_children: protocol.aggregate_lazy_children,
@@ -214,6 +218,7 @@ fn audit(
         } else {
             FixedPolicySolver::new(dex, cfg, side, priority)
         };
+        if protocol.fixed_sleep_talk { solver = solver.with_sleep_talk(); }
         let started = Instant::now();
         let report = solver.solve(&battle);
         let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
@@ -225,6 +230,7 @@ fn audit(
             "game":game.game,"decision":decision,"state_key":battle.state_key128().to_string(),
             "side":side,"priority_actions":priority_names,
             "fixed_first_action":protocol.fixed_first_action,
+            "fixed_sleep_talk":protocol.fixed_sleep_talk,
             "guaranteed_score":bound(report.guaranteed_score),
             "unrestricted_game_value":bound(report.unrestricted_game_value),
             "restricted_matrix":{
@@ -244,6 +250,7 @@ fn audit(
     }
     assert!(protocol.fixed_first_action.is_none());
     assert!(protocol.fixed_priority_actions.is_none());
+    assert!(!protocol.fixed_sleep_talk);
     let mut targets = Vec::new();
     let archived: [Option<&Value>; 2] = [0, 1].map(|side| {
         if legal[side].is_empty() {
@@ -278,6 +285,7 @@ fn audit(
             work_budget: protocol.work_budget,
             node_budget: protocol.node_budget,
             cell_cap: protocol.cell_cap,
+            trial_depth: protocol.trial_depth.unwrap_or_else(|| BoundConfig::default().trial_depth),
             certified_action_pruning: protocol.certified_action_pruning,
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
@@ -533,6 +541,7 @@ fn main() {
     let protocol: Protocol = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(protocol.schema, "nc2000-policy-gap-v1");
     assert!(protocol.threads > 0 && protocol.search_seeds > 0 && protocol.reference_ms > 0);
+    assert!(protocol.trial_depth.is_none_or(|depth| depth > 0));
     assert!(protocol.iterations.windows(2).all(|w| w[0] < w[1]));
     let corpus = std::fs::read(&protocol.corpus).unwrap();
     let baseline = std::fs::read(&protocol.baseline).unwrap();

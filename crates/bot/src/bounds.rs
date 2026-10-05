@@ -434,6 +434,7 @@ pub struct BoundSolver<'d> {
     active_two_sided: Option<TwoSidedHeal>,
     fixed_policy: Option<(usize, Vec<SearchChoice>)>,
     fixed_first_action: Option<(NodeKey, SearchChoice)>,
+    fixed_sleep_talk: bool,
     value_certificates: HashMap<NodeKey, Bounds>,
     pub stats: BoundStats,
 }
@@ -492,6 +493,13 @@ impl<'d> FixedPolicySolver<'d> {
         };
         PolicyBoundReport { guaranteed_score, unrestricted_game_value,
             stop: report.stop, runs: report.runs }
+    }
+
+    pub fn with_sleep_talk(mut self) -> Self {
+        assert!(self.solver.nodes.is_empty() && self.solver.closed.is_empty(),
+            "fixed strategy must be configured before search");
+        self.solver.fixed_sleep_talk = true;
+        self
     }
 
     pub fn node_count(&self) -> usize { self.solver.node_count() }
@@ -554,6 +562,7 @@ impl<'d> BoundSolver<'d> {
             active_two_sided: None,
             fixed_policy: None,
             fixed_first_action: None,
+            fixed_sleep_talk: false,
             value_certificates: HashMap::new(),
             stats: BoundStats::default(),
         }
@@ -574,6 +583,7 @@ impl<'d> BoundSolver<'d> {
             active_two_sided: None,
             fixed_policy: None,
             fixed_first_action: None,
+            fixed_sleep_talk: false,
             value_certificates: cache.value_certificates,
             stats: cache.stats,
         }
@@ -1049,6 +1059,13 @@ impl<'d> BoundSolver<'d> {
                         if let Some((root, action)) = self.fixed_first_action {
                             if root == key {
                                 assert!(legal.contains(&action));
+                                return vec![Some(action)];
+                            }
+                        }
+                        if self.fixed_sleep_talk && probe.active_id(side)
+                            .is_some_and(|id| probe.poke(id).status == nc2000_engine::state::Status::Slp) {
+                            if let Some(action) = self.dex.moves.id("sleeptalk").map(SearchChoice::Move)
+                                .filter(|action| legal.contains(action)) {
                                 return vec![Some(action)];
                             }
                         }
@@ -2518,6 +2535,63 @@ mod tests {
                 assert_eq!(solver.restricted_root_payoffs(&root).unwrap().actions[side], vec![Some(splash)]);
             }
         }
+    }
+
+    #[test]
+    fn sleeping_fixed_strategy_matches_exhaustive_turn_and_respects_root_override() {
+        use nc2000_engine::battle::SearchChoice;
+        use nc2000_engine::battle::EffectHandle;
+        let dex = conformance::load_dex();
+        let attack = SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
+        let talk = SearchChoice::Move(dex.moves.id("sleeptalk").unwrap());
+        let splash = SearchChoice::Move(dex.moves.id("splash").unwrap());
+        for side in 0..2 {
+            for (sleeping, pp, first, selected) in [
+                (false, 10, None, attack), (true, 10, None, talk),
+                (true, 0, None, attack), (true, 10, Some(splash), splash),
+            ] {
+                let moves = &["Seismic Toss", "Sleep Talk", "Splash"];
+                let mut root = if side == 0 { battle(&dex, moves, &["Splash"]) }
+                    else { battle(&dex, &["Splash"], moves) };
+                let preview = [0, 1].map(|s| root.legal_choices(&dex, s).first().copied());
+                root.apply_choices(&dex, preview).unwrap();
+                root.turn = 1000;
+                let me = root.active_id(side).unwrap();
+                let foe = root.active_id(1 - side).unwrap();
+                root.poke_mut(foe).hp = 25;
+                if sleeping { root.set_status(&dex, me, "slp", Some(me), EffectHandle::None, true); }
+                root.poke_mut(me).move_slots[1].pp = pp;
+                root.poke_mut(me).base_move_slots[1].pp = pp;
+                let mut choices = [Some(splash); 2];
+                choices[side] = Some(selected);
+                let step = enumerate_step(&dex, &root, choices, 100_000).unwrap();
+                let expected: f64 = step.leaves.iter().map(|leaf| {
+                    let value = super::outcome_value(&leaf.battle).unwrap();
+                    leaf.prob * if side == 0 { value } else { 1.0 - value }
+                }).sum();
+                let cfg = BoundConfig { eps: 1e-10, ..BoundConfig::default() };
+                let mut solver = match first {
+                    Some(action) => super::FixedPolicySolver::new_with_first_action(&dex,
+                        cfg, side, vec![attack], &root, action),
+                    None => super::FixedPolicySolver::new(&dex, cfg, side, vec![attack]),
+                }.with_sleep_talk();
+                let report = solver.solve(&root);
+                assert!((report.guaranteed_score.lo - expected).abs() < 1e-10);
+                assert!((report.guaranteed_score.hi - expected).abs() < 1e-10);
+                assert_eq!(solver.restricted_root_payoffs(&root).unwrap().actions[side], vec![Some(selected)]);
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "fixed strategy must be configured before search")]
+    fn fixed_strategy_cannot_change_after_search() {
+        let dex = conformance::load_dex();
+        let root = battle(&dex, &["Splash"], &["Splash"]);
+        let mut solver = super::FixedPolicySolver::new(&dex,
+            BoundConfig { work_budget: 0, ..BoundConfig::default() }, 0, vec![]);
+        solver.solve(&root);
+        solver.with_sleep_talk();
     }
 
     #[test]

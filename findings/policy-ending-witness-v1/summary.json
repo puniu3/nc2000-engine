@@ -1,0 +1,562 @@
+{
+  "schema": "nc2000-policy-ending-witness-v1",
+  "states": [
+    {
+      "game": 11,
+      "decision": 15,
+      "state_key": "198571953228035350025324111010210281290",
+      "matrix": {
+        "actions": [
+          [
+            "move return",
+            "move icebeam",
+            "move curse",
+            "move recover"
+          ],
+          [
+            "move icebeam",
+            "move spikes",
+            "move curse",
+            "move explosion",
+            "switch 2"
+          ]
+        ],
+        "cells": [
+          {
+            "lo": 0,
+            "hi": 0.4267981689097378
+          },
+          {
+            "lo": 0,
+            "hi": 0.21404149867745884
+          },
+          {
+            "lo": 0,
+            "hi": 0.2205185202497385
+          },
+          {
+            "lo": 0,
+            "hi": 0.014585098977719297
+          },
+          {
+            "lo": 0,
+            "hi": 0.9855975698118206
+          },
+          {
+            "lo": 0,
+            "hi": 0.4156609397711891
+          },
+          {
+            "lo": 0,
+            "hi": 0.2121885268645388
+          },
+          {
+            "lo": 0,
+            "hi": 0.20785735742995443
+          },
+          {
+            "lo": 0,
+            "hi": 0.014748519691739384
+          },
+          {
+            "lo": 0,
+            "hi": 0.9888158827897435
+          },
+          {
+            "lo": 0,
+            "hi": 0.43974254690022124
+          },
+          {
+            "lo": 0,
+            "hi": 0.22287860293080586
+          },
+          {
+            "lo": 0,
+            "hi": 0.22287860293080586
+          },
+          {
+            "lo": 0,
+            "hi": 0.014792175724324895
+          },
+          {
+            "lo": 0,
+            "hi": 0.9758864183684915
+          },
+          {
+            "lo": 0,
+            "hi": 0.4393866796651185
+          },
+          {
+            "lo": 0,
+            "hi": 0.22252273569570313
+          },
+          {
+            "lo": 0,
+            "hi": 0.22252273569570313
+          },
+          {
+            "lo": 0,
+            "hi": 0.008037576366568823
+          },
+          {
+            "lo": 0,
+            "hi": 0.976061483633716
+          }
+        ],
+        "value": {
+          "lo": 0,
+          "hi": 0.014792175724324888
+        }
+      },
+      "endpoints": [
+        {
+          "side": 0,
+          "archived_choice": "move curse",
+          "previous_loss": {
+            "lo": 0,
+            "hi": 0.04158269739134394
+          },
+          "assessment": {
+            "policy": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            "guarantee": {
+              "lo": 0.0,
+              "hi": 0.014792175724324895
+            },
+            "loss": {
+              "lo": 0,
+              "hi": 0.014792175824324887
+            }
+          }
+        },
+        {
+          "side": 1,
+          "archived_choice": "move explosion",
+          "previous_loss": {
+            "lo": 0,
+            "hi": 0.0415826973913439
+          },
+          "assessment": {
+            "policy": [
+              0.0,
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            "guarantee": {
+              "lo": 0.9852078242756751,
+              "hi": 1.0
+            },
+            "loss": {
+              "lo": 0,
+              "hi": 0.014792175824324896
+            }
+          }
+        }
+      ],
+      "witnesses": [
+        {
+          "arm": "g11",
+          "guaranteed_score": {
+            "lo": 0.9852078243756751,
+            "hi": 0.9996763058397036
+          },
+          "sleep_talk": false,
+          "trial_depth": 24,
+          "depth_limit_trials": 0,
+          "stop": "NodeBudget",
+          "runs": 1001304,
+          "elapsed_ms": 31163.988290999998,
+          "nodes": 120052
+        }
+      ]
+    },
+    {
+      "game": 17,
+      "decision": 21,
+      "state_key": "199433906935569759004884428941975153695",
+      "matrix": {
+        "actions": [
+          [
+            "move bodyslam",
+            "move fireblast",
+            "move rest",
+            "move selfdestruct"
+          ],
+          [
+            "move doubleedge",
+            "move earthquake",
+            "move curse",
+            "move selfdestruct",
+            "switch 2"
+          ]
+        ],
+        "cells": [
+          {
+            "lo": 0,
+            "hi": 0.9672053597352656
+          },
+          {
+            "lo": 0,
+            "hi": 0.9991512598369626
+          },
+          {
+            "lo": 0,
+            "hi": 0.9899074937620833
+          },
+          {
+            "lo": 0,
+            "hi": 0.04654854627573705
+          },
+          {
+            "lo": 0,
+            "hi": 0.9968931608958794
+          },
+          {
+            "lo": 0,
+            "hi": 0.9679540073406538
+          },
+          {
+            "lo": 0,
+            "hi": 1
+          },
+          {
+            "lo": 0,
+            "hi": 0.9989027366258503
+          },
+          {
+            "lo": 0,
+            "hi": 0.021867608987013572
+          },
+          {
+            "lo": 0,
+            "hi": 0.9972501168900244
+          },
+          {
+            "lo": 0,
+            "hi": 0.9687500001000242
+          },
+          {
+            "lo": 0,
+            "hi": 1
+          },
+          {
+            "lo": 0,
+            "hi": 0.9989281816142092
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 1
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          }
+        ],
+        "value": {
+          "lo": 0,
+          "hi": 0.046548546275737006
+        }
+      },
+      "endpoints": [
+        {
+          "side": 0,
+          "archived_choice": "move bodyslam",
+          "previous_loss": {
+            "lo": 0,
+            "hi": 0.06444948699758841
+          },
+          "assessment": {
+            "policy": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "guarantee": {
+              "lo": 0.0,
+              "hi": 0.04654854627573705
+            },
+            "loss": {
+              "lo": 0,
+              "hi": 0.04654854637573701
+            }
+          }
+        },
+        {
+          "side": 1,
+          "archived_choice": "move selfdestruct",
+          "previous_loss": {
+            "lo": 0,
+            "hi": 0.06444948699758844
+          },
+          "assessment": {
+            "policy": [
+              0.0,
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            "guarantee": {
+              "lo": 0.953451453724263,
+              "hi": 1.0
+            },
+            "loss": {
+              "lo": 0,
+              "hi": 0.046548546375737014
+            }
+          }
+        }
+      ],
+      "witnesses": [
+        {
+          "arm": "g17",
+          "guaranteed_score": {
+            "lo": 0.953451453824263,
+            "hi": 1.0
+          },
+          "sleep_talk": false,
+          "trial_depth": 24,
+          "depth_limit_trials": 6780,
+          "stop": "WorkExhausted",
+          "runs": 2000000,
+          "elapsed_ms": 35270.591209000006,
+          "nodes": 34510
+        },
+        {
+          "arm": "g17-talk",
+          "guaranteed_score": {
+            "lo": 0.9526178709934773,
+            "hi": 1.0
+          },
+          "sleep_talk": true,
+          "trial_depth": 24,
+          "depth_limit_trials": 5889,
+          "stop": "WorkExhausted",
+          "runs": 2000000,
+          "elapsed_ms": 38007.073917,
+          "nodes": 36970
+        },
+        {
+          "arm": "g17-deep",
+          "guaranteed_score": {
+            "lo": 0.953451453824263,
+            "hi": 1.0
+          },
+          "sleep_talk": false,
+          "trial_depth": 64,
+          "depth_limit_trials": 0,
+          "stop": "WorkExhausted",
+          "runs": 2000000,
+          "elapsed_ms": 38869.840500000006,
+          "nodes": 77988
+        }
+      ]
+    },
+    {
+      "game": 23,
+      "decision": 17,
+      "state_key": "220099424291272094622176126743844857922",
+      "matrix": {
+        "actions": [
+          [
+            "move icebeam",
+            "move explosion",
+            "move reflect",
+            "move spikes"
+          ],
+          [
+            "move earthquake",
+            "move fireblast",
+            "move rockslide",
+            "move swordsdance",
+            "switch 2"
+          ]
+        ],
+        "cells": [
+          {
+            "lo": 0,
+            "hi": 0.10227312839203467
+          },
+          {
+            "lo": 0,
+            "hi": 0.5436773029836375
+          },
+          {
+            "lo": 0,
+            "hi": 0.1915395758140161
+          },
+          {
+            "lo": 0,
+            "hi": 0.368183506803502
+          },
+          {
+            "lo": 0,
+            "hi": 0.3836257396176234
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 0.10055019312239231
+          },
+          {
+            "lo": 0,
+            "hi": 0.8059405050909727
+          },
+          {
+            "lo": 0,
+            "hi": 0.675507943004895
+          },
+          {
+            "lo": 0,
+            "hi": 0.28971679952570634
+          },
+          {
+            "lo": 0,
+            "hi": 0.2546621629642566
+          },
+          {
+            "lo": 0,
+            "hi": 1e-10
+          },
+          {
+            "lo": 0,
+            "hi": 0.5862729593792728
+          },
+          {
+            "lo": 0,
+            "hi": 0.0973700227791982
+          },
+          {
+            "lo": 0,
+            "hi": 0.30579763186182213
+          },
+          {
+            "lo": 0,
+            "hi": 0.2546621629642566
+          }
+        ],
+        "value": {
+          "lo": 0,
+          "hi": 0.10227312839203472
+        }
+      },
+      "endpoints": [
+        {
+          "side": 0,
+          "archived_choice": "move icebeam",
+          "previous_loss": {
+            "lo": 0,
+            "hi": 0.10231857514262926
+          },
+          "assessment": {
+            "policy": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "guarantee": {
+              "lo": 0.0,
+              "hi": 0.10227312839203467
+            },
+            "loss": {
+              "lo": 0,
+              "hi": 0.10227312849203471
+            }
+          }
+        },
+        {
+          "side": 1,
+          "archived_choice": "move earthquake",
+          "previous_loss": {
+            "lo": 0,
+            "hi": 0.1023185751426293
+          },
+          "assessment": {
+            "policy": [
+              1.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "guarantee": {
+              "lo": 0.8977268716079654,
+              "hi": 1.0
+            },
+            "loss": {
+              "lo": 0,
+              "hi": 0.10227312849203461
+            }
+          }
+        }
+      ],
+      "witnesses": [
+        {
+          "arm": "g23",
+          "guaranteed_score": {
+            "lo": 0.8977268717079653,
+            "hi": 0.9999999189132581
+          },
+          "sleep_talk": false,
+          "trial_depth": 24,
+          "depth_limit_trials": 0,
+          "stop": "NodeBudget",
+          "runs": 742188,
+          "elapsed_ms": 48857.385958,
+          "nodes": 120023
+        }
+      ]
+    }
+  ],
+  "numerical_envelope": 1e-10,
+  "prior_certificate": "findings/policy-cut-expansion-v1/summary.json",
+  "prior_sha256": "23796f6086b249c1029287ea186e69b16c902ad9ed39196009f59242ab3362a5",
+  "interpretation": "Frozen archived first actions with deterministic side-one continuation priorities. All side-zero actions remain legal. Optional Sleep Talk applies only while currently asleep, outside the first-action override. Only restricted side-one upper payoff bounds transfer to unrestricted values/cells. Bounds compare certificates, not actual strengths of the two fixed policies. First-decision assessments assume optimal full-information continuation; no deployed blind-policy or global optimality claim."
+}

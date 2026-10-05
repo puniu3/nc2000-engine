@@ -1,0 +1,22 @@
+{
+  "schema": "nc2000-policy-ending-witness-verification-v1",
+  "native_bot_tests": 170,
+  "checks": [
+    "cargo test -p nc2000-bot --lib",
+    "cargo check --workspace --all-targets",
+    "cargo check -p nc2000-bot --example endgame_policy_audit",
+    "tools/policy-expansion --witness --verify-only"
+  ],
+  "sleeping_strategy_exhaustive_one_turn_cases": "passed for both sides, awake/asleep, depleted Sleep Talk PP, and root override precedence",
+  "strategy_mutation_after_search": "rejected",
+  "conclusions": [
+    "The g11d15 first-decision loss upper bound falls from 0.0415826974 to 0.0147921758 for both archived endpoints. A side-one Explosion-first continuation guarantees at least 0.9852078244 against every side-zero response. Both initial actions are now within the 0.02 tolerance with optimal full-information continuation.",
+    "The g17d21 bound improves from 0.0644494870 to 0.0465485464. Preferring Sleep Talk while currently asleep gives a slightly weaker lower certificate at the same 2,000,000 executions (0.9526178710 versus 0.9534514538). Overlapping score intervals do not establish which fixed strategy is stronger.",
+    "Increasing g17 trial depth from 24 to 64 removes all 6,780 depth-limit trials but leaves its guaranteed score exactly unchanged at matched executions. Node count rises from 34,510 to 77,988. This diagnostic alone does not justify changing the default depth.",
+    "The g23d17 bound changes only from 0.1023185751 to 0.1022731285. It remains unresolved. These are certificate refinements, not improvements to the deployed bot, and all archived first-decision loss lower bounds remain zero."
+  ],
+  "source_hashes": {
+    "crates/bot/src/bounds.rs": "45524819e7c18e45fc4316733bf0bfcb558a1877eebcb6656247ca1272e2c909",
+    "crates/bot/examples/endgame_policy_audit.rs": "0ef0b445e6d40af62a95c8b12cc0660cec878ddbc0e9b4bc23c88b22762eaac3"
+  }
+}
