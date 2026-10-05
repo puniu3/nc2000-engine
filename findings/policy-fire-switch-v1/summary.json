@@ -1,0 +1,423 @@
+{
+  "schema": "nc2000-policy-fire-switch-v1",
+  "arms": {
+    "fireblast": {
+      "side": 1,
+      "reply": "move fireblast",
+      "restricted_cell": {
+        "lo": 0.0,
+        "hi": 0.018228705120125886
+      },
+      "stop": "ProvenBelow",
+      "runs": 39599,
+      "nodes": 116,
+      "elapsed_ms": 728.7834170000001
+    },
+    "control": {
+      "side": 0,
+      "reply": "switch 2",
+      "restricted_cell": {
+        "lo": 0.0,
+        "hi": 0.9629160637021914
+      },
+      "stop": "WorkExhausted",
+      "runs": 2000000,
+      "nodes": 44929,
+      "elapsed_ms": 64036.386958999996
+    },
+    "material": {
+      "side": 0,
+      "reply": "switch 2",
+      "restricted_cell": {
+        "lo": 2.445754875870042e-08,
+        "hi": 0.9979479544752913
+      },
+      "stop": "WorkExhausted",
+      "runs": 2000000,
+      "nodes": 69566,
+      "elapsed_ms": 81495.629708
+    }
+  },
+  "matrix": {
+    "actions": [
+      [
+        "move bodyslam",
+        "move fireblast",
+        "move rest",
+        "move selfdestruct"
+      ],
+      [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move selfdestruct",
+        "switch 2"
+      ]
+    ],
+    "cells": [
+      {
+        "lo": 0,
+        "hi": 0.9672053601352656
+      },
+      {
+        "lo": 0,
+        "hi": 0.9991512602369627
+      },
+      {
+        "lo": 0,
+        "hi": 0.9899074941620833
+      },
+      {
+        "lo": 0,
+        "hi": 0.046293368058149605
+      },
+      {
+        "lo": 2.4357548758700418e-08,
+        "hi": 0.9968931612958795
+      },
+      {
+        "lo": 0,
+        "hi": 0.9679540077406539
+      },
+      {
+        "lo": 0,
+        "hi": 1
+      },
+      {
+        "lo": 0,
+        "hi": 0.9989027370258503
+      },
+      {
+        "lo": 0,
+        "hi": 0.018228705220125888
+      },
+      {
+        "lo": 0,
+        "hi": 0.9972501172900244
+      },
+      {
+        "lo": 0,
+        "hi": 0.9687500005000242
+      },
+      {
+        "lo": 0,
+        "hi": 1
+      },
+      {
+        "lo": 0,
+        "hi": 0.9989281820142092
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 1
+      },
+      {
+        "lo": 0,
+        "hi": 5e-10
+      },
+      {
+        "lo": 0,
+        "hi": 5e-10
+      },
+      {
+        "lo": 0,
+        "hi": 5e-10
+      },
+      {
+        "lo": 0,
+        "hi": 3e-10
+      },
+      {
+        "lo": 0,
+        "hi": 5e-10
+      }
+    ],
+    "value": {
+      "lo": 0,
+      "hi": 0.046293368058149605
+    }
+  },
+  "difference_certificates": [
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move doubleedge"
+      ],
+      "difference_upper": 0.016933411160976367,
+      "source": "shared_successor"
+    },
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move earthquake"
+      ],
+      "difference_upper": 0.016933411160976367,
+      "source": "shared_successor"
+    },
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move curse"
+      ],
+      "difference_upper": 0.016933411160976367,
+      "source": "shared_successor"
+    },
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "difference_upper": 0.0,
+      "source": "shared_matrix_entry"
+    },
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "switch 2"
+      ],
+      "difference_upper": 0.04629334370060085,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move fireblast",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move doubleedge"
+      ],
+      "difference_upper": 0.018228705220125888,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move fireblast",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move earthquake"
+      ],
+      "difference_upper": 0.018228705220125888,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move fireblast",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move curse"
+      ],
+      "difference_upper": 0.018228705220125888,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move fireblast",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "difference_upper": 0.018228705220125888,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move fireblast",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "switch 2"
+      ],
+      "difference_upper": 0.01822868086257713,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move rest",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move doubleedge"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move rest",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move earthquake"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move rest",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move curse"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move rest",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move rest",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "switch 2"
+      ],
+      "difference_upper": -2.405754875870042e-08,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move selfdestruct",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move doubleedge"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move selfdestruct",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move earthquake"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move selfdestruct",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move curse"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move selfdestruct",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "difference_upper": 3e-10,
+      "source": "matrix_intervals"
+    },
+    {
+      "upper_actions": [
+        "move selfdestruct",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "switch 2"
+      ],
+      "difference_upper": -2.405754875870042e-08,
+      "source": "matrix_intervals"
+    }
+  ],
+  "remaining_above_two_points": [
+    {
+      "upper_actions": [
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "lower_actions": [
+        "move bodyslam",
+        "switch 2"
+      ],
+      "difference_upper": 0.04629334370060085,
+      "source": "matrix_intervals"
+    }
+  ],
+  "archived_first_decisions": [
+    {
+      "side": 0,
+      "loss": {
+        "lo": 0,
+        "hi": 0.04629334380060085
+      }
+    },
+    {
+      "side": 1,
+      "loss": {
+        "lo": 0,
+        "hi": 0.04629334380060085
+      }
+    }
+  ],
+  "numerical_envelope": 1e-10,
+  "prior_hashes": {
+    "findings/policy-rest-continuation-v1/summary.json": "a5527ef3fd298f673433b9ec2a30c60ea7deb3b0df038dfc74169aa6a5652eca",
+    "findings/policy-rest-continuation-v1/records.json.gz": "4ebbf2892ed3eb312257333055bf096f92afaee2a836349fbc61572eae2d0cfa"
+  },
+  "proof": "For selected pure row r and column c, either player's first-decision regret is at most max_i A[i,c] - min_j A[r,j] = max_(i,j) (A[i,c] - A[r,j]). Bound each difference with matrix intervals, exact cancellation of the same entry, or the prior verified shared-successor certificate. Restricting a side-zero continuation yields only cell lower bounds; restricting side one yields only upper bounds. The HP ordering affects refinement only, retaining all actions, probability mass and interval backups.",
+  "interpretation": "Full-information first-decision certificates with optimal continuation. A remaining difference above two points is unresolved, not proof of a mistake or a lower bound on improvement. No deployed-bot strength or global optimality claim."
+}

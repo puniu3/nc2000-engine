@@ -87,6 +87,7 @@ pub struct BoundConfig {
     pub aggregate_lazy_children: bool,
     pub chance_fair_period: usize,
     pub chance_status_groups: bool,
+    pub chance_material_order: bool,
     pub resource_closure_nodes: Option<usize>,
     pub resource_closure_period: usize,
     pub directed_policy_refinement: bool,
@@ -115,6 +116,7 @@ impl Default for BoundConfig {
             aggregate_lazy_children: false,
             chance_fair_period: 0,
             chance_status_groups: false,
+            chance_material_order: false,
             resource_closure_nodes: None,
             resource_closure_period: 1,
             directed_policy_refinement: false,
@@ -410,6 +412,7 @@ struct StageWitness {
 
 struct Node {
     chance_class: u32,
+    remaining_hp: [i32; 2],
     /// Expansion source; dropped once the node is resolved or fully
     /// expanded (bounds then update purely from children).
     battle: Option<Battle>,
@@ -1057,6 +1060,8 @@ impl<'d> BoundSolver<'d> {
         }
         let needs = b.needs_choice();
         chance_class |= u32::from(needs[0]) << 16 | u32::from(needs[1]) << 17;
+        let remaining_hp = [0,1].map(|side|b.sides[side].party.iter()
+            .map(|&slot|b.sides[side].roster[slot as usize].hp.max(0)).sum());
         let node = match b.outcome() {
             Some(o) => {
                 let v = match o {
@@ -1066,6 +1071,7 @@ impl<'d> BoundSolver<'d> {
                 };
                 Node {
                     chance_class,
+                    remaining_hp,
                     battle: None,
                     acts0: vec![],
                     acts1: vec![],
@@ -1083,6 +1089,7 @@ impl<'d> BoundSolver<'d> {
             }
             None => Node {
                 chance_class,
+                remaining_hp,
                 battle: Some(b),
                 acts0: vec![],
                 acts1: vec![],
@@ -1295,6 +1302,7 @@ impl<'d> BoundSolver<'d> {
             } else {
                 None
             }
+            .or_else(|| self.material_chance_child(cur, ci, direction))
             .or_else(|| self.grouped_chance_child(cur, ci))
             .or_else(|| {
                 cell.resolved
@@ -1348,6 +1356,20 @@ impl<'d> BoundSolver<'d> {
             }
         }
         did_work
+    }
+
+    fn material_chance_child(&self, key: NodeKey, ci: usize, direction: Option<BoundDirection>) -> Option<(f64, NodeKey)> {
+        if !self.cfg.chance_material_order { return None; }
+        let side = match direction { Some(BoundDirection::Lower)=>0,Some(BoundDirection::Upper)=>1,None=>return None };
+        self.nodes[&key].cells[ci].resolved.iter().filter_map(|&(mass,child)| {
+            let node=&self.nodes[&child];
+            let uncertainty=mass*(node.hi-node.lo);
+            (uncertainty>1e-12).then_some((uncertainty,child))
+        }).min_by(|(wa,a),(wb,b)| {
+            let a_hp=self.nodes[a].remaining_hp;let b_hp=self.nodes[b].remaining_hp;
+            a_hp[1-side].cmp(&b_hp[1-side]).then_with(||b_hp[side].cmp(&a_hp[side]))
+                .then_with(||wb.total_cmp(wa)).then_with(||a.cmp(b))
+        })
     }
 
     fn grouped_chance_child(&self, key: NodeKey, ci: usize) -> Option<(f64, NodeKey)> {
@@ -2992,10 +3014,11 @@ mod tests {
         root.turn=999;
         for side in 0..2 { let id=root.active_id(side).unwrap();root.poke_mut(id).hp=if side==0 {40} else {60}; }
         let attack=SearchChoice::Move(dex.moves.id("seismictoss").unwrap());
-        for side in 0..2 { for reply in root.legal_choices(&dex,1-side) {
+        for (side,material) in [(0,false),(1,false),(0,true),(1,true)] { for reply in root.legal_choices(&dex,1-side) {
             let expected=exact(&dex,&root,side,Some(reply));
             let mut solver=super::FixedPolicySolver::new(&dex,BoundConfig {
-                work_budget:1,cell_cap:0,eps:1e-8,..BoundConfig::default()
+                work_budget:1,cell_cap:0,eps:1e-8,chance_material_order:material,
+                chance_fair_period:2,..BoundConfig::default()
             },side,vec![attack]);
             let mut closed=false;
             for _ in 0..1000 {
@@ -3363,6 +3386,7 @@ mod tests {
     fn synthetic_node(select_count: usize, fair_cursor: usize) -> Node {
         Node {
             chance_class: 0,
+            remaining_hp: [1,1],
             battle: None,
             acts0: vec![None, None],
             acts1: vec![None, None],

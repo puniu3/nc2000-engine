@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-fire-switch-v1'
+names = ['fireblast', 'control', 'material']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(records):
+    assert set(records) == set(names)
+    control, material = [records[name]['manifest'] for name in ['control', 'material']]
+    assert control['binary_sha256'] == material['binary_sha256']
+    assert control['source_hashes'] == material['source_hashes']
+    assert not control['protocol']['chance_material_order'] and material['protocol']['chance_material_order']
+    assert {k: v for k, v in control['protocol'].items() if k != 'chance_material_order'} == {k: v for k, v in material['protocol'].items() if k != 'chance_material_order'}
+    prior_path = root / 'findings/policy-rest-continuation-v1/summary.json'
+    prior_records_path = root / 'findings/policy-rest-continuation-v1/records.json.gz'
+    prior = json.loads(prior_path.read_bytes())
+    previous_control = json.loads(gzip.decompress(prior_records_path.read_bytes()))['reply-switch']['result']
+    assert records['control']['result']['restricted_matrix'] == previous_control['restricted_matrix']
+    assert all(records['control']['result']['reference'][k] == previous_control['reference'][k] for k in ['runs', 'nodes', 'stop'])
+    matrix = json.loads(json.dumps(prior['matrix']))
+    padding = 1e-10
+    for b in matrix['cells'] + [matrix['value']]:
+        b['lo'] = max(0, b['lo'] - padding)
+        b['hi'] = min(1, b['hi'] + padding)
+    rows, cols = map(len, matrix['actions'])
+    selected = [matrix['actions'][0].index('move bodyslam'), matrix['actions'][1].index('move selfdestruct')]
+    arms = {}
+    for name in names:
+        row = records[name]['result']
+        protocol = records[name]['manifest']['protocol']
+        assert row['schema'] == 'nc2000-fixed-reply-bound-v1'
+        assert row['state_key'] == '199433906935569759004884428941975153695'
+        side = 1 if name == 'fireblast' else 0
+        assert row['side'] == protocol['fixed_policy_side'] == side
+        assert row['fixed_first_action'] == protocol['fixed_first_action'] == ('move selfdestruct' if side else 'move bodyslam')
+        assert row['reply_action'] == protocol['fixed_reply_action'] == ('move fireblast' if side else 'switch 2')
+        assert row['priority_actions'] == protocol['fixed_priority_actions']
+        assert row['threshold'] == protocol['fixed_reply_threshold']
+        restricted = row['restricted_matrix']
+        expected_actions = [list(actions) for actions in matrix['actions']]
+        expected_actions[side] = [row['fixed_first_action']]
+        assert restricted['actions'] == expected_actions
+        index = matrix['actions'][1 - side].index(row['reply_action'])
+        assert restricted['cells'][index] == row['reply_value']
+        assert row['reference']['runs'] == row['root_chance'][index]['runs']
+        assert all(c['runs'] == 0 for i, c in enumerate(row['root_chance']) if i != index)
+        for i, b in enumerate(restricted['cells']):
+            if side:
+                cell = matrix['cells'][i * cols + selected[1]]
+                cell['hi'] = min(cell['hi'], b['hi'] + padding)
+            else:
+                cell = matrix['cells'][selected[0] * cols + i]
+                cell['lo'] = max(cell['lo'], b['lo'] - padding)
+        arms[name] = {'side': side, 'reply': row['reply_action'], 'restricted_cell': row['reply_value'], **row['reference']}
+    matrix['value']['lo'] = max(matrix['value']['lo'], max(min(b['lo'] for b in matrix['cells'][i:i + cols]) for i in range(0, rows * cols, cols)))
+    matrix['value']['hi'] = min(matrix['value']['hi'], min(max(b['hi'] for b in matrix['cells'][j::cols]) for j in range(cols)))
+    assert all(0 <= b['lo'] <= b['hi'] <= 1 for b in matrix['cells'] + [matrix['value']])
+    differences = []
+    for i in range(rows):
+        for j in range(cols):
+            upper_cell = i * cols + selected[1]
+            lower_cell = selected[0] * cols + j
+            upper = 0.0 if upper_cell == lower_cell else matrix['cells'][upper_cell]['hi'] - matrix['cells'][lower_cell]['lo']
+            source = 'shared_matrix_entry' if upper_cell == lower_cell else 'matrix_intervals'
+            for shared in prior['shared_continuation_differences']:
+                if shared['upper_actions'] == [matrix['actions'][0][i], 'move selfdestruct'] and shared['lower_actions'] == ['move bodyslam', matrix['actions'][1][j]]:
+                    if shared['difference_upper'] < upper:
+                        upper = shared['difference_upper']
+                        source = 'shared_successor'
+            differences.append({'upper_actions': [matrix['actions'][0][i], 'move selfdestruct'],
+                                'lower_actions': ['move bodyslam', matrix['actions'][1][j]],
+                                'difference_upper': upper, 'source': source})
+    loss_upper = min(1, max(0, max(d['difference_upper'] for d in differences)) + padding)
+    return {'schema': 'nc2000-policy-fire-switch-v1', 'arms': arms, 'matrix': matrix,
+            'difference_certificates': differences, 'remaining_above_two_points': [d for d in differences if d['difference_upper'] > .02],
+            'archived_first_decisions': [{'side': side, 'loss': {'lo': 0, 'hi': loss_upper}} for side in range(2)],
+            'numerical_envelope': padding, 'prior_hashes': {str(p.relative_to(root)): sha(p.read_bytes()) for p in [prior_path, prior_records_path]},
+            'proof': 'For selected pure row r and column c, either player\'s first-decision regret is at most max_i A[i,c] - min_j A[r,j] = max_(i,j) (A[i,c] - A[r,j]). Bound each difference with matrix intervals, exact cancellation of the same entry, or the prior verified shared-successor certificate. Restricting a side-zero continuation yields only cell lower bounds; restricting side one yields only upper bounds. The HP ordering affects refinement only, retaining all actions, probability mass and interval backups.',
+            'interpretation': 'Full-information first-decision certificates with optimal continuation. A remaining difference above two points is unresolved, not proof of a mistake or a lower bound on improvement. No deployed-bot strength or global optimality claim.'}
+
+
+parser = argparse.ArgumentParser()
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--verify-only', action='store_true')
+mode.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+if args.verify_only:
+    subprocess.run([str(root / 'tools/policy-rest-continuation'), '--verify-only'], check=True)
+    records = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    for name, record in records.items():
+        manifest = record['manifest']
+        raw = (archive / f'{name}.json').read_bytes()
+        assert sha(raw) == manifest['protocol_sha256'] and json.loads(raw) == manifest['protocol']
+        assert sha(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes())) == manifest['protocol']['corpus_sha256']
+        assert sha((root / manifest['protocol']['baseline']).read_bytes()) == manifest['protocol']['baseline_sha256']
+    assert summarize(records) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified reply projections, all first-decision difference bounds and remaining proof obligations')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-fire-switch-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(gzip.decompress((archive / 'corpus.jsonl.gz').read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'endgame_policy_audit'], cwd=root, env=env, check=True)
+    for name in names:
+        protocol = json.loads((archive / f'{name}.json').read_bytes())
+        protocol['corpus'] = str((directory / 'corpus.jsonl').relative_to(root))
+        (directory / f'{name}.json').write_text(json.dumps(protocol, indent=2) + '\n')
+        subprocess.run([str(root / 'target/release/examples/endgame_policy_audit'), str(directory / f'{name}.json'), str(directory / name)], cwd=root, env=env, check=True)
+records = {name: {'manifest': json.loads((directory / name / 'manifest.json').read_bytes()),
+                  'result': json.loads((directory / name / 'game-017-d0021.json').read_bytes())} for name in names}
+summary = summarize(records)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'corpus.jsonl.gz').write_bytes(gzip.compress((directory / 'corpus.jsonl').read_bytes(), mtime=0))
+    for name in names:
+        (archive / f'{name}.json').write_bytes((directory / f'{name}.json').read_bytes())
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(records, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(summary['arms'])
+print(summary['remaining_above_two_points'])

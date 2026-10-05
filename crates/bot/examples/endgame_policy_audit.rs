@@ -57,6 +57,8 @@ struct Protocol {
     #[serde(default)]
     chance_status_groups: bool,
     #[serde(default)]
+    chance_material_order: bool,
+    #[serde(default)]
     dead_quick_claw_quotient: bool,
     resource_closure_nodes: Option<usize>,
     resource_closure_period: Option<usize>,
@@ -266,6 +268,7 @@ fn audit(
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
             chance_status_groups: protocol.chance_status_groups,
+            chance_material_order: protocol.chance_material_order,
             dead_quick_claw_quotient: protocol.dead_quick_claw_quotient,
             resource_closure_nodes: protocol.resource_closure_nodes,
             resource_closure_period: protocol.resource_closure_period.unwrap_or(1),
@@ -371,6 +374,7 @@ fn audit(
             aggregate_lazy_children: protocol.aggregate_lazy_children,
             chance_fair_period: protocol.chance_fair_period,
             chance_status_groups: protocol.chance_status_groups,
+            chance_material_order: protocol.chance_material_order,
             dead_quick_claw_quotient: protocol.dead_quick_claw_quotient,
             resource_closure_nodes: protocol.resource_closure_nodes,
             resource_closure_period: protocol.resource_closure_period.unwrap_or(1),
