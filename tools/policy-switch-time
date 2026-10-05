@@ -30,6 +30,8 @@ def summarize(records, corpus):
     expected = dict(old['config'], time_budget_ms=30000, work_budget=100_000_000)
     if 'switch_kernel_capacity' in config:
         expected['switch_kernel_capacity'] = 0
+    if 'frontier_mass_order' in config:
+        expected['frontier_mass_order'] = False
     assert config == expected
     results = {}
     for name in names:

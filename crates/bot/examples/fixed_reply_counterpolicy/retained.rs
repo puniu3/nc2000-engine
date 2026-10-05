@@ -70,10 +70,24 @@ impl Retained {
         let used=self.cells.values().map(|cell|cell.shape).collect::<BTreeSet<_>>();
         self.templates.retain(|key,_|used.contains(key));dropped
     }
-    pub(super) fn into_states(self)->Box<dyn Iterator<Item=(Battle,f64)>> {
-        if !self.packed {return Box::new(self.full.into_values());}
+    pub(super) fn sorted_masses(&self)->Vec<f64> {
+        let mut masses=if self.packed {self.cells.values().map(|c|c.mass).collect::<Vec<_>>()} else {self.full.values().map(|(_,mass)|*mass).collect()};
+        masses.sort_by(|a,b|b.total_cmp(a));masses
+    }
+    pub(super) fn into_states(self,mass_order:bool)->Box<dyn Iterator<Item=(Battle,f64)>> {
+        if !self.packed {
+            if !mass_order {return Box::new(self.full.into_values());}
+            let mut cells=self.full.into_iter().collect::<Vec<_>>();
+            cells.sort_by(|a,b|b.1.1.total_cmp(&a.1.1).then_with(||a.0.cmp(&b.0)));
+            return Box::new(cells.into_iter().map(|(_,cell)|cell));
+        }
         let templates=self.templates;
-        Box::new(self.cells.into_values().map(move|cell| {
+        let cells:Box<dyn Iterator<Item=Cell>>=if mass_order {
+            let mut cells=self.cells.into_iter().collect::<Vec<_>>();
+            cells.sort_by(|a,b|b.1.mass.total_cmp(&a.1.mass).then_with(||a.0.cmp(&b.0)));
+            Box::new(cells.into_iter().map(|(_,cell)|cell))
+        } else {Box::new(self.cells.into_values())};
+        Box::new(cells.map(move|cell| {
             let mut b=templates[&cell.shape].clone();
             let mut hp=cell.hp.into_iter();
             for side in &mut b.sides {for p in &mut side.roster {p.hp=hp.next().unwrap();}}
@@ -87,6 +101,21 @@ mod tests {
     use super::*;
     use nc2000_engine::battle::enumerate::run_scripted;
     #[test]
+    fn probability_order_preserves_every_state_and_tie_order() {
+        let dex=conformance::load_dex();let base=super::super::tests::battle(&dex,false);
+        for packed in [false,true] {
+            let mut retained=Retained::new(packed,true);let mut expected=Vec::new();
+            for (hp,mass) in [(1,0.1),(70,0.2),(130,0.2),(200,0.5)] {
+                let mut b=base.clone();let id=b.active_id(0).unwrap();b.poke_mut(id).hp=hp;
+                expected.push((key(&dex,&b,true),b.state_key128(),mass));retained.insert(&dex,b,mass);
+            }
+            expected.sort_by(|a,b|b.2.total_cmp(&a.2).then_with(||a.0.cmp(&b.0)));
+            assert_eq!(retained.sorted_masses(),vec![0.5,0.2,0.2,0.1]);
+            let actual=retained.into_states(true).map(|(b,mass)|(key(&dex,&b,true),b.state_key128(),mass)).collect::<Vec<_>>();
+            assert_eq!(actual,expected);
+        }
+    }
+    #[test]
     fn packed_states_preserve_hp_actions_and_scripted_successors() {
         let dex=conformance::load_dex();let mut flat=Retained::new(false,true);let mut packed=Retained::new(true,true);
         let base=super::super::tests::battle(&dex,false);
@@ -99,7 +128,7 @@ mod tests {
         }}
         assert_eq!(packed.len(),25);assert_eq!(packed.templates(),1);
         let before=packed.mass();assert_eq!(packed.prune(1,100),0.0);assert_eq!(packed.mass(),before);
-        for ((mut a,pa),(mut b,pb)) in flat.into_states().zip(packed.into_states()) {
+        for ((mut a,pa),(mut b,pb)) in flat.into_states(false).zip(packed.into_states(false)) {
             assert_eq!(pa,pb);assert_eq!(key(&dex,&a,true),key(&dex,&b,true));
             let aa=[0,1].map(|s|choose_response(&dex,&mut a,s,false,OwnPolicy::AfterBoom75,response));
             let ab=[0,1].map(|s|choose_response(&dex,&mut b,s,false,OwnPolicy::AfterBoom75,response));
