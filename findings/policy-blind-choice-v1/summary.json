@@ -1,0 +1,136 @@
+{
+  "schema": "nc2000-policy-blind-choice-v1",
+  "state_key": "245845597322975585360400929104655917751",
+  "observed_choices": {
+    "pinned": [
+      {
+        "iterations": 27000,
+        "trials": 4,
+        "choices": {
+          "move hydropump": 0,
+          "move psychic": 4,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      },
+      {
+        "iterations": 108000,
+        "trials": 4,
+        "choices": {
+          "move hydropump": 0,
+          "move psychic": 4,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      },
+      {
+        "iterations": 432000,
+        "trials": 4,
+        "choices": {
+          "move hydropump": 0,
+          "move psychic": 4,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      }
+    ],
+    "blind": [
+      {
+        "iterations": 27000,
+        "trials": 4,
+        "choices": {
+          "move hydropump": 0,
+          "move psychic": 4,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      },
+      {
+        "iterations": 108000,
+        "trials": 4,
+        "choices": {
+          "move hydropump": 0,
+          "move psychic": 4,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      },
+      {
+        "iterations": 432000,
+        "trials": 4,
+        "choices": {
+          "move hydropump": 0,
+          "move psychic": 4,
+          "move thunderwave": 0,
+          "move recover": 0
+        }
+      }
+    ]
+  },
+  "belief": {
+    "alive": 1,
+    "fallback": false,
+    "species_prior": false,
+    "candidate_ids": [
+      "mjj-2020-rraikou"
+    ]
+  },
+  "observations": [
+    {
+      "species": "raikou",
+      "appeared": false,
+      "moves": [],
+      "current_item": null
+    },
+    {
+      "species": "cloyster",
+      "appeared": false,
+      "moves": [],
+      "current_item": null
+    },
+    {
+      "species": "snorlax",
+      "appeared": true,
+      "moves": [
+        "bodyslam",
+        "selfdestruct"
+      ],
+      "current_item": "leftovers"
+    },
+    {
+      "species": "marowak",
+      "appeared": true,
+      "moves": [
+        "earthquake"
+      ],
+      "current_item": null
+    },
+    {
+      "species": "heracross",
+      "appeared": false,
+      "moves": [],
+      "current_item": null
+    },
+    {
+      "species": "machamp",
+      "appeared": false,
+      "moves": [],
+      "current_item": null
+    }
+  ],
+  "full_search_visit_mean_disagreements": [
+    {
+      "seed_index": 2,
+      "iterations": 108000,
+      "selected": "move hydropump",
+      "largest_mean": "move psychic"
+    }
+  ],
+  "full_search_exact_parity": true,
+  "pinned_blind_exact_parity": true,
+  "inputs": {
+    "findings/policy-choice-errors-v1/records.json.gz": "8cec62a99e33cb72cb7d6c6d62e0b3161f0e621c3953c45b76ffc544f7b5ed20",
+    "findings/policy-choice-errors-v1/psychic/corpus.jsonl.gz": "843d5c41f80706376755db421903952f6b9c2a25384a9d609042c47339675e0e"
+  },
+  "interpretation": "Public observations are replayed from preview and the native harness asserts the complete reconstructed state, including PRNG, equals the full-search root. All four observed seeds select Psychic at all three nested budgets. Pinned-team and pool-based searches agree exactly. One remaining team candidate does not reveal the unseen third party member: both beliefs still resample hidden selections. The full-state first-Hydro loss certificate therefore does not certify blind information-set regret. At 108000 iterations the full-search error seed already ranks Psychic highest by mean but selects Hydro by cumulative visits; this is a diagnostic, not evidence that globally replacing the selector improves play. Joint values use sampled continuations, not optimal continuations. No human reference or deployed strength claim."
+}

@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import math
+import os
+import pathlib
+import subprocess
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/policy-blind-choice-v1'
+prior_path = root / 'findings/policy-choice-errors-v1/records.json.gz'
+corpus_path = root / 'findings/policy-choice-errors-v1/psychic/corpus.jsonl.gz'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def close(a, b):
+    assert math.isclose(a, b, rel_tol=1e-10, abs_tol=1e-10), (a, b)
+
+
+def summarize(record, config, corpus):
+    previous = json.loads(gzip.decompress(prior_path.read_bytes()))['psychic']['search']
+    cfg = json.loads(config)
+    assert record['config'] == cfg
+    assert record['config_sha256'] == sha(config)
+    assert record['manifest']['corpus_sha256'] == sha(corpus)
+    assert record['state_key'] == previous['state_key']
+    assert {k: v for k, v in cfg.items() if k != 'observed_side'} == previous['config']
+    assert cfg['observed_side'] == 1
+    assert len(record['rows']) == len(previous['rows'])
+    lag = []
+    for row, old in zip(record['rows'], previous['rows']):
+        for key in ['seed_index', 'iterations', 'seed', 'choices', 'actions', 'visits', 'means', 'nodes']:
+            assert row[key] == old[key], key
+        a, b = map(len, row['actions'])
+        counts, rewards = row['joint_samples'], row['joint_side_zero_rewards']
+        assert len(counts) == len(rewards) == a*b
+        assert sum(counts) == row['iterations']
+        assert all(0 <= w <= n for n, w in zip(counts, rewards))
+        for side in range(2):
+            for i, visits in enumerate(row['visits'][side]):
+                indices = range(i*b, (i+1)*b) if side == 0 else range(i, a*b, b)
+                assert sum(counts[j] for j in indices) == visits
+                reward = sum(rewards[j] for j in indices)
+                if visits:
+                    close(row['means'][side][i], reward/visits if side == 0 else 1-reward/visits)
+        best_mean = max(range(b), key=lambda i: row['means'][1][i])
+        if row['choices'][1] != row['actions'][1][best_mean]:
+            lag.append(dict(seed_index=row['seed_index'], iterations=row['iterations'],
+                            selected=row['choices'][1], largest_mean=row['actions'][1][best_mean]))
+    observed = record['observed']
+    assert observed['side'] == 1
+    assert observed['pool_sha256'] == sha((root / 'data/belief-pool-v3/belief-pool.json').read_bytes())
+    assert observed['belief'] == dict(alive=1, fallback=False, species_prior=False,
+                                      candidate_ids=['mjj-2020-rraikou'])
+    expected = [(i, n) for i in range(cfg['search_seeds']) for n in cfg['iterations']]
+    modes = {}
+    for mode in ['pinned', 'blind']:
+        rows = [r for r in observed['rows'] if r['mode'] == mode]
+        assert [(r['seed_index'], r['iterations']) for r in rows] == expected
+        for row, full in zip(rows, record['rows']):
+            assert row['seed'] == full['seed']
+            assert row['actions'] == full['actions'][1]
+            assert row['choice'] in row['actions']
+            assert sum(row['visits']) == sum(c['samples'] for c in row['joint']) == row['iterations']
+            assert len(row['actions']) == len(row['visits']) == len(row['means']) == len(row['dominated'])
+            for cell in row['joint']:
+                assert 0 <= cell['own'] < len(row['actions'])
+                assert cell['samples'] > 0 and 0 <= cell['mean'] <= 1
+            for i, visits in enumerate(row['visits']):
+                cells = [c for c in row['joint'] if c['own'] == i]
+                assert sum(c['samples'] for c in cells) == visits
+                if visits:
+                    close(sum(c['samples']*c['mean'] for c in cells)/visits, row['means'][i])
+            assert all(0 < r['samples'] <= row['iterations'] for r in row['reply_availability'])
+        modes[mode] = rows
+    for pinned, blind in zip(modes['pinned'], modes['blind']):
+        for key in ['seed', 'iterations', 'choice', 'actions', 'visits', 'means', 'dominated', 'nodes']:
+            assert pinned[key] == blind[key], key
+        for key in ['joint', 'reply_availability']:
+            assert sorted(map(lambda x: json.dumps(x, sort_keys=True), pinned[key])) == sorted(map(lambda x: json.dumps(x, sort_keys=True), blind[key]))
+    assert len(observed['rows']) == 2*len(expected)
+    tables = {mode: [dict(iterations=n, trials=cfg['search_seeds'],
+              choices={a: sum(r['choice'] == a for r in rows if r['iterations'] == n)
+                       for a in rows[0]['actions']}) for n in cfg['iterations']]
+              for mode, rows in modes.items()}
+    return dict(schema='nc2000-policy-blind-choice-v1', state_key=record['state_key'],
+                observed_choices=tables, belief=observed['belief'], observations=observed['observations'],
+                full_search_visit_mean_disagreements=lag, full_search_exact_parity=True,
+                pinned_blind_exact_parity=True,
+                inputs={str(p.relative_to(root)): sha(p.read_bytes()) for p in [prior_path, corpus_path]},
+                interpretation='Public observations are replayed from preview and the native harness asserts the complete reconstructed state, including PRNG, equals the full-search root. All four observed seeds select Psychic at all three nested budgets. Pinned-team and pool-based searches agree exactly. One remaining team candidate does not reveal the unseen third party member: both beliefs still resample hidden selections. The full-state first-Hydro loss certificate therefore does not certify blind information-set regret. At 108000 iterations the full-search error seed already ranks Psychic highest by mean but selects Hydro by cumulative visits; this is a diagnostic, not evidence that globally replacing the selector improves play. Joint values use sampled continuations, not optimal continuations. No human reference or deployed strength claim.')
+
+
+parser = argparse.ArgumentParser()
+group = parser.add_mutually_exclusive_group()
+group.add_argument('--verify-only', action='store_true')
+group.add_argument('--record-existing', type=pathlib.Path)
+args = parser.parse_args()
+corpus = gzip.decompress(corpus_path.read_bytes())
+if args.verify_only:
+    record = json.loads(gzip.decompress((archive / 'record.json.gz').read_bytes()))
+    assert summarize(record, (archive / 'search.json').read_bytes(), corpus) == json.loads((archive / 'summary.json').read_bytes())
+    print('Verified public replay audit, full-search parity, joint conservation and pinned/blind parity')
+    raise SystemExit(0)
+directory = args.record_existing
+if directory is None:
+    directory = root / 'tmp/policy-blind-choice-v1' / datetime.datetime.now().strftime('run-%Y%m%d-%H%M%S')
+    directory.mkdir(parents=True)
+    (directory / 'corpus.jsonl').write_bytes(corpus)
+    (directory / 'pilot.json').write_bytes((archive / 'search.json').read_bytes())
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'fixed_reply_counterpolicy'], cwd=root, env=env, check=True)
+    subprocess.run([str(root / 'target/release/examples/fixed_reply_counterpolicy'), str(directory / 'corpus.jsonl'), 'corpus-search', str(directory / 'pilot.json'), str(directory / 'pilot-result.json')], cwd=root, env=env, check=True)
+assert (directory / 'corpus.jsonl').read_bytes() == corpus
+record = json.loads((directory / 'pilot-result.json').read_bytes())
+config = (directory / 'pilot.json').read_bytes()
+summary = summarize(record, config, corpus)
+if args.record_existing:
+    archive.mkdir(exist_ok=True)
+    (archive / 'search.json').write_bytes(config)
+    (archive / 'record.json.gz').write_bytes(gzip.compress(json.dumps(record, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(json.dumps(summary['observed_choices'], indent=2))

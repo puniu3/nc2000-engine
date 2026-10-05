@@ -1,0 +1,12 @@
+{
+  "game": 2,
+  "decision": 11,
+  "iterations": [
+    27000,
+    108000,
+    432000
+  ],
+  "search_seeds": 4,
+  "seed": 2026100501,
+  "observed_side": 1
+}
