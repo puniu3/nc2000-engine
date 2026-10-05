@@ -1,0 +1,208 @@
+use nc2000_bot::bounds::{BoundConfig, BoundSolver};
+use nc2000_bot::exact::solve_matrix_full;
+use nc2000_bot::{Belief, BlindSearch, Observer, RmConfig, SkuctSearch};
+use nc2000_engine::battle::{PokemonSet, SearchChoice};
+use nc2000_engine::dex::Dex;
+use nc2000_engine::state::Battle;
+use nc2000_engine::validate::{validate_team, Learnsets};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use std::time::{Duration, Instant};
+
+fn sha(raw: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(raw))
+}
+fn set(species: &str, moves: &[&str], trained: bool) -> PokemonSet {
+    let ev = if trained { 255 } else { 4 };
+    serde_json::from_value(
+        json!({"name":species,"species":species,"ability":"", "item":"",
+        "level":50,"happiness":255,"moves":moves,
+        "evs":{"hp":ev,"atk":ev,"def":ev,"spa":ev,"spd":ev,"spe":ev},
+        "ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30}}),
+    )
+    .unwrap()
+}
+fn step(
+    dex: &Dex,
+    b: &mut Battle,
+    obs: &mut [Observer; 2],
+    beliefs: &mut [Belief; 2],
+    actions: [SearchChoice; 2],
+    records: &mut Vec<Value>,
+) {
+    let indices = [0, 1].map(|s| {
+        b.legal_choices(dex, s)
+            .iter()
+            .position(|a| *a == actions[s])
+            .expect("legal prefix")
+    });
+    records.push(json!({"key":b.state_key128().to_string(),"choices":indices}));
+    b.apply_choices(dex, actions.map(Some)).unwrap();
+    for s in 0..2 {
+        obs[s].observe(b, dex);
+        beliefs[s].sync(dex, &obs[s]);
+    }
+}
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    assert_eq!(
+        args.len(),
+        6,
+        "output seed search-seeds iterations search-seed-base"
+    );
+    let out = std::path::Path::new(&args[1]);
+    assert!(!out.exists());
+    let seed = &args[2];
+    let count: usize = args[3].parse().unwrap();
+    let iterations: u32 = args[4].parse().unwrap();
+    let seed_base: u64 = args[5].parse().unwrap();
+    let dex = conformance::load_dex();
+    let teams: [Vec<PokemonSet>; 2] = [0, 1].map(|side| {
+        vec![
+            set("Electrode", &["Explosion"], true),
+            set("Raikou", &["Thunderbolt"], false),
+            if side == 0 {
+                set("Starmie", &["Return", "Surf"], true)
+            } else {
+                set("Wobbuffet", &["Counter", "Mirror Coat", "Safeguard"], true)
+            },
+            set("Snorlax", &["Body Slam"], true),
+            set("Marowak", &["Earthquake"], true),
+            set("Heracross", &["Megahorn"], true),
+        ]
+    });
+    let learnsets =
+        Learnsets::from_json(&std::fs::read_to_string("data/learnsets-gen2.json").unwrap())
+            .unwrap();
+    let validations = teams
+        .each_ref()
+        .map(|team| validate_team(&dex, &learnsets, &serde_json::to_string(team).unwrap()));
+    assert!(
+        validations.iter().all(|v| v["ok"] == true),
+        "{validations:?}"
+    );
+    let mut b = Battle::from_fixture(&dex, seed, &teams[0], &teams[1]).unwrap();
+    b.set_log_enabled(true);
+    let mut obs = [0, 1].map(|s| Observer::new(&b, s));
+    let mut beliefs = [0, 1].map(|s| Belief::pinned_from_battle(&b, &obs[s]));
+    let mut records = Vec::new();
+    let mv = |name: &str| SearchChoice::Move(dex.moves.id(name).unwrap());
+    let prefix = [
+        [SearchChoice::Team([1, 2, 3]), SearchChoice::Team([2, 1, 3])],
+        [mv("explosion"), mv("thunderbolt")],
+        [SearchChoice::Switch(2), SearchChoice::Switch(2)],
+        [mv("thunderbolt"), mv("explosion")],
+        [SearchChoice::Switch(3), SearchChoice::Switch(3)],
+        [mv("return"), mv("mirrorcoat")],
+        [mv("surf"), mv("safeguard")],
+        [mv("return"), mv("counter")],
+    ];
+    for actions in prefix {
+        step(&dex, &mut b, &mut obs, &mut beliefs, actions, &mut records);
+    }
+    assert!(b.outcome().is_none());
+    assert!(b.sides.iter().all(|s| s
+        .party
+        .iter()
+        .filter(|&&i| !s.roster[i as usize].fainted)
+        .count()
+        == 1));
+    let decision = records.len();
+    records.push(json!({"key":b.state_key128().to_string(),"choices":[0,0]}));
+    let corpus = json!({"game":3000,"seed":seed,"teams":teams,"decisions":records,"samples":[decision],"outcome":null,"prefix_only":true});
+    std::fs::create_dir(out).unwrap();
+    std::fs::write(
+        out.join("corpus.jsonl"),
+        serde_json::to_string(&corpus).unwrap() + "\n",
+    )
+    .unwrap();
+    eprintln!("root {}", b.essence(&dex));
+    let actions = [0, 1].map(|s| b.legal_choices(&dex, s));
+    let mut targets = Vec::new();
+    for s in 0..2 {
+        for i in 0..actions[s].len() {
+            let mut p = vec![0.; actions[s].len()];
+            p[i] = 1.;
+            targets.push((s, p));
+        }
+    }
+    let mut solver = BoundSolver::new(
+        &dex,
+        BoundConfig {
+            time_budget: Some(Duration::from_secs(60)),
+            work_budget: 10_000_000,
+            eps: 1e-10,
+            certified_action_pruning: false,
+            fold_closed_nodes: false,
+            ..Default::default()
+        },
+    );
+    let started = Instant::now();
+    solver.solve_policy_losses(&b, &targets, 1e-8);
+    let payoffs = solver.root_payoffs(&b).unwrap();
+    let lower: Vec<f64> = payoffs.cells.iter().map(|c| c.lo).collect();
+    let upper: Vec<f64> = payoffs.cells.iter().map(|c| c.hi).collect();
+    let low = solve_matrix_full(&lower, actions[0].len(), actions[1].len());
+    let high = solve_matrix_full(&upper, actions[0].len(), actions[1].len());
+    let proof = json!({"value":[payoffs.value.lo,payoffs.value.hi],"cells":payoffs.cells.iter().map(|c|[c.lo,c.hi]).collect::<Vec<_>>(),
+        "lower_mix":[low.x,low.y],"upper_mix":[high.x,high.y],"elapsed_seconds":started.elapsed().as_secs_f64(),
+        "runs":solver.stats.runs});
+    eprintln!("proof {proof}");
+    let mut rows = Vec::new();
+    for index in 0..count {
+        let search_seed = seed_base ^ (index as u64).wrapping_mul(0x94d049bb133111eb);
+        let mut full = SkuctSearch::new(
+            &b,
+            &dex,
+            RmConfig {
+                c: 0.4,
+                ..Default::default()
+            },
+            search_seed,
+        );
+        full.step(&dex, iterations);
+        for s in 0..2 {
+            rows.push(json!({"mode":"full","side":s,"seed_index":index,"seed":search_seed,"iterations":iterations,
+                "choice":full.best(s).map(|a|a.to_input(&dex)),"visits":full.visits(s),"means":full.means(s)}));
+            let mut pinned = BlindSearch::new(
+                &b,
+                &dex,
+                RmConfig {
+                    c: 0.4,
+                    ..Default::default()
+                },
+                s,
+                search_seed,
+            );
+            pinned.step(&dex, &beliefs[s], &obs[s], iterations);
+            rows.push(json!({"mode":"pinned","side":s,"seed_index":index,"seed":search_seed,"iterations":iterations,
+                "choice":pinned.best().map(|a|a.to_input(&dex)),"visits":pinned.visits(),"means":pinned.means()}));
+        }
+        eprintln!("seed {index} complete");
+    }
+    let paths = [
+        "crates/bot/examples/counter_mix_probe.rs",
+        "crates/bot/src/bounds.rs",
+        "crates/bot/src/exact.rs",
+        "crates/bot/src/blind.rs",
+        "crates/bot/src/smmcts.rs",
+        "crates/bot/src/belief.rs",
+        "crates/bot/src/observe.rs",
+        "crates/bot/src/eval.rs",
+        "crates/bot/src/agent.rs",
+        "crates/bot/src/rng.rs",
+        "data/gen2stadium2.json",
+        "data/learnsets-gen2.json",
+    ];
+    let output = json!({"schema":"nc2000-counter-mix-v1","state":b.essence(&dex),"state_key":b.state_key128().to_string(),
+        "validations":validations,"actions":actions.map(|aa|aa.into_iter().map(|a|a.to_input(&dex)).collect::<Vec<_>>()),
+        "proof":proof,"rows":rows,"log":b.log,"source_hashes":paths.map(|p|(p,sha(&std::fs::read(p).unwrap()))),
+        "search_seed_base":seed_base,"search_seeds":count,"iterations":iterations,
+        "binary_sha256":sha(&std::fs::read(std::env::current_exe().unwrap()).unwrap()),
+        "interpretation":"Legal prefix; fixed known loadouts. Pinned beliefs reconstructed from preview. No shipped-pool or human calibration claim. Matrix continuation values bound the first-action distribution with optimal subsequent play."});
+    std::fs::write(
+        out.join("records.json"),
+        serde_json::to_vec_pretty(&output).unwrap(),
+    )
+    .unwrap();
+}
