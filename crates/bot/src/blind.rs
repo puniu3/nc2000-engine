@@ -1054,6 +1054,28 @@ impl BlindSearch {
         }
     }
 
+    pub fn prune_rest_aliases(&mut self, dex: &Dex) -> usize {
+        use nc2000_engine::state::{Status, DK};
+        let Some(id) = self.base.active_id(self.side) else { return 0 };
+        let own = self.base.poke(id);
+        if own.status != Status::Slp || own.status_state.source != Some(id)
+            || own.status_state.get_int(DK::StartTime) != 3
+        {
+            return 0;
+        }
+        let allowed = self.my_mask.clone().unwrap_or_else(|| vec![true; self.my_acts.len()]);
+        let mut indices: Vec<_> = (0..self.my_acts.len()).filter(|&i| allowed[i]).collect();
+        indices.sort_by_key(|&i| self.my_dominated[i]);
+        let mut representatives: Vec<_> = indices.iter().map(|&i| self.my_acts[i]).collect();
+        crate::smmcts::collapse_sleep_choices(&self.base, dex, self.side, &mut representatives);
+        let removed = indices.len() - representatives.len();
+        if removed > 0 {
+            self.mask_actions(&self.my_acts.iter().enumerate()
+                .map(|(i,a)| allowed[i] && representatives.contains(a)).collect::<Vec<_>>());
+        }
+        removed
+    }
+
     pub fn joint_probe_visits(&self) -> &[u32] { &self.joint_probe_n }
 
     pub fn best(&self) -> Option<SearchChoice> {

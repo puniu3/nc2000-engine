@@ -1,5 +1,10 @@
 use conformance::load_dex;
-use nc2000_bot::smmcts::collapse_sleep_choices;
+use nc2000_bot::{
+    position::{synthesize_spec, PositionSpec},
+    preview::MetaPool,
+    smmcts::collapse_sleep_choices,
+    BlindSearch, RmConfig,
+};
 use nc2000_engine::{
     battle::{enumerate::enumerate_step, PokemonSet, SearchChoice},
     dex::Dex,
@@ -162,4 +167,86 @@ fn waking_and_berry_cures_make_apparently_redundant_moves_different() {
             distribution(&b, &dex, own[1], reply, 0)
         );
     }
+}
+
+#[test]
+fn public_rest_clock_enables_root_merging_but_hidden_sleep_clock_does_not() {
+    let dex = load_dex();
+    for side in 0..2 {
+        for rest in [false, true] {
+            for slept in 0..3 {
+                let own = serde_json::json!({"active":0,"party":[0],"mons":[{
+                    "species":"Smeargle","level":50,"gender":"M","active":true,"appeared":true,
+                    "hp_num":100,"status":"slp","rest":rest,"slept":slept
+                }]});
+                let foe = serde_json::json!({"active":0,"mons":[{
+                    "species":"Magikarp","level":50,"gender":"M","active":true,"appeared":true,"hp_num":100
+                }]});
+                let sides = if side == 0 { [own, foe] } else { [foe, own] };
+                let raw = serde_json::json!({"schema":"nc2000-position-v1","side":side,"turn":5,
+                    "own_sets":[set(&["Scratch","Growl","Rest","Whirlwind"],"")],"sides":sides});
+                let spec = PositionSpec::parse(&raw.to_string()).unwrap();
+                for seed in 0..4 {
+                    let b = synthesize_spec(&dex, &spec, &MetaPool { teams: vec![] }, None, seed)
+                        .unwrap();
+                    let mut search = BlindSearch::new(&b, &dex, RmConfig::default(), side, 19);
+                    assert_eq!(
+                        search.prune_rest_aliases(&dex),
+                        if rest && slept < 2 { 2 } else { 0 }
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn rest_root_merging_respects_existing_restrictions_and_keeps_eligible_representatives() {
+    let dex = load_dex();
+    let mut b = position(
+        &dex,
+        0,
+        &["Scratch", "Growl", "Rest", "Whirlwind"],
+        &["Splash"],
+        "",
+        2,
+    );
+    let id = b.active_id(0).unwrap();
+    b.poke_mut(id).status_state.source = Some(id);
+    b.poke_mut(id).status_state.set_int(DK::StartTime, 3);
+    for permitted in [
+        vec![false, true, true, true, true],
+        vec![false, false, true, false, false],
+    ] {
+        let mut search = BlindSearch::new(&b, &dex, RmConfig::default(), 0, 19);
+        search.mask_actions(&permitted);
+        let before = search.actions().to_vec();
+        search.prune_rest_aliases(&dex);
+        assert_eq!(search.actions(), before);
+        let best = search.best().unwrap();
+        assert!(permitted[before.iter().position(|&a| a == best).unwrap()]);
+        assert_eq!(search.prune_rest_aliases(&dex), 0);
+    }
+}
+
+#[test]
+fn rest_root_merging_does_not_replace_an_eligible_move_with_an_excluded_alias() {
+    let dex = load_dex();
+    let mut own = set(&["Thunderbolt", "Drill Peck", "Rest", "Whirlwind"], "");
+    own.species = "Zapdos".into();
+    own.name = "Zapdos".into();
+    let mut foe = set(&["Swords Dance"], "");
+    foe.species = "Marowak".into();
+    foe.name = "Marowak".into();
+    let mut b = Battle::from_fixture(&dex, "1,2,3,4", &[own], &[foe]).unwrap();
+    b.choose(&dex, 0, "team 1").unwrap();
+    b.choose(&dex, 1, "team 1").unwrap();
+    let id = b.active_id(0).unwrap();
+    b.poke_mut(id).hp -= 1;
+    b.choose(&dex, 0, "move rest").unwrap();
+    b.choose(&dex, 1, "move swordsdance").unwrap();
+    let mut search = BlindSearch::new(&b, &dex, RmConfig::default(), 0, 19);
+    assert_eq!(search.dominated(), [true, false, true, true]);
+    assert_eq!(search.prune_rest_aliases(&dex), 2);
+    assert_eq!(search.best().unwrap().to_input(&dex), "move drillpeck");
 }

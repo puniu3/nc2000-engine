@@ -13,10 +13,12 @@ use std::{collections::BTreeMap, io::BufRead, time::Instant};
 fn main() {
     let args: Vec<_> = std::env::args().collect();
     assert!(
-        args.len() == 3 || (args.len() == 4 && args[3] == "--verify-corpus"),
-        "corpus output [--verify-corpus]"
+        args.len() == 3
+            || (args.len() == 4 && matches!(args[3].as_str(), "--verify-corpus" | "--root-rest")),
+        "corpus output [--verify-corpus | --root-rest]"
     );
-    let verify_corpus = args.len() == 4;
+    let verify_corpus = args.get(3).is_some_and(|s| s == "--verify-corpus");
+    let root_rest = args.get(3).is_some_and(|s| s == "--root-rest");
     let dex = conformance::load_dex();
     let pool = load_meta_pool(std::path::Path::new("data/belief-pool-v3/belief-pool.json"));
     let mut cases = Vec::new();
@@ -38,8 +40,14 @@ fn main() {
                 census[0] += 1;
                 let mut reduced = legal[side].clone();
                 collapse_sleep_choices(&b, &dex, side, &mut reduced);
-                census[1] += usize::from(reduced.len() < legal[side].len());
-                census[2] += legal[side].len() - reduced.len();
+                let removed = if root_rest {
+                    BlindSearch::new(&b, &dex, RmConfig::default(), side, 0)
+                        .prune_rest_aliases(&dex)
+                } else {
+                    legal[side].len() - reduced.len()
+                };
+                census[1] += usize::from(removed > 0);
+                census[2] += removed;
                 let order = b
                     .state_key128()
                     .wrapping_mul(0x9e3779b97f4a7c15)
@@ -135,7 +143,23 @@ fn main() {
         .unwrap();
         return;
     }
-    cases.truncate(24);
+    if root_rest {
+        let mut controls = 8;
+        cases.retain(|(_, _, _, side, b, _)| {
+            if BlindSearch::new(b, &dex, RmConfig::default(), *side, 0).prune_rest_aliases(&dex) > 0
+            {
+                true
+            } else if controls > 0 {
+                controls -= 1;
+                true
+            } else {
+                false
+            }
+        });
+    } else {
+        cases.truncate(24);
+    }
+    let case_count = cases.len();
     let mut rows = Vec::new();
     for (index, (order, game, decision, side, battle, observer)) in cases.into_iter().enumerate() {
         let seed = 0x20261008 ^ order as u64;
@@ -147,6 +171,26 @@ fn main() {
         };
         let mut profile = [0usize; 4];
         let mut instrumented = BlindSearch::new(&battle, &dex, cfg.clone(), side, seed);
+        let mut probe = BlindSearch::new(&battle, &dex, cfg.clone(), side, seed);
+        let root_removed = if root_rest {
+            probe.prune_rest_aliases(&dex)
+        } else {
+            0
+        };
+        let acts = instrumented.actions();
+        let mut classes: Vec<_> = (0..acts.len()).collect();
+        if root_removed > 0 {
+            for i in 0..acts.len() {
+                for j in 0..i {
+                    let mut pair = vec![acts[j], acts[i]];
+                    collapse_sleep_choices(&battle, &dex, side, &mut pair);
+                    if pair.len() == 1 {
+                        classes[i] = classes[j];
+                        break;
+                    }
+                }
+            }
+        }
         for _ in 0..1000 {
             let mut first = true;
             instrumented.step_observed(&dex, &belief, &observer, 1, &mut |trace| {
@@ -176,10 +220,13 @@ fn main() {
             [true, false]
         } {
             let cfg = RmConfig {
-                collapse_sleep_actions: enabled,
+                collapse_sleep_actions: enabled && !root_rest,
                 ..cfg.clone()
             };
             let mut search = BlindSearch::new(&battle, &dex, cfg, side, seed);
+            if root_rest && enabled {
+                assert_eq!(search.prune_rest_aliases(&dex), root_removed);
+            }
             let start = Instant::now();
             let mut checkpoints = Vec::new();
             for budget in [3000, 27000] {
@@ -189,8 +236,13 @@ fn main() {
             arms.push(json!({"enabled":enabled,"actions":search.actions().iter().map(|a|a.to_input(&dex)).collect::<Vec<_>>(),"checkpoints":checkpoints}));
         }
         arms.sort_by_key(|a| a["enabled"].as_bool().unwrap());
-        rows.push(json!({"game":game,"decision":decision,"side":side,"seed":seed,"key":battle.state_key128().to_string(),"profile":profile,"arms":arms}));
-        eprintln!("sleep root {}/24 complete", index + 1);
+        let mut row = json!({"game":game,"decision":decision,"side":side,"seed":seed,"key":battle.state_key128().to_string(),"profile":profile,"arms":arms});
+        if root_rest {
+            row["root_removed"] = json!(root_removed);
+            row["classes"] = json!(classes);
+        }
+        rows.push(row);
+        eprintln!("sleep root {}/{} complete", index + 1, case_count);
     }
     std::fs::write(
         &args[2],
