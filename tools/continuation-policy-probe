@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import statistics
+import subprocess
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/continuation-policy-v1'
+prior_path = root / 'findings/continuation-information-v1/records.json.gz'
+
+
+def verify(result, prior):
+    assert result['iterations'] == 27000 and result['repeats'] == 3
+    assert len(result['rows']) == 24 and {r['game'] for r in result['rows']} == set(range(24))
+    sums = {m: dict(milliseconds=0., nodes=0, groups=0, selections=0) for m in ['baseline', 'record_only', 'shared']}
+    changes = []
+    witnesses = {}
+    for r in result['rows']:
+        old = next(p for p in prior if p['game'] == r['game'])
+        assert all(r[k] == old[k] for k in ['game','decision','key','side','seed'])
+        assert len(r['measurements']) == 9
+        assert {(m['mode'],m['repeat']) for m in r['measurements']} == {(m,i) for m in sums for i in range(3)}
+        modes = {}
+        for name in sums:
+            runs = [m for m in r['measurements'] if m['mode'] == name]
+            first = runs[0]
+            for m in runs:
+                assert m['elapsed_ms'] > 0
+                assert sum(m['snapshot']['visits']) == 27000
+                assert all(m[k] == first[k] for k in ['snapshot','groups','selections','rewards'])
+                assert 0 <= m['rewards'] <= m['selections'] <= 27000
+                if name != 'shared': assert m['snapshot'] == old['snapshot']
+                if name == 'baseline': assert m['groups'] == m['selections'] == 0
+                else: assert 0 < m['groups'] <= m['selections']
+            sums[name]['milliseconds'] += statistics.median(m['elapsed_ms'] for m in runs)
+            for k in ['groups','selections']: sums[name][k] += first[k]
+            sums[name]['nodes'] += first['snapshot']['nodes']
+            modes[name] = first['snapshot']
+            if r['game'] == 4 and name != 'baseline':
+                witness = next(m for m in runs if m['repeat'] == 0)['witnesses']
+                assert witness
+                witnesses[name] = witness
+        if modes['baseline']['best'] != modes['shared']['best']:
+            changes.append(dict(game=r['game'], decision=r['decision'], side=r['side'],
+                                baseline=modes['baseline']['best'], shared=modes['shared']['best']))
+    return dict(roots=24, iterations=27000, repeats=3, baseline_and_record_only_identities=144,
+                measurements=sums, shared_time_ratio=sums['shared']['milliseconds']/sums['baseline']['milliseconds'],
+                record_only_time_ratio=sums['record_only']['milliseconds']/sums['baseline']['milliseconds'],
+                changed_root_choices=len(changes), changes=changes, witness=witnesses,
+                default_enabled=False, strength_demonstrated=False,
+                scope='First continuation idle Move only. Own previous action, entire generated protocol log including '
+                      'both private split branches, and own ordered legal choices index a shared own UCB bandit. '
+                      'Opponent policies and deeper own nodes remain full-state-conditioned. Unexpanded first children '
+                      'still roll out. This is a partial information correction, not a complete player information-set '
+                      'solver. Per-node statistics also receive the actual choices and returns. Record-only mode preserves '
+                      'selection. Native sequential alternating-order measurements include search construction, log capture, '
+                      'and search. Each median is across three repeated identical seeds; not three independent samples. '
+                      'Root means and witness returns are adaptive search estimates, not certified values or match scores.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record',type=Path)
+    args=parser.parse_args()
+    prior=json.loads(gzip.decompress(prior_path.read_bytes()))['result']['rows']
+    if args.record:
+        assert not (archive/'records.json.gz').exists()
+        result=json.loads(args.record.read_bytes())
+        summary=verify(result,prior)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','crates/conformance/src','Cargo.toml','Cargo.lock'],cwd=root,text=True).splitlines()
+        paths += ['crates/bot/src/first_continuation.rs','crates/bot/tests/first_continuation.rs',
+                  'crates/bot/examples/continuation_policy_budget.rs','tools/continuation-policy-probe',
+                  'findings/continuation-information-v1/records.json.gz',
+                  'findings/policy-gap-v1/corpus.jsonl.gz','data/gen2stadium2.json',
+                  'data/belief-pool-v3/belief-pool.json','data/learnsets-gen2.json']
+        bundle=dict(result=result,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        archive.mkdir(parents=True,exist_ok=True)
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in bundle['hashes'].items())
+    result=bundle['result']
+    summary=verify(result,prior)
+    assert summary==json.loads((archive/'summary.json').read_bytes())
+    for corruption in ['seed','visits','baseline','time']:
+        bad=copy.deepcopy(result)
+        r=bad['rows'][0]
+        m=r['measurements'][0]
+        if corruption=='seed':r['seed']+=1
+        elif corruption=='visits':m['snapshot']['visits'][0]+=1
+        elif corruption=='baseline':m['snapshot']['best']='invalid'
+        else:m['elapsed_ms']=-1
+        try: verify(bad,prior)
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['witness','scope','changes']},indent=2))
+
+
+if __name__=='__main__':main()

@@ -3163,5 +3163,195 @@
       "findings/continuation-information-v1/summary.json": "2a72025ec64849e961cfca886d70028619d1955b2d68ab59bd7da0fe5437b06f",
       "findings/continuation-information-v1/checks.json": "cd05f8205510a94fa9d9a0a1d4a48d503ab208142d2a186f231320ce816b2362"
     }
+  },
+  "continuation_policy": {
+    "status": "cost_and_behavior_screen_complete",
+    "source_baseline_commit": "a621261",
+    "summary": {
+      "roots": 24,
+      "iterations": 27000,
+      "repeats": 3,
+      "baseline_and_record_only_identities": 144,
+      "measurements": {
+        "baseline": {
+          "milliseconds": 22805.109708999997,
+          "nodes": 608304,
+          "groups": 0,
+          "selections": 0
+        },
+        "record_only": {
+          "milliseconds": 23967.940208000004,
+          "nodes": 608304,
+          "groups": 19451,
+          "selections": 488986
+        },
+        "shared": {
+          "milliseconds": 24057.192208999997,
+          "nodes": 608169,
+          "groups": 19620,
+          "selections": 471405
+        }
+      },
+      "shared_time_ratio": 1.0549035946757963,
+      "record_only_time_ratio": 1.0509899103243998,
+      "changed_root_choices": 6,
+      "changes": [
+        {
+          "game": 4,
+          "decision": 4,
+          "side": 0,
+          "baseline": "move icebeam",
+          "shared": "move curse"
+        },
+        {
+          "game": 11,
+          "decision": 1,
+          "side": 0,
+          "baseline": "move thunderbolt",
+          "shared": "move hiddenpowerice"
+        },
+        {
+          "game": 12,
+          "decision": 5,
+          "side": 0,
+          "baseline": "move synthesis",
+          "shared": "move sleeppowder"
+        },
+        {
+          "game": 14,
+          "decision": 7,
+          "side": 0,
+          "baseline": "switch 3",
+          "shared": "move fireblast"
+        },
+        {
+          "game": 17,
+          "decision": 11,
+          "side": 1,
+          "baseline": "switch 3",
+          "shared": "switch 2"
+        },
+        {
+          "game": 20,
+          "decision": 1,
+          "side": 0,
+          "baseline": "move thunderbolt",
+          "shared": "move hiddenpowerice"
+        }
+      ],
+      "witness": {
+        "record_only": [
+          {
+            "own_action": "move curse",
+            "log": [
+              "|",
+              "|move|p1a: Cloyster|Curse|p1a: Cloyster",
+              "|-unboost|p1a: Cloyster|spe|1",
+              "|-boost|p1a: Cloyster|atk|1",
+              "|-boost|p1a: Cloyster|def|1",
+              "|move|p2a: Porygon2|Curse|p2a: Porygon2",
+              "|-unboost|p2a: Porygon2|spe|1",
+              "|-boost|p2a: Porygon2|atk|1",
+              "|-boost|p2a: Porygon2|def|1",
+              "|",
+              "|upkeep",
+              "|turn|5"
+            ],
+            "actions": [
+              "move icebeam",
+              "move explosion",
+              "move curse",
+              "move spikes",
+              "switch 2",
+              "switch 3"
+            ],
+            "visits": [
+              3504,
+              310,
+              1898,
+              682,
+              76,
+              72
+            ],
+            "rewards": [
+              2040.0265539856348,
+              150.6272364146483,
+              1134.4077286070062,
+              387.15209889109,
+              18.42007371537666,
+              17.91334172795794
+            ]
+          }
+        ],
+        "shared": [
+          {
+            "own_action": "move curse",
+            "log": [
+              "|",
+              "|move|p1a: Cloyster|Curse|p1a: Cloyster",
+              "|-unboost|p1a: Cloyster|spe|1",
+              "|-boost|p1a: Cloyster|atk|1",
+              "|-boost|p1a: Cloyster|def|1",
+              "|move|p2a: Porygon2|Curse|p2a: Porygon2",
+              "|-unboost|p2a: Porygon2|spe|1",
+              "|-boost|p2a: Porygon2|atk|1",
+              "|-boost|p2a: Porygon2|def|1",
+              "|",
+              "|upkeep",
+              "|turn|5"
+            ],
+            "actions": [
+              "move icebeam",
+              "move explosion",
+              "move curse",
+              "move spikes",
+              "switch 2",
+              "switch 3"
+            ],
+            "visits": [
+              1493,
+              131,
+              12271,
+              176,
+              4,
+              4
+            ],
+            "rewards": [
+              899.2745223391935,
+              68.39043629429838,
+              7668.407023534294,
+              95.25742122623734,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      "default_enabled": false,
+      "strength_demonstrated": false,
+      "scope": "First continuation idle Move only. Own previous action, entire generated protocol log including both private split branches, and own ordered legal choices index a shared own UCB bandit. Opponent policies and deeper own nodes remain full-state-conditioned. Unexpanded first children still roll out. This is a partial information correction, not a complete player information-set solver. Per-node statistics also receive the actual choices and returns. Record-only mode preserves selection. Native sequential alternating-order measurements include search construction, log capture, and search. Each median is across three repeated identical seeds; not three independent samples. Root means and witness returns are adaptive search estimates, not certified values or match scores."
+    },
+    "checks": {
+      "library_tests": 228,
+      "blind_integration_tests": 9,
+      "first_continuation_integration_tests": 1,
+      "all_targets_compile": true,
+      "baseline_and_record_only_snapshot_identities": 144,
+      "each_mode_reproduced_across_three_repeats": true,
+      "trace_counts_and_rewards_match_on_both_sides": true,
+      "chunked_search_matches_bulk": true,
+      "negative_controls": [
+        "seed",
+        "visits",
+        "baseline",
+        "time"
+      ],
+      "default_enabled": false
+    },
+    "artifacts": {
+      "findings/continuation-policy-v1/records.json.gz": "c0754e2be3688a29720f511d97a839ad65e66ea6fd67f79095d5374612002c0c",
+      "findings/continuation-policy-v1/summary.json": "ff2927a39048a988dcb8d5a52e5214bc3544144e74ab95b16bfe8fbbf1aaa3ba",
+      "findings/continuation-policy-v1/checks.json": "ee000b4fdd7b6b69ce5be073df5ce60a57bf7237ac1b83c56e6fbf5616988de6"
+    }
   }
 }

@@ -423,18 +423,22 @@ pub(crate) fn select_ucb(
     node: &mut Node,
     side: usize,
 ) -> usize {
-    let k = node.acts[side].len();
-    let untried: Vec<usize> = (0..k).filter(|&a| node.n[side][a] == 0).collect();
+    select_ucb_counts(cfg.c, rng, &mut node.n[side], &node.w[side])
+}
+
+pub(crate) fn select_ucb_counts(c: f64, rng: &mut SplitMix64, counts: &mut [u32], rewards: &[f64]) -> usize {
+    let k = counts.len();
+    let untried: Vec<usize> = (0..k).filter(|&a| counts[a] == 0).collect();
     let pick = if !untried.is_empty() {
         untried[rng.below(untried.len())]
     } else {
-        let total: u32 = node.n[side].iter().sum();
+        let total: u32 = counts.iter().sum();
         let ln_total = (total as f64).ln();
         let mut best = 0;
         let mut best_v = f64::NEG_INFINITY;
         for a in 0..k {
-            let (n, w) = (node.n[side][a] as f64, node.w[side][a]);
-            let v = w / n + cfg.c * (ln_total / n).sqrt();
+            let (n, w) = (counts[a] as f64, rewards[a]);
+            let v = w / n + c * (ln_total / n).sqrt();
             if v > best_v {
                 best_v = v;
                 best = a;
@@ -442,7 +446,7 @@ pub(crate) fn select_ucb(
         }
         best
     };
-    node.n[side][pick] += 1;
+    counts[pick] += 1;
     pick
 }
 
@@ -493,7 +497,7 @@ pub(crate) fn run_iteration_with_leaf(
     trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
 ) -> f64 {
     run_iteration_with_root_child_value(cfg,rng,nodes,table,sim,dex,turn_cap,start,
-        force_root,root_joint,depth_out,leaf,trace,None)
+        force_root,root_joint,depth_out,leaf,trace,None,None)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -512,11 +516,15 @@ pub(crate) fn run_iteration_with_root_child_value(
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
     mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
+    mut continuation: Option<&mut crate::first_continuation::FirstContinuation>,
 ) -> f64 {
     let mut path: Vec<(usize, usize, usize)> = Vec::new();
     let mut exp3_path = Vec::new();
     let mut mean_path = Vec::new();
     let mut node_idx = start;
+    let mut decision_depth = 0;
+    let mut own_root_action = None;
+    let mut shared_pending = None;
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
     let reward0 = loop {
@@ -524,6 +532,16 @@ pub(crate) fn run_iteration_with_root_child_value(
         if cfg.continuation_exp3_mean { mean_path.push(node_idx); }
         let at_root = node_idx == start;
         let mut joint = [None, None];
+        let mut continuation_group = None;
+        if decision_depth == 1 && sim.is_idle_move_request() {
+            if let Some(policy) = continuation.as_deref_mut() {
+                let acts = &nodes[node_idx].acts[policy.side()];
+                if acts.len() > 1 {
+                    continuation_group = Some(policy.group(own_root_action, &sim.log, acts));
+                }
+            }
+        }
+        if decision_depth == 1 && continuation.is_some() { sim.set_log_enabled(false); }
         for s in 0..2 {
             let k = nodes[node_idx].acts[s].len();
             if k == 0 {
@@ -537,6 +555,11 @@ pub(crate) fn run_iteration_with_root_child_value(
                     Some(f) if at_root => {
                         nodes[node_idx].n[s][f] += 1;
                         f
+                    }
+                    _ if continuation_group.is_some() && continuation.as_ref().is_some_and(|p| p.side() == s && p.shared()) => {
+                        let action = continuation.as_deref_mut().unwrap().select(continuation_group.unwrap(), cfg.c, rng);
+                        nodes[node_idx].n[s][action] += 1;
+                        action
                     }
                     _ if (cfg.continuation_exp3_ix || cfg.continuation_exp3_mean) && !at_root && !nodes[node_idx].preview => {
                         let node = &mut nodes[node_idx];
@@ -553,6 +576,15 @@ pub(crate) fn run_iteration_with_root_child_value(
                 ai
             };
             joint[s] = Some(nodes[node_idx].acts[s][ai]);
+            if let Some(policy) = continuation.as_deref_mut() {
+                if s == policy.side() {
+                    if decision_depth == 0 { own_root_action = joint[s]; }
+                    if let Some(group) = continuation_group {
+                        if !policy.shared() { policy.record_selection(group, ai); }
+                        shared_pending = Some((group, ai));
+                    }
+                }
+            }
             if at_root {
                 root_joint[s] = ai;
             }
@@ -572,9 +604,12 @@ pub(crate) fn run_iteration_with_root_child_value(
             }
             break leaf(sim, rng, false);
         }
+        if decision_depth == 0 && continuation.is_some() { sim.set_log_enabled(true); }
         sim.apply_choices(dex, joint)
             .expect("cached legal choice rejected (state_key collision?)");
+        decision_depth += 1;
         if let Some(o) = sim.outcome() {
+            if continuation.is_some() { sim.set_log_enabled(false); }
             break outcome_reward(o);
         }
         if at_root {
@@ -584,6 +619,7 @@ pub(crate) fn run_iteration_with_root_child_value(
             }
         }
         if sim.turn > turn_cap {
+            if continuation.is_some() { sim.set_log_enabled(false); }
             if let Some(trace) = trace.as_deref_mut() {
                 trace(SearchTrace::Leaf { battle: sim, rng, rollout: false });
             }
@@ -604,11 +640,15 @@ pub(crate) fn run_iteration_with_root_child_value(
                 if let Some(trace) = trace.as_deref_mut() {
                     trace(SearchTrace::Leaf { battle: sim, rng, rollout: true });
                 }
+                if continuation.is_some() { sim.set_log_enabled(false); }
                 break leaf(sim, rng, true);
             }
         }
     };
 
+    if let (Some(policy), Some((group, action))) = (continuation, shared_pending) {
+        policy.observe(group, action, reward0);
+    }
     if let Some(trace) = trace {
         trace(SearchTrace::Result { battle: sim, reward0 });
     }
