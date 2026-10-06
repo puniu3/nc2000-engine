@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/hidden-prefix-v1'
+
+
+def verify(result):
+    plan = json.loads(gzip.decompress((root / 'findings/hidden-mask-v1/records.json.gz').read_bytes()))['items']['rows']
+    games = [json.loads(line) for line in gzip.decompress((root / 'findings/policy-gap-v1/corpus.jsonl.gz').read_bytes()).splitlines()]
+    pairs = result['pairs']
+    assert len(pairs) == len(plan) == 47
+    decisions = later = maximum_turn = changed = projections = 0
+    tested = [0, 0]
+    choices_changed = [0, 0]
+    stops = collections.Counter()
+    for p, expected in zip(pairs, plan):
+        assert all(p[k] == expected[k] for k in ['game', 'side', 'foe_slot'])
+        game = next(g for g in games if g['game'] == p['game'])
+        stop = p['stop']
+        assert stop['reason'] in ['public_log', 'corpus_end', 'public_log_after_last_step']
+        assert 1 <= stop['decision'] <= len(game['decisions'])
+        stops[stop['reason']] += 1
+        if stop['reason'] == 'corpus_end':
+            assert stop['decision'] == len(game['decisions']) and p['end_logs_equal']
+            assert p['outcomes'][0] == p['outcomes'][1]
+        else:
+            assert not p['end_logs_equal']
+        rows = p['rows']
+        assert rows and rows[0]['decision'] == 1
+        indices = [r['decision'] for r in rows]
+        assert indices == sorted(set(indices))
+        assert all(d < stop['decision'] for d in indices)
+        for r in rows:
+            decisions += 1
+            later += r['decision'] > 1
+            maximum_turn = max(maximum_turn, r['turn'])
+            assert r['key'] == game['decisions'][r['decision']]['key']
+            assert r['seed'] == 0x2026102900 ^ (int(r['key']) & (2**64-1)) ^ (p['side'] << 32)
+            assert r['public_log_and_observer_match']
+            assert r['projection_checks'] == 32 and r['projection_mismatches'] == []
+            projections += 32
+            assert len(r['masks']) == 2
+            assert all(len(m) == len(r['actions']) for m in r['masks'])
+            assert r['mask_changed'] == (r['masks'][0] != r['masks'][1])
+            if not r['mask_changed']:
+                assert r['checkpoints'] == []
+                continue
+            changed += 1
+            assert [c['iterations'] for c in r['checkpoints']] == [3000, 27000]
+            for i, c in enumerate(r['checkpoints']):
+                tested[i] += 1
+                arms = c['arms']
+                assert len(arms) == 2
+                for k in ['visits', 'means', 'rng']: assert arms[0][k] == arms[1][k]
+                for j, arm in enumerate(arms):
+                    assert sum(arm['visits']) == c['iterations']
+                    assert len(arm['visits']) == len(arm['means']) == len(r['actions'])
+                    assert all(n >= 0 for n in arm['visits']) and all(0 <= m <= 1 for m in arm['means'])
+                    assert arm['best'] in r['actions']
+                    if not all(r['masks'][j]): assert not r['masks'][j][r['actions'].index(arm['best'])]
+                choices_changed[i] += arms[0]['best'] != arms[1]['best']
+    return dict(pairs=len(pairs), decisions=decisions, after_opening_decisions=later,
+                maximum_turn=maximum_turn, equal_projection_checks=projections, changed_masks=changed,
+                tested_per_budget=tested, final_choice_changes=choices_changed, stops=dict(stops),
+                production_changed=False, strength_demonstrated=False,
+                decision='Deprioritize this hidden-item mask dependency as a strength candidate; no fix or match trial from this screen.',
+                scope='Extend the same 47 held-item counterfactuals along the recorded native game seed and original '
+                      'choices. Stop at the first full-log, observer or legal-choice difference. Normalizing the '
+                      'hidden coin and cached speeds happens only on diagnostic clones, never on the replay. '
+                      'Thirty-two paired determinizations per retained idle decision agree. At every mask-sensitive '
+                      'decision, one fresh search seed is measured at cumulative 3000 and 27000 iterations; '
+                      'visits, means and final RNG agree across truths. These are selected matching prefixes, '
+                      'not a prevalence estimate, exhaustive hidden-state proof or strength comparison.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', type=Path)
+    args = parser.parse_args()
+    if args.record:
+        assert not (archive / 'records.json.gz').exists()
+        result = json.loads(args.record.read_bytes())
+        summary = verify(result)
+        paths = subprocess.check_output(['git', 'ls-files', 'crates/engine', 'crates/bot/src', 'Cargo.toml', 'Cargo.lock'], cwd=root, text=True).splitlines()
+        paths += ['crates/bot/examples/hidden_item_prefix.rs', 'tools/hidden-prefix-probe',
+                  'findings/hidden-mask-v1/records.json.gz', 'findings/policy-gap-v1/corpus.jsonl.gz',
+                  'data/belief-pool-v3/belief-pool.json', 'data/learnsets-gen2.json']
+        archive.mkdir(parents=True, exist_ok=True)
+        bundle = dict(result=result, hashes={p: hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, sort_keys=True).encode(), mtime=0))
+        (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest() == h for p, h in bundle['hashes'].items())
+    summary = verify(bundle['result'])
+    assert summary == json.loads((archive / 'summary.json').read_bytes())
+    for corruption in ['missing', 'key', 'seed', 'public', 'projection', 'stats']:
+        bad = copy.deepcopy(bundle['result'])
+        row = bad['pairs'][0]['rows'][0]
+        if corruption == 'missing': bad['pairs'].pop()
+        elif corruption == 'key': row['key'] = '0'
+        elif corruption == 'seed': row['seed'] += 1
+        elif corruption == 'public': row['public_log_and_observer_match'] = False
+        elif corruption == 'projection': row['projection_mismatches'] = [{}]
+        else: next(r for p in bad['pairs'] for r in p['rows'] if r['mask_changed'])['checkpoints'][0]['arms'][0]['rng'] += 1
+        try: verify(bad)
+        except AssertionError: pass
+        else: raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == '__main__':
+    main()

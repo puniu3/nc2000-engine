@@ -2845,5 +2845,60 @@
       "findings/hidden-mask-v1/summary.json": "c35e44b29be3d19172e43e946c91f9889e7b8c53d5ba0f34b7053ed233b7e8d5",
       "findings/hidden-mask-v1/checks.json": "df2b4c7db0b75675dd59b14c79e36453cffa3f200c733107d339567464335593"
     }
+  },
+  "hidden_prefix": {
+    "status": "diagnostic_complete",
+    "source_baseline_commit": "109fd9d",
+    "summary": {
+      "pairs": 47,
+      "decisions": 303,
+      "after_opening_decisions": 256,
+      "maximum_turn": 26,
+      "equal_projection_checks": 9696,
+      "changed_masks": 25,
+      "tested_per_budget": [
+        25,
+        25
+      ],
+      "final_choice_changes": [
+        0,
+        0
+      ],
+      "stops": {
+        "public_log": 33,
+        "corpus_end": 12,
+        "public_log_after_last_step": 2
+      },
+      "production_changed": false,
+      "strength_demonstrated": false,
+      "decision": "Deprioritize this hidden-item mask dependency as a strength candidate; no fix or match trial from this screen.",
+      "scope": "Extend the same 47 held-item counterfactuals along the recorded native game seed and original choices. Stop at the first full-log, observer or legal-choice difference. Normalizing the hidden coin and cached speeds happens only on diagnostic clones, never on the replay. Thirty-two paired determinizations per retained idle decision agree. At every mask-sensitive decision, one fresh search seed is measured at cumulative 3000 and 27000 iterations; visits, means and final RNG agree across truths. These are selected matching prefixes, not a prevalence estimate, exhaustive hidden-state proof or strength comparison."
+    },
+    "checks": {
+      "diagnostic_rows_reproduced_exactly": 303,
+      "projection_pairs_equal": 9696,
+      "changed_mask_decisions": 25,
+      "search_budgets": [
+        3000,
+        27000
+      ],
+      "paired_stats_and_rng_equal": true,
+      "matching_terminal_histories": 12,
+      "divergence_after_last_recorded_decision": 2,
+      "negative_controls": [
+        "missing_pair",
+        "wrong_key",
+        "wrong_seed",
+        "public_mismatch",
+        "projection_mismatch",
+        "different_search_rng"
+      ],
+      "production_changed": false
+    },
+    "artifacts": {
+      "findings/hidden-prefix-v1/records.json.gz": "56b8d4fb3d239bb25706f7b0ace1053c90f0645f136392199e5da6ed561c2639",
+      "findings/hidden-prefix-v1/summary.json": "f83d04ba707f68fcd0b2820fcc4e27c125d42ba0f98043f15c341d6ea26ab62d",
+      "findings/hidden-prefix-v1/checks.json": "e9d5130ccbb1ef9a876c223ecdeaf6ec56c6eabd0b63d676a47cbdd6128e7f07"
+    }
   }
 }
