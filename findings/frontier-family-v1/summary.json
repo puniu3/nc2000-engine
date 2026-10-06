@@ -1,0 +1,2044 @@
+{
+  "rows": {
+    "snorlax": [
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9720918443113427,
+          0.9954630449087805
+        ],
+        "solver_runs": 200000,
+        "id": 85496,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 43,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.951985992707062,
+          0.9948932802744984
+        ],
+        "solver_runs": 200000,
+        "id": 80685,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 46,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9451750206108356,
+          0.9947867966240334
+        ],
+        "solver_runs": 200000,
+        "id": 78465,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 47,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9316993574166286,
+          0.9943993260455735
+        ],
+        "solver_runs": 200000,
+        "id": 74342,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 49,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9250358509573549,
+          0.994270654221872
+        ],
+        "solver_runs": 200000,
+        "id": 70536,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 51,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9251128414647867,
+          0.9942652182423733
+        ],
+        "solver_runs": 200000,
+        "id": 66975,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 53,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9250885112472452,
+          0.9942676885300957
+        ],
+        "solver_runs": 200000,
+        "id": 65273,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 54,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9250558346828605,
+          0.994510075743768
+        ],
+        "solver_runs": 200000,
+        "id": 62017,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 56,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9250504490878522,
+          0.9944864155264658
+        ],
+        "solver_runs": 200000,
+        "id": 59394,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 59,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9250564920571678,
+          0.9945488306099179
+        ],
+        "solver_runs": 200000,
+        "id": 57228,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 61,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9246975454632164,
+          0.9944099183208449
+        ],
+        "solver_runs": 200000,
+        "id": 56127,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 62,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.9829797744750977,
+          0.9960292809638864
+        ],
+        "solver_runs": 200000,
+        "id": 114702,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 35,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      }
+    ],
+    "poli": [
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move dynamicpunch",
+          "move rockslide",
+          "move crunch",
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.11225933918769986,
+          0.11225957277117651
+        ],
+        "root_cells": {
+          "move hydropump": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move submission": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move return": [
+            0.5526614202336497,
+            0.5526623944608188
+          ],
+          "move bellydrum": [
+            0.5526613621548301,
+            0.5526620503417257
+          ]
+        },
+        "solver_runs": 35870,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 2826,
+        "id": 1570,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 103,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move dynamicpunch",
+          "move rockslide",
+          "move crunch",
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.11225933918769986,
+          0.11225957277117651
+        ],
+        "root_cells": {
+          "move hydropump": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move submission": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move return": [
+            0.5526613942224721,
+            0.5526623722606974
+          ],
+          "move bellydrum": [
+            0.5526613621548301,
+            0.5526620503417257
+          ]
+        },
+        "solver_runs": 37100,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 2927,
+        "id": 1591,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 102,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move dynamicpunch",
+          "move rockslide",
+          "move crunch",
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.11225933918769986,
+          0.11225957277117651
+        ],
+        "root_cells": {
+          "move hydropump": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move submission": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move return": [
+            0.5526614202336497,
+            0.5526623944608189
+          ],
+          "move bellydrum": [
+            0.5526613621548301,
+            0.5526620503417257
+          ]
+        },
+        "solver_runs": 36816,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 2873,
+        "id": 1611,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 101,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move dynamicpunch",
+          "move rockslide",
+          "move crunch",
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.11225933918769986,
+          0.11225957277117651
+        ],
+        "root_cells": {
+          "move hydropump": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move submission": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move return": [
+            0.5526614202336497,
+            0.5526623944608189
+          ],
+          "move bellydrum": [
+            0.5526613621548301,
+            0.5526620503417257
+          ]
+        },
+        "solver_runs": 36822,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 2885,
+        "id": 1650,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 99,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move dynamicpunch",
+          "move rockslide",
+          "move crunch",
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.11225933918769986,
+          0.11225957277117651
+        ],
+        "root_cells": {
+          "move hydropump": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move submission": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move return": [
+            0.5526614202336497,
+            0.5526623944608189
+          ],
+          "move bellydrum": [
+            0.5526613621548301,
+            0.5526620503417257
+          ]
+        },
+        "solver_runs": 36793,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 2871,
+        "id": 1671,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 98,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move dynamicpunch",
+          "move rockslide",
+          "move crunch",
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.11225933918769986,
+          0.11225957277117651
+        ],
+        "root_cells": {
+          "move hydropump": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move submission": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move return": [
+            0.5526614202336497,
+            0.5526623944608188
+          ],
+          "move bellydrum": [
+            0.5526613621548301,
+            0.5526620503417257
+          ]
+        },
+        "solver_runs": 36771,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 2871,
+        "id": 1692,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 97,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move dynamicpunch",
+          "move rockslide",
+          "move crunch",
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.11225933918769986,
+          0.11225957277117651
+        ],
+        "root_cells": {
+          "move hydropump": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move submission": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move return": [
+            0.5526614202336497,
+            0.552662394460819
+          ],
+          "move bellydrum": [
+            0.5526613621548301,
+            0.5526620503417257
+          ]
+        },
+        "solver_runs": 36825,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 2887,
+        "id": 1732,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 95,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 0,
+        "priority": [
+          "move explosion",
+          "move dynamicpunch",
+          "move rockslide",
+          "move crunch",
+          "move explosion",
+          "move rockslide",
+          "move crunch",
+          "move razorleaf",
+          "switch 2",
+          "switch 3"
+        ],
+        "bounds": [
+          0.11225933918769986,
+          0.11225957277117651
+        ],
+        "root_cells": {
+          "move hydropump": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move submission": [
+            0.11225933918769986,
+            0.11225957277117651
+          ],
+          "move return": [
+            0.5526614202336497,
+            0.5526623944608187
+          ],
+          "move bellydrum": [
+            0.5526613621548301,
+            0.5526620503417257
+          ]
+        },
+        "solver_runs": 36797,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 2887,
+        "id": 1751,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 94,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      }
+    ],
+    "poli-lower": [
+      {
+        "side": 1,
+        "priority": [
+          "move hydropump",
+          "move submission",
+          "move return",
+          "move bellydrum"
+        ],
+        "bounds": [
+          0.8877397308229773,
+          0.8877405449329973
+        ],
+        "root_cells": {
+          "move rockslide": [
+            0.048362689841796834,
+            0.04836361081267662
+          ],
+          "move crunch": [
+            0.0513763427734375,
+            0.0513763427734375
+          ],
+          "move fireblast": [
+            0.04691167176359948,
+            0.04691239089048706
+          ],
+          "move dynamicpunch": [
+            0.11225945506700273,
+            0.11226026917702264
+          ]
+        },
+        "solver_runs": 12815,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 1841,
+        "id": 1570,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 103,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 1,
+        "priority": [
+          "move hydropump",
+          "move submission",
+          "move return",
+          "move bellydrum"
+        ],
+        "bounds": [
+          0.8877397308229773,
+          0.8877405449329973
+        ],
+        "root_cells": {
+          "move rockslide": [
+            0.048362689841796834,
+            0.04836361081267662
+          ],
+          "move crunch": [
+            0.0513763427734375,
+            0.0513763427734375
+          ],
+          "move fireblast": [
+            0.04691167176359947,
+            0.04691239089048705
+          ],
+          "move dynamicpunch": [
+            0.11225945506700273,
+            0.11226026917702264
+          ]
+        },
+        "solver_runs": 12790,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 1841,
+        "id": 1591,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 102,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 1,
+        "priority": [
+          "move hydropump",
+          "move submission",
+          "move return",
+          "move bellydrum"
+        ],
+        "bounds": [
+          0.8877397308229773,
+          0.8877405449329973
+        ],
+        "root_cells": {
+          "move rockslide": [
+            0.04836268984179684,
+            0.04836361081267663
+          ],
+          "move crunch": [
+            0.0513763427734375,
+            0.0513763427734375
+          ],
+          "move fireblast": [
+            0.04691167176359948,
+            0.04691239089048706
+          ],
+          "move dynamicpunch": [
+            0.11225945506700273,
+            0.11226026917702264
+          ]
+        },
+        "solver_runs": 12710,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 1833,
+        "id": 1611,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 101,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 1,
+        "priority": [
+          "move hydropump",
+          "move submission",
+          "move return",
+          "move bellydrum"
+        ],
+        "bounds": [
+          0.8877397308229773,
+          0.8877405449329973
+        ],
+        "root_cells": {
+          "move rockslide": [
+            0.048362689841796834,
+            0.04836361081267662
+          ],
+          "move crunch": [
+            0.0513763427734375,
+            0.0513763427734375
+          ],
+          "move fireblast": [
+            0.04691167176359947,
+            0.04691239089048706
+          ],
+          "move dynamicpunch": [
+            0.11225945506700273,
+            0.11226026917702264
+          ]
+        },
+        "solver_runs": 12835,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 1845,
+        "id": 1650,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 99,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 1,
+        "priority": [
+          "move hydropump",
+          "move submission",
+          "move return",
+          "move bellydrum"
+        ],
+        "bounds": [
+          0.8877397308229773,
+          0.8877405449329973
+        ],
+        "root_cells": {
+          "move rockslide": [
+            0.048362689841796834,
+            0.04836361081267662
+          ],
+          "move crunch": [
+            0.0513763427734375,
+            0.0513763427734375
+          ],
+          "move fireblast": [
+            0.04691167176359947,
+            0.04691239089048705
+          ],
+          "move dynamicpunch": [
+            0.11225945506700273,
+            0.11226026917702264
+          ]
+        },
+        "solver_runs": 12805,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 1839,
+        "id": 1671,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 98,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 1,
+        "priority": [
+          "move hydropump",
+          "move submission",
+          "move return",
+          "move bellydrum"
+        ],
+        "bounds": [
+          0.8877397308229773,
+          0.8877405449329973
+        ],
+        "root_cells": {
+          "move rockslide": [
+            0.048362689841796834,
+            0.04836361081267663
+          ],
+          "move crunch": [
+            0.0513763427734375,
+            0.0513763427734375
+          ],
+          "move fireblast": [
+            0.04691167176359946,
+            0.046912390890487043
+          ],
+          "move dynamicpunch": [
+            0.11225945506700273,
+            0.11226026917702264
+          ]
+        },
+        "solver_runs": 12733,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 1831,
+        "id": 1692,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 97,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 1,
+        "priority": [
+          "move hydropump",
+          "move submission",
+          "move return",
+          "move bellydrum"
+        ],
+        "bounds": [
+          0.8877397308229773,
+          0.8877405449329973
+        ],
+        "root_cells": {
+          "move rockslide": [
+            0.048362689841796834,
+            0.04836361081267662
+          ],
+          "move crunch": [
+            0.0513763427734375,
+            0.0513763427734375
+          ],
+          "move fireblast": [
+            0.04691167176359948,
+            0.046912390890487064
+          ],
+          "move dynamicpunch": [
+            0.11225945506700273,
+            0.11226026917702264
+          ]
+        },
+        "solver_runs": 12770,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 1839,
+        "id": 1732,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 95,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "side": 1,
+        "priority": [
+          "move hydropump",
+          "move submission",
+          "move return",
+          "move bellydrum"
+        ],
+        "bounds": [
+          0.8877397308229773,
+          0.8877405449329973
+        ],
+        "root_cells": {
+          "move rockslide": [
+            0.04836268984179684,
+            0.04836361081267663
+          ],
+          "move crunch": [
+            0.0513763427734375,
+            0.0513763427734375
+          ],
+          "move fireblast": [
+            0.04691167176359947,
+            0.04691239089048705
+          ],
+          "move dynamicpunch": [
+            0.11225945506700273,
+            0.11226026917702264
+          ]
+        },
+        "solver_runs": 12750,
+        "replay_runs": 182,
+        "probe_runs": 104,
+        "stop": "WidthMet",
+        "nodes": 1837,
+        "id": 1751,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 94,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "family": [
+    {
+      "id": 1570,
+      "tyranitar_hp": 103,
+      "unrestricted_side_one_score_bounds": [
+        0.8877397307229772,
+        0.8877406609123003
+      ],
+      "width": 9.30189323122832e-07
+    },
+    {
+      "id": 1591,
+      "tyranitar_hp": 102,
+      "unrestricted_side_one_score_bounds": [
+        0.8877397307229772,
+        0.8877406609123003
+      ],
+      "width": 9.30189323122832e-07
+    },
+    {
+      "id": 1611,
+      "tyranitar_hp": 101,
+      "unrestricted_side_one_score_bounds": [
+        0.8877397307229772,
+        0.8877406609123003
+      ],
+      "width": 9.30189323122832e-07
+    },
+    {
+      "id": 1650,
+      "tyranitar_hp": 99,
+      "unrestricted_side_one_score_bounds": [
+        0.8877397307229772,
+        0.8877406609123003
+      ],
+      "width": 9.30189323122832e-07
+    },
+    {
+      "id": 1671,
+      "tyranitar_hp": 98,
+      "unrestricted_side_one_score_bounds": [
+        0.8877397307229772,
+        0.8877406609123003
+      ],
+      "width": 9.30189323122832e-07
+    },
+    {
+      "id": 1692,
+      "tyranitar_hp": 97,
+      "unrestricted_side_one_score_bounds": [
+        0.8877397307229772,
+        0.8877406609123003
+      ],
+      "width": 9.30189323122832e-07
+    },
+    {
+      "id": 1732,
+      "tyranitar_hp": 95,
+      "unrestricted_side_one_score_bounds": [
+        0.8877397307229772,
+        0.8877406609123003
+      ],
+      "width": 9.30189323122832e-07
+    },
+    {
+      "id": 1751,
+      "tyranitar_hp": 94,
+      "unrestricted_side_one_score_bounds": [
+        0.8877397307229772,
+        0.8877406609123003
+      ],
+      "width": 9.30189323122832e-07
+    }
+  ],
+  "parent_bounds": [
+    0.16356242052106665,
+    0.80342680916558
+  ],
+  "imported_fixed_opponent": {
+    "runs": 876664,
+    "nodes": 197026,
+    "bounds": [
+      0.3879367359952026,
+      0.8028039966298991
+    ],
+    "node_kinds": {
+      "terminal": 3598,
+      "horizon": 273,
+      "budget": 152504,
+      "decision": 40651
+    },
+    "partial_branches": 152320
+  },
+  "imports": [
+    {
+      "id": 56979,
+      "identity": [
+        true,
+        true,
+        "53733046944207494931972748469434051276",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.0055900815791550896,
+        0.07530245463678364
+      ]
+    },
+    {
+      "id": 58080,
+      "identity": [
+        true,
+        true,
+        "78414975332275559857425235605985182957",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.005451169290082055,
+        0.07494350804283223
+      ]
+    },
+    {
+      "id": 60246,
+      "identity": [
+        true,
+        true,
+        "143007594356094790663708907582391030421",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.005513584373534227,
+        0.07494955101214784
+      ]
+    },
+    {
+      "id": 62869,
+      "identity": [
+        true,
+        true,
+        "174825669549266003913911301419870071756",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.005489924156231959,
+        0.07494416541713955
+      ]
+    },
+    {
+      "id": 66125,
+      "identity": [
+        true,
+        true,
+        "20753531006870451881928861737759520310",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.005732311369904272,
+        0.07491148885275478
+      ]
+    },
+    {
+      "id": 67827,
+      "identity": [
+        true,
+        true,
+        "300432760012350858547668296662818968088",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.00573478165762665,
+        0.07488715863521334
+      ]
+    },
+    {
+      "id": 71388,
+      "identity": [
+        true,
+        true,
+        "160596971233317698897873578276355636658",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.005729345678128003,
+        0.07496414914264515
+      ]
+    },
+    {
+      "id": 75194,
+      "identity": [
+        true,
+        true,
+        "128214539248164207660554575044781270686",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.005600673854426538,
+        0.06830064268337144
+      ]
+    },
+    {
+      "id": 79317,
+      "identity": [
+        true,
+        true,
+        "145325005481453283330121542875718638611",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.005213203275966646,
+        0.05482497948916443
+      ]
+    },
+    {
+      "id": 81537,
+      "identity": [
+        true,
+        true,
+        "268800101403411947632498092688162486734",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.005106719625501585,
+        0.04801400739293804
+      ]
+    },
+    {
+      "id": 86348,
+      "identity": [
+        true,
+        true,
+        "167449001979575133946285391951904513874",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.004536954991219541,
+        0.027908155788657348
+      ]
+    },
+    {
+      "id": 115554,
+      "identity": [
+        true,
+        true,
+        "241146707521656276450501053863776114984",
+        5
+      ],
+      "before": [
+        0.0,
+        0.105468750094
+      ],
+      "imported": [
+        0.0039707189361135676,
+        0.01702022562490235
+      ]
+    },
+    {
+      "id": 130046,
+      "identity": [
+        true,
+        true,
+        "207355701093083121694517840018967605944",
+        4
+      ],
+      "before": [
+        0.049804687459,
+        0.5286140442884532
+      ],
+      "imported": [
+        0.42778385417029313,
+        0.4277848460059864
+      ]
+    },
+    {
+      "id": 194554,
+      "identity": [
+        true,
+        true,
+        "81090988014739123714187484071197128480",
+        3
+      ],
+      "before": [
+        0.796874999992,
+        0.89923095703925
+      ],
+      "imported": [
+        0.8877404271288234,
+        0.8877406609123003
+      ]
+    },
+    {
+      "id": 194555,
+      "identity": [
+        true,
+        true,
+        "59153111361324158113279748600874385598",
+        3
+      ],
+      "before": [
+        0.796874999992,
+        0.89923095703925
+      ],
+      "imported": [
+        0.8877404271288234,
+        0.8877406609123003
+      ]
+    },
+    {
+      "id": 194556,
+      "identity": [
+        true,
+        true,
+        "192308844345364451410084546171455823719",
+        3
+      ],
+      "before": [
+        0.796874999992,
+        0.89923095703925
+      ],
+      "imported": [
+        0.8877404271288234,
+        0.8877406609123003
+      ]
+    },
+    {
+      "id": 194558,
+      "identity": [
+        true,
+        true,
+        "18700284333978661953859990615533518183",
+        3
+      ],
+      "before": [
+        0.796874999992,
+        0.89923095703925
+      ],
+      "imported": [
+        0.8877404271288234,
+        0.8877406609123003
+      ]
+    },
+    {
+      "id": 194559,
+      "identity": [
+        true,
+        true,
+        "59095603234338704243891142039837976017",
+        3
+      ],
+      "before": [
+        0.796874999992,
+        0.89923095703925
+      ],
+      "imported": [
+        0.8877404271288234,
+        0.8877406609123003
+      ]
+    },
+    {
+      "id": 194560,
+      "identity": [
+        true,
+        true,
+        "46812960146008629039761154197803765715",
+        3
+      ],
+      "before": [
+        0.796874999992,
+        0.89923095703925
+      ],
+      "imported": [
+        0.8877404271288234,
+        0.8877406609123003
+      ]
+    },
+    {
+      "id": 194562,
+      "identity": [
+        true,
+        true,
+        "192922190265117034210351776402722555832",
+        3
+      ],
+      "before": [
+        0.796874999992,
+        0.89923095703925
+      ],
+      "imported": [
+        0.8877404271288234,
+        0.8877406609123003
+      ]
+    },
+    {
+      "id": 194563,
+      "identity": [
+        true,
+        true,
+        "3457781766650683507191759190474583814",
+        3
+      ],
+      "before": [
+        0.796874999992,
+        0.89923095703925
+      ],
+      "imported": [
+        0.8877404271288234,
+        0.8877406609123003
+      ]
+    }
+  ],
+  "unrestricted_switch_bounds": [
+    0,
+    0.8028039966298991
+  ],
+  "zero_value_sensitivity": {
+    "snorlax": 0.80342680916558,
+    "poli": 0.7546854794096984
+  },
+  "additional_engine_runs": 2804322,
+  "scope": "Replay and solve 12 Tyranitar/Snorlax and eight Tyranitar/Poliwrath 1v1 states. The original fixed side-zero context priority is preserved; admitted move sets cannot transform, replace moves, or switch to another living Pokemon. Side-one Hydro Pump priority witnesses additionally bound the eight Poliwrath subgames below. Their lower bounds do not enter the fixed-opponent parent ledger. Only side-zero-policy score intervals, complemented with outward margins, populate the external native_subgame value table, including the previously solved full-HP state. Entries bind exact guarded state/depth identities and the same parent policy. All ancestor chance sums and max backups are recomputed using rational arithmetic and outward margins, then checked by the existing full ledger verifier with that explicitly external value table. The table itself trusts FixedPolicySolver; it is not a terminal ledger or an independently serialized proof of native solver internals. The parent fixed-opponent lower endpoint is not an unrestricted guarantee. Only its upper endpoint bounds the initial Switch action. Zero-value sensitivity substitutes hypothetical zero upper values and is an allocation diagnostic, not a valid game-value certificate. Scores count draws as one half. The eight measured HP states are separate certificates, not a proof for all HP values between them. No human calibration or production bot change is involved."
+}

@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import json
+import math
+import pathlib
+import runpy
+import tempfile
+from fractions import Fraction as F
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/frontier-family-v1'
+reply=runpy.run_path(str(root/'tools/frontier-reply-probe'))
+frontier=reply['frontier'];legacy=reply['legacy'];join=frontier['join'];sha=legacy['sha']
+previous='findings/frontier-witness-v1/records.json.gz'
+solved='findings/frontier-reply-v1/records.json.gz'
+inputs=[previous,solved,frontier['previous'],frontier['corpus'],'tools/frontier-family-probe',
+        'tools/frontier-witness-probe','tools/frontier-reply-probe',reply['subgame']['native']]
+
+
+def specs():
+    old=legacy['read'](previous)
+    snorlax=json.loads(old['manifests']['2-first']);snorlax.update(solve_budgets=[20000]*10,solve_node_budget=120000)
+    poli=json.loads(old['manifests']['0-last'])
+    poli['targets']=[t for t,o in zip(poli['targets'],old['outputs']['0-last']['targets'])
+                     if o['active'][1]['species']=='poliwrath' and o['active'][0]['hp']<226]
+    poli.update(solve_budgets=[20000]*10,solve_node_budget=120000,
+                solve_reply_order=['move hydropump','move submission','move return','move bellydrum'])
+    lower=dict(poli,solve_side=1,solve_priority=['move hydropump','move submission','move return','move bellydrum'],
+        solve_reply_order=['move dynamicpunch','move crunch','move rockslide','move fireblast'])
+    return {'snorlax':snorlax,'poli':poli,'poli-lower':lower}
+
+
+def check_scores(manifest,target):
+    side=manifest.get('solve_side',0);cfg=manifest['config']
+    priority=manifest.get('solve_priority') or cfg['opponent_priority'].get(target['active'][1-side]['species'],[])+cfg['priority']
+    assert target['subgame_side']==side and target['subgame_priority']==priority
+    assert all(s['pokemonLeft']==1 for s in target['state']['sides'])
+    assert all(a['hp']>0 for a in target['active'])
+    if manifest.get('solve_reply_order'):
+        report=reply['check'](manifest,dict(targets=[target],
+            replay_runs=sum(t['runs'] for t in target['trace']),probe_runs=sum(p['runs'] for p in target['probes'])))
+        return dict(report,id=target['id'],active=target['active'])
+    assert len(target['subgame'])==len(manifest['solve_budgets']);total=0;bounds=[0,1]
+    for budget,r in zip(manifest['solve_budgets'],target['subgame']):
+        assert r['budget']==budget and 0<=r['runs']<=budget
+        total+=r['runs'];assert total==r['total_runs']
+        lo,hi=r['fixed_side_bounds'];assert 0<=lo<=hi<=1
+        assert lo>=bounds[0]-1e-10 and hi<=bounds[1]+1e-10;bounds=[lo,hi]
+        assert r['stop'] in ['WorkExhausted','WidthMet','NodeBudget']
+        if r['stop']=='WidthMet':assert hi-lo<=1e-6
+    return dict(side=side,priority=priority,bounds=bounds,solver_runs=total,id=target['id'],active=target['active'])
+
+
+def binding(manifest,target):
+    assert manifest.get('solve_side',0)==target['subgame_side']==0
+    wanted=next(t for t in manifest['targets'] if t['id']==target['id'])
+    assert wanted['cache_key']==target['cache_key']
+    score=target['subgame'][-1]['fixed_side_bounds']
+    bounds=[max(0,math.nextafter(1-score[1]-1e-10,-math.inf)),min(1,math.nextafter(1-score[0]+1e-10,math.inf))]
+    return (*target['cache_key'],len(wanted['path'])),bounds
+
+
+def splice(record,imports):
+    known={(*n['cache_key'],n['depth']) for n in record['nodes']};assert set(imports)<=known
+    r=copy.deepcopy(record);table=dict(config=r['config'],nodes=[]);matched=[]
+    for i,n in enumerate(r['nodes']):
+        assert 'prior_node' not in n and 'raw_bounds' not in n
+        if n['kind']=='decision':
+            for b in n['branches']:
+                value=[F(0),F(b['pending'])]
+                for c in b['children']:
+                    for k in [0,1]:value[k]+=F(c['mass'])*F(r['nodes'][c['node']]['bounds'][k])
+                pad=F(len(b['children'])+2,10**12)
+                b['bounds']=[join['outward'](max(F(0),value[0]-pad),False),join['outward'](min(F(1),value[1]+pad),True)]
+            assert n['maximizing'];n['bounds']=[max(b['bounds'][k] for b in n['branches']) for k in [0,1]]
+        identity=(*n['cache_key'],n['depth'])
+        if identity in imports:
+            value=imports[identity];assert 0<=value[0]<=value[1]<=1
+            matched.append(dict(id=i,identity=list(identity),before=n['bounds'],imported=value))
+            n['raw_bounds']=n['bounds'];n['prior_node']=len(table['nodes'])
+            table['nodes'].append(dict(cache_key=n['cache_key'],depth=n['depth'],bounds=value,kind='native_subgame'))
+            n['bounds']=[max(n['bounds'][0],value[0]),min(n['bounds'][1],value[1])]
+            assert n['bounds'][0]<=n['bounds'][1]
+    assert len(matched)==len(imports)
+    last=r['nodes'][-1];r['bounds']=last['bounds']
+    table['nodes'].append(dict(cache_key=last['cache_key'],state_key=last['state_key'],depth=0,bounds=[0,1],kind='budget'))
+    table['root']=len(table['nodes'])-1
+    report=legacy['verify'](r,table)
+    assert r['bounds'][0]>=record['bounds'][0] and r['bounds'][1]<=record['bounds'][1]
+    return report,matched
+
+
+def sensitivity(record,targets):
+    values=[]
+    for n in record['nodes']:
+        if (*n['cache_key'],n['depth']) in targets:value=0
+        elif n['kind']=='decision':
+            value=max(min(1,b['pending']+sum(c['mass']*values[c['node']] for c in b['children'])+
+                          (len(b['children'])+2)*1e-12) for b in n['branches'])
+        else:value=n['bounds'][1]
+        values.append(value)
+    return values[-1]
+
+
+def summarize(bundle):
+    assert bundle['inputs']=={p:sha((root/p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes']=={p:sha((root/p).read_bytes()) for p in bundle['source_hashes']}
+    old=legacy['read'](previous);prior=legacy['read'](solved)
+    reply['summarize'](prior)
+    current=json.loads(legacy['read'](frontier['previous'])['raw']['explode-fair3']);parents=[]
+    legacy['verify'](current)
+    for i in range(3):
+        parents.append(current);current=frontier['splice'](current,[old['outputs'][f'{i}-first'],old['outputs'][f'{i}-last']])
+    rows={};groups={};imports={};work=0
+    for name,wanted in specs().items():
+        raw=bundle['manifests'][name];m=json.loads(raw);assert m==wanted
+        output=bundle['outputs'][name];frontier['check_output'](parents[2 if name=='snorlax' else 0],raw,output)
+        rows[name]=[check_scores(m,t) for t in output['targets']]
+        work+=output['replay_runs']+output['probe_runs']+sum(r['solver_runs'] for r in rows[name])
+        if name!='poli-lower':
+            group=dict(binding(m,t) for t in output['targets']);assert not set(imports)&set(group)
+            groups[name]=group;imports.update(group)
+    assert set(bundle['manifests'])==set(bundle['outputs'])==set(rows)
+    m=json.loads(prior['manifests']['dp-focus']);t=prior['outputs']['dp-focus']['targets'][0]
+    k,v=binding(m,t);assert k not in imports;imports[k]=v
+    policy_ignored={'horizon','work_budget'}
+    for m in list(specs().values())+[m]:
+        assert {k:v for k,v in m['config'].items() if k not in policy_ignored}=={
+            k:v for k,v in current['config'].items() if k not in policy_ignored}
+    report,matched=splice(current,imports)
+    for fault in ['policy','identity']:
+        try:
+            if fault=='policy':
+                bad=copy.deepcopy(bundle['outputs']['snorlax']['targets'][0]);bad['subgame_priority']=['move crunch']
+                check_scores(specs()['snorlax'],bad)
+            else:splice(current,{(True,True,'0',999):[0,1]})
+        except AssertionError:pass
+        else:raise AssertionError(fault)
+    lower={r['id']:r for r in rows['poli-lower']};family=[]
+    for r in rows['poli']:
+        lo=math.nextafter(lower[r['id']]['bounds'][0]-1e-10,-math.inf)
+        hi=math.nextafter(1-r['bounds'][0]+1e-10,math.inf);assert lo<=hi
+        family.append(dict(id=r['id'],tyranitar_hp=r['active'][0]['hp'],unrestricted_side_one_score_bounds=[lo,hi],width=hi-lo))
+    return dict(rows=rows,family=family,parent_bounds=current['bounds'],imported_fixed_opponent=report,
+        imports=matched,unrestricted_switch_bounds=[0,report['bounds'][1]],
+        zero_value_sensitivity={name:sensitivity(current,set(group)) for name,group in groups.items()},
+        additional_engine_runs=work,
+        scope='Replay and solve 12 Tyranitar/Snorlax and eight Tyranitar/Poliwrath 1v1 states. '
+              'The original fixed side-zero context priority is preserved; admitted move sets cannot '
+              'transform, replace moves, or switch to another living Pokemon. Side-one Hydro Pump '
+              'priority witnesses additionally bound the eight Poliwrath subgames below. Their lower '
+              'bounds do not enter the fixed-opponent parent ledger. Only side-zero-policy score '
+              'intervals, complemented with outward margins, populate the external native_subgame '
+              'value table, including the previously solved full-HP state. Entries bind exact guarded '
+              'state/depth identities and the same parent policy. All ancestor chance sums and max '
+              'backups are recomputed using rational arithmetic and outward margins, then checked by '
+              'the existing full ledger verifier with that explicitly external value table. The table '
+              'itself trusts FixedPolicySolver; it is not a terminal ledger or an independently serialized '
+              'proof of native solver internals. The parent fixed-opponent lower endpoint is not an '
+              'unrestricted guarantee. Only its upper endpoint bounds the initial Switch action. '
+              'Zero-value sensitivity substitutes hypothetical zero upper values and is an allocation '
+              'diagnostic, not a valid game-value certificate. Scores count draws as one half. '
+              'The eight measured HP states are separate certificates, not a proof for all HP values '
+              'between them. No human calibration or production bot change is involved.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--replay',action='store_true');parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle=legacy['read']('findings/frontier-family-v1/records.json.gz')
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-family-replay-') as d:
+                assert reply['subgame']['execute'](pathlib.Path(d),bundle['manifests'])==bundle['outputs']
+        print('frontier-family: subgame policies, native imports, ancestor backups and controls verified');return
+    assert not archive.exists()
+    if args.import_directory:
+        manifests={n:(args.import_directory/(n+'.json')).read_text() for n in specs()}
+        outputs={n:json.loads((args.import_directory/(n+'.out.json')).read_bytes()) for n in specs()}
+    else:
+        manifests={n:json.dumps(m) for n,m in specs().items()}
+        with tempfile.TemporaryDirectory(prefix='nc-family-') as d:outputs=reply['subgame']['execute'](pathlib.Path(d),manifests)
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in inputs},
+        source_hashes=legacy['read'](solved)['source_hashes'],
+        binary_sha256=sha((root/'target/release/examples/witness_frontier').read_bytes()),manifests=manifests,outputs=outputs)
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(report['unrestricted_switch_bounds'],report['additional_engine_runs'])
+
+
+if __name__=='__main__':main()

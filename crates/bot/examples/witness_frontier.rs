@@ -113,9 +113,14 @@ fn main() {
             assert_eq!((cfg.policy_side,cfg.target_side),(0,1));
             assert!((0..2).all(|s|b.sides[s].pokemon_left==1 && b.active_id(s).is_some_and(|id|b.poke(id).hp>0)));
             assert_eq!(active[0].as_ref().unwrap()["species"],json!("tyranitar"));
-            assert_eq!(active[1].as_ref().unwrap()["species"],json!("poliwrath"));
+            let foe=active[1].as_ref().unwrap()["species"].as_str().unwrap();
+            let foe_moves=match foe {
+                "poliwrath"=>["hydropump","submission","return","bellydrum"],
+                "snorlax"=>["bodyslam","earthquake","curse","selfdestruct"],
+                _=>panic!("unsupported subgame opponent"),
+            };
             for (s,moves) in [(0,["rockslide","crunch","fireblast","dynamicpunch"]),
-                (1,["hydropump","submission","return","bellydrum"])] {
+                (1,foe_moves)] {
                 assert!(b.poke(b.active_id(s).unwrap()).move_slots.iter().all(|slot|moves.contains(&dex.moves.key(slot.id))));
             }
             let solve_side=m.solve_side.unwrap_or(side);assert!(solve_side<2);
