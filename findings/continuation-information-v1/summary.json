@@ -1,0 +1,241 @@
+{
+  "roots": 24,
+  "iterations_per_root": 27000,
+  "baseline_identity_checks": 24,
+  "shadow_state_checks": 591951,
+  "total_information_views": 28960,
+  "views_with_multiple_selections": 14210,
+  "same_loadout_strata": {
+    "16": {
+      "supported": 1356,
+      "different_unique_modes": 952
+    },
+    "32": {
+      "supported": 638,
+      "different_unique_modes": 459
+    },
+    "64": {
+      "supported": 316,
+      "different_unique_modes": 228
+    }
+  },
+  "witnesses": [
+    {
+      "game": 4,
+      "decision": 4,
+      "side": 0,
+      "view_hash": "a39a4c4f9efae7249251a4433abb9ea38b1234e6fa95b800057f374ebd46bba5",
+      "loadout_signature": "6ac35318365533b8adc9930834c0f4b1e75aa22a83f427877a156a29a5ed0f36",
+      "actions": [
+        "move icebeam",
+        "move explosion",
+        "move curse",
+        "move spikes",
+        "switch 2",
+        "switch 3"
+      ],
+      "own_previous_action": "move curse",
+      "continuation_log": [
+        "|",
+        "|move|p1a: Cloyster|Curse|p1a: Cloyster",
+        "|-unboost|p1a: Cloyster|spe|1",
+        "|-boost|p1a: Cloyster|atk|1",
+        "|-boost|p1a: Cloyster|def|1",
+        "|move|p2a: Porygon2|Curse|p2a: Porygon2",
+        "|-unboost|p2a: Porygon2|spe|1",
+        "|-boost|p2a: Porygon2|atk|1",
+        "|-boost|p2a: Porygon2|def|1",
+        "|",
+        "|upkeep",
+        "|turn|5"
+      ],
+      "minimum_type_samples": 1626,
+      "types": [
+        {
+          "selection_mask": 25,
+          "counts": [
+            1411,
+            49,
+            203,
+            69,
+            21,
+            13
+          ],
+          "selected_species": [
+            "Porygon2",
+            "Exeggutor",
+            "Snorlax"
+          ]
+        },
+        {
+          "selection_mask": 41,
+          "counts": [
+            1317,
+            148,
+            77,
+            62,
+            9,
+            13
+          ],
+          "selected_species": [
+            "Porygon2",
+            "Exeggutor",
+            "Golem"
+          ]
+        },
+        {
+          "selection_mask": 49,
+          "counts": [
+            228,
+            48,
+            1028,
+            318,
+            14,
+            11
+          ],
+          "selected_species": [
+            "Porygon2",
+            "Snorlax",
+            "Golem"
+          ]
+        }
+      ]
+    },
+    {
+      "game": 21,
+      "decision": 35,
+      "side": 1,
+      "view_hash": "07e61d621d212e13a019d39f7e9906d35bf3375b8fa16b22ce11eb38ce780357",
+      "loadout_signature": "1d68b210726542377a1fd0e0d622cbde3a24d83493515d94660bbfe2f3dfabb3",
+      "actions": [
+        "move doubleedge",
+        "move earthquake",
+        "move selfdestruct",
+        "move curse"
+      ],
+      "own_previous_action": "move curse",
+      "continuation_log": [
+        "|",
+        "|move|p1a: Raikou|Thunder|p2a: Snorlax|[miss]",
+        "|-miss|p1a: Raikou",
+        "|move|p2a: Snorlax|Curse|p2a: Snorlax",
+        "|-unboost|p2a: Snorlax|spe|1",
+        "|-boost|p2a: Snorlax|atk|1",
+        "|-boost|p2a: Snorlax|def|1",
+        "|",
+        "|upkeep",
+        "|turn|33"
+      ],
+      "minimum_type_samples": 574,
+      "types": [
+        {
+          "selection_mask": 50,
+          "counts": [
+            116,
+            84,
+            5,
+            375
+          ],
+          "selected_species": [
+            "Skarmory",
+            "Raikou",
+            "Suicune"
+          ]
+        },
+        {
+          "selection_mask": 52,
+          "counts": [
+            285,
+            274,
+            3,
+            12
+          ],
+          "selected_species": [
+            "Marowak",
+            "Raikou",
+            "Suicune"
+          ]
+        }
+      ]
+    },
+    {
+      "game": 23,
+      "decision": 11,
+      "side": 0,
+      "view_hash": "df32d0c22d505718784531a64a200b33e52b931d8aed6df079b5654a864e506b",
+      "loadout_signature": "5fd19ab3a308d7c9c1ff3c2a0106919a5b7ee28f9c0375b45f32d40ceff4673d",
+      "actions": [
+        "move doubleedge",
+        "move curse",
+        "move rest",
+        "move sleeptalk",
+        "switch 2"
+      ],
+      "own_previous_action": "move sleeptalk",
+      "continuation_log": [
+        "|",
+        "|cant|p2a: Snorlax|par",
+        "|cant|p1a: Snorlax|slp",
+        "|move|p1a: Snorlax|Sleep Talk|p1a: Snorlax",
+        "|move|p1a: Snorlax|Curse|p1a: Snorlax|[from] Sleep Talk",
+        "|-unboost|p1a: Snorlax|spe|1",
+        "|-boost|p1a: Snorlax|atk|1",
+        "|-boost|p1a: Snorlax|def|1",
+        "|",
+        "|upkeep",
+        "|turn|11"
+      ],
+      "minimum_type_samples": 497,
+      "types": [
+        {
+          "selection_mask": 13,
+          "counts": [
+            82,
+            28,
+            10,
+            390,
+            2
+          ],
+          "selected_species": [
+            "Umbreon",
+            "Marowak",
+            "Snorlax"
+          ]
+        },
+        {
+          "selection_mask": 14,
+          "counts": [
+            84,
+            32,
+            211,
+            168,
+            2
+          ],
+          "selected_species": [
+            "Skarmory",
+            "Marowak",
+            "Snorlax"
+          ]
+        },
+        {
+          "selection_mask": 44,
+          "counts": [
+            123,
+            45,
+            82,
+            291,
+            5
+          ],
+          "selected_species": [
+            "Marowak",
+            "Snorlax",
+            "Suicune"
+          ]
+        }
+      ]
+    }
+  ],
+  "production_changed": false,
+  "strength_demonstrated": false,
+  "scope": "One hash-selected ordinary root with unrevealed opposing picks per corpus game. Trace only the first continuation choice after the root. A separate log-enabled replay of the sampled root joint action must match the actual search state. Group by complete new protocol log, own previous action, own complete Side state, own legal actions, field, opponent active identity and public counts. Additionally retain the hidden Quick Claw coin, all opposing HP/maxHP, status states and volatiles: the diagnostic uses stricter information than a real player. Then stratify by all opponent roster species, level, gender, happiness, IVs/EVs, stored stats, items, Hidden Power and base/current move slots. Counts are actual selected actions during nonstationary search, not independent games or calibrated final policies. Node statistics can include visits under other histories; only local counts define the reported modes. Different conditional modes show the use of separate hidden-state continuations, not a certified value loss or evidence that merging them strengthens play. No policy is changed."
+}

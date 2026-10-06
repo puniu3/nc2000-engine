@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/continuation-information-v1'
+
+
+def check_group(g):
+    view = json.dumps(g['view'], ensure_ascii=False, separators=(',', ':')).encode()
+    assert hashlib.sha256(view).hexdigest() == g['view_hash']
+    assert g['actions'] == g['view']['actions'] and len(g['actions']) > 1
+    k = len(g['actions'])
+    counts = {t['selection_mask']: t['counts'] for t in g['types']}
+    assert len(counts) == len(g['types']) > 1
+    reconstructed = collections.defaultdict(lambda: [0] * k)
+    for load in g['loadouts']:
+        assert len(load['signature']) == 64
+        assert len({t['selection_mask'] for t in load['types']}) == len(load['types'])
+        for t in load['types']:
+            assert t['selection_mask'].bit_count() == 3
+            assert len(t['counts']) == k and sum(t['counts']) > 0
+            assert all(isinstance(n, int) and n >= 0 for n in t['counts'])
+            reconstructed[t['selection_mask']] = [a+b for a,b in zip(reconstructed[t['selection_mask']], t['counts'])]
+    assert dict(reconstructed) == counts
+    assert len({n['node'] for n in g['nodes']}) == len(g['nodes'])
+    assert {n['selection_mask'] for n in g['nodes']} == set(counts)
+    for n in g['nodes']:
+        assert len(n['visits']) == len(n['rewards']) == k
+        assert all(0 <= w <= v for w,v in zip(n['rewards'], n['visits']))
+
+
+def verify(result):
+    games = [json.loads(line) for line in gzip.decompress((root / 'findings/policy-gap-v1/corpus.jsonl.gz').read_bytes()).splitlines()]
+    rows = result['rows']
+    assert len(rows) == 24 and {r['game'] for r in rows} == set(range(24))
+    totals = {n: dict(supported=0, different_unique_modes=0) for n in [16, 32, 64]}
+    witnesses = []
+    for r in rows:
+        game = next(g for g in games if g['game'] == r['game'])
+        assert r['key'] == game['decisions'][r['decision']]['key']
+        assert r['seed'] == 0x2026103000 ^ (int(r['key']) & (2**64-1)) ^ (r['side'] << 32)
+        assert r['baseline_identical'] and r['iterations'] == 27000
+        assert sum(r['snapshot']['visits']) == 27000
+        assert r['continuation_choices'] == r['shadow_checks'] <= 27000
+        assert len(r['groups']) <= r['total_groups']
+        for g in r['groups']:
+            check_group(g)
+            for load in g['loadouts']:
+                for threshold in totals:
+                    types = [t for t in load['types'] if sum(t['counts']) >= threshold]
+                    if len(types) < 2: continue
+                    totals[threshold]['supported'] += 1
+                    modes = {t['counts'].index(max(t['counts'])) for t in types if t['counts'].count(max(t['counts'])) == 1}
+                    if len(modes) < 2: continue
+                    totals[threshold]['different_unique_modes'] += 1
+                    if threshold == 32:
+                        witnesses.append(dict(game=r['game'], decision=r['decision'], side=r['side'],
+                            view_hash=g['view_hash'], loadout_signature=load['signature'], actions=g['actions'],
+                            own_previous_action=g['view']['own_choice'], continuation_log=g['view']['log'],
+                            minimum_type_samples=min(sum(t['counts']) for t in types),
+                            types=[dict(**t, selected_species=[s['species'] for slot,s in enumerate(game['teams'][1-r['side']]) if t['selection_mask'] & (1<<slot)]) for t in types]))
+    witnesses.sort(key=lambda w: w['minimum_type_samples'], reverse=True)
+    return dict(roots=24, iterations_per_root=27000, baseline_identity_checks=24,
+                shadow_state_checks=sum(r['shadow_checks'] for r in rows),
+                total_information_views=sum(r['total_groups'] for r in rows),
+                views_with_multiple_selections=sum(len(r['groups']) for r in rows),
+                same_loadout_strata={str(k): v for k, v in totals.items()}, witnesses=witnesses[:3], production_changed=False,
+                strength_demonstrated=False,
+                scope='One hash-selected ordinary root with unrevealed opposing picks per corpus game. Trace only '
+                      'the first continuation choice after the root. A separate log-enabled replay of the sampled '
+                      'root joint action must match the actual search state. Group by complete new protocol log, '
+                      'own previous action, own complete Side state, own legal actions, field, opponent active identity '
+                      'and public counts. Additionally retain the hidden Quick Claw coin, all opposing HP/maxHP, '
+                      'status states and volatiles: the diagnostic uses stricter information than a real player. '
+                      'Then stratify by all opponent roster species, level, gender, happiness, IVs/EVs, stored stats, '
+                      'items, Hidden Power and base/current move slots. Counts are actual selected actions during '
+                      'nonstationary search, not independent games or calibrated final policies. Node statistics '
+                      'can include visits under other histories; only local counts define the reported modes. '
+                      'Different conditional modes show the use of separate hidden-state continuations, not '
+                      'a certified value loss or evidence that merging them strengthens play. No policy is changed.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', type=Path)
+    args = parser.parse_args()
+    if args.record:
+        assert not (archive / 'records.json.gz').exists()
+        result = json.loads(args.record.read_bytes())
+        summary = verify(result)
+        paths = subprocess.check_output(['git', 'ls-files', 'crates/engine', 'crates/bot/src', 'crates/conformance/src', 'Cargo.toml', 'Cargo.lock'], cwd=root, text=True).splitlines()
+        paths += ['crates/bot/examples/continuation_information.rs', 'tools/continuation-information-probe',
+                  'findings/policy-gap-v1/corpus.jsonl.gz', 'data/gen2stadium2.json',
+                  'data/belief-pool-v3/belief-pool.json', 'data/learnsets-gen2.json']
+        archive.mkdir(parents=True, exist_ok=True)
+        bundle = dict(result=result, hashes={p: hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, ensure_ascii=False, separators=(',', ':')).encode(), mtime=0))
+        (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+        del bundle, result
+    bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest() == h for p,h in bundle['hashes'].items())
+    summary = verify(bundle['result'])
+    assert summary == json.loads((archive / 'summary.json').read_bytes())
+    group = bundle['result']['rows'][0]['groups'][0]
+    for corruption in ['view', 'count', 'node_reward']:
+        bad = copy.deepcopy(group)
+        if corruption == 'view': bad['view']['coin'] = not bad['view']['coin']
+        elif corruption == 'count': bad['loadouts'][0]['types'][0]['counts'][0] += 1
+        else: bad['nodes'][0]['rewards'][0] = -1
+        try: check_group(bad)
+        except AssertionError: pass
+        else: raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ('witnesses', 'scope')}, indent=2))
+
+
+if __name__ == '__main__':
+    main()

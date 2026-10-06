@@ -1,0 +1,13 @@
+{
+  "baseline_identity_checks": 24,
+  "shadow_state_checks": 591951,
+  "original_census_fields_reproduced_exactly": true,
+  "example_compiles": true,
+  "same_loadout_counts_reconstruct_pooled_counts": true,
+  "negative_controls": [
+    "view",
+    "count",
+    "node_reward"
+  ],
+  "production_changed": false
+}
