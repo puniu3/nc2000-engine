@@ -19,7 +19,7 @@
 //! Leaf probabilities are products of per-draw exact rationals
 //! (class-count / 2^32) accumulated in f64 — deterministic, no seed noise.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
 use crate::dex::Dex;
@@ -47,6 +47,87 @@ pub struct StepEnum {
     /// Diagnostic observations across scripted transitions, including cache
     /// hits. These are not unique events: probes revisit the same prefix.
     pub damage: DamageEnumStats,
+}
+
+pub struct ChancePrefix {
+    pub script: Vec<usize>,
+    pub mass: f64,
+}
+
+pub struct PartialStepEnum {
+    pub leaves: Vec<ChanceLeaf>,
+    pub pending: Vec<ChancePrefix>,
+    pub runs: usize,
+    pub exhausted: bool,
+}
+
+#[derive(Default)]
+struct TracePartition {
+    counts: Option<Vec<u64>>,
+    children: BTreeMap<usize, TracePartition>,
+    terminal: bool,
+}
+
+impl TracePartition {
+    fn insert(&mut self, trace: &[Draw]) {
+        let mut node = self;
+        for draw in trace {
+            assert!(!node.terminal);
+            if let Some(counts) = &node.counts { assert_eq!(counts, &draw.counts); }
+            else { node.counts = Some(draw.counts.clone()); }
+            node = node.children.entry(draw.chosen).or_default();
+        }
+        assert!(node.counts.is_none());
+        node.terminal = true;
+    }
+
+    fn pending(&self, prefix: &mut Vec<usize>, mass: f64, out: &mut Vec<ChancePrefix>) {
+        if self.terminal { return; }
+        let Some(counts) = &self.counts else {
+            out.push(ChancePrefix { script: prefix.clone(), mass });
+            return;
+        };
+        for (class, &count) in counts.iter().enumerate().filter(|(_, n)| **n > 0) {
+            prefix.push(class);
+            let mass = mass * count as f64 / Draw::TOTAL as f64;
+            if let Some(child) = self.children.get(&class) { child.pending(prefix, mass, out); }
+            else { out.push(ChancePrefix { script: prefix.clone(), mass }); }
+            prefix.pop();
+        }
+    }
+}
+
+/// Leaves and pending prefixes partition the complete chance mass without overlap.
+pub fn enumerate_step_partial(
+    dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], cap: usize,
+) -> PartialStepEnum {
+    let mut observed = HashMap::new();
+    let mut runs = 0;
+    let complete = {
+        let mut runner = |script: &[usize]| {
+            let (battle, trace) = run_scripted(dex, base, choices, script);
+            runs += 1;
+            let path: Vec<_> = trace.iter().map(|d| d.chosen).collect();
+            observed.entry(path).or_insert_with(|| (battle.clone(), trace.clone()));
+            (battle, trace, true)
+        };
+        enumerate_step_with_runner(dex, base, choices, cap, &mut runner)
+    };
+    if let Some(step) = complete {
+        assert_eq!(step.runs, runs);
+        return PartialStepEnum { leaves: step.leaves, pending: Vec::new(), runs, exhausted: false };
+    }
+    let mut observed: Vec<_> = observed.into_iter().collect();
+    observed.sort_by(|a,b| a.0.cmp(&b.0));
+    let mut partition = TracePartition::default();
+    let leaves = observed.into_iter().map(|(_, (battle, trace))| {
+        partition.insert(&trace);
+        ChanceLeaf { battle, prob: trace.iter().map(Draw::prob).product(), draws: trace.len() }
+    }).collect::<Vec<_>>();
+    let mut pending = Vec::new();
+    partition.pending(&mut Vec::new(), 1., &mut pending);
+    assert!((leaves.iter().map(|l|l.prob).sum::<f64>() + pending.iter().map(|p|p.mass).sum::<f64>() - 1.).abs()<1e-9);
+    PartialStepEnum { leaves, pending, runs, exhausted: true }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

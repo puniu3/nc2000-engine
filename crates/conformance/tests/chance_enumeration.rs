@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use nc2000_engine::battle::enumerate::{enumerate_step, run_scripted};
+use nc2000_engine::battle::enumerate::{enumerate_step, enumerate_step_partial, run_scripted};
 use nc2000_engine::battle::{PokemonSet, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
@@ -64,12 +64,42 @@ fn reused_traces_preserve_exhaustive_successor_distributions_and_run_caps() {
         }
         assert_eq!(actual.len(), expected.len(), "{first} vs {second}");
         assert!((actual.values().sum::<f64>() - 1.0).abs() < 1e-10);
-        for (state, probability) in expected {
-            assert!((actual[&state] - probability).abs() < 1e-10, "{first} vs {second}");
+        for (state, probability) in &expected {
+            assert!((actual[state] - probability).abs() < 1e-10, "{first} vs {second}");
         }
         let exact_cap = enumerate_step(&dex, &root, actions, result.runs).unwrap();
         assert_eq!(exact_cap.runs, result.runs);
         assert!(enumerate_step(&dex, &root, actions, result.runs - 1).is_none());
         assert!(enumerate_step(&dex, &root, actions, 0).is_none());
+        for cap in [0, 1, 7, result.runs - 1, result.runs] {
+            let partial = enumerate_step_partial(&dex, &root, actions, cap);
+            assert!(partial.runs <= cap);
+            if !partial.pending.is_empty() { assert_eq!(partial.runs, cap); }
+            assert!((partial.leaves.iter().map(|l|l.prob).sum::<f64>()
+                + partial.pending.iter().map(|p|p.mass).sum::<f64>() - 1.).abs()<1e-10);
+            let mut actual = BTreeMap::new();
+            for leaf in partial.leaves {
+                *actual.entry(leaf.battle.state_key128()).or_insert(0.) += leaf.prob;
+            }
+            let mut pending: Vec<_> = partial.pending.into_iter().map(|p| {
+                let (_, trace) = run_scripted(&dex, &root, actions, &p.script);
+                assert!((trace.iter().take(p.script.len()).map(|d|d.prob()).product::<f64>()-p.mass).abs()<1e-10);
+                p.script
+            }).collect();
+            while let Some(script) = pending.pop() {
+                let (leaf, trace) = run_scripted(&dex, &root, actions, &script);
+                if let Some(draw) = trace.get(script.len()) {
+                    for (class, &count) in draw.counts.iter().enumerate() {
+                        if count>0 { let mut next=script.clone();next.push(class);pending.push(next); }
+                    }
+                } else {
+                    *actual.entry(leaf.state_key128()).or_insert(0.) += trace.iter().map(|d|d.prob()).product::<f64>();
+                }
+            }
+            assert_eq!(actual.len(),expected.len(),"cap={cap}, {first} vs {second}");
+            for (state, probability) in &expected {
+                assert!((actual[state]-probability).abs()<1e-10,"cap={cap}, {first} vs {second}");
+            }
+        }
     }
 }

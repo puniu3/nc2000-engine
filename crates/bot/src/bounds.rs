@@ -20,7 +20,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use nc2000_engine::battle::enumerate::{enumerate_step, run_scripted};
+use nc2000_engine::battle::enumerate::{enumerate_step, enumerate_step_partial, run_scripted};
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
@@ -50,6 +50,7 @@ pub struct BoundConfig {
     /// this, lazy expansion re-pays merged overkill fans one run per roll
     /// class (b60: 411k runs vs the eager solver's 11.7k).
     pub cell_cap: usize,
+    pub retain_eager_prefix: bool,
     /// Max live nodes (memory guard; Battles are dropped from resolved
     /// nodes but frontier nodes hold one each).
     pub node_budget: usize,
@@ -112,6 +113,7 @@ impl Default for BoundConfig {
             work_budget: 1_000_000,
             node_budget: 120_000,
             cell_cap: 4096,
+            retain_eager_prefix: false,
             eps: 0.02,
             trial_depth: 24,
             descend_floor: 0.1,
@@ -314,6 +316,8 @@ pub struct BoundStats {
     pub hp_transition_peak: usize,
     pub eager_runs: usize,
     pub eager_failures: usize,
+    pub retained_eager_runs: usize,
+    pub retained_eager_leaves: usize,
     pub reused_nodes: usize,
     pub reused_backups: usize,
     pub expansions: usize,
@@ -1681,9 +1685,6 @@ impl<'d> BoundSolver<'d> {
         selected
     }
 
-    /// First visit of a virgin cell: attempt the eager enumerator (range
-    /// merge intact) within `cell_cap` runs; on success the whole cell
-    /// resolves at once. Returns whether it did the work.
     fn try_eager(&mut self, key: NodeKey, ci: usize, work_limit: usize) -> bool {
         let cap = self.cfg.cell_cap.min(work_limit.saturating_sub(self.stats.runs));
         if cap == 0 {
@@ -1703,37 +1704,49 @@ impl<'d> BoundSolver<'d> {
                 [node.acts0[i], node.acts1[j]],
             )
         };
-        let step = if self.cfg.hp_transition_eager && self.cfg.hp_transition_capacity>0
-            && self.cfg.dead_damage_quotient && self.cfg.dead_quick_claw_quotient {
-            let cache=&mut self.hp_transitions;
-            let stats=&mut self.stats;
-            let dex=self.dex;
-            let capacity=self.cfg.hp_transition_capacity;
-            cache.enumerate(dex,&battle,choices,cap,capacity,|step,len| {
-                stats.hp_transition_hits+=usize::from(step.hit);
-                stats.hp_transition_eligible+=usize::from(step.eligible);
-                stats.hp_transition_eager_hits+=usize::from(step.hit);
-                stats.hp_transition_eager_eligible+=usize::from(step.eligible);
-                stats.hp_transition_rejected+=usize::from(step.rejected_hp);
-                stats.hp_transition_peak=stats.hp_transition_peak.max(len);
-            })
+        let (leaves, pending, runs) = if self.cfg.retain_eager_prefix {
+            assert!(!self.cfg.hp_transition_eager);
+            let partial = enumerate_step_partial(self.dex, &battle, choices, cap);
+            if partial.exhausted {
+                self.stats.eager_failures += 1;
+                self.stats.retained_eager_runs += partial.runs;
+                self.stats.retained_eager_leaves += partial.leaves.len();
+            }
+            (partial.leaves, partial.pending.into_iter().map(|p|Pending {script:p.script,mass:p.mass}).collect::<Vec<_>>(), partial.runs)
         } else {
-            enumerate_step(self.dex,&battle,choices,cap)
+            let step = if self.cfg.hp_transition_eager && self.cfg.hp_transition_capacity>0
+                && self.cfg.dead_damage_quotient && self.cfg.dead_quick_claw_quotient {
+                let cache=&mut self.hp_transitions;
+                let stats=&mut self.stats;
+                let dex=self.dex;
+                let capacity=self.cfg.hp_transition_capacity;
+                cache.enumerate(dex,&battle,choices,cap,capacity,|step,len| {
+                    stats.hp_transition_hits+=usize::from(step.hit);
+                    stats.hp_transition_eligible+=usize::from(step.eligible);
+                    stats.hp_transition_eager_hits+=usize::from(step.hit);
+                    stats.hp_transition_eager_eligible+=usize::from(step.eligible);
+                    stats.hp_transition_rejected+=usize::from(step.rejected_hp);
+                    stats.hp_transition_peak=stats.hp_transition_peak.max(len);
+                })
+            } else {
+                enumerate_step(self.dex,&battle,choices,cap)
+            };
+            let Some(step) = step else {
+                self.nodes.get_mut(&key).unwrap().battle = Some(battle);
+                self.stats.runs += cap;
+                self.stats.eager_runs += cap;
+                self.stats.eager_failures += 1;
+                return false;
+            };
+            (step.leaves, Vec::new(), step.runs)
         };
-        let Some(step) = step else {
-            self.nodes.get_mut(&key).unwrap().battle = Some(battle);
-            self.stats.runs += cap;
-            self.stats.eager_runs += cap;
-            self.stats.eager_failures += 1;
-            return false;
-        };
-        self.stats.runs += step.runs;
-        self.stats.eager_runs += step.runs;
+        self.stats.runs += runs;
+        self.stats.eager_runs += runs;
         self.stats.expansions += 1;
         let mut agg: HashMap<NodeKey, f64> = HashMap::new();
         let mut fixed_lo = 0.0;
         let mut fixed_hi = 0.0;
-        for l in step.leaves {
+        for l in leaves {
             let prob = l.prob;
             self.check_stall_edge(&battle, &l.battle);
             if self.cfg.fold_terminal_nodes {
@@ -1759,8 +1772,8 @@ impl<'d> BoundSolver<'d> {
         cell.resolved.sort_unstable_by_key(|&(_, key)| key);
         cell.fixed_lo = fixed_lo;
         cell.fixed_hi = fixed_hi;
-        cell.pending.clear();
-        cell.pending_mass = 0.0;
+        cell.pending_mass = pending.iter().map(|p|p.mass).sum();
+        cell.pending = pending;
         true
     }
 
@@ -2787,21 +2800,26 @@ mod tests {
         let targets: Vec<_> = (0..2).flat_map(|side| {
             [vec![1.0, 0.0], vec![0.0, 1.0], vec![0.3, 0.7]].map(|p| (side, p))
         }).collect();
-        let mut solver = BoundSolver::new(&dex, BoundConfig {
-            work_budget: 1, cell_cap: 0, ..BoundConfig::default()
-        });
-        for _ in 0..1000 {
-            let report = solver.solve_policy_losses(&root, &targets, 1e-7);
-            let matrix = solver.root_payoffs(&root).unwrap();
-            for (side, policy) in &targets {
-                let found = matrix.policy_loss(*side, policy);
-                let expected = exact.policy_loss(*side, policy);
-                assert!(found.lo <= expected.hi + 1e-10);
-                assert!(found.hi >= expected.lo - 1e-10);
+        for retain_eager_prefix in [false,true] {
+            let mut solver = BoundSolver::new(&dex, BoundConfig {
+                work_budget: 1, cell_cap: usize::from(retain_eager_prefix), retain_eager_prefix,
+                ..BoundConfig::default()
+            });
+            let mut closed = false;
+            for _ in 0..1000 {
+                let report = solver.solve_policy_losses(&root, &targets, 1e-7);
+                let matrix = solver.root_payoffs(&root).unwrap();
+                for (side, policy) in &targets {
+                    let found = matrix.policy_loss(*side, policy);
+                    let expected = exact.policy_loss(*side, policy);
+                    assert!(found.lo <= expected.hi + 1e-10);
+                    assert!(found.hi >= expected.lo - 1e-10);
+                }
+                if report.stop == super::Stop::StrategyMet { closed = true; break; }
             }
-            if report.stop == super::Stop::StrategyMet { return; }
+            assert!(closed,"policy certificates did not converge");
+            if retain_eager_prefix { assert!(solver.stats.retained_eager_runs>0); }
         }
-        panic!("policy certificates did not converge");
     }
 
     #[test]
@@ -3476,6 +3494,39 @@ mod tests {
                 if report.stop == super::Stop::WidthMet { closed = true; break; }
             }
             assert!(closed);
+        }
+    }
+
+    #[test]
+    fn retained_eager_prefix_resumes_exhaustive_successor_distribution() {
+        let dex = conformance::load_dex();
+        let mut root = battle(&dex, &["Body Slam"], &["Splash"]);
+        let preview = [0,1].map(|s|root.legal_choices(&dex,s).first().copied());
+        root.apply_choices(&dex,preview).unwrap();
+        let choices = [0,1].map(|s|Some(root.legal_choices(&dex,s)[0]));
+        let exact = enumerate_step(&dex,&root,choices,100_000).unwrap();
+        for cap in [1,7] {
+            let mut solver = BoundSolver::new(&dex,BoundConfig {
+                retain_eager_prefix:true,fold_terminal_nodes:false,..Default::default()
+            });
+            let key = solver.intern(root.clone());
+            solver.init_cells(key);
+            assert!(solver.try_eager(key,0,cap));
+            assert_eq!(solver.stats.runs,cap);
+            assert_eq!(solver.stats.retained_eager_runs,cap);
+            assert!(solver.stats.retained_eager_leaves>0);
+            assert!(!solver.nodes[&key].cells[0].pending.is_empty());
+            while !solver.nodes[&key].cells[0].pending.is_empty() {
+                solver.expand(key,0);
+                assert!(solver.stats.runs<100_000);
+            }
+            let mut expected = std::collections::HashMap::<_,f64>::new();
+            for leaf in &exact.leaves { *expected.entry(solver.node_key(&leaf.battle)).or_default() += leaf.prob; }
+            let mut found = std::collections::HashMap::<_,f64>::new();
+            for &(mass,child) in &solver.nodes[&key].cells[0].resolved { *found.entry(child).or_default() += mass; }
+            assert_eq!(found.len(),expected.len());
+            for (child,mass) in expected { assert!((found[&child]-mass).abs()<1e-10); }
+            assert!((found.values().sum::<f64>()-1.).abs()<1e-10);
         }
     }
 

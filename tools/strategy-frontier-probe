@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import collections
+import copy
 import gzip
 import hashlib
 import json
@@ -44,12 +45,14 @@ def summarize(bundle):
         assert r['trial_depth']==bundle['depth'] and r['node_budget']==bundle['nodes']
         assert r.get('call_budget',40000)==bundle.get('slice',40000)
         assert r.get('cell_cap',4096)==bundle.get('cell_cap',4096)
+        assert r.get('retain_eager_prefix',False)==bundle.get('retain_eager_prefix',False)
         assert r['value'][0]<=p['reference']['value']['hi']+1e-8
         assert r['value'][1]>=p['reference']['value']['lo']-1e-8
         g=r['graph'];stats=r['stats']
         assert g['unexpanded']+g['initialized']==g['nodes']
         assert g['unique_edges']<=g['edges'] and stats['eager_runs']<=r['runs']
         assert stats['depth_limit_trials']<=stats['trials']
+        assert stats.get('retained_eager_leaves',0)<=stats.get('retained_eager_runs',0)<=stats['eager_runs']
         assert len(r['cells'])==len(r['chance'])==len(r['actions'][0])*len(r['actions'][1])
         pending=children=0
         for cell,c in zip(r['cells'],r['chance']):
@@ -103,6 +106,54 @@ def compare():
              'certified position had an already-certified baseline action in the prior corpus audit.')
 
 
+def compare_retained():
+    directory=root/'findings/strategy-frontier-v1'
+    stem='depth24-nodes12000-slice1000-cap4096'
+    bundles={mode:json.loads(gzip.decompress((directory/(stem+suffix)/'records.json.gz').read_bytes()))
+             for mode,suffix in [('old',''),('control','-recheck'),('retained','-retained')]}
+    plain=copy.deepcopy(bundles['control']['rows'])
+    for row in plain:
+        row.pop('retain_eager_prefix')
+        row['stats'].pop('retained_eager_runs');row['stats'].pop('retained_eager_leaves')
+        row.pop('milliseconds')
+    old=copy.deepcopy(bundles['old']['rows'])
+    for row in old: row.pop('milliseconds')
+    diagnostic_delta=0.
+    for a,b in zip(plain,old):
+        for ac,bc in zip(a['chance'],b['chance']):
+            delta=abs(ac.pop('child_uncertainty')-bc.pop('child_uncertainty'))
+            assert delta<1e-12
+            diagnostic_delta=max(diagnostic_delta,delta)
+    assert plain==old
+    assert bundles['control']['source_hashes']==bundles['retained']['source_hashes']
+    assert bundles['control']['binary_sha256']==bundles['retained']['binary_sha256']
+    reports={mode:summarize(bundles[mode]) for mode in ['control','retained']}
+    pairs=[]
+    for a,b in zip(reports['control']['rows'],reports['retained']['rows']):
+        assert (a['game'],a['decision'],a['side'])==(b['game'],b['decision'],b['side'])
+        pairs.append(dict(game=a['game'],decision=a['decision'],side=a['side'],
+            width_change=b['value_width']-a['value_width'],certified=[a['certified'],b['certified']],
+            milliseconds=[a['milliseconds'],b['milliseconds']],runs=[a['runs'],b['runs']]))
+    return dict(positions=len(pairs),default_parity='All 41 control records match the pre-change archive except timing '
+                'and sub-1e-12 summation-order differences in diagnostic child uncertainty.',
+        maximum_diagnostic_delta=diagnostic_delta,
+        narrower=sum(r['width_change']< -1e-8 for r in pairs),wider=sum(r['width_change']>1e-8 for r in pairs),
+        certified={mode:reports[mode]['certified'] for mode in reports},
+        stops={mode:reports[mode]['stops'] for mode in reports},
+        median_unexpanded_fraction={mode:reports[mode]['median_unexpanded_fraction'] for mode in reports},
+        total_ms={mode:sum(r['milliseconds'] for r in report['rows']) for mode,report in reports.items()},
+        total_runs={mode:sum(r['runs'] for r in report['rows']) for mode,report in reports.items()},
+        runs_in_retained_attempts=sum(r['stats']['retained_eager_runs'] for r in bundles['retained']['rows']),
+        retained_leaves=sum(r['stats']['retained_eager_leaves'] for r in bundles['retained']['rows']),
+        rows=pairs,decision='Not adopted. Retaining completed paths causes more node-budget stops and no '
+             'additional strategy certificates. Fewer executed transitions cannot be counted as an '
+             'efficiency gain when the solver stops earlier with unresolved bounds.',
+        scope='Same binary, sources, initial states and resource ceilings. Actual run counts and times '
+             'may differ. Retained-attempt runs count work whose partial results are kept, not a measured '
+             'number of executions saved. Certificate counts concern one first action under optimal '
+             'full-information continuation, not complete-game or hidden-information strength.')
+
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--depth',type=int,default=24)
@@ -112,7 +163,20 @@ def main():
     parser.add_argument('--verify-only',action='store_true')
     parser.add_argument('--import-directory',type=pathlib.Path)
     parser.add_argument('--compare',action='store_true')
+    parser.add_argument('--retain-eager',action='store_true')
+    parser.add_argument('--recheck',action='store_true')
+    parser.add_argument('--compare-retained',action='store_true')
     args=parser.parse_args()
+    if args.compare_retained:
+        path=root/'findings/strategy-frontier-v1/retained-comparison.json'
+        report=compare_retained()
+        if args.verify_only:
+            assert json.loads(path.read_bytes())==report
+            print('strategy-frontier: verified retained-prefix comparison and pre-change null parity')
+        else:
+            assert not path.exists()
+            path.write_text(json.dumps(report,indent=2)+'\n')
+        return
     if args.compare:
         path=root/'findings/strategy-frontier-v1/cap-comparison.json'
         report=json.loads(json.dumps(compare()))
@@ -126,6 +190,8 @@ def main():
     archive=root/f'findings/strategy-frontier-v1/depth{args.depth}-nodes{args.nodes}'
     if args.slice!=40000 or args.cell_cap!=4096:
         archive=archive.with_name(archive.name+f'-slice{args.slice}-cap{args.cell_cap}')
+    if args.retain_eager: archive=archive.with_name(archive.name+'-retained')
+    elif args.recheck: archive=archive.with_name(archive.name+'-recheck')
     if args.verify_only:
         bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
         assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
@@ -151,10 +217,10 @@ def main():
         print(directory,flush=True)
         with (directory/'run.log').open('w') as log:
             subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/'requests.json'),str(directory/'rows.jsonl'),
-                            '40000',str(args.nodes),str(args.depth),str(args.slice),str(args.cell_cap)],cwd=root,env=env,stdout=log,stderr=log,check=True)
+                            '40000',str(args.nodes),str(args.depth),str(args.slice),str(args.cell_cap),str(args.retain_eager).lower()],cwd=root,env=env,stdout=log,stderr=log,check=True)
     assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
     assert manifest['binary_sha256']==sha(binary.read_bytes())
-    bundle=dict(**manifest,depth=args.depth,nodes=args.nodes,slice=args.slice,cell_cap=args.cell_cap,selection_sha256=sha(previous.read_bytes()),
+    bundle=dict(**manifest,depth=args.depth,nodes=args.nodes,slice=args.slice,cell_cap=args.cell_cap,retain_eager_prefix=args.retain_eager,selection_sha256=sha(previous.read_bytes()),
         corpus_sha256=sha(corpus.read_bytes()),reference_sha256=sha(reference.read_bytes()),
         rows=[json.loads(s) for s in (directory/'rows.jsonl').read_text().splitlines()])
     report=summarize(bundle)
