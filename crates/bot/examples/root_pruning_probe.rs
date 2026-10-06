@@ -3,7 +3,7 @@ use nc2000_bot::{
     smmcts::{RmConfig, SelRule},
     Belief, BlindSearch, Observer,
 };
-use nc2000_engine::{battle::PokemonSet, state::Battle};
+use nc2000_engine::{battle::{enumerate::enumerate_step_partial, Outcome, PokemonSet}, state::Battle};
 use serde_json::{json, Value};
 use std::{
     io::BufRead,
@@ -27,7 +27,14 @@ struct Case {
 
 fn main() {
     let args: Vec<_> = std::env::args().collect();
-    assert_eq!(args.len(), 3, "corpus output");
+    assert!(args.len() == 3 || (args.len() == 4 && (args[3] == "--audit-exclusions" || args[3].starts_with("--audit-case="))),
+        "corpus output [--audit-exclusions | --audit-case=game:decision:side]");
+    let audit = args.len() == 4;
+    let focus = args.get(3).and_then(|s| s.strip_prefix("--audit-case=")).map(|s| {
+        let keys = s.split(':').map(|v| v.parse::<usize>().unwrap()).collect::<Vec<_>>();
+        assert_eq!(keys.len(), 3);
+        keys
+    });
     let dex = conformance::load_dex();
     let pool = load_meta_pool(std::path::Path::new("data/belief-pool-v3/belief-pool.json"));
     let cfg = RmConfig {
@@ -82,8 +89,9 @@ fn main() {
     }
     let exposed = cases.iter().filter(|c| c.exposed).count();
     cases.sort_by_key(|c| c.order);
-    let mut quotas = [8usize, 48];
+    let mut quotas = if audit { [0, usize::MAX] } else { [8usize, 48] };
     cases.retain(|c| {
+        if focus.as_ref().is_some_and(|f| c.game.as_u64() != Some(f[0] as u64) || c.decision != f[1] || c.side != f[2]) { return false; }
         let i = usize::from(c.exposed);
         if quotas[i] == 0 {
             false
@@ -92,6 +100,40 @@ fn main() {
             true
         }
     });
+    let detail = focus.as_ref().map(|_| {
+        assert_eq!(cases.len(), 1);
+        let c = &cases[0];
+        let mut base = c.battle.clone();
+        let actions = [0, 1].map(|side| base.legal_choices(&dex, side));
+        let mut cells = Vec::new();
+        for &own in &actions[c.side] {
+            for &reply in &actions[1-c.side] {
+                let joint = if c.side == 0 { [own, reply] } else { [reply, own] };
+                let result = enumerate_step_partial(&dex, &c.battle, joint.map(Some), 100_000);
+                let mut lower = 0.0;
+                let mut unknown = result.pending.iter().map(|p| p.mass).sum::<f64>();
+                let mut losses = 0.0;
+                let mut successors = std::collections::BTreeMap::<String, f64>::new();
+                for leaf in &result.leaves {
+                    *successors.entry(leaf.battle.state_key128().to_string()).or_default() += leaf.prob;
+                    let value = leaf.battle.outcome().map(|outcome| match outcome {
+                        Outcome::P1Win => if c.side == 0 {1.0} else {0.0},
+                        Outcome::P2Win => if c.side == 1 {1.0} else {0.0},
+                        Outcome::Tie => 0.5,
+                    });
+                    if let Some(v) = value { lower += leaf.prob*v; losses += leaf.prob*(1.0-v); }
+                    else { unknown += leaf.prob; }
+                }
+                assert!((lower + losses + unknown - 1.0).abs() < 1e-9);
+                cells.push(json!({"own":own.to_input(&dex),"reply":reply.to_input(&dex),"lower":lower,"upper":(lower+unknown).min(1.0),"runs":result.runs,"complete":!result.exhausted && result.pending.is_empty(),"successors":successors}));
+            }
+        }
+        let active = [0, 1].map(|side| {
+            let p = c.battle.poke(c.battle.active_id(side).unwrap());
+            json!({"species":dex.species.key(p.species),"hp":p.hp,"maxhp":p.maxhp,"status":format!("{:?}",p.status),"alive":c.battle.sides[side].pokemon_left})
+        });
+        json!({"scope":"True-state one-step bounds; nonterminal and unfinished branches stay [0,1]. Not a public-information guarantee.","active":active,"cells":cells,"masked":nc2000_bot::smmcts::dominated_actions(&c.battle,&dex,c.side).iter().map(|(a,r)|json!({"action":a.to_input(&dex),"reason":r})).collect::<Vec<_>>()})
+    });
     let next = AtomicUsize::new(0);
     let rows = Mutex::new(Vec::new());
     std::thread::scope(|scope| {
@@ -99,7 +141,7 @@ fn main() {
             scope.spawn(||loop {
         let i=next.fetch_add(1,Ordering::Relaxed);if i>=cases.len(){break;}let c=&cases[i];let seed=0x20261007u64^(c.order as u64);
         let belief=Belief::new(&dex,&pool,&c.observer);let mut arms=Vec::new();
-        for prune in [false,true] {
+        for prune in [false,true].into_iter().filter(|&prune| !audit || !prune) {
             let mut search=BlindSearch::new(&c.battle,&dex,cfg.clone(),c.side,seed);if prune {search.prune_dominated();}
             let started=Instant::now();let mut checkpoints=Vec::new();
             for budget in [3000,27000] {
@@ -117,6 +159,7 @@ fn main() {
     });
     let mut rows = rows.into_inner().unwrap();
     rows.sort_by_key(|r| r["index"].as_u64().unwrap());
-    let output = json!({"decisions":decisions,"exposed":exposed,"sampled":rows.len(),"rows":rows});
+    let mut output = json!({"decisions":decisions,"exposed":exposed,"sampled":rows.len(),"rows":rows});
+    if let Some(detail) = detail { output["detail"] = detail; }
     std::fs::write(&args[2], serde_json::to_vec(&output).unwrap()).unwrap();
 }

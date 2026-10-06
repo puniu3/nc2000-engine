@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/exclusion-audit-v1'
+corpora = {'selfplay': 'findings/policy-gap-v1/corpus.jsonl.gz',
+           'tactical': 'findings/tactical-exposure-v1/corpus.jsonl.gz'}
+
+
+def projection(value):
+    value = copy.deepcopy(value)
+    for row in value['rows']:
+        for arm in row['arms']:
+            for point in arm['checkpoints']:
+                point.pop('elapsed_ms', None)
+    return value
+
+
+def verify(outputs):
+    report = {}
+    for name, path in corpora.items():
+        games = {g['game']: g for g in map(json.loads, gzip.decompress((root/path).read_bytes()).splitlines())}
+        result = outputs[name]
+        assert result['sampled'] == result['exposed'] == len(result['rows'])
+        assert len({(r['game'], r['decision'], r['side']) for r in result['rows']}) == len(result['rows'])
+        changes = []
+        for row in result['rows']:
+            assert row['state_key'] == games[row['game']]['decisions'][row['decision']]['key']
+            arm, = row['arms']
+            assert arm['prune'] is False and any(arm['dominated']) and not all(arm['dominated'])
+            for point, budget in zip(arm['checkpoints'], [3000, 27000], strict=True):
+                visits, means = point['visits'], point['means']
+                assert sum(visits) == point['iterations'] == budget
+                assert len(visits) == len(means) == len(arm['actions']) == len(arm['dominated'])
+                assert all(0 <= mean <= 1 for mean in means)
+                raw = max(range(len(visits)), key=lambda i: (visits[i], i))
+                eligible = [i for i, masked in enumerate(arm['dominated']) if not masked]
+                final = max(eligible, key=lambda i: (visits[i], i))
+                assert point['best'] == arm['actions'][final]
+                if raw != final:
+                    changes.append(dict(game=row['game'], decision=row['decision'], side=row['side'],
+                        budget=budget, raw=arm['actions'][raw], final=arm['actions'][final],
+                        all_means_zero=all(mean == 0 for mean in means)))
+        report[name] = dict(decisions=result['decisions'], exposed=result['exposed'], changes=changes)
+    old = json.loads(gzip.decompress((root/'findings/root-pruning-v1/records.json.gz').read_bytes()))['outputs']['roots']
+    current = {(r['game'], r['decision'], r['side']): r for r in outputs['selfplay']['rows']}
+    overlap = 0
+    for row in old['rows']:
+        if not row['exposed']:
+            continue
+        expected = projection(dict(rows=[row]))['rows'][0]['arms'][0]
+        actual = projection(dict(rows=[current[(row['game'], row['decision'], row['side'])]]))['rows'][0]['arms'][0]
+        assert expected == actual
+        overlap += 1
+    report['prior_baseline_roots_reproduced'] = overlap
+    report['focused_cases'] = []
+    for game in [4, 5]:
+        case = outputs[f'case{game}']
+        row, = case['rows']
+        reference = next(r for r in outputs['tactical']['rows'] if (r['game'], r['decision'], r['side']) == (game, 20, 1))
+        assert projection(dict(rows=[row]))['rows'][0]['arms'] == projection(dict(rows=[reference]))['rows'][0]['arms']
+        detail = case['detail']
+        cells = detail['cells']
+        actions = row['arms'][0]['actions']
+        replies = sorted({cell['reply'] for cell in cells})
+        assert len(cells) == len(actions)*len(replies)
+        for reply in replies:
+            group = [c for c in cells if c['reply'] == reply]
+            assert {c['own'] for c in group} == set(actions)
+            assert all(c['complete'] for c in group)
+            for cell in group:
+                assert 0 <= cell['lower'] <= cell['upper'] <= 1
+                assert abs(sum(cell['successors'].values()) - 1) < 1e-10
+        classes = {}
+        for action in actions:
+            signature = json.dumps([next(c['successors'] for c in cells if c['own'] == action and c['reply'] == reply) for reply in replies], sort_keys=True)
+            classes.setdefault(signature, []).append(action)
+        point = row['arms'][0]['checkpoints'][-1]
+        raw = max(range(len(actions)), key=lambda i: (point['visits'][i], i))
+        assert any(actions[raw] in group and point['best'] in group for group in classes.values())
+        report['focused_cases'].append(dict(game=game, decision=20, side=1,
+            cells=len(cells), runs=sum(c['runs'] for c in cells),
+            raw=actions[raw], final=point['best'], equivalent_action_classes=list(classes.values()),
+            raw_and_final_have_equal_successor_distributions=True, active=detail['active']))
+    report['scope'] = ('All exposed decisions in these two generated corpora, one search seed per state and side, '
+        'with 3000 and 27000 checkpoints. This is an exclusion audit, not a strength or prevalence estimate '
+        'outside these corpora. Full-state successor equivalence of raw and final choices in two sleeping-Zapdos positions is verified '
+        'for every legal opposing reply and completed engine chance support, using state_key128 and probability '
+        'mass. It does not prove equivalence across all hidden states or that unselected actions elsewhere are optimal. '
+        'No production policy changed; the result does not support further blanket mask relaxation.')
+    return report
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--import-directory', type=Path)
+    parser.add_argument('--replay-cases', action='store_true')
+    parser.add_argument('--replay', action='store_true')
+    args = parser.parse_args()
+    if args.import_directory:
+        assert not archive.exists()
+        outputs = {name: json.loads((args.import_directory/f'nc-exclusion-{name}.json').read_bytes())
+                   for name in [*corpora, 'case4', 'case5']}
+        sources = subprocess.check_output(['git', 'ls-files', 'crates/bot/src', 'crates/engine/src'], cwd=root, text=True).splitlines()
+        sources += [*corpora.values(), 'data/gen2stadium2.json', 'data/learnsets-gen2.json', 'data/belief-pool-v3/belief-pool.json',
+                    'crates/bot/examples/root_pruning_probe.rs', 'tools/exclusion-audit']
+        bundle = dict(outputs=outputs, hashes={p: hashlib.sha256((root/p).read_bytes()).hexdigest() for p in sources})
+        report = verify(outputs)
+        archive.mkdir()
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+        (archive/'summary.json').write_text(json.dumps(report, indent=2)+'\n')
+    else:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert all(hashlib.sha256((root/p).read_bytes()).hexdigest() == h for p, h in bundle['hashes'].items())
+        assert verify(bundle['outputs']) == json.loads((archive/'summary.json').read_bytes())
+        if args.replay or args.replay_cases:
+            subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'root_pruning_probe'], cwd=root, check=True)
+            env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+            with tempfile.TemporaryDirectory(prefix='nc-exclusion-') as directory:
+                directory = Path(directory)
+                for name, path in corpora.items():
+                    (directory/f'{name}.jsonl').write_bytes(gzip.decompress((root/path).read_bytes()))
+                tasks = [(f'case{g}', 'tactical', f'--audit-case={g}:20:1') for g in [4, 5]]
+                if args.replay:
+                    tasks += [(name, name, '--audit-exclusions') for name in corpora]
+                for name, corpus, flag in tasks:
+                    output = directory/f'{name}.json'
+                    subprocess.run([str(root/'target/release/examples/root_pruning_probe'), str(directory/f'{corpus}.jsonl'), str(output), flag], cwd=root, env=env, check=True)
+                    assert projection(json.loads(output.read_bytes())) == projection(bundle['outputs'][name])
+    print('exclusion-audit: root selections, baseline overlap and complete-support successor equivalence verified')
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,12 @@
+{
+  "archive_verified": true,
+  "baseline_overlap_replayed": 48,
+  "focused_native_replays": 2,
+  "full_388_native_replay": false,
+  "negative_controls_rejected": [
+    "visits",
+    "state_identity",
+    "successor_equivalence"
+  ],
+  "production_policy_changed": false
+}
