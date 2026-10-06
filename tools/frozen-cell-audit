@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import math
+import os
+import pathlib
+import runpy
+import statistics
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/frozen-cell-v1'
+source = root/'findings/visit-policy-v1/holdout/records.json.gz'
+binary = root/'target/release/examples/frozen_cell_audit'
+policy_loss = runpy.run_path(str(root/'tools/visit-policy-audit'))['loss']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def requests():
+    records = json.loads(gzip.decompress(source.read_bytes()))['records']
+    selection = [('bond-long', 1, 15)] + [(name, side, index) for name, indices in
+                 [('counter', [0, 1]), ('bond', [0, 1]), ('bond-long', [0, 1, 2, 15])]
+                 for index in indices for side in range(2) if (name, side, index) != ('bond-long', 1, 15)]
+    result = []
+    for ordinal, (name, side, index) in enumerate(selection):
+        item = records[name]
+        row = next(r for r in item['record']['rows'] if r['mode'] == 'pinned' and r['side'] == side and r['seed_index'] == index)
+        result.append(dict(id=f'{name}:{side}:{index}', corpus=item['corpus'], expected=row, trials=16384,
+                           evaluation_seed=2026121801 ^ ((ordinal*0x94d049bb133111eb) % (1 << 64))))
+    return result, records
+
+
+def loss(record, side, policy):
+    assert min(policy) >= 0 and abs(sum(policy)-1) < 1e-10
+    rational = list(map(F, policy))
+    total = sum(rational)
+    return list(map(float, policy_loss(record, side, [p/total for p in rational])))
+
+
+def summarize(bundle):
+    specs, records = requests()
+    assert bundle['source_sha256'] == sha(source.read_bytes())
+    assert bundle['requests'] == specs
+    assert [r['id'] for r in bundle['results']] == [r['id'] for r in specs]
+    rows = []
+    for spec, result in zip(specs, bundle['results']):
+        expected = spec['expected']
+        for key, value in result['search'].items():
+            assert expected[key] == value
+        record = records[spec['id'].split(':')[0]]['record']
+        side = expected['side']
+        n, m = len(record['actions'][side]), len(record['actions'][1-side])
+        assert [v['policy'] for v in result['variants']] == ['most', 'sample']
+        baseline = [float(a == expected['choice']) for a in record['actions'][side]]
+        baseline_loss = loss(record, side, baseline)
+        old = expected['candidate_policy'] or baseline
+        for variant in result['variants']:
+            assert variant['trials_per_cell'] == spec['trials']
+            assert [(c['own'], c['reply']) for c in variant['cells']] == [(i, j) for i in range(n) for j in range(m)]
+            cells = []
+            for cell in variant['cells']:
+                trials = spec['trials']
+                assert 0 <= cell['terminal'] <= trials
+                assert 0 <= cell['square_sum'] <= cell['sum'] <= trials
+                assert cell['sum']/trials == cell['mean']
+                a, b = (cell['own'], cell['reply']) if side == 0 else (cell['reply'], cell['own'])
+                lo, hi = record['proof']['cells'][a*len(record['actions'][1])+b]
+                if side == 1:
+                    lo, hi = 1-hi, 1-lo
+                own_action, reply_action = record['actions'][side][cell['own']], record['actions'][1-side][cell['reply']]
+                old_cell = next(c for c in expected['joint'] if c['own'] == cell['own'] and c['reply'] == reply_action)
+                cells.append(dict(own=own_action, reply=reply_action, optimal_continuation=[lo, hi],
+                                  search_mean=old_cell['mean'], frozen_mean=cell['mean'],
+                                  search_difference=[old_cell['mean']-hi, old_cell['mean']-lo],
+                                  frozen_difference=[cell['mean']-hi, cell['mean']-lo],
+                                  trials=trials, terminal=cell['terminal'],
+                                  standard_error=(max(0, cell['square_sum']/trials-cell['mean']**2)/(trials-1))**0.5))
+            analysis = variant['analysis']
+            assert analysis is not None
+            eligible = [i for i, dominated in enumerate(expected['dominated']) if not dominated]
+            policy = analysis['policy']
+            assert all(p == 0 for i, p in enumerate(policy) if i not in eligible)
+            matrix = [c['mean'] for c in variant['cells']]
+            radius = math.sqrt(math.log(200*len(eligible)*m)/(2*spec['trials']))
+            guarantee = lambda values: min(sum(policy[i]*values[i*m+j] for i in eligible) for j in range(m))
+            pure = lambda values: max(min(values[i*m:(i+1)*m]) for i in eligible)
+            recomputed = dict(estimated_guarantee=guarantee(matrix), estimated_best_pure=pure(matrix),
+                              lower_guarantee=guarantee([max(0, v-radius) for v in matrix]),
+                              upper_best_pure=pure([min(1, v+radius) for v in matrix]))
+            assert all(abs(analysis[k]-v) < 1e-10 for k, v in recomputed.items())
+            margin = analysis['lower_guarantee']-analysis['upper_best_pure']
+            selected = analysis['policy'] if margin > 0.02 else baseline
+            measured_loss = loss(record, side, selected)
+            rows.append(dict(id=spec['id'], side=side, continuation=variant['policy'],
+                             baseline_loss=baseline_loss, old_candidate_loss=loss(record, side, old),
+                             raw_policy=analysis['policy'], raw_policy_loss=loss(record, side, analysis['policy']),
+                             margin=margin, gate_passes=margin > 0.02, selected_policy=selected, selected_loss=measured_loss,
+                             worse_than_fallback=measured_loss[0] > baseline_loss[1],
+                             search_ms=result['search_ms'], evaluation_ms=variant['milliseconds'], cells=cells))
+    groups = []
+    for family in ['counter', 'bond', 'bond-long']:
+        for mode in ['most', 'sample']:
+            rr = [r for r in rows if r['id'].startswith(family+':') and r['continuation'] == mode]
+            groups.append(dict(family=family, continuation=mode, searches=len(rr),
+                               gate_passes=sum(r['gate_passes'] for r in rr),
+                               worse_than_fallback=sum(r['worse_than_fallback'] for r in rr),
+                               mean_raw_loss_upper=statistics.mean(r['raw_policy_loss'][1] for r in rr),
+                               mean_selected_loss_upper=statistics.mean(r['selected_loss'][1] for r in rr),
+                               median_evaluation_ms=statistics.median(r['evaluation_ms'] for r in rr)))
+    sampled = [r for r in rows if r['continuation'] == 'sample']
+    return dict(searches=len(specs), variants=len(rows), trials_per_cell=16384,
+                total_trials=sum(c['trials'] for r in rows for c in r['cells']), groups=groups, rows=rows,
+                sampled_raw_regressions=sum(r['raw_policy_loss'][0] > r['baseline_loss'][1] for r in sampled),
+                sampled_gated_regressions=sum(r['worse_than_fallback'] for r in sampled),
+                sampled_gate_passes=sum(r['gate_passes'] for r in sampled),
+                median_added_evaluation_to_search_ratio=statistics.median(r['evaluation_ms']/r['search_ms'] for r in sampled),
+                decision='Not adopted. Independent resampling reduces the known critical-cell discrepancy but does not '
+                         'recover game values. Six raw fitted policies are provably worse than the pure fallback; the '
+                         'existing heuristic gate rejects them in this sample. General gate safety remains unproved, '
+                         'and evaluation adds substantial work.',
+                scope='Sixteen archived pinned-team search trees, including the known failing seed and controls from two tactical families. '
+                      'Both extraction rules evaluate immutable trees, and complete search snapshots match before and after evaluation. '
+                      'MostVisited is a separate frozen-policy control, not the original online UCB process. SampleVisits independently '
+                      'draws each side from its node visit counts; missing continuations use the existing rollout. '
+                      'Means and standard errors describe sampled fixed-policy returns, not game-value certificates. '
+                      'Policies fitted to those means are separately assessed with archived full-state minimax matrices and optimal subsequent play. '
+                      'Identical evaluation seeds do not imply identical trajectories across policies. This adds evaluation work and is not a '
+                      'matched-time strength experiment, a blind information-set certificate, or an adopted bot change.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--pilot-output', type=pathlib.Path)
+    parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle) == json.loads((archive/'summary.json').read_bytes())
+        print('frozen-cell: search parity, complete matrices, sampled moments and certified policy losses verified')
+        return
+    assert not archive.exists()
+    specs, _ = requests()
+    if args.import_directory:
+        directory = args.import_directory
+        results = json.loads((directory/'results.json').read_bytes())
+    else:
+        directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-frozen-cell-'))
+        print(directory, flush=True)
+        results = []
+        if args.pilot_output:
+            results = json.loads(args.pilot_output.read_bytes())
+            assert len(results) == 1 and results[0]['id'] == specs[0]['id']
+        pending = specs[len(results):]
+        (directory/'requests.json').write_text(json.dumps(pending))
+        env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+        subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'frozen_cell_audit'], cwd=root, env=env, check=True)
+        subprocess.run([str(binary), str(directory/'requests.json'), str(directory/'pending.json')], cwd=root, env=env, check=True)
+        results.extend(json.loads((directory/'pending.json').read_bytes()))
+        (directory/'results.json').write_text(json.dumps(results))
+    sources = sorted((root/'crates/engine/src').rglob('*.rs')) + sorted((root/'crates/bot/src').rglob('*.rs'))
+    sources.append(root/'crates/bot/examples/frozen_cell_audit.rs')
+    bundle = dict(requests=specs, results=results, source_sha256=sha(source.read_bytes()), binary_sha256=sha(binary.read_bytes()),
+                  source_hashes={str(p.relative_to(root)): sha(p.read_bytes()) for p in sources})
+    report = summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report, indent=2)+'\n')
+    print(json.dumps(report['groups'], indent=2))
+
+
+if __name__ == '__main__':
+    main()
