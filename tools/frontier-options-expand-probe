@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import json
+import math
+import pathlib
+import runpy
+import tempfile
+from fractions import Fraction as F
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/frontier-options-expand-v1'
+base_tool=runpy.run_path(str(root/'tools/frontier-options-probe'))
+legacy=base_tool['legacy'];frontier=base_tool['frontier'];join=base_tool['join'];sha=legacy['sha']
+previous='findings/frontier-options-v1/records.json.gz'
+inputs=[previous,'findings/frontier-options-v1/summary.json','tools/frontier-options-probe',
+        'tools/frontier-options-expand-probe',frontier['corpus']]
+
+
+def initial_specs(base):
+    cases=base_tool['specs'](base)
+    for name in ['crunch','rock']:cases[name]['solve_budgets']=[20000]
+    return cases
+
+
+def refinements(cases,outputs):
+    result={}
+    for name in ['crunch','rock']:
+        m=copy.deepcopy(cases[name]);targets=[]
+        for t,x,y in zip(m['targets'],outputs['crunch']['targets'],outputs['rock']['targets']):
+            own=(x if name=='crunch' else y)['subgame'][-1]['fixed_side_bounds']
+            best=max(x['subgame'][-1]['fixed_side_bounds'][0],y['subgame'][-1]['fixed_side_bounds'][0])
+            if own[1]-own[0]>1e-6 and own[1]>best+1e-6:targets.append(t)
+        m.update(targets=targets,solve_budgets=[20000]*10);result[name+'-refine']=m
+    return result
+
+
+def options(base,rows):
+    selected={}
+    for target in base['targets']:
+        candidates=[(name,row) for name,rr in rows.items() for row in rr if row['id']==target['id']]
+        name,row=max(candidates,key=lambda item:item[1]['side_zero_bounds'][0])
+        lo,hi=row['side_zero_bounds'];bounds=[max(0,math.nextafter(1-hi-1e-10,-math.inf)),min(1,math.nextafter(1-lo+1e-10,math.inf))]
+        identity=(*target['cache_key'],len(target['path']))
+        selected[identity]=dict(priority=row['priority'],source=name,bounds=bounds)
+    return selected
+
+
+def check_prefix(initial,refined):
+    initial={t['id']:t for t in initial['targets']}
+    for t in refined['targets']:assert t['subgame'][:1]==initial[t['id']]['subgame']
+
+
+def summarize(bundle):
+    assert bundle['inputs']=={p:sha((root/p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes']=={p:sha((root/p).read_bytes()) for p in bundle['source_hashes']}
+    old=legacy['read'](previous);prior=base_tool['summarize'](old)
+    assert prior==json.loads((root/'findings/frontier-options-v1/summary.json').read_bytes())
+    record=base_tool['parent']()
+    family=json.loads((root/'findings/frontier-family-v1/summary.json').read_bytes())
+    imports={tuple(x['identity']):x['imported'] for x in family['imports']}
+    ranked,ranking=base_tool['rank'](record,imports,48)
+    old_base=json.loads(old['manifests']['ranked']);assert ranked['targets'][:12]==old_base['targets']
+    ranked['targets']=ranked['targets'][12:];cases=initial_specs(ranked)
+    cases.update(refinements(cases,bundle['outputs']))
+    rows={};work=0;references={t['id']:t for t in bundle['outputs']['ranked']['targets']}
+    for name,m in cases.items():
+        raw=bundle['manifests'][name];assert json.loads(raw)==m
+        output=bundle['outputs'][name];frontier['check_output'](record,raw,output)
+        work+=output['replay_runs']+output['probe_runs']
+        if name.startswith(('crunch','rock')):
+            rows[name]=[base_tool['check_option'](m,t,references[t['id']]) for t in output['targets']]
+            work+=sum(r['solver_runs'] for r in rows[name])
+            if name.endswith('-refine'):
+                check_prefix(bundle['outputs'][name.split('-')[0]],output)
+    assert set(bundle['outputs'])==set(bundle['manifests'])==set(cases)
+    old_options=options(old_base,prior['rows'])
+    cheap=options(ranked,{k:v for k,v in rows.items() if not k.endswith('-refine')});best=options(ranked,rows)
+    assert not set(old_options)&set(best) and len(best)==36
+    screened=base_tool['replace_options'](record,old_options|cheap)
+    report=base_tool['replace_options'](record,old_options|best)
+    assert report['bounds'][1]<=screened['bounds'][1]<=prior['unrestricted_switch_bounds'][1]
+    local=[]
+    for target,t in zip(ranked['targets'],bundle['outputs']['hydro-floor']['targets']):
+        identity=(*target['cache_key'],len(target['path']));choice=best[identity]
+        assert t['cache_key']==target['cache_key'] and t['selected'][1]==['move hydropump']
+        floors=[sum(F(l['mass'])*(1-F(l['terminal'])) for l in p['leaves'] if l['terminal'] is not None) for p in t['probes']]
+        floor=join['outward'](max(F(0),min(floors)-F(1,10**10)),False);upper=choice['bounds'][1]
+        assert floor<=upper
+        local.append(dict(id=target['id'],chosen_option=choice['source'],unrestricted_side_one_score_bounds=[floor,upper],width=upper-floor))
+    for fault in ['priority','prefix']:
+        if fault=='priority':
+            bad=copy.deepcopy(bundle['outputs']['crunch']['targets'][0]);bad['subgame_priority']=['move splash']
+            try:base_tool['check_option'](cases['crunch'],bad,references[bad['id']])
+            except AssertionError:pass
+            else:raise AssertionError(fault)
+        else:
+            bad=copy.deepcopy(bundle['outputs']['rock-refine']);bad['targets'][0]['subgame'][0]['total_runs']+=1
+            try:check_prefix(bundle['outputs']['rock'],bad)
+            except AssertionError:pass
+            else:raise AssertionError(fault)
+    return dict(ranking=ranking,rows=rows,local=local,screened_conditional_opponent=screened,
+        refined_conditional_opponent=report,previous_unrestricted_switch_bounds=prior['unrestricted_switch_bounds'],
+        unrestricted_switch_bounds=[0,report['bounds'][1]],additional_engine_runs=work,
+        new_options=len(best),total_options=len(old_options|best),
+        refinement_counts={n:len(cases[n]['targets']) for n in ['crunch-refine','rock-refine']},
+        scope='Continue the same preselected sensitivity ranking from positions 13 through 48. '
+              'Preserve the first 12 certified absorbing opponent options. Screen both constant priority '
+              'policies at 20000 executions per new state; refine only policies with unresolved width '
+              'whose upper bound can still exceed the best certified lower bound by more than 1e-6. '
+              'This is a computation-allocation rule, not an assertion that all unrefined policies are '
+              'exactly solved. Refined native runs must reproduce the entire screened first-call report. '
+              'Choose the largest certified side-zero lower bound among the available witnesses, '
+              'then rebuild the complete 48-option adversary from the original ledger. Each option '
+              'is absorbing until battle end; old-policy bounds and previous one-on-one imports are '
+              'not intersected into a changed-policy subtree. Verify both the screened and refined '
+              'whole-root certificates. Local lower bounds use immediate terminal score mass under '
+              'Hydro Pump against every legal first reply; native solver intervals supply their upper '
+              'bounds. The first 12 ranking entries must exactly match the prior artifact. Potential '
+              'ranking gains are not additive or promises of realized gain. Scores count draws as '
+              'one half. The inherited solver, engine and external option-table trust limitations '
+              'remain in force. These are full-state pure-Switch upper bounds, not whole-game or '
+              'blind guarantees and not a production bot strength improvement.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--replay',action='store_true');parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle=legacy['read']('findings/frontier-options-expand-v1/records.json.gz')
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-options-expand-replay-') as d:
+                assert base_tool['execute'](pathlib.Path(d),bundle['manifests'])==bundle['outputs']
+        print('frontier-options-expand: selection, retained options, prefixes, full backups and controls verified');return
+    assert not archive.exists()
+    if args.import_directory:
+        names=['ranked','crunch','rock','hydro-floor','crunch-refine','rock-refine']
+        manifests={n:(args.import_directory/(n+'.json')).read_text() for n in names}
+        outputs={n:json.loads((args.import_directory/(n+'.out.json')).read_bytes()) for n in names}
+    else:
+        prior=base_tool['family']['summarize'](legacy['read'](base_tool['previous']))
+        imports={tuple(x['identity']):x['imported'] for x in prior['imports']}
+        ranked,_=base_tool['rank'](base_tool['parent'](),imports,48);ranked['targets']=ranked['targets'][12:]
+        cases=initial_specs(ranked);manifests={n:json.dumps(m) for n,m in cases.items()}
+        with tempfile.TemporaryDirectory(prefix='nc-options-expand-') as d:
+            d=pathlib.Path(d);outputs=base_tool['execute'](d,manifests)
+            extra={n:json.dumps(m) for n,m in refinements(cases,outputs).items()}
+            outputs.update(base_tool['execute'](d,extra));manifests.update(extra)
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in inputs},
+        source_hashes=legacy['read'](previous)['source_hashes'],
+        binary_sha256=sha((root/'target/release/examples/witness_frontier').read_bytes()),manifests=manifests,outputs=outputs)
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(report['unrestricted_switch_bounds'],report['additional_engine_runs'])
+
+
+if __name__=='__main__':main()

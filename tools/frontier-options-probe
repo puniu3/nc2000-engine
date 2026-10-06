@@ -30,7 +30,8 @@ def parent():
     return record
 
 
-def rank(record,imports):
+def rank(record,imports,limit=12):
+    assert limit>0
     nodes=record['nodes'];lower=[];upper=[];branches=[];parents=[[] for _ in nodes]
     for i,n in enumerate(nodes):
         row=[]
@@ -74,7 +75,7 @@ def rank(record,imports):
         for bi,b in enumerate(nodes[i].get('branches',[])):
             for ci,c in enumerate(b['children']):pred.setdefault(c['node'],(i,bi,ci))
     targets=[]
-    for g,i in ranked[:12]:
+    for g,i in ranked[:limit]:
         values=[]
         for j,n in enumerate(nodes):
             if j==i:u=lower[j]
@@ -92,7 +93,7 @@ def rank(record,imports):
         path.reverse();targets.append(dict(id=i,cache_key=nodes[i]['cache_key'],path=path,mass=g,reason='sensitivity'))
     return dict(config=record['config'],targets=targets,cap=4096),dict(
         parent_bounds=[lower[-1],upper[-1]],positive_targets=len(ranked),
-        selected=[dict(id=i,potential_gain=g,bounds=[lower[i],upper[i]]) for g,i in ranked[:12]])
+        selected=[dict(id=i,potential_gain=g,bounds=[lower[i],upper[i]]) for g,i in ranked[:limit]])
 
 
 def specs(base):
