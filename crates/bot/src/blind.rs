@@ -1321,6 +1321,7 @@ impl Agent for BlindAgent {
             name.push_str(&format!(":mix-probes={}", mixture.probe_iterations));
         }
         if self.root_pruning { name.push_str(":root-prune"); }
+        if self.cfg.collapse_sleep_actions { name.push_str(":sleep-collapse"); }
         name
     }
 

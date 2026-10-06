@@ -1,0 +1,17 @@
+{
+  "tests_passed": 242,
+  "workspace_all_targets": "passed with existing warnings",
+  "root_refactor_statistics_identical": true,
+  "null_control_pairs_all_half": true,
+  "negative_controls_rejected": [
+    "root_budget",
+    "root_identity",
+    "incomplete_support",
+    "match_score"
+  ],
+  "full_64_game_native_replay": false,
+  "duel_timing": "Includes concurrent compilation and corpus validation; do not treat sub-percent timing differences as a speedup.",
+  "native_root_replay": true,
+  "native_corpus_equivalence_replay": true,
+  "native_null_replay": true
+}

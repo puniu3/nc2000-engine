@@ -98,6 +98,7 @@ pub struct RmConfig {
     pub c: f64,
     pub continuation_exp3_ix: bool,
     pub continuation_exp3_mean: bool,
+    pub collapse_sleep_actions: bool,
     /// Tree horizon in turns (same meaning as `MctsConfig::horizon`).
     pub horizon: u16,
     /// Rollout policy + leaf eval (shared with the M6 agent).
@@ -160,6 +161,7 @@ impl Default for RmConfig {
             c: 1.0,
             continuation_exp3_ix: false,
             continuation_exp3_mean: false,
+            collapse_sleep_actions: false,
             horizon: 100,
             playout: Playout::heavy(),
             threshold: 0.5,
@@ -242,7 +244,16 @@ pub enum SearchTrace<'a> {
 
 impl Node {
     pub(crate) fn at(sim: &mut Battle, dex: &Dex) -> Node {
-        let acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];
+        Self::build(sim, dex, false)
+    }
+
+    fn build(sim: &mut Battle, dex: &Dex, collapse_sleep: bool) -> Node {
+        let mut acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];
+        if collapse_sleep {
+            for side in 0..2 {
+                collapse_sleep_choices(sim, dex, side, &mut acts[side]);
+            }
+        }
         let preview = acts
             .iter()
             .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
@@ -254,6 +265,33 @@ impl Node {
             acts,
         }
     }
+
+    fn continuation(sim: &mut Battle, dex: &Dex, cfg: &RmConfig) -> Node {
+        Self::build(sim, dex, cfg.collapse_sleep_actions)
+    }
+}
+
+pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut Vec<SearchChoice>) {
+    let Some(id) = b.active_id(side) else { return };
+    let p = b.poke(id);
+    if p.status != nc2000_engine::state::Status::Slp
+        || p.status_state.get_int(nc2000_engine::state::DK::Time) <= 1
+        || p.item.is_some_and(|item| matches!(dex.items.key(item), "mintberry" | "miracleberry"))
+    {
+        return;
+    }
+    let mut priorities = [false; 256];
+    choices.retain(|action| {
+        let SearchChoice::Move(id) = action else { return true };
+        let ms = dex.move_static(*id);
+        if ms.sleep_usable || ms.callbacks.iter().any(|key| key == "beforeTurnCallback") {
+            return true;
+        }
+        let priority = (i16::from(ms.priority) + 128) as usize;
+        let first = !priorities[priority];
+        priorities[priority] = true;
+        first
+    });
 }
 
 struct ProbeStats {
@@ -555,7 +593,7 @@ pub(crate) fn run_iteration_with_root_child_value(
             None => {
                 // expand exactly one node per iteration, then roll out
                 let child = nodes.len();
-                nodes.push(Node::at(sim, dex));
+                nodes.push(Node::continuation(sim, dex, cfg));
                 table.insert(key, child);
                 if cfg.continuation_exp3_mean { mean_path.push(child); }
                 if let Some(trace) = trace.as_deref_mut() {

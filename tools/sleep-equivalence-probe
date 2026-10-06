@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import statistics
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+archive = root/'findings/sleep-equivalence-v1'
+corpus = 'findings/policy-gap-v1/corpus.jsonl.gz'
+
+
+def root_projection(value):
+    value = copy.deepcopy(value)
+    for row in value['rows']:
+        for arm in row['arms']:
+            for point in arm['checkpoints']:
+                point.pop('elapsed_ms')
+    return value
+
+
+def duel_projection(value):
+    return {k: v for k, v in value.items() if k not in ['seconds', 'mean_think_ms']}
+
+
+def verify(outputs):
+    roots = outputs['roots']
+    assert roots['census'] == [972, 61, 134]
+    assert len(roots['rows']) == 24
+    games = {g['game']: g for g in map(json.loads, gzip.decompress((root/corpus).read_bytes()).splitlines())}
+    for row in roots['rows']:
+        assert row['key'] == games[row['game']]['decisions'][row['decision']]['key']
+        a, b = row['arms']
+        assert a['enabled'] is False and b['enabled'] is True
+        assert a['actions'] == b['actions']
+        for arm in [a, b]:
+            for point, budget in zip(arm['checkpoints'], [3000, 27000], strict=True):
+                assert point['iterations'] == sum(point['visits']) == budget
+                assert len(point['visits']) == len(point['means']) == len(arm['actions'])
+                assert all(0 <= mean <= 1 for mean in point['means'])
+                assert point['best'] in arm['actions'] and point['elapsed_ms'] > 0
+        checks, exposed, actions, aliases = row['profile']
+        assert 0 <= exposed <= checks and 0 <= aliases <= actions
+    corpus_check = outputs['corpus']
+    assert corpus_check['census'] == roots['census']
+    assert len(corpus_check['rows']) == roots['census'][1]
+    assert len({(r['game'],r['decision'],r['side']) for r in corpus_check['rows']}) == len(corpus_check['rows'])
+    for row in corpus_check['rows']:
+        assert row['key'] == games[row['game']]['decisions'][row['decision']]['key']
+        assert row['comparisons'] > 0 and row['unresolved'] == 0 and row['completed_enumeration_runs'] > 0
+    corpus_summary = {key:sum(row[key] for row in corpus_check['rows']) for key in ['comparisons','unresolved','completed_enumeration_runs']}
+    assert corpus_summary == dict(comparisons=732, unresolved=0, completed_enumeration_runs=24732)
+    profile = [sum(r['profile'][i] for r in roots['rows']) for i in range(4)]
+    measurements = []
+    for index in range(2):
+        a, b = [[r['arms'][arm]['checkpoints'][index] for r in roots['rows']] for arm in range(2)]
+        measurements.append(dict(iterations=a[0]['iterations'], changed=sum(x['best'] != y['best'] for x, y in zip(a, b)),
+            aggregate_time_ratio=sum(x['elapsed_ms'] for x in b)/sum(x['elapsed_ms'] for x in a),
+            median_time_ratio=statistics.median(y['elapsed_ms']/x['elapsed_ms'] for x, y in zip(a, b)),
+            node_ratio=sum(x['nodes'] for x in b)/sum(x['nodes'] for x in a)))
+    for name in ['null', 'duel']:
+        result = outputs[name]
+        scores = result['game_scores']
+        assert result['null_control'] == (name == 'null')
+        assert result['iterations'] == (3000 if name == 'null' else 27000)
+        assert result['games'] == len(scores) == (8 if name == 'null' else 64)
+        assert all(score in [0, .5, 1] for score in scores)
+        assert result['wins'] == scores.count(1) and result['losses'] == scores.count(0)
+        assert result['ties'] == scores.count(.5) and 0 <= result['caps'] <= result['ties']
+        pairs = [(a+b)/2 for a, b in zip(scores[::2], scores[1::2])]
+        assert pairs == result['pair_scores'] and len(pairs) == result['pairs']
+        assert statistics.mean(pairs) == result['score']
+        assert math.isclose(1.96*statistics.stdev(pairs)/math.sqrt(len(pairs)), result['ci95_halfwidth'], abs_tol=1e-14)
+        if name == 'null':
+            assert all(pair == .5 for pair in pairs)
+    return dict(census=roots['census'], corpus_equivalence=corpus_summary, profile=profile,
+        profile_alias_fraction=profile[3]/profile[2], measurements=measurements,
+        null=outputs['null'], duel=outputs['duel'], default_enabled=False,
+        scope='Continuation nodes only; root legal actions and final exclusions remain intact. '
+        'Complete-support regression comparisons cover 90 action/reply pairs in reduced fixtures, '
+        'with waking/berry negative controls and priority, sleep-move, Pursuit and switch guards. '
+        'The original full-state corpus also has 61 exposed decisions: all 732 collapsed-action/reply comparisons have identical complete successor distributions (24732 engine runs). '
+        'The profile uses 1000 baseline iterations per each of 24 roots selected by state hash before comparison. '
+        'Timing uses sequential alternating arms and is a coarse native measurement, not a statistically established speedup. '
+        'The fixed 64-game screen uses 32 side-swap blocks, the 24-team catalog and 27000 iterations per decision. '
+        'It compares with the current local default, not the deployed binary or human players. '
+        'No full-game optimality, complete hidden-information solution or broader population win rate is established.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--import-directory', type=Path)
+    parser.add_argument('--replay', action='store_true')
+    parser.add_argument('--replay-duel', action='store_true')
+    args = parser.parse_args()
+    if args.import_directory:
+        assert not archive.exists()
+        outputs = {name: json.loads((args.import_directory/f'nc-sleep-{name}.json').read_bytes()) for name in ['roots', 'corpus', 'null', 'duel']}
+        report = verify(outputs)
+        sources = subprocess.check_output(['git', 'ls-files', 'crates/bot/src', 'crates/engine/src'], cwd=root, text=True).splitlines()
+        sources += [corpus, 'Cargo.lock', 'crates/conformance/src/lib.rs', 'crates/conformance/src/fixture.rs', 'data/gen2stadium2.json', 'data/learnsets-gen2.json', 'data/belief-pool-v3/belief-pool.json', 'data/team-pool-v2/team-pool.json',
+            'crates/bot/examples/sleep_equivalence_probe.rs', 'crates/bot/examples/sleep_equivalence_duel.rs', 'crates/bot/tests/sleep_equivalence.rs', 'crates/bot/tests/blind.rs', 'tools/sleep-equivalence-probe']
+        bundle = dict(outputs=outputs, hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in sources})
+        archive.mkdir()
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    else:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in bundle['hashes'].items())
+        assert verify(bundle['outputs']) == json.loads((archive/'summary.json').read_bytes())
+        if args.replay or args.replay_duel:
+            subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','sleep_equivalence_probe','--example','sleep_equivalence_duel'],cwd=root,check=True)
+            env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+            with tempfile.TemporaryDirectory(prefix='nc-sleep-') as directory:
+                directory = Path(directory)
+                source = directory/'corpus.jsonl'
+                source.write_bytes(gzip.decompress((root/corpus).read_bytes()))
+                target = directory/'roots.json'
+                subprocess.run([str(root/'target/release/examples/sleep_equivalence_probe'),str(source),str(target)],cwd=root,env=env,check=True)
+                assert root_projection(json.loads(target.read_bytes())) == root_projection(bundle['outputs']['roots'])
+                subprocess.run([str(root/'target/release/examples/sleep_equivalence_probe'),str(source),str(target),'--verify-corpus'],cwd=root,env=env,check=True)
+                assert json.loads(target.read_bytes()) == bundle['outputs']['corpus']
+                for name in ['null'] + (['duel'] if args.replay_duel else []):
+                    result = json.loads(subprocess.check_output([str(root/'target/release/examples/sleep_equivalence_duel')] + (['--null'] if name=='null' else []),cwd=root,env=env))
+                    assert duel_projection(result) == duel_projection(bundle['outputs'][name])
+    print('sleep-equivalence: exposure, paired root statistics, null control and match scores verified')
+
+
+if __name__ == '__main__':
+    main()
