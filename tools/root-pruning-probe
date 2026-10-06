@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import math
+import os
+import pathlib
+import statistics
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/root-pruning-v1'
+corpora = {'selfplay': 'findings/policy-gap-v1/corpus.jsonl.gz',
+           'tactical': 'findings/tactical-exposure-v1/corpus.jsonl.gz'}
+examples = ['public_mask_census', 'root_pruning_probe', 'root_pruning_duel']
+inputs = list(corpora.values()) + ['data/gen2stadium2.json', 'data/learnsets-gen2.json',
+    'data/belief-pool-v3/belief-pool.json', 'data/team-pool-v2/team-pool.json',
+    'crates/bot/tests/blind.rs', 'tools/root-pruning-probe']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def duel_projection(result):
+    return {k: result[k] for k in ['iterations', 'games', 'pairs', 'wins', 'losses', 'ties', 'caps',
+        'score', 'ci95_halfwidth', 'pair_scores', 'game_scores', 'exposure']}
+
+
+def root_projection(result):
+    result = copy.deepcopy(result)
+    for row in result['rows']:
+        for arm in row['arms']:
+            for checkpoint in arm['checkpoints']:
+                checkpoint.pop('elapsed_ms')
+    return result
+
+
+def check_duel(result, null):
+    assert result['iterations'] == (3000 if null else 27000)
+    assert result['games'] == (8 if null else 64) and result['pairs'] == result['games']//2
+    scores = result['game_scores']
+    assert len(scores) == result['games'] and all(x in [0, .5, 1] for x in scores)
+    assert result['wins'] == scores.count(1) and result['losses'] == scores.count(0)
+    assert result['ties'] == scores.count(.5) and 0 <= result['caps'] <= result['ties']
+    pairs = [(a+b)/2 for a, b in zip(scores[::2], scores[1::2])]
+    assert pairs == result['pair_scores'] and statistics.mean(pairs) == result['score']
+    assert math.isclose(1.96*statistics.stdev(pairs)/math.sqrt(len(pairs)), result['ci95_halfwidth'], abs_tol=1e-14)
+    assert all(0 < c['exposed'] <= c['decisions'] for c in result['exposure'])
+    if null:
+        assert all(x == .5 for x in pairs) and result['exposure'][0] == result['exposure'][1]
+
+
+def summarize(bundle):
+    assert bundle['hashes'] == {p: sha((root/p).read_bytes()) for p in bundle['hashes']}
+    outputs = bundle['outputs']
+    assert outputs['selfplay']['games'] == 24 and outputs['tactical']['games'] == 12
+    assert all(r['kind'] != 'priority_substitute' for name in corpora for r in outputs[name]['opportunities'])
+    sample = outputs['roots']
+    assert sample['decisions'] == 972 and sample['exposed'] == 258 and sample['sampled'] == 56
+    assert len(sample['rows']) == 56 and sum(r['exposed'] for r in sample['rows']) == 48
+    games = {g['game']: g for g in map(json.loads, gzip.decompress((root/corpora['selfplay']).read_bytes()).splitlines())}
+    for row in sample['rows']:
+        assert row['state_key'] == games[row['game']]['decisions'][row['decision']]['key']
+        a, b = row['arms']
+        assert a['prune'] is False and b['prune'] is True
+        assert a['actions'] == b['actions'] and a['dominated'] == b['dominated']
+        assert row['exposed'] == (any(a['dominated']) and not all(a['dominated']))
+        for arm in row['arms']:
+            for checkpoint, iterations in zip(arm['checkpoints'], [3000, 27000]):
+                assert checkpoint['iterations'] == iterations and sum(checkpoint['visits']) == iterations
+                assert len(checkpoint['visits']) == len(checkpoint['means']) == len(arm['actions'])
+                assert all(0 <= x <= 1 for x in checkpoint['means'])
+                eligible = [i for i, d in enumerate(arm['dominated']) if not d]
+                best = max(eligible, key=lambda i: (checkpoint['visits'][i], i))
+                assert checkpoint['best'] == arm['actions'][best]
+                if arm['prune']:
+                    assert all(n == 0 for n, d in zip(checkpoint['visits'], arm['dominated']) if d)
+        if not row['exposed']:
+            aa, bb = root_projection(dict(rows=[row]))['rows'][0]['arms']
+            assert aa['checkpoints'] == bb['checkpoints']
+    measurements = []
+    exposed = [r for r in sample['rows'] if r['exposed']]
+    for i, iterations in enumerate([3000, 27000]):
+        baseline = [r['arms'][0]['checkpoints'][i] for r in exposed]
+        candidate = [r['arms'][1]['checkpoints'][i] for r in exposed]
+        excluded = [sum(n for n, d in zip(c['visits'], r['arms'][0]['dominated']) if d)/iterations
+                    for r, c in zip(exposed, baseline)]
+        measurements.append(dict(iterations=iterations, excluded_mean=statistics.mean(excluded),
+            excluded_median=statistics.median(excluded), changed_choices=sum(a['best'] != b['best'] for a, b in zip(baseline, candidate)),
+            time_ratio=sum(c['elapsed_ms'] for c in candidate)/sum(c['elapsed_ms'] for c in baseline)))
+    check_duel(outputs['null'], True)
+    check_duel(outputs['duel'], False)
+    return dict(default_changed=False, decision='not_adopted_no_demonstrated_gain',
+        score95=[outputs['duel']['score'] + sign*outputs['duel']['ci95_halfwidth'] for sign in [-1, 1]], census={name: {k: outputs[name][k] for k in ['games', 'decisions', 'mask_counts']} for name in corpora},
+        priority_substitute_exposure=0, root_decisions=sample['decisions'], root_exposure=sample['exposed'],
+        sampled_exposed=48, unchanged_root_controls=8, root_measurements=measurements,
+        null_control=duel_projection(outputs['null']), duel=outputs['duel'],
+        terminal_score_interval=[outputs['duel']['score'] + sign*outputs['duel']['caps']/(2*outputs['duel']['games']) for sign in [-1, 1]],
+        scope='The public priority-Substitute hypothesis had zero exposure in two generated corpora and was not implemented. '
+        'The next candidate only calls the existing prune_dominated method before ordinary root simulations. '
+        'It does not add final-choice exclusions or repair their information assumptions. '
+        'The opt-in BlindAgent path preserves the continuous search RNG stream. Both sides use the current local '
+        'default belief and search configuration except for this switch. The 64-game screen uses 32 fixed '
+        'side-swap blocks, 27000 iterations per decision, the 24-team catalog uniformly, and the 103-candidate '
+        'belief pool. It is not a matched-wall-time trial, an optimality proof, a comparison against human '
+        'players, or a direct comparison against the deployed binary. No outcome-dependent stopping or tuning '
+        'was applied. Turn caps, if any, count as half a point and remain unresolved in terminal_score_interval. Root samples are selected by state identity before running either search, from one '
+        '24-game self-play corpus; the eight unexposed controls must match all deterministic root statistics. '
+        'Observer histories are replayed; the root probe constructs each belief from the current complete '
+        'observation snapshot. The full-game agents use their ordinary persistent belief lifecycle. '
+        'Final eligibility is unchanged, but search value and strength need not improve monotonically. '
+        'Timing includes concurrent native work and supports only coarse comparisons. Default remains off.')
+
+
+def checked(bundle):
+    report = summarize(bundle)
+    for fault in ['allocation', 'identity', 'outcome']:
+        bad = copy.deepcopy(bundle)
+        if fault == 'allocation':
+            row = next(r for r in bad['outputs']['roots']['rows'] if r['exposed'])
+            arm = row['arms'][1]
+            arm['checkpoints'][1]['visits'][arm['dominated'].index(True)] += 1
+        elif fault == 'identity':
+            bad['outputs']['roots']['rows'][0]['state_key'] = '0'
+        else:
+            bad['outputs']['duel']['wins'] += 1
+        try:
+            summarize(bad)
+        except (AssertionError, ValueError):
+            pass
+        else:
+            raise AssertionError(fault)
+    report['negative_controls'] = ['allocation', 'identity', 'outcome']
+    return report
+
+
+def execute(directory, duel):
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot',
+                    *sum((['--example', e] for e in examples), [])], cwd=root, check=True)
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    outputs = {}
+    for name, path in corpora.items():
+        c = directory/(name+'.jsonl')
+        c.write_bytes(gzip.decompress((root/path).read_bytes()))
+        out = directory/(name+'.json')
+        subprocess.run([str(root/'target/release/examples/public_mask_census'), str(c), str(out)], cwd=root, env=env, check=True)
+        outputs[name] = json.loads(out.read_bytes())
+    out = directory/'roots.json'
+    subprocess.run([str(root/'target/release/examples/root_pruning_probe'), str(directory/'selfplay.jsonl'), str(out)], cwd=root, env=env, check=True)
+    outputs['roots'] = json.loads(out.read_bytes())
+    for name, arguments in [('null', ['--null'])] + ([('duel', [])] if duel else []):
+        outputs[name] = json.loads(subprocess.check_output([str(root/'target/release/examples/root_pruning_duel'), *arguments], cwd=root, env=env))
+    return outputs
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--import-directory', type=pathlib.Path)
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--replay', action='store_true')
+    parser.add_argument('--replay-duel', action='store_true')
+    args = parser.parse_args()
+    if args.import_directory:
+        assert not archive.exists()
+        paths = subprocess.check_output(['git', 'ls-files', 'crates/bot/src', 'crates/engine/src', 'crates/bot/src/duel.rs'], cwd=root, text=True).splitlines()
+        paths = sorted(set(paths + inputs + [f'crates/bot/examples/{e}.rs' for e in examples]))
+        outputs = {n: json.loads((args.import_directory/(n+'.json')).read_bytes()) for n in [*corpora, 'roots', 'null', 'duel']}
+        for name in ['null', 'duel']:
+            outputs[name].pop('null', None)
+            outputs[name].pop('null_control', None)
+        bundle = dict(hashes={p: sha((root/p).read_bytes()) for p in paths}, outputs=outputs)
+        summary = checked(bundle)
+        archive.mkdir()
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
+    else:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert checked(bundle) == json.loads((archive/'summary.json').read_bytes())
+        if args.replay or args.replay_duel:
+            with tempfile.TemporaryDirectory(prefix='nc-root-pruning-') as d:
+                results = execute(pathlib.Path(d), args.replay_duel)
+                for name, out in results.items():
+                    expected = bundle['outputs'][name]
+                    projection = root_projection if name == 'roots' else duel_projection if name in ['duel', 'null'] else lambda x: x
+                    assert projection(out) == projection(expected), name
+    print('root-pruning: corpus exposure, root allocation, eligibility, null control and paired results verified')
+
+
+if __name__ == '__main__':
+    main()

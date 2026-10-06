@@ -1,0 +1,229 @@
+{
+  "default_changed": false,
+  "decision": "not_adopted_no_demonstrated_gain",
+  "score95": [
+    0.36125,
+    0.545
+  ],
+  "census": {
+    "selfplay": {
+      "games": 24,
+      "decisions": 1020,
+      "mask_counts": {
+        "Sleep Talk and Snore need the user asleep": 90,
+        "healing at full HP, and faster": 134,
+        "inflicting sleep would forfeit under Sleep Clause": 5,
+        "self-KO with the last mon": 45,
+        "that side condition is already up": 23,
+        "the target is immune to the move's type": 15,
+        "there is nobody left to phaze in": 7
+      }
+    },
+    "tactical": {
+      "games": 12,
+      "decisions": 866,
+      "mask_counts": {
+        "Sleep Talk and Snore need the user asleep": 14,
+        "healing at full HP, and faster": 58,
+        "self-KO with the last mon": 16,
+        "that side condition is already up": 14,
+        "the target is immune to the move's type": 25,
+        "there is nobody left to phaze in": 13
+      }
+    }
+  },
+  "priority_substitute_exposure": 0,
+  "root_decisions": 972,
+  "root_exposure": 258,
+  "sampled_exposed": 48,
+  "unchanged_root_controls": 8,
+  "root_measurements": [
+    {
+      "iterations": 3000,
+      "excluded_mean": 0.05397222222222222,
+      "excluded_median": 0.029833333333333333,
+      "changed_choices": 8,
+      "time_ratio": 1.0102371310317737
+    },
+    {
+      "iterations": 27000,
+      "excluded_mean": 0.02514814814814815,
+      "excluded_median": 0.005796296296296296,
+      "changed_choices": 8,
+      "time_ratio": 0.999395132962505
+    }
+  ],
+  "null_control": {
+    "iterations": 3000,
+    "games": 8,
+    "pairs": 4,
+    "wins": 4,
+    "losses": 4,
+    "ties": 0,
+    "caps": 0,
+    "score": 0.5,
+    "ci95_halfwidth": 0.0,
+    "pair_scores": [
+      0.5,
+      0.5,
+      0.5,
+      0.5
+    ],
+    "game_scores": [
+      0.0,
+      1.0,
+      1.0,
+      0.0,
+      1.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    "exposure": [
+      {
+        "decisions": 207,
+        "exposed": 60
+      },
+      {
+        "decisions": 207,
+        "exposed": 60
+      }
+    ]
+  },
+  "duel": {
+    "iterations": 27000,
+    "games": 64,
+    "pairs": 32,
+    "wins": 29,
+    "losses": 35,
+    "ties": 0,
+    "caps": 0,
+    "score": 0.453125,
+    "ci95_halfwidth": 0.091875,
+    "pair_scores": [
+      0.0,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.0,
+      0.5,
+      0.5,
+      0.0,
+      0.5,
+      0.5,
+      0.5,
+      1.0,
+      0.5,
+      0.5,
+      0.5,
+      0.0,
+      0.5,
+      1.0,
+      0.0,
+      0.5,
+      0.5,
+      0.5,
+      0.0,
+      0.5,
+      0.5,
+      0.5,
+      1.0
+    ],
+    "game_scores": [
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      1.0,
+      1.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      1.0,
+      0.0,
+      1.0,
+      1.0,
+      1.0,
+      0.0,
+      1.0,
+      1.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      1.0,
+      0.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "seconds": 713.689949708,
+    "mean_think_ms": [
+      738.0543527005209,
+      737.6195695159269
+    ],
+    "exposure": [
+      {
+        "decisions": 1785,
+        "exposed": 384
+      },
+      {
+        "decisions": 1792,
+        "exposed": 394
+      }
+    ]
+  },
+  "terminal_score_interval": [
+    0.453125,
+    0.453125
+  ],
+  "scope": "The public priority-Substitute hypothesis had zero exposure in two generated corpora and was not implemented. The next candidate only calls the existing prune_dominated method before ordinary root simulations. It does not add final-choice exclusions or repair their information assumptions. The opt-in BlindAgent path preserves the continuous search RNG stream. Both sides use the current local default belief and search configuration except for this switch. The 64-game screen uses 32 fixed side-swap blocks, 27000 iterations per decision, the 24-team catalog uniformly, and the 103-candidate belief pool. It is not a matched-wall-time trial, an optimality proof, a comparison against human players, or a direct comparison against the deployed binary. No outcome-dependent stopping or tuning was applied. Turn caps, if any, count as half a point and remain unresolved in terminal_score_interval. Root samples are selected by state identity before running either search, from one 24-game self-play corpus; the eight unexposed controls must match all deterministic root statistics. Observer histories are replayed; the root probe constructs each belief from the current complete observation snapshot. The full-game agents use their ordinary persistent belief lifecycle. Final eligibility is unchanged, but search value and strength need not improve monotonically. Timing includes concurrent native work and supports only coarse comparisons. Default remains off.",
+  "negative_controls": [
+    "allocation",
+    "identity",
+    "outcome"
+  ]
+}

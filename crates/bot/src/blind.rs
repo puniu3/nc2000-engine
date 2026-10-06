@@ -101,6 +101,7 @@ pub struct BlindAgent {
     adaptive_mixture: Option<AdaptiveMixture>,
     decision_policy: Option<Vec<f64>>,
     root_stats: RootSearchStats,
+    root_pruning: bool,
 }
 
 impl BlindAgent {
@@ -140,6 +141,7 @@ impl BlindAgent {
             adaptive_mixture: None,
             decision_policy: None,
             root_stats: RootSearchStats::default(),
+            root_pruning: false,
         }
     }
 
@@ -149,6 +151,11 @@ impl BlindAgent {
             probe_iterations,
             rng: SplitMix64::new(self.rng.0 ^ 0xa24baed4963ee407),
         });
+        self
+    }
+
+    pub fn with_root_pruning(mut self) -> Self {
+        self.root_pruning = true;
         self
     }
 
@@ -192,6 +199,7 @@ impl BlindAgent {
             self.root_stats.searches += 1;
             if let Some(mixture) = self.adaptive_mixture.as_mut() {
                 let mut search = BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
+                if self.root_pruning { search.prune_dominated(); }
                 debug_assert_eq!(search.actions(), choices);
                 let probes = search.finish_with_typed_mixed_probes(dex, &g.belief, &g.observer, self.cfg.iterations, mixture.probe_iterations);
                 self.root_stats.probed_searches += u64::from(probes > 0);
@@ -206,13 +214,10 @@ impl BlindAgent {
                 return search.best().expect("search called with a non-empty choice list");
             }
         }
-        search_choose(&self.cfg, &mut self.rng, g, battle, dex, side, choices)
+        search_choose(&self.cfg, &mut self.rng, g, battle, dex, side, choices, self.root_pruning)
     }
 }
 
-/// One full `cfg.iterations` blind search at a decision point — the agent
-/// loop over `BlindSearch`, shared by `BlindAgent` and `OpenAgent` (same
-/// operation order as the original `BlindAgent::search`, bit-identical).
 fn search_choose(
     cfg: &RmConfig,
     rng: &mut SplitMix64,
@@ -221,8 +226,10 @@ fn search_choose(
     dex: &Dex,
     side: usize,
     choices: &[SearchChoice],
+    prune: bool,
 ) -> SearchChoice {
     let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
+    if prune { bs.prune_dominated(); }
     debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
     for _ in 0..cfg.iterations {
         bs.step_one(dex, &g.belief, &g.observer);
@@ -1280,7 +1287,7 @@ impl Agent for OpenAgent {
             }
         }
         let g = self.game.as_ref().expect("choose after lifecycle setup");
-        search_choose(&self.cfg, &mut self.rng, g, battle, dex, side, choices)
+        search_choose(&self.cfg, &mut self.rng, g, battle, dex, side, choices, false)
     }
 }
 
@@ -1313,6 +1320,7 @@ impl Agent for BlindAgent {
         if let Some(mixture) = &self.adaptive_mixture {
             name.push_str(&format!(":mix-probes={}", mixture.probe_iterations));
         }
+        if self.root_pruning { name.push_str(":root-prune"); }
         name
     }
 
@@ -1458,6 +1466,49 @@ pub struct PrincipalLine {
 #[cfg(test)]
 mod mixed_selection_tests {
     use super::*;
+
+    #[test]
+    fn root_pruning_preserves_agent_rng_and_all_masked_fallback() {
+        let dex = conformance::load_dex();
+        let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
+            serde_json::from_value(serde_json::json!({"name":species,"species":species,
+                "level":50,"moves":moves,"happiness":255})).unwrap()
+        };
+        for (species, moves, expected) in [
+            ("Alakazam", vec!["Recover", "Psychic"], vec![true, false]),
+            ("Gengar", vec!["Destiny Bond", "Perish Song"], vec![true, true]),
+            ("Alakazam", vec!["Psychic", "Thunder Punch"], vec![false, false]),
+        ] {
+            let mut battle = Battle::from_fixture(&dex, "1,2,3,4",
+                &[set(species, &moves)], &[set("Snorlax", &["Return"])]).unwrap();
+            let preview = battle.clone();
+            let mut observer = Observer::new(&battle, 0);
+            battle.choose(&dex, 0, "team 1").unwrap();
+            battle.choose(&dex, 1, "team 1").unwrap();
+            observer.observe(&battle, &dex);
+            let legal = battle.legal_choices(&dex, 0);
+            let cfg = RmConfig { iterations: 300, c: 0.4, ..Default::default() };
+            for prune in [false, true] {
+                let mut belief = Belief::pinned_from_battle(&preview, &observer);
+                belief.sync(&dex, &observer);
+                let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 17);
+                assert_eq!(reference.dominated(), &expected);
+                if prune { reference.prune_dominated(); }
+                reference.step(&dex, &belief, &observer, cfg.iterations);
+                let mut agent = BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 17);
+                if prune { agent = agent.with_root_pruning(); }
+                agent.game = Some(GameState { side: 0, last_turn: battle.turn,
+                    observer: observer.clone(), belief });
+                assert_eq!(Some(agent.choose(&battle, &dex, 0, &legal)), reference.best());
+                assert_eq!(agent.search_rng_state(), reference.rng.0);
+                if prune && expected.iter().any(|&x| !x) {
+                    assert!(reference.visits().iter().zip(&expected).all(|(&n, &masked)| !masked || n == 0));
+                } else {
+                    assert!(reference.visits().iter().all(|&n| n > 0));
+                }
+            }
+        }
+    }
 
     #[test]
     fn adaptive_agent_uses_the_search_mixture_and_a_separate_draw_stream() {

@@ -14,7 +14,7 @@
 <span class="status">デプロイ版に対する強化：未確認</span>
 <h1>デプロイ済みbotより強いとは、<br>まだ言えません。</h1>
 <p class="lead">局面限定で誤手を減らす方法は証明できました。ただし、直近の成果は検証用です。非公開情報を含む本番条件への対応と、実際のbotへの組込みが残っています。</p>
-<p class="meta">確認日 2026年10月7日 JST · 研究版 <code>410505f</code> 時点</p>
+<p class="meta">確認日 2026年10月7日 JST · 終盤解析 <code>410505f</code> ＋ 探索配分の追試</p>
 </header>
 <div class="grid">
 <article class="card"><span class="label">本番で動いている版</span><strong>c7b11e8</strong><p>10月6日 03:47 JST デプロイ成功。GitHub Pagesの履歴を今回確認。</p></article>
@@ -32,11 +32,13 @@
 </section>
 <section class="section">
 <h2>今回の進展と、その限界</h2>
+<article class="evidence"><div class="metric" style="font-size:23px">29勝 / 35敗<small>10月7日の新しい追試</small></div><div><h3>探索の振替だけでは、強化を確認できなかった</h3><p>既に選択時に除外している手を、探索段階でも除外する候補を試しました。通常自己対戦の972判断中258判断で適用可能。抽出48局面では、従来は平均2.5%の探索回数が最後に選べない手へ使われていました。</p><p>その計算を残る手へ振り替えた候補は、現行ローカル通常botとの64試合で<strong>29勝35敗</strong>。95%区間は約36.1〜54.5%、平均思考時間は両者ほぼ同じ。<strong>本番採用は見送り、既定はOFF</strong>のままです。</p><p class="note">先後入替32組、各判断27,000探索、全試合終局。人間との比較ではありません。234件のテスト、全ターゲットのコンパイル、抽出局面の再現・同一bot同士の対照試験を確認しました。優位性が未確認であり、劣化が確定したという意味でもありません。</p></div></article>
+
 <article class="evidence"><div class="metric">5 / 32 → 0<small>同一局面・探索乱数32通り</small></div><div><h3>構成が分かる条件では、誤手を取り除けた</h3><p>相手の真の構成を固定した探索で、27,000回探索後の誤手が5件。証明に基づく除外を記録済みの選択に適用すると0件になりました。完全情報探索でも9件から0件です。</p><p class="note">32試合の勝敗ではありません。本番対戦の勝率向上を示す数値ではありません。焦点の局面では証明に2,558回のエンジン実行を使用。</p></div></article>
 <article class="evidence"><div class="metric">同じ観測<small>未公開技だけが違う反例</small></div><div><h3>その除外規則を本番に移すと、勝ち目を消し得る</h3><p>未公開の「だいもんじ」を「なきごえ」に置き換えても、対戦ログと39時点の観測は同じでした。ところが前回唯一残した「すてみタックル」固定は、この構成に対して確定負けにできます。</p><p>「すてみタックル」と「じしん」を半々で選び、その後は「すてみタックル」を使う方針には、調べた両構成に対して<strong>少なくとも0.0422%の勝率保証</strong>があります。</p><p class="note">0.0422%は、この不利な局面での保証下限を切り下げた値です。全対戦の改善幅でも、未公開構成すべてへの保証でもありません。改善の証明が、ごく小さな勝ち目を扱う段階にあることも示しています。</p></div></article>
 <article class="evidence"><div class="metric" style="font-size:23px">14勝 / 18敗<small>以前の探索候補・小規模試験</small></div><div><h3>対戦試験からも、強化済みとは言えない</h3><p>相手の構成別に応手を評価する別の探索候補は、通常探索との32試合で14勝18敗。優位性を示していません。</p><p class="note">16組の先後入替試験。95%区間は約28.6〜58.9%。同じ27,000探索回数で、同一時間を強制した比較ではありません。現行ローカル版と最新デプロイ版の直接比較ではなく、直近の証明付き除外とも別の実験です。</p></div></article>
 </section>
-<div class="boundary"><strong>成果は「強化完了」ではなく、改善できる局面と、誤って強くなったと判断する条件の特定です。</strong><p class="small" style="margin:8px 0 0">直近の2コミットは検証コードと結果の追加で、通常bot・ゲームエンジン・ブラウザ実行部に変更はありません。一方、デプロイ版との差分全体には通常動作の変更も含まれるため、ローカル版と公開版が同一だとは扱っていません。</p></div>
+<div class="boundary"><strong>成果は「強化完了」ではなく、改善できる局面と、誤って強くなったと判断する条件の特定です。</strong><p class="small" style="margin:8px 0 0">終盤証明の2コミットは検証コードと結果の追加でした。その後、探索配分の実験をローカルbotへ追加しましたが、既定はOFFです。デプロイ版との差分全体には通常動作の変更も含まれるため、ローカル版と公開版が同一だとは扱っていません。</p></div>
 <section class="section">
 <h2>ここから「強くした」と言うために</h2>
 <ol>
@@ -48,8 +50,9 @@
 <details><summary>根拠と確認範囲</summary>
 <p class="small">本番：<code>c7b11e8</code>。<a href="https://github.com/puniu3/nc2000-engine/actions/runs/37358345981">Pagesの成功履歴</a>と最新デプロイの成功ステータスを確認しました。ローカル研究：<code>410505f</code>。</p>
 <p class="small">公開版とローカルの <code>crates/bot/src</code> には20ファイルの差分があります。両方の既定の構成補完方針は EarlyPerish ですが、ローカルには選出の合計レベル制約などの変更もあります。差分の存在を強化の証明とは扱っていません。</p>
-<p class="small">証明資料：<code>terminal-certificate-v1</code> と <code>hidden-terminal-v1</code>。後者は全件再現、確率・局面ID・観測の改変を拒否する検査まで実施済み。今回の報告作成では保存結果とソース差分を確認し、新しい対戦実験は行っていません。</p>
+<p class="small">証明資料：<code>terminal-certificate-v1</code> と <code>hidden-terminal-v1</code>。後者は全件再現、確率・局面ID・観測の改変を拒否する検査まで実施済み。初版の報告は保存結果とソース差分の確認でした。追記した探索配分の64試合は、その後に新しく実行したものです。</p>
 <p class="small">以前の対戦候補：<code>typed-agent-pilot-v1</code>。近縁の <code>positive-margin-agent-pilot-v1</code> も同じ14勝18敗で、独立した64試合として合算していません。</p>
+<p class="small">追試資料：<code>root-pruning-v1</code>。比較対象は現行ローカル通常botです。公開中のバイナリに対する直接対戦ではありません。</p>
 <a href="./evidence.json">確認記録・数値・資料のハッシュを開く</a>
 </details>
 <footer>NC2000 bot強化の現状 · このページはローカルpreviewです。公開botのデプロイは行っていません。</footer>

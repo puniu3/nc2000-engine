@@ -91,12 +91,17 @@ fn projection(
 
 #[test]
 fn no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(false);
+    collision_invariance(false, false);
 }
 
 #[test]
 fn adaptive_mixture_has_no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(true);
+    collision_invariance(true, false);
+}
+
+#[test]
+fn root_pruning_has_no_psychic_tells_on_the_collision_pair() {
+    collision_invariance(false, true);
 }
 
 #[test]
@@ -156,7 +161,7 @@ fn active_mixture_is_identical_across_ambiguous_hidden_stats() {
     assert_eq!(observations[0], observations[1]);
 }
 
-fn collision_invariance(mixed: bool) {
+fn collision_invariance(mixed: bool, prune: bool) {
     let dex = load_dex();
     let meta = pool();
     let (ci, cj) = collision_pair(&meta);
@@ -180,6 +185,10 @@ fn collision_invariance(mixed: bool) {
         if mixed {
             agent_a = agent_a.with_adaptive_mixture(38);
             agent_b = agent_b.with_adaptive_mixture(38);
+        }
+        if prune {
+            agent_a = agent_a.with_root_pruning();
+            agent_b = agent_b.with_root_pruning();
         }
 
         // test-owned observers/beliefs (independent of the agents') define
