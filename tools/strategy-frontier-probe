@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import statistics
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+previous=root/'findings/strategy-corpus-v1/summary.json'
+corpus=root/'findings/policy-gap-v1/corpus.jsonl.gz'
+reference=root/'findings/policy-gap-v1/records.json.gz'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def requests():
+    selected={}
+    for r in json.loads(previous.read_bytes())['rows']:
+        if not r['certified']:
+            selected.setdefault((r['game'],r['decision']),dict(game=r['game'],decision=r['decision'],side=r['side']))
+    assert len(selected)==41
+    return list(selected.values())
+
+
+def summarize(bundle):
+    assert bundle['selection_sha256']==sha(previous.read_bytes())
+    assert bundle['corpus_sha256']==sha(corpus.read_bytes())
+    assert bundle['reference_sha256']==sha(reference.read_bytes())
+    expected=requests()
+    assert [{k:r[k] for k in ['game','decision','side']} for r in bundle['rows']]==expected
+    old={(p['game'],p['decision']):p for p in json.loads(gzip.decompress(reference.read_bytes()))}
+    rows=[]
+    for r in bundle['rows']:
+        p=old[r['game'],r['decision']]
+        assert r['state_key']==p['state_key']
+        assert r['work_budget']==40000 and r['runs']<=40000
+        assert r['trial_depth']==bundle['depth'] and r['node_budget']==bundle['nodes']
+        assert r.get('call_budget',40000)==bundle.get('slice',40000)
+        assert r.get('cell_cap',4096)==bundle.get('cell_cap',4096)
+        assert r['value'][0]<=p['reference']['value']['hi']+1e-8
+        assert r['value'][1]>=p['reference']['value']['lo']-1e-8
+        g=r['graph'];stats=r['stats']
+        assert g['unexpanded']+g['initialized']==g['nodes']
+        assert g['unique_edges']<=g['edges'] and stats['eager_runs']<=r['runs']
+        assert stats['depth_limit_trials']<=stats['trials']
+        assert len(r['cells'])==len(r['chance'])==len(r['actions'][0])*len(r['actions'][1])
+        pending=children=0
+        for cell,c in zip(r['cells'],r['chance']):
+            assert 0<=c['pending_mass']<=1+1e-8 and 0<=c['child_uncertainty']<=1+1e-8
+            assert cell[1]-cell[0]<=c['pending_mass']+c['child_uncertainty']+1e-8
+            assert c['unique_children']<=c['resolved_edges']
+            assert c['expanded_children']<=c['unique_children']
+            pending+=c['pending_mass'];children+=c['child_uncertainty']
+        rows.append(dict(game=r['game'],decision=r['decision'],side=r['side'],stop=r['stop'],
+            certified=r['max_loss'] is not None and r['max_loss'][r['side']]<=.005,
+            max_loss=r['max_loss'][r['side']] if r['max_loss'] else None,
+            milliseconds=r['milliseconds'],runs=r['runs'],value_width=r['value'][1]-r['value'][0],
+            nodes=g['nodes'],unexpanded_fraction=g['unexpanded']/g['nodes'],
+            capped_fraction=stats['depth_limit_trials']/max(1,stats['trials']),
+            pending_mass_sum=pending,child_uncertainty_sum=children))
+    return dict(positions=len(rows),certified=sum(r['certified'] for r in rows),
+        stops=dict(collections.Counter(r['stop'] for r in rows)),
+        median_unexpanded_fraction=statistics.median(r['unexpanded_fraction'] for r in rows),
+        median_capped_fraction=statistics.median(r['capped_fraction'] for r in rows),
+        rows=rows,scope='All 41 distinct positions with at least one unresolved endpoint in the one-second '
+            'strategy corpus. One unresolved side per position, chosen before this run. Each uses 40000 '
+            'engine executions with explicit node and depth limits; this is not a matched-time strength '
+            'comparison. Root pending mass and child uncertainty are summed over cells without policy '
+            'weighting and therefore diagnose work structure, not regret or probability at the root.')
+
+
+def compare():
+    directory=root/'findings/strategy-frontier-v1'
+    arms={cap:json.loads(gzip.decompress((directory/f'depth24-nodes12000-slice1000-cap{cap}/records.json.gz').read_bytes()))
+          for cap in [4096,64]}
+    assert arms[4096]['source_hashes']==arms[64]['source_hashes']
+    assert arms[4096]['binary_sha256']==arms[64]['binary_sha256']
+    reports={cap:summarize(bundle) for cap,bundle in arms.items()}
+    prior={(r['game'],r['decision'],r['side']):r for r in json.loads(previous.read_bytes())['rows']}
+    pairs=[]
+    for a,b in zip(reports[4096]['rows'],reports[64]['rows']):
+        assert (a['game'],a['decision'],a['side'])==(b['game'],b['decision'],b['side'])
+        if b['certified'] and not a['certified']:
+            assert prior[a['game'],a['decision'],a['side']]['baseline_certified']
+        pairs.append(dict(game=a['game'],decision=a['decision'],side=a['side'],
+            width_change=b['value_width']-a['value_width'],certified=[a['certified'],b['certified']],
+            milliseconds=[a['milliseconds'],b['milliseconds']],runs=[a['runs'],b['runs']]))
+    return dict(positions=len(pairs),
+        narrower=sum(r['width_change']< -1e-8 for r in pairs),wider=sum(r['width_change']>1e-8 for r in pairs),
+        certified={cap:reports[cap]['certified'] for cap in arms},
+        total_ms={cap:sum(r['milliseconds'] for r in report['rows']) for cap,report in reports.items()},
+        total_runs={cap:sum(r['runs'] for r in report['rows']) for cap,report in reports.items()},
+        rows=pairs,decision='No default change: cap 64 closes one previously unresolved position but increases '
+             'aggregate runtime and widens some value intervals. Both arms have identical work ceilings, '
+             'node limits and call sizes; engine executions are not a wall-time budget. The one newly '
+             'certified position had an already-certified baseline action in the prior corpus audit.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--depth',type=int,default=24)
+    parser.add_argument('--nodes',type=int,default=12000)
+    parser.add_argument('--slice',type=int,default=40000)
+    parser.add_argument('--cell-cap',type=int,default=4096)
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    parser.add_argument('--compare',action='store_true')
+    args=parser.parse_args()
+    if args.compare:
+        path=root/'findings/strategy-frontier-v1/cap-comparison.json'
+        report=json.loads(json.dumps(compare()))
+        if args.verify_only:
+            assert json.loads(path.read_bytes())==report
+            print('strategy-frontier: verified paired cap comparison from identical sources and binary')
+        else:
+            assert not path.exists()
+            path.write_text(json.dumps(report,indent=2)+'\n')
+        return
+    archive=root/f'findings/strategy-frontier-v1/depth{args.depth}-nodes{args.nodes}'
+    if args.slice!=40000 or args.cell_cap!=4096:
+        archive=archive.with_name(archive.name+f'-slice{args.slice}-cap{args.cell_cap}')
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        print('strategy-frontier: verified selection, state identities, work accounting and uncertainty decomposition')
+        return
+    assert not archive.exists()
+    sources=sorted(list((root/'crates/bot/src').rglob('*.rs'))+list((root/'crates/engine/src').rglob('*.rs'))+
+                   [root/'crates/bot/examples/strategy_frontier.rs'])
+    hashes={str(p.relative_to(root)):sha(p.read_bytes()) for p in sources}
+    binary=root/'target/release/examples/strategy_frontier'
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if args.import_directory:
+        directory=args.import_directory
+        manifest=json.loads((directory/'manifest.json').read_bytes())
+        assert manifest['source_hashes']==hashes and manifest['binary_sha256']==sha(binary.read_bytes())
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','strategy_frontier'],cwd=root,env=env,check=True)
+        directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-strategy-frontier-'))
+        manifest=dict(source_hashes=hashes,binary_sha256=sha(binary.read_bytes()))
+        (directory/'manifest.json').write_text(json.dumps(manifest))
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress(corpus.read_bytes()))
+        (directory/'requests.json').write_text(json.dumps(requests()))
+        print(directory,flush=True)
+        with (directory/'run.log').open('w') as log:
+            subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/'requests.json'),str(directory/'rows.jsonl'),
+                            '40000',str(args.nodes),str(args.depth),str(args.slice),str(args.cell_cap)],cwd=root,env=env,stdout=log,stderr=log,check=True)
+    assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
+    assert manifest['binary_sha256']==sha(binary.read_bytes())
+    bundle=dict(**manifest,depth=args.depth,nodes=args.nodes,slice=args.slice,cell_cap=args.cell_cap,selection_sha256=sha(previous.read_bytes()),
+        corpus_sha256=sha(corpus.read_bytes()),reference_sha256=sha(reference.read_bytes()),
+        rows=[json.loads(s) for s in (directory/'rows.jsonl').read_text().splitlines()])
+    report=summarize(bundle)
+    archive.mkdir(parents=True)
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='rows'},indent=2))
+
+
+if __name__=='__main__': main()

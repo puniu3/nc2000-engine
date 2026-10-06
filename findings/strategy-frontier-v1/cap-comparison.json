@@ -1,0 +1,758 @@
+{
+  "positions": 41,
+  "narrower": 15,
+  "wider": 9,
+  "certified": {
+    "4096": 0,
+    "64": 1
+  },
+  "total_ms": {
+    "4096": 29447.089417,
+    "64": 55225.828585
+  },
+  "total_runs": {
+    "4096": 1596192,
+    "64": 1566181
+  },
+  "rows": [
+    {
+      "game": 1,
+      "decision": 10,
+      "side": 1,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        797.734583,
+        2049.320792
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 1,
+      "decision": 19,
+      "side": 0,
+      "width_change": -1.1102230246251565e-15,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        756.45275,
+        961.253084
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 1,
+      "decision": 21,
+      "side": 0,
+      "width_change": 0.006820589145548728,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        773.1647499999999,
+        657.959667
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 2,
+      "decision": 7,
+      "side": 0,
+      "width_change": 0.14811728009080238,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        627.073208,
+        982.4745409999999
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 2,
+      "decision": 8,
+      "side": 0,
+      "width_change": -0.04404073529509156,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        674.223459,
+        907.924
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 2,
+      "decision": 11,
+      "side": 0,
+      "width_change": -0.34954903241772217,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        698.1747499999999,
+        619.572583
+      ],
+      "runs": [
+        38760,
+        40000
+      ]
+    },
+    {
+      "game": 2,
+      "decision": 13,
+      "side": 0,
+      "width_change": -0.12309478196885926,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        708.024666,
+        668.670416
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 5,
+      "decision": 7,
+      "side": 1,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        602.371,
+        2592.906833
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 5,
+      "decision": 8,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        662.935209,
+        1145.602583
+      ],
+      "runs": [
+        40000,
+        27795
+      ]
+    },
+    {
+      "game": 6,
+      "decision": 6,
+      "side": 1,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        593.326917,
+        524.5185839999999
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 6,
+      "decision": 7,
+      "side": 0,
+      "width_change": 0.001098432488827239,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        681.050292,
+        1181.932542
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 6,
+      "decision": 30,
+      "side": 0,
+      "width_change": 0.0004989382073612436,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        522.534583,
+        708.8879999999999
+      ],
+      "runs": [
+        22070,
+        40000
+      ]
+    },
+    {
+      "game": 6,
+      "decision": 33,
+      "side": 0,
+      "width_change": -0.07031250000818545,
+      "certified": [
+        false,
+        true
+      ],
+      "milliseconds": [
+        394.683875,
+        547.0353329999999
+      ],
+      "runs": [
+        15817,
+        36842
+      ]
+    },
+    {
+      "game": 8,
+      "decision": 44,
+      "side": 1,
+      "width_change": 0.10692213955420837,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        703.533375,
+        803.3921670000001
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 8,
+      "decision": 46,
+      "side": 0,
+      "width_change": 0.04605003124190854,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        751.3553750000001,
+        831.286834
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 11,
+      "decision": 3,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        627.587042,
+        1692.997541
+      ],
+      "runs": [
+        40000,
+        28668
+      ]
+    },
+    {
+      "game": 11,
+      "decision": 13,
+      "side": 0,
+      "width_change": -0.2603343098988995,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        583.444833,
+        1592.868958
+      ],
+      "runs": [
+        40000,
+        36371
+      ]
+    },
+    {
+      "game": 11,
+      "decision": 15,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        622.291209,
+        1287.312042
+      ],
+      "runs": [
+        40000,
+        27052
+      ]
+    },
+    {
+      "game": 12,
+      "decision": 14,
+      "side": 0,
+      "width_change": -0.0002352541773927852,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        677.546584,
+        931.6982499999999
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 12,
+      "decision": 15,
+      "side": 0,
+      "width_change": -0.00030727076230896433,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        653.3384580000001,
+        996.465917
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 12,
+      "decision": 17,
+      "side": 0,
+      "width_change": -0.4125790455469933,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        577.2340409999999,
+        722.0869170000001
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 13,
+      "decision": 18,
+      "side": 1,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        661.5962499999999,
+        2756.008583
+      ],
+      "runs": [
+        40000,
+        34534
+      ]
+    },
+    {
+      "game": 13,
+      "decision": 19,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        668.796875,
+        2563.8462090000003
+      ],
+      "runs": [
+        40000,
+        34550
+      ]
+    },
+    {
+      "game": 15,
+      "decision": 12,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        556.578583,
+        1379.4919160000002
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 15,
+      "decision": 16,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        632.584917,
+        897.5432920000001
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 15,
+      "decision": 18,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        689.629292,
+        638.826667
+      ],
+      "runs": [
+        39545,
+        40000
+      ]
+    },
+    {
+      "game": 15,
+      "decision": 21,
+      "side": 0,
+      "width_change": -0.040408254093456386,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        764.740541,
+        775.363
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 16,
+      "decision": 16,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        688.896042,
+        1549.017708
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 16,
+      "decision": 24,
+      "side": 0,
+      "width_change": -0.0013013588594902314,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        792.09675,
+        680.309458
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 17,
+      "decision": 20,
+      "side": 1,
+      "width_change": -0.3706530462054396,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        625.846916,
+        2334.6410419999997
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 17,
+      "decision": 21,
+      "side": 0,
+      "width_change": -0.18864328220872983,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        1424.8319170000002,
+        4508.253833000001
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 18,
+      "decision": 9,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        1058.6836250000001,
+        3145.921292
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 18,
+      "decision": 11,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        1741.7057499999999,
+        3331.756583
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 19,
+      "decision": 11,
+      "side": 1,
+      "width_change": -1.1333026355031528e-05,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        739.019875,
+        1080.9435
+      ],
+      "runs": [
+        40000,
+        34242
+      ]
+    },
+    {
+      "game": 19,
+      "decision": 12,
+      "side": 0,
+      "width_change": -1.4802320137174974e-05,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        712.512792,
+        1245.506917
+      ],
+      "runs": [
+        40000,
+        39402
+      ]
+    },
+    {
+      "game": 19,
+      "decision": 17,
+      "side": 0,
+      "width_change": -0.0017703272725926311,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        694.884417,
+        642.3893750000001
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 21,
+      "decision": 30,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        679.417416,
+        1023.200042
+      ],
+      "runs": [
+        40000,
+        30555
+      ]
+    },
+    {
+      "game": 21,
+      "decision": 33,
+      "side": 0,
+      "width_change": 0.0,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        604.8131249999999,
+        1503.4908329999998
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 21,
+      "decision": 36,
+      "side": 0,
+      "width_change": 0.03146749907108948,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        694.569917,
+        1353.042458
+      ],
+      "runs": [
+        40000,
+        36170
+      ]
+    },
+    {
+      "game": 23,
+      "decision": 16,
+      "side": 1,
+      "width_change": 0.05079873998685233,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        663.250667,
+        730.241334
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    },
+    {
+      "game": 23,
+      "decision": 17,
+      "side": 0,
+      "width_change": 0.13643377402269097,
+      "certified": [
+        false,
+        false
+      ],
+      "milliseconds": [
+        664.552791,
+        679.8669590000001
+      ],
+      "runs": [
+        40000,
+        40000
+      ]
+    }
+  ],
+  "decision": "No default change: cap 64 closes one previously unresolved position but increases aggregate runtime and widens some value intervals. Both arms have identical work ceilings, node limits and call sizes; engine executions are not a wall-time budget. The one newly certified position had an already-certified baseline action in the prior corpus audit."
+}
