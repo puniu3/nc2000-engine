@@ -106,6 +106,7 @@ pub struct BoundConfig {
     pub resource_closure_period: usize,
     pub directed_policy_refinement: bool,
     pub target_aware_refinement: bool,
+    pub strategy_refinement: bool,
 }
 
 impl Default for BoundConfig {
@@ -141,6 +142,7 @@ impl Default for BoundConfig {
             resource_closure_period: 1,
             directed_policy_refinement: false,
             target_aware_refinement: false,
+            strategy_refinement: false,
         }
     }
 }
@@ -353,6 +355,8 @@ pub struct BoundStats {
     pub trial_depth_counts: Vec<usize>,
     pub depth_limit_trials: usize,
     pub material_descent_bypasses: usize,
+    pub strategy_refinement_trials: usize,
+    pub strategy_ceiling_trials: usize,
     pub fixed_waking_rest_nodes: usize,
     pub lazy_edge_merges: usize,
 }
@@ -958,7 +962,10 @@ impl<'d> BoundSolver<'d> {
                     strategies: node_strategies(n),
                 };
             }
-            if self.trial(root, work_limit) {
+            let (cell, direction) = if self.cfg.strategy_refinement {
+                strategy_target.map_or((None,None), |(side,loss)|self.select_strategy_refinement(root,side,loss))
+            } else { (None,None) };
+            if self.trial_from_cell(root, work_limit, cell, direction) {
                 idle = 0;
                 if self.cfg.fold_closed_nodes
                     && (self.stats.trials % 4096 == 0
@@ -1116,6 +1123,31 @@ impl<'d> BoundSolver<'d> {
                 self.fold_closed_graph();
             }
         }
+    }
+
+    fn select_strategy_refinement(&mut self, root: NodeKey, side: usize, tolerance: f64) -> (Option<usize>, Option<BoundDirection>) {
+        let node = &self.nodes[&root];
+        let Some(policies) = node_strategies(node) else { return (None,None); };
+        let policy: Vec<_> = policies[side].actions.iter().map(|(_,mass)|*mass).collect();
+        let payoffs = RootPayoffs {
+            actions:[node.acts0.clone(),node.acts1.clone()],
+            cells:node.cells.iter().map(|c|Bounds {lo:c.lo,hi:c.hi}).collect(),
+            value:Bounds {lo:node.lo,hi:node.hi},
+        };
+        let (refine,sufficient) = payoffs.refinement_cell(side,&policy,Some(tolerance));
+        self.stats.sufficient_reply_skips += sufficient;
+        self.stats.target_filtered_trials += usize::from(sufficient>0);
+        let visits = self.stats.strategy_refinement_trials + self.stats.strategy_ceiling_trials;
+        let refine_ceiling = refine.is_none() || (payoffs.value.width()>tolerance*0.5 && visits%4==3);
+        let direction = if (side==0)==refine_ceiling { BoundDirection::Upper } else { BoundDirection::Lower };
+        let cell = if refine_ceiling {
+            self.stats.strategy_ceiling_trials += 1;
+            self.select_cell_for_bound(root,Some(direction))
+        } else {
+            self.stats.strategy_refinement_trials += 1;
+            refine.unwrap().0
+        };
+        (Some(cell),Some(direction))
     }
 
     fn node_key(&self, b: &Battle) -> NodeKey {
@@ -1330,12 +1362,6 @@ impl<'d> BoundSolver<'d> {
         node.acts1 = a1;
         node.active_rows = vec![true; node.acts0.len()];
         node.active_cols = vec![true; node.acts1.len()];
-    }
-
-    /// One trial: descend by LP-support × uncertainty, expand one pending
-    /// chance script at the frontier, back up along the path.
-    fn trial(&mut self, root: NodeKey, work_limit: usize) -> bool {
-        self.trial_from_cell(root, work_limit, None, None)
     }
 
     fn trial_from_cell(&mut self, root: NodeKey, work_limit: usize, root_cell: Option<usize>, direction: Option<BoundDirection>) -> bool {
@@ -4020,6 +4046,54 @@ mod tests {
             }
         }
         panic!("strategy target never reached");
+    }
+
+    #[test]
+    fn strategy_refinement_encloses_exhaustive_policies_and_resumes() {
+        let dex = conformance::load_dex();
+        for (moves,turn,hp) in [(["Quick Attack","Splash"],1000,[1,1]),
+                              (["Recover","Seismic Toss"],999,[60,40])] {
+            let mut root = battle(&dex,&moves,&moves);
+            let preview = [0,1].map(|s|root.legal_choices(&dex,s).first().copied());
+            root.apply_choices(&dex,preview).unwrap();
+            root.turn=turn;
+            for side in 0..2 {
+                let id=root.active_id(side).unwrap();
+                root.poke_mut(id).hp=hp[side];
+            }
+            let values=exhaustive_matrix(&dex,&root,2);
+            let value=solve_matrix(&values,2,2).0;
+            let exact=super::RootPayoffs {
+                actions:[0,1].map(|s|root.legal_choices(&dex,s).into_iter().map(Some).collect()),
+                cells:values.into_iter().map(|v|super::Bounds {lo:v,hi:v}).collect(),
+                value:super::Bounds {lo:value,hi:value},
+            };
+            for side in 0..2 {
+                let mut solver=BoundSolver::new(&dex,BoundConfig {
+                    work_budget:7,cell_cap:0,eps:1e-12,strategy_refinement:true,
+                    resource_closure_nodes:Some(0),..BoundConfig::default()
+                });
+                let mut certified=false;
+                let mut previous=super::Bounds {lo:0.,hi:1.};
+                for _ in 0..2000 {
+                    let report=solver.solve_strategy(&root,side,1e-8);
+                    assert!(report.runs<=7);
+                    assert!(report.bounds.lo<=value+1e-9 && report.bounds.hi>=value-1e-9);
+                    assert!(report.bounds.lo>=previous.lo && report.bounds.hi<=previous.hi);
+                    previous=report.bounds;
+                    if let Some(policies)=report.strategies.as_ref() {
+                        for s in 0..2 {
+                            let policy:Vec<_>=policies[s].actions.iter().map(|(_,p)|*p).collect();
+                            assert!(exact.policy_loss(s,&policy).hi<=policies[s].max_loss+1e-8);
+                        }
+                    }
+                    if report.strategy(side,1e-8).is_some() { certified=true;break; }
+                    assert!(report.runs>0);
+                }
+                assert!(certified);
+                assert!(solver.stats.strategy_refinement_trials>0);
+            }
+        }
     }
 
     fn exhaustive_matrix(dex: &nc2000_engine::dex::Dex, root: &Battle, depth: usize) -> Vec<f64> {

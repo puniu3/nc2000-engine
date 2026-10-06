@@ -18,7 +18,7 @@ struct Request { game: usize, decision: usize, side: usize }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    assert!((11..=14).contains(&args.len()), "corpus requests output runs nodes depth call-runs cell-cap retain-prefix defer-frontier [profile-selection] [milliseconds] [resource-closure-nodes]");
+    assert!((11..=15).contains(&args.len()), "corpus requests output runs nodes depth call-runs cell-cap retain-prefix defer-frontier [profile-selection] [milliseconds] [resource-closure-nodes] [strategy-refinement]");
     let requests: Vec<Request> = serde_json::from_str(&std::fs::read_to_string(&args[2]).unwrap()).unwrap();
     let work_budget: usize = args[4].parse().unwrap();
     let node_budget: usize = args[5].parse().unwrap();
@@ -30,6 +30,7 @@ fn main() {
     let profile_pending_selection = args.get(11).is_some_and(|s|s.parse::<bool>().unwrap());
     let time_budget = args.get(12).map(|s| Duration::from_millis(s.parse().unwrap()));
     let resource_closure_nodes = args.get(13).map(|s| s.parse::<usize>().unwrap());
+    let strategy_refinement = args.get(14).is_some_and(|s|s.parse::<bool>().unwrap());
     assert!(time_budget.is_none_or(|d| !d.is_zero()));
     assert!(!defer_eager_frontier || retain_eager_prefix);
     assert!(work_budget>0 && call_budget>0);
@@ -44,7 +45,7 @@ fn main() {
             assert_eq!(battle.state_key128().to_string(), decision.key);
             let legal = [0,1].map(|s|battle.legal_choices(&dex,s));
             if let Some(request) = requests.iter().find(|r|r.game==game.game && r.decision==index) {
-                let config = BoundConfig { work_budget:call_budget, node_budget, trial_depth, cell_cap, retain_eager_prefix, defer_eager_frontier, profile_pending_selection, resource_closure_nodes, eps:1e-10, ..Default::default() };
+                let config = BoundConfig { work_budget:call_budget, node_budget, trial_depth, cell_cap, retain_eager_prefix, defer_eager_frontier, profile_pending_selection, resource_closure_nodes, strategy_refinement, eps:1e-10, ..Default::default() };
                 let started = Instant::now();
                 let mut solver = BoundSolver::new(&dex,config);
                 let report = loop {
@@ -102,6 +103,11 @@ fn main() {
                     record["resource_closure"]=json!({"threshold":threshold,
                         "visits":stats.resource_closure_visits,"first_nodes":stats.first_resource_closure_nodes,
                         "one_sided_roots":stats.monotone_roots,"two_sided_roots":stats.two_sided_roots});
+                }
+                if args.len()==15 {
+                    record["strategy_refinement"]=json!({"enabled":strategy_refinement,
+                        "policy_trials":stats.strategy_refinement_trials,"ceiling_trials":stats.strategy_ceiling_trials,
+                        "sufficient_reply_skips":stats.sufficient_reply_skips});
                 }
                 if profile_pending_selection {
                     record["pending_profile"]=json!({"nanoseconds":stats.pending_selection_ns,

@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import gzip
+import json
+import os
+import pathlib
+import re
+import runpy
+import shutil
+import statistics
+import subprocess
+import sys
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/strategy-refinement-v1'
+timed=runpy.run_path(str(root/'tools/fused-key-time-probe'))
+frontier=timed['frontier']
+sha=timed['sha']
+fixed=runpy.run_path(str(root/'tools/fused-key-probe'))
+prior=root/'findings/node-budget-fixed-time-v1/records.json.gz'
+parity_reference=root/'findings/fused-key-v1/records.json.gz'
+
+
+def summarize(bundle):
+    assert bundle['prior_sha256']==sha(prior.read_bytes())
+    assert bundle['parity_sha256']==sha(parity_reference.read_bytes())
+    for key,path in [('corpus',frontier['corpus']),('reference',frontier['reference']),('selection',frontier['previous'])]:
+        assert bundle[key+'_sha256']==sha(path.read_bytes())
+    previous=json.loads(gzip.decompress(prior.read_bytes()))
+    changed=sorted(p for p,h in previous['manifest']['sources'].items() if bundle['manifest']['sources'][p]!=h)
+    assert changed==['crates/bot/examples/strategy_frontier.rs','crates/bot/src/bounds.rs']
+    reference=json.loads(gzip.decompress(parity_reference.read_bytes()))['runs'][1]['rows']
+    assert fixed['normalize'](bundle['parity'])==fixed['normalize'](reference)
+    for a,b in zip(bundle['parity'],reference):
+        for ac,bc in zip(a['chance'],b['chance']): assert abs(ac['child_uncertainty']-bc['child_uncertainty'])<1e-12
+    summaries=[]
+    for i,run in enumerate(bundle['runs']):
+        repeat=i//2
+        order=[False,True] if repeat%2==0 else [True,False]
+        assert run['repeat']==repeat and run['enabled']==order[i%2]
+        rows=timed['validate_rows'](run['rows'],node_budget=48000,allowed_stops=('NodeBudget','TimeBudget','WidthMet','WorkExhausted'))
+        for row,raw in zip(rows,run['rows']):
+            assert raw['resource_closure']['threshold']==9000
+            stats=raw['strategy_refinement']
+            assert stats['enabled']==run['enabled']
+            if not run['enabled']: assert stats['policy_trials']==stats['ceiling_trials']==0
+            row['refinement']=stats
+        peak=int(re.search(r'^\s*(\d+)\s+maximum resident set size$',run['time_log'],re.M)[1])
+        summaries.append(dict(repeat=repeat,enabled=run['enabled'],certified=sum(r['certified'] for r in rows),
+            stops=dict(collections.Counter(r['stop'] for r in rows)),runs=sum(r['runs'] for r in rows),
+            peak_rss_bytes=peak,max_ms=max(r['milliseconds'] for r in rows),rows=rows))
+    assert len(summaries)==6
+    pairs=[]
+    for repeat in range(3):
+        arms={r['enabled']:r for r in summaries if r['repeat']==repeat}
+        a,b=arms[False],arms[True]
+        pairs.append(dict(repeat=repeat,certified=dict(control=a['certified'],refinement=b['certified']),runs_ratio=b['runs']/a['runs'],
+            narrower=sum(y['width']<x['width']-1e-8 for x,y in zip(a['rows'],b['rows'])),
+            wider=sum(y['width']>x['width']+1e-8 for x,y in zip(a['rows'],b['rows'])),
+            loss_bound_lower=sum(y['max_loss'] is not None and x['max_loss'] is not None and y['max_loss']<x['max_loss']-1e-8 for x,y in zip(a['rows'],b['rows'])),
+            loss_bound_higher=sum(y['max_loss'] is not None and x['max_loss'] is not None and y['max_loss']>x['max_loss']+1e-8 for x,y in zip(a['rows'],b['rows'])),
+            gained=[dict(game=y['game'],decision=y['decision'],side=y['side']) for x,y in zip(a['rows'],b['rows']) if y['certified'] and not x['certified']],
+            lost=[dict(game=x['game'],decision=x['decision'],side=x['side']) for x,y in zip(a['rows'],b['rows']) if x['certified'] and not y['certified']]))
+    gained=sorted({(r['game'],r['decision'],r['side']) for p in pairs for r in p['gained']})
+    prior_policies={(r['game'],r['decision'],r['side']):r for r in json.loads(frontier['previous'].read_bytes())['rows']}
+    return dict(positions=41,repeats=3,budget_ms=1000,nodes=48000,pairs=pairs,runs=summaries,
+        gained_baseline_context=[dict(game=k[0],decision=k[1],side=k[2],prior_baseline_loss=prior_policies[k]['baseline_loss'],
+                  prior_baseline_certified=prior_policies[k]['baseline_certified']) for k in gained],
+        default_parity='All 41 fixed-work control outcomes match the pre-change archive except time and sub-1e-12 diagnostic sums.',
+        scope='Same binary, alternating order, 1000 ms soft deadlines, 48000-node cap and fixed 9000-node resource threshold. '
+              'Refinement changes only scheduling toward the current certified policy and its value ceiling. All reply actions '
+              'remain in certificates. Certificates bound first-action loss with optimal full-information continuation; '
+              'they are not complete-game or blind-policy guarantees. Experimental flag defaults to false.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        print('strategy-refinement: verified 41 unchanged controls and 246 timed policy certificates')
+        return
+    assert not archive.exists() and sys.platform=='darwin'
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-strategy-refinement-'))
+    print(directory,flush=True)
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    paths=json.loads(gzip.decompress(prior.read_bytes()))['manifest']['sources']
+    hashes={p:sha((root/p).read_bytes()) for p in paths}
+    if args.import_directory:
+        manifest=json.loads((directory/'manifest.json').read_bytes())
+        assert manifest['sources']==hashes
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','strategy_frontier'],cwd=root,env=env,check=True)
+        shutil.copy2(root/'target/release/examples/strategy_frontier',directory/'runner')
+        manifest=dict(sources=hashes,binary_sha256=sha((directory/'runner').read_bytes()))
+        (directory/'manifest.json').write_text(json.dumps(manifest))
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress(frontier['corpus'].read_bytes()))
+        (directory/'requests.json').write_text(json.dumps(frontier['requests']()))
+        prefix=[str(directory/'runner'),str(directory/'corpus.jsonl'),str(directory/'requests.json')]
+        with (directory/'parity.log').open('w') as log:
+            subprocess.run(prefix+[str(directory/'parity.jsonl'),'40000','12000','24','1000','4096','false','false','false'],cwd=root,env=env,stdout=log,stderr=log,check=True)
+        print('fixed-work control complete',flush=True)
+        for repeat in range(3):
+            for enabled in ([False,True] if repeat%2==0 else [True,False]):
+                stem=f'{repeat}-{int(enabled)}'
+                with (directory/f'{stem}.log').open('w') as log:
+                    subprocess.run(['/usr/bin/time','-l']+prefix+[str(directory/f'{stem}.jsonl'),'1000000','48000','24','1000','4096',
+                        'false','false','false','1000','9000',str(enabled).lower()],cwd=root,env=env,stdout=log,stderr=log,check=True)
+                print(f'{repeat} refinement={enabled} complete',flush=True)
+    assert manifest['binary_sha256']==sha((directory/'runner').read_bytes())
+    assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
+    bundle=dict(manifest=manifest,prior_sha256=sha(prior.read_bytes()),parity_sha256=sha(parity_reference.read_bytes()),
+        parity=[json.loads(s) for s in (directory/'parity.jsonl').read_text().splitlines()],
+        **{key+'_sha256':sha(path.read_bytes()) for key,path in [('corpus',frontier['corpus']),('reference',frontier['reference']),('selection',frontier['previous'])]},
+        runs=[dict(repeat=repeat,enabled=enabled,rows=[json.loads(s) for s in (directory/f'{repeat}-{int(enabled)}.jsonl').read_text().splitlines()],
+                   time_log='\n'.join(line for line in (directory/f'{repeat}-{int(enabled)}.log').read_text().splitlines() if not line.startswith('game=')))
+              for repeat in range(3) for enabled in ([False,True] if repeat%2==0 else [True,False])])
+    report=summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='runs'},indent=2))
+
+
+if __name__=='__main__': main()

@@ -25,7 +25,7 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-def validate_rows(records, *, node_budget=12000, budget_ms=1000):
+def validate_rows(records, *, node_budget=12000, budget_ms=1000, allowed_stops=('NodeBudget','TimeBudget')):
     reference={(p['game'],p['decision']):p for p in json.loads(gzip.decompress(frontier['reference'].read_bytes()))}
     assert [{k:r[k] for k in ['game','decision','side']} for r in records]==frontier['requests']()
     rows=[]
@@ -46,7 +46,7 @@ def validate_rows(records, *, node_budget=12000, budget_ms=1000):
                 assert loss(p['reference'],side,policy)[0]<=r['max_loss'][side]+1e-7
         side=r['side']
         certified=r['max_loss'] is not None and r['max_loss'][side]<=.005
-        assert certified or r['stop'] in ['NodeBudget','TimeBudget']
+        assert certified or r['stop'] in allowed_stops
         rows.append(dict(game=r['game'],decision=r['decision'],side=side,certified=certified,
             max_loss=None if r['max_loss'] is None else r['max_loss'][side],
             width=r['value'][1]-r['value'][0],milliseconds=r['milliseconds'],runs=r['runs'],stop=r['stop']))
