@@ -1,0 +1,27 @@
+{
+  "harness_commit": "15f7808",
+  "identity_checkpoints": 2106,
+  "identity_previews": 96,
+  "identity_iterations": 128,
+  "baseline_matches_native": true,
+  "candidate_matches_direct_search": true,
+  "fixed_iteration_null_games": 8,
+  "null_pair_scores": [
+    0.5,
+    0.5,
+    0.5,
+    0.5
+  ],
+  "example_compilation": "passed",
+  "complete_games": 64,
+  "paired_arithmetic_and_timings": "verified",
+  "negative_controls": [
+    "wrong_seed",
+    "invalid_score",
+    "invalid_deadline",
+    "baseline_action_removal",
+    "missing_game"
+  ],
+  "native_wall_clock_match_replay": false,
+  "decision": "No fresh confirmation or adoption; no additional games appended to this screen."
+}
