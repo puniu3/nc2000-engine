@@ -41,19 +41,35 @@ def specs():
             'capfloor3':dict(guarded,first_choice='switch 3',work_budget=1,cell_cap=1)}
 
 
-def verify(record):
+def verify(record, prior=None):
     cfg=record['config'];nodes=record['nodes'];runs=0;identities=set()
+    if prior is not None:
+        ignored={'horizon','work_budget','cell_cap'}
+        assert {k:v for k,v in cfg.items() if k not in ignored}=={k:v for k,v in prior['config'].items() if k not in ignored}
+        assert nodes[-1]['state_key']==prior['nodes'][-1]['state_key']
     assert record['root']==len(nodes)-1
     assert record['bounds']==nodes[-1]['bounds'] and nodes[-1]['depth']==0
     for index,node in enumerate(nodes):
         identity=(*node['cache_key'],node['depth'])
         assert identity not in identities;identities.add(identity)
         lo,hi=map(F,node['bounds']);assert 0<=lo<=hi<=1
+        raw=node.get('raw_bounds',node['bounds'])
+        lo,hi=map(F,raw);assert 0<=lo<=hi<=1
+        if 'prior_node' in node:
+            assert prior is not None
+            assert 0<=node['prior_node']<len(prior['nodes'])
+            previous=prior['nodes'][node['prior_node']]
+            assert (*previous['cache_key'],previous['depth'])==identity
+            assert node['bounds']==[max(raw[0],previous['bounds'][0]),min(raw[1],previous['bounds'][1])]
+        else:assert 'raw_bounds' not in node
         if node['kind']=='terminal':
             assert lo==hi and lo in [0,F(1,2),1]
         elif node['kind'] in ['horizon','budget']:
             assert [lo,hi]==[0,1]
             if node['kind']=='horizon':assert node['depth']>=cfg['horizon']
+        elif node['kind']=='reused':
+            assert 'prior_node' in node and raw==[0,1]
+            assert previous['bounds'][1]-previous['bounds'][0]<=1e-8
         else:
             assert node['kind']=='decision' and node['depth']<cfg['horizon']
             assert node['maximizing']==(cfg['policy_side']!=cfg['target_side'])
@@ -81,7 +97,7 @@ def verify(record):
                     assert found[0]<=max(F(0),values[0]-pad/2)
                     assert found[1]>=min(F(1),values[1]+pad/2)
             op=max if node['maximizing'] else min
-            assert node['bounds']==[op(b['bounds'][k] for b in node['branches']) for k in [0,1]]
+            assert raw==[op(b['bounds'][k] for b in node['branches']) for k in [0,1]]
     assert runs==record['runs']<=cfg['work_budget']
     return dict(runs=runs,nodes=len(nodes),bounds=record['bounds'],
         node_kinds=dict(collections.Counter(n['kind'] for n in nodes)),

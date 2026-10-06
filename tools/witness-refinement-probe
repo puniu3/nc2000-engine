@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/finite-witness-refinement-v1'
+previous='findings/finite-policy-witness-v1/records.json.gz'
+verifier=runpy.run_path(str(root/'tools/policy-witness-probe'))
+
+
+def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+
+def read(path):return json.loads(gzip.decompress((root/path).read_bytes()))
+
+
+def specs():
+    base=verifier['specs']()['lower2-guarded']
+    return {'control-current':(base,None,False),
+        'seeded8-import':(dict(base,horizon=8),'lower2-guarded',False),
+        'seeded8-priority':(dict(base,horizon=8),'lower2-guarded',True),
+        'seeded8-cap16k':(dict(base,horizon=8,cell_cap=16384),'lower2-cap16k',True),
+        'seeded-tiny':(dict(base,horizon=8,work_budget=1,cell_cap=1),'lower2-guarded',False)}
+
+
+def active_certificate(record):
+    nodes=record['nodes'];weights=collections.defaultdict(F,{record['root']:F(1)});mass=collections.defaultdict(F)
+    for index in reversed(range(len(nodes))):
+        node=nodes[index];weight=weights[index]
+        if not weight:continue
+        assert 'prior_node' not in node
+        if node['kind']=='decision':
+            assert not node['maximizing']
+            branch=min(node['branches'],key=lambda b:b['bounds'][0])
+            mass['pending']+=weight*F(branch['pending'])
+            for child in branch['children']:weights[child['node']]+=weight*F(child['mass'])
+        else:mass[node['kind']]+=weight
+    assert abs(sum(mass.values())-1)<F(1,10**8)
+    return {k:float(v) for k,v in mass.items()}
+
+
+def summarize(bundle):
+    assert bundle['prior_sha256']==sha((root/previous).read_bytes())
+    old=read(previous)
+    assert sorted(p for p,h in old['source_hashes'].items() if bundle['source_hashes'][p]!=h)==['crates/bot/examples/policy_witness.rs']
+    priors={name:json.loads(raw) for name,raw in bundle['prior_raw_json'].items()}
+    for name,record in priors.items():
+        assert record==old['records'][name]
+        verifier['verify'](record)
+    reports={}
+    assert list(bundle['records'])==list(specs())
+    for name,(cfg,parent,priority) in specs().items():
+        r=bundle['records'][name];assert r['config']==cfg
+        if parent:
+            assert r['prior_sha256']==sha(bundle['prior_raw_json'][parent].encode())
+            assert r['prioritize_uncertainty']==priority
+        report=verifier['verify'](r,priors.get(parent))
+        report['prior_nodes_used']=sum('prior_node' in n for n in r['nodes'])
+        report['certificate_runs']=r['runs']+(priors[parent]['runs'] if parent else 0)
+        if parent:
+            prior=priors[parent]['bounds']
+            assert r['bounds'][0]>=prior[0] and r['bounds'][1]<=prior[1]
+            report['lower_bound_gain']=r['bounds'][0]-prior[0]
+        reports[name]=report
+    assert bundle['records']['control-current']==old['records']['lower2-guarded']
+    assert reports['seeded-tiny']['runs']==1 and reports['seeded-tiny']['bounds']==priors['lower2-guarded']['bounds']
+    assert bundle['incompatible_policy']['returncode']!=0
+    assert 'prior policy and key configuration must match' in bundle['incompatible_policy']['stderr']
+    for fault in ['wrong_policy','wrong_reference','invalid_intersection']:
+        bad=copy.deepcopy(bundle['records']['seeded-tiny'])
+        if fault=='wrong_policy':bad['config']['first_choice']='switch 3'
+        elif fault=='wrong_reference':bad['nodes'][-1]['prior_node']=0
+        else:bad['nodes'][-1]['bounds'][0]=1.;bad['bounds'][0]=1.
+        try:verifier['verify'](bad,priors['lower2-guarded'])
+        except AssertionError:pass
+        else:raise AssertionError(f'accepted invalid import: {fault}')
+    return dict(rows=reports,default_archive_parity=True,
+        initial_certificate=active_certificate(priors['lower2-guarded']),
+        wider_certificate=active_certificate(priors['lower2-cap16k']),
+        significant_improvements=sum(r.get('lower_bound_gain',0)>1e-8 for r in reports.values()),
+        decision='Retain the certificate-import mechanism as a diagnostic. No material gain from deeper refinement '
+                 'or mass-times-width ordering at this budget; no production change.',
+        scope='Same fixed continuation policy and tagged state/depth identities. Imported intervals bound the '
+              'infinite continuation; horizon limits only new work. Intersect every new result with its prior '
+              'interval, including at budget cuts. Skip prior intervals at most 1e-8 wide without treating them '
+              'as exact. Optional chance ordering uses prior mass times interval width. Every prior artifact is '
+              'verified before import; engine and data source hashes are identical to its frozen run. Native '
+              'imports assume a trusted verified witness, and reject differing policy or key configurations. '
+              'The verifier checks source references, identities, exact interval intersection and all reply '
+              'coverage, and rejects mutated policies, references and overclaims. Active-certificate mass follows '
+              'the replies minimizing the recorded lower bound with first-branch tie breaking; it diagnoses this '
+              'certificate, not the true optimal opponent. Counts include prior construction work; wall times '
+              'are not used. Full-state first-choice evidence only, not deployed bot strength.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path);args=parser.parse_args()
+    if args.verify_only:
+        assert summarize(read('findings/finite-witness-refinement-v1/records.json.gz'))==json.loads((archive/'summary.json').read_bytes())
+        print('witness-refinement: prior identity, monotone certificates, parity and rejection controls verified');return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-witness-refinement-'))
+    print(directory,flush=True)
+    old=read(previous);binary=root/'target/release/examples/policy_witness'
+    sources={p:sha((root/p).read_bytes()) for p in old['source_hashes']}
+    assert sorted(p for p,h in old['source_hashes'].items() if sources[p]!=h)==['crates/bot/examples/policy_witness.rs']
+    for parent in ['lower2-guarded','lower2-cap16k']:
+        verifier['verify'](old['records'][parent])
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if not args.import_directory:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','policy_witness'],cwd=root,env=env,check=True)
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/'findings/policy-gap-v1/corpus.jsonl.gz').read_bytes()))
+        for parent in ['lower2-guarded','lower2-cap16k']:
+            (directory/(parent+'.out.json')).write_text(json.dumps(old['records'][parent],separators=(',',':')))
+        for name,(cfg,parent,priority) in specs().items():
+            (directory/(name+'.config.json')).write_text(json.dumps(cfg))
+            cmd=[str(binary),str(directory/'corpus.jsonl'),str(directory/(name+'.config.json')),str(directory/(name+'.out.json'))]
+            if parent:cmd.append(str(directory/(parent+'.out.json')))
+            if priority:cmd.append('priority')
+            subprocess.run(cmd,cwd=root,env=env,check=True)
+    wrong=dict(specs()['seeded-tiny'][0],first_choice='switch 3')
+    (directory/'wrong-prior.json').write_text(json.dumps(wrong))
+    rejected=subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/'wrong-prior.json'),
+        str(directory/'wrong-prior.out.json'),str(directory/'lower2-guarded.out.json')],cwd=root,env=env,capture_output=True,text=True)
+    assert not (directory/'wrong-prior.out.json').exists()
+    bundle=dict(prior_sha256=sha((root/previous).read_bytes()),source_hashes=sources,binary_sha256=sha(binary.read_bytes()),
+        prior_raw_json={n:(directory/(n+'.out.json')).read_text() for n in ['lower2-guarded','lower2-cap16k']},
+        records={n:json.loads((directory/(n+'.out.json')).read_bytes()) for n in specs()},
+        incompatible_policy=dict(returncode=rejected.returncode,stderr=rejected.stderr))
+    assert sources=={p:sha((root/p).read_bytes()) for p in sources}
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='rows'},indent=2))
+
+
+if __name__=='__main__':main()

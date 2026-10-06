@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::BufRead;
+use sha2::{Digest, Sha256};
+
+type CacheKey = (bool, bool, u128, usize);
 
 #[derive(Deserialize)]
 struct Decision { key: String, choices: [Option<usize>; 2] }
@@ -21,10 +24,19 @@ struct Config {
 
 struct Witness<'a> {
     dex: &'a Dex, cfg: Config, runs: usize,
-    memo: HashMap<(bool, bool, u128, usize), usize>, nodes: Vec<Value>,
+    memo: HashMap<CacheKey, usize>, nodes: Vec<Value>,
+    prior: HashMap<CacheKey, (usize, [f64; 2])>, prioritize: bool,
 }
 
 impl Witness<'_> {
+    fn key(&self, battle: &Battle, depth: usize) -> CacheKey {
+        let damage=self.cfg.guarded_keys && !battle.damage_bookkeeping_observable(self.dex);
+        let claw=self.cfg.guarded_keys && !battle.quick_claw_roll_observable(self.dex);
+        let semantic=if claw {battle.state_key128_without_quick_claw_roll(self.dex,damage)}
+            else if damage {battle.state_key128_without_damage_bookkeeping()} else {battle.state_key128()};
+        (damage,claw,semantic,depth)
+    }
+
     fn selected(&self, b: &Battle, side: usize, legal: &[Option<SearchChoice>], depth: usize) -> Vec<Option<SearchChoice>> {
         if legal == [None] { return legal.to_vec(); }
         if depth == 0 && side == self.cfg.target_side {
@@ -47,12 +59,10 @@ impl Witness<'_> {
 
     fn visit(&mut self, mut battle: Battle, depth: usize) -> usize {
         let key=battle.state_key128();
-        let damage=self.cfg.guarded_keys && !battle.damage_bookkeeping_observable(self.dex);
-        let claw=self.cfg.guarded_keys && !battle.quick_claw_roll_observable(self.dex);
-        let semantic=if claw {battle.state_key128_without_quick_claw_roll(self.dex,damage)}
-            else if damage {battle.state_key128_without_damage_bookkeeping()} else {key};
-        let cache_key=(damage,claw,semantic,depth);
+        let cache_key=self.key(&battle,depth);
+        let (damage,claw,semantic,_)=cache_key;
         if let Some(&id)=self.memo.get(&cache_key) { return id; }
+        let prior=self.prior.get(&cache_key).copied();
         let terminal=battle.outcome().map(|o|match o {
             Outcome::Tie=>0.5, Outcome::P1Win=>f64::from(self.cfg.target_side==0),
             Outcome::P2Win=>f64::from(self.cfg.target_side==1),
@@ -61,6 +71,8 @@ impl Witness<'_> {
             "cache_key":[damage,claw,semantic.to_string()]});
         if let Some(value)=terminal {
             record["kind"]=json!("terminal");record["bounds"]=json!([value,value]);
+        } else if prior.is_some_and(|(_,b)|b[1]-b[0]<=1e-8) {
+            record["kind"]=json!("reused");record["bounds"]=json!([0.,1.]);
         } else if depth>=self.cfg.horizon || self.runs>=self.cfg.work_budget {
             record["kind"]=json!(if depth>=self.cfg.horizon {"horizon"} else {"budget"});
             record["bounds"]=json!([0.,1.]);
@@ -81,12 +93,21 @@ impl Witness<'_> {
                 let mut pending=1.;
                 let mut executions=0;
                 if remaining>0 {
-                    let step=enumerate_step_partial(self.dex,&battle,choices,self.cfg.cell_cap.min(remaining));
+                    let mut step=enumerate_step_partial(self.dex,&battle,choices,self.cfg.cell_cap.min(remaining));
                     executions=step.runs;self.runs+=executions;
                     pending=step.pending.iter().map(|p|p.mass).sum::<f64>();
                     branch=[0.,pending];
                     let mass=step.leaves.iter().map(|l|l.prob).sum::<f64>()+pending;
                     assert!((mass-1.).abs()<1e-8);
+                    if self.prioritize {
+                        let score=|leaf:&nc2000_engine::battle::enumerate::ChanceLeaf| {
+                            let width=if leaf.battle.outcome().is_some() {0.} else {
+                                self.prior.get(&self.key(&leaf.battle,depth+1)).map_or(1.,|(_,b)|b[1]-b[0])
+                            };
+                            leaf.prob*width
+                        };
+                        step.leaves.sort_by(|a,b|score(b).total_cmp(&score(a)));
+                    }
                     for leaf in step.leaves {
                         let child=self.visit(leaf.battle,depth+1);
                         for k in 0..2 { branch[k]+=leaf.prob*self.nodes[child]["bounds"][k].as_f64().unwrap(); }
@@ -106,12 +127,18 @@ impl Witness<'_> {
             record["selected"]=json!(selected.map(|aa|aa.into_iter().map(|a|a.map(|a|a.to_input(self.dex))).collect::<Vec<_>>()));
             record["branches"]=json!(branches);record["bounds"]=json!(bounds);
         }
+        if let Some((id,bounds))=prior {
+            let raw=[record["bounds"][0].as_f64().unwrap(),record["bounds"][1].as_f64().unwrap()];
+            let tightened=[raw[0].max(bounds[0]),raw[1].min(bounds[1])];
+            assert!(tightened[0]<=tightened[1]);
+            record["prior_node"]=json!(id);record["raw_bounds"]=json!(raw);record["bounds"]=json!(tightened);
+        }
         let id=self.nodes.len();self.nodes.push(record);self.memo.insert(cache_key,id);id
     }
 }
 
 fn main() {
-    let args:Vec<_>=std::env::args().collect();assert_eq!(args.len(),4,"corpus config output");
+    let args:Vec<_>=std::env::args().collect();assert!((4..=6).contains(&args.len()),"corpus config output [prior [priority]]");
     let cfg:Config=serde_json::from_slice(&std::fs::read(&args[2]).unwrap()).unwrap();
     assert!(cfg.target_side<2 && cfg.policy_side<2 && cfg.horizon>0 && cfg.work_budget>0 && cfg.cell_cap>0);
     let dex=conformance::load_dex();
@@ -124,10 +151,30 @@ fn main() {
         battle.apply_choices(&dex,[0,1].map(|s|record.choices[s].map(|i|legal[s][i]))).unwrap();
     }
     assert_eq!(battle.state_key128().to_string(),game.decisions[cfg.decision].key);
-    let mut witness=Witness {dex:&dex,cfg,runs:0,memo:HashMap::new(),nodes:Vec::new()};
+    let mut prior=HashMap::new();let mut prior_hash=None;
+    if let Some(path)=args.get(4) {
+        let raw=std::fs::read(path).unwrap();let previous:Value=serde_json::from_slice(&raw).unwrap();
+        let mut before=previous["config"].clone();let mut after=serde_json::to_value(&cfg).unwrap();
+        for name in ["horizon","work_budget","cell_cap"] {
+            before.as_object_mut().unwrap().remove(name);after.as_object_mut().unwrap().remove(name);
+        }
+        assert_eq!(before,after,"prior policy and key configuration must match");
+        assert_eq!(previous["nodes"][previous["root"].as_u64().unwrap() as usize]["state_key"],json!(battle.state_key128().to_string()));
+        for (index,node) in previous["nodes"].as_array().unwrap().iter().enumerate() {
+            let k=&node["cache_key"];
+            let key=(k[0].as_bool().unwrap(),k[1].as_bool().unwrap(),k[2].as_str().unwrap().parse().unwrap(),node["depth"].as_u64().unwrap() as usize);
+            let bounds=[node["bounds"][0].as_f64().unwrap(),node["bounds"][1].as_f64().unwrap()];
+            assert!(bounds.iter().all(|v|v.is_finite()) && 0.<=bounds[0] && bounds[0]<=bounds[1] && bounds[1]<=1.);
+            assert!(prior.insert(key,(index,bounds)).is_none());
+        }
+        prior_hash=Some(format!("{:x}",Sha256::digest(raw)));
+    }
+    let prioritize=args.get(5).is_some_and(|s| {assert_eq!(s,"priority");true});
+    let mut witness=Witness {dex:&dex,cfg,runs:0,memo:HashMap::new(),nodes:Vec::new(),prior,prioritize};
     let root=witness.visit(battle,0);
-    let output=json!({"config":witness.cfg,"runs":witness.runs,"root":root,
+    let mut output=json!({"config":witness.cfg,"runs":witness.runs,"root":root,
         "bounds":witness.nodes[root]["bounds"],"nodes":witness.nodes});
+    if let Some(hash)=prior_hash {output["prior_sha256"]=json!(hash);output["prioritize_uncertainty"]=json!(prioritize);}
     std::fs::write(&args[3],serde_json::to_vec(&output).unwrap()).unwrap();
     eprintln!("runs={} nodes={} bounds={}",witness.runs,witness.nodes.len(),output["bounds"]);
 }

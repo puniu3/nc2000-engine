@@ -1,0 +1,107 @@
+{
+  "rows": {
+    "control-current": {
+      "runs": 59897,
+      "nodes": 6434,
+      "bounds": [
+        0.9913024887292214,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 35,
+        "decision": 272,
+        "horizon": 6127
+      },
+      "partial_branches": 6,
+      "prior_nodes_used": 0,
+      "certificate_runs": 59897
+    },
+    "seeded8-import": {
+      "runs": 200000,
+      "nodes": 12044,
+      "bounds": [
+        0.9913024887292214,
+        1.0
+      ],
+      "node_kinds": {
+        "reused": 7,
+        "terminal": 80,
+        "decision": 100,
+        "horizon": 10943,
+        "budget": 914
+      },
+      "partial_branches": 20,
+      "prior_nodes_used": 70,
+      "certificate_runs": 259897,
+      "lower_bound_gain": 0.0
+    },
+    "seeded8-priority": {
+      "runs": 200000,
+      "nodes": 7673,
+      "bounds": [
+        0.9913024887292216,
+        1.0
+      ],
+      "node_kinds": {
+        "reused": 7,
+        "horizon": 6699,
+        "terminal": 14,
+        "decision": 29,
+        "budget": 924
+      },
+      "partial_branches": 56,
+      "prior_nodes_used": 36,
+      "certificate_runs": 259897,
+      "lower_bound_gain": 1.1102230246251565e-16
+    },
+    "seeded8-cap16k": {
+      "runs": 200000,
+      "nodes": 14650,
+      "bounds": [
+        0.9913024887292216,
+        1.0
+      ],
+      "node_kinds": {
+        "reused": 7,
+        "horizon": 10960,
+        "decision": 13,
+        "budget": 3665,
+        "terminal": 5
+      },
+      "partial_branches": 19,
+      "prior_nodes_used": 36,
+      "certificate_runs": 321673,
+      "lower_bound_gain": 1.1102230246251565e-16
+    },
+    "seeded-tiny": {
+      "runs": 1,
+      "nodes": 2,
+      "bounds": [
+        0.9913024887292214,
+        1.0
+      ],
+      "node_kinds": {
+        "budget": 1,
+        "decision": 1
+      },
+      "partial_branches": 1,
+      "prior_nodes_used": 2,
+      "certificate_runs": 59898,
+      "lower_bound_gain": 0.0
+    }
+  },
+  "default_archive_parity": true,
+  "initial_certificate": {
+    "pending": 0.008543288778375287,
+    "terminal": 0.991302490234375,
+    "horizon": 0.00015422098724971264
+  },
+  "wider_certificate": {
+    "pending": 0.006890816455453735,
+    "terminal": 0.991302490234375,
+    "horizon": 0.001806693310171265
+  },
+  "significant_improvements": 0,
+  "decision": "Retain the certificate-import mechanism as a diagnostic. No material gain from deeper refinement or mass-times-width ordering at this budget; no production change.",
+  "scope": "Same fixed continuation policy and tagged state/depth identities. Imported intervals bound the infinite continuation; horizon limits only new work. Intersect every new result with its prior interval, including at budget cuts. Skip prior intervals at most 1e-8 wide without treating them as exact. Optional chance ordering uses prior mass times interval width. Every prior artifact is verified before import; engine and data source hashes are identical to its frozen run. Native imports assume a trusted verified witness, and reject differing policy or key configurations. The verifier checks source references, identities, exact interval intersection and all reply coverage, and rejects mutated policies, references and overclaims. Active-certificate mass follows the replies minimizing the recorded lower bound with first-branch tie breaking; it diagnoses this certificate, not the true optimal opponent. Counts include prior construction work; wall times are not used. Full-state first-choice evidence only, not deployed bot strength."
+}
