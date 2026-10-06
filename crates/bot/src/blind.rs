@@ -357,6 +357,7 @@ fn root_type_key(battle: &mut Battle) -> u64 {
 pub struct BlindSearch {
     cfg: RmConfig,
     first_continuation: Option<crate::first_continuation::FirstContinuation>,
+    history_continuation: Option<crate::history_continuation::HistoryContinuation>,
     rng: SplitMix64,
     /// Search resets omit the observer's protocol log.
     base: Battle,
@@ -396,7 +397,19 @@ pub struct BlindSearch {
 }
 
 impl BlindSearch {
+    pub fn enable_history_continuation(&mut self, shared: bool) {
+        assert_eq!(self.done, 0);
+        assert!(self.first_continuation.is_none());
+        assert!(!self.cfg.continuation_exp3_ix && !self.cfg.continuation_exp3_mean);
+        self.history_continuation = Some(crate::history_continuation::HistoryContinuation::new(self.side, shared));
+    }
+
+    pub fn history_continuation(&self) -> Option<&crate::history_continuation::HistoryContinuation> {
+        self.history_continuation.as_ref()
+    }
+
     pub fn enable_first_continuation(&mut self, shared: bool) {
+        assert!(self.history_continuation.is_none());
         assert_eq!(self.done, 0);
         assert!(!self.cfg.continuation_exp3_ix && !self.cfg.continuation_exp3_mean);
         self.first_continuation = Some(crate::first_continuation::FirstContinuation::new(self.side, shared));
@@ -440,6 +453,7 @@ impl BlindSearch {
             .collect();
         BlindSearch {
             first_continuation: None,
+            history_continuation: None,
             cfg,
             rng,
             base,
@@ -528,13 +542,21 @@ impl BlindSearch {
             );
         }
         let mut joint = [0usize; 2];
-        let r = if let Some(policy) = self.first_continuation.as_mut() {
+        let r = if let Some(policy) = self.history_continuation.as_mut() {
             assert!(leaf.is_none());
             crate::smmcts::run_iteration_with_root_child_value(
                 &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
                 &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
                 &mut |sim, rng, rollout| crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout),
-                trace, None, Some(policy),
+                trace, None, None, Some(policy),
+            )
+        } else if let Some(policy) = self.first_continuation.as_mut() {
+            assert!(leaf.is_none());
+            crate::smmcts::run_iteration_with_root_child_value(
+                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
+                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
+                &mut |sim, rng, rollout| crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout),
+                trace, None, Some(policy), None,
             )
         } else if let Some(leaf) = leaf {
             crate::smmcts::run_iteration_with_leaf(
@@ -732,20 +754,28 @@ impl BlindSearch {
             force[1 - self.side] = forced_reply;
         }
         let mut joint = [0usize; 2];
-        let r = if let Some(policy) = self.first_continuation.as_mut() {
+        let r = if let Some(policy) = self.history_continuation.as_mut() {
             assert!(root_child_value.is_none());
             crate::smmcts::run_iteration_with_root_child_value(
                 &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
                 &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
                 &mut |sim, rng, rollout| crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout),
-                trace, None, Some(policy),
+                trace, None, None, Some(policy),
+            )
+        } else if let Some(policy) = self.first_continuation.as_mut() {
+            assert!(root_child_value.is_none());
+            crate::smmcts::run_iteration_with_root_child_value(
+                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
+                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
+                &mut |sim, rng, rollout| crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout),
+                trace, None, Some(policy), None,
             )
         } else if let Some(evaluate) = root_child_value {
             crate::smmcts::run_iteration_with_root_child_value(
                 &self.cfg,&mut self.rng,&mut self.nodes,&mut self.table,&mut sim,dex,
                 self.turn_cap,root,force,&mut joint,&mut 0,
                 &mut |sim,rng,rollout| crate::smmcts::default_leaf(&self.cfg,sim,dex,self.turn_cap,rng,rollout),
-                trace,Some(evaluate),None,
+                trace,Some(evaluate),None,None,
             )
         } else if let Some(trace) = trace {
             crate::smmcts::run_iteration_with_leaf(

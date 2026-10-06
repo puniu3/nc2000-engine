@@ -4406,5 +4406,153 @@
       "findings/continuation-depth-v1/summary.json": "db3583679845b89feeeb27fc06f416bef4f99fe24596b94500727ff2dc3eafe1",
       "findings/continuation-depth-v1/checks.json": "2c176ffec27579ab7395bb643e9eac8ba784c1b8e34c9042d6a0d5d5a662e419"
     }
+  },
+  "history_policy": {
+    "status": "cost_and_behavior_screen_complete",
+    "source_baseline_commit": "e18daa8",
+    "summary": {
+      "roots": 24,
+      "iterations": 27000,
+      "repeats": 3,
+      "historical_snapshot_identities": 216,
+      "measurements": {
+        "baseline": {
+          "milliseconds": 22894.624081,
+          "nodes": 608304,
+          "groups": 0,
+          "selections": 0,
+          "histories": 0,
+          "log_bytes": 0,
+          "depth_counts": {}
+        },
+        "record_only": {
+          "milliseconds": 26649.141667999997,
+          "nodes": 608304,
+          "groups": 269326,
+          "selections": 1153272,
+          "histories": 302224,
+          "log_bytes": 87495483,
+          "depth_counts": {
+            "1": 504683,
+            "2": 369049,
+            "3": 176081,
+            "4": 66131,
+            "5": 26385,
+            "6": 8608,
+            "7": 2075,
+            "8": 246,
+            "9": 14
+          }
+        },
+        "first_shared": {
+          "milliseconds": 24338.330249999995,
+          "nodes": 608169,
+          "groups": 19620,
+          "selections": 471405,
+          "histories": 0,
+          "log_bytes": 0,
+          "depth_counts": {
+            "1": 471405
+          }
+        },
+        "history_shared": {
+          "milliseconds": 26882.1335,
+          "nodes": 606648,
+          "groups": 254912,
+          "selections": 1182108,
+          "histories": 288160,
+          "log_bytes": 84247128,
+          "depth_counts": {
+            "1": 501493,
+            "2": 377179,
+            "3": 187505,
+            "4": 73999,
+            "5": 30286,
+            "6": 8389,
+            "7": 2547,
+            "8": 615,
+            "9": 84,
+            "10": 11
+          }
+        }
+      },
+      "history_time_ratio": 1.1741679358827817,
+      "record_only_time_ratio": 1.1639912310294638,
+      "first_time_ratio": 1.0630587409468806,
+      "changed_root_choices": 6,
+      "changes": [
+        {
+          "game": 1,
+          "decision": 9,
+          "side": 0,
+          "baseline": "move recover",
+          "history_shared": "move thunderwave"
+        },
+        {
+          "game": 4,
+          "decision": 4,
+          "side": 0,
+          "baseline": "move icebeam",
+          "history_shared": "move curse"
+        },
+        {
+          "game": 6,
+          "decision": 7,
+          "side": 1,
+          "baseline": "move thunderbolt",
+          "history_shared": "move icebeam"
+        },
+        {
+          "game": 7,
+          "decision": 9,
+          "side": 1,
+          "baseline": "move whirlwind",
+          "history_shared": "move curse"
+        },
+        {
+          "game": 12,
+          "decision": 5,
+          "side": 0,
+          "baseline": "move synthesis",
+          "history_shared": "move sleeppowder"
+        },
+        {
+          "game": 17,
+          "decision": 11,
+          "side": 1,
+          "baseline": "switch 3",
+          "history_shared": "switch 2"
+        }
+      ],
+      "default_enabled": false,
+      "strength_demonstrated": false,
+      "scope": "Own continuation UCB at every tree depth, including replacement choices. Exact interned prefixes retain parent history, own previous action (including no action), resulting request type and all new protocol lines; own ordered legal actions index each bandit. Both private split log branches are retained, so this is a conservative refinement of player information, not a full information-set solver. Opponent policies, expansion and rollouts remain unchanged. Record-only mode consumes no search randomness and must reproduce baseline exactly. The first-continuation candidate must also reproduce its historical snapshots. Each mode runs three identical-seed repetitions in rotating order, with construction and search timed. Time sums are sums of per-root medians; byte counts cover stored protocol strings only, not resident memory. Changes in root choices are not evidence of improvement or optimality."
+    },
+    "checks": {
+      "library_tests": 229,
+      "blind_integration_tests": 9,
+      "first_continuation_integration_tests": 1,
+      "history_continuation_integration_tests": 1,
+      "all_targets_compile": true,
+      "historical_search_snapshot_identities": 216,
+      "all_modes_repeat_exactly": true,
+      "history_group_counts_and_rewards_match_independent_replay": true,
+      "checked_both_sides_and_replacement_choices": true,
+      "chunked_search_matches_bulk": true,
+      "history_vs_first_choice_changes": 6,
+      "negative_controls": [
+        "seed",
+        "visits",
+        "baseline",
+        "time",
+        "depth"
+      ],
+      "default_enabled": false
+    },
+    "artifacts": {
+      "findings/history-policy-v1/records.json.gz": "586dd1e485ee43b994603a68a8b30559429793a271afbeebd28c707a72ad9628",
+      "findings/history-policy-v1/summary.json": "419a2e8d490c95496eb33c20512392c8b672fc808fac074fbd273f7391086d0f",
+      "findings/history-policy-v1/checks.json": "de9d085e5aeae49cc71ec1bc97e3d6eee4a26f3b634604c13a478a761405faa1"
+    }
   }
 }

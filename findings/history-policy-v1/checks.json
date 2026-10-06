@@ -1,0 +1,21 @@
+{
+  "library_tests": 229,
+  "blind_integration_tests": 9,
+  "first_continuation_integration_tests": 1,
+  "history_continuation_integration_tests": 1,
+  "all_targets_compile": true,
+  "historical_search_snapshot_identities": 216,
+  "all_modes_repeat_exactly": true,
+  "history_group_counts_and_rewards_match_independent_replay": true,
+  "checked_both_sides_and_replacement_choices": true,
+  "chunked_search_matches_bulk": true,
+  "history_vs_first_choice_changes": 6,
+  "negative_controls": [
+    "seed",
+    "visits",
+    "baseline",
+    "time",
+    "depth"
+  ],
+  "default_enabled": false
+}

@@ -497,7 +497,7 @@ pub(crate) fn run_iteration_with_leaf(
     trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
 ) -> f64 {
     run_iteration_with_root_child_value(cfg,rng,nodes,table,sim,dex,turn_cap,start,
-        force_root,root_joint,depth_out,leaf,trace,None,None)
+        force_root,root_joint,depth_out,leaf,trace,None,None,None)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -517,6 +517,7 @@ pub(crate) fn run_iteration_with_root_child_value(
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
     mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
     mut continuation: Option<&mut crate::first_continuation::FirstContinuation>,
+    mut history_policy: Option<&mut crate::history_continuation::HistoryContinuation>,
 ) -> f64 {
     let mut path: Vec<(usize, usize, usize)> = Vec::new();
     let mut exp3_path = Vec::new();
@@ -525,6 +526,9 @@ pub(crate) fn run_iteration_with_root_child_value(
     let mut decision_depth = 0;
     let mut own_root_action = None;
     let mut shared_pending = None;
+    let mut history_cursor = 0;
+    let mut history_previous = None;
+    let mut history_pending = Vec::new();
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
     let reward0 = loop {
@@ -533,6 +537,15 @@ pub(crate) fn run_iteration_with_root_child_value(
         let at_root = node_idx == start;
         let mut joint = [None, None];
         let mut continuation_group = None;
+        let mut history_group = None;
+        if decision_depth > 0 {
+            if let Some(policy) = history_policy.as_deref_mut() {
+                history_cursor = policy.advance(history_cursor, history_previous, sim.request_state, &sim.log);
+                sim.set_log_enabled(false);
+                let acts = &nodes[node_idx].acts[policy.side()];
+                if acts.len() > 1 { history_group = Some(policy.group(history_cursor, acts)); }
+            }
+        }
         if decision_depth == 1 && sim.is_idle_move_request() {
             if let Some(policy) = continuation.as_deref_mut() {
                 let acts = &nodes[node_idx].acts[policy.side()];
@@ -555,6 +568,11 @@ pub(crate) fn run_iteration_with_root_child_value(
                     Some(f) if at_root => {
                         nodes[node_idx].n[s][f] += 1;
                         f
+                    }
+                    _ if history_group.is_some() && history_policy.as_ref().is_some_and(|p| p.side() == s && p.shared()) => {
+                        let action = history_policy.as_deref_mut().unwrap().select(history_group.unwrap(), cfg.c, rng);
+                        nodes[node_idx].n[s][action] += 1;
+                        action
                     }
                     _ if continuation_group.is_some() && continuation.as_ref().is_some_and(|p| p.side() == s && p.shared()) => {
                         let action = continuation.as_deref_mut().unwrap().select(continuation_group.unwrap(), cfg.c, rng);
@@ -585,6 +603,14 @@ pub(crate) fn run_iteration_with_root_child_value(
                     }
                 }
             }
+            if let Some(policy) = history_policy.as_deref_mut() {
+                if s == policy.side() {
+                    if let Some(group) = history_group {
+                        if !policy.shared() { policy.record_selection(group, ai); }
+                        history_pending.push((group, ai));
+                    }
+                }
+            }
             if at_root {
                 root_joint[s] = ai;
             }
@@ -605,11 +631,15 @@ pub(crate) fn run_iteration_with_root_child_value(
             break leaf(sim, rng, false);
         }
         if decision_depth == 0 && continuation.is_some() { sim.set_log_enabled(true); }
+        if let Some(policy) = history_policy.as_deref() {
+            history_previous = joint[policy.side()];
+            sim.set_log_enabled(true);
+        }
         sim.apply_choices(dex, joint)
             .expect("cached legal choice rejected (state_key collision?)");
         decision_depth += 1;
         if let Some(o) = sim.outcome() {
-            if continuation.is_some() { sim.set_log_enabled(false); }
+            if continuation.is_some() || history_policy.is_some() { sim.set_log_enabled(false); }
             break outcome_reward(o);
         }
         if at_root {
@@ -619,7 +649,7 @@ pub(crate) fn run_iteration_with_root_child_value(
             }
         }
         if sim.turn > turn_cap {
-            if continuation.is_some() { sim.set_log_enabled(false); }
+            if continuation.is_some() || history_policy.is_some() { sim.set_log_enabled(false); }
             if let Some(trace) = trace.as_deref_mut() {
                 trace(SearchTrace::Leaf { battle: sim, rng, rollout: false });
             }
@@ -640,7 +670,7 @@ pub(crate) fn run_iteration_with_root_child_value(
                 if let Some(trace) = trace.as_deref_mut() {
                     trace(SearchTrace::Leaf { battle: sim, rng, rollout: true });
                 }
-                if continuation.is_some() { sim.set_log_enabled(false); }
+                if continuation.is_some() || history_policy.is_some() { sim.set_log_enabled(false); }
                 break leaf(sim, rng, true);
             }
         }
@@ -648,6 +678,9 @@ pub(crate) fn run_iteration_with_root_child_value(
 
     if let (Some(policy), Some((group, action))) = (continuation, shared_pending) {
         policy.observe(group, action, reward0);
+    }
+    if let Some(policy) = history_policy {
+        for (group, action) in history_pending { policy.observe(group, action, reward0); }
     }
     if let Some(trace) = trace {
         trace(SearchTrace::Result { battle: sim, reward0 });

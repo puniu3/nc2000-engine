@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import statistics
+import subprocess
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/history-policy-v1'
+
+
+def verify(result,prior):
+    assert result['iterations']==27000 and result['repeats']==3
+    assert len(result['rows'])==24 and {r['game'] for r in result['rows']}==set(range(24))
+    sums={m:dict(milliseconds=0.,nodes=0,groups=0,selections=0,histories=0,log_bytes=0,depth_counts=collections.Counter()) for m in ['baseline','record_only','first_shared','history_shared']}
+    changes=[]
+    for r in result['rows']:
+        old=next(p for p in prior if p['game']==r['game'])
+        assert all(r[k]==old[k] for k in ['game','decision','key','side','seed'])
+        assert len(r['measurements'])==12
+        assert {(m['mode'],m['repeat']) for m in r['measurements']}=={(m,i) for m in sums for i in range(3)}
+        modes={}
+        for name in sums:
+            runs=[m for m in r['measurements'] if m['mode']==name];first=runs[0]
+            for m in runs:
+                assert m['elapsed_ms']>0 and sum(m['snapshot']['visits'])==27000
+                assert all(m[k]==first[k] for k in ['snapshot','groups','selections','rewards','histories','log_bytes','depth_counts'])
+                assert 0<=m['rewards']<=m['selections'] and sum(m['depth_counts'].values())==m['selections']
+                assert all(int(d)>=1 and 0<=v<=27000 for d,v in m['depth_counts'].items())
+                if name!='history_shared':
+                    previous='shared' if name=='first_shared' else 'baseline'
+                    assert m['snapshot']==next(p['snapshot'] for p in old['measurements'] if p['mode']==previous)
+                if name=='baseline': assert m['groups']==m['selections']==m['histories']==m['log_bytes']==0
+                else: assert 0<m['groups']<=m['selections']
+                if name in ['record_only','history_shared']:
+                    assert m['histories']>0 and m['log_bytes']>0
+                elif name=='first_shared': assert set(m['depth_counts'])=={'1'} and m['histories']==m['log_bytes']==0
+            sums[name]['milliseconds']+=statistics.median(m['elapsed_ms'] for m in runs)
+            for k in ['groups','selections','histories','log_bytes']:sums[name][k]+=first[k]
+            sums[name]['nodes']+=first['snapshot']['nodes']
+            sums[name]['depth_counts'].update(first['depth_counts'])
+            modes[name]=first['snapshot']
+        if modes['baseline']['best']!=modes['history_shared']['best']:
+            changes.append(dict(game=r['game'],decision=r['decision'],side=r['side'],baseline=modes['baseline']['best'],history_shared=modes['history_shared']['best']))
+    for m in sums.values():m['depth_counts']=dict(sorted(m['depth_counts'].items(),key=lambda p:int(p[0])))
+    return dict(roots=24,iterations=27000,repeats=3,historical_snapshot_identities=216,measurements=sums,
+                history_time_ratio=sums['history_shared']['milliseconds']/sums['baseline']['milliseconds'],
+                record_only_time_ratio=sums['record_only']['milliseconds']/sums['baseline']['milliseconds'],
+                first_time_ratio=sums['first_shared']['milliseconds']/sums['baseline']['milliseconds'],
+                changed_root_choices=len(changes),changes=changes,default_enabled=False,strength_demonstrated=False,
+                scope='Own continuation UCB at every tree depth, including replacement choices. Exact interned prefixes '
+                      'retain parent history, own previous action (including no action), resulting request type and '
+                      'all new protocol lines; own ordered legal actions index each bandit. Both private split log '
+                      'branches are retained, so this is a conservative refinement of player information, not a full '
+                      'information-set solver. Opponent policies, expansion and rollouts remain unchanged. '
+                      'Record-only mode consumes no search randomness and must reproduce baseline exactly. '
+                      'The first-continuation candidate must also reproduce its historical snapshots. Each mode runs '
+                      'three identical-seed repetitions in rotating order, with construction and search timed. '
+                      'Time sums are sums of per-root medians; byte counts cover stored protocol strings only, '
+                      'not resident memory. Changes in root choices are not evidence of improvement or optimality.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',type=Path);args=parser.parse_args()
+    prior=json.loads(gzip.decompress((root/'findings/continuation-policy-v1/records.json.gz').read_bytes()))['result']['rows']
+    if args.record:
+        assert not (archive/'records.json.gz').exists()
+        result=json.loads(args.record.read_bytes());summary=verify(result,prior)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','crates/conformance/src','Cargo.toml','Cargo.lock'],cwd=root,text=True).splitlines()
+        paths+=['crates/bot/src/history_continuation.rs','crates/bot/tests/history_continuation.rs',
+                'crates/bot/examples/history_policy_budget.rs','tools/history-policy-probe',
+                'findings/continuation-policy-v1/records.json.gz','findings/policy-gap-v1/corpus.jsonl.gz',
+                'data/gen2stadium2.json','data/belief-pool-v3/belief-pool.json','data/learnsets-gen2.json']
+        bundle=dict(result=result,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        archive.mkdir(parents=True,exist_ok=True)
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in bundle['hashes'].items())
+    summary=verify(bundle['result'],prior)
+    assert summary==json.loads((archive/'summary.json').read_bytes())
+    for corruption in ['seed','visits','baseline','time','depth']:
+        bad=copy.deepcopy(bundle['result']);r=bad['rows'][0];m=r['measurements'][0]
+        if corruption=='seed':r['seed']+=1
+        elif corruption=='visits':m['snapshot']['visits'][0]+=1
+        elif corruption=='baseline':m['snapshot']['best']='invalid'
+        elif corruption=='time':m['elapsed_ms']=-1
+        else:m['depth_counts']['1']=1
+        try:verify(bad,prior)
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['changes','scope']},indent=2))
+
+
+if __name__=='__main__':main()
