@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import hashlib
+import itertools
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/finite-policy-witness-v1'
+inputs=['findings/policy-gap-v1/corpus.jsonl.gz','findings/policy-pair-ceiling-v1/records.json.gz',
+        'findings/policy-pair-ceiling-v1/summary.json','data/gen2stadium2.json']
+
+
+def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+
+def read(path):return json.loads(gzip.decompress((root/path).read_bytes()))
+
+
+def specs():
+    base=dict(game=22,decision=15,target_side=1,first_choice='switch 2',policy_side=1,
+              priority=['move selfdestruct','move thunderbolt','switch 3'],rest_at_percent=None,
+              horizon=6,work_budget=200000,cell_cap=4096,guarded_keys=False)
+    guarded=dict(base,guarded_keys=True)
+    return {'lower2':base,'lower3':dict(base,first_choice='switch 3'),'lower2-guarded':guarded,
+            'upper2-guarded':dict(guarded,policy_side=0,priority=['move bodyslam'],rest_at_percent=75),
+            'lower2-h8':dict(guarded,horizon=8),'lower2-h10':dict(guarded,horizon=10),
+            'lower2-h8-long':dict(guarded,horizon=8,work_budget=2000000),
+            'lower2-cap16k':dict(guarded,cell_cap=16384),
+            'reverse2':dict(guarded,target_side=0,first_choice='',
+                priority=['move selfdestruct','move thunderbolt','switch 2','switch 3']),
+            'floor3':dict(guarded,first_choice='switch 3',horizon=1),
+            'capfloor3':dict(guarded,first_choice='switch 3',work_budget=1,cell_cap=1)}
+
+
+def verify(record):
+    cfg=record['config'];nodes=record['nodes'];runs=0;identities=set()
+    assert record['root']==len(nodes)-1
+    assert record['bounds']==nodes[-1]['bounds'] and nodes[-1]['depth']==0
+    for index,node in enumerate(nodes):
+        identity=(*node['cache_key'],node['depth'])
+        assert identity not in identities;identities.add(identity)
+        lo,hi=map(F,node['bounds']);assert 0<=lo<=hi<=1
+        if node['kind']=='terminal':
+            assert lo==hi and lo in [0,F(1,2),1]
+        elif node['kind'] in ['horizon','budget']:
+            assert [lo,hi]==[0,1]
+            if node['kind']=='horizon':assert node['depth']>=cfg['horizon']
+        else:
+            assert node['kind']=='decision' and node['depth']<cfg['horizon']
+            assert node['maximizing']==(cfg['policy_side']!=cfg['target_side'])
+            for side in [0,1]:
+                legal=node['legal'][side];selected=node['selected'][side]
+                assert selected and len(selected)==len(set(selected)) and set(selected)<=set(legal)
+                if node['depth']==0 and side==cfg['target_side'] and legal!=[None]:
+                    assert selected==[cfg['first_choice']]
+                elif side==cfg['policy_side']:assert len(selected)==1
+                else:assert selected==legal
+            assert [b['choices'] for b in node['branches']]==list(map(list,itertools.product(*node['selected'])))
+            for branch in node['branches']:
+                runs+=branch['runs'];pending=F(branch['pending']);assert 0<=pending<=1
+                values=[F(0),pending];mass=pending
+                for child in branch['children']:
+                    child_id=child['node'];weight=F(child['mass'])
+                    assert 0<=child_id<index and weight>=0 and nodes[child_id]['depth']==node['depth']+1
+                    mass+=weight
+                    for k in [0,1]:values[k]+=weight*F(nodes[child_id]['bounds'][k])
+                pad=F(len(branch['children'])+2,10**12)
+                assert abs(mass-1)<=pad/2
+                found=list(map(F,branch['bounds']))
+                if branch['runs']==0:assert branch['children']==[] and pending==1 and found==[0,1]
+                else:
+                    assert found[0]<=max(F(0),values[0]-pad/2)
+                    assert found[1]>=min(F(1),values[1]+pad/2)
+            op=max if node['maximizing'] else min
+            assert node['bounds']==[op(b['bounds'][k] for b in node['branches']) for k in [0,1]]
+    assert runs==record['runs']<=cfg['work_budget']
+    return dict(runs=runs,nodes=len(nodes),bounds=record['bounds'],
+        node_kinds=dict(collections.Counter(n['kind'] for n in nodes)),
+        partial_branches=sum(b['pending']>1e-12 for n in nodes for b in n.get('branches',[])))
+
+
+def controls():
+    for maximizing in [False,True]:
+        candidates=[[F(1,4),F(1,2)],[F(3,4),F(1)]]
+        op=max if maximizing else min
+        found=[op(p[k] for p in candidates) for k in [0,1]]
+        assert found==candidates[int(maximizing)]
+    lower=F(0);upper=F(1,4)
+    for mass,value in [(F(1,2),F(1)),(F(1,4),F(1,2))]:
+        lower+=mass*value;upper+=mass*value
+    assert [lower,upper]==[F(5,8),F(7,8)]
+
+
+def summarize(bundle):
+    controls()
+    assert bundle['input_sha256']=={p:sha((root/p).read_bytes()) for p in inputs}
+    assert list(bundle['records'])==list(specs())
+    reports={}
+    for name,cfg in specs().items():
+        record=bundle['records'][name];assert record['config']==cfg
+        assert record['nodes'][-1]['state_key']=='335807928381250885925857526802514165581'
+        reports[name]=verify(record)
+    a=reports['lower2-guarded']['bounds'];b=reports['reverse2']['bounds']
+    assert reports['lower2-guarded']['runs']==reports['reverse2']['runs']
+    assert max(abs(a[k]+b[1-k]-1) for k in [0,1])<1e-10
+    assert reports['floor3']['bounds']==reports['capfloor3']['bounds']==[0,1]
+    assert reports['lower3']['bounds'][0]>1-1e-8
+    for fault in ['omit_reply','reverse_operator']:
+        broken=copy.deepcopy(bundle['records']['lower3'])
+        node=next(n for n in broken['nodes'] if len(n.get('branches',[]))>1)
+        if fault=='omit_reply':node['branches'].pop()
+        else:node['maximizing']=not node['maximizing']
+        try:verify(broken)
+        except AssertionError:pass
+        else:raise AssertionError(f'undetected invalid witness: {fault}')
+    prior=json.loads((root/inputs[2]).read_bytes())
+    affected=[r for r in prior['rows'] if (r['game'],r['decision'],r['side'])==(22,15,1)]
+    assert len(affected)==4 and all(r['after']=='switch 2' for r in affected)
+    lower=max(r['bounds'][0] for name,r in reports.items() if specs()[name]['policy_side']==1
+              and specs()[name]['target_side']==1 and specs()[name]['first_choice']=='switch 2')
+    loss_upper=float(F(1)-F(lower))
+    pruning=runpy.run_path(str(root/'tools/correlated-pruning-probe'))
+    census=[]
+    for row in read(inputs[1])['rows']:
+        variants={mode:pruning['prune'](row['model'],mode) for mode in ['interval','correlated','equivalent']}
+        census.append(dict(game=row['game'],decision=row['decision'],
+            removals={mode:len(v[1]) for mode,v in variants.items()}))
+    return dict(rows=reports,affected_searches=4,prior_candidate_loss_upper=affected[0]['candidate_loss'][1],
+        candidate_loss_upper=loss_upper,root_action_census=census,
+        decision='Keep continuation mean updates disabled. A restricted-policy certificate tightens one full-state '
+                 'candidate action without establishing a strict improvement or regression.',
+        scope='The frozen g022-d0015-s1 replacement, selected because all four candidate searches leave a certified '
+              'winning action. A fixed policy faces every legal opponent action; its security lower bound bounds '
+              'the unrestricted first-action value from below. Fixing the opponent instead bounds it from above. '
+              'Chance is enumerated by the engine; unfinished probability, budget cuts and horizon leaves remain '
+              'in [0,1]. Every backed-up interval and action-product coverage is checked with rational arithmetic '
+              'over the recorded floating-point masses and outward rounding margins. Guarded identity uses only '
+              'the existing damage-history and Quick Claw observability contracts, with distinct key tags. '
+              'Source engine transitions and key-quotient validity remain trusted; this is not an independent '
+              'engine or arbitrary-precision probability proof. The side-reversed replay reproduces the complement; '
+              'one-step and one-run controls remain unknown. Deeper or wider runs are retained even when worse, '
+              'and their bounds never replace stronger earlier evidence. This analyzes one full-information first '
+              'choice with optimal future play, not the shipped bot continuation, blind information sets or '
+              'whole-game strength. Kernel equality in the root census is only a rounded-coefficient candidate.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path);args=parser.parse_args()
+    if args.verify_only:
+        assert summarize(read('findings/finite-policy-witness-v1/records.json.gz'))==json.loads((archive/'summary.json').read_bytes())
+        print('policy-witness: rational backups, all legal replies, complements and cutoff controls verified');return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-policy-witness-'))
+    print(directory,flush=True);binary=root/'target/release/examples/policy_witness'
+    paths={*read(inputs[1])['manifest']['source_hashes'],'crates/bot/examples/policy_witness.rs','data/gen2stadium2.json'}
+    sources={p:sha((root/p).read_bytes()) for p in sorted(paths)}
+    if not args.import_directory:
+        env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','policy_witness'],cwd=root,env=env,check=True)
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/inputs[0]).read_bytes()))
+        for name,cfg in specs().items():
+            (directory/(name+'.json')).write_text(json.dumps(cfg))
+            subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/(name+'.json')),
+                            str(directory/(name+'.out.json'))],cwd=root,env=env,check=True)
+    records={name:json.loads((directory/(name+'.out.json')).read_bytes()) for name in specs()}
+    bundle=dict(records=records,input_sha256={p:sha((root/p).read_bytes()) for p in inputs},
+                source_hashes=sources,binary_sha256=sha(binary.read_bytes()))
+    assert sources=={p:sha((root/p).read_bytes()) for p in sorted(paths)}
+    report=summarize(bundle)
+    archive.mkdir();(archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k not in ['rows','root_action_census']},indent=2))
+
+
+if __name__=='__main__':main()
