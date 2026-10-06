@@ -2,7 +2,7 @@ use nc2000_engine::{battle::{Outcome, PokemonSet, SearchChoice}, dex::Dex, state
 use nc2000_engine::battle::enumerate::enumerate_step_partial;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::BufRead;
 use sha2::{Digest, Sha256};
 
@@ -42,6 +42,8 @@ struct Config {
     share_root_budget: bool,
     #[serde(default, skip_serializing_if="Option::is_none")]
     share_budget_depth: Option<usize>,
+    #[serde(default, skip_serializing_if="is_false")]
+    share_unique_children: bool,
 }
 
 struct Witness<'a> {
@@ -157,10 +159,16 @@ impl Witness<'_> {
                         };
                         step.leaves.sort_by(|a,b|score(b).total_cmp(&score(a)));
                     }
-                    let mut leaves_left=step.leaves.len();
+                    let mut unique=if sharing && self.cfg.share_unique_children {
+                        Some(step.leaves.iter().map(|leaf|self.key(&leaf.battle,depth+1))
+                            .filter(|key|!self.memo.contains_key(key)).collect::<HashSet<_>>())
+                    } else {None};
+                    let mut leaves_left=unique.as_ref().map_or(step.leaves.len(),HashSet::len);
                     for leaf in step.leaves {
-                        let child_limit=if sharing {self.runs+branch_limit.saturating_sub(self.runs)/leaves_left} else {branch_limit};
-                        leaves_left-=1;
+                        let allocate=unique.as_mut().map_or(true,|keys|keys.remove(&self.key(&leaf.battle,depth+1)));
+                        let child_limit=if !allocate {self.runs}
+                            else if sharing {self.runs+branch_limit.saturating_sub(self.runs)/leaves_left} else {branch_limit};
+                        if allocate {leaves_left-=1;}
                         let child=self.visit(leaf.battle,depth+1,child_limit);
                         for k in 0..2 { branch[k]+=leaf.prob*self.nodes[child]["bounds"][k].as_f64().unwrap(); }
                         children.push(json!({"mass":leaf.prob,"node":child}));
@@ -212,7 +220,7 @@ fn main() {
     if let Some(path)=args.get(4) {
         let raw=std::fs::read(path).unwrap();let previous:Value=serde_json::from_slice(&raw).unwrap();
         let mut before=previous["config"].clone();let mut after=serde_json::to_value(&cfg).unwrap();
-        for name in ["horizon","work_budget","cell_cap","reverse_replies","share_root_budget","share_budget_depth"] {
+        for name in ["horizon","work_budget","cell_cap","reverse_replies","share_root_budget","share_budget_depth","share_unique_children"] {
             before.as_object_mut().unwrap().remove(name);after.as_object_mut().unwrap().remove(name);
         }
         assert_eq!(before,after,"prior policy and key configuration must match");

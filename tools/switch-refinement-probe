@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import concurrent.futures
+import copy
+import functools
+import gzip
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/switch-refinement-v1'
+previous='findings/switch-witness-v1/records.json.gz'
+support_path='findings/support-witness-v1/records.json.gz'
+corpus='findings/policy-gap-v1/corpus.jsonl.gz'
+join=runpy.run_path(str(root/'tools/witness-closure-probe'))
+legacy=join['coverage'];sha=legacy['sha']
+inputs=[previous,support_path,corpus,'tools/witness-closure-probe','tools/policy-witness-probe',
+        'tools/switch-refinement-probe','data/gen2stadium2.json']
+
+
+@functools.lru_cache
+def prior_bundle():return legacy['read'](previous)
+
+
+@functools.lru_cache
+def prior():return json.loads(prior_bundle()['raw']['explode-fair3'])
+
+
+def normalized(record):
+    cfg=dict(record['config'])
+    if 'share_unique_children' in cfg:assert isinstance(cfg.pop('share_unique_children'),bool)
+    return dict(record,config=cfg)
+
+
+def specs():
+    base=dict(prior()['config']);base.pop('reverse_replies')
+    certain=dict(legacy['read'](support_path)['records']['explosion']['config'],
+                 share_root_budget=True,share_budget_depth=3,share_unique_children=True)
+    return dict(same6=base,deep8=dict(base,horizon=8),unique6=dict(base,share_unique_children=True),
+                unique8=dict(base,horizon=8,share_unique_children=True),
+                tiny=dict(base,share_unique_children=True,work_budget=1,cell_cap=1),
+                certain=certain,floor=dict(certain,work_budget=1,cell_cap=1))
+
+
+def upper_mass(record,parent=None):
+    records={'new':record}
+    if parent is not None:records['parent']=parent
+    weights={name:collections.defaultdict(F) for name in records};weights['new'][record['root']]=F(1)
+    mass=collections.defaultdict(F)
+    for name,r in records.items():
+        for index in reversed(range(len(r['nodes']))):
+            node=r['nodes'][index];weight=weights[name][index]
+            if not weight:continue
+            if 'prior_node' in node and (node['kind']=='reused' or node['bounds'][1]<node['raw_bounds'][1]):
+                assert name=='new' and parent is not None
+                weights['parent'][node['prior_node']]+=weight;continue
+            if node['kind']=='decision':
+                assert node['maximizing']
+                branch=max(node['branches'],key=lambda b:b['bounds'][1])
+                reason='untouched' if branch['runs']==0 else 'at_cell_cap' if branch['runs']==r['config']['cell_cap'] else 'below_cell_cap'
+                mass['pending_'+reason]+=weight*F(branch['pending'])
+                for child in branch['children']:weights[name][child['node']]+=weight*F(child['mass'])
+            else:
+                kind=node['kind']
+                if kind=='terminal':kind+='_'+str(node['bounds'][0])
+                mass[kind]+=weight
+    assert abs(sum(mass.values())-1)<F(1,10**8)
+    return {k:float(v) for k,v in mass.items()}
+
+
+def summarize(bundle):
+    assert bundle['inputs']=={p:sha((root/p).read_bytes()) for p in inputs}
+    assert sorted(p for p,h in prior_bundle()['source_hashes'].items() if bundle['source_hashes'][p]!=h)==['crates/bot/examples/policy_witness.rs']
+    parent=prior();legacy['verify'](parent);records={n:json.loads(raw) for n,raw in bundle['raw'].items()}
+    assert list(records)==list(specs());reports={}
+    for name,cfg in specs().items():
+        r=records[name];assert r['config']==cfg
+        imported=name not in ['certain','floor']
+        if imported:assert r['prior_sha256']==sha(prior_bundle()['raw']['explode-fair3'].encode())
+        reports[name]=legacy['verify'](normalized(r),parent if imported else None)
+        if imported:
+            assert r['bounds'][0]>=parent['bounds'][0] and r['bounds'][1]<=parent['bounds'][1]
+            reports[name]['upper_certificate_mass']=upper_mass(r,parent)
+    assert records['tiny']['bounds']==parent['bounds'] and records['tiny']['runs']==1
+    assert legacy['support'](records['certain'])==[1,1] and legacy['support'](records['floor'])==[0,1]
+    merged=join['closure']({'parent':parent,**{n:normalized(records[n]) for n in ['same6','deep8','unique6','unique8']}})
+    for bad in ['config','bound']:
+        r=copy.deepcopy(records['tiny'])
+        if bad=='config':r['config']['first_choice']='move return'
+        else:r['bounds'][1]=r['nodes'][-1]['bounds'][1]=0
+        try:legacy['verify'](normalized(r),parent)
+        except AssertionError:pass
+        else:raise AssertionError(bad)
+    return dict(rows=reports,initial_upper_certificate_mass=upper_mass(parent),
+        combined_fixed_opponent_bounds=merged['bounds'],unrestricted_switch_bounds=[0,merged['bounds'][1]],
+        improved_nodes=len(merged['improved']),
+        upper_gain=parent['bounds'][1]-merged['bounds'][1],
+        unique_upper_gain=records['same6']['bounds'][1]-records['unique6']['bounds'][1],
+        scope='Same game-12 decision-15 switching upper witness and the same fixed opponent policy. '
+              'Compare inherited bounds at depth 6 and 8 under the same one-million execution cap. '
+              'The optional unique-child scheduler divides chance-child allowances among unseen guarded '
+              'state/depth identities; it keeps every original chance edge and its mass. Only this known '
+              'scheduling flag is removed when passing config metadata to the legacy verifier and closure; '
+              'raw records retain it, policies and action sets are unchanged, and hashes bind the native '
+              'source. Every imported interval, chance backup and legal reply set is verified. Upper-mass '
+              'diagnostics follow the largest recorded upper branch, preferring current evidence on ties, '
+              'and follow prior references when they tighten the upper endpoint. They describe a certificate, '
+              'not the true optimal response; rounding margins are not probability mass. A branch at the '
+              'cell cap may also have reached a local budget. Fixed-opponent lower endpoints are not '
+              'unrestricted security guarantees. The upper endpoint bounds win plus half draw and therefore '
+              'also win probability. No blind guarantee, whole-game solution or production change.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path);args=parser.parse_args()
+    if args.verify_only:
+        assert summarize(legacy['read']('findings/switch-refinement-v1/records.json.gz'))==json.loads((archive/'summary.json').read_bytes())
+        print('switch-refinement: imported upper bounds, budget controls, certificate mass and unique-child scheduling verified');return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-switch-refine-'));print(directory,flush=True)
+    sources={p:sha((root/p).read_bytes()) for p in prior_bundle()['source_hashes']}
+    binary=root/'target/release/examples/policy_witness';env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if not args.import_directory:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','policy_witness'],cwd=root,env=env,check=True)
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/corpus).read_bytes()))
+        (directory/'parent.json').write_text(prior_bundle()['raw']['explode-fair3'])
+        configs=specs()
+        def run(name):
+            (directory/(name+'.json')).write_text(json.dumps(configs[name]))
+            cmd=[str(binary),str(directory/'corpus.jsonl'),str(directory/(name+'.json')),str(directory/(name+'.out.json'))]
+            if name not in ['certain','floor']:cmd +=[str(directory/'parent.json'),'priority']
+            subprocess.run(cmd,cwd=root,env=env,check=True);print(name,'complete',flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:list(pool.map(run,configs))
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in inputs},source_hashes=sources,
+        binary_sha256=sha(binary.read_bytes()),raw={n:(directory/(n+'.out.json')).read_text() for n in specs()})
+    assert sources=={p:sha((root/p).read_bytes()) for p in sources}
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k not in ['rows','scope']},indent=2))
+
+
+if __name__=='__main__':main()
