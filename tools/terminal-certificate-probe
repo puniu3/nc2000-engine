@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import json
+import math
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/terminal-certificate-v1'
+duel=runpy.run_path(str(root/'tools/duel-frontier-probe'))
+sha=duel['sha']; verify=duel['late']['verify']; corpus=duel['corpus']
+previous='findings/duel-frontier-v1/records.json.gz'
+inputs=[previous,'findings/duel-frontier-v1/summary.json',corpus,'tools/duel-frontier-probe',
+        'tools/policy-witness-probe','tools/terminal-certificate-probe']
+
+
+def specs(old):
+    manifests={n:raw for n,raw in old['manifests'].items() if n.startswith('bot-')}
+    for i in range(13):
+        b=json.loads(manifests['bot-'+str(i)])
+        for name,side,horizon,first in [('edge',1,1,'move doubleedge'),('quake',0,2,'move earthquake')]:
+            m={k:b[k] for k in ['config','targets','cap']}
+            m['witness']=dict(game=21,decision=36,target_side=side,policy_side=side,first_choice=first,
+                priority=[first],rest_at_percent=None,horizon=horizon,work_budget=100000,cell_cap=10000,
+                guarded_keys=True,support_certificate=True)
+            manifests[f'proof-{i}-{name}']=json.dumps(m)
+    for name,source in [('floor','proof-5-edge'),('floor-quake','proof-5-quake')]:
+        m=json.loads(manifests[source]);m['witness'].update(work_budget=1,cell_cap=1)
+        manifests[name]=json.dumps(m)
+    return manifests
+
+
+def check_matrix(out, old):
+    stripped=copy.deepcopy(out)
+    for s in stripped['searches']:
+        previous=[{},{}]
+        for c in s['checkpoints']:
+            for side,row in enumerate(c['sides']):
+                matrix=row.pop('matrix'); cells={(x['own'],x['reply']):x for x in matrix}
+                assert len(cells)==len(matrix) and sum(x['visits'] for x in matrix)==c['iterations']
+                assert set(previous[side])<=set(cells)
+                for k,x in cells.items():
+                    assert 0<=k[0]<len(row['actions']) and k[1] in c['sides'][1-side]['actions']
+                    assert isinstance(x['visits'],int) and x['visits']>0 and 0<=x['mean']<=1
+                    assert x['visits']>=previous[side].get(k,0)
+                for a in range(len(row['actions'])):
+                    subset=[x for x in matrix if x['own']==a]
+                    assert sum(x['visits'] for x in subset)==row['visits'][a]
+                    assert abs(sum(x['visits']*x['mean'] for x in subset)-row['visits'][a]*row['means'][a])<1e-8
+                previous[side]={k:x['visits'] for k,x in cells.items()}
+    assert stripped==old
+
+
+def support(record):
+    values=[]; root_branches=[]
+    for i,n in enumerate(record['nodes']):
+        if n['kind']=='terminal': value=n['bounds']
+        elif n['kind']=='decision':
+            branches=[]
+            for b in n['branches']:
+                if b['complete_enumeration']:
+                    assert b['pending_scripts']==0 and b['pending']==0 and b['children']
+                    children=[values[c['node']] for c in b['children']]
+                    branches.append([min(c[0] for c in children),max(c[1] for c in children)])
+                else: branches.append([0,1])
+            op=max if n['maximizing'] else min
+            value=[op(b[j] for b in branches) for j in [0,1]]
+            if i==record['root']: root_branches=branches
+        else: value=[0,1]
+        values.append(value)
+    return values[record['root']],root_branches
+
+
+def check_proof(raw,out,reference):
+    m=json.loads(raw)
+    assert out['manifest_sha256']==sha(raw.encode())
+    for k in ['corpus_sha256','root_state_key','id','cache_key','trace','state']: assert out[k]==reference[k]
+    assert out['legal']==[s['actions'] for s in reference['searches'][0]['checkpoints'][0]['sides']]
+    record=out['ledger']; assert record['config']==m['witness']
+    assert record['nodes'][record['root']]['cache_key']==out['cache_key']
+    result=verify(record); qualitative,branches=support(record)
+    bounds=qualitative if qualitative in [[0,0],[1,1]] else result['bounds']
+    upper={}
+    for branch,q in zip(record['nodes'][record['root']]['branches'],branches):
+        a=branch['choices'][1-m['witness']['policy_side']]
+        upper[a]=0 if q==[1,1] else min(1,math.nextafter(1-branch['bounds'][0],math.inf))
+    return dict(**result,certified_bounds=bounds,opposing_first_upper=upper,qualitative=qualitative)
+
+
+def allowed(legal,own,opposing):
+    result=[a for a in legal if opposing['opposing_first_upper'][a]>=own['certified_bounds'][0]]
+    assert result
+    return result
+
+
+def summarize(bundle):
+    assert bundle['inputs']=={p:sha((root/p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes']=={p:sha((root/p).read_bytes()) for p in bundle['source_hashes']}
+    old=json.loads(gzip.decompress((root/previous).read_bytes()));prior=duel['summarize'](old)
+    assert prior==json.loads((root/inputs[1]).read_bytes())
+    manifests=specs(old);assert bundle['manifests']==manifests and set(bundle['outputs'])==set(manifests)
+    outputs=bundle['outputs'];proofs={};masks={};rows=[];diagnostics=[]
+    for name,raw in manifests.items():
+        if name.startswith('bot-'):check_matrix(outputs[name],old['outputs'][name]);continue
+        i=int(name.split('-')[1]) if name.startswith('proof-') else 5
+        proofs[name]=check_proof(raw,outputs[name],old['outputs']['bot-'+str(i)])
+    for i in range(13):
+        edge=proofs[f'proof-{i}-edge'];quake=proofs[f'proof-{i}-quake']
+        legal=outputs[f'proof-{i}-edge']['legal']
+        masks[i]=[allowed(legal[0],quake,edge),allowed(legal[1],edge,quake)]
+        assert masks[i][0]==['move earthquake']
+        assert masks[i][1]==(legal[1] if i==1 else ['move doubleedge'])
+    legal=outputs['floor']['legal']
+    assert allowed(legal[0],proofs['floor-quake'],proofs['floor'])==legal[0]
+    assert allowed(legal[1],proofs['floor'],proofs['floor-quake'])==legal[1]
+    for name,out in outputs.items():
+        if not name.startswith('bot-'):continue
+        i=5 if name=='bot-focus' else int(name.split('-')[1])
+        for s in out['searches']:
+            for c in s['checkpoints']:
+                r=c['sides'][1];before=r['chosen'];permitted=masks[i][1]
+                after=before if before in permitted else max(permitted,key=lambda a:r['visits'][r['actions'].index(a)])
+                assert after in permitted
+                rows.append(dict(case=name,kind=s['kind'],seed=s['seed'],iterations=c['iterations'],
+                                 before=before,after=after,rejected=before not in permitted))
+                if name!='bot-focus' or c['iterations']!=27000:continue
+                acts=r['actions'];cells={(acts[x['own']],x['reply']):x for x in r['matrix']}
+                counts=collections.Counter()
+                for x in r['matrix']:counts[x['reply']]+=x['visits']
+                top=max(counts,key=counts.get);assert top=='move earthquake'
+                candidates=['move doubleedge','move earthquake']
+                comparisons={}
+                for method in ['dominant_reply','worst_observed_reply']:
+                    assert all((a,b) in cells for a in candidates for b in counts)
+                    vals={a:cells[a,top]['mean'] if method=='dominant_reply' else min(cells[a,b]['mean'] for b in counts) for a in candidates}
+                    best=[a for a in candidates if vals[a]>=max(vals.values())-1e-12]
+                    comparisons[method]=before if before in best else best[0]
+                j=acts.index('move earthquake');eq=cells['move earthquake','move earthquake']
+                diagnostics.append(dict(kind=s['kind'],seed=s['seed'],chosen=before,comparisons=comparisons,
+                    quake_total_reward=r['means'][j]*r['visits'][j],quake_reward_against_quake=eq['visits']*eq['mean']))
+    focus=[r for r in rows if r['case']=='bot-focus' and r['iterations']==27000]
+    counts={kind:dict(before=sum(r['kind']==kind and r['rejected'] for r in focus),
+                     after=sum(r['kind']==kind and r['after']!='move doubleedge' for r in focus)) for kind in ['skuct','pinned']}
+    assert counts==dict(skuct=dict(before=9,after=0),pinned=dict(before=5,after=0))
+    diagnostic_counts={kind:{method:sum(d['kind']==kind and d['comparisons'][method]=='move earthquake' for d in diagnostics)
+                            for method in ['dominant_reply','worst_observed_reply']} for kind in ['skuct','pinned']}
+    assert diagnostic_counts==dict(skuct=dict(dominant_reply=2,worst_observed_reply=2),pinned=dict(dominant_reply=5,worst_observed_reply=5))
+    for fault in ['matrix','mass','unknown','identity']:
+        if fault=='matrix':
+            bad=copy.deepcopy(outputs['bot-focus']);bad['searches'][0]['checkpoints'][0]['sides'][0]['matrix'][0]['visits']+=1
+            check=lambda:check_matrix(bad,old['outputs']['bot-focus'])
+        else:
+            name='proof-5-edge' if fault=='unknown' else 'proof-5-quake';bad=copy.deepcopy(outputs[name])
+            if fault=='mass':bad['ledger']['nodes'][-1]['branches'][0]['children'][0]['mass']+=.1
+            elif fault=='unknown':next(n for n in bad['ledger']['nodes'] if n['kind']=='horizon')['bounds']=[1,1]
+            else:bad['cache_key'][2]='0'
+            check=lambda:check_proof(manifests[name],bad,old['outputs']['bot-5'])
+        try:check()
+        except (AssertionError,ValueError):pass
+        else:raise AssertionError(fault)
+    focus_lower=proofs['proof-5-edge']['certified_bounds'][0]
+    focus_upper=math.nextafter(1-proofs['proof-5-quake']['certified_bounds'][0],math.inf)
+    return dict(proofs=proofs,allowed_actions={str(k):v for k,v in masks.items()},selections=rows,focus_counts=counts,
+        diagnostic_counts=diagnostic_counts,diagnostics=diagnostics,focus_side_one_bounds=[focus_lower,focus_upper],
+        focus_proof_runs=proofs['proof-5-edge']['runs']+proofs['proof-5-quake']['runs'],
+        all_proof_runs=sum(p['runs'] for p in proofs.values()),
+        scope='All instrumented baseline search outputs match the previous archive exactly after '
+              'removing joint-matrix fields. Matrix counts and reward sums reconstruct every action '
+              'statistic. On the HP87 counterexample, most Earthquake reward in erroneous selections '
+              'comes from other opposing root choices; positive reward remains when the opposing '
+              'first choice is Earthquake. This does not isolate later exploration from rollout '
+              'evaluation. Comparing only Double Edge and Earthquake against the most sampled '
+              'reply or their worst observed reply leaves 5 pinned failures, fixing three old '
+              'failures but introducing three new ones. No mean-ranking change is adopted. '
+              'Separate one-step Double Edge and two-step Earthquake ledgers enumerate exact '
+              'chance support. A qualitative complete-support proof makes the other three '
+              'side-one first choices certain losses in twelve states. The HP86 state gives '
+              'side one value zero for all choices. Numeric bounds are independently checked '
+              'using rational backups and padding. A generic certificate filter removes an '
+              'action only when its upper bound is strictly below an own-policy lower bound; '
+              'the budget-one controls remove nothing. Applied to recorded searches, it corrects '
+              'all observed certified mistakes without rejecting an optimal action. Side-one '
+              'positive guarantees come entirely from immediate terminal outcomes and therefore '
+              'hold for any legal later continuation after Double Edge, not just the fixed '
+              'continuation used in longer searches. The focus value lies in a roughly 6.3e-11 '
+              'interval with 2558 engine runs. These are full-state and true-roster-pinned '
+              'diagnostics, not production belief certificates. The filter is implemented in '
+              'this audit tool only. Hidden-state coverage, runtime integration and broader '
+              'strength gains remain unproved. Engine transitions, chance support and guarded '
+              'identities remain trusted. No production code was changed.')
+
+
+def execute(directory,manifests):
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','frontier_matrix','--example','frontier_policy'],cwd=root,check=True)
+    source=directory/'corpus.jsonl';source.write_bytes(gzip.decompress((root/corpus).read_bytes()));outputs={}
+    for name,raw in manifests.items():
+        m=directory/'manifest.json';m.write_text(raw);o=directory/'output.json'
+        example='frontier_matrix' if name.startswith('bot-') else 'frontier_policy'
+        subprocess.run([str(root/'target/release/examples'/example),str(source),str(m),str(o)],
+            cwd=root,env=dict(os.environ,NC2000_REPO_ROOT=str(root)),check=True,stderr=subprocess.DEVNULL)
+        outputs[name]=json.loads(o.read_bytes());print(name,'replayed',flush=True)
+    return outputs
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--replay',action='store_true');parser.add_argument('--import-directory',type=pathlib.Path);args=parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-terminal-cert-') as d:assert execute(pathlib.Path(d),bundle['manifests'])==bundle['outputs']
+        print('terminal-certificate: unchanged search, joint statistics, finite proofs and safe filtering verified');return
+    assert not archive.exists() and args.import_directory
+    old=json.loads(gzip.decompress((root/previous).read_bytes()));manifests=specs(old)
+    paths=set(old['source_hashes'])|{'crates/bot/examples/frontier_matrix.rs','crates/bot/examples/frontier_policy.rs'}
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in inputs},source_hashes={p:sha((root/p).read_bytes()) for p in sorted(paths)},
+        manifests={n:(args.import_directory/(n+'.json')).read_text() for n in manifests},
+        outputs={n:json.loads((args.import_directory/(n+'.out.json')).read_bytes()) for n in manifests})
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(report['focus_counts'],'proof runs',report['focus_proof_runs'])
+
+
+if __name__=='__main__':main()
