@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import itertools
+import json
+import math
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/frontier-bot-v1'
+reply=runpy.run_path(str(root/'tools/frontier-reply-probe'))
+legacy=reply['legacy'];sha=legacy['sha']
+previous='findings/frontier-reply-v1/records.json.gz'
+corpus=reply['subgame']['corpus'];native='crates/bot/examples/frontier_bot.rs'
+inputs=[previous,'findings/frontier-reply-v1/summary.json',corpus,native,'tools/frontier-bot-probe']
+
+
+def spec():
+    old=legacy['read'](previous);base=json.loads(old['manifests']['hydro-cycle'])
+    base={k:v for k,v in base.items() if not k.startswith('solve_')}
+    return dict(base,search_seeds=list(range(8)),search_budgets=[300,3000,27000],search_c=[.4,1.],search_pinned=True)
+
+
+def check(manifest,output,reference):
+    assert output['manifest_sha256']==sha(manifest.encode())
+    assert output['corpus_sha256']==sha(gzip.decompress((root/corpus).read_bytes()))
+    assert output['root_state_key']==reference['root_state_key']
+    target=reference['targets'][0];m=json.loads(manifest)
+    for k in ['id','cache_key','trace','state']:assert output[k]==target[k]
+    expected=list(itertools.product(['skuct','pinned'],m['search_c'],m['search_seeds']))
+    assert [(s['kind'],s['c'],s['seed']) for s in output['searches']]==expected
+    for search in output['searches']:
+        assert [c['iterations'] for c in search['checkpoints']]==m['search_budgets']
+        previous_visits=[[0]*len(a) for a in target['legal']]
+        for checkpoint in search['checkpoints']:
+            assert checkpoint['nodes']>0 and len(checkpoint['sides'])==2
+            if search['kind']=='skuct':assert checkpoint['mean_depth']>=0
+            else:assert checkpoint['mean_depth'] is None
+            for side,r in enumerate(checkpoint['sides']):
+                assert r['actions']==target['legal'][side]
+                assert len(r['visits'])==len(r['means'])==len(r['actions'])
+                assert all(isinstance(v,int) and v>=p for v,p in zip(r['visits'],previous_visits[side]))
+                assert sum(r['visits'])==checkpoint['iterations']
+                assert all(math.isfinite(v) and 0<=v<=1 for v in r['means'])
+                assert r['chosen'] in r['actions']
+                assert r['visits'][r['actions'].index(r['chosen'])]==max(r['visits'])
+                previous_visits[side]=r['visits']
+
+
+def summarize(bundle):
+    assert bundle['inputs']=={p:sha((root/p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes']=={p:sha((root/p).read_bytes()) for p in bundle['source_hashes']}
+    old=legacy['read'](previous);prior=reply['summarize'](old)
+    assert prior==json.loads((root/'findings/frontier-reply-v1/summary.json').read_bytes())
+    assert json.loads(bundle['manifest'])==spec()
+    reference=old['outputs']['hydro-cycle'];check(bundle['manifest'],bundle['output'],reference)
+    for fault in ['identity','visits','selection']:
+        bad=copy.deepcopy(bundle['output'])
+        if fault=='identity':bad['cache_key'][2]='0'
+        elif fault=='visits':bad['searches'][0]['checkpoints'][0]['sides'][0]['visits'][0]+=1
+        else:bad['searches'][0]['checkpoints'][0]['sides'][0]['chosen']='move splash'
+        try:check(bundle['manifest'],bad,reference)
+        except AssertionError:pass
+        else:raise AssertionError(fault)
+    side_one=prior['unrestricted_side_one_score_bounds'];values=[[1-side_one[1],1-side_one[0]],side_one]
+    action_upper=[{a:min(r['root_cells'][a][1] for r in prior['rows'].values() if r['side']==1)+1e-10
+                   for a in prior['rows']['hydro-cycle']['root_cells']},prior['pure_first_action_upper']]
+    near=['move dynamicpunch','move hydropump'];rows=[]
+    for kind,c,budget,side in itertools.product(['skuct','pinned'],spec()['search_c'],spec()['search_budgets'],[0,1]):
+        selected=[p['sides'][side]['chosen'] for s in bundle['output']['searches'] if s['kind']==kind and s['c']==c
+                  for p in s['checkpoints'] if p['iterations']==budget]
+        assert len(selected)==8
+        counts=dict(collections.Counter(selected));bad={a:n for a,n in counts.items() if action_upper[side][a]<values[side][0]}
+        rows.append(dict(kind=kind,c=c,iterations=budget,side=side,choices=counts,
+            certified_inferior_choices=bad,
+            inferior_choice_regret_lower={a:values[side][0]-action_upper[side][a] for a in bad},
+            all_choices_near_optimal=all(a==near[side] for a in selected)))
+    assert all(r['all_choices_near_optimal'] for r in rows if r['iterations']>=3000)
+    return dict(rows=rows,game_score_bounds=values,pure_first_action_upper=action_upper,
+        near_optimal_first_actions=near,near_optimal_first_action_regret_upper=side_one[1]-side_one[0],
+        search_iterations=3*len(spec()['search_c'])*len(spec()['search_seeds'])*max(spec()['search_budgets']),
+        pinned_identity_checks=64,
+        scope='The exact certified frontier state is independently replayed and matched against its '
+              'archived guarded identity, raw trace and complete essence. SkuctSearch is the full-state '
+              'UCB kernel; BlindSearch is also run with the true current opponent roster pinned to one '
+              'candidate. For each side, 32 native determinization checks must preserve the certified '
+              'guarded identity before the pinned searches run. This control intentionally supplies '
+              'information that the production hidden-information policy need not possess. Both '
+              'exploration constants use the remaining RmConfig defaults, with cumulative checkpoints '
+              'and eight seeds each. Search means and visit counts are diagnostics, not certificates. '
+              'The opposing fixed-policy certificates bound pure first-action values with optimal '
+              'future play. They establish near-optimality of the observed initial selections at '
+              '3000 and 27000 iterations, not of the actual search continuation. Inferior-choice '
+              'regret bounds are per deterministic selected action; frequencies are descriptive, '
+              'not population guarantees. These measurements neither prove whole-game strength nor '
+              'calibrate against people. The 300-iteration failures do not justify a production '
+              'change at the normal budget. No production search was modified.')
+
+
+def execute(manifest):
+    binary=root/'target/release/examples/frontier_bot';env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','frontier_bot'],cwd=root,env=env,check=True)
+    with tempfile.TemporaryDirectory(prefix='nc-frontier-bot-') as d:
+        d=pathlib.Path(d);(d/'manifest.json').write_text(manifest)
+        (d/'corpus.jsonl').write_bytes(gzip.decompress((root/corpus).read_bytes()))
+        subprocess.run([str(binary),str(d/'corpus.jsonl'),str(d/'manifest.json'),str(d/'output.json')],cwd=root,env=env,check=True)
+        return json.loads((d/'output.json').read_bytes())
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--replay',action='store_true');parser.add_argument('--import-prefix',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle=legacy['read']('findings/frontier-bot-v1/records.json.gz')
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        if args.replay:assert execute(bundle['manifest'])==bundle['output']
+        print('frontier-bot: exact state, search accounting, action certificates and rejection controls verified');return
+    assert not archive.exists()
+    if args.import_prefix:
+        manifest=args.import_prefix.with_suffix('.json').read_text()
+        output=json.loads(args.import_prefix.with_suffix('.out.json').read_bytes())
+    else:manifest=json.dumps(spec());output=execute(manifest)
+    sources=dict(legacy['read'](previous)['source_hashes']);sources[native]=sha((root/native).read_bytes())
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in inputs},source_hashes=sources,
+        binary_sha256=sha((root/'target/release/examples/frontier_bot').read_bytes()),manifest=manifest,output=output)
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print('all 3000/27000-iteration first choices within',report['near_optimal_first_action_regret_upper'])
+
+
+if __name__=='__main__':main()

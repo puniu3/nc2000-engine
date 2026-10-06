@@ -1,0 +1,342 @@
+{
+  "rows": [
+    {
+      "kind": "skuct",
+      "c": 0.4,
+      "iterations": 300,
+      "side": 0,
+      "choices": {
+        "move crunch": 1,
+        "move dynamicpunch": 7
+      },
+      "certified_inferior_choices": {
+        "move crunch": 1
+      },
+      "inferior_choice_regret_lower": {
+        "move crunch": 0.18961818428952054
+      },
+      "all_choices_near_optimal": false
+    },
+    {
+      "kind": "skuct",
+      "c": 0.4,
+      "iterations": 300,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "skuct",
+      "c": 0.4,
+      "iterations": 3000,
+      "side": 0,
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "skuct",
+      "c": 0.4,
+      "iterations": 3000,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "skuct",
+      "c": 0.4,
+      "iterations": 27000,
+      "side": 0,
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "skuct",
+      "c": 0.4,
+      "iterations": 27000,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "skuct",
+      "c": 1.0,
+      "iterations": 300,
+      "side": 0,
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "skuct",
+      "c": 1.0,
+      "iterations": 300,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "skuct",
+      "c": 1.0,
+      "iterations": 3000,
+      "side": 0,
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "skuct",
+      "c": 1.0,
+      "iterations": 3000,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "skuct",
+      "c": 1.0,
+      "iterations": 27000,
+      "side": 0,
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "skuct",
+      "c": 1.0,
+      "iterations": 27000,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "pinned",
+      "c": 0.4,
+      "iterations": 300,
+      "side": 0,
+      "choices": {
+        "move rockslide": 4,
+        "move dynamicpunch": 4
+      },
+      "certified_inferior_choices": {
+        "move rockslide": 4
+      },
+      "inferior_choice_regret_lower": {
+        "move rockslide": 0.10320030035995226
+      },
+      "all_choices_near_optimal": false
+    },
+    {
+      "kind": "pinned",
+      "c": 0.4,
+      "iterations": 300,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "pinned",
+      "c": 0.4,
+      "iterations": 3000,
+      "side": 0,
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "pinned",
+      "c": 0.4,
+      "iterations": 3000,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "pinned",
+      "c": 0.4,
+      "iterations": 27000,
+      "side": 0,
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "pinned",
+      "c": 0.4,
+      "iterations": 27000,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "pinned",
+      "c": 1.0,
+      "iterations": 300,
+      "side": 0,
+      "choices": {
+        "move dynamicpunch": 6,
+        "move fireblast": 1,
+        "move crunch": 1
+      },
+      "certified_inferior_choices": {
+        "move fireblast": 1,
+        "move crunch": 1
+      },
+      "inferior_choice_regret_lower": {
+        "move fireblast": 0.09212877549309789,
+        "move crunch": 0.18961818428952054
+      },
+      "all_choices_near_optimal": false
+    },
+    {
+      "kind": "pinned",
+      "c": 1.0,
+      "iterations": 300,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "pinned",
+      "c": 1.0,
+      "iterations": 3000,
+      "side": 0,
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "pinned",
+      "c": 1.0,
+      "iterations": 3000,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "pinned",
+      "c": 1.0,
+      "iterations": 27000,
+      "side": 0,
+      "choices": {
+        "move dynamicpunch": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    },
+    {
+      "kind": "pinned",
+      "c": 1.0,
+      "iterations": 27000,
+      "side": 1,
+      "choices": {
+        "move hydropump": 8
+      },
+      "certified_inferior_choices": {},
+      "inferior_choice_regret_lower": {},
+      "all_choices_near_optimal": true
+    }
+  ],
+  "game_score_bounds": [
+    [
+      0.5722151539940137,
+      0.572616871028008
+    ],
+    [
+      0.4273831289719921,
+      0.4277848460059864
+    ]
+  ],
+  "pure_first_action_upper": [
+    {
+      "move rockslide": 0.4690148536340614,
+      "move crunch": 0.38259696970449314,
+      "move fireblast": 0.4800863785009158,
+      "move dynamicpunch": 0.5726168710280078
+    },
+    {
+      "move hydropump": 0.4277848460059863,
+      "move submission": 0.09408529553832355,
+      "move return": 0.23484643113919246,
+      "move bellydrum": 0.21799124776256285
+    }
+  ],
+  "near_optimal_first_actions": [
+    "move dynamicpunch",
+    "move hydropump"
+  ],
+  "near_optimal_first_action_regret_upper": 0.0004017170339942755,
+  "search_iterations": 1296000,
+  "pinned_identity_checks": 64,
+  "scope": "The exact certified frontier state is independently replayed and matched against its archived guarded identity, raw trace and complete essence. SkuctSearch is the full-state UCB kernel; BlindSearch is also run with the true current opponent roster pinned to one candidate. For each side, 32 native determinization checks must preserve the certified guarded identity before the pinned searches run. This control intentionally supplies information that the production hidden-information policy need not possess. Both exploration constants use the remaining RmConfig defaults, with cumulative checkpoints and eight seeds each. Search means and visit counts are diagnostics, not certificates. The opposing fixed-policy certificates bound pure first-action values with optimal future play. They establish near-optimality of the observed initial selections at 3000 and 27000 iterations, not of the actual search continuation. Inferior-choice regret bounds are per deterministic selected action; frequencies are descriptive, not population guarantees. These measurements neither prove whole-game strength nor calibrate against people. The 300-iteration failures do not justify a production change at the normal budget. No production search was modified."
+}
