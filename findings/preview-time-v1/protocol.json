@@ -1,0 +1,28 @@
+{
+  "model_commit": "ef2a63f",
+  "cost_check_commit": "55204f4",
+  "games": 64,
+  "pairs": 32,
+  "base_seed": 2026102601,
+  "budget_ms": 500,
+  "batch": 64,
+  "threads": 4,
+  "max_turns": 500,
+  "pool": "data/belief-pool-v3/belief-pool.json",
+  "teams": "data/team-pool-v2/team-pool.json",
+  "candidate": "Explicit own-root prune_preview_aliases before search; all RmConfig settings equal to baseline, c=0.4, UCB. All other research switches OFF.",
+  "budget_scope": "Per non-forced choice: search construction, preview pruning and search steps. Belief observation/sync, result recording and destruction excluded; total choose times are also retained.",
+  "null_control": {
+    "games": 8,
+    "base_seed": 2026102600,
+    "iterations": 3000,
+    "arms_identical": true
+  },
+  "identity_check": "Both perspectives at every recorded decision in the frozen 24-game corpus; 128 fixed iterations. Baseline against BlindAgent; candidate against separately stepped BlindSearch with persistent observer/belief/RNG. Compare exact chosen action and search RNG.",
+  "timing_validity": {
+    "maximum_mean_search_ms": 505,
+    "maximum_p99_search_ms": 520
+  },
+  "decision_rule": "Exploratory fixed-size screen only. A lower paired 95% score bound above 0.5 warrants a separately prespecified fresh confirmation; otherwise do not claim superiority or extend this sample. No adoption from this 64-game screen.",
+  "scope": "Game-derived preview action reduction; native timed comparison against local default search, not a proof of optimality or a deployed-binary/human comparison. Wall-clock runs are not exactly reproducible."
+}
