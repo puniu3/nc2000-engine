@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import json
+import math
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/late-root-witness-v1'
+support = runpy.run_path(str(root / 'tools/support-witness-probe'))
+policy = runpy.run_path(str(root / 'tools/root-policy-probe'))
+bot = runpy.run_path(str(root / 'tools/frontier-bot-probe'))
+verify = support['verifier']['verify']; sha = policy['sha']
+corpus = 'findings/policy-gap-v1/corpus.jsonl.gz'
+inputs = [corpus, 'findings/policy-pair-ceiling-v1/summary.json', 'findings/support-witness-v1/summary.json',
+    'findings/support-witness-v1/records.json.gz', 'tools/support-witness-probe', 'tools/policy-witness-probe',
+    'tools/root-policy-probe', 'tools/frontier-bot-probe', 'tools/late-root-witness-probe']
+
+
+def specs():
+    base = dict(game=15, decision=21, side=1, first='move submission',
+        priority=['move submission', 'move hydropump', 'move return', 'move bellydrum'],
+        replies=['move return', 'move icebeam', 'move curse', 'move recover'],
+        rounds=20, work_budget=20000, node_budget=120000)
+    cases = {'submission': base, 'return-counter': dict(base, side=0, first='move return',
+        priority=['move return', 'move icebeam', 'move curse', 'move recover'],
+        replies=['move hydropump', 'move submission', 'move return', 'move bellydrum'])}
+    raikou = dict(base, game=21, decision=36, side=0, first='move hiddenpowerice',
+        priority=['move hiddenpowerice', 'move earthquake', 'move thunder', 'move rockslide'],
+        replies=['move doubleedge', 'move earthquake', 'move selfdestruct', 'move curse'])
+    cases['raikou-counter'] = raikou
+    cases['machamp-counter'] = dict(raikou, game=19, decision=12, side=1, first='move crosschop',
+        priority=['move crosschop', 'move thunder', 'move rockslide', 'move earthquake', 'move hiddenpowerice', 'move hiddenpowerghost'],
+        replies=['move bodyslam', 'move earthquake', 'move curse', 'move selfdestruct'])
+    cases['marowak-counter'] = dict(raikou, first='switch 2',
+        priority=['move earthquake', 'move thunder', 'move hiddenpowerice', 'move rockslide'])
+    snorlax = dict(raikou, side=1, first='move earthquake',
+        priority=['move doubleedge', 'move earthquake', 'move curse', 'move selfdestruct'],
+        replies=['move thunder', 'move hiddenpowerice', 'move rest', 'move sleeptalk', 'switch 2'], rounds=25)
+    cases['snorlax-earthquake'] = snorlax
+    cases['snorlax-curse'] = dict(snorlax, first='move curse')
+    base = dict(game=15, decision=21, target_side=0, first_choice='move return', policy_side=0,
+        priority=['move return'], rest_at_percent=None, horizon=6, work_budget=200000, cell_cap=4096,
+        guarded_keys=True, support_certificate=True)
+    ledgers = {'support': base, **{name + '-support': dict(base, first_choice='move ' + name) for name in ['icebeam', 'recover']},
+        'curse-upper': dict(base, first_choice='move curse', policy_side=1, horizon=2,
+            priority=['move submission', 'move hydropump', 'move return', 'move bellydrum'])}
+    return cases, ledgers
+
+
+def bot_spec(ledger):
+    return dict(config=ledger['config'], targets=[dict(id=0, cache_key=ledger['nodes'][-1]['cache_key'], path=[])],
+        cap=4096, search_c=[.4], search_seeds=list(range(16)), search_budgets=[300, 3000, 27000], search_pinned=True)
+
+
+def projected(output):
+    result = copy.deepcopy(output)
+    for r in result['rounds']:
+        intervals = [r['fixed_side_bounds'], r['reply_side_zero_bounds']] + [c['side_zero_bounds'] for c in r['root_cells']]
+        for b in intervals:
+            assert -1e-12 <= b[0] <= b[1] <= 1 + 1e-12
+            b[:] = [max(0, min(1, x)) for x in b]
+    return result
+
+
+def padded(bounds):
+    return [max(0, math.nextafter(bounds[0] - 1e-10, -math.inf)),
+            min(1, math.nextafter(bounds[1] + 1e-10, math.inf))]
+
+
+def summarize(bundle):
+    assert bundle['inputs'] == {p: sha((root / p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes'] == {p: sha((root / p).read_bytes()) for p in bundle['source_hashes']}
+    old = json.loads(gzip.decompress((root / inputs[3]).read_bytes()))
+    previous = support['summarize'](old)
+    assert previous == json.loads((root / inputs[2]).read_bytes())
+    pair = json.loads((root / inputs[1]).read_bytes())
+    cases, ledgers = specs(); rows = {}; proofs = {}
+    assert set(bundle['manifests']) == set(bundle['outputs']) == set(cases) | set(ledgers) | {'bot'}
+    for name, m in cases.items():
+        raw = bundle['manifests'][name]; assert json.loads(raw) == m
+        out = bundle['outputs'][name]
+        rows[name] = policy['check'](raw, projected(out))
+        rows[name]['certified_bounds'] = padded(out['rounds'][-1]['fixed_side_bounds'])
+        rows[name]['certified_cells'] = {c['reply']: padded(c['side_zero_bounds']) for c in out['rounds'][-1]['root_cells']}
+    data = [json.loads(line) for line in gzip.decompress((root / corpus).read_bytes()).splitlines()]
+    game = next(g for g in data if g['game'] == 15)
+    state_key = game['decisions'][21]['key']
+    for name, m in ledgers.items():
+        assert json.loads(bundle['manifests'][name]) == m
+        r = bundle['outputs'][name]
+        assert r['config'] == m and r['nodes'][-1]['state_key'] == state_key
+        proofs[name] = dict(**verify(r), support_bounds=support['support_bounds'](r))
+    assert proofs['support']['support_bounds'] == proofs['icebeam-support']['support_bounds'] == [1, 1]
+    assert proofs['curse-upper']['bounds'][1] < 1
+    assert proofs['recover-support']['bounds'][1] < 1
+    curse_upper = proofs['curse-upper']['bounds'][1]
+    deficit = math.nextafter(1 - curse_upper, -math.inf)
+    affected = [r for r in pair['rows'] if (r['game'], r['decision'], r['side']) == (15, 21, 1)]
+    assert len(affected) == 1 and affected[0]['state_key'] == state_key and affected[0]['verdict'] == 'unresolved'
+    wanted = {(r['game'], r['decision']) for r in pair['rows'] if r['verdict'] == 'unresolved' and r['game'] not in [12, 22]}
+    assert {(r['game'], r['decision']) for r in bundle['census']} == wanted
+    for r in bundle['census']:
+        g = next(g for g in data if g['game'] == r['game'])
+        assert r['state_key'] == g['decisions'][r['decision']]['key']
+    m = bot_spec(bundle['outputs']['support'])
+    assert json.loads(bundle['manifests']['bot']) == m
+    native = bundle['outputs']['return-counter']
+    reference = dict(root_state_key=state_key, targets=[dict(id=0, cache_key=m['targets'][0]['cache_key'], trace=[],
+        state=native['state'], legal=native['legal'])])
+    bot['check'](bundle['manifests']['bot'], bundle['outputs']['bot'], reference)
+    selections = []
+    for kind in ['skuct', 'pinned']:
+        for budget in [300, 3000, 27000]:
+            selected = [c['sides'][0]['chosen'] for s in bundle['outputs']['bot']['searches'] if s['kind'] == kind
+                for c in s['checkpoints'] if c['iterations'] == budget]
+            assert len(selected) == 16
+            counts = dict(collections.Counter(selected))
+            if budget >= 3000: assert counts == {'move return': 16}
+            selections.append(dict(kind=kind, iterations=budget, side_zero_choices=counts,
+                certified_inferior_choices=counts.get('move curse', 0), curse_regret_lower=deficit))
+    for fault in ['coverage', 'optimistic_cut', 'completeness', 'accounting']:
+        if fault == 'accounting':
+            bad = copy.deepcopy(bundle['outputs']['return-counter']); bad['rounds'][-1]['total_runs'] += 1
+            check = lambda: policy['check'](bundle['manifests']['return-counter'], projected(bad))
+        elif fault == 'completeness':
+            bad = copy.deepcopy(bundle['outputs']['support'])
+            for b in bad['nodes'][-1]['branches']: b['complete_enumeration'] = False
+            assert support['support_bounds'](bad) == [0, 1]
+            continue
+        else:
+            bad = copy.deepcopy(bundle['outputs']['curse-upper' if fault == 'optimistic_cut' else 'support'])
+            if fault == 'coverage': bad['nodes'][-1]['branches'].pop()
+            else: next(n for n in bad['nodes'] if n['kind'] == 'horizon')['bounds'] = [1, 1]
+            check = lambda: verify(bad)
+        try: check()
+        except AssertionError: pass
+        else: raise AssertionError(fault)
+    upper = {a: math.nextafter(1 - max(rows[n]['certified_cells'][a][0] for n in ['raikou-counter', 'marowak-counter']), math.inf)
+             for a in cases['raikou-counter']['replies']}
+    weights = {'raikou-counter': F(2, 25), 'marowak-counter': F(23, 25)}
+    mixed_cells = {a: sum(w * F(rows[n]['certified_cells'][a][0]) for n, w in weights.items())
+                   for a in cases['raikou-counter']['replies']}
+    mixed_lower = math.nextafter(float(min(mixed_cells.values())), -math.inf)
+    pure_lower = max(rows[n]['certified_bounds'][0] for n in weights)
+    assert mixed_lower > pure_lower
+    mixed = dict(weights={n: str(w) for n, w in weights.items()},
+        reply_lower={a: math.nextafter(float(v), -math.inf) for a, v in mixed_cells.items()},
+        side_zero_lower=mixed_lower, side_one_upper=math.nextafter(1 - mixed_lower, math.inf))
+    return dict(rows=rows, proofs=proofs, selections=selections,
+        game15_side_zero_value=[1, 1], game15_side_one_value=[0, 0],
+        proven_winning_first_choices=['move return', 'move icebeam'], curse_first_security_upper=curse_upper,
+        curse_security_deficit_lower=deficit,
+        resolved_comparisons=[dict(id=r['id'], before=r['before'], after=r['after'], verdict='equal_value',
+            baseline_loss=[0, 0], candidate_loss=[0, 0]) for r in affected],
+        remaining_unresolved=previous['remaining_unresolved'] - len(affected),
+        game21_pure_witness_lower=pure_lower, game21_mixed_witness=mixed,
+        game21_side_one_pure_first_upper=upper,
+        game19_side_one_lower=rows['machamp-counter']['certified_bounds'][0],
+        witness_engine_runs=sum(r['runs'] for r in rows.values()) + sum(r['runs'] for r in proofs.values()),
+        search_iterations=3 * 16 * 27000,
+        scope='Screen the other unresolved roots, then test explicit policies at games 15, 19 and 21. '
+              'Game 15 decision 21 is solved exactly by qualitative support induction: first Return or '
+              'Ice Beam followed by Return covers every opposing legal action and every chance successor, '
+              'ending in a side-zero win. Numerical ledger backups are separately checked rationally. '
+              'The first-Curse upper witness fixes side-one Submission and leaves all future side-zero '
+              'choices free; unknown horizon leaves stay [0,1]. Recover followed by Return is only a '
+              'fixed-continuation result and does not prove first Recover inferior. Every side-one '
+              'first action has game value zero, resolving one earlier search comparison. The 16-seed '
+              'bot audit uses full-state search and true-roster-pinned BlindSearch, not production '
+              'hidden-information beliefs. At 300 iterations one pinned choice is certified inferior; '
+              'all tested 3000/27000-iteration choices select certain-winning Return. The other roots '
+              'remain unresolved. Their native fixed-policy witnesses retain every future opposing '
+              'choice. Probability-range excursions no larger than 1e-12 are projected only for '
+              'structural checks; every numeric endpoint used as a certificate is widened by 1e-10 '
+              'and rounded outward. Exact 0/1 claims come only from the complete support proof. '
+              'Game 21 pure-first upper bounds may use different opposing policies and do not bound '
+              'an optimal mixed first action. A separate valid root mixture privately selects the '
+              'entire Hidden Power priority policy with probability 2/25 or the switch-to-Marowak '
+              'policy with probability 23/25 before observing the simultaneous opposing choice. '
+              'For each opposing first action, combine the corresponding certified lower cells '
+              'with exact rational weights, then minimize across the complete reply set. Each '
+              'component leaves all later opposing choices unrestricted. The guarantee holds even '
+              'if the opponent learns the selected component after the first action. The mixture '
+              'improves the available lower certificate, not a measured bot win rate or a proven '
+              'comparison with the true values of its component policies. Engine transitions, guarded keys and native solver '
+              'bounds remain trusted. No production change or whole-game optimality claim.')
+
+
+def census():
+    pair = json.loads((root / inputs[1]).read_bytes())
+    wanted = {(r['game'], r['decision']) for r in pair['rows'] if r['verdict'] == 'unresolved' and r['game'] not in [12, 22]}
+    return wanted
+
+
+def execute(directory, manifests):
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'root_policy_witness',
+        '--example', 'policy_witness', '--example', 'frontier_bot', '--example', 'endgame_case_audit'], cwd=root, check=True)
+    source = directory / 'corpus.jsonl'; source.write_bytes(gzip.decompress((root / corpus).read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root)); outputs = {}; _, ledgers = specs()
+    for name, raw in manifests.items():
+        manifest = directory / 'manifest.json'; manifest.write_text(raw); output = directory / 'output.json'
+        example = 'frontier_bot' if name == 'bot' else 'policy_witness' if name in ledgers else 'root_policy_witness'
+        subprocess.run([str(root / 'target/release/examples' / example), str(source), str(manifest), str(output)],
+                       cwd=root, env=env, check=True, stderr=subprocess.DEVNULL)
+        outputs[name] = json.loads(output.read_bytes()); print(name, 'replayed', flush=True)
+    result = subprocess.run([str(root / 'target/release/examples/endgame_case_audit'), str(source)],
+                            cwd=root, env=env, check=True, capture_output=True)
+    states = [r for line in result.stdout.splitlines() if (r := json.loads(line)) and (r['game'], r['decision']) in census()]
+    return outputs, states
+
+
+def main():
+    parser = argparse.ArgumentParser(); parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--replay', action='store_true'); parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert summarize(bundle) == json.loads((archive / 'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-late-root-replay-') as d:
+                outputs, states = execute(pathlib.Path(d), bundle['manifests'])
+                assert outputs == bundle['outputs'] and states == bundle['census']
+        print('late-root-witness: support proof, numeric bounds, action comparison, controls and bot audit verified'); return
+    assert not archive.exists() and args.import_directory
+    cases, ledgers = specs(); names = list(cases) + list(ledgers) + ['bot']
+    manifests = {n: (args.import_directory / (n + '.json')).read_text() for n in names}
+    outputs = {n: json.loads((args.import_directory / (n + '.out.json')).read_bytes()) for n in names}
+    states = [r for line in (args.import_directory / 'states.jsonl').read_bytes().splitlines()
+              if (r := json.loads(line)) and (r['game'], r['decision']) in census()]
+    old = json.loads(gzip.decompress((root / 'findings/root-policy-v1/records.json.gz').read_bytes()))
+    paths = set(old['source_hashes']) | {f'crates/bot/examples/{n}.rs' for n in ['policy_witness', 'frontier_bot', 'endgame_case_audit']}
+    bundle = dict(inputs={p: sha((root / p).read_bytes()) for p in inputs},
+        source_hashes={p: sha((root / p).read_bytes()) for p in sorted(paths)}, manifests=manifests, outputs=outputs, census=states)
+    report = summarize(bundle); archive.mkdir()
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
+    print('remaining unresolved:', report['remaining_unresolved'], 'curse deficit:', report['curse_security_deficit_lower'])
+
+
+if __name__ == '__main__': main()
