@@ -472,13 +472,21 @@ impl BlindSearch {
                 self.nodes.len() - 1
             }
         };
-        let my_pick = select_global(
+        let my_pick = if self.cfg.root_revisit_interval > 0 && !self.is_preview()
+            && self.done > 0 && self.done % self.cfg.root_revisit_interval == 0
+        {
+            let action = (0..self.my_acts.len())
+                .filter(|&i| self.my_mask.as_ref().map_or(true, |mask| mask[i]))
+                .min_by_key(|&i| self.my_n[i]).unwrap();
+            self.my_n[action] += 1;
+            action
+        } else { select_global(
             &self.cfg,
             &mut self.rng,
             &mut self.my_n,
             &self.my_w,
             self.my_mask.as_deref(),
-        );
+        ) };
         let mut force = [None, None];
         force[self.side] = Some(my_pick);
         if self.opponent_preview_prior && self.is_preview() {
@@ -1344,6 +1352,7 @@ impl Agent for BlindAgent {
         }
         if self.root_pruning { name.push_str(":root-prune"); }
         if self.cfg.collapse_sleep_actions { name.push_str(":sleep-collapse"); }
+        if self.cfg.root_revisit_interval > 0 { name.push_str(&format!(":revisit-{}", self.cfg.root_revisit_interval)); }
         name
     }
 
@@ -1489,6 +1498,44 @@ pub struct PrincipalLine {
 #[cfg(test)]
 mod mixed_selection_tests {
     use super::*;
+
+    #[test]
+    fn root_revisits_match_forced_steps_preserve_masks_and_skip_preview() {
+        let dex = conformance::load_dex();
+        let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
+            serde_json::from_value(serde_json::json!({"species":species,"name":species,"level":50,"moves":moves})).unwrap()
+        };
+        let mut b = Battle::from_fixture(&dex,"1,2,3,4",
+            &[set("Snorlax", &["Return","Curse","Rest","Sleep Talk"]),set("Magikarp", &["Splash"])],
+            &[set("Suicune", &["Surf","Rest","Sleep Talk"]),set("Pidgey", &["Tackle"])]).unwrap();
+        let preview = b.clone();
+        b.choose(&dex,0,"team 1,2").unwrap();
+        b.choose(&dex,1,"team 1,2").unwrap();
+        for base in [&preview,&b] {
+            for side in 0..2 {
+                let obs = Observer::new(base,side);
+                let belief = Belief::pinned_from_battle(base,&obs);
+                let cfg = RmConfig {c:0.4,..Default::default()};
+                let mut reference = BlindSearch::new(base,&dex,cfg.clone(),side,901);
+                let mut candidate = BlindSearch::new(base,&dex,RmConfig {root_revisit_interval:64,..cfg},side,901);
+                let allowed: Vec<_> = (0..reference.actions().len()).map(|i|reference.is_preview() || i!=1).collect();
+                reference.mask_actions(&allowed);
+                candidate.mask_actions(&allowed);
+                for i in 0..300 {
+                    if i>0 && i%64==0 && !reference.is_preview() {
+                        let action = (0..allowed.len()).filter(|&i|allowed[i]).min_by_key(|&i|reference.visits()[i]).unwrap();
+                        reference.step_forced(&dex,&belief,&obs,action);
+                    } else {reference.step(&dex,&belief,&obs,1);}
+                }
+                candidate.step(&dex,&belief,&obs,300);
+                assert_eq!(candidate.visits(),reference.visits());
+                assert_eq!(candidate.means(),reference.means());
+                assert_eq!(candidate.rng.0,reference.rng.0);
+                assert_eq!(candidate.iterations(),300);
+                assert!(candidate.visits().iter().zip(&allowed).all(|(&n,&ok)|ok || n==0));
+            }
+        }
+    }
 
     #[test]
     fn root_pruning_preserves_agent_rng_and_all_masked_fallback() {

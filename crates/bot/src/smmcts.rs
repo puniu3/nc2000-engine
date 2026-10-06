@@ -99,6 +99,7 @@ pub struct RmConfig {
     pub continuation_exp3_ix: bool,
     pub continuation_exp3_mean: bool,
     pub collapse_sleep_actions: bool,
+    pub root_revisit_interval: u32,
     /// Tree horizon in turns (same meaning as `MctsConfig::horizon`).
     pub horizon: u16,
     /// Rollout policy + leaf eval (shared with the M6 agent).
@@ -162,6 +163,7 @@ impl Default for RmConfig {
             continuation_exp3_ix: false,
             continuation_exp3_mean: false,
             collapse_sleep_actions: false,
+            root_revisit_interval: 0,
             horizon: 100,
             playout: Playout::heavy(),
             threshold: 0.5,

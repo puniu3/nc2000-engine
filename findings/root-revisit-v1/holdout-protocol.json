@@ -1,0 +1,19 @@
+{
+  "games": 384,
+  "pairs": 192,
+  "iterations": 27000,
+  "threads": 6,
+  "max_turns": 500,
+  "base_seed": 2026101901,
+  "candidate_root_revisit_interval": 64,
+  "baseline_root_revisit_interval": 0,
+  "collapse_sleep_actions": false,
+  "root_alias_merging": false,
+  "crn_agent_seeds": true,
+  "team_catalog": "data/team-pool-v2/team-pool.json",
+  "belief_pool": "data/belief-pool-v3/belief-pool.json",
+  "primary_measure": "Mean of side-swap pair scores; approximate 95% interval using 1.96 * pair standard error.",
+  "positive_evidence_criterion": "Lower endpoint exceeds 0.5 after all 384 games.",
+  "interim_policy": "No parameter changes, early stopping or sample-size extension.",
+  "scope": "Fresh match seed; compares with local default at equal iteration budgets. Not a game-optimality certificate or deployed-bot comparison."
+}

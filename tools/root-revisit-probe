@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import statistics
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/root-revisit-v1'
+corpus = 'findings/policy-gap-v1/corpus.jsonl.gz'
+files = dict(focus='nc-rest-focus.json', manual='nc-rest-revisit.json',
+             integrated='nc-rest-revisit-integrated.json', null='nc-rest-revisit-null.json',
+             duel='nc-rest-revisit-duel.json')
+
+
+def verify(outputs):
+    previous = json.loads(gzip.decompress((root / 'findings/rest-root-v1/records.json.gz').read_bytes()))
+    focus = outputs['focus']
+    assert outputs['manual'] == outputs['integrated']
+    assert len(focus['rows']) == len(outputs['manual']['rows']) == 34
+    counts = []
+    for game, decision in [(21, 22), (23, 12)]:
+        rows = [r for r in focus['rows'] if r['game'] == game]
+        revisit = [r for r in outputs['manual']['rows'] if r['game'] == game]
+        assert [r['seed_index'] for r in rows] == list(range(17))
+        assert [r['seed_index'] for r in revisit] == list(range(17))
+        for r, v in zip(rows, revisit, strict=True):
+            assert r['decision'] == v['decision'] == decision and r['seed'] == v['seed']
+            for arm in r['arms'] + v['arms']:
+                for point in arm['checkpoints']:
+                    assert point['iterations'] == sum(point['visits'])
+                    assert point['iterations'] in [27000, 270000]
+                    assert len(point['means']) == len(point['visits']) == len(arm['actions'])
+                    assert point['best'] in arm['actions']
+                    assert all(0 <= m <= 1 for m in point['means'])
+        old = next(r for r in previous['rows'] if r['game'] == game and r['decision'] == decision and r['side'] == 0)
+        for i in range(2):
+            current = rows[0]['arms'][i]['checkpoints'][0]
+            assert current == {k: v for k, v in old['arms'][i]['checkpoints'][1].items() if k != 'elapsed_ms'}
+        base = rows[0]['arms'][0]
+        initial = [t for t in base['traces'] if t['iteration'] <= 27000]
+        index = base['actions'].index('move sleeptalk')
+        point = base['checkpoints'][0]
+        assert len(initial) == point['visits'][index] == (7 if game == 21 else 5)
+        assert math.isclose(sum(t['reward'] for t in initial) / len(initial), point['means'][index], abs_tol=1e-15)
+        later = next(t['iteration'] for t in base['traces'] if t['iteration'] > 27000)
+        assert base['checkpoints'][1]['best'] == 'move sleeptalk'
+        counts.append(dict(game=game, decision=decision,
+            fresh_seeds=16, baseline_sleep_talk=sum(r['arms'][0]['checkpoints'][0]['best']=='move sleeptalk' for r in rows[1:]),
+            merged_sleep_talk=sum(r['arms'][1]['checkpoints'][0]['best']=='move sleeptalk' for r in rows[1:]),
+            revisit_sleep_talk=sum(r['arms'][0]['checkpoints'][0]['best']=='move sleeptalk' for r in revisit[1:]),
+            equal_allocation_sleep_talk_top_mean=sum(max(zip(r['arms'][2]['checkpoints'][0]['means'],r['arms'][2]['actions']))[1]=='move sleeptalk' for r in rows[1:]),
+            original_next_sleep_talk_iteration=later,
+            original_revisit_best=revisit[0]['arms'][0]['checkpoints'][0]['best']))
+    cells = [c for d in focus['details'] for c in d['cells']]
+    assert len(cells) == 24 and sum(c['runs'] for c in cells) == 9688
+    for c in cells:
+        assert c['pending_mass'] == c['terminal_mass'] == 0
+        assert math.isclose(sum(g['prob'] for g in c['groups']), 1, abs_tol=1e-9)
+        assert all(g['state']['outcome'] == 'None' for g in c['groups'])
+    for name in ['null', 'duel']:
+        d = outputs[name]
+        assert d['null_control'] == (name == 'null')
+        assert d['base_seed'] == (2026100901 if name == 'null' else 2026100902)
+        assert d['iterations'] == (3000 if name == 'null' else 27000)
+        assert d['games'] == len(d['game_scores']) == (8 if name == 'null' else 64)
+        scores = d['game_scores']
+        assert all(s in [0, .5, 1] for s in scores)
+        assert d['wins'] == scores.count(1) and d['losses'] == scores.count(0)
+        assert d['ties'] == scores.count(.5) and 0 <= d['caps'] <= d['ties']
+        pairs = [(a+b)/2 for a, b in zip(scores[::2], scores[1::2], strict=True)]
+        assert pairs == d['pair_scores'] and len(pairs) == d['pairs']
+        assert statistics.mean(pairs) == d['score']
+        assert math.isclose(1.96*statistics.stdev(pairs)/math.sqrt(len(pairs)), d['ci95_halfwidth'], abs_tol=1e-14)
+        if name == 'null':
+            assert all(s == .5 for s in pairs)
+    return dict(focus=counts, complete_one_step_cells=24, one_step_engine_runs=9688,
+        terminal_value_bounds=[0, 1], integrated_matches_manual=True,
+        null=outputs['null'], duel=outputs['duel'], default_enabled=False,
+        scope='Two post-selected diagnostic roots, not a population prevalence sample. '
+        'Fresh search seeds and equal allocation diagnose early unfavorable rollouts; neither search means nor additional search prove optimality. '
+        'All one-step branches are nonterminal; the enumeration therefore does not certify action ordering. '
+        'The fixed 64-game test compares periodic least-visited root revisits alone against the local default, not the deployed bot. '
+        'Sleep equivalence compression is disabled in both match arms. No human calibration.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--import-directory', type=Path)
+    parser.add_argument('--replay', action='store_true')
+    parser.add_argument('--replay-duel', action='store_true')
+    args = parser.parse_args()
+    if args.import_directory:
+        assert not archive.exists()
+        outputs = {k: json.loads((args.import_directory / v).read_bytes()) for k, v in files.items()}
+        summary = verify(outputs)
+        sources = subprocess.check_output(['git', 'ls-files', 'crates/bot/src', 'crates/engine/src'], cwd=root, text=True).splitlines()
+        sources += [corpus, 'Cargo.lock', 'crates/conformance/src/lib.rs', 'crates/conformance/src/fixture.rs',
+            'data/gen2stadium2.json', 'data/learnsets-gen2.json', 'data/belief-pool-v3/belief-pool.json', 'data/team-pool-v2/team-pool.json',
+            'crates/bot/examples/rest_root_focus.rs', 'crates/bot/examples/sleep_equivalence_duel.rs',
+            'crates/bot/tests/blind.rs', 'findings/rest-root-v1/records.json.gz', 'tools/root-revisit-probe']
+        bundle = dict(outputs=outputs, hashes={p: hashlib.sha256((root/p).read_bytes()).hexdigest() for p in sources})
+        archive.mkdir()
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest() == h for p,h in bundle['hashes'].items())
+    assert verify(bundle['outputs']) == json.loads((archive/'summary.json').read_bytes())
+    for key in ['budget', 'branch_mass', 'game_score']:
+        broken = copy.deepcopy(bundle['outputs'])
+        if key == 'budget': broken['focus']['rows'][0]['arms'][0]['checkpoints'][0]['iterations'] += 1
+        if key == 'branch_mass': broken['focus']['details'][0]['cells'][0]['pending_mass'] = .01
+        if key == 'game_score': broken['duel']['game_scores'][0] = .25
+        try: verify(broken)
+        except AssertionError: pass
+        else: raise AssertionError(f'negative control accepted: {key}')
+    if args.replay or args.replay_duel:
+        env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','rest_root_focus','--example','sleep_equivalence_duel'],cwd=root,env=env,check=True)
+        with tempfile.TemporaryDirectory(prefix='nc-revisit-') as directory:
+            directory = Path(directory)
+            source = directory/'corpus.jsonl'
+            source.write_bytes(gzip.decompress((root/corpus).read_bytes()))
+            target = directory/'result.json'
+            if args.replay:
+                for name, flags in [('focus',[]),('manual',['--revisit']),('integrated',['--revisit-integrated'])]:
+                    subprocess.run([str(root/'target/release/examples/rest_root_focus'),str(source),str(target),*flags],cwd=root,env=env,check=True)
+                    assert json.loads(target.read_bytes()) == bundle['outputs'][name]
+            for name in (['null'] if args.replay else []) + (['duel'] if args.replay_duel else []):
+                output = json.loads(subprocess.check_output([str(root/'target/release/examples/sleep_equivalence_duel'),'--revisit'] + (['--null'] if name=='null' else []),cwd=root,env=env))
+                projection = lambda d: {k:v for k,v in d.items() if k not in ['seconds','mean_think_ms']}
+                assert projection(output) == projection(bundle['outputs'][name])
+    print('Root revisit archive verified; budget, branch-mass and game-score negative controls rejected.')
+
+
+if __name__ == '__main__':
+    main()
