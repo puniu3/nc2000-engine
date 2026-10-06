@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import shutil
+import statistics
+import subprocess
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/fused-key-v1'
+prior=root/'findings/deferred-frontier-v1/records.json.gz'
+frontier=runpy.run_path(str(root/'tools/strategy-frontier-probe'))
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def normalize(rows):
+    rows=copy.deepcopy(rows)
+    for row in rows:
+        row.pop('milliseconds')
+        for cell in row['chance']: cell.pop('child_uncertainty')
+    return rows
+
+
+def summarize(bundle):
+    assert bundle['prior_sha256']==sha(prior.read_bytes())
+    previous=json.loads(gzip.decompress(prior.read_bytes()))
+    expected=previous['arms']['control']['rows']
+    manifests=bundle['manifests']
+    changed=[p for p,h in manifests['baseline']['source_hashes'].items() if manifests['candidate']['source_hashes'][p]!=h]
+    assert sorted(changed)==['crates/engine/src/battle/search.rs','crates/engine/src/fxhash.rs']
+    assert len(bundle['runs'])==6
+    groups=[]
+    for i,run in enumerate(bundle['runs']):
+        repeat=i//2
+        order=['baseline','candidate'] if repeat%2==0 else ['candidate','baseline']
+        assert run['repeat']==repeat and run['arm']==order[i%2]
+        rows=run['rows']
+        frontier['summarize']({**previous,**previous['arms']['control'],'rows':rows})
+        assert normalize(rows)==normalize(expected)
+        for a,b in zip(rows,expected):
+            for ac,bc in zip(a['chance'],b['chance']):
+                assert abs(ac['child_uncertainty']-bc['child_uncertainty'])<1e-12
+        groups.append(dict(repeat=repeat,arm=run['arm'],milliseconds=sum(r['milliseconds'] for r in rows)))
+    pairs=[]
+    for repeat in range(3):
+        times={r['arm']:r['milliseconds'] for r in groups if r['repeat']==repeat}
+        pairs.append(dict(repeat=repeat,**times,ratio=times['candidate']/times['baseline']))
+    return dict(positions=41,repeats=3,runs=groups,pairs=pairs,
+        median_time_ratio=statistics.median(r['ratio'] for r in pairs),
+        parity='All six 41-position runs reproduce every archived search field except elapsed time and sub-1e-12 diagnostic sums. '
+               'Every prefix state identity is checked by the native runner.',
+        scope='Original FxHash and SipHash outputs are retained; only the field traversal is fused. '
+              'Native fixed-work solver benchmark with alternating run order. This measures runtime on '
+              'the selected unresolved corpus, not new strategy certificates, general game strength or browser performance.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--directory',type=pathlib.Path)
+    parser.add_argument('--import-only',action='store_true')
+    parser.add_argument('--verify-only',action='store_true')
+    args=parser.parse_args()
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        print('fused-key: verified 246 outcomes, exact key/search parity and paired runtime ratios')
+        return
+    assert args.directory is not None and not archive.exists()
+    directory=args.directory
+    baseline=json.loads((directory/'baseline-manifest.json').read_bytes())
+    assert sha((directory/'baseline').read_bytes())==baseline['binary_sha256']
+    hashes={p:sha((root/p).read_bytes()) for p in baseline['source_hashes']}
+    binary=root/'target/release/examples/strategy_frontier'
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if args.import_only:
+        candidate=json.loads((directory/'candidate-manifest.json').read_bytes())
+        assert candidate['source_hashes']==hashes
+        assert candidate['binary_sha256']==sha(binary.read_bytes())==sha((directory/'candidate').read_bytes())
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','strategy_frontier'],cwd=root,env=env,check=True)
+        shutil.copy2(binary,directory/'candidate')
+        candidate=dict(source_hashes=hashes,binary_sha256=sha(binary.read_bytes()))
+        (directory/'candidate-manifest.json').write_text(json.dumps(candidate))
+        for repeat in range(3):
+            for arm in (['baseline','candidate'] if repeat%2==0 else ['candidate','baseline']):
+                with (directory/f'{repeat}-{arm}.log').open('w') as log:
+                    subprocess.run([str(directory/arm),str(directory/'corpus.jsonl'),str(directory/'requests.json'),
+                        str(directory/f'{repeat}-{arm}.jsonl'),'40000','12000','24','1000','4096','false','false','false'],
+                        cwd=root,env=env,stdout=log,stderr=log,check=True)
+                print(f'{repeat} {arm} complete',flush=True)
+    assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
+    bundle=dict(manifests=dict(baseline=baseline,candidate=candidate),prior_sha256=sha(prior.read_bytes()),runs=[
+        dict(repeat=repeat,arm=arm,rows=[json.loads(s) for s in (directory/f'{repeat}-{arm}.jsonl').read_text().splitlines()])
+        for repeat in range(3) for arm in (['baseline','candidate'] if repeat%2==0 else ['candidate','baseline'])])
+    report=summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report,indent=2))
+
+
+if __name__=='__main__': main()

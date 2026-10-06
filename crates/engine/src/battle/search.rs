@@ -173,12 +173,9 @@ impl Battle {
     }
 
     fn state_key128_with(&self, omit_damage_bookkeeping: bool, omit_quick_claw_roll: bool) -> u128 {
-        use std::hash::Hasher;
-        let mut h1 = FxHasher::default();
-        self.state_hash_into(&mut h1, None, omit_damage_bookkeeping, omit_quick_claw_roll);
-        let mut h2 = std::collections::hash_map::DefaultHasher::new();
-        self.state_hash_into(&mut h2, None, omit_damage_bookkeeping, omit_quick_claw_roll);
-        ((h1.finish() as u128) << 64) | h2.finish() as u128
+        let mut h = crate::fxhash::FingerprintHasher::default();
+        self.state_hash_into(&mut h, None, omit_damage_bookkeeping, omit_quick_claw_roll);
+        h.finish128()
     }
 
     pub fn state_key128_without_quick_claw_roll(&self, dex: &Dex, omit_damage_bookkeeping: bool) -> u128 {
