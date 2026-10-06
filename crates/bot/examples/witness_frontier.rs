@@ -30,6 +30,8 @@ struct Manifest {
     solve_priority: Vec<String>,
     #[serde(default)]
     solve_node_budget: Option<usize>,
+    #[serde(default)]
+    solve_reply_order: Vec<String>,
 }
 
 fn key(dex: &Dex, b: &Battle, guarded: bool) -> Key {
@@ -130,6 +132,22 @@ fn main() {
             let mut solver=FixedPolicySolver::new(&dex,bound_cfg,solve_side,priority);
             for &budget in &m.solve_budgets {
                 assert!(budget>0 && budget==m.solve_budgets[0]);
+                if !m.solve_reply_order.is_empty() {
+                    let name=&m.solve_reply_order[rounds.len()%m.solve_reply_order.len()];
+                    let reply=SearchChoice::Move(dex.moves.id(name.strip_prefix("move ").unwrap()).unwrap());
+                    let report=solver.solve_reply(&b,reply,None);let graph=solver.graph_diagnostics();
+                    let matrix=solver.restricted_root_payoffs(&b).unwrap();
+                    assert_eq!(matrix.actions[solve_side].len(),1);
+                    let bounds=if solve_side==0 {[matrix.value.lo,matrix.value.hi]}
+                        else {[1.0-matrix.value.hi,1.0-matrix.value.lo]};
+                    let cells:Vec<_>=matrix.actions[1-solve_side].iter().zip(&matrix.cells)
+                        .map(|(a,v)|json!({"reply":a.map(|a|a.to_input(&dex)),"side_zero_bounds":[v.lo,v.hi]})).collect();
+                    rounds.push(json!({"budget":budget,"runs":report.runs,"total_runs":solver.stats().runs,
+                        "fixed_side_bounds":bounds,"reply":name,"reply_side_zero_bounds":[report.bounds.lo,report.bounds.hi],
+                        "root_cells":cells,"stop":format!("{:?}",report.stop),"nodes":solver.node_count(),
+                        "unexpanded_nodes":graph.unexpanded_nodes}));
+                    continue;
+                }
                 let report=solver.solve(&b);let graph=solver.graph_diagnostics();
                 rounds.push(json!({"budget":budget,"runs":report.runs,"total_runs":solver.stats().runs,
                     "fixed_side_bounds":[report.guaranteed_score.lo,report.guaranteed_score.hi],
