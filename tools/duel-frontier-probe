@@ -1,0 +1,254 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import itertools
+import json
+import math
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/duel-frontier-v1'
+opponent = runpy.run_path(str(root / 'tools/opponent-ceiling-probe'))
+late = opponent['late']; sha = opponent['sha']; bot = late['bot']; padded = late['padded']
+corpus = opponent['corpus']; previous = 'findings/opponent-ceiling-v1/records.json.gz'
+inputs = [previous, 'findings/opponent-ceiling-v1/summary.json', corpus,
+          'tools/opponent-ceiling-probe', 'tools/frontier-bot-probe', 'tools/duel-frontier-probe']
+
+
+def key(k): return tuple(k)
+
+
+def check_census(raw, out):
+    m = json.loads(raw)
+    assert out['manifest_sha256'] == sha(raw.encode())
+    data = gzip.decompress((root / corpus).read_bytes())
+    assert out['corpus_sha256'] == sha(data)
+    game = next(g for line in data.splitlines() if (g := json.loads(line))['game'] == m['game'])
+    assert out['state_key'] == game['decisions'][m['decision']]['key']
+    nodes = {key(n['key']): n for n in out['nodes']}; assert len(nodes) == len(out['nodes'])
+    assert [k['choices'] for k in out['kernels']] == [[a, m['first_opponent']] for a in out['legal'][0]]
+    assert m['first_opponent'] in out['legal'][1]
+    kernels = out['kernels'] + [n['forced'] for n in nodes.values() if 'forced' in n]
+    assert sum(k['runs'] for k in kernels) == out['census_runs']
+    for k in kernels:
+        assert 0 < k['runs'] <= m['cap'] and 0 <= k['pending'] <= 1
+        assert k['complete'] == (k['pending_scripts'] == 0)
+        assert not k['complete'] or k['pending'] == 0
+        assert abs(sum(F(l['mass']) for l in k['leaves']) + F(k['pending']) - 1) < F(1, 10**9)
+        assert len({key(l['key']) for l in k['leaves']}) == len(k['leaves'])
+        assert all(l['mass'] > 0 and key(l['key']) in nodes for l in k['leaves'])
+    for n in nodes.values():
+        assert n['terminal'] in [None, 0, .5, 1]
+        if n['duel']: assert n['living'] == [1, 1] and n['terminal'] is None and all(None not in a for a in n['legal'])
+        if 'forced' in n:
+            assert n['terminal'] is None and all(len(a) == 1 for a in n['legal'])
+            assert n['forced']['choices'] == [a[0] for a in n['legal']] and None in n['forced']['choices']
+    reached = set()
+    def visit(k, active):
+        assert k not in active
+        reached.add(k)
+        if 'forced' in nodes[k]:
+            for leaf in nodes[k]['forced']['leaves']: visit(key(leaf['key']), active | {k})
+    for kernel in out['kernels']:
+        for leaf in kernel['leaves']: visit(key(leaf['key']), set())
+    assert reached == set(nodes)
+    return nodes
+
+
+def check_policy(m, out, nodes):
+    assert [s['key'] for s in out['solved']] == m['targets']
+    result = {}
+    for s in out['solved']:
+        k = key(s['key']); n = nodes[k]; assert n['duel']
+        assert len(s['rounds']) == m['calls'] and m['calls'] > 0
+        legal = n['legal'][1-m['side']]; cells = {a: [0, 1] for a in legal}; total = 0; prior = [0, 1]
+        first = m.get('first') or next((a for a in m['priority'] if a in n['legal'][m['side']]), n['legal'][m['side']][0])
+        assert first in n['legal'][m['side']]
+        for i, r in enumerate(s['rounds']):
+            assert r['reply'] == legal[i % len(legal)] and 0 <= r['runs'] <= m['work_budget']
+            total += r['runs']; assert total == r['total_runs']
+            assert [c['reply'] for c in r['root_cells']] == legal
+            new = {c['reply']: c['side_zero_bounds'] for c in r['root_cells']}
+            for a, (lo, hi) in new.items():
+                assert -1e-12 <= lo <= hi <= 1+1e-12 and lo >= cells[a][0]-1e-10 and hi <= cells[a][1]+1e-10
+            cells = new; assert r['reply_side_zero_bounds'] == cells[r['reply']]
+            expected = [min(c[j] for c in cells.values()) for j in [0, 1]] if m['side'] == 0 else [
+                1-max(c[1] for c in cells.values()), 1-max(c[0] for c in cells.values())]
+            bounds = r['fixed_side_bounds']
+            assert all(abs(a-b) < 1e-10 for a, b in zip(bounds, expected))
+            assert bounds[0] >= prior[0]-1e-10 and bounds[1] <= prior[1]+1e-10
+            assert r['stop'] in ['WidthMet', 'WorkExhausted', 'NodeBudget']
+            if r['stop'] == 'WidthMet': assert cells[r['reply']][1]-cells[r['reply']][0] <= 1e-6
+            prior = bounds
+        result[k] = dict(bounds=padded(prior), cells={a:padded(b) for a,b in cells.items()}, runs=total, first=first)
+    return result
+
+
+def specs(census):
+    nodes = {key(n['key']):n for n in census['nodes']}; paths = {}; traces = {}
+    def visit(kernel, path, trace):
+        for l in kernel['leaves']:
+            k = key(l['key']); n = nodes[k]
+            p = path + [dict(choices=kernel['choices'], child=l['key'])]
+            t = trace + [dict(runs=kernel['runs'], cache_key=l['key'], state_key=n['state_key'])]
+            paths.setdefault(k, p); traces.setdefault(k, t)
+            if 'forced' in n: visit(n['forced'], p, t)
+    for kernel in census['kernels']: visit(kernel, [], [])
+    base = dict(game=21, decision=36, first_opponent='move earthquake', cap=50000, targets=[], side=1,
+                priority=['move doubleedge','move earthquake','move curse','move selfdestruct'], calls=0,
+                work_budget=20000, node_budget=120000)
+    targets = [n['key'] for n in census['nodes'] if n['duel']]
+    sleep = [list(k) for k,p in paths.items() if p[0]['choices'][0] == 'move sleeptalk' and nodes[k]['duel']]
+    assert len(sleep) == 1 and len(targets) == 41
+    own = ['move earthquake','move rockslide','move fireblast','move swordsdance']
+    quake = ['move earthquake','move doubleedge','move curse','move selfdestruct']
+    cases = dict(census=base, **{'all-duels':dict(base, targets=targets, calls=8),
+        'all-quake':dict(base, targets=targets, calls=8, side=0, priority=own),
+        'sleep-duel':dict(base, targets=sleep, calls=20),
+        'duel-quake':dict(base, targets=sleep, calls=40, side=0, priority=own, first=None),
+        'duel-dance':dict(base, targets=sleep, calls=40, side=0, priority=own, first='move swordsdance'),
+        'all-opponent-quake':dict(base, targets=targets, calls=8, priority=quake),
+        'sleep-opponent-quake':dict(base, targets=sleep, calls=40, priority=quake),
+        'sleep-quake-then-edge':dict(base, targets=sleep, calls=40, first='move earthquake')})
+    return cases, paths, traces
+
+
+def summarize(bundle):
+    assert bundle['inputs'] == {p:sha((root/p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes'] == {p:sha((root/p).read_bytes()) for p in bundle['source_hashes']}
+    old = json.loads(gzip.decompress((root/previous).read_bytes())); prior = opponent['summarize'](old)
+    assert prior == json.loads((root/inputs[1]).read_bytes())
+    outputs = bundle['outputs']; manifests = bundle['manifests']; census = outputs['census']
+    nodes = check_census(manifests['census'], census); cases, paths, traces = specs(census); rows = {}
+    for name, m in cases.items():
+        assert json.loads(manifests[name]) == m
+        check_census(manifests[name], outputs[name])
+        assert {k:v for k,v in outputs[name].items() if k not in ['manifest_sha256','solved']} == {
+            k:v for k,v in census.items() if k not in ['manifest_sha256','solved']}
+        if name != 'census': rows[name] = check_policy(m, outputs[name], nodes)
+        else: assert outputs[name]['solved'] == []
+    for name in ['sleep-duel','sleep-opponent-quake']:
+        baseline = outputs['all-duels' if name == 'sleep-duel' else 'all-opponent-quake']
+        s = outputs[name]['solved'][0]
+        assert s['rounds'][:8] == next(x['rounds'] for x in baseline['solved'] if x['key'] == s['key'])
+    values = {k:[r['bounds'][0], math.nextafter(1-rows['all-duels'][k]['bounds'][0], math.inf)] for k,r in rows['all-quake'].items()}
+    near = [k for k,b in values.items() if b[1]-b[0]<1e-4]; assert len(near) == 13
+    selections = []; references = {}; bot_specs = {}
+    for i,k in enumerate(near):
+        m = dict(config=dict(game=21,decision=36,guarded_keys=True),targets=[dict(id=i,cache_key=list(k),path=paths[k])],
+                 cap=50000,search_c=[.4],search_seeds=[0,1],search_budgets=[3000,27000],search_pinned=True)
+        name = 'bot-'+str(i); bot_specs[name] = m
+        references[name] = dict(root_state_key=census['state_key'], targets=[dict(id=i,cache_key=list(k),trace=traces[k],
+                               state=nodes[k]['state'],legal=nodes[k]['legal'])])
+    bot_specs['bot-focus'] = dict(bot_specs['bot-5'],search_seeds=list(range(32)))
+    references['bot-focus'] = references['bot-5']
+    assert set(manifests) == set(outputs) == set(cases) | set(bot_specs)
+    for name,m in bot_specs.items():
+        assert json.loads(manifests[name]) == m
+        bot['check'](manifests[name], outputs[name], references[name])
+        k = key(m['targets'][0]['cache_key']); v = values[k]
+        for s in outputs[name]['searches']:
+            for c in s['checkpoints']:
+                assert c['sides'][0]['chosen'] == 'move earthquake'
+                a = c['sides'][1]['chosen']
+                upper = math.nextafter(1-rows['all-quake'][k]['cells'][a][0], math.inf)
+                regret = max(0, math.nextafter(1-v[1]-upper, -math.inf))
+                selections.append(dict(case=name,kind=s['kind'],seed=s['seed'],iterations=c['iterations'],
+                    side_one_choice=a,side_one_regret_lower=regret))
+    focus = [r for r in selections if r['case']=='bot-focus' and r['iterations']==27000]
+    failures = {kind:sum(r['kind']==kind and r['side_one_regret_lower']>1e-8 for r in focus) for kind in ['skuct','pinned']}
+    assert failures == dict(skuct=9,pinned=5)
+    fixed_lower = {k:max(rs.get(k,dict(bounds=[0,1]))['bounds'][0] for name,rs in rows.items() if cases[name]['side']==1) for k in nodes}
+    def upper(k):
+        n = nodes[k]
+        if n['terminal'] is not None: return F(n['terminal'])
+        if 'forced' in n: return backup(n['forced'])
+        return F(1)-F(fixed_lower[k])
+    def backup(kernel):
+        return min(F(1), F(kernel['pending'])+sum(F(l['mass'])*upper(key(l['key'])) for l in kernel['leaves'])+F(1,10**10))
+    upper_cells = {k['choices'][0]:min(1,math.nextafter(float(backup(k)),math.inf)) for k in census['kernels']}
+    for fault in ['mass','forced','accounting','identity']:
+        if fault in ['mass','forced']:
+            bad = copy.deepcopy(census)
+            if fault == 'mass': bad['kernels'][0]['leaves'][0]['mass'] += .1
+            else: next(n for n in bad['nodes'] if 'forced' in n)['forced']['choices'] = [None,None]
+            check = lambda: check_census(manifests['census'],bad)
+        elif fault == 'accounting':
+            bad = copy.deepcopy(outputs['all-duels']); bad['solved'][0]['rounds'][-1]['total_runs'] += 1
+            check = lambda: check_policy(cases['all-duels'],bad,nodes)
+        else:
+            bad = copy.deepcopy(outputs['bot-focus']); bad['cache_key'][2]='0'
+            check = lambda: bot['check'](manifests['bot-focus'],bad,references['bot-focus'])
+        try: check()
+        except AssertionError: pass
+        else: raise AssertionError(fault)
+    return dict(census_runs=census['census_runs'],duels=len(values),
+        near_solved=[dict(key=list(k),active=nodes[k]['active'],bounds=values[k]) for k in near],
+        rows={n:[dict(key=list(k),**r) for k,r in rs.items()] for n,rs in rows.items()},
+        selections=selections,focus_normal_budget_inferior_counts=failures,focus_seeds=32,
+        prefix_side_zero_pure_first_upper=upper_cells,prior_game_bounds=prior['side_zero_game_bounds'],
+        remaining_unresolved=prior['remaining_unresolved'],
+        witness_runs=sum(outputs[n]['census_runs'] for n in cases)+sum(r['runs'] for rs in rows.values() for r in rs.values()),
+        search_iterations=sum(3*len(m['search_seeds'])*max(m['search_budgets']) for m in bot_specs.values()),
+        scope='Game 21 decision 36. Exhaust every legal side-zero first choice against side-one '
+              'Earthquake and fold only forced singleton replacements. The complete prefix reaches '
+              '41 guarded live one-on-one states. Every subgame fixed-policy solver leaves all future '
+              'opposing choices free. Whole-policy upper endpoints do not bound unrestricted own play. '
+              'Opposing lower certificates enclose the unrestricted value in 13 subgames within '
+              'outward 1e-10 margins. These are numeric near-solutions, not exact real-arithmetic values. '
+              'Subgame side-one lower certificates can be chosen after observing the resulting '
+              'state; their complement backs up an upper bound through the exact prefix. Unknown '
+              'two-on-one frontiers stay [0,1], so the original whole-game interval is not improved. '
+              'Full-state and true-roster-pinned bot audits replay the guarded paths, with 64 native '
+              'determinization identity checks per target. At the HP87 subgame the 32-seed audit '
+              'finds 9 full-state and 5 pinned inferior Earthquake choices at 27000 iterations; '
+              'the certified per-choice loss is about 0.0011268 score. Counts describe these seeds, '
+              'not population rates. Search means and visits are diagnostic. Pinned beliefs are '
+              'not production hidden-information beliefs. No actual full bot continuation guarantee '
+              'or global strength claim. Native transitions, chance partitioning, guarded identity '
+              'and solver floating bounds remain trusted. No production search change.')
+
+
+def execute(directory, manifests):
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','duel_frontier','--example','frontier_bot'],cwd=root,check=True)
+    source = directory/'corpus.jsonl'; source.write_bytes(gzip.decompress((root/corpus).read_bytes())); outputs = {}
+    for name,raw in manifests.items():
+        manifest=directory/'manifest.json'; manifest.write_text(raw); output=directory/'output.json'
+        example='frontier_bot' if name.startswith('bot-') else 'duel_frontier'
+        subprocess.run([str(root/'target/release/examples'/example),str(source),str(manifest),str(output)],
+                       cwd=root,env=dict(os.environ,NC2000_REPO_ROOT=str(root)),check=True,stderr=subprocess.DEVNULL)
+        outputs[name]=json.loads(output.read_bytes()); print(name,'replayed',flush=True)
+    return outputs
+
+
+def main():
+    parser=argparse.ArgumentParser(); parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--replay',action='store_true'); parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-duel-replay-') as d: assert execute(pathlib.Path(d),bundle['manifests'])==bundle['outputs']
+        print('duel-frontier: complete prefixes, subgame bounds, bot counterexamples and controls verified'); return
+    assert not archive.exists() and args.import_directory
+    census=json.loads((args.import_directory/'census.out.json').read_bytes())
+    names=list(specs(census)[0])+['bot-'+str(i) for i in range(13)]+['bot-focus']
+    old=json.loads(gzip.decompress((root/previous).read_bytes())); paths=set(old['source_hashes'])|{'crates/bot/examples/duel_frontier.rs'}
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in inputs},source_hashes={p:sha((root/p).read_bytes()) for p in sorted(paths)},
+        manifests={n:(args.import_directory/(n+'.json')).read_text() for n in names},
+        outputs={n:json.loads((args.import_directory/(n+'.out.json')).read_bytes()) for n in names})
+    report=summarize(bundle); archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print('near-solved:',len(report['near_solved']),'normal-budget inferior:',report['focus_normal_budget_inferior_counts'])
+
+
+if __name__=='__main__': main()
