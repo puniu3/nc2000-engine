@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import json
+import math
+import os
+import pathlib
+import re
+import runpy
+import subprocess
+import tempfile
+import zipfile
+from fractions import Fraction
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/hidden-terminal-v1'
+prior = runpy.run_path(str(root / 'tools/terminal-certificate-probe'))
+sha = prior['sha']
+previous = 'findings/terminal-certificate-v1/records.json.gz'
+inputs = [previous, prior['corpus'], 'data/learnsets-gen2.json', 'pokemon-showdown.zip',
+          'tools/hidden-terminal-probe', 'tools/terminal-certificate-probe', 'tools/policy-witness-probe']
+
+
+def spec(old):
+    m = json.loads(old['manifests']['proof-5-quake'])
+    base = m.pop('witness')
+    m['change'] = dict(side=0, mon=2, slot=1, **{'from': 'Fire Blast', 'to': 'Growl'})
+    m['witnesses'] = []
+    cases = [(0, 1, 'doubleedge', 1, 'doubleedge', 200000),
+             (1, 1, 'doubleedge', 1, 'doubleedge', 200000),
+             (1, 0, 'growl', 3, 'earthquake', 200000),
+             (1, 1, 'earthquake', 3, 'doubleedge', 200000),
+             (1, 0, 'earthquake', 2, 'earthquake', 100000)]
+    for variant, side, first, horizon, continuation, budget in cases:
+        config = dict(base, target_side=side, policy_side=side, first_choice='move '+first,
+                      priority=['move '+continuation], horizon=horizon, work_budget=budget)
+        m['witnesses'].append(dict(id=f'{variant}-{first}-h{horizon}', variant=variant, config=config))
+    return m
+
+
+def visible_log(lines, side):
+    result = []
+    i = 0
+    while i < len(lines):
+        if lines[i].startswith('|split|'):
+            result.append(lines[i + (1 if lines[i] == f'|split|p{side+1}' else 2)])
+            i += 3
+        else:
+            result.append(lines[i])
+            i += 1
+    return result
+
+
+def check(raw, out, old):
+    m = json.loads(raw)
+    assert m == spec(old)
+    assert out['manifest_sha256'] == sha(raw.encode())
+    source = gzip.decompress((root / prior['corpus']).read_bytes())
+    assert out['corpus_sha256'] == sha(source)
+    game = next(json.loads(l) for l in source.splitlines() if json.loads(l)['game'] == 21)
+    teams = copy.deepcopy(game['teams'])
+    teams[0][2]['moves'][1] = 'Growl'
+    assert out['teams'] == teams and out['observer_side'] == 1
+    assert all(v['ok'] and v['errors'] == 0 for pair in out['validation'] for v in pair)
+    assert out['histories'][0] == out['histories'][1] and len(out['histories'][0]) == 39
+    marowak = [next(x for x in h if x['species'] == 'marowak') for h in out['histories'][0]]
+    assert all(x['moves'] == [] and x['preview_has_item'] for x in marowak)
+    assert not any(x['appeared'] for x in marowak[:-1]) and marowak[-1]['appeared']
+    assert marowak[-1]['item'] == 'ItemObs { original: None, current: None, gained: false }'
+    assert out['engine_logs'][0] == out['engine_logs'][1]
+    assert out['public_logs'] == [visible_log(log, 1) for log in out['engine_logs']]
+    assert out['public_logs'][0] == out['public_logs'][1]
+    assert len(out['trace']) == len(m['targets'][0]['path'])
+    for t, step in zip(out['trace'], m['targets'][0]['path']):
+        assert t['keys'][0] == step['child'] and t['keys'][0] != t['keys'][1]
+        assert t['script'] == [d['chosen'] for d in t['draws']] and t['runs'] > 0
+        for d in t['draws']:
+            assert sum(d['counts']) == 2**32 and d['counts'][d['chosen']] > 0
+    reference = old['outputs']['proof-5-edge']
+    assert out['states'][0] == reference['state'] and out['keys'][0] == reference['cache_key']
+    changed = copy.deepcopy(out['states'][1])
+    moves = changed['sides'][0]['pokemon'][0]['moves']
+    assert moves[1] == dict(id='growl', pp=61, disabled=False)
+    moves[1] = copy.deepcopy(out['states'][0]['sides'][0]['pokemon'][0]['moves'][1])
+    assert changed == out['states'][0]
+    assert out['keys'][0] != out['keys'][1] and out['trace'][-1]['keys'] == out['keys']
+    assert len(out['ledgers']) == len(m['witnesses'])
+    reports = {}
+    branches = {}
+    for w, entry in zip(m['witnesses'], out['ledgers']):
+        assert (w['id'], w['variant']) == (entry['id'], entry['variant'])
+        r = entry['ledger']
+        assert r['config'] == w['config']
+        assert r['nodes'][r['root']]['cache_key'] == out['keys'][entry['variant']]
+        reports[w['id']] = prior['verify'](r)
+        _, qualitative = prior['support'](r)
+        branches[w['id']] = {b['choices'][1-w['config']['policy_side']]:
+                             dict(bounds=b['bounds'], support=q)
+                             for b, q in zip(r['nodes'][r['root']]['branches'], qualitative)}
+    original = copy.deepcopy(out['ledgers'][0]['ledger'])
+    original['config']['work_budget'] = 100000
+    assert original == reference['ledger']
+    growl = branches['1-growl-h3']
+    quake = branches['1-earthquake-h2']
+    assert growl['move doubleedge']['support'] == [1, 1]
+    assert all(quake[a]['support'] == [1, 1] for a in ['move earthquake', 'move selfdestruct', 'move curse'])
+    assert reports['1-doubleedge-h1']['bounds'][0] == 0
+    assert reports['0-doubleedge-h1']['bounds'][0] > 0
+    edge = branches['1-doubleedge-h1']
+    eq = branches['1-earthquake-h3']
+    assert edge.keys() == eq.keys()
+    mixed = {a: math.nextafter(float((Fraction(edge[a]['bounds'][0]) + Fraction(eq[a]['bounds'][0]))/2), -math.inf)
+             for a in edge}
+    assert min(mixed.values()) > 0
+    original_mixed_lower = math.nextafter(reports['0-doubleedge-h1']['bounds'][0]/2, -math.inf)
+    return dict(proofs=reports, side_one_pure_first_security_upper={a: 0 for a in growl},
+                original_roster_mixed_lower=original_mixed_lower,
+                two_roster_mixed_lower=min(original_mixed_lower, min(mixed.values())),
+                half_edge_half_quake_lower_by_reply=mixed, mixed_policy_lower=min(mixed.values()),
+                shared_history_states=len(out['histories'][0]), public_log_lines=len(out['public_logs'][0]),
+                proof_runs=sum(x['runs'] for x in reports.values()),
+                path_enumeration_runs=sum(t['runs'] for t in out['trace']), observed_marowak=marowak[-1])
+
+
+def summarize(bundle):
+    assert bundle['inputs'] == {p: sha((root/p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes'] == {p: sha((root/p).read_bytes()) for p in bundle['source_hashes']}
+    old = json.loads(gzip.decompress((root/previous).read_bytes()))
+    report = check(bundle['manifest'], bundle['output'], old)
+    for fault in ['mass', 'horizon', 'identity', 'observation', 'public_log']:
+        out = copy.deepcopy(bundle['output'])
+        if fault == 'mass': out['ledgers'][3]['ledger']['nodes'][-1]['branches'][0]['children'][0]['mass'] += .1
+        elif fault == 'horizon': next(n for n in out['ledgers'][3]['ledger']['nodes'] if n['kind'] == 'horizon')['bounds'] = [1, 1]
+        elif fault == 'identity': out['ledgers'][2]['ledger']['nodes'][-1]['cache_key'] = out['keys'][0]
+        elif fault == 'observation': out['histories'][1][-1][2]['moves'] = ['growl']
+        else: out['public_logs'][1].append('|move|p1a: Marowak|Growl|p2a: Snorlax')
+        try: check(bundle['manifest'], out, old)
+        except (AssertionError, ValueError): pass
+        else: raise AssertionError(fault)
+    learnsets = json.loads((root/'data/learnsets-gen2.json').read_bytes())['species']
+    assert all(a in learnsets['marowak']['moves'] for a in ['earthquake', 'growl', 'rockslide', 'swordsdance'])
+    with zipfile.ZipFile(root/'pokemon-showdown.zip') as z:
+        source = z.read('pokemon-showdown/data/mods/gen2/learnsets.ts').decode()
+    legality = {}
+    for species, moves in [('cubone', ['growl', 'rockslide', 'swordsdance', 'earthquake']), ('marowak', ['growl'])]:
+        start = source.index('\n\t'+species+':')
+        block = source[start:source.index('\n\t},', start)]
+        legality[species] = {move: json.loads(re.search(r'\b'+move+r': (\[[^\n]+\])', block)[1]) for move in moves}
+    assert '2L1' in legality['cubone']['growl'] and '2L1' in legality['marowak']['growl']
+    assert all('2E' in legality['cubone'][a] for a in ['rockslide', 'swordsdance'])
+    assert '2M' in legality['cubone']['earthquake']
+    report['learnset_sources'] = legality
+    report['scope'] = ('A replacement of unrevealed Fire Blast by level-one Growl preserves the original egg-move '
+        'combination and all other roster fields. Both rosters pass the native flat-learnset validator; the '
+        'archived source learnsets also identify Growl as a level-one move, with no new egg/event constraint. '
+        'Both complete engine logs, side-one protocol projections and 39 Observer snapshots are identical. '
+        'The first hidden move is never selected before the target. Original guarded keys are checked at '
+        'each corpus decision and every recorded chance-path child. Each alternative ledger uses its own '
+        'guarded identity. Against the Growl roster every pure side-one first action has security zero: '
+        'Growl then Earthquake defeats Double Edge; Earthquake twice defeats the other three. A half '
+        'Double Edge / half Earthquake first move followed by Double Edge has a strictly positive '
+        'guarantee against every opposing first action and adaptive later choices. Mixed-policy weights '
+        'are fixed before the simultaneous choice. Thus the previous full-state filter can remove all '
+        'positive-security policies under an observationally identical legal roster. This is a two-roster '
+        'counterexample to transferring that filter, not a solution of the complete information set or '
+        'a claim about an optimal Bayesian prior. Partial enumeration and horizon leaves remain [0,1]. '
+        'Production bot code is unchanged; no human-player calibration is used.')
+    return report
+
+
+def execute(directory, raw):
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'hidden_terminal'], cwd=root, check=True)
+    corpus = directory/'corpus.jsonl'
+    corpus.write_bytes(gzip.decompress((root/prior['corpus']).read_bytes()))
+    manifest = directory/'manifest.json'
+    manifest.write_text(raw)
+    output = directory/'output.json'
+    command = [str(root/'target/release/examples/hidden_terminal'), str(corpus), str(manifest), str(output)]
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root))
+    subprocess.run(command, cwd=root, env=env, check=True)
+    result = json.loads(output.read_bytes())
+    bad = json.loads(raw)
+    bad['change'] = dict(side=0, mon=4, slot=0, **{'from': 'Thunder', 'to': 'Thunderbolt'})
+    bad['witnesses'] = []
+    manifest.write_text(json.dumps(bad))
+    rejected = subprocess.run(command, cwd=root, env=env, capture_output=True)
+    assert rejected.returncode != 0 and b'assertion `left == right` failed' in rejected.stderr
+    print('revealed-move mutation rejected', flush=True)
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--replay', action='store_true')
+    args = parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle) == json.loads((archive/'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-hidden-terminal-') as d:
+                assert execute(pathlib.Path(d), bundle['manifest']) == bundle['output']
+    else:
+        assert not archive.exists()
+        old = json.loads(gzip.decompress((root/previous).read_bytes()))
+        raw = json.dumps(spec(old))
+        with tempfile.TemporaryDirectory(prefix='nc-hidden-terminal-') as d:
+            out = execute(pathlib.Path(d), raw)
+        paths = set(old['source_hashes']) | {'crates/bot/examples/hidden_terminal.rs'}
+        bundle = dict(inputs={p: sha((root/p).read_bytes()) for p in inputs},
+                      source_hashes={p: sha((root/p).read_bytes()) for p in sorted(paths)}, manifest=raw, output=out)
+        report = summarize(bundle)
+        archive.mkdir()
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+        (archive/'summary.json').write_text(json.dumps(report, indent=2)+'\n')
+    print('hidden-terminal: identical observations, separate state proofs, positive mixed guarantee verified')
+
+
+if __name__ == '__main__':
+    main()
