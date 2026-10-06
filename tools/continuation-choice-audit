@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/continuation-choice-v1'
+source = root/'findings/visit-policy-v1/holdout/records.json.gz'
+binary = root/'target/release/examples/continuation_choice_audit'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def request():
+    item = json.loads(gzip.decompress(source.read_bytes()))['records']['bond-long']
+    row = next(r for r in item['record']['rows'] if r['mode'] == 'pinned' and r['side'] == 1 and r['seed_index'] == 15)
+    return dict(corpus=item['corpus'], expected=row, config=dict(side=1, seed=row['seed'], iterations=row['iterations'],
+                probes=row['probes_used'], focus=['move curse', 'move destinybond']))
+
+
+def weighted(coefficients, intervals):
+    epsilon = F(1, 10**10)
+    low = high = F(0)
+    for coefficient, interval in zip(coefficients, intervals, strict=True):
+        lo, hi = sorted(map(F, interval))
+        lo, hi = max(F(0), lo-epsilon), min(F(1), hi+epsilon)
+        low += coefficient*(lo if coefficient >= 0 else hi)
+        high += coefficient*(hi if coefficient >= 0 else lo)
+    return [low, high]
+
+
+def decompose(child, phase):
+    counts = child['counts'][phase]
+    total = sum(counts)
+    n, m = map(len, child['actions'])
+    assert len(counts) == len(child['cells']) == n*m and total > 0
+    joint = [F(k, total) for k in counts]
+    own = [sum(joint[i*m:(i+1)*m]) for i in range(n)]
+    reply = [sum(joint[i*m+j] for i in range(n)) for j in range(m)]
+    product = [p*q for p in own for q in reply]
+    correlated = weighted([p-q for p, q in zip(joint, product)], child['cells'])
+    independent = weighted(product, child['cells'])
+    value = weighted([F(1)], [child['value']])
+    marginal = [independent[0]-value[1], independent[1]-value[0]]
+    observed = sum(map(F, child['reward0_sums'][phase]))/total
+    empirical = weighted(joint, child['cells'])
+    residual = [observed-empirical[1], observed-empirical[0]]
+    return dict(samples=total, terminal=sum(child['terminal_counts'][phase]), value=value,
+                observed_reward0=observed, joint_oracle_value=empirical, independent_oracle_value=independent,
+                correlation_difference=correlated, marginal_difference=marginal, continuation_difference=residual)
+
+
+def controls():
+    child = dict(actions=[['a', 'b'], ['a', 'b']], counts=[[1, 0, 0, 1]],
+                 reward0_sums=[[1, 0, 0, 1]], terminal_counts=[[1, 0, 0, 1]],
+                 cells=[[1, 1], [0, 0], [0, 0], [1, 1]], value=[0.5, 0.5])
+    result = decompose(child, 0)
+    assert result['correlation_difference'][0] > F(49, 100)
+    assert result['marginal_difference'][0] <= 0 <= result['marginal_difference'][1]
+    child['counts'] = [[1, 1, 1, 1]]
+    child['terminal_counts'] = child['counts']
+    assert decompose(child, 0)['correlation_difference'] == [0, 0]
+
+
+def summarize(bundle):
+    controls()
+    assert bundle['source_sha256'] == sha(source.read_bytes())
+    assert bundle['input'] == request()
+    result = bundle['result']
+    expected = bundle['input']['expected']
+    for key, value in result['final'].items():
+        assert value == expected[key], key
+    critical = next(c for c in expected['joint'] if c['own'] == 1 and c['reply'] == 'move curse')
+    counts = result['focused_counts']
+    assert sum(r[0] for r in counts) == critical['samples'] == 40294
+    assert counts[1] == [0, 0, 0]
+    assert abs(1-sum(result['focus_reward0_sums'])/critical['samples']-critical['mean']) < 1e-12
+    assert [n-p for n, p in zip(expected['visits'], expected['joint_probe_visits'])] == result['warm']['visits']
+    assert result['warm']['probe_enabled']
+    by_depth = collections.defaultdict(list)
+    for child in result['children']:
+        assert all(n == 0 for n in child['counts'][1])
+        assert len(child['nodes']) == 1
+        assert all(0 <= t <= n and 0 <= reward <= n for ns, ts, rs in
+                   zip(child['counts'], child['terminal_counts'], child['reward0_sums']) for n, t, reward in zip(ns, ts, rs))
+        by_depth[child['depth']].append(decompose(child, 0))
+    assert sorted(by_depth) == list(range(1, 8)) and len(result['children']) == 14
+    assert sum(r['samples'] for r in by_depth[1]) == critical['samples']-2
+    groups = []
+    sums = {key: [F(0), F(0)] for key in ['correlation_difference', 'marginal_difference']}
+    for depth, rows in sorted(by_depth.items()):
+        n = sum(r['samples'] for r in rows)
+        combined = dict(depth=depth, states=len(rows), samples=n, terminal=sum(r['terminal'] for r in rows))
+        for key in ['value', 'joint_oracle_value', 'independent_oracle_value', 'correlation_difference',
+                    'marginal_difference', 'continuation_difference']:
+            bounds = [sum(r[key][i]*r['samples'] for r in rows)/n for i in range(2)]
+            combined[key] = list(map(float, bounds))
+            if key in sums:
+                for i in range(2):
+                    sums[key][i] += bounds[i]*F(n, critical['samples'])
+        combined['observed_reward0'] = float(sum(r['observed_reward0']*r['samples'] for r in rows)/n)
+        groups.append(combined)
+    return dict(search_seed=expected['seed'], iterations=expected['iterations'], forced_probes=expected['probes_used'],
+                critical_samples=critical['samples'], critical_samples_during_probes=0,
+                first_child_unexpanded_samples=2, final_search_parity=True, groups=groups,
+                path_weighted_differences={k: list(map(float, v)) for k, v in sums.items()},
+                certificate_runs=sum(c['runs'] for c in result['children']),
+                scope='One fresh-seed counterexample traced without changing visits, means, root joint statistics, '
+                      'fallback or candidate policy. Conditional on the initial Curse/Destiny Bond pair, each later '
+                      'decision is recorded until that pair is first broken. Two initially unexpanded child visits '
+                      'have no next-choice record. Every opposing action remains in each certified continuation matrix. '
+                      'Correlation difference compares the observed joint action counts with independent draws from '
+                      'their marginals, within each exact state before averaging. The empirical counts are conditional '
+                      'search histories, not a runnable independent strategy or a population guarantee. Observed rewards '
+                      'retain sampling noise and changing continuations. Path-weighted differences are a diagnostic '
+                      'decomposition, not the causal improvement from an algorithm change. No bot behavior was changed.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--import-output', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle) == json.loads((archive/'summary.json').read_bytes())
+        print('continuation-choice: exact replay parity and rational joint/marginal decomposition verified')
+        return
+    assert not archive.exists()
+    spec = request()
+    if args.import_output:
+        output = args.import_output
+    else:
+        directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-continuation-choice-'))
+        (directory/'input.json').write_text(json.dumps(spec))
+        output = directory/'output.json'
+        env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+        subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'continuation_choice_audit'], cwd=root, env=env, check=True)
+        subprocess.run([str(binary), str(directory/'input.json'), str(output), '30'], cwd=root, env=env, check=True)
+    sources = sorted((root/'crates/engine/src').rglob('*.rs')) + sorted((root/'crates/bot/src').rglob('*.rs'))
+    sources.append(root/'crates/bot/examples/continuation_choice_audit.rs')
+    bundle = dict(input=spec, result=json.loads(output.read_bytes()), source_sha256=sha(source.read_bytes()),
+                  binary_sha256=sha(binary.read_bytes()), source_hashes={str(p.relative_to(root)): sha(p.read_bytes()) for p in sources})
+    report = summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report, indent=2)+'\n')
+    print(json.dumps(report, indent=2))
+
+
+if __name__ == '__main__':
+    main()
