@@ -32,6 +32,8 @@ struct Manifest {
     solve_node_budget: Option<usize>,
     #[serde(default)]
     solve_reply_order: Vec<String>,
+    #[serde(default)]
+    solve_allow_reserves: bool,
 }
 
 fn key(dex: &Dex, b: &Battle, guarded: bool) -> Key {
@@ -111,7 +113,15 @@ fn main() {
         if !m.solve_budgets.is_empty() {
             use nc2000_bot::bounds::{BoundConfig, FixedPolicySolver};
             assert_eq!((cfg.policy_side,cfg.target_side),(0,1));
-            assert!((0..2).all(|s|b.sides[s].pokemon_left==1 && b.active_id(s).is_some_and(|id|b.poke(id).hp>0)));
+            assert!((0..2).all(|s|b.active_id(s).is_some_and(|id|b.poke(id).hp>0)));
+            assert_eq!(b.sides[0].pokemon_left,1);
+            if m.solve_allow_reserves {
+                assert_eq!(m.solve_side.unwrap_or(side),0);
+                assert!(!m.solve_priority.is_empty() && (1..=2).contains(&b.sides[1].pokemon_left));
+                assert!(b.sides[1].party.iter().map(|&slot|&b.sides[1].roster[slot as usize])
+                    .filter(|p|p.hp>0 && !p.fainted)
+                    .all(|p|matches!(dex.species.key(p.species),"poliwrath"|"snorlax")));
+            } else {assert_eq!(b.sides[1].pokemon_left,1);}
             assert_eq!(active[0].as_ref().unwrap()["species"],json!("tyranitar"));
             let foe=active[1].as_ref().unwrap()["species"].as_str().unwrap();
             let foe_moves=match foe {

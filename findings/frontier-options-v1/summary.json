@@ -1,0 +1,584 @@
+{
+  "ranking": {
+    "parent_bounds": [
+      0.3879367359952026,
+      0.8028039966298991
+    ],
+    "positive_targets": 308,
+    "selected": [
+      {
+        "id": 196279,
+        "potential_gain": 0.0027627670493470813,
+        "bounds": [
+          0.049804687459,
+          1
+        ]
+      },
+      {
+        "id": 196105,
+        "potential_gain": 0.0027627670493470813,
+        "bounds": [
+          0.049804687459,
+          1
+        ]
+      },
+      {
+        "id": 196192,
+        "potential_gain": 0.0027627670242601488,
+        "bounds": [
+          0.049804687459,
+          1
+        ]
+      },
+      {
+        "id": 196018,
+        "potential_gain": 0.0027627670242601488,
+        "bounds": [
+          0.049804687459,
+          1
+        ]
+      },
+      {
+        "id": 196453,
+        "potential_gain": 0.002762741701948457,
+        "bounds": [
+          0.04981340516083804,
+          1
+        ]
+      },
+      {
+        "id": 196540,
+        "potential_gain": 0.0027627416768624125,
+        "bounds": [
+          0.04981340516058016,
+          1
+        ]
+      },
+      {
+        "id": 196366,
+        "potential_gain": 0.00276274167686108,
+        "bounds": [
+          0.049813405161044357,
+          1
+        ]
+      },
+      {
+        "id": 195320,
+        "potential_gain": 0.002481270949210357,
+        "bounds": [
+          0.024707794161128907,
+          1
+        ]
+      },
+      {
+        "id": 195233,
+        "potential_gain": 0.002481270949210357,
+        "bounds": [
+          0.024707794161128907,
+          1
+        ]
+      },
+      {
+        "id": 195059,
+        "potential_gain": 0.002481270949210357,
+        "bounds": [
+          0.024707794161128907,
+          1
+        ]
+      },
+      {
+        "id": 194885,
+        "potential_gain": 0.002481270949210357,
+        "bounds": [
+          0.024707794161128907,
+          1
+        ]
+      },
+      {
+        "id": 194711,
+        "potential_gain": 0.002481270949210357,
+        "bounds": [
+          0.024707794161128907,
+          1
+        ]
+      }
+    ]
+  },
+  "rows": {
+    "crunch": [
+      {
+        "id": 196279,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.9501953125,
+          0.9501953125
+        ],
+        "solver_runs": 1606
+      },
+      {
+        "id": 196105,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.9501953125,
+          0.9501953125
+        ],
+        "solver_runs": 1604
+      },
+      {
+        "id": 196192,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.9501953125,
+          0.9501953125
+        ],
+        "solver_runs": 1604
+      },
+      {
+        "id": 196018,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.9501953125,
+          0.9501953125
+        ],
+        "solver_runs": 1606
+      },
+      {
+        "id": 196453,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.9501953125,
+          0.9501953125
+        ],
+        "solver_runs": 1604
+      },
+      {
+        "id": 196540,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.9501953125,
+          0.9501953125
+        ],
+        "solver_runs": 1604
+      },
+      {
+        "id": 196366,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.9501953125,
+          0.9501953125
+        ],
+        "solver_runs": 1606
+      },
+      {
+        "id": 195320,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7885695235874548,
+          0.7885695235874548
+        ],
+        "solver_runs": 31284
+      },
+      {
+        "id": 195233,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7167358397350365,
+          0.7167358397350365
+        ],
+        "solver_runs": 47564
+      },
+      {
+        "id": 195059,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.5730684720302006,
+          0.5730684720302006
+        ],
+        "solver_runs": 78277
+      },
+      {
+        "id": 194885,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.3396089992652377,
+          0.3396089992652377
+        ],
+        "solver_runs": 125312
+      },
+      {
+        "id": 194711,
+        "priority": [
+          "move crunch",
+          "move rockslide",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.2498159305113515,
+          0.24981689453124975
+        ],
+        "solver_runs": 168775
+      }
+    ],
+    "rock": [
+      {
+        "id": 196279,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7891583536475163,
+          0.8679092355465865
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 196105,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7880464944023761,
+          0.8678572838860628
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 196192,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7891252227538171,
+          0.8678677280407658
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 196018,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7855811094092842,
+          0.867835317269789
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 196453,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7891583536475166,
+          0.8679389031818416
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 196540,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7892329519193723,
+          0.8679445039601867
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 196366,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7889619213656008,
+          0.8679389315292498
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 195320,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7724498642733237,
+          0.8688915766669525
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 195233,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7708802289576836,
+          0.868883332392931
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 195059,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7723289513287805,
+          0.8688821929793114
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 194885,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.771015587124919,
+          0.8688821182484769
+        ],
+        "solver_runs": 200000
+      },
+      {
+        "id": 194711,
+        "priority": [
+          "move rockslide",
+          "move crunch",
+          "move dynamicpunch",
+          "move fireblast"
+        ],
+        "side_zero_bounds": [
+          0.7710155871249191,
+          0.8689083343046394
+        ],
+        "solver_runs": 200000
+      }
+    ]
+  },
+  "local": [
+    {
+      "id": 196279,
+      "chosen_option": "crunch",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.04980468760000001
+      ],
+      "width": 2.000000096091803e-10
+    },
+    {
+      "id": 196105,
+      "chosen_option": "crunch",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.04980468760000001
+      ],
+      "width": 2.000000096091803e-10
+    },
+    {
+      "id": 196192,
+      "chosen_option": "crunch",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.04980468760000001
+      ],
+      "width": 2.000000096091803e-10
+    },
+    {
+      "id": 196018,
+      "chosen_option": "crunch",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.04980468760000001
+      ],
+      "width": 2.000000096091803e-10
+    },
+    {
+      "id": 196453,
+      "chosen_option": "crunch",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.04980468760000001
+      ],
+      "width": 2.000000096091803e-10
+    },
+    {
+      "id": 196540,
+      "chosen_option": "crunch",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.04980468760000001
+      ],
+      "width": 2.000000096091803e-10
+    },
+    {
+      "id": 196366,
+      "chosen_option": "crunch",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.04980468760000001
+      ],
+      "width": 2.000000096091803e-10
+    },
+    {
+      "id": 195320,
+      "chosen_option": "crunch",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.21143047651254523
+      ],
+      "width": 0.16162578911254524
+    },
+    {
+      "id": 195233,
+      "chosen_option": "rock",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.22911977114231644
+      ],
+      "width": 0.17931508374231644
+    },
+    {
+      "id": 195059,
+      "chosen_option": "rock",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.2276710487712195
+      ],
+      "width": 0.1778663613712195
+    },
+    {
+      "id": 194885,
+      "chosen_option": "rock",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.22898441297508101
+      ],
+      "width": 0.17917972557508102
+    },
+    {
+      "id": 194711,
+      "chosen_option": "rock",
+      "unrestricted_side_one_score_bounds": [
+        0.0498046874,
+        0.2289844129750809
+      ],
+      "width": 0.1791797255750809
+    }
+  ],
+  "conditional_opponent": {
+    "runs": 874506,
+    "nodes": 197026,
+    "bounds": [
+      0.16374663254000835,
+      0.7742319608739531
+    ],
+    "node_kinds": {
+      "terminal": 3598,
+      "horizon": 273,
+      "budget": 152516,
+      "decision": 40639
+    },
+    "partial_branches": 152294
+  },
+  "previous_unrestricted_switch_bounds": [
+    0,
+    0.8028039966298991
+  ],
+  "unrestricted_switch_bounds": [
+    0,
+    0.7742319608739531
+  ],
+  "additional_engine_runs": 2882150,
+  "scope": "Sensitivity ranking hypothetically replaces one node upper bound by its current certified lower bound and propagates affected ancestors. It preserves imported bounds and tests the selected sparse calculations against full recomputation. Potential gains are allocation diagnostics and are neither promised improvements nor additive masses. The top 12 states are independently replayed. Two constant priority policies for the lone side-zero Tyranitar are solved against all future replies of side one, including switches between two survivors. At each selected guarded state/depth, the new adversary enters the chosen priority policy and follows it until battle end. Before the first such entry it follows the old context policy. These absorbing options may depend on history but never on the concurrent opposing choice. Their native scalar intervals replace entire old subtrees; old-policy bounds are not intersected and previous family imports are not reused under the changed policy. The external native_option table trusts FixedPolicySolver. The ledger adapter treats an option as an unknown cut with that external value, recomputes rational chance/max backups, and runs the existing full verifier. This is not an independently serialized proof of native solver internals. Separate one-step Hydro Pump probes retain every side-zero reply; their immediate terminal score mass supplies an unrestricted local lower bound. Scores count draws as one half. Only the new adversary upper bound transfers to the original pure Switch choice; its lower bound is not a security guarantee. No production bot strength improvement, human calibration, or whole-game solution is claimed."
+}

@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import heapq
+import json
+import math
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/frontier-options-v1'
+family=runpy.run_path(str(root/'tools/frontier-family-probe'))
+frontier=family['frontier'];legacy=family['legacy'];join=family['join'];sha=legacy['sha']
+previous='findings/frontier-family-v1/records.json.gz'
+frontier_path='findings/frontier-witness-v1/records.json.gz'
+inputs=[previous,'findings/frontier-family-v1/summary.json',frontier_path,frontier['previous'],
+        frontier['corpus'],'tools/frontier-options-probe','tools/frontier-family-probe',family['reply']['subgame']['native']]
+
+
+def parent():
+    old=legacy['read'](frontier_path)
+    record=json.loads(legacy['read'](frontier['previous'])['raw']['explode-fair3'])
+    for i in range(3):record=frontier['splice'](record,[old['outputs'][f'{i}-first'],old['outputs'][f'{i}-last']])
+    return record
+
+
+def rank(record,imports):
+    nodes=record['nodes'];lower=[];upper=[];branches=[];parents=[[] for _ in nodes]
+    for i,n in enumerate(nodes):
+        row=[]
+        if n['kind']=='decision':
+            lo=[]
+            for bi,b in enumerate(n['branches']):
+                pad=(len(b['children'])+2)*1e-12
+                lo.append(max(0,sum(c['mass']*lower[c['node']] for c in b['children'])-pad))
+                row.append(min(1,b['pending']+sum(c['mass']*upper[c['node']] for c in b['children'])+pad))
+                for c in b['children']:parents[c['node']].append((i,bi,c['mass']))
+            l,u=max(lo),max(row)
+        else:l,u=n['bounds']
+        imported=imports.get((*n['cache_key'],n['depth']))
+        if imported:l,u=max(l,imported[0]),min(u,imported[1])
+        lower.append(l);upper.append(u);branches.append(row)
+
+    def gain(index):
+        changed={index:lower[index]};deltas=collections.defaultdict(float);queued=set();queue=[]
+        def send(i,d):
+            for p,bi,w in parents[i]:
+                deltas[p,bi]+=w*d
+                if p not in queued:heapq.heappush(queue,p);queued.add(p)
+        send(index,lower[index]-upper[index])
+        while queue:
+            p=heapq.heappop(queue);u=max(min(1,b+deltas[p,bi]) for bi,b in enumerate(branches[p]))
+            imported=imports.get((*nodes[p]['cache_key'],nodes[p]['depth']))
+            if imported:u=max(imported[0],min(u,imported[1]))
+            if u<upper[p]-1e-15:changed[p]=u;send(p,u-upper[p])
+        return max(0,upper[-1]-changed.get(len(nodes)-1,upper[-1]))
+
+    ranked=[]
+    for i,n in enumerate(nodes):
+        if n['depth']<3 or upper[i]-lower[i]<1e-8:continue
+        if n['kind']=='decision' and not any(b['pending']>0 for b in n['branches']):continue
+        if n['kind'] not in ['decision','budget','horizon']:continue
+        g=gain(i)
+        if g>1e-12:ranked.append((g,i))
+    ranked.sort(reverse=True);pred={}
+    for i in reversed(range(len(nodes))):
+        if i!=record['root'] and i not in pred:continue
+        for bi,b in enumerate(nodes[i].get('branches',[])):
+            for ci,c in enumerate(b['children']):pred.setdefault(c['node'],(i,bi,ci))
+    targets=[]
+    for g,i in ranked[:12]:
+        values=[]
+        for j,n in enumerate(nodes):
+            if j==i:u=lower[j]
+            elif n['kind']=='decision':u=max(min(1,b['pending']+sum(c['mass']*values[c['node']] for c in b['children'])+
+                                                 (len(b['children'])+2)*1e-12) for b in n['branches'])
+            else:u=n['bounds'][1]
+            imported=imports.get((*n['cache_key'],n['depth']))
+            if imported:u=max(imported[0],min(u,imported[1]))
+            values.append(u)
+        assert abs(upper[-1]-values[-1]-g)<1e-9
+        path=[];child=i
+        while child!=record['root']:
+            p,bi,ci=pred[child];b=nodes[p]['branches'][bi]
+            path.append(dict(choices=b['choices'],child=nodes[child]['cache_key']));child=p
+        path.reverse();targets.append(dict(id=i,cache_key=nodes[i]['cache_key'],path=path,mass=g,reason='sensitivity'))
+    return dict(config=record['config'],targets=targets,cap=4096),dict(
+        parent_bounds=[lower[-1],upper[-1]],positive_targets=len(ranked),
+        selected=[dict(id=i,potential_gain=g,bounds=[lower[i],upper[i]]) for g,i in ranked[:12]])
+
+
+def specs(base):
+    crunch=dict(base,solve_allow_reserves=True,solve_priority=['move crunch','move rockslide','move dynamicpunch','move fireblast'],
+                solve_budgets=[20000]*10,solve_node_budget=120000)
+    rock=dict(crunch,solve_priority=['move rockslide','move crunch','move dynamicpunch','move fireblast'])
+    hydro=copy.deepcopy(base)
+    hydro['config'].update(policy_side=1,target_side=0,priority=['move hydropump','move submission','move return','move bellydrum'],opponent_priority={})
+    return {'ranked':base,'crunch':crunch,'rock':rock,'hydro-floor':hydro}
+
+
+def check_option(manifest,target,reference):
+    assert target['subgame_side']==0 and target['subgame_priority']==manifest['solve_priority']
+    assert [s['pokemonLeft'] for s in target['state']['sides']]==[1,2]
+    base=copy.deepcopy(target)
+    for k in ['subgame','subgame_side','subgame_priority']:base.pop(k)
+    assert base==reference
+    assert len(target['subgame'])==len(manifest['solve_budgets']);total=0;bounds=[0,1]
+    for budget,r in zip(manifest['solve_budgets'],target['subgame']):
+        assert r['budget']==budget and 0<=r['runs']<=budget;total+=r['runs'];assert total==r['total_runs']
+        lo,hi=r['fixed_side_bounds'];assert 0<=lo<=hi<=1
+        assert lo>=bounds[0]-1e-10 and hi<=bounds[1]+1e-10;bounds=[lo,hi]
+        assert r['stop'] in ['WorkExhausted','WidthMet','NodeBudget']
+        if r['stop']=='WidthMet':assert hi-lo<=1e-6
+    return dict(id=target['id'],priority=manifest['solve_priority'],side_zero_bounds=bounds,solver_runs=total)
+
+
+def replace_options(record,options):
+    identities={(*n['cache_key'],n['depth']) for n in record['nodes']};assert set(options)<=identities
+    r=copy.deepcopy(record)
+    r['config']['native_options']=[dict(identity=list(k),priority=v['priority'],source=v['source']) for k,v in options.items()]
+    table=dict(config=r['config'],nodes=[]);runs=0
+    for i,n in enumerate(r['nodes']):
+        assert 'prior_node' not in n and 'raw_bounds' not in n
+        identity=(*n['cache_key'],n['depth'])
+        if identity in options:
+            value=options[identity]['bounds'];assert 0<=value[0]<=value[1]<=1
+            n={k:n[k] for k in ['cache_key','state_key','depth']}
+            n.update(kind='budget',raw_bounds=[0,1],prior_node=len(table['nodes']),bounds=value);r['nodes'][i]=n
+            table['nodes'].append(dict(cache_key=n['cache_key'],depth=n['depth'],bounds=value,kind='native_option'))
+            continue
+        if n['kind']=='decision':
+            for b in n['branches']:
+                runs+=b['runs'];value=[F(0),F(b['pending'])]
+                for c in b['children']:
+                    for k in [0,1]:value[k]+=F(c['mass'])*F(r['nodes'][c['node']]['bounds'][k])
+                pad=F(len(b['children'])+2,10**12)
+                b['bounds']=[join['outward'](max(F(0),value[0]-pad),False),join['outward'](min(F(1),value[1]+pad),True)]
+            assert n['maximizing'];n['bounds']=[max(b['bounds'][k] for b in n['branches']) for k in [0,1]]
+    assert len(table['nodes'])==len(options)
+    last=r['nodes'][-1];r.update(bounds=last['bounds'],runs=runs)
+    table['nodes'].append(dict(cache_key=last['cache_key'],state_key=last['state_key'],depth=0,bounds=[0,1],kind='budget'))
+    table['root']=len(table['nodes'])-1
+    return legacy['verify'](r,table)
+
+
+def summarize(bundle):
+    assert bundle['inputs']=={p:sha((root/p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes']=={p:sha((root/p).read_bytes()) for p in bundle['source_hashes']}
+    prior=family['summarize'](legacy['read'](previous))
+    assert prior==json.loads((root/'findings/frontier-family-v1/summary.json').read_bytes())
+    record=parent();imports={tuple(x['identity']):x['imported'] for x in prior['imports']}
+    base,ranking=rank(record,imports);cfgs=specs(base);rows={};work=0
+    assert abs(ranking['parent_bounds'][1]-prior['unrestricted_switch_bounds'][1])<1e-10
+    for name,wanted in cfgs.items():
+        raw=bundle['manifests'][name];assert json.loads(raw)==wanted
+        output=bundle['outputs'][name];frontier['check_output'](record,raw,output)
+        work+=output['replay_runs']+output['probe_runs']
+        if name in ['crunch','rock']:
+            rows[name]=[check_option(wanted,t,r) for t,r in zip(output['targets'],bundle['outputs']['ranked']['targets'])]
+            work+=sum(r['solver_runs'] for r in rows[name])
+    assert set(bundle['outputs'])==set(bundle['manifests'])==set(cfgs)
+    options={};local=[]
+    for index,target in enumerate(base['targets']):
+        name=max(['crunch','rock'],key=lambda name:rows[name][index]['side_zero_bounds'][0]);row=rows[name][index]
+        a,b=row['side_zero_bounds'];bounds=[max(0,math.nextafter(1-b-1e-10,-math.inf)),min(1,math.nextafter(1-a+1e-10,math.inf))]
+        identity=(*target['cache_key'],len(target['path']))
+        options[identity]=dict(priority=row['priority'],source=name,bounds=bounds)
+        t=bundle['outputs']['hydro-floor']['targets'][index]
+        assert t['cache_key']==target['cache_key'] and t['selected'][1]==['move hydropump']
+        floors=[sum(F(l['mass'])*(1-F(l['terminal'])) for l in p['leaves'] if l['terminal'] is not None) for p in t['probes']]
+        floor=join['outward'](max(F(0),min(floors)-F(1,10**10)),False)
+        assert floor<=bounds[1]
+        local.append(dict(id=target['id'],chosen_option=name,unrestricted_side_one_score_bounds=[floor,bounds[1]],
+                          width=bounds[1]-floor))
+    report=replace_options(record,options)
+    for fault in ['priority','identity']:
+        try:
+            if fault=='priority':
+                bad=copy.deepcopy(bundle['outputs']['crunch']['targets'][0]);bad['subgame_priority']=['move splash']
+                check_option(cfgs['crunch'],bad,bundle['outputs']['ranked']['targets'][0])
+            else:replace_options(record,{(True,True,'0',999):dict(bounds=[0,1],priority=[],source='bad')})
+        except AssertionError:pass
+        else:raise AssertionError(fault)
+    upper=min(prior['unrestricted_switch_bounds'][1],report['bounds'][1])
+    return dict(ranking=ranking,rows=rows,local=local,conditional_opponent=report,
+        previous_unrestricted_switch_bounds=prior['unrestricted_switch_bounds'],unrestricted_switch_bounds=[0,upper],
+        additional_engine_runs=work,
+        scope='Sensitivity ranking hypothetically replaces one node upper bound by its current certified '
+              'lower bound and propagates affected ancestors. It preserves imported bounds and tests the '
+              'selected sparse calculations against full recomputation. Potential gains are allocation '
+              'diagnostics and are neither promised improvements nor additive masses. The top 12 states '
+              'are independently replayed. Two constant priority policies for the lone side-zero Tyranitar '
+              'are solved against all future replies of side one, including switches between two survivors. '
+              'At each selected guarded state/depth, the new adversary enters the chosen priority policy '
+              'and follows it until battle end. Before the first such entry it follows the old context '
+              'policy. These absorbing options may depend on history but never on the concurrent opposing '
+              'choice. Their native scalar intervals replace entire old subtrees; old-policy bounds are '
+              'not intersected and previous family imports are not reused under the changed policy. '
+              'The external native_option table trusts FixedPolicySolver. The ledger adapter treats '
+              'an option as an unknown cut with that external value, recomputes rational chance/max '
+              'backups, and runs the existing full verifier. This is not an independently serialized '
+              'proof of native solver internals. Separate one-step Hydro Pump probes retain every '
+              'side-zero reply; their immediate terminal score mass supplies an unrestricted local '
+              'lower bound. Scores count draws as one half. Only the new adversary upper bound transfers '
+              'to the original pure Switch choice; its lower bound is not a security guarantee. '
+              'No production bot strength improvement, human calibration, or whole-game solution is claimed.')
+
+
+def execute(directory,manifests):
+    binary=root/'target/release/examples/witness_frontier';env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','witness_frontier'],cwd=root,env=env,check=True)
+    (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/frontier['corpus']).read_bytes()));outputs={}
+    for name,raw in manifests.items():
+        m=directory/(name+'.json');o=directory/(name+'.out.json');m.write_text(raw)
+        subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(m),str(o)],cwd=root,env=env,check=True)
+        outputs[name]=json.loads(o.read_bytes());print(name,len(outputs[name]['targets']),flush=True)
+    return outputs
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--replay',action='store_true');parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle=legacy['read']('findings/frontier-options-v1/records.json.gz')
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-options-replay-') as d:
+                assert execute(pathlib.Path(d),bundle['manifests'])==bundle['outputs']
+        print('frontier-options: sensitivity, absorbing policies, local floors, backups and controls verified');return
+    assert not archive.exists()
+    names=['ranked','crunch','rock','hydro-floor']
+    if args.import_directory:
+        manifests={n:(args.import_directory/(n+'.json')).read_text() for n in names}
+        outputs={n:json.loads((args.import_directory/(n+'.out.json')).read_bytes()) for n in names}
+    else:
+        prior=family['summarize'](legacy['read'](previous));imports={tuple(x['identity']):x['imported'] for x in prior['imports']}
+        base,_=rank(parent(),imports);manifests={n:json.dumps(m) for n,m in specs(base).items()}
+        with tempfile.TemporaryDirectory(prefix='nc-options-') as d:outputs=execute(pathlib.Path(d),manifests)
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in inputs},
+        source_hashes=legacy['read'](previous)['source_hashes'],
+        binary_sha256=sha((root/'target/release/examples/witness_frontier').read_bytes()),manifests=manifests,outputs=outputs)
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(report['unrestricted_switch_bounds'],report['additional_engine_runs'])
+
+
+if __name__=='__main__':main()
