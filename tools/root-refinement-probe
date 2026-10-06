@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import itertools
+import json
+import math
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/root-refinement-v1'
+late = runpy.run_path(str(root / 'tools/late-root-witness-probe'))
+policy = late['policy']; sha = policy['sha']; padded = late['padded']
+corpus = late['corpus']
+previous = 'findings/late-root-witness-v1/records.json.gz'
+inputs = [previous, 'findings/late-root-witness-v1/summary.json', corpus,
+          'tools/late-root-witness-probe', 'tools/root-policy-probe',
+          'tools/policy-witness-probe', 'tools/root-refinement-probe']
+
+
+def specs():
+    old = late['specs']()[0]
+    cases = {}
+    for name in ['raikou-counter', 'marowak-counter']:
+        base = old[name]
+        extra = ['move curse'] * 20 if name == 'raikou-counter' else [
+            'move earthquake', 'move doubleedge', 'move curse'] * 20
+        replies = base['replies'] * 5 + extra
+        cases[name] = dict(base, replies=replies, rounds=len(replies))
+    thunder = dict(old['raikou-counter'], first='move thunder', rounds=40,
+                   priority=['move thunder', 'move earthquake', 'move hiddenpowerice', 'move rockslide'])
+    cases['thunder-counter'] = thunder
+    cases['thunder-refined'] = dict(thunder, rounds=80, replies=thunder['replies'] * 10 + ['move curse'] * 40)
+    floor = dict(game=21, decision=36, target_side=0, first_choice='move hiddenpowerice', policy_side=0,
+                 priority=old['raikou-counter']['priority'], rest_at_percent=None, horizon=1,
+                 work_budget=1, cell_cap=1, guarded_keys=True)
+    return cases, floor
+
+
+def check_bot(raw, out, native, floor):
+    m = json.loads(raw)
+    expected = dict(config=floor['config'], targets=[dict(id=0, cache_key=floor['nodes'][-1]['cache_key'], path=[])],
+                    cap=4096, search_c=[.4], search_seeds=list(range(8)), search_budgets=[3000, 27000], search_pinned=False)
+    assert m == expected
+    assert out['manifest_sha256'] == sha(raw.encode()) and out['corpus_sha256'] == native['corpus_sha256']
+    assert out['root_state_key'] == native['state_key'] and out['state'] == native['state']
+    assert out['cache_key'] == m['targets'][0]['cache_key'] and out['id'] == 0 and out['trace'] == []
+    assert [(s['kind'], s['c'], s['seed']) for s in out['searches']] == [
+        ('skuct', c, seed) for c, seed in itertools.product(m['search_c'], m['search_seeds'])]
+    for search in out['searches']:
+        assert [c['iterations'] for c in search['checkpoints']] == m['search_budgets']
+        prev = [[0] * len(a) for a in native['legal']]
+        for checkpoint in search['checkpoints']:
+            assert checkpoint['nodes'] > 0 and checkpoint['mean_depth'] >= 0 and len(checkpoint['sides']) == 2
+            for side, row in enumerate(checkpoint['sides']):
+                assert row['actions'] == native['legal'][side]
+                assert len(row['actions']) == len(row['visits']) == len(row['means'])
+                assert all(isinstance(v, int) and v >= p for v, p in zip(row['visits'], prev[side]))
+                assert sum(row['visits']) == checkpoint['iterations']
+                assert all(math.isfinite(v) and 0 <= v <= 1 for v in row['means'])
+                assert row['chosen'] in row['actions']
+                assert row['visits'][row['actions'].index(row['chosen'])] == max(row['visits'])
+                prev[side] = row['visits']
+    return [dict(iterations=budget, side=side, choices=dict(collections.Counter(
+        c['sides'][side]['chosen'] for s in out['searches'] for c in s['checkpoints'] if c['iterations'] == budget)))
+        for budget, side in itertools.product(m['search_budgets'], [0, 1])]
+
+
+def check_pin(audit, native, floor):
+    assert (audit['game'], audit['decision']) == (21, 36)
+    assert audit['state_key'] == native['state_key'] and audit['essence'] == native['state']
+    assert audit['key'] == floor['nodes'][-1]['cache_key'][2]
+    assert audit['party'] == [[4, 2, 5], [5, 2, 4]]
+    assert [(r['history'], r['side'], r['seed']) for r in audit['rows']] == list(
+        itertools.product([False, True], [0, 1], range(32)))
+    groups = []
+    for history, side in itertools.product([False, True], [0, 1]):
+        rows = [r for r in audit['rows'] if r['history'] == history and r['side'] == side]
+        for r in rows:
+            assert r['party'][side] == audit['party'][side]
+            if r['party'] == audit['party']:
+                assert r['nonparty_positions_restored_key'] == audit['key']
+            else:
+                assert r['nonparty_positions_restored_key'] is None and r['key'] != audit['key']
+        counts = dict(identity_mismatches=sum(r['key'] != audit['key'] for r in rows),
+                      party_changes=sum(r['party'] != audit['party'] for r in rows),
+                      position_only_mismatches=sum(r['key'] != audit['key'] and r['party'] == audit['party'] for r in rows))
+        assert list(counts.values()) == ([0, 0, 0] if side == 0 else [32, 19, 13])
+        groups.append(dict(history=history, side=side, samples=len(rows), **counts))
+    return groups
+
+
+def summarize(bundle):
+    assert bundle['inputs'] == {p: sha((root / p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes'] == {p: sha((root / p).read_bytes()) for p in bundle['source_hashes']}
+    old = json.loads(gzip.decompress((root / previous).read_bytes()))
+    prior = late['summarize'](old)
+    assert prior == json.loads((root / inputs[1]).read_bytes())
+    cases, floor_spec = specs(); outputs = bundle['outputs']; manifests = bundle['manifests']; rows = {}
+    assert set(manifests) == set(outputs) == set(cases) | {'floor', 'bot-full'}
+    for name, spec in cases.items():
+        assert json.loads(manifests[name]) == spec
+        out = outputs[name]
+        rows[name] = policy['check'](manifests[name], late['projected'](out))
+        rows[name]['certified_bounds'] = padded(out['rounds'][-1]['fixed_side_bounds'])
+        rows[name]['certified_cells'] = {c['reply']: padded(c['side_zero_bounds']) for c in out['rounds'][-1]['root_cells']}
+    for name in ['raikou-counter', 'marowak-counter']:
+        assert outputs[name]['rounds'][:20] == old['outputs'][name]['rounds']
+    assert outputs['thunder-refined']['rounds'][:40] == outputs['thunder-counter']['rounds']
+    floor = outputs['floor']; native = outputs['raikou-counter']
+    assert floor['config'] == json.loads(manifests['floor']) == floor_spec
+    assert floor['nodes'][-1]['state_key'] == native['state_key']
+    assert late['verify'](floor)['bounds'] == [0, 1] and floor['runs'] == 1
+    selections = check_bot(manifests['bot-full'], outputs['bot-full'], native, floor)
+    pins = check_pin(bundle['pinned_audit'], native, floor)
+    for fault in ['coverage', 'accounting', 'bot_identity', 'pin_identity']:
+        if fault == 'pin_identity':
+            bad = copy.deepcopy(bundle['pinned_audit']); bad['rows'][32]['key'] = bad['key']
+            check = lambda: check_pin(bad, native, floor)
+        elif fault == 'bot_identity':
+            bad = copy.deepcopy(outputs['bot-full']); bad['cache_key'][2] = '0'
+            check = lambda: check_bot(manifests['bot-full'], bad, native, floor)
+        else:
+            bad = copy.deepcopy(outputs['thunder-refined'])
+            if fault == 'coverage': bad['rounds'][-1]['root_cells'].pop()
+            else: bad['rounds'][-1]['total_runs'] += 1
+            check = lambda: policy['check'](manifests['thunder-refined'], late['projected'](bad))
+        try: check()
+        except AssertionError: pass
+        else: raise AssertionError(fault)
+    lower = max(r['certified_bounds'][0] for r in rows.values())
+    previous_lower = prior['game21_mixed_witness']['side_zero_lower']
+    hp_upper = rows['raikou-counter']['certified_bounds'][1]
+    assert lower > hp_upper and lower > previous_lower
+    return dict(rows=rows, previous_side_zero_lower=previous_lower, side_zero_lower=lower,
+        side_one_upper=math.nextafter(1 - lower, math.inf),
+        hp_priority_policy_security_deficit_lower=math.nextafter(lower - hp_upper, -math.inf),
+        selections=selections, pinned_identity_audit=pins,
+        witness_engine_runs=sum(r['runs'] for r in rows.values()) + floor['runs'], search_iterations=8 * 27000,
+        remaining_unresolved=prior['remaining_unresolved'],
+        scope='Game 21 decision 36, exact full-state score with win=1 and draw=0.5. '
+              'Refine the same two prior policies by changing only the root-reply computation schedule, '
+              'then test a Thunder-priority policy matching the observed normal-budget first choice. '
+              'All future opposing legal choices remain unrestricted. Whole-policy lower bounds are '
+              'valid game lower bounds; their upper bounds apply only to the specified full policies. '
+              'The HP-priority policy is certified inferior, but this does not reject first Hidden Power '
+              'with a different continuation or establish any first-action ordering. Prior prefixes '
+              'match exactly. Native floating bounds are widened by 1e-10 and rounded outward; '
+              'native transitions, guarded identities and solver bounds remain trusted. '
+              'Full-state bot searches use c=0.4, eight seeds and cumulative 3000/27000 checkpoints. '
+              'Their means and choices do not certify the actual bot continuation. The roster-pinned '
+              'control is excluded because side-one determinization resamples the unrevealed opposing '
+              'selection: 19 of 32 seeds change the party, with or without replayed observation history. '
+              'The remaining 13 have only nonparty position differences detectable by a diagnostic '
+              'restoration. That restoration is never used for solver or bot comparisons. '
+              'This diagnoses a nonidentical control, not a production belief defect. No normal blind '
+              'policy, global optimality, production strength improvement or human calibration claim.')
+
+
+def execute(directory, manifests):
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'root_policy_witness',
+                    '--example', 'policy_witness', '--example', 'frontier_bot', '--example', 'pinned_state_audit'], cwd=root, check=True)
+    source = directory / 'corpus.jsonl'; source.write_bytes(gzip.decompress((root / corpus).read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root)); outputs = {}
+    for name, raw in manifests.items():
+        manifest = directory / 'manifest.json'; manifest.write_text(raw); output = directory / 'output.json'
+        example = 'policy_witness' if name == 'floor' else 'frontier_bot' if name == 'bot-full' else 'root_policy_witness'
+        subprocess.run([str(root / 'target/release/examples' / example), str(source), str(manifest), str(output)],
+                       cwd=root, env=env, check=True, stderr=subprocess.DEVNULL)
+        outputs[name] = json.loads(output.read_bytes()); print(name, 'replayed', flush=True)
+    subprocess.run([str(root / 'target/release/examples/pinned_state_audit'), str(source), '21', '36', str(output)],
+                   cwd=root, env=env, check=True)
+    return outputs, json.loads(output.read_bytes())
+
+
+def main():
+    parser = argparse.ArgumentParser(); parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--replay', action='store_true'); parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert summarize(bundle) == json.loads((archive / 'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-root-refinement-') as d:
+                outputs, pins = execute(pathlib.Path(d), bundle['manifests'])
+                assert outputs == bundle['outputs'] and pins == bundle['pinned_audit']
+        print('root-refinement: bounds, prefixes, controls, full-state bot and pinned diagnosis verified'); return
+    assert not archive.exists() and args.import_directory
+    names = list(specs()[0]) + ['floor', 'bot-full']
+    old = json.loads(gzip.decompress((root / previous).read_bytes()))
+    paths = set(old['source_hashes']) | {'crates/bot/examples/pinned_state_audit.rs'}
+    bundle = dict(inputs={p: sha((root / p).read_bytes()) for p in inputs},
+        source_hashes={p: sha((root / p).read_bytes()) for p in sorted(paths)},
+        manifests={n: (args.import_directory / (n + '.json')).read_text() for n in names},
+        outputs={n: json.loads((args.import_directory / (n + '.out.json')).read_bytes()) for n in names},
+        pinned_audit=json.loads((args.import_directory / 'pinned-diff.json').read_bytes()))
+    report = summarize(bundle); archive.mkdir()
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
+    print('side-zero lower:', report['side_zero_lower'])
+
+
+if __name__ == '__main__': main()
