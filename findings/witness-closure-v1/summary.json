@@ -3,9 +3,9 @@
     "findings/witness-coverage-v1/records.json.gz": "b9c926d9335cd09ef6a87560870318d168b66733edbf47ff9d5b94133934ac7d",
     "findings/witness-backtrack-v1/records.json.gz": "829117cb2793e632b2d54430a43c38d4ef889450c165ac37342d5f8183429971",
     "findings/witness-coverage-v1/summary.json": "b3b9c59244b6cc84ed3b46eb12884ca854002e9e7a00a4fe8fb48d0de7efef3c",
-    "tools/witness-coverage-probe": "c2f5ad4c36ad759d40eb3d59e89cb627cc78692abec508549018ced788b7c94a",
-    "tools/policy-witness-probe": "7fb9b205740144a51aec5e5401e21dfa152892951d9d435737984bd19c94a9ce",
-    "tools/witness-closure-probe": "d764067e1e6b0527845526eed4f2302dadb73f99f8fc95e40ba3def7074624d3"
+    "tools/witness-coverage-probe": "3d5669c560a9788d6cbcad895195d28912ee4dcafc712184f0e7c037b11695f9",
+    "tools/policy-witness-probe": "6b9d217c06b8cf49bbdee0c7f10dde5d62e6ce3a409bd6daf5ccdbf38c4094be",
+    "tools/witness-closure-probe": "d25492744d807accc6cb690143cca2005860886e72dc0d1968cf3df93da120fd"
   },
   "report": {
     "closure": {

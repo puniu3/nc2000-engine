@@ -18,7 +18,7 @@ previous='findings/witness-backtrack-v1/records.json.gz'
 corpus='findings/policy-gap-v1/corpus.jsonl.gz'
 verify=runpy.run_path(str(root/'tools/policy-witness-probe'))['verify']
 support=runpy.run_path(str(root/'tools/support-witness-probe'))['support_bounds']
-ignored={'horizon','work_budget','cell_cap','reverse_replies','share_root_budget'}
+ignored={'horizon','work_budget','cell_cap','reverse_replies','share_root_budget','share_budget_depth'}
 
 
 def sha(raw):return hashlib.sha256(raw).hexdigest()

@@ -1,0 +1,464 @@
+{
+  "rows": {
+    "h2": {
+      "runs": 1408,
+      "nodes": 98,
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "node_kinds": {
+        "horizon": 33,
+        "decision": 65
+      },
+      "partial_branches": 0
+    },
+    "h3": {
+      "runs": 1474,
+      "nodes": 131,
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "node_kinds": {
+        "horizon": 33,
+        "decision": 98
+      },
+      "partial_branches": 0
+    },
+    "h4": {
+      "runs": 118457,
+      "nodes": 9105,
+      "bounds": [
+        0.04980468729999999,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 116,
+        "horizon": 8858,
+        "decision": 131
+      },
+      "partial_branches": 123
+    },
+    "reverse4": {
+      "runs": 119010,
+      "nodes": 6329,
+      "bounds": [
+        0.045408615505087596,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 116,
+        "decision": 131,
+        "horizon": 6082
+      },
+      "partial_branches": 221
+    },
+    "reverse6": {
+      "runs": 660932,
+      "nodes": 33858,
+      "bounds": [
+        0.04219203252358678,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 876,
+        "decision": 3355,
+        "budget": 10107,
+        "horizon": 19520
+      },
+      "partial_branches": 317
+    },
+    "refine6": {
+      "runs": 313033,
+      "nodes": 23870,
+      "bounds": [
+        0.3949388959969795,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 255,
+        "decision": 529,
+        "budget": 19211,
+        "horizon": 3875
+      },
+      "partial_branches": 299
+    },
+    "refine8": {
+      "runs": 298297,
+      "nodes": 21426,
+      "bounds": [
+        0.5637155699799022,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 218,
+        "decision": 686,
+        "budget": 20169,
+        "reused": 353
+      },
+      "partial_branches": 311
+    },
+    "reverse8": {
+      "runs": 298297,
+      "nodes": 17289,
+      "bounds": [
+        0.5637155699799022,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 714,
+        "horizon": 2540,
+        "decision": 1694,
+        "budget": 12341
+      },
+      "partial_branches": 356
+    },
+    "seed200": {
+      "runs": 464812,
+      "nodes": 45250,
+      "bounds": [
+        0.037966241462035394,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 557,
+        "decision": 3488,
+        "budget": 16688,
+        "horizon": 24517
+      },
+      "partial_branches": 605
+    },
+    "seed200-h8": {
+      "runs": 344967,
+      "nodes": 31687,
+      "bounds": [
+        0.037966249730062636,
+        1.0
+      ],
+      "node_kinds": {
+        "budget": 30195,
+        "decision": 400,
+        "terminal": 431,
+        "horizon": 661
+      },
+      "partial_branches": 664
+    },
+    "psychic": {
+      "runs": 464812,
+      "nodes": 40437,
+      "bounds": [
+        0.04213213900594459,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 291,
+        "decision": 1930,
+        "budget": 12140,
+        "horizon": 26076
+      },
+      "partial_branches": 556
+    },
+    "psychic-h8": {
+      "runs": 344967,
+      "nodes": 29472,
+      "bounds": [
+        0.04213214727397182,
+        1.0
+      ],
+      "node_kinds": {
+        "budget": 27980,
+        "decision": 436,
+        "terminal": 395,
+        "horizon": 661
+      },
+      "partial_branches": 548
+    },
+    "rock6": {
+      "runs": 660932,
+      "nodes": 32216,
+      "bounds": [
+        0.0019454962901425269,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 1456,
+        "horizon": 27478,
+        "decision": 1535,
+        "budget": 1747
+      },
+      "partial_branches": 283
+    },
+    "rock8": {
+      "runs": 306238,
+      "nodes": 20777,
+      "bounds": [
+        0.05105583608333217,
+        1.0
+      ],
+      "node_kinds": {
+        "horizon": 1205,
+        "terminal": 567,
+        "decision": 277,
+        "budget": 18728
+      },
+      "partial_branches": 440
+    },
+    "explode6": {
+      "runs": 1000000,
+      "nodes": 83787,
+      "bounds": [
+        0.03805226685143752,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 1871,
+        "horizon": 74326,
+        "decision": 6675,
+        "budget": 915
+      },
+      "partial_branches": 234
+    },
+    "explode8": {
+      "runs": 965438,
+      "nodes": 41514,
+      "bounds": [
+        0.09576452242241056,
+        1.0
+      ],
+      "node_kinds": {
+        "horizon": 31618,
+        "terminal": 3686,
+        "decision": 1669,
+        "budget": 4541
+      },
+      "partial_branches": 653
+    },
+    "explode-fair2": {
+      "runs": 874184,
+      "nodes": 142964,
+      "bounds": [
+        0.06504729055640568,
+        0.8345616598878657
+      ],
+      "node_kinds": {
+        "terminal": 2849,
+        "horizon": 94853,
+        "decision": 13642,
+        "budget": 31620
+      },
+      "partial_branches": 17763
+    },
+    "explode-fair3": {
+      "runs": 864150,
+      "nodes": 194053,
+      "bounds": [
+        0.15182496767688952,
+        0.8108579885250125
+      ],
+      "node_kinds": {
+        "terminal": 3069,
+        "horizon": 52299,
+        "decision": 40642,
+        "budget": 98043
+      },
+      "partial_branches": 152498
+    },
+    "rock-fair2": {
+      "runs": 51365,
+      "nodes": 2994,
+      "bounds": [
+        6.706543114088972e-05,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 412,
+        "decision": 173,
+        "horizon": 2252,
+        "budget": 157
+      },
+      "partial_branches": 143
+    },
+    "rock-fair3": {
+      "runs": 51365,
+      "nodes": 6401,
+      "bounds": [
+        0.04980468729399999,
+        0.9999935388535471
+      ],
+      "node_kinds": {
+        "terminal": 299,
+        "budget": 5780,
+        "decision": 311,
+        "horizon": 11
+      },
+      "partial_branches": 808
+    }
+  },
+  "fixed_opponent_value_bounds": {
+    "crunch": {
+      "bounds": [
+        0.6174030296428786,
+        1.0
+      ],
+      "unique_nodes": 71092,
+      "recomputed_branches": 2533,
+      "root_replies": [
+        {
+          "choices": [
+            "move psychic",
+            "switch 2"
+          ],
+          "bounds": [
+            0.6174030296428786,
+            1.0
+          ],
+          "sources": [
+            [
+              "old",
+              6620,
+              0
+            ],
+            null
+          ]
+        }
+      ],
+      "improved_nodes": 144
+    },
+    "seed200": {
+      "bounds": [
+        0.03796624973006271,
+        1.0
+      ],
+      "unique_nodes": 76872,
+      "recomputed_branches": 1,
+      "root_replies": [
+        {
+          "choices": [
+            "move psychic",
+            "switch 2"
+          ],
+          "bounds": [
+            0.03796624973006271,
+            1.0
+          ],
+          "sources": [
+            [
+              "seed200",
+              45249,
+              0
+            ],
+            null
+          ]
+        }
+      ],
+      "improved_nodes": 0
+    },
+    "psychic": {
+      "bounds": [
+        0.0421321472739719,
+        1.0
+      ],
+      "unique_nodes": 69844,
+      "recomputed_branches": 1,
+      "root_replies": [
+        {
+          "choices": [
+            "move psychic",
+            "switch 2"
+          ],
+          "bounds": [
+            0.0421321472739719,
+            1.0
+          ],
+          "sources": [
+            [
+              "psychic",
+              40436,
+              0
+            ],
+            null
+          ]
+        }
+      ],
+      "improved_nodes": 0
+    },
+    "rock": {
+      "bounds": [
+        0.051055836083332286,
+        0.9999935388535471
+      ],
+      "unique_nodes": 54721,
+      "recomputed_branches": 1406,
+      "root_replies": [
+        {
+          "choices": [
+            "move psychic",
+            "switch 2"
+          ],
+          "bounds": [
+            0.051055836083332286,
+            0.9999935388535471
+          ],
+          "sources": [
+            [
+              "rock6",
+              32215,
+              0
+            ],
+            [
+              "rock6",
+              32215,
+              0
+            ]
+          ]
+        }
+      ],
+      "improved_nodes": 122
+    },
+    "explode": {
+      "bounds": [
+        0.1853725868181223,
+        0.8108579885250125
+      ],
+      "unique_nodes": 416397,
+      "recomputed_branches": 4451,
+      "root_replies": [
+        {
+          "choices": [
+            "move explosion",
+            "switch 2"
+          ],
+          "bounds": [
+            0.1853725868181223,
+            0.8108579885250125
+          ],
+          "sources": [
+            [
+              "explode6",
+              83786,
+              0
+            ],
+            [
+              "explode6",
+              83786,
+              0
+            ]
+          ]
+        }
+      ],
+      "improved_nodes": 172
+    }
+  },
+  "unrestricted_switch_bounds": [
+    0,
+    0.8108579885250125
+  ],
+  "return_bounds": [
+    0.07387508188302666,
+    0.4951923077240254
+  ],
+  "switch_proven_worse_than_return": false,
+  "order_independent_bounds": true,
+  "scope": "Game 12 decision 15, side one first switches to Snorlax. Every subsequent side-one choice remains unrestricted against a fixed side-zero policy. Thus only the upper endpoint transfers to an unrestricted-opponent bound. In particular, the positive lower endpoint against the old Crunch policy is a counterexample to that policy as a tight upper witness; it is not a security guarantee for switching. Policy-specific closures remain separate. Full-state score is win plus half draw, and its upper endpoint also bounds win probability. Retained horizons and incomplete chance mass stay unknown. The Explosion variant changes the root reply to Explosion and uses Dynamic Punch against Poliwrath, with Rock Slide otherwise. Upper/lower operators, imported policy identity, all legal replies, rational backups and source-order independence are checked. Engine semantics and guarded identities remain trusted. No human calibration, blind guarantee, whole-game solution or production change."
+}

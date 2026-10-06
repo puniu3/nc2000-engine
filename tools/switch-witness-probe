@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+import argparse
+import concurrent.futures
+import copy
+import gzip
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/switch-witness-v1'
+join=runpy.run_path(str(root/'tools/witness-closure-probe'))
+coverage=join['coverage'];verify=coverage['verify'];sha=coverage['sha']
+old_path='findings/witness-backtrack-v1/records.json.gz'
+corpus='findings/policy-gap-v1/corpus.jsonl.gz'
+inputs=[old_path,corpus,'findings/witness-coverage-v1/records.json.gz',
+        'findings/witness-closure-v1/summary.json','data/gen2stadium2.json',
+        'tools/witness-closure-probe','tools/policy-witness-probe','tools/switch-witness-probe']
+
+
+def specs():
+    base=coverage['read'](old_path)['records']['a15-switch-2-ordered']['config']
+    cfgs={f'h{h}':dict(base,horizon=h,share_root_budget=True) for h in [2,3,4]}
+    cfgs['reverse4']=dict(base,horizon=4,reverse_replies=True,share_root_budget=True)
+    rev=dict(base,reverse_replies=True,share_root_budget=True,work_budget=1000000)
+    cfgs['reverse6']=rev
+    for name,h,reverse in [('refine6',6,False),('refine8',8,False),('reverse8',8,True)]:
+        cfgs[name]=dict(rev,horizon=h)
+        if not reverse:cfgs[name].pop('reverse_replies')
+    for name in ['seed200','psychic']:
+        cfg=dict(rev,work_budget=500000,opponent_priority=dict(base['opponent_priority']))
+        cfg['opponent_priority']['snorlax']=['move leechseed','move crunch'] if name=='seed200' else ['move psychic','move crunch']
+        if name=='seed200':cfg.update(finishing_hp=200,finishing_priority=['move psychic','move crunch'])
+        cfgs[name]=cfg;cfgs[name+'-h8']=dict(cfg,horizon=8);cfgs[name+'-h8'].pop('reverse_replies')
+    rock=dict(rev,priority=['move explosion','move rockslide','move crunch','move razorleaf','switch 2','switch 3'],
+              opponent_priority={'poliwrath':['move psychic','move rockslide','move crunch']})
+    cfgs['rock6']=rock;cfgs['rock8']=dict(rock,horizon=8);cfgs['rock8'].pop('reverse_replies')
+    explode=dict(rock,opponent_priority={'poliwrath':['move explosion','move dynamicpunch','move rockslide','move crunch']})
+    cfgs['explode6']=explode;cfgs['explode8']=dict(explode,horizon=8);cfgs['explode8'].pop('reverse_replies')
+    cfgs['explode-fair2']=dict(explode,share_budget_depth=2)
+    cfgs['explode-fair3']=dict(explode,share_budget_depth=3)
+    cfgs['rock-fair2']=dict(rock,share_budget_depth=2)
+    cfgs['rock-fair3']=dict(rock,share_budget_depth=3)
+    return cfgs
+
+
+def parent(name):
+    return {'refine6':'reverse6','refine8':'refine6','reverse8':'refine8',
+            'seed200-h8':'seed200','psychic-h8':'psychic','rock8':'rock6','explode8':'explode6'}.get(name)
+
+
+def summarize(bundle):
+    assert bundle['inputs']=={p:sha((root/p).read_bytes()) for p in inputs}
+    old=coverage['read'](old_path)['records']
+    records={n:json.loads(raw) for n,raw in bundle['raw'].items()};assert list(records)==list(specs())
+    reports={}
+    for n,cfg in specs().items():
+        r=records[n];assert r['config']==cfg
+        assert r['nodes'][-1]['state_key']==old['a15-switch-2-ordered']['nodes'][-1]['state_key']
+        p=parent(n)
+        if p:assert r['prior_sha256']==sha(bundle['raw'][p].encode())
+        reports[n]=verify(r,records[p] if p else None)
+    records['old']=old['a15-switch-2-ordered'];verify(records['old'])
+    groups={'crunch':['old','h2','h3','h4','reverse4','reverse6','refine6','refine8','reverse8'],
+            'seed200':['seed200','seed200-h8'],'psychic':['psychic','psychic-h8'],
+            'rock':['rock6','rock8','rock-fair2','rock-fair3'],
+            'explode':['explode6','explode8','explode-fair2','explode-fair3']}
+    merged={}
+    for name,names in groups.items():
+        subset={n:records[n] for n in names};r=join['closure'](subset)
+        reversed_r=join['closure'](dict(reversed(list(subset.items()))))
+        assert r['bounds']==reversed_r['bounds']
+        merged[name]={k:r[k] for k in ['bounds','unique_nodes','recomputed_branches','root_replies']}
+        merged[name]['improved_nodes']=len(r['improved'])
+    assert merged['crunch']['bounds'][0]>.6
+    verify(old['a15-move-hydropump-ordered'])
+    assert join['closure']({'loss':old['a15-move-hydropump-ordered']})['bounds']==old['a15-move-hydropump-ordered']['bounds']
+    for fault in ['policy','operator']:
+        bad=copy.deepcopy(records['h2'])
+        if fault=='policy':bad['config']['priority'].reverse()
+        else:bad['nodes'][-1]['maximizing']=False
+        try:join['closure']({'base':records['h3'],'bad':bad})
+        except AssertionError:pass
+        else:raise AssertionError(fault)
+    upper=min(v['bounds'][1] for v in merged.values())
+    return_bound=json.loads((root/'findings/witness-closure-v1/summary.json').read_bytes())['report']['win_probability_bounds']
+    return dict(rows=reports,fixed_opponent_value_bounds=merged,unrestricted_switch_bounds=[0,upper],
+        return_bounds=return_bound,switch_proven_worse_than_return=upper<return_bound[0],
+        order_independent_bounds=True,
+        scope='Game 12 decision 15, side one first switches to Snorlax. Every subsequent side-one '
+              'choice remains unrestricted against a fixed side-zero policy. Thus only the upper endpoint '
+              'transfers to an unrestricted-opponent bound. In particular, the positive lower endpoint '
+              'against the old Crunch policy is a counterexample to that policy as a tight upper witness; '
+              'it is not a security guarantee for switching. Policy-specific closures remain separate. '
+              'Full-state score is win plus half draw, and its upper endpoint also bounds win probability. '
+              'Retained horizons and incomplete chance mass stay unknown. The Explosion variant changes '
+              'the root reply to Explosion and uses Dynamic Punch against Poliwrath, with Rock Slide '
+              'otherwise. Upper/lower operators, imported policy identity, all legal replies, rational '
+              'backups and source-order independence are checked. Engine semantics and guarded identities '
+              'remain trusted. No human calibration, blind guarantee, whole-game solution or production change.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path);args=parser.parse_args()
+    if args.verify_only:
+        assert summarize(coverage['read']('findings/switch-witness-v1/records.json.gz'))==json.loads((archive/'summary.json').read_bytes())
+        print('switch-witness: policy-specific upper closures, imports, operator controls and baseline lower parity verified');return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-switch-witness-'));print(directory,flush=True)
+    old_sources=coverage['read']('findings/witness-coverage-v1/records.json.gz')['source_hashes']
+    sources={p:sha((root/p).read_bytes()) for p in old_sources}
+    assert sorted(p for p,h in old_sources.items() if sources[p]!=h)==[
+        'crates/bot/examples/policy_witness.rs','tools/policy-witness-probe','tools/witness-coverage-probe']
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)};binary=root/'target/release/examples/policy_witness'
+    configs=specs()
+    if not args.import_directory:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','policy_witness'],cwd=root,env=env,check=True)
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/corpus).read_bytes()))
+        def run(name):
+            (directory/(name+'.json')).write_text(json.dumps(configs[name]))
+            cmd=[str(binary),str(directory/'corpus.jsonl'),str(directory/(name+'.json')),str(directory/(name+'.out.json'))]
+            if parent(name):cmd +=[str(directory/(parent(name)+'.out.json')),'priority']
+            subprocess.run(cmd,cwd=root,env=env,check=True);print(name,'complete',flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            list(pool.map(run,[n for n in configs if parent(n) is None]))
+        for n in configs:
+            if parent(n):run(n)
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in inputs},source_hashes=sources,
+        binary_sha256=sha(binary.read_bytes()),raw={n:(directory/(n+'.out.json')).read_text() for n in configs})
+    assert sources=={p:sha((root/p).read_bytes()) for p in sources}
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k not in ['rows','scope','fixed_opponent_value_bounds']},indent=2))
+
+
+if __name__=='__main__':main()

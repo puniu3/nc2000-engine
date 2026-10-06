@@ -27,6 +27,8 @@ def outward(value,upper):
 
 def closure(records):
     base=next(iter(records.values()))
+    maximizing=base['config']['policy_side']!=base['config']['target_side']
+    operator=max if maximizing else min
     policy={k:v for k,v in base['config'].items() if k not in coverage['ignored']}
     root_key=key(base['nodes'][-1]);groups=collections.defaultdict(list)
     for name,r in records.items():
@@ -41,7 +43,7 @@ def closure(records):
         for name,index in refs:
             nodes=records[name]['nodes'];node=nodes[index]
             if node['kind']!='decision':continue
-            assert not node['maximizing']
+            assert node['maximizing']==maximizing
             actions={tuple(b['choices']) for b in node['branches']}
             node_legal=[set(a) for a in node['legal']];node_selected=[set(a) for a in node['selected']]
             if expected is None:expected=actions;legal=node_legal;selected=node_selected
@@ -68,8 +70,8 @@ def closure(records):
                 assert current[0]<=current[1]
         after=list(before)
         if branches:
-            after=[max(after[0],min(b[0] for b in branches.values())),
-                   min(after[1],min(b[1] for b in branches.values()))]
+            after=[max(after[0],operator(b[0] for b in branches.values())),
+                   min(after[1],operator(b[1] for b in branches.values()))]
         assert 0<=after[0]<=after[1]<=1
         values[identity]=after
         if after[0]>before[0]+1e-8 or after[1]<before[1]-1e-8:

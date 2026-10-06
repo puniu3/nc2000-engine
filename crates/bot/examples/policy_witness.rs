@@ -40,6 +40,8 @@ struct Config {
     finishing_priority: Vec<String>,
     #[serde(default, skip_serializing_if="is_false")]
     share_root_budget: bool,
+    #[serde(default, skip_serializing_if="Option::is_none")]
+    share_budget_depth: Option<usize>,
 }
 
 struct Witness<'a> {
@@ -121,7 +123,7 @@ impl Witness<'_> {
             let mut branches_left=selected[0].len()*selected[1].len();
             for &a in &selected[0] { for &b in &selected[1] {
                 let choices=[a,b];
-                let sharing=depth==0 && self.cfg.share_root_budget;
+                let sharing=depth<=self.cfg.share_budget_depth.unwrap_or(0) && self.cfg.share_root_budget;
                 let branch_limit=if sharing {self.runs+limit.saturating_sub(self.runs)/branches_left} else {limit};
                 branches_left-=1;
                 let remaining=branch_limit.saturating_sub(self.runs);
@@ -210,7 +212,7 @@ fn main() {
     if let Some(path)=args.get(4) {
         let raw=std::fs::read(path).unwrap();let previous:Value=serde_json::from_slice(&raw).unwrap();
         let mut before=previous["config"].clone();let mut after=serde_json::to_value(&cfg).unwrap();
-        for name in ["horizon","work_budget","cell_cap","reverse_replies","share_root_budget"] {
+        for name in ["horizon","work_budget","cell_cap","reverse_replies","share_root_budget","share_budget_depth"] {
             before.as_object_mut().unwrap().remove(name);after.as_object_mut().unwrap().remove(name);
         }
         assert_eq!(before,after,"prior policy and key configuration must match");
