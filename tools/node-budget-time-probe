@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import gzip
+import json
+import os
+import pathlib
+import re
+import runpy
+import shutil
+import statistics
+import subprocess
+import sys
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/node-budget-time-v1'
+timed=runpy.run_path(str(root/'tools/fused-key-time-probe'))
+frontier=timed['frontier']
+sha=timed['sha']
+prior=root/'findings/fused-key-time-v1/records.json.gz'
+
+
+def summarize(bundle):
+    assert bundle['prior_sha256']==sha(prior.read_bytes())
+    for key,path in [('corpus',frontier['corpus']),('reference',frontier['reference']),('selection',frontier['previous'])]:
+        assert bundle[key+'_sha256']==sha(path.read_bytes())
+    previous=json.loads(gzip.decompress(prior.read_bytes()))
+    for p,h in previous['manifests']['candidate']['sources'].items():
+        if p!='crates/bot/examples/strategy_frontier.rs' or bundle.get('resource_closure_nodes') is None:
+            assert bundle['manifest']['sources'][p]==h
+    assert bundle['rss_unit']=='bytes' and bundle['platform']=='darwin'
+    summaries=[]
+    for i,run in enumerate(bundle['runs']):
+        repeat=i//2
+        order=[12000,48000] if repeat%2==0 else [48000,12000]
+        assert run['repeat']==repeat and run['nodes']==order[i%2]
+        rows=timed['validate_rows'](run['rows'],node_budget=run['nodes'])
+        for r in run['rows']:
+            if bundle.get('resource_closure_nodes') is not None:
+                assert r['resource_closure']['threshold']==bundle['resource_closure_nodes']==9000
+        peak=int(re.search(r'^\s*(\d+)\s+maximum resident set size$',run['time_log'],re.M)[1])
+        assert peak>0
+        for row,raw in zip(rows,run['rows']):
+            if 'resource_closure' in raw: row['resource_closure']=raw['resource_closure']
+            g=raw['graph']
+            assert g['nodes']==g['unexpanded']+g['initialized']
+            row.update(nodes=g['nodes'],unexpanded_fraction=g['unexpanded']/g['nodes'])
+        summaries.append(dict(repeat=repeat,nodes=run['nodes'],certified=sum(r['certified'] for r in rows),
+            stops=dict(collections.Counter(r['stop'] for r in rows)),runs=sum(r['runs'] for r in rows),
+            max_ms=max(r['milliseconds'] for r in rows),total_ms=sum(r['milliseconds'] for r in rows),
+            peak_rss_bytes=peak,median_unexpanded_fraction=statistics.median(r['unexpanded_fraction'] for r in rows),rows=rows))
+    assert len(summaries)==6
+    pairs=[]
+    for repeat in range(3):
+        arms={r['nodes']:r for r in summaries if r['repeat']==repeat}
+        a,b=arms[12000],arms[48000]
+        pairs.append(dict(repeat=repeat,certified={str(n):r['certified'] for n,r in arms.items()},
+            runs_ratio=b['runs']/a['runs'],rss_ratio=b['peak_rss_bytes']/a['peak_rss_bytes'],
+            narrower=sum(y['width']<x['width']-1e-8 for x,y in zip(a['rows'],b['rows'])),
+            wider=sum(y['width']>x['width']+1e-8 for x,y in zip(a['rows'],b['rows'])),
+            gained=[dict(game=y['game'],decision=y['decision'],side=y['side']) for x,y in zip(a['rows'],b['rows']) if y['certified'] and not x['certified']],
+            lost=[dict(game=x['game'],decision=x['decision'],side=x['side']) for x,y in zip(a['rows'],b['rows']) if x['certified'] and not y['certified']]))
+    gained=sorted({(r['game'],r['decision'],r['side']) for p in pairs for r in p['gained']})
+    prior_policies={(r['game'],r['decision'],r['side']):r for r in json.loads(frontier['previous'].read_bytes())['rows']}
+    context=[dict(game=k[0],decision=k[1],side=k[2],prior_baseline_loss=prior_policies[k]['baseline_loss'],
+                  prior_baseline_certified=prior_policies[k]['baseline_certified']) for k in gained]
+    return dict(positions=41,repeats=3,budget_ms=1000,pairs=pairs,runs=summaries,gained_baseline_context=context,
+        median_runs_ratio=statistics.median(p['runs_ratio'] for p in pairs),
+        resource_closure_nodes=bundle.get('resource_closure_nodes'),
+        scheduling=('Resource closure starts at a fixed 9000 nodes in both arms.' if bundle.get('resource_closure_nodes') is not None
+                    else 'Default resource closure starts at 75% of the node cap; this comparison changes that scheduling threshold as well as capacity.'),
+        scope='Same binary, fixed unresolved corpus, 1000 ms soft deadline, 12000 versus 48000 live-node caps, '
+              'alternating arm order across three repeats. RSS is the native process peak across all 41 positions, '
+              'including allocator retention and shared runtime data; it is not per-position graph memory. '
+              'Certificates concern first-action loss with optimal full-information continuation. No production default change.')
+
+
+def main():
+    global archive
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--fixed-resource-threshold',action='store_true')
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    threshold=9000 if args.fixed_resource_threshold else None
+    if threshold is not None: archive=root/'findings/node-budget-fixed-time-v1'
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        print('node-budget-time: verified 246 outcomes, policy bounds and measured process RSS')
+        return
+    assert not archive.exists() and sys.platform=='darwin'
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-node-budget-time-'))
+    print(directory,flush=True)
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    paths=json.loads(gzip.decompress(prior.read_bytes()))['manifests']['candidate']['sources']
+    hashes={p:sha((root/p).read_bytes()) for p in paths}
+    if args.import_directory:
+        manifest=json.loads((directory/'manifest.json').read_bytes())
+        assert manifest['sources']==hashes
+    else:
+        with (directory/'build.log').open('w') as log:
+            subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','strategy_frontier'],cwd=root,env=env,stdout=log,stderr=log,check=True)
+        shutil.copy2(root/'target/release/examples/strategy_frontier',directory/'runner')
+        manifest=dict(sources=hashes,binary_sha256=sha((directory/'runner').read_bytes()))
+        (directory/'manifest.json').write_text(json.dumps(manifest))
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress(frontier['corpus'].read_bytes()))
+        (directory/'requests.json').write_text(json.dumps(frontier['requests']()))
+        for repeat in range(3):
+            for nodes in ([12000,48000] if repeat%2==0 else [48000,12000]):
+                with (directory/f'{repeat}-{nodes}.log').open('w') as log:
+                    subprocess.run(['/usr/bin/time','-l',str(directory/'runner'),str(directory/'corpus.jsonl'),
+                        str(directory/'requests.json'),str(directory/f'{repeat}-{nodes}.jsonl'),
+                        '1000000',str(nodes),'24','1000','4096','false','false','false','1000']+([] if threshold is None else [str(threshold)]),
+                        cwd=root,env=env,stdout=log,stderr=log,check=True)
+                print(f'{repeat} {nodes} complete',flush=True)
+    assert manifest['binary_sha256']==sha((directory/'runner').read_bytes())
+    assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
+    bundle=dict(manifest=manifest,prior_sha256=sha(prior.read_bytes()),platform='darwin',rss_unit='bytes',resource_closure_nodes=threshold,
+        **{key+'_sha256':sha(path.read_bytes()) for key,path in [('corpus',frontier['corpus']),('reference',frontier['reference']),('selection',frontier['previous'])]},
+        runs=[dict(repeat=repeat,nodes=nodes,rows=[json.loads(s) for s in (directory/f'{repeat}-{nodes}.jsonl').read_text().splitlines()],
+                   time_log='\n'.join(line for line in (directory/f'{repeat}-{nodes}.log').read_text().splitlines() if not line.startswith('game=')))
+              for repeat in range(3) for nodes in ([12000,48000] if repeat%2==0 else [48000,12000])])
+    report=summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='runs'},indent=2))
+
+
+if __name__=='__main__': main()

@@ -25,6 +25,34 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
+def validate_rows(records, *, node_budget=12000, budget_ms=1000):
+    reference={(p['game'],p['decision']):p for p in json.loads(gzip.decompress(frontier['reference'].read_bytes()))}
+    assert [{k:r[k] for k in ['game','decision','side']} for r in records]==frontier['requests']()
+    rows=[]
+    for r in records:
+        p=reference[r['game'],r['decision']]
+        assert r['state_key']==p['state_key'] and r['time_budget_ms']==budget_ms
+        assert (r['work_budget'],r['node_budget'],r['trial_depth'],r['call_budget'],r['cell_cap'])==(1000000,node_budget,24,1000,4096)
+        assert not r['retain_eager_prefix'] and not r['defer_eager_frontier']
+        assert r['runs']<r['work_budget']
+        assert [[canonical(a) if a is not None else a for a in aa] for aa in r['actions']]==p['reference']['actions']
+        assert r['value'][0]<=p['reference']['value']['hi']+1e-8 and r['value'][1]>=p['reference']['value']['lo']-1e-8
+        matrix=dict(actions=r['actions'],value=dict(zip(['lo','hi'],r['value'])),cells=[dict(zip(['lo','hi'],c)) for c in r['cells']])
+        if r['policies'] is not None:
+            for side in [0,1]:
+                policy=r['policies'][side]
+                assert min(policy)>=-1e-12
+                assert abs(loss(matrix,side,policy)[1]-r['max_loss'][side])<1e-7
+                assert loss(p['reference'],side,policy)[0]<=r['max_loss'][side]+1e-7
+        side=r['side']
+        certified=r['max_loss'] is not None and r['max_loss'][side]<=.005
+        assert certified or r['stop'] in ['NodeBudget','TimeBudget']
+        rows.append(dict(game=r['game'],decision=r['decision'],side=side,certified=certified,
+            max_loss=None if r['max_loss'] is None else r['max_loss'][side],
+            width=r['value'][1]-r['value'][0],milliseconds=r['milliseconds'],runs=r['runs'],stop=r['stop']))
+    return rows
+
+
 def summarize(bundle):
     assert bundle['fixed_sha256']==sha(fixed.read_bytes())
     assert bundle['corpus_sha256']==sha(frontier['corpus'].read_bytes())
@@ -35,35 +63,12 @@ def summarize(bundle):
     frozen=json.loads(gzip.decompress(fixed.read_bytes()))
     for arm in manifests:
         for p in changed: assert manifests[arm]['sources'][p]==frozen['manifests'][arm]['source_hashes'][p]
-    reference={(p['game'],p['decision']):p for p in json.loads(gzip.decompress(frontier['reference'].read_bytes()))}
     summaries=[]
     for i,run in enumerate(bundle['runs']):
         repeat=i//2
         order=['baseline','candidate'] if repeat%2==0 else ['candidate','baseline']
         assert run['repeat']==repeat and run['arm']==order[i%2]
-        assert [{k:r[k] for k in ['game','decision','side']} for r in run['rows']]==frontier['requests']()
-        rows=[]
-        for r in run['rows']:
-            p=reference[r['game'],r['decision']]
-            assert r['state_key']==p['state_key'] and r['time_budget_ms']==1000
-            assert (r['work_budget'],r['node_budget'],r['trial_depth'],r['call_budget'],r['cell_cap'])==(1000000,12000,24,1000,4096)
-            assert not r['retain_eager_prefix'] and not r['defer_eager_frontier']
-            assert r['runs']<r['work_budget']
-            assert [[canonical(a) if a is not None else a for a in aa] for aa in r['actions']]==p['reference']['actions']
-            assert r['value'][0]<=p['reference']['value']['hi']+1e-8 and r['value'][1]>=p['reference']['value']['lo']-1e-8
-            matrix=dict(actions=r['actions'],value=dict(zip(['lo','hi'],r['value'])),cells=[dict(zip(['lo','hi'],c)) for c in r['cells']])
-            if r['policies'] is not None:
-                for side in [0,1]:
-                    policy=r['policies'][side]
-                    assert min(policy)>=-1e-12
-                    assert abs(loss(matrix,side,policy)[1]-r['max_loss'][side])<1e-7
-                    assert loss(p['reference'],side,policy)[0]<=r['max_loss'][side]+1e-7
-            side=r['side']
-            certified=r['max_loss'] is not None and r['max_loss'][side]<=.005
-            assert certified or r['stop'] in ['NodeBudget','TimeBudget']
-            rows.append(dict(game=r['game'],decision=r['decision'],side=side,certified=certified,
-                max_loss=None if r['max_loss'] is None else r['max_loss'][side],
-                width=r['value'][1]-r['value'][0],milliseconds=r['milliseconds'],runs=r['runs'],stop=r['stop']))
+        rows=validate_rows(run['rows'])
         summaries.append(dict(repeat=repeat,arm=run['arm'],certified=sum(r['certified'] for r in rows),
             stops=dict(collections.Counter(r['stop'] for r in rows)),runs=sum(r['runs'] for r in rows),
             max_ms=max(r['milliseconds'] for r in rows),rows=rows))
