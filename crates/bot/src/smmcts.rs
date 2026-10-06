@@ -855,21 +855,14 @@ fn foe_may_preempt_heal(b: &Battle, dex: &Dex, side: usize, priority: i8) -> boo
     })
 }
 
-/// Is `def` immune to a move of `move_type`? Mirrors
-/// `pokemon.rs::run_move_immunity`: Ground is resolved by groundedness
-/// (gen-2 `isGrounded` = "Flying-types are airborne, nothing else"), every
-/// other type by the chart.
-///
-/// **Known hole, shared with the shipped rule:** Foresight's
-/// `onNegateImmunity` (`conditions.rs:765`) strips a Ghost's Normal/Fighting
-/// immunity and nothing here reads the volatile, so a Foresighted Ghost is
-/// called immune when it is not. Out of distribution rather than merely
-/// rare — `foresight` occurs 0 times in the 32-team meta pool and 0 times in
-/// the 570-battle corpus — but any mask that can meet it needs the check
-/// added here first, in ONE place, which is why this predicate exists at all
-/// instead of the old inline expression.
 fn type_immune_to(b: &Battle, dex: &Dex, move_type: TypeId, def: PokeId) -> bool {
     let d = b.poke(def);
+    if (move_type == dex.known_types.normal || move_type == dex.known_types.fighting)
+        && d.has_type(dex.known_types.ghost)
+        && dex.conds_id("foresight").is_some_and(|id| d.has_volatile(id))
+    {
+        return false;
+    }
     if move_type == dex.known_types.ground {
         d.has_type(dex.known_types.flying)
     } else {
