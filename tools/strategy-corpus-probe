@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import statistics
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/strategy-corpus-v1'
+corpus=root/'findings/policy-gap-v1/corpus.jsonl.gz'
+reference=root/'findings/policy-gap-v1/records.json.gz'
+loss=runpy.run_path(str(root/'tools/mixed-root-corpus'))['loss']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def canonical_action(action):
+    types='fighting flying poison ground rock bug ghost steel fire water grass electric psychic ice dragon dark'.split()
+    return 'move hiddenpower' if action in ['move hiddenpower'+t for t in types] else action
+
+
+def summarize(bundle):
+    old=json.loads(gzip.decompress(reference.read_bytes()))
+    selected={(p['game'],p['decision'],e['side']):(p,e)
+              for p in old for e in p['endpoints'] if len(e['actions'])>1}
+    assert len(selected)==93
+    assert [(r['game'],r['decision'],r['side']) for r in bundle['rows']]==list(selected)
+    assert bundle['corpus_sha256']==sha(corpus.read_bytes())
+    assert bundle['reference_sha256']==sha(reference.read_bytes())
+    rows=[]
+    for record in bundle['rows']:
+        key=record['game'],record['decision'],record['side']
+        p,e=selected[key]
+        side=record['side']
+        assert record['state_key']==p['state_key']
+        actions=list(map(canonical_action,record['actions']))
+        assert len(set(actions))==len(actions) and actions==e['actions']
+        assert record['budget_ms']==1000 and record['baseline']['iterations']>=32
+        expected_seed=2026111201 ^ ((record['game']*0x94d049bb133111eb)%(1<<64)) ^ record['decision']
+        assert record['baseline']['seed']==expected_seed
+        assert record['baseline']['milliseconds']>=1000
+        assert record['baseline']['choice'] in record['actions']
+        previous=[0.,1.]
+        total=0
+        previous_ms=0
+        for call in record['calls']:
+            assert call['milliseconds']>=previous_ms
+            assert previous_ms<1000
+            previous_ms=call['milliseconds']
+            total+=call['call_runs']
+            assert total==call['runs']
+            assert call['value'][0]>=previous[0]-1e-8 and call['value'][1]<=previous[1]+1e-8
+            assert call['value'][0]<=p['reference']['value']['hi']+1e-8
+            assert call['value'][1]>=p['reference']['value']['lo']-1e-8
+            previous=call['value']
+            cert=call['certificate']
+            if cert:
+                assert cert['max_loss']+1e-7>=loss(p['reference'],side,cert['policy'])[0]
+        last=record['calls'][-1]
+        matrix=copy.deepcopy(p['reference'])
+        if record['matrix']:
+            current=record['matrix']
+            assert [list(map(canonical_action,aa)) for aa in current['actions']]==matrix['actions']
+            for a,b in zip(matrix['cells']+[matrix['value']],current['cells']+[current['value']]):
+                a['lo']=max(a['lo'],b['lo']);a['hi']=min(a['hi'],b['hi'])
+                assert a['lo']<=a['hi']+1e-8
+        baseline=[float(a==record['baseline']['choice']) for a in record['actions']]
+        baseline_loss=loss(matrix,side,baseline)
+        cert=last['certificate']
+        if cert and record['matrix']:
+            own_bound=loss(record['matrix'],side,cert['policy'])
+            assert abs(own_bound[1]-cert['max_loss'])<1e-7
+        candidate_loss=loss(matrix,side,cert['policy']) if cert else None
+        if cert:
+            assert candidate_loss[0]<=cert['max_loss']+1e-7
+            candidate_loss[1]=min(candidate_loss[1],cert['max_loss'])
+        previously_certified=min([e['oracle']['loss']['hi']]+[a['loss']['hi'] for a in e['pure_actions']])<=.005
+        rows.append(dict(game=key[0],decision=key[1],side=side,baseline_loss=baseline_loss,
+            candidate_loss=candidate_loss,certified=cert is not None and cert['max_loss']<=.005,
+            newly_certified=cert is not None and cert['max_loss']<=.005 and not previously_certified,
+            improvement_proven=cert is not None and candidate_loss[1]<baseline_loss[0]-1e-8,
+            baseline_error_proven=baseline_loss[0]>.005,
+            baseline_certified=baseline_loss[1]<=.005,
+            stop=last['stop'],solver_ms=last['milliseconds'],baseline_ms=record['baseline']['milliseconds'],
+            iterations=record['baseline']['iterations'],runs=last['runs'],nodes=record['nodes']+record['closed']))
+    return dict(decisions=len(rows),positions=len({(r['game'],r['decision']) for r in rows}),
+        counts={k:sum(r[k] for r in rows) for k in ['certified','newly_certified','improvement_proven','baseline_error_proven','baseline_certified']},
+        stops=dict(collections.Counter(r['stop'] for r in rows)),
+        solver_ms=dict(median=statistics.median(r['solver_ms'] for r in rows),maximum=max(r['solver_ms'] for r in rows)),
+        rows=rows,scope='Every non-forced endpoint in the frozen 72-position corpus, without selecting by success. '
+            'Full-information search and each side-specific interval solver have separate 1000 ms budgets; '
+            'the last search chunk or solver trial may overrun and actual time is recorded. The solver uses '
+            'default scheduling, 12000 live nodes, 1000 engine runs per call and a 0.005 strategy-loss target. '
+            'Loss intervals fix only the first action and grant optimal continuation. Baseline actions are '
+            'conditional on one recorded search seed; these are not population-policy, hidden-information '
+            'or complete-game strength certificates. No production adoption.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_text())
+        print('strategy-corpus: verified all 93 endpoints, prefix identities, intervals and work accounting')
+        return
+    assert not archive.exists()
+    sources=sorted(list((root/'crates/bot/src').rglob('*.rs'))+list((root/'crates/engine/src').rglob('*.rs'))+
+                   [root/'crates/bot/examples/strategy_corpus.rs'])
+    hashes={str(p.relative_to(root)):sha(p.read_bytes()) for p in sources}
+    binary=root/'target/release/examples/strategy_corpus'
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if args.import_directory:
+        directory=args.import_directory
+        manifest=json.loads((directory/'manifest.json').read_text())
+        assert manifest['source_hashes']==hashes and manifest['binary_sha256']==sha(binary.read_bytes())
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','strategy_corpus'],cwd=root,env=env,check=True)
+        directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-strategy-corpus-'))
+        manifest=dict(source_hashes=hashes,binary_sha256=sha(binary.read_bytes()))
+        (directory/'manifest.json').write_text(json.dumps(manifest))
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress(corpus.read_bytes()))
+        print(directory,flush=True)
+        with (directory/'run.log').open('w') as log:
+            subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/'rows.jsonl'),'1000'],
+                           cwd=root,env=env,stdout=log,stderr=log,check=True)
+    assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
+    assert manifest['binary_sha256']==sha(binary.read_bytes())
+    bundle=dict(**manifest,corpus_sha256=sha(corpus.read_bytes()),reference_sha256=sha(reference.read_bytes()),
+                rows=[json.loads(line) for line in (directory/'rows.jsonl').read_text().splitlines()])
+    report=summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='rows'},indent=2))
+
+
+if __name__=='__main__': main()
