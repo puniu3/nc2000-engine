@@ -2507,5 +2507,102 @@
       "findings/claw-budget-v1/summary.json": "d1f9ee39ff38413a3195061709a1c2d10f4a1fb8b695d520f4457eae2eb15a85",
       "findings/claw-budget-v1/protocol.json": "bc2725082977ae460cf020894807a5085e44624d90273da5a29b10c9e2ffacee"
     }
+  },
+  "claw_time_trial": {
+    "state": "complete",
+    "protocol": {
+      "model_commit": "b231220",
+      "cost_check_commit": "a0f612a",
+      "games": 64,
+      "pairs": 32,
+      "base_seed": 2026102401,
+      "budget_ms": 500,
+      "batch": 64,
+      "threads": 4,
+      "max_turns": 500,
+      "pool": "data/belief-pool-v3/belief-pool.json",
+      "teams": "data/team-pool-v2/team-pool.json",
+      "candidate": "unseen_claw_root=true; all other RmConfig settings equal to baseline, c=0.4, UCB",
+      "budget_scope": "Per non-forced choice: search construction and search steps. Belief observation/sync, result recording and destruction excluded; total choose times are also retained.",
+      "null_control": {
+        "games": 8,
+        "base_seed": 2026102400,
+        "iterations": 3000,
+        "arms_identical": true
+      },
+      "identity_check": "Both configurations and both perspectives at every recorded decision in the frozen 24-game corpus; 128 fixed iterations, exact chosen action and RNG state against BlindAgent.",
+      "timing_validity": {
+        "maximum_mean_search_ms": 505,
+        "maximum_p99_search_ms": 520
+      },
+      "decision_rule": "Exploratory fixed-size screen only. A lower paired 95% score bound above 0.5 warrants a separately prespecified fresh confirmation; otherwise do not claim superiority or extend this sample. No adoption from this 64-game screen.",
+      "scope": "Game-derived model correction; native timed comparison against the local default search, not a proof of optimality or a deployed-binary/human comparison. Wall-clock runs are not exactly reproducible even under common game and agent seeds."
+    },
+    "result": {
+      "games": 64,
+      "wins": 29,
+      "losses": 35,
+      "ties": 0,
+      "caps": 0,
+      "score": 0.453125,
+      "ci95": [
+        0.3185052865925528,
+        0.5877447134074472
+      ],
+      "timing_valid": true,
+      "arms": [
+        {
+          "searches": 1423,
+          "active_claw_searches": 109,
+          "mean_search_ms": 501.01049332888266,
+          "p99_search_ms": 502.554875,
+          "max_search_ms": 503.085042,
+          "iterations": 27397376,
+          "mean_total_choose_ms": 481.31551780634277
+        },
+        {
+          "searches": 1429,
+          "active_claw_searches": 111,
+          "mean_search_ms": 501.0222270419874,
+          "p99_search_ms": 502.616792,
+          "max_search_ms": 503.345375,
+          "iterations": 27448064,
+          "mean_total_choose_ms": 484.00932855472973
+        }
+      ],
+      "warrants_fresh_confirmation": false,
+      "default_enabled": false,
+      "scope": "Prespecified 64-game exploratory timed comparison, 32 side-swap blocks, 500 ms per non-forced search including construction but excluding observation/sync and destruction. Total choose times also recorded. Common seeds do not make wall-clock runs exactly reproducible. The identical-agent null is a separate fixed-3000-iteration test. This is a local default comparison, not deployed binary superiority, human calibration or a game-optimality certificate. No adoption from this screen."
+    },
+    "checks": {
+      "harness_commit": "09edadf",
+      "identity_checkpoints": 2106,
+      "identity_iterations": 128,
+      "identity_both_configurations": true,
+      "fixed_iteration_null_games": 8,
+      "fixed_iteration_null_pair_scores": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "workspace_all_targets": "passed",
+      "complete_games": 64,
+      "paired_arithmetic_and_timings": "verified",
+      "negative_controls": [
+        "wrong_seed",
+        "invalid_score",
+        "invalid_deadline",
+        "missing_game"
+      ],
+      "native_wall_clock_match_replay": false,
+      "decision": "No fresh confirmation or default adoption; no additional games appended to this screen."
+    },
+    "artifacts": {
+      "findings/claw-time-v1/prerequisites.json.gz": "369052e3cab79894b6583e9a5f114954cd75cfa97341a8d152733547cbfecd23",
+      "findings/claw-time-v1/records.json.gz": "a317175847d93b9ed88b731619a48b1141c6a3866a5c8823ae139b96fc76ac48",
+      "findings/claw-time-v1/summary.json": "a4cb20baf30efe8c2277086a19e55fb11773a9a8a5dd725b6063010315328698",
+      "findings/claw-time-v1/checks.json": "3fd952a8190a552c714e79ccf2f318dcf2a33b2bcfa72ba5e92a92943afb2aa4"
+    }
   }
 }

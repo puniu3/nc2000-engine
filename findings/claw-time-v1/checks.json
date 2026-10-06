@@ -1,0 +1,24 @@
+{
+  "harness_commit": "09edadf",
+  "identity_checkpoints": 2106,
+  "identity_iterations": 128,
+  "identity_both_configurations": true,
+  "fixed_iteration_null_games": 8,
+  "fixed_iteration_null_pair_scores": [
+    0.5,
+    0.5,
+    0.5,
+    0.5
+  ],
+  "workspace_all_targets": "passed",
+  "complete_games": 64,
+  "paired_arithmetic_and_timings": "verified",
+  "negative_controls": [
+    "wrong_seed",
+    "invalid_score",
+    "invalid_deadline",
+    "missing_game"
+  ],
+  "native_wall_clock_match_replay": false,
+  "decision": "No fresh confirmation or default adoption; no additional games appended to this screen."
+}
