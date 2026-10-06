@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import statistics
+import subprocess
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/claw-budget-v1'
+
+
+def verify(result,protocol):
+    corpus=[json.loads(line) for line in gzip.decompress((root/protocol['corpus']).read_bytes()).splitlines()]
+    keys={(g['game'],i):d['key'] for g in corpus for i,d in enumerate(g['decisions'])}
+    rows=result['rows']
+    assert len(rows)==56 and sum(r['active_claw'] for r in rows)==44
+    assert len({(r['game'],r['decision'],r['side']) for r in rows})==56
+    assert result['available']==[734,44]
+    assert result['iterations']==protocol['fixed_iterations']==27000
+    assert result['fixed_repeats']==protocol['fixed_repeats']==3
+    assert result['timed_batch']==protocol['timed_batch']==64
+    for row in rows:
+        assert row['key']==keys[row['game'],row['decision']]
+        assert row['side'] in [0,1]
+        assert row['seed']==0x2026102300 ^ (int(row['key'])&((1<<64)-1)) ^ row['side']
+        assert len(row['fixed'])==6 and len(row['timed'])==2
+        assert {(r['enabled'],r['repeat']) for r in row['fixed']}=={(e,k) for e in [False,True] for k in range(3)}
+        assert {r['enabled'] for r in row['timed']}=={False,True}
+        budget=statistics.median(r['elapsed_ms'] for r in row['fixed'] if not r['enabled'])
+        for enabled in [False,True]:
+            fixed=[r for r in row['fixed'] if r['enabled']==enabled]
+            assert all(r['snapshot']==fixed[0]['snapshot'] for r in fixed)
+            for r in fixed:
+                assert r['snapshot']['iterations']==27000 and r['elapsed_ms']>0
+            timed=next(r for r in row['timed'] if r['enabled']==enabled)
+            assert timed['budget_ms']==budget
+            assert budget<=timed['elapsed_ms']<=budget+timed['last_batch_ms']+1e-9
+            assert timed['snapshot']['iterations']>0 and timed['snapshot']['iterations']%64==0
+        for r in row['fixed']+row['timed']:
+            snap=r['snapshot'];assert sum(snap['visits'])==snap['iterations']
+            assert len(snap['visits'])==len(snap['means']) and snap['nodes']>0
+            assert all(0<=v<=1 for v in snap['means']) and snap['best']
+    groups=[]
+    for label,selected in [('all',rows),('active_claw',[r for r in rows if r['active_claw']]),('controls',[r for r in rows if not r['active_claw']])]:
+        times=[[],[]];nodes=[0,0];iters=[0,0];fixed_changes=timed_changes=0;budget_changes=[0,0];overshoots=[]
+        for row in selected:
+            fixed=[];timed=[]
+            for enabled in [False,True]:
+                f=[r for r in row['fixed'] if r['enabled']==enabled]
+                t=next(r for r in row['timed'] if r['enabled']==enabled)
+                times[enabled].append(statistics.median(r['elapsed_ms'] for r in f))
+                nodes[enabled]+=f[0]['snapshot']['nodes']
+                iters[enabled]+=t['snapshot']['iterations']
+                fixed.append(f[0]['snapshot']['best']);timed.append(t['snapshot']['best'])
+                budget_changes[enabled]+=fixed[-1]!=timed[-1]
+                overshoots.append((t['elapsed_ms']-t['budget_ms'])/t['budget_ms'])
+            fixed_changes+=fixed[0]!=fixed[1];timed_changes+=timed[0]!=timed[1]
+        groups.append(dict(group=label,decisions=len(selected),idle_decisions=sum(r['idle'] for r in selected),
+            fixed_choice_changes=fixed_changes,timed_choice_changes=timed_changes,
+            fixed_to_timed_changes=budget_changes,fixed_node_counts=nodes,node_ratio=nodes[1]/nodes[0],
+            median_fixed_ms_sums=list(map(sum,times)),aggregate_fixed_time_ratio=sum(times[1])/sum(times[0]),
+            median_case_time_ratio=statistics.median(b/a for a,b in zip(*times)),timed_iteration_counts=iters,
+            timed_iteration_ratio=iters[1]/iters[0],maximum_deadline_overshoot_fraction=max(overshoots)))
+    screen=protocol['next_stage_screen']
+    proceed=groups[0]['aggregate_fixed_time_ratio']<=screen['maximum_aggregate_fixed_time_ratio'] and groups[1]['fixed_choice_changes']>=screen['minimum_changed_fixed_choices_among_active_claw_cases']
+    return dict(groups=groups,next_stage_screen_passed=proceed,default_enabled=False,strength_demonstrated=False,
+        scope='All 44 actual active-Quick-Claw perspective decisions in the frozen selfplay corpus plus 12 hash-selected '
+        'controls. One fresh fixed search seed per decision, three sequential fixed-budget repeats, one timed run '
+        'per arm. Timed budgets equal the per-case median baseline construction and search time, excluding belief '
+        'construction, serialization and destruction. Deadlines are checked every 64 iterations and overshoots '
+        'are recorded. This is a shared-host native cost and behavioral screen, not iPad timing, game-value '
+        'certification, a full-game strength trial, or a comparison to the deployed binary.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',type=Path);args=parser.parse_args()
+    protocol=json.loads((archive/'protocol.json').read_bytes())
+    if args.record:
+        assert not (archive/'records.json.gz').exists()
+        result=json.loads(args.record.read_bytes());summary=verify(result,protocol)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','Cargo.lock','Cargo.toml','data/belief-pool-v3/belief-pool.json'],cwd=root,text=True).splitlines()
+        paths+=['crates/bot/examples/claw_information_budget.rs','tools/claw-budget-probe','findings/claw-budget-v1/protocol.json',protocol['corpus']]
+        bundle=dict(result=result,protocol=protocol,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,sort_keys=True).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert bundle['protocol']==protocol
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in bundle['hashes'].items())
+    summary=verify(bundle['result'],protocol)
+    assert summary==json.loads((archive/'summary.json').read_bytes())
+    for corruption in ['missing_case','seed','repeat','deadline']:
+        bad=copy.deepcopy(bundle['result'])
+        if corruption=='missing_case':bad['rows'].pop()
+        elif corruption=='seed':bad['rows'][0]['seed']+=1
+        elif corruption=='repeat':bad['rows'][0]['fixed'][0]['snapshot']['nodes']+=1
+        else:bad['rows'][0]['timed'][0]['elapsed_ms']=0
+        try:verify(bad,protocol)
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps(summary,indent=2))
+
+
+if __name__=='__main__':main()
