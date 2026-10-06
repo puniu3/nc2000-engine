@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import math
+from pathlib import Path
+import statistics
+import subprocess
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/claw-time-v1'
+
+
+def verify(result,protocol,null=False):
+    expected=protocol['null_control'] if null else protocol
+    assert result['null_control']==null and result['games']==expected['games']
+    assert result['base_seed']==expected['base_seed'] and result['batch']==64
+    assert result['budget_ms']==(0 if null else 500)
+    assert result['fixed_iterations']==(3000 if null else 0)
+    scores=result['game_scores'];assert len(scores)==result['games']
+    assert all(s in [0,.5,1] for s in scores)
+    assert [scores.count(s) for s in [1,0,.5]]==[result['wins'],result['losses'],result['ties']]
+    assert 0<=result['caps']<=result['ties']
+    pairs=[(a+b)/2 for a,b in zip(scores[::2],scores[1::2],strict=True)]
+    assert pairs==result['pair_scores'] and len(pairs)==result['pairs']
+    score=statistics.mean(pairs);half=1.96*statistics.stdev(pairs)/math.sqrt(len(pairs))
+    assert score==result['score'] and abs(half-result['ci95_halfwidth'])<1e-12
+    if null:assert all(p==.5 for p in pairs)
+    arms=[]
+    assert len(result['decisions'])==2
+    for i,records in enumerate(result['decisions']):
+        assert records and len(records)<=result['moves'][i]
+        assert sum(r['preview'] for r in records)==result['games']
+        for r in records:
+            assert r['iterations']>0 and r['elapsed_ns']>0
+            if null:assert r['iterations']==3000
+            else:
+                assert r['iterations']%64==0 and r['elapsed_ns']>=500_000_000
+                assert r['elapsed_ns']-500_000_000<=r['last_batch_ns']
+        ordered=sorted(r['elapsed_ns']/1e6 for r in records)
+        arms.append(dict(searches=len(records),active_claw_searches=sum(r['active_claw'] for r in records),
+            mean_search_ms=statistics.mean(ordered),p99_search_ms=ordered[math.ceil(len(ordered)*.99)-1],
+            max_search_ms=max(ordered),iterations=sum(r['iterations'] for r in records),mean_total_choose_ms=result['mean_think_ms'][i]))
+    timing_valid=null or all(a['mean_search_ms']<=protocol['timing_validity']['maximum_mean_search_ms'] and a['p99_search_ms']<=protocol['timing_validity']['maximum_p99_search_ms'] for a in arms)
+    interval=[score-half,score+half]
+    return dict(games=result['games'],wins=result['wins'],losses=result['losses'],ties=result['ties'],caps=result['caps'],
+        score=score,ci95=interval,timing_valid=timing_valid,arms=arms,
+        warrants_fresh_confirmation=not null and timing_valid and interval[0]>.5,default_enabled=False,
+        scope='Prespecified 64-game exploratory timed comparison, 32 side-swap blocks, 500 ms per non-forced '
+        'search including construction but excluding observation/sync and destruction. Total choose times '
+        'also recorded. Common seeds do not make wall-clock runs exactly reproducible. The identical-agent '
+        'null is a separate fixed-3000-iteration test. This is a local default comparison, not deployed '
+        'binary superiority, human calibration or a game-optimality certificate. No adoption from this screen.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--prepare',nargs=2,type=Path);parser.add_argument('--record',type=Path);args=parser.parse_args()
+    protocol=json.loads((archive/'protocol.json').read_bytes())
+    if args.prepare:
+        assert not (archive/'prerequisites.json.gz').exists()
+        identity,null=[json.loads(p.read_bytes()) for p in args.prepare]
+        verify(null,protocol,True)
+        assert identity==dict(checkpoints=2106,previews=96,iterations=128,candidate_and_baseline=True,choice_and_rng_identical=True)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','Cargo.lock','Cargo.toml'],cwd=root,text=True).splitlines()
+        paths+=['crates/bot/examples/claw_time_duel.rs','tools/claw-time-probe','findings/claw-time-v1/protocol.json',protocol['pool'],protocol['teams'],'findings/policy-gap-v1/corpus.jsonl.gz']
+        bundle=dict(identity=identity,null=null,protocol=protocol,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        (archive/'prerequisites.json.gz').write_bytes(gzip.compress(json.dumps(bundle,sort_keys=True).encode(),mtime=0))
+    prereq=json.loads(gzip.decompress((archive/'prerequisites.json.gz').read_bytes()))
+    assert prereq['protocol']==protocol
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in prereq['hashes'].items())
+    verify(prereq['null'],protocol,True)
+    if args.record:
+        assert not (archive/'records.json.gz').exists()
+        result=json.loads(args.record.read_bytes());summary=verify(result,protocol)
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(result,sort_keys=True).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    if not (archive/'records.json.gz').exists():
+        print(json.dumps(dict(identity=prereq['identity'],null=verify(prereq['null'],protocol,True),trial_result_recorded=False),indent=2));return
+    result=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    summary=verify(result,protocol);assert summary==json.loads((archive/'summary.json').read_bytes())
+    for corruption in ['seed','score','deadline','missing_game']:
+        bad=copy.deepcopy(result)
+        if corruption=='seed':bad['base_seed']+=1
+        elif corruption=='score':bad['game_scores'][0]=.25
+        elif corruption=='deadline':bad['decisions'][0][0]['elapsed_ns']=1
+        else:bad['game_scores'].pop()
+        try:verify(bad,protocol)
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps(summary,indent=2))
+
+
+if __name__=='__main__':main()

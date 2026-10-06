@@ -1037,6 +1037,10 @@ impl BlindSearch {
         self.done
     }
 
+    pub fn search_rng_state(&self) -> u64 {
+        self.rng.0
+    }
+
     /// The global root's actions — the side's public legal choice list.
     pub fn actions(&self) -> &[SearchChoice] {
         &self.my_acts
