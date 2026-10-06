@@ -2,12 +2,10 @@
 //! equilibrium over the meta matchup matrix, plus the agents that consume
 //! and probe it.
 //!
-//! Preview action space: NC2000 previews are ordered picks of 3 from 6
-//! (120 per side), but bench order only affects which display slot a random
-//! drag-in (Roar/Whirlwind) resolves to — uniform over the eligible bench
-//! either way — so win probability is invariant under bench permutation.
-//! The baked space is therefore the 60 canonical actions
-//! (20 subsets × 3 leads, bench ascending), a 4x cell saving.
+//! The baked space uses 60 canonical actions (20 subsets × 3 leads,
+//! bench ascending) from the 120 ordered picks. This reduction is not an
+//! equivalence for arbitrary teams: Beat Up reads party order, and move
+//! calling or copying can make it available later.
 //!
 //! Per meta-pool pair (row team a, column team b) a `PairTable` records the
 //! estimated preview payoff matrix (side-a win rate per joint preview), the

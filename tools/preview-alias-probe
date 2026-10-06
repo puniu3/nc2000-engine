@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import itertools
+import json
+from pathlib import Path
+import statistics
+import subprocess
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/preview-alias-v1'
+
+
+def verify(result, protocol):
+    teams = json.loads((root / protocol['catalog']).read_bytes())['teams']
+    assert result['iterations'] == protocol['fixed_iterations'] == 27000
+    assert len(result['rows']) == len(teams) == 24
+    times = [[], []]
+    nodes = [0, 0]
+    changes = removed = 0
+    for i, row in enumerate(result['rows']):
+        assert row['index'] == i and row['side'] == i % 2
+        assert row['own'] == teams[i]['id'] and row['opponent'] == teams[(i + 1) % 24]['id']
+        assert row['seed'] == 0x2026102500 ^ i
+        assert 0 <= int(row['state_key']) < 2**128
+        actions = [list(t) for t in itertools.permutations(range(1, 7), 3)
+                   if sum(teams[i]['sets'][j-1]['level'] for j in t) <= 155]
+        assert row['actions'] == actions
+        runs = row['runs']
+        assert len(runs) == 6
+        assert {(r['enabled'], r['repeat']) for r in runs} == {(e, k) for e in [False, True] for k in range(3)}
+        best = []
+        for enabled in [False, True]:
+            arm = [r for r in runs if r['enabled'] == enabled]
+            deterministic = lambda r: {k: v for k, v in r.items() if k not in ('elapsed_ms', 'repeat')}
+            assert all(deterministic(r) == deterministic(arm[0]) for r in arm)
+            for r in arm:
+                assert r['elapsed_ms'] > 0 and r['nodes'] > 0
+                assert r['removed'] == (len(actions) // 2 if enabled else 0)
+                assert len(r['visits']) == len(r['means']) == len(actions)
+                assert sum(r['visits']) == 27000 and all(n >= 0 for n in r['visits'])
+                assert all(0 <= m <= 1 for m in r['means'])
+                selected = [int(n) for n in r['best'].removeprefix('team ').split(',')]
+                assert selected in actions
+                assert r['best_canonical'] == [selected[0], *sorted(selected[1:])]
+                if enabled:
+                    assert selected[1] < selected[2]
+                    assert all(n == 0 for a, n in zip(actions, r['visits']) if a[1] > a[2])
+            best.append(arm[0]['best_canonical'])
+            times[enabled].append(statistics.median(r['elapsed_ms'] for r in arm))
+            nodes[enabled] += arm[0]['nodes']
+        changes += best[0] != best[1]
+        removed += len(actions) // 2
+    ratio = sum(times[1]) / sum(times[0])
+    gate = protocol['next_stage_screen']
+    return dict(previews=24, removed_action_indices=removed, semantic_choice_changes=changes,
+                median_time_sums_ms=list(map(sum, times)), aggregate_time_ratio=ratio,
+                median_case_time_ratio=statistics.median(b/a for a, b in zip(*times)),
+                nodes=nodes, node_ratio=nodes[1]/nodes[0],
+                next_stage_screen_passed=ratio <= gate['maximum_aggregate_time_ratio'] and changes >= gate['minimum_semantic_choice_changes'],
+                default_enabled=False, strength_demonstrated=False,
+                scope='Own root only; 24 catalog matchups, one seed each, three sequential timing repeats. '
+                      'Canonical choice changes exclude bench-order aliases. No optimality, whole-game strength, '
+                      'deployed-binary comparison or iPad performance claim.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', type=Path)
+    args = parser.parse_args()
+    protocol = json.loads((archive / 'protocol.json').read_bytes())
+    if args.record:
+        assert not (archive / 'records.json.gz').exists()
+        result = json.loads(args.record.read_bytes())
+        summary = verify(result, protocol)
+        paths = subprocess.check_output(['git', 'ls-files', 'crates/engine', 'crates/bot/src', 'Cargo.toml', 'Cargo.lock'], cwd=root, text=True).splitlines()
+        paths += ['crates/bot/examples/preview_alias_budget.rs', 'crates/bot/tests/preview_aliases.rs',
+                  'tools/preview-alias-probe', 'findings/preview-alias-v1/protocol.json', 'findings/preview-alias-v1/audit.json', protocol['catalog'], protocol['prior']]
+        bundle = dict(result=result, protocol=protocol, hashes={p: hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, sort_keys=True).encode(), mtime=0))
+        (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    assert bundle['protocol'] == protocol
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest() == h for p, h in bundle['hashes'].items())
+    assert verify(bundle['result'], protocol) == json.loads((archive / 'summary.json').read_bytes())
+    for corruption in ['missing', 'seed', 'repeat', 'masked_visit', 'canonical']:
+        bad = copy.deepcopy(bundle['result'])
+        candidate = next(r for r in bad['rows'][0]['runs'] if r['enabled'])
+        if corruption == 'missing': bad['rows'].pop()
+        elif corruption == 'seed': bad['rows'][0]['seed'] += 1
+        elif corruption == 'repeat': candidate['nodes'] += 1
+        elif corruption == 'masked_visit': candidate['visits'][1] += 1
+        else: candidate['best_canonical'][1] = 0
+        try: verify(bad, protocol)
+        except AssertionError: pass
+        else: raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps(verify(bundle['result'], protocol), indent=2))
+
+
+if __name__ == '__main__':
+    main()

@@ -1089,6 +1089,35 @@ impl BlindSearch {
         }
     }
 
+    pub fn prune_preview_aliases(&mut self, dex: &Dex) -> usize {
+        if !self.is_preview() || self.base.sides[self.side].roster.iter().any(|p| {
+            p.base_move_slots.iter().chain(p.move_slots.iter()).any(|m| {
+                matches!(dex.moves.key(m.id),
+                    "beatup" | "metronome" | "mimic" | "mirrormove" | "sketch" | "transform")
+            })
+        }) {
+            return 0;
+        }
+        assert_eq!(self.done, 0, "preview aliases must be pruned before search");
+        let mut allowed = self.my_mask.clone().unwrap_or_else(|| vec![true; self.my_acts.len()]);
+        let mut seen = Vec::new();
+        let mut removed = 0;
+        for (i, action) in self.my_acts.iter().enumerate() {
+            if !allowed[i] { continue; }
+            let SearchChoice::Team(mut triple) = *action else { continue };
+            if triple[2] == 0 { continue; }
+            triple[1..].sort_unstable();
+            if seen.contains(&triple) {
+                allowed[i] = false;
+                removed += 1;
+            } else {
+                seen.push(triple);
+            }
+        }
+        if removed > 0 { self.mask_actions(&allowed); }
+        removed
+    }
+
     pub fn prune_rest_aliases(&mut self, dex: &Dex) -> usize {
         use nc2000_engine::state::{Status, DK};
         let Some(id) = self.base.active_id(self.side) else { return 0 };
