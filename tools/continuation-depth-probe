@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import hashlib
+import json
+import math
+from pathlib import Path
+import subprocess
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/continuation-depth-v1'
+
+
+def mode_difference(types):
+    modes={t['counts'].index(max(t['counts'])) for t in types if t['counts'].count(max(t['counts']))==1}
+    return len(modes)>1
+
+
+def policy(stats):
+    n,w=stats['visits'],stats['rewards']
+    assert len(n)==len(w)>1 and all(isinstance(v,int) and v>=0 for v in n)
+    assert all(0<=v<=count+1e-8 for count,v in zip(n,w))
+    untried=tuple(i for i,count in enumerate(n) if count==0)
+    if untried:return untried
+    total=sum(n)
+    scores=[value/count+.4*math.sqrt(math.log(total)/count) for count,value in zip(n,w)]
+    return (max(range(len(n)),key=lambda i:scores[i]),)
+
+
+def calibration():
+    a=dict(visits=[32,32],rewards=[24.,8.])
+    b=dict(visits=[32,32],rewards=[8.,24.])
+    out={}
+    for name,counts,stats in [
+        ('known_common_policy',[[64,0],[64,0]],[a,a]),
+        ('deliberate_hidden_conditioning',[[64,0],[0,64]],[a,b]),
+        ('conditioning_removed',[[64,0],[64,0]],[a,a]),
+        ('time_varying_common_policy',[[64,0],[0,64]],[a,a]),
+    ]:
+        out[name]=dict(retrospective_mode_difference=mode_difference([dict(counts=c) for c in counts]),frozen_policy_difference=len({policy(s) for s in stats})>1)
+    assert out['time_varying_common_policy']==dict(retrospective_mode_difference=True,frozen_policy_difference=False)
+    assert out['deliberate_hidden_conditioning']['frozen_policy_difference']
+    assert not out['conditioning_removed']['frozen_policy_difference']
+    return out
+
+
+def inspect_group(g,shared):
+    view=g['view'];k=len(g['actions'])
+    assert hashlib.sha256(json.dumps(view,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()==g['view_hash']
+    assert g['depth']==len(view['history'])>=1
+    assert [line for h in view['history'] for line in h['log']]==view['log']
+    assert view['own_choice']==view['history'][0]['action']
+    assert g['actions']==view['actions'] and k>1
+    counts={t['selection_mask']:t['counts'] for t in g['types']}
+    assert len(counts)==len(g['types'])>1
+    nodes={n['node']:n for n in g['nodes']}
+    assert len(nodes)==len(g['nodes'])
+    for n in nodes.values():assert len(n['visits'])==k;policy(n)
+    assert (g['shared_policy'] is not None)==(shared and g['depth']==1)
+    common=policy(g['shared_policy']) if g['shared_policy'] else None
+    totals=collections.defaultdict(lambda:[0]*k)
+    typed=[]
+    for load in g['loadouts']:
+        assert len(load['signature'])==64
+        assert len({t['selection_mask'] for t in load['types']})==len(load['types'])
+        for t in load['types']:
+            mask=t['selection_mask'];assert mask.bit_count()==3
+            assert len(t['counts'])==k and sum(t['counts'])>0 and all(isinstance(n,int) and n>=0 for n in t['counts'])
+            totals[mask]=[a+b for a,b in zip(totals[mask],t['counts'])]
+            assert t['nodes'] and len(set(t['nodes']))==len(t['nodes'])
+        for threshold in [16,32,64]:
+            types=[t for t in load['types'] if sum(t['counts'])>=threshold]
+            if len(types)<2:continue
+            supports={common or policy(nodes[node]) for t in types for node in t['nodes']}
+            typed.append((threshold,mode_difference(types),len(supports)>1,load['signature'],types))
+    assert dict(totals)==counts and typed
+    return typed
+
+
+def verify(result,prior,first_summary):
+    rows=result['rows']
+    assert len(rows)==48 and {(r['game'],r['shared_first']) for r in rows}=={(g,s) for g in range(24) for s in [False,True]}
+    metrics=collections.defaultdict(lambda:collections.defaultdict(lambda:dict(choices=0,eligible=0,views=0,multiple_selections=0,retained=0,strata={str(t):dict(supported=0,retrospective_modes_differ=0,frozen_policies_differ=0) for t in [16,32,64]})))
+    witness=[]
+    for r in rows:
+        old=next(p for p in prior if p['game']==r['game'])
+        assert all(r[k]==old[k] for k in ['game','decision','side','key','seed'])
+        name='shared' if r['shared_first'] else 'baseline'
+        expected=next(m['snapshot'] for m in old['measurements'] if m['mode']==name)
+        assert r['snapshot']==expected and r['baseline_identical'] and r['iterations']==27000
+        assert r['shadow_checks']==sum(v[0] for v in r['depths'].values())
+        assert 0<r['leaf_checks']<=27000
+        retained=collections.Counter()
+        for d,counts in r['depths'].items():
+            assert int(d)>0 and len(counts)==5 and all(isinstance(c,int) and c>=0 for c in counts)
+            assert counts==sorted(counts,reverse=True)
+            m=metrics[name][d]
+            for k,c in zip(['choices','eligible','views','multiple_selections','retained'],counts):m[k]+=c
+        for g in r['groups']:
+            retained[str(g['depth'])]+=1
+            for threshold,mode_diff,policy_diff,signature,types in inspect_group(g,r['shared_first']):
+                m=metrics[name][str(g['depth'])]['strata'][str(threshold)]
+                m['supported']+=1;m['retrospective_modes_differ']+=mode_diff;m['frozen_policies_differ']+=policy_diff
+                if threshold==32 and policy_diff and g['depth']>1:
+                    witness.append(dict(mode=name,game=r['game'],decision=r['decision'],side=r['side'],depth=g['depth'],view_hash=g['view_hash'],loadout_signature=signature,
+                        minimum_type_samples=min(sum(t['counts']) for t in types),history=g['view']['history'],actions=g['actions'],types=types,
+                        policies={str(n['node']):list(policy(n)) for n in g['nodes']}))
+        assert all(retained[d]==v[4] for d,v in r['depths'].items())
+    for t,old in first_summary['same_loadout_strata'].items():
+        now=metrics['baseline']['1']['strata'][t]
+        assert now['supported']==old['supported'] and now['retrospective_modes_differ']==old['different_unique_modes']
+    assert all(v['frozen_policies_differ']==0 for v in metrics['shared']['1']['strata'].values())
+    witness.sort(key=lambda w:(w['depth'],w['minimum_type_samples']),reverse=True)
+    return dict(roots=24,arms=2,iterations=27000,baseline_snapshot_identities=48,
+                shadow_checks=sum(r['shadow_checks'] for r in rows),leaf_checks=sum(r['leaf_checks'] for r in rows),
+                depths={mode:dict(sorted(ds.items(),key=lambda p:int(p[0]))) for mode,ds in metrics.items()},
+                calibration=calibration(),witnesses=witness[:3],strength_demonstrated=False,production_changed=False,
+                scope='Same 24 ordinary roots and search seeds as the first-continuation census and policy cost screen. '
+                      'Trace every tree choice, excluding rollouts. Replay each chosen joint action on a separate log-enabled '
+                      'battle and check exact physical state at subsequent choices and leaves. History remembers each own '
+                      'action and all new protocol lines at every decision boundary. Views also retain own complete state, '
+                      'field, opponent counters and hidden Quick Claw coin; loadout strata fix species, items, moves and stats. '
+                      'Depth counts joint decision transitions, not turns. Retain only views with at least two selected sets '
+                      'having 16 observations each within a loadout; the 32/64 thresholds are nested. Frozen UCB distributions '
+                      'come from final node visits/rewards reconstructed by trace and per-iteration backpropagation, or the '
+                      'actual shared first-continuation bandit. Uniform untried actions or a deterministic UCB maximum define '
+                      'each distribution. Comparisons concern retained encountered states, not full reachability or all '
+                      'information sets. Retrospective modes can differ under a common changing policy and must not quantify '
+                      'hidden-information dependence. Frozen policy differences establish structural dependence within '
+                      'matched histories, not value loss, optimality gaps, strength, or that more sharing is an improvement.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',type=Path);args=parser.parse_args()
+    prior=json.loads(gzip.decompress((root/'findings/continuation-policy-v1/records.json.gz').read_bytes()))['result']['rows']
+    first=json.loads((root/'findings/continuation-information-v1/summary.json').read_bytes())
+    if args.record:
+        assert not (archive/'records.json.gz').exists()
+        result=json.loads(args.record.read_bytes());summary=verify(result,prior,first)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','crates/conformance/src','Cargo.toml','Cargo.lock'],cwd=root,text=True).splitlines()
+        paths+=['crates/bot/examples/continuation_depth.rs','tools/continuation-depth-probe',
+                'findings/continuation-policy-v1/records.json.gz','findings/continuation-information-v1/summary.json',
+                'findings/policy-gap-v1/corpus.jsonl.gz','data/gen2stadium2.json','data/belief-pool-v3/belief-pool.json','data/learnsets-gen2.json']
+        bundle=dict(result=result,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        archive.mkdir(parents=True,exist_ok=True)
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,ensure_ascii=False,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in bundle['hashes'].items())
+    summary=verify(bundle['result'],prior,first)
+    assert summary==json.loads((archive/'summary.json').read_bytes())
+    row=bundle['result']['rows'][0];group=row['groups'][0]
+    for corruption in ['history','count','node_reward','shared_flag']:
+        bad=copy.deepcopy(group)
+        if corruption=='history':bad['view']['history'][0]['action']='invalid'
+        elif corruption=='count':bad['loadouts'][0]['types'][0]['counts'][0]+=1
+        elif corruption=='node_reward':bad['nodes'][0]['rewards'][0]=-1
+        else:bad['shared_policy']=dict(visits=[1,1],rewards=[0,0])
+        try:inspect_group(bad,row['shared_first'])
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['witnesses','scope']},indent=2))
+
+
+if __name__=='__main__':main()

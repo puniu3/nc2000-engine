@@ -1,0 +1,18 @@
+{
+  "example_compiles": true,
+  "historical_search_snapshots_reproduced": 48,
+  "shadow_state_checks": 2641957,
+  "shadow_leaf_checks": 1215297,
+  "root_node_visits_and_rewards_reconstruct_global_statistics": true,
+  "first_depth_counts_match_prior_screen": true,
+  "first_depth_retrospective_strata_match_prior_census": true,
+  "shared_first_depth_frozen_policy_differences": 0,
+  "synthetic_calibration_cases": 4,
+  "negative_controls": [
+    "history",
+    "count",
+    "node_reward",
+    "shared_flag"
+  ],
+  "production_changed": false
+}
