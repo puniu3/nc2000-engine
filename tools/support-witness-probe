@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/support-witness-v1'
+verifier=runpy.run_path(str(root/'tools/policy-witness-probe'))
+inputs=['findings/policy-gap-v1/corpus.jsonl.gz','findings/policy-pair-ceiling-v1/summary.json',
+        'findings/finite-witness-refinement-v1/records.json.gz','data/gen2stadium2.json']
+
+
+def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+
+def specs():
+    base=dict(game=12,decision=17,target_side=0,first_choice='move explosion',policy_side=0,
+        priority=['move explosion','move crunch','switch 3'],rest_at_percent=None,horizon=6,
+        work_budget=200000,cell_cap=4096,guarded_keys=True,support_certificate=True)
+    return {'explosion':base,
+        'crosschop-thunder':dict(base,game=19,decision=12,target_side=1,policy_side=1,
+            first_choice='move crosschop',priority=['move crosschop','move thunder','switch 3']),
+        'psychic-upper':dict(base,first_choice='move psychic',policy_side=1,priority=['move earthquake']),
+        **{'reply-'+move:dict(base,target_side=1,first_choice='move '+move)
+           for move in ['bodyslam','earthquake','curse','selfdestruct']}}
+
+
+def support_bounds(record):
+    values=[]
+    for node in record['nodes']:
+        if node['kind']=='terminal':
+            assert node['bounds'][0]==node['bounds'][1] and node['bounds'][0] in [0,.5,1]
+            value=node['bounds']
+        elif node['kind']=='decision':
+            branches=[]
+            for branch in node['branches']:
+                if branch['complete_enumeration']:
+                    assert branch['pending_scripts']==0 and branch['pending']==0 and branch['runs']>0
+                    children=[values[c['node']] for c in branch['children']]
+                    assert children
+                    branches.append([min(c[0] for c in children),max(c[1] for c in children)])
+                else:branches.append([0,1])
+            op=max if node['maximizing'] else min
+            value=[op(b[k] for b in branches) for k in [0,1]]
+        else:value=[0,1]
+        values.append(value)
+    return values[record['root']]
+
+
+def summarize(bundle):
+    assert bundle['input_sha256']=={p:sha((root/p).read_bytes()) for p in inputs}
+    previous=json.loads(gzip.decompress((root/inputs[2]).read_bytes()))
+    assert sorted(p for p,h in previous['source_hashes'].items() if bundle['source_hashes'][p]!=h)==['crates/bot/examples/policy_witness.rs']
+    assert bundle['default_control']==json.loads(previous['prior_raw_json']['lower2-guarded'])
+    assert list(bundle['records'])==list(specs())
+    reports={}
+    for name,cfg in specs().items():
+        r=bundle['records'][name];assert r['config']==cfg
+        reports[name]=dict(**verifier['verify'](r),support_bounds=support_bounds(r))
+    assert reports['explosion']['support_bounds']==[1,1]
+    assert all(reports['reply-'+m]['support_bounds']==[0,0] for m in ['bodyslam','earthquake','curse','selfdestruct'])
+    assert reports['crosschop-thunder']['support_bounds']==reports['psychic-upper']['support_bounds']==[0,1]
+    for fault in ['incomplete','nonwinning_terminal','pending_script']:
+        bad=copy.deepcopy(bundle['records']['explosion'])
+        if fault=='incomplete':
+            for n in bad['nodes']:
+                for b in n.get('branches',[]):b['complete_enumeration']=False
+            assert support_bounds(bad)==[0,1]
+        elif fault=='nonwinning_terminal':
+            for n in bad['nodes']:
+                if n['kind']=='terminal':n['bounds']=[0,0]
+            assert support_bounds(bad)==[0,0]
+        else:
+            next(n for n in bad['nodes'] if n['kind']=='decision')['branches'][0]['pending_scripts']=1
+            try:support_bounds(bad)
+            except AssertionError:pass
+            else:raise AssertionError('accepted incomplete support as exact')
+    root_node=bundle['records']['explosion']['nodes'][-1]
+    assert root_node['selected'][0]==['move explosion']
+    assert root_node['selected'][1]==root_node['legal'][1]==['move bodyslam','move earthquake','move curse','move selfdestruct']
+    old=json.loads((root/inputs[1]).read_bytes())
+    affected=[r for r in old['rows'] if (r['game'],r['decision'],r['side'])==(12,17,1)]
+    assert len(affected)==4 and all(r['state_key']==root_node['state_key'] for r in affected)
+    return dict(rows=reports,default_archive_parity=True,game=12,decision=17,state_key=root_node['state_key'],
+        game_value_side_zero=[1,1],game_value_side_one=[0,0],
+        resolved_search_comparisons=[dict(id=r['id'],before=r['before'],after=r['after'],
+            baseline_loss=[0,0],candidate_loss=[0,0],loss_change=[0,0],verdict='equal_value') for r in affected],
+        remaining_unresolved=sum(r['verdict']=='unresolved' for r in old['rows'])-len(affected),
+        controls=['incomplete enumeration remains unknown','terminal outcomes determine the support value',
+                  'nonempty pending scripts reject completeness','all four opposing first choices independently lose'],
+        conclusion='A certain-loss state, not a continuation-search defect: all four side-one first actions have '
+                 'zero value against optimal opposition. No bot default change.',
+        scope='One fixed full-state position from the frozen corpus. Side zero chooses Explosion, then the first '
+              'legal action in Explosion/Crunch/switch-3 priority order. Every side-one legal response and engine '
+              'chance successor is covered. Complete-enumeration flags and empty pending-script sets establish '
+              'support coverage; every reachable terminal awards side zero one. The qualitative induction uses '
+              'no floating-point probability weights and includes children even if their recorded mass is zero. '
+              'Its exact 0/1 conclusion is relative to the trusted game engine, exact chance enumerator and existing '
+              'guarded state identities. Numeric backups are separately verified with rational arithmetic. '
+              'Four side-reversed first-action checks independently agree. Cross Chop/Thunder on another position '
+              'and first-Psychic against Earthquake remain unresolved and are retained. This removes four first-choice '
+              'comparisons from the unresolved set; it does not prove earlier decisions optimal, a blind information-set '
+              'value, whole-game optimality or stronger deployed play.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path);args=parser.parse_args()
+    if args.verify_only:
+        b=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(b)==json.loads((archive/'summary.json').read_bytes())
+        print('support-witness: complete chance support, every reply, qualitative values and four reversed controls verified');return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-support-witness-'))
+    print(directory,flush=True);binary=root/'target/release/examples/policy_witness'
+    old=json.loads(gzip.decompress((root/inputs[2]).read_bytes()))
+    sources={p:sha((root/p).read_bytes()) for p in old['source_hashes']}
+    if not args.import_directory:
+        env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','policy_witness'],cwd=root,env=env,check=True)
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/inputs[0]).read_bytes()))
+        for name,cfg in specs().items():
+            (directory/(name+'-support.json')).write_text(json.dumps(cfg))
+            subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/(name+'-support.json')),
+                str(directory/(name+'-support.out.json'))],cwd=root,env=env,check=True)
+        control=json.loads(old['prior_raw_json']['lower2-guarded'])['config']
+        (directory/'default-check.json').write_text(json.dumps(control))
+        subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/'default-check.json'),
+                        str(directory/'default-check.out.json')],cwd=root,env=env,check=True)
+    bundle=dict(records={n:json.loads((directory/(n+'-support.out.json')).read_bytes()) for n in specs()},
+        default_control=json.loads((directory/'default-check.out.json').read_bytes()),
+        input_sha256={p:sha((root/p).read_bytes()) for p in inputs},source_hashes=sources,binary_sha256=sha(binary.read_bytes()))
+    assert sources=={p:sha((root/p).read_bytes()) for p in sources}
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k not in ['rows','resolved_search_comparisons']},indent=2))
+
+
+if __name__=='__main__':main()

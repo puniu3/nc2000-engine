@@ -8,6 +8,8 @@ use sha2::{Digest, Sha256};
 
 type CacheKey = (bool, bool, u128, usize);
 
+fn is_false(value: &bool) -> bool { !value }
+
 #[derive(Deserialize)]
 struct Decision { key: String, choices: [Option<usize>; 2] }
 #[derive(Deserialize)]
@@ -20,6 +22,8 @@ struct Config {
     horizon: usize, work_budget: usize, cell_cap: usize,
     #[serde(default)]
     guarded_keys: bool,
+    #[serde(default, skip_serializing_if="is_false")]
+    support_certificate: bool,
 }
 
 struct Witness<'a> {
@@ -92,9 +96,12 @@ impl Witness<'_> {
                 let mut branch=[0.,1.];
                 let mut pending=1.;
                 let mut executions=0;
+                let mut complete=false;
+                let mut pending_scripts=None;
                 if remaining>0 {
                     let mut step=enumerate_step_partial(self.dex,&battle,choices,self.cfg.cell_cap.min(remaining));
                     executions=step.runs;self.runs+=executions;
+                    complete=!step.exhausted;pending_scripts=Some(step.pending.len());
                     pending=step.pending.iter().map(|p|p.mass).sum::<f64>();
                     branch=[0.,pending];
                     let mass=step.leaves.iter().map(|l|l.prob).sum::<f64>()+pending;
@@ -119,8 +126,13 @@ impl Witness<'_> {
                 for k in 0..2 {
                     bounds[k]=if maximizing {bounds[k].max(branch[k])} else {bounds[k].min(branch[k])};
                 }
-                branches.push(json!({"choices":choices.map(|a|a.map(|a|a.to_input(self.dex))),
-                    "runs":executions,"pending":pending,"children":children,"bounds":branch}));
+                let mut branch_record=json!({"choices":choices.map(|a|a.map(|a|a.to_input(self.dex))),
+                    "runs":executions,"pending":pending,"children":children,"bounds":branch});
+                if self.cfg.support_certificate {
+                    branch_record["complete_enumeration"]=json!(complete);
+                    branch_record["pending_scripts"]=json!(pending_scripts);
+                }
+                branches.push(branch_record);
             }}
             record["kind"]=json!("decision");record["maximizing"]=json!(maximizing);
             record["legal"]=json!(legal.map(|aa|aa.into_iter().map(|a|a.map(|a|a.to_input(self.dex))).collect::<Vec<_>>()));
