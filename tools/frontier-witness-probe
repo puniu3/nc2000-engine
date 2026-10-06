@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import itertools
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/frontier-witness-v1'
+previous='findings/switch-witness-v1/records.json.gz'
+refined='findings/switch-refinement-v1/records.json.gz'
+corpus='findings/policy-gap-v1/corpus.jsonl.gz'
+join=runpy.run_path(str(root/'tools/witness-closure-probe'))
+legacy=join['coverage'];sha=legacy['sha']
+inputs=[previous,refined,corpus,'tools/policy-witness-probe','tools/witness-closure-probe',
+        'tools/frontier-witness-probe','crates/bot/examples/witness_frontier.rs','data/gen2stadium2.json']
+
+
+def manifest(record,last):
+    nodes=record['nodes'];weights=collections.defaultdict(F,{record['root']:F(1)});best={};pred={};candidates=[]
+    for i in reversed(range(len(nodes))):
+        n=nodes[i];w=weights[i]
+        if not w:continue
+        if n['kind']=='decision':
+            assert n['maximizing']
+            bi=max(range(len(n['branches'])),key=lambda j:(n['branches'][j]['bounds'][1],j if last else -j))
+            b=n['branches'][bi]
+            if b['pending']>0:candidates.append((w*F(b['pending']),i,'pending'))
+            for ci,c in enumerate(b['children']):
+                v=w*F(c['mass']);child=c['node'];weights[child]+=v
+                if v>best.get(child,F(-1)):best[child]=v;pred[child]=(i,bi,ci)
+        elif n['kind'] in ['budget','horizon']:candidates.append((w,i,n['kind']))
+    targets=[]
+    for mass,i,reason in sorted(candidates,reverse=True)[:12]:
+        path=[];child=i
+        while child!=record['root']:
+            pi,bi,ci=pred[child];b=nodes[pi]['branches'][bi];assert b['children'][ci]['node']==child
+            path.append(dict(choices=b['choices'],child=nodes[child]['cache_key']));child=pi
+        path.reverse();assert len(path)==nodes[i]['depth']
+        targets.append(dict(id=i,cache_key=nodes[i]['cache_key'],path=path,mass=float(mass),reason=reason))
+    return dict(config=record['config'],targets=targets,cap=4096)
+
+
+def check_output(record,raw,output):
+    m=json.loads(raw)
+    assert output['manifest_sha256']==sha(raw.encode())
+    assert output['corpus_sha256']==sha(gzip.decompress((root/corpus).read_bytes()))
+    assert output['root_state_key']==record['nodes'][-1]['state_key']
+    assert [t['id'] for t in output['targets']]==[t['id'] for t in m['targets']]
+    replay=0;probes=0
+    for wanted,t in zip(m['targets'],output['targets']):
+        assert t['cache_key']==wanted['cache_key']==record['nodes'][t['id']]['cache_key']
+        assert len(t['trace'])==len(wanted['path'])
+        for step,trace in zip(wanted['path'],t['trace']):
+            assert trace['cache_key']==step['child'];replay+=trace['runs']
+        for s in [0,1]:
+            assert t['selected'][s] and set(t['selected'][s])<=set(t['legal'][s])
+            if s==m['config']['policy_side']:assert len(t['selected'][s])==1
+            else:assert t['selected'][s]==t['legal'][s]
+        side=m['config']['policy_side'];opponent=t['active'][1-side]
+        context=m['config'].get('opponent_priority',{}).get(opponent['species'],[]) if opponent else []
+        expected=next((a for a in context+m['config']['priority'] if a in t['legal'][side]),t['legal'][side][0])
+        assert t['selected'][side]==[expected]
+        assert [p['choices'] for p in t['probes']]==list(map(list,itertools.product(*t['selected'])))
+        for p in t['probes']:
+            probes+=p['runs'];assert 0<p['runs']<=m['cap']
+            assert abs(sum(F(l['mass']) for l in p['leaves'])+F(p['pending'])-1)<F(1,10**8)
+            assert p['complete']==(p['pending_scripts']==0)
+            if p['complete']:assert p['pending']==0
+            assert all(l['mass']>=0 and l['terminal'] in [None,0,.5,1] for l in p['leaves'])
+    assert replay==output['replay_runs'] and probes==output['probe_runs']
+
+
+def splice(record,outputs):
+    r=copy.deepcopy(record);nodes=r['nodes'];ids={(*n['cache_key'],n['depth']):i for i,n in enumerate(nodes)}
+    targets={}
+    for output in outputs:
+        for t in output['targets']:
+            if t['id'] in targets:assert targets[t['id']]==t
+            targets[t['id']]=t
+    horizon=max(r['config']['horizon'],max(nodes[i]['depth']+1 for i in targets))
+    for n in nodes:
+        if n['kind']=='horizon' and n['depth']<horizon:n['kind']='budget'
+    r['config']['horizon']=horizon
+    for index,t in targets.items():
+        n=nodes[index];assert n['cache_key']==t['cache_key']
+        choices=[p['choices'] for p in t['probes']]
+        if n['kind']=='decision':
+            assert n['legal']==t['legal']
+            assert all(set(n['selected'][s])==set(t['selected'][s]) for s in [0,1])
+            choices=[b['choices'] for b in n['branches']]
+        else:
+            assert n['kind'] in ['budget','horizon']
+            n.update(kind='decision',maximizing=True,legal=t['legal'],selected=t['selected'])
+        probes={tuple(p['choices']):p for p in t['probes']};assert set(probes)==set(map(tuple,choices))
+        branches=[]
+        for choice in choices:
+            p=probes[tuple(choice)];children=[]
+            for leaf in p['leaves']:
+                identity=(*leaf['cache_key'],n['depth']+1);value=leaf['terminal']
+                if identity not in ids:
+                    ids[identity]=len(nodes)
+                    nodes.append(dict(cache_key=leaf['cache_key'],depth=n['depth']+1,state_key=leaf['state_key'],
+                        kind='terminal' if value is not None else 'horizon' if n['depth']+1>=horizon else 'budget',
+                        bounds=[value,value] if value is not None else [0,1]))
+                child=ids[identity]
+                if value is not None:assert nodes[child]['kind']=='terminal' and nodes[child]['bounds']==[value,value]
+                else:assert nodes[child]['kind']!='terminal'
+                children.append(dict(mass=leaf['mass'],node=child))
+            branches.append(dict(choices=choice,runs=p['runs'],pending=p['pending'],children=children,bounds=[0,1],
+                complete_enumeration=p['complete'],pending_scripts=p['pending_scripts']))
+        n['branches']=branches
+    order=sorted(range(len(nodes)),key=lambda i:(-nodes[i]['depth'],i));remap={old:new for new,old in enumerate(order)}
+    nodes=[nodes[i] for i in order];runs=0
+    for n in nodes:
+        if n['kind']!='decision':continue
+        for b in n['branches']:
+            runs+=b['runs'];value=[F(0),F(b['pending'])]
+            for c in b['children']:
+                c['node']=remap[c['node']]
+                for k in [0,1]:value[k]+=F(c['mass'])*F(nodes[c['node']]['bounds'][k])
+            pad=F(len(b['children'])+2,10**12)
+            b['bounds']=[join['outward'](max(F(0),value[0]-pad),False),join['outward'](min(F(1),value[1]+pad),True)]
+        op=max if n['maximizing'] else min;n['bounds']=[op(b['bounds'][k] for b in n['branches']) for k in [0,1]]
+    r.update(nodes=nodes,root=remap[r['root']],runs=runs,bounds=nodes[-1]['bounds'])
+    r['config']['work_budget']=max(r['config']['work_budget'],runs)
+    legacy['verify'](r)
+    assert r['bounds'][1]<=record['bounds'][1]+1e-8
+    return r
+
+
+def summarize(bundle):
+    assert bundle['inputs']=={p:sha((root/p).read_bytes()) for p in inputs}
+    previous_bundle=legacy['read'](previous);parent=json.loads(previous_bundle['raw']['explode-fair3']);legacy['verify'](parent)
+    assert sorted(p for p,h in previous_bundle['source_hashes'].items() if bundle['source_hashes'][p]!=h)==['crates/bot/examples/policy_witness.rs']
+    rows={};current=parent
+    for round_index in range(3):
+        names=[f'{round_index}-{tie}' for tie in ['first','last']]
+        for name in names:
+            assert json.loads(bundle['manifests'][name])==manifest(current,name.endswith('last'))
+            check_output(current,bundle['manifests'][name],bundle['outputs'][name])
+        if round_index==0:
+            for name in names:rows[name]=legacy['verify'](splice(current,[bundle['outputs'][name]]))
+        current=splice(current,[bundle['outputs'][n] for n in names])
+        rows[f'{round_index}-combined']=legacy['verify'](current)
+    for fault in ['mass','coverage','identity']:
+        bad=copy.deepcopy(bundle['outputs']['0-first'])
+        if fault=='mass':bad['targets'][0]['probes'][0]['leaves'][0]['mass']+=1
+        elif fault=='coverage':bad['targets'][0]['probes'].pop()
+        else:bad['targets'][0]['cache_key'][2]='0'
+        try:check_output(parent,bundle['manifests']['0-first'],bad)
+        except AssertionError:pass
+        else:raise AssertionError(fault)
+    descriptions={name:[dict(id=t['id'],active=t['active']) for t in o['targets']] for name,o in bundle['outputs'].items()}
+    work={name:dict(replay=o['replay_runs'],probe=o['probe_runs']) for name,o in bundle['outputs'].items()}
+    return dict(parent_bounds=parent['bounds'],rows=rows,additional_work=work,targets=descriptions,
+        unrestricted_switch_bounds=[0,current['bounds'][1]],
+        scope='Reconstruct selected frontier states from the original game and recorded chance-edge paths. '
+              'Each path step must match its guarded state identity; raw history may differ within that '
+              'existing quotient. At each frontier enumerate every legal target reply against the unchanged '
+              'fixed opponent policy for one step. Replay hashes, path identities, legal-action products '
+              'and chance mass are checked. Replace only these transitions, merge equal state/depth '
+              'identities, sort by depth and recompute the full certificate with rational mass arithmetic '
+              'and outward margins. Remaining leaves stay unknown. Both tied-upper reply rankings are '
+              'retained for three adaptive rounds: reducing one maximizing branch need not reduce its parent if another branch ties. '
+              'Ranking masses describe separate certificate paths and must not be added across rankings. '
+              'Recorded certificate runs count its current transitions; additional replay/probe costs are '
+              'reported separately. Fixed-opponent lower endpoints do not transfer to unrestricted security '
+              'values; only upper bounds do. Engine transitions and guarded keys remain trusted. These are '
+              'full-state first-action certificates, not blind guarantees, a whole-game solution or a bot change.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true');args=parser.parse_args()
+    if args.verify_only:
+        assert summarize(legacy['read']('findings/frontier-witness-v1/records.json.gz'))==json.loads((archive/'summary.json').read_bytes())
+        print('frontier-witness: replay identities, complete replies, splice backups and rejection controls verified');return
+    assert not archive.exists();directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-frontier-proof-'));print(directory,flush=True)
+    old=legacy['read'](previous);parent=json.loads(old['raw']['explode-fair3'])
+    sources={p:sha((root/p).read_bytes()) for p in old['source_hashes']}
+    sources['crates/bot/examples/witness_frontier.rs']=sha((root/'crates/bot/examples/witness_frontier.rs').read_bytes())
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)};binary=root/'target/release/examples/witness_frontier'
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','witness_frontier'],cwd=root,env=env,check=True)
+    (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/corpus).read_bytes()));manifests={};outputs={}
+    current=parent
+    for round_index in range(3):
+        names=[f'{round_index}-{tie}' for tie in ['first','last']]
+        for name in names:
+            manifests[name]=json.dumps(manifest(current,name.endswith('last')));(directory/(name+'.json')).write_text(manifests[name])
+            subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/(name+'.json')),str(directory/(name+'.out.json'))],cwd=root,env=env,check=True)
+            outputs[name]=json.loads((directory/(name+'.out.json')).read_bytes())
+        current=splice(current,[outputs[n] for n in names]);print('round',round_index,current['bounds'],flush=True)
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in inputs},source_hashes=sources,
+        binary_sha256=sha(binary.read_bytes()),manifests=manifests,outputs=outputs)
+    assert sources=={p:sha((root/p).read_bytes()) for p in sources}
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(report['unrestricted_switch_bounds'],report['additional_work'])
+
+
+if __name__=='__main__':main()

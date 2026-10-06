@@ -1,0 +1,2216 @@
+{
+  "parent_bounds": [
+    0.15182496767688952,
+    0.8108579885250125
+  ],
+  "rows": {
+    "0-first": {
+      "runs": 867346,
+      "nodes": 194678,
+      "bounds": [
+        0.15354284351951003,
+        0.8108579885250125
+      ],
+      "node_kinds": {
+        "terminal": 3233,
+        "horizon": 52760,
+        "decision": 40642,
+        "budget": 98043
+      },
+      "partial_branches": 152454
+    },
+    "0-last": {
+      "runs": 864559,
+      "nodes": 194168,
+      "bounds": [
+        0.16014391856359556,
+        0.8057961575321473
+      ],
+      "node_kinds": {
+        "terminal": 3143,
+        "horizon": 52299,
+        "decision": 40644,
+        "budget": 98082
+      },
+      "partial_branches": 152486
+    },
+    "0-combined": {
+      "runs": 867755,
+      "nodes": 194793,
+      "bounds": [
+        0.16014391856359556,
+        0.8057961575321473
+      ],
+      "node_kinds": {
+        "terminal": 3307,
+        "horizon": 52760,
+        "decision": 40644,
+        "budget": 98082
+      },
+      "partial_branches": 152442
+    },
+    "1-combined": {
+      "runs": 872106,
+      "nodes": 195902,
+      "bounds": [
+        0.16032704708575152,
+        0.8034268091673044
+      ],
+      "node_kinds": {
+        "terminal": 3550,
+        "horizon": 273,
+        "budget": 151428,
+        "decision": 40651
+      },
+      "partial_branches": 152395
+    },
+    "2-combined": {
+      "runs": 876664,
+      "nodes": 197026,
+      "bounds": [
+        0.16356242052106665,
+        0.80342680916558
+      ],
+      "node_kinds": {
+        "terminal": 3598,
+        "horizon": 273,
+        "budget": 152504,
+        "decision": 40651
+      },
+      "partial_branches": 152320
+    }
+  },
+  "additional_work": {
+    "0-first": {
+      "replay": 912,
+      "probe": 3264
+    },
+    "0-last": {
+      "replay": 2260,
+      "probe": 1110
+    },
+    "1-first": {
+      "replay": 954,
+      "probe": 3084
+    },
+    "1-last": {
+      "replay": 1532,
+      "probe": 2634
+    },
+    "2-first": {
+      "replay": 912,
+      "probe": 2832
+    },
+    "2-last": {
+      "replay": 1392,
+      "probe": 3294
+    }
+  },
+  "targets": {
+    "0-first": [
+      {
+        "id": 2516,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2706,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 4,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2630,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 5,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2569,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 6,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2463,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 8,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2914,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2491,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2665,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 4,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2597,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 5,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2541,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 6,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2437,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 8,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2375,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 9,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      }
+    ],
+    "0-last": [
+      {
+        "id": 3161,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 6302,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 201,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 0,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 6416,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 200,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 0,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 1570,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 103,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 1591,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 102,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 1611,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 101,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 1650,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 99,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 1671,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 98,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 1692,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 97,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 6216,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 202,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 0,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 1732,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 95,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 1751,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 94,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      }
+    ],
+    "1-first": [
+      {
+        "id": 887,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 919,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 4,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 903,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 5,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 892,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 6,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 882,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 8,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 987,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 885,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 119890,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 34,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 108700,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 36,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 104126,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 37,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 96412,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 39,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 90100,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 41,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      }
+    ],
+    "1-last": [
+      {
+        "id": 192331,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 93,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 127684,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 192320,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 104,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 192324,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 100,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 192351,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 192328,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 96,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 192480,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 192654,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 192567,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 192828,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 192741,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 192915,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      }
+    ],
+    "2-first": [
+      {
+        "id": 85496,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 43,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 80685,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 46,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 78465,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 47,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 74342,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 49,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 70536,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 51,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 66975,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 53,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 65273,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 54,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 62017,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 56,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 59394,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 59,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 57228,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 61,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 56127,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 62,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      },
+      {
+        "id": 114702,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "snorlax",
+            "hp": 35,
+            "speed": 81,
+            "stored_stats": [
+              161,
+              116,
+              116,
+              161,
+              81
+            ]
+          }
+        ]
+      }
+    ],
+    "2-last": [
+      {
+        "id": 128531,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 206,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 128530,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 207,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 128529,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 208,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 194111,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 194198,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 194285,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 194372,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 194459,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 194546,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 194633,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 194720,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      },
+      {
+        "id": 194807,
+        "active": [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "speed": 123,
+            "stored_stats": [
+              203,
+              177,
+              160,
+              166,
+              123
+            ]
+          },
+          {
+            "species": "poliwrath",
+            "hp": 7,
+            "speed": 133,
+            "stored_stats": [
+              149,
+              160,
+              133,
+              155,
+              133
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "unrestricted_switch_bounds": [
+    0,
+    0.80342680916558
+  ],
+  "scope": "Reconstruct selected frontier states from the original game and recorded chance-edge paths. Each path step must match its guarded state identity; raw history may differ within that existing quotient. At each frontier enumerate every legal target reply against the unchanged fixed opponent policy for one step. Replay hashes, path identities, legal-action products and chance mass are checked. Replace only these transitions, merge equal state/depth identities, sort by depth and recompute the full certificate with rational mass arithmetic and outward margins. Remaining leaves stay unknown. Both tied-upper reply rankings are retained for three adaptive rounds: reducing one maximizing branch need not reduce its parent if another branch ties. Ranking masses describe separate certificate paths and must not be added across rankings. Recorded certificate runs count its current transitions; additional replay/probe costs are reported separately. Fixed-opponent lower endpoints do not transfer to unrestricted security values; only upper bounds do. Engine transitions and guarded keys remain trusted. These are full-state first-action certificates, not blind guarantees, a whole-game solution or a bot change."
+}
