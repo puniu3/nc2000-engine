@@ -1,6 +1,11 @@
-use nc2000_engine::{battle::SearchChoice, fxhash::FxHashMap, state::RequestState};
+use nc2000_engine::{
+    battle::SearchChoice,
+    fxhash::{FxHashMap, FxHasher},
+    state::RequestState,
+};
 
 use crate::{rng::SplitMix64, smmcts::select_ucb_counts};
+use std::hash::{Hash, Hasher};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct Transition {
@@ -25,9 +30,18 @@ pub struct HistoryGroup {
     pub rewards: Vec<f64>,
 }
 
+#[derive(Default)]
+struct CompactIndex {
+    transition_heads: FxHashMap<u64, usize>,
+    transition_next: Vec<usize>,
+    group_heads: Vec<Option<usize>>,
+    group_next: Vec<Option<usize>>,
+}
+
 pub struct HistoryContinuation {
     side: usize,
     shared: bool,
+    compact: Option<CompactIndex>,
     transitions: FxHashMap<Transition, usize>,
     histories: Vec<HistoryStep>,
     index: FxHashMap<(usize, Vec<SearchChoice>), usize>,
@@ -40,11 +54,31 @@ impl HistoryContinuation {
         Self {
             side,
             shared,
+            compact: None,
             transitions: FxHashMap::default(),
             histories: Vec::new(),
             index: FxHashMap::default(),
             groups: Vec::new(),
         }
+    }
+
+    pub(crate) fn use_compact_index(&mut self) {
+        assert!(self.histories.is_empty() && self.groups.is_empty());
+        self.compact = Some(CompactIndex::default());
+    }
+
+    pub fn stored_log_bytes(&self) -> usize {
+        self.histories
+            .iter()
+            .flat_map(|h| &h.log)
+            .map(|s| s.len())
+            .sum::<usize>()
+            + self
+                .transitions
+                .keys()
+                .flat_map(|h| &h.log)
+                .map(|s| s.len())
+                .sum::<usize>()
     }
 
     pub fn groups(&self) -> &[HistoryGroup] {
@@ -69,6 +103,11 @@ impl HistoryContinuation {
         log: &[String],
     ) -> usize {
         assert!(parent <= self.histories.len());
+        if self.compact.is_some() {
+            let mut hash = FxHasher::default();
+            (parent, own_action, request, log).hash(&mut hash);
+            return self.advance_compact(hash.finish(), parent, own_action, request, log);
+        }
         let transition = Transition {
             parent,
             own_action,
@@ -95,8 +134,69 @@ impl HistoryContinuation {
         id
     }
 
+    fn advance_compact(
+        &mut self,
+        hash: u64,
+        parent: usize,
+        own_action: Option<SearchChoice>,
+        request: RequestState,
+        log: &[String],
+    ) -> usize {
+        let compact = self.compact.as_mut().unwrap();
+        let head = compact.transition_heads.get(&hash).copied().unwrap_or(0);
+        let mut id = head;
+        while id != 0 {
+            let h = &self.histories[id - 1];
+            if h.parent == parent
+                && h.own_action == own_action
+                && h.request == request
+                && h.log == log
+            {
+                return id;
+            }
+            id = compact.transition_next[id - 1];
+        }
+        let depth = if parent == 0 {
+            1
+        } else {
+            self.histories[parent - 1].depth + 1
+        };
+        self.histories.push(HistoryStep {
+            parent,
+            own_action,
+            request,
+            log: log.to_vec(),
+            depth,
+        });
+        let id = self.histories.len();
+        compact.transition_next.push(head);
+        compact.group_heads.push(None);
+        compact.transition_heads.insert(hash, id);
+        id
+    }
+
     pub(crate) fn group(&mut self, history: usize, actions: &[SearchChoice]) -> usize {
         assert!(history > 0 && history <= self.histories.len());
+        if let Some(compact) = self.compact.as_mut() {
+            let head = compact.group_heads[history - 1];
+            let mut cursor = head;
+            while let Some(id) = cursor {
+                if self.groups[id].actions == actions {
+                    return id;
+                }
+                cursor = compact.group_next[id];
+            }
+            let id = self.groups.len();
+            self.groups.push(HistoryGroup {
+                history,
+                actions: actions.to_vec(),
+                visits: vec![0; actions.len()],
+                rewards: vec![0.; actions.len()],
+            });
+            compact.group_next.push(head);
+            compact.group_heads[history - 1] = Some(id);
+            return id;
+        }
         let key = (history, actions.to_vec());
         if let Some(&id) = self.index.get(&key) {
             return id;
@@ -133,6 +233,39 @@ impl HistoryContinuation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compact_hash_collisions_preserve_full_history_equality_and_action_order() {
+        let mut p = HistoryContinuation::new(0, true);
+        p.use_compact_index();
+        let actions = [SearchChoice::Switch(2), SearchChoice::Switch(3)];
+        let log = vec!["|turn|5".to_owned()];
+        let cases = [
+            (0, Some(actions[0]), RequestState::Move, log.clone()),
+            (0, Some(actions[1]), RequestState::Move, log.clone()),
+            (0, Some(actions[0]), RequestState::Switch, log.clone()),
+            (0, Some(actions[0]), RequestState::Move, vec![]),
+            (1, Some(actions[0]), RequestState::Move, log.clone()),
+        ];
+        for (i, (parent, action, request, lines)) in cases.iter().enumerate() {
+            assert_eq!(
+                p.advance_compact(7, *parent, *action, *request, lines),
+                i + 1
+            );
+        }
+        for (i, (parent, action, request, lines)) in cases.iter().enumerate() {
+            assert_eq!(
+                p.advance_compact(7, *parent, *action, *request, lines),
+                i + 1
+            );
+        }
+        let first = p.group(1, &actions);
+        let reversed = p.group(1, &[actions[1], actions[0]]);
+        assert_ne!(first, reversed);
+        assert_eq!(first, p.group(1, &actions));
+        assert_eq!(reversed, p.group(1, &[actions[1], actions[0]]));
+        assert!(p.transitions.is_empty() && p.index.is_empty());
+    }
 
     #[test]
     fn prefixes_preserve_earlier_choices_requests_and_empty_boundaries() {

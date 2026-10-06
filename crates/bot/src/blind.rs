@@ -404,6 +404,11 @@ impl BlindSearch {
         self.history_continuation = Some(crate::history_continuation::HistoryContinuation::new(self.side, shared));
     }
 
+    pub fn enable_compact_history_continuation(&mut self, shared: bool) {
+        self.enable_history_continuation(shared);
+        self.history_continuation.as_mut().unwrap().use_compact_index();
+    }
+
     pub fn history_continuation(&self) -> Option<&crate::history_continuation::HistoryContinuation> {
         self.history_continuation.as_ref()
     }

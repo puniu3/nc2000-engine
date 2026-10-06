@@ -36,7 +36,7 @@ fn every_history_group_matches_independent_replay_on_both_sides() {
             bulk.enable_history_continuation(shared);
             bulk.step(&dex, &belief, &obs[side], 2048);
             let mut traced = BlindSearch::new(&b, &dex, cfg.clone(), side, 73);
-            traced.enable_history_continuation(shared);
+            traced.enable_compact_history_continuation(shared);
             let mut expected = HashMap::<Key, (Vec<u32>, Vec<f64>)>::new();
             let mut shadow: Option<Battle> = None;
             let mut history = Vec::new();
@@ -110,6 +110,10 @@ fn every_history_group_matches_independent_replay_on_both_sides() {
                 assert_eq!(plain.search_rng_state(), bulk.search_rng_state());
             }
             let policy = traced.history_continuation().unwrap();
+            assert_eq!(
+                bulk.history_continuation().unwrap().stored_log_bytes(),
+                2 * policy.stored_log_bytes()
+            );
             assert!(policy.histories().iter().any(|h| h.depth >= 3));
             assert_eq!(policy.groups().len(), expected.len());
             for g in policy.groups() {

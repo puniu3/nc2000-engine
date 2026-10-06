@@ -2259,6 +2259,182 @@
           "timing_scope": "Shared host also ran key census and native builds; timing is not an isolated benchmark."
         }
       }
+    },
+    "findings/compact-history-v1/summary.json": {
+      "sha256": "90ac78f53de724cde6f9493167c58ae2bce1e3e0d08b54b0c536e9ef09d2a8de",
+      "data": {
+        "roots": 24,
+        "iterations": 27000,
+        "repeats": 3,
+        "historical_snapshot_identities": 288,
+        "measurements": {
+          "baseline": {
+            "milliseconds": 22863.574833000002,
+            "nodes": 608304,
+            "groups": 0,
+            "selections": 0,
+            "histories": 0,
+            "log_bytes": 0,
+            "stored_log_bytes": 0,
+            "depth_counts": {}
+          },
+          "compact_record_only": {
+            "milliseconds": 26137.888879000002,
+            "nodes": 608304,
+            "groups": 269326,
+            "selections": 1153272,
+            "histories": 302224,
+            "log_bytes": 87495483,
+            "stored_log_bytes": 87495483,
+            "depth_counts": {
+              "1": 504683,
+              "2": 369049,
+              "3": 176081,
+              "4": 66131,
+              "5": 26385,
+              "6": 8608,
+              "7": 2075,
+              "8": 246,
+              "9": 14
+            }
+          },
+          "legacy_shared": {
+            "milliseconds": 26793.666461,
+            "nodes": 606648,
+            "groups": 254912,
+            "selections": 1182108,
+            "histories": 288160,
+            "log_bytes": 84247128,
+            "stored_log_bytes": 168494256,
+            "depth_counts": {
+              "1": 501493,
+              "2": 377179,
+              "3": 187505,
+              "4": 73999,
+              "5": 30286,
+              "6": 8389,
+              "7": 2547,
+              "8": 615,
+              "9": 84,
+              "10": 11
+            }
+          },
+          "compact_shared": {
+            "milliseconds": 26356.864999999998,
+            "nodes": 606648,
+            "groups": 254912,
+            "selections": 1182108,
+            "histories": 288160,
+            "log_bytes": 84247128,
+            "stored_log_bytes": 84247128,
+            "depth_counts": {
+              "1": 501493,
+              "2": 377179,
+              "3": 187505,
+              "4": 73999,
+              "5": 30286,
+              "6": 8389,
+              "7": 2547,
+              "8": 615,
+              "9": 84,
+              "10": 11
+            }
+          }
+        },
+        "compact_time_ratio": 1.1527884502977188,
+        "legacy_time_ratio": 1.1718931381774789,
+        "compact_vs_legacy_time_ratio": 0.983697585336602,
+        "record_only_time_ratio": 1.1432109401052208,
+        "faster_roots": 21,
+        "changed_vs_legacy_root_choices": 0,
+        "changed_root_choices": 6,
+        "changes": [
+          {
+            "game": 1,
+            "decision": 9,
+            "side": 0,
+            "baseline": "move recover",
+            "compact_shared": "move thunderwave"
+          },
+          {
+            "game": 4,
+            "decision": 4,
+            "side": 0,
+            "baseline": "move icebeam",
+            "compact_shared": "move curse"
+          },
+          {
+            "game": 6,
+            "decision": 7,
+            "side": 1,
+            "baseline": "move thunderbolt",
+            "compact_shared": "move icebeam"
+          },
+          {
+            "game": 7,
+            "decision": 9,
+            "side": 1,
+            "baseline": "move whirlwind",
+            "compact_shared": "move curse"
+          },
+          {
+            "game": 12,
+            "decision": 5,
+            "side": 0,
+            "baseline": "move synthesis",
+            "compact_shared": "move sleeppowder"
+          },
+          {
+            "game": 17,
+            "decision": 11,
+            "side": 1,
+            "baseline": "switch 3",
+            "compact_shared": "switch 2"
+          }
+        ],
+        "default_enabled": false,
+        "strength_demonstrated": false,
+        "scope": "Exact compact lookup for the same own full-history policy. Transition hashes select collision chains, then compare full parent, action, request and protocol lines. Action lists are compared within each history. Copies occur only on insertion; identical IDs and bandit statistics are preserved. Native sequential measurements include construction and search. The first pass rotates four modes but always runs legacy_shared before compact_shared; a second pass balances those two orders within each root. Repetitions use identical seeds, not independent games. Stored byte counts include protocol string contents in both prefix records and index keys, not total resident memory. This measures cost and identity, not strength or game-optimality.",
+        "order_confirmation": {
+          "roots": 24,
+          "repeats": 4,
+          "historical_snapshot_identities": 192,
+          "milliseconds": {
+            "legacy_shared": 26361.882606,
+            "compact_shared": 25763.791314500002
+          },
+          "compact_vs_legacy_time_ratio": 0.9773122693686577,
+          "faster_roots": 22,
+          "order": "legacy/compact, compact/legacy, legacy/compact, compact/legacy within each root"
+        }
+      }
+    },
+    "findings/compact-history-v1/checks.json": {
+      "sha256": "91f00a7df9c42b356a87c350630a3fc5ce35ff1c0bce7b851d639550914643c2",
+      "data": {
+        "library_tests": 230,
+        "blind_integration_tests": 9,
+        "first_continuation_integration_tests": 1,
+        "history_continuation_integration_tests": 1,
+        "all_targets_compile": true,
+        "historical_search_snapshot_identities": 480,
+        "all_modes_repeat_exactly": true,
+        "history_group_counts_and_rewards_match_independent_replay": true,
+        "checked_both_sides_and_replacement_choices": true,
+        "chunked_search_matches_bulk": true,
+        "forced_hash_collisions_keep_full_equality": true,
+        "retained_protocol_string_bytes_halved": true,
+        "negative_controls": [
+          "seed",
+          "visits",
+          "baseline",
+          "time",
+          "depth",
+          "stored_bytes",
+          "confirmation_order"
+        ],
+        "default_enabled": false
+      }
     }
   },
   "foresight_fix": {
@@ -4719,5 +4895,182 @@
       "decision": "Won more games than lost but failed the prespecified superiority screen; no additional matches or adoption of this implementation. Investigate the measured history/log cost before any new candidate."
     },
     "elapsed_seconds": 341.361553041
+  },
+  "compact_history": {
+    "status": "cost_screen_complete",
+    "checked_at": "2026-10-07T08:33:49.510690+09:00",
+    "source_baseline_commit": "2be11ba",
+    "summary": {
+      "roots": 24,
+      "iterations": 27000,
+      "repeats": 3,
+      "historical_snapshot_identities": 288,
+      "measurements": {
+        "baseline": {
+          "milliseconds": 22863.574833000002,
+          "nodes": 608304,
+          "groups": 0,
+          "selections": 0,
+          "histories": 0,
+          "log_bytes": 0,
+          "stored_log_bytes": 0,
+          "depth_counts": {}
+        },
+        "compact_record_only": {
+          "milliseconds": 26137.888879000002,
+          "nodes": 608304,
+          "groups": 269326,
+          "selections": 1153272,
+          "histories": 302224,
+          "log_bytes": 87495483,
+          "stored_log_bytes": 87495483,
+          "depth_counts": {
+            "1": 504683,
+            "2": 369049,
+            "3": 176081,
+            "4": 66131,
+            "5": 26385,
+            "6": 8608,
+            "7": 2075,
+            "8": 246,
+            "9": 14
+          }
+        },
+        "legacy_shared": {
+          "milliseconds": 26793.666461,
+          "nodes": 606648,
+          "groups": 254912,
+          "selections": 1182108,
+          "histories": 288160,
+          "log_bytes": 84247128,
+          "stored_log_bytes": 168494256,
+          "depth_counts": {
+            "1": 501493,
+            "2": 377179,
+            "3": 187505,
+            "4": 73999,
+            "5": 30286,
+            "6": 8389,
+            "7": 2547,
+            "8": 615,
+            "9": 84,
+            "10": 11
+          }
+        },
+        "compact_shared": {
+          "milliseconds": 26356.864999999998,
+          "nodes": 606648,
+          "groups": 254912,
+          "selections": 1182108,
+          "histories": 288160,
+          "log_bytes": 84247128,
+          "stored_log_bytes": 84247128,
+          "depth_counts": {
+            "1": 501493,
+            "2": 377179,
+            "3": 187505,
+            "4": 73999,
+            "5": 30286,
+            "6": 8389,
+            "7": 2547,
+            "8": 615,
+            "9": 84,
+            "10": 11
+          }
+        }
+      },
+      "compact_time_ratio": 1.1527884502977188,
+      "legacy_time_ratio": 1.1718931381774789,
+      "compact_vs_legacy_time_ratio": 0.983697585336602,
+      "record_only_time_ratio": 1.1432109401052208,
+      "faster_roots": 21,
+      "changed_vs_legacy_root_choices": 0,
+      "changed_root_choices": 6,
+      "changes": [
+        {
+          "game": 1,
+          "decision": 9,
+          "side": 0,
+          "baseline": "move recover",
+          "compact_shared": "move thunderwave"
+        },
+        {
+          "game": 4,
+          "decision": 4,
+          "side": 0,
+          "baseline": "move icebeam",
+          "compact_shared": "move curse"
+        },
+        {
+          "game": 6,
+          "decision": 7,
+          "side": 1,
+          "baseline": "move thunderbolt",
+          "compact_shared": "move icebeam"
+        },
+        {
+          "game": 7,
+          "decision": 9,
+          "side": 1,
+          "baseline": "move whirlwind",
+          "compact_shared": "move curse"
+        },
+        {
+          "game": 12,
+          "decision": 5,
+          "side": 0,
+          "baseline": "move synthesis",
+          "compact_shared": "move sleeppowder"
+        },
+        {
+          "game": 17,
+          "decision": 11,
+          "side": 1,
+          "baseline": "switch 3",
+          "compact_shared": "switch 2"
+        }
+      ],
+      "default_enabled": false,
+      "strength_demonstrated": false,
+      "scope": "Exact compact lookup for the same own full-history policy. Transition hashes select collision chains, then compare full parent, action, request and protocol lines. Action lists are compared within each history. Copies occur only on insertion; identical IDs and bandit statistics are preserved. Native sequential measurements include construction and search. The first pass rotates four modes but always runs legacy_shared before compact_shared; a second pass balances those two orders within each root. Repetitions use identical seeds, not independent games. Stored byte counts include protocol string contents in both prefix records and index keys, not total resident memory. This measures cost and identity, not strength or game-optimality.",
+      "order_confirmation": {
+        "roots": 24,
+        "repeats": 4,
+        "historical_snapshot_identities": 192,
+        "milliseconds": {
+          "legacy_shared": 26361.882606,
+          "compact_shared": 25763.791314500002
+        },
+        "compact_vs_legacy_time_ratio": 0.9773122693686577,
+        "faster_roots": 22,
+        "order": "legacy/compact, compact/legacy, legacy/compact, compact/legacy within each root"
+      }
+    },
+    "checks": {
+      "library_tests": 230,
+      "blind_integration_tests": 9,
+      "first_continuation_integration_tests": 1,
+      "history_continuation_integration_tests": 1,
+      "all_targets_compile": true,
+      "historical_search_snapshot_identities": 480,
+      "all_modes_repeat_exactly": true,
+      "history_group_counts_and_rewards_match_independent_replay": true,
+      "checked_both_sides_and_replacement_choices": true,
+      "chunked_search_matches_bulk": true,
+      "forced_hash_collisions_keep_full_equality": true,
+      "retained_protocol_string_bytes_halved": true,
+      "negative_controls": [
+        "seed",
+        "visits",
+        "baseline",
+        "time",
+        "depth",
+        "stored_bytes",
+        "confirmation_order"
+      ],
+      "default_enabled": false
+    },
+    "strength_demonstrated": false,
+    "deployed": false
   }
 }

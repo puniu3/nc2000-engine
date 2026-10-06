@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import statistics
+import subprocess
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/compact-history-v1'
+
+
+def verify(result,prior):
+    assert result['iterations']==27000 and result['repeats']==3
+    assert len(result['rows'])==24 and {r['game'] for r in result['rows']}==set(range(24))
+    sums={m:dict(milliseconds=0.,nodes=0,groups=0,selections=0,histories=0,log_bytes=0,stored_log_bytes=0,depth_counts=collections.Counter()) for m in ['baseline','compact_record_only','legacy_shared','compact_shared']}
+    changes=[]
+    faster_roots=0
+    for r in result['rows']:
+        old=next(p for p in prior if p['game']==r['game'])
+        assert all(r[k]==old[k] for k in ['game','decision','key','side','seed'])
+        assert len(r['measurements'])==12
+        assert {(m['mode'],m['repeat']) for m in r['measurements']}=={(m,i) for m in sums for i in range(3)}
+        modes={}
+        times={}
+        for name in sums:
+            runs=[m for m in r['measurements'] if m['mode']==name];first=runs[0]
+            for m in runs:
+                assert m['elapsed_ms']>0 and sum(m['snapshot']['visits'])==27000
+                assert all(m[k]==first[k] for k in ['snapshot','groups','selections','rewards','histories','log_bytes','stored_log_bytes','depth_counts'])
+                assert 0<=m['rewards']<=m['selections'] and sum(m['depth_counts'].values())==m['selections']
+                assert all(int(d)>=1 and 0<=v<=27000 for d,v in m['depth_counts'].items())
+                previous='baseline' if name in ['baseline','compact_record_only'] else 'history_shared'
+                expected=next(p for p in old['measurements'] if p['mode']==previous)
+                assert m['snapshot']==expected['snapshot']
+                if name=='baseline': assert m['groups']==m['selections']==m['histories']==m['log_bytes']==m['stored_log_bytes']==0
+                else:
+                    assert 0<m['groups']<=m['selections'] and m['histories']>0 and m['log_bytes']>0
+                    previous='record_only' if name=='compact_record_only' else 'history_shared'
+                    expected=next(p for p in old['measurements'] if p['mode']==previous)
+                    assert all(m[k]==expected[k] for k in ['groups','selections','rewards','histories','log_bytes','depth_counts'])
+                    assert m['stored_log_bytes']==m['log_bytes']*(2 if name=='legacy_shared' else 1)
+            times[name]=statistics.median(m['elapsed_ms'] for m in runs)
+            sums[name]['milliseconds']+=times[name]
+            for k in ['groups','selections','histories','log_bytes','stored_log_bytes']:sums[name][k]+=first[k]
+            sums[name]['nodes']+=first['snapshot']['nodes']
+            sums[name]['depth_counts'].update(first['depth_counts'])
+            modes[name]=first['snapshot']
+        faster_roots+=times['compact_shared']<times['legacy_shared']
+        if modes['baseline']['best']!=modes['compact_shared']['best']:
+            changes.append(dict(game=r['game'],decision=r['decision'],side=r['side'],baseline=modes['baseline']['best'],compact_shared=modes['compact_shared']['best']))
+    for m in sums.values():m['depth_counts']=dict(sorted(m['depth_counts'].items(),key=lambda p:int(p[0])))
+    return dict(roots=24,iterations=27000,repeats=3,historical_snapshot_identities=288,measurements=sums,
+                compact_time_ratio=sums['compact_shared']['milliseconds']/sums['baseline']['milliseconds'],
+                legacy_time_ratio=sums['legacy_shared']['milliseconds']/sums['baseline']['milliseconds'],
+                compact_vs_legacy_time_ratio=sums['compact_shared']['milliseconds']/sums['legacy_shared']['milliseconds'],
+                record_only_time_ratio=sums['compact_record_only']['milliseconds']/sums['baseline']['milliseconds'],
+                faster_roots=faster_roots,changed_vs_legacy_root_choices=0,
+                changed_root_choices=len(changes),changes=changes,default_enabled=False,strength_demonstrated=False,
+                scope='Exact compact lookup for the same own full-history policy. Transition hashes select collision '
+                      'chains, then compare full parent, action, request and protocol lines. Action lists are compared '
+                      'within each history. Copies occur only on insertion; identical IDs and bandit statistics are '
+                      'preserved. Native sequential measurements include construction and search. The first pass rotates '
+                      'four modes but always runs legacy_shared before compact_shared; a second pass balances those two '
+                      'orders within each root. Repetitions use identical seeds, not independent games. Stored byte counts include protocol string '
+                      'contents in both prefix records and index keys, not total resident memory. This measures cost '
+                      'and identity, not strength or game-optimality.')
+
+
+
+def verify_order(result,prior):
+    assert result['iterations']==27000 and result['repeats']==4
+    assert len(result['rows'])==24 and {r['game'] for r in result['rows']}==set(range(24))
+    names=('legacy_shared','compact_shared')
+    sums={name:0. for name in names}
+    faster=0
+    for r in result['rows']:
+        old=next(p for p in prior if p['game']==r['game'])
+        assert all(r[k]==old[k] for k in ['game','decision','key','side','seed'])
+        expected=next(p for p in old['measurements'] if p['mode']=='history_shared')
+        assert [(m['mode'],m['repeat']) for m in r['measurements']]==[(names[(i+repeat)%2],repeat) for repeat in range(4) for i in range(2)]
+        for m in r['measurements']:
+            assert m['elapsed_ms']>0
+            assert all(m[k]==expected[k] for k in ['snapshot','groups','selections','rewards','histories','log_bytes','depth_counts'])
+            assert m['stored_log_bytes']==m['log_bytes']*(2 if m['mode']=='legacy_shared' else 1)
+        times={name:statistics.median(m['elapsed_ms'] for m in r['measurements'] if m['mode']==name) for name in names}
+        for name in names:sums[name]+=times[name]
+        faster+=times['compact_shared']<times['legacy_shared']
+    return dict(roots=24,repeats=4,historical_snapshot_identities=192,milliseconds=sums,
+                compact_vs_legacy_time_ratio=sums['compact_shared']/sums['legacy_shared'],
+                faster_roots=faster,order='legacy/compact, compact/legacy, legacy/compact, compact/legacy within each root')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',nargs=2,type=Path);args=parser.parse_args()
+    prior=json.loads(gzip.decompress((root/'findings/history-policy-v1/records.json.gz').read_bytes()))['result']['rows']
+    if args.record:
+        assert not (archive/'records.json.gz').exists()
+        result=json.loads(args.record[0].read_bytes());summary=verify(result,prior)
+        order=json.loads(args.record[1].read_bytes());summary['order_confirmation']=verify_order(order,prior)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','crates/conformance/src','Cargo.toml','Cargo.lock'],cwd=root,text=True).splitlines()
+        paths+=['crates/bot/src/history_continuation.rs','crates/bot/tests/history_continuation.rs',
+                'crates/bot/examples/compact_history_budget.rs','crates/bot/examples/compact_history_order.rs','tools/compact-history-probe',
+                'findings/history-policy-v1/records.json.gz','findings/policy-gap-v1/corpus.jsonl.gz',
+                'data/gen2stadium2.json','data/belief-pool-v3/belief-pool.json','data/learnsets-gen2.json']
+        bundle=dict(result=result,order=order,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        archive.mkdir(parents=True,exist_ok=True)
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in bundle['hashes'].items())
+    summary=verify(bundle['result'],prior)
+    summary['order_confirmation']=verify_order(bundle['order'],prior)
+    assert summary==json.loads((archive/'summary.json').read_bytes())
+    for corruption in ['seed','visits','baseline','time','depth','stored_bytes']:
+        bad=copy.deepcopy(bundle['result']);r=bad['rows'][0];m=r['measurements'][0]
+        if corruption=='seed':r['seed']+=1
+        elif corruption=='visits':m['snapshot']['visits'][0]+=1
+        elif corruption=='baseline':m['snapshot']['best']='invalid'
+        elif corruption=='time':m['elapsed_ms']=-1
+        elif corruption=='stored_bytes':m['stored_log_bytes']+=1
+        else:m['depth_counts']['1']=1
+        try:verify(bad,prior)
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {corruption}')
+    bad=copy.deepcopy(bundle['order']);bad['rows'][0]['measurements'].reverse()
+    try:verify_order(bad,prior)
+    except AssertionError:pass
+    else:raise AssertionError('Accepted corrupted measurement order')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['changes','scope']},indent=2))
+
+
+if __name__=='__main__':main()
