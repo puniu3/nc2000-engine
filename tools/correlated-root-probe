@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import json
+import os
+import pathlib
+import runpy
+import shutil
+import statistics
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/correlated-root-v1'
+fixed=runpy.run_path(str(root/'tools/fused-key-probe'))
+frontier=fixed['frontier']
+timed=runpy.run_path(str(root/'tools/fused-key-time-probe'))
+sha=fixed['sha']
+prior=root/'findings/strategy-refinement-v1/records.json.gz'
+reference_path=root/'findings/policy-gap-v1/records.json.gz'
+baseline_path=root/'findings/strategy-corpus-v1/records.json.gz'
+
+
+def exact_gaps(model):
+    rows,cols=model['dimensions']
+    policies=[[F(p) for p in policy] for policy in model['policies']]
+    policies=[[p/sum(policy) for p in policy] for policy in policies]
+    bounds=[[F(v) for v in b] for b in model['cell_bounds']]
+    children=[[F(v) for v in b] for b in model['children']]
+    cells=[dict(fixed=list(map(F,c['fixed'])),pending=F(c['pending_mass']),
+                successors=[(key,F(mass)) for key,mass in c['successors']]) for c in model['cells']]
+    cell_gap=successor_gap=F(0)
+    for row in range(rows):
+        for col in range(cols):
+            coefficients=[F(0)]*(rows*cols)
+            for j in range(cols): coefficients[row*cols+j]+=policies[1][j]
+            for i in range(rows): coefficients[i*cols+col]-=policies[0][i]
+            coefficients_by_child=collections.defaultdict(F)
+            independent=combined=F(0)
+            for index,coefficient in enumerate(coefficients):
+                if not coefficient: continue
+                positive=coefficient>0
+                independent+=coefficient*bounds[index][positive]
+                cell=cells[index]
+                combined+=coefficient*(cell['fixed'][positive]+(cell['pending'] if positive else 0))
+                for child,mass in cell['successors']: coefficients_by_child[child]+=coefficient*mass
+            for child,coefficient in coefficients_by_child.items(): combined+=coefficient*children[child][coefficient>0]
+            cell_gap=max(cell_gap,independent)
+            successor_gap=max(successor_gap,combined)
+    return min(F(1),cell_gap),min(F(1),successor_gap)
+
+
+def summarize(bundle,progress=False):
+    assert bundle['prior_sha256']==sha(prior.read_bytes())
+    assert bundle['reference_sha256']==sha(reference_path.read_bytes())
+    assert bundle['baseline_sha256']==sha(baseline_path.read_bytes())
+    previous=json.loads(gzip.decompress(prior.read_bytes()))
+    old_sources=previous['manifest']['sources']
+    sources=bundle['manifest']['sources']
+    assert sorted(p for p,h in old_sources.items() if sources[p]!=h)==['crates/bot/examples/strategy_frontier.rs','crates/bot/src/bounds.rs']
+    assert sorted(set(sources)-set(old_sources))==['crates/bot/src/bounds/correlated.rs']
+    plain=copy.deepcopy(bundle['rows'])
+    for r in plain:r.pop('correlation')
+    assert fixed['normalize'](plain)==fixed['normalize'](previous['parity'])
+    for a,b in zip(plain,previous['parity']):
+        for ac,bc in zip(a['chance'],b['chance']):assert abs(ac['child_uncertainty']-bc['child_uncertainty'])<1e-12
+    references={(p['game'],p['decision']):p for p in json.loads(gzip.decompress(reference_path.read_bytes()))}
+    baseline={(r['game'],r['decision'],r['side']):r['baseline']['choice']
+              for r in json.loads(gzip.decompress(baseline_path.read_bytes()))['rows']}
+    summaries=[]
+    for index,r in enumerate(bundle['rows']):
+        c=r['correlation'];model=c['model'];bounds=c['bounds']
+        assert model['dimensions']==list(map(len,r['actions']))
+        assert model['cell_bounds']==r['cells'] and model['independent_loss']==r['max_loss']
+        cell_gap,successor_gap=exact_gaps(model)
+        assert F(bounds['cell_gap'])>=cell_gap
+        assert F(bounds['successor_gap'])>=successor_gap
+        assert bounds['max_loss']==[min(v,bounds['cell_gap'],bounds['successor_gap']) for v in model['independent_loss']]
+        incidence=collections.Counter(child for cell in model['cells'] for child in {key for key,mass in cell['successors'] if mass>0})
+        assert bounds['shared_children']==sum(n>1 for n in incidence.values())
+        reference=references[r['game'],r['decision']]['reference']
+        for side in [0,1]:
+            assert timed['loss'](reference,side,model['policies'][side])[0]<=bounds['max_loss'][side]+1e-7
+        side=r['side'];original=model['independent_loss'][side]
+        cell_only=min(original,bounds['cell_gap']);correlated=bounds['max_loss'][side]
+        chosen=baseline[r['game'],r['decision'],side]
+        assert chosen in r['actions'][side]
+        matches=model['policies'][side]==[float(a==chosen) for a in r['actions'][side]]
+        summaries.append(dict(archived_baseline_choice=chosen,matches_archived_baseline=matches,game=r['game'],decision=r['decision'],side=side,original_loss=original,
+            cell_only_loss=cell_only,correlated_loss=correlated,cell_improved=cell_only<original-1e-8,
+            successor_improved=correlated<cell_only-1e-8,original_certified=original<=.005,correlated_certified=correlated<=.005,
+            shared_children=bounds['shared_children'],children=len(model['children']),milliseconds=c['milliseconds']))
+        if progress and (index+1)%5==0: print(f'exact rational verification {index+1}/{len(bundle["rows"])}',flush=True)
+    return dict(positions=len(summaries),cell_improved=sum(r['cell_improved'] for r in summaries),
+        successor_improved=sum(r['successor_improved'] for r in summaries),
+        newly_certified_baseline=sum(r['matches_archived_baseline'] and r['correlated_certified'] and not r['original_certified'] for r in summaries),
+        original_certified=sum(r['original_certified'] for r in summaries),correlated_certified=sum(r['correlated_certified'] for r in summaries),
+        positions_with_shared_children=sum(r['shared_children']>0 for r in summaries),
+        calculation_ms=dict(total=sum(r['milliseconds'] for r in summaries),maximum=max(r['milliseconds'] for r in summaries),median=statistics.median(r['milliseconds'] for r in summaries)),
+        rows=summaries,certificate_basis='For row and column policies p,q, each first-action regret is bounded by max(i,j) [(Aq)_i-(pA)_j]. '
+            'Cell coefficients are combined before bounding; identical successor values also share a coefficient. '
+            'Pending mass remains independent in [0,1]. All affine upper bounds are independently recomputed with exact rational '
+            'arithmetic over the stored floating-point model, including normalized policies. Engine transition and child bounds '
+            'retain the existing solver numerical assumptions.',
+        scope='Read-only diagnostic after 40000-run, 12000-node searches on all 41 unresolved positions. Original search outcomes '
+              'are unchanged. Calculation time includes model extraction and bounding, excludes JSON export, and is additional '
+              'to search time. First-action full-information certificates only; no default solver or bot policy change.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle,True)==json.loads((archive/'summary.json').read_bytes())
+        print('correlated-root: verified search parity and exact rational correlated bounds for all 41 positions')
+        return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-correlated-root-'))
+    print(directory,flush=True)
+    paths=list(json.loads(gzip.decompress(prior.read_bytes()))['manifest']['sources'])+['crates/bot/src/bounds/correlated.rs']
+    hashes={p:sha((root/p).read_bytes()) for p in paths}
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if args.import_directory:
+        manifest=json.loads((directory/'manifest.json').read_bytes())
+        assert manifest['sources']==hashes
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','strategy_frontier'],cwd=root,env=env,check=True)
+        shutil.copy2(root/'target/release/examples/strategy_frontier',directory/'runner')
+        manifest=dict(sources=hashes,binary_sha256=sha((directory/'runner').read_bytes()))
+        (directory/'manifest.json').write_text(json.dumps(manifest))
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress(frontier['corpus'].read_bytes()))
+        (directory/'requests.json').write_text(json.dumps(frontier['requests']()))
+        with (directory/'run.log').open('w') as log:
+            subprocess.run([str(directory/'runner'),str(directory/'corpus.jsonl'),str(directory/'requests.json'),
+                str(directory/'records.jsonl'),'40000','12000','24','1000','4096','false','false','false','--correlation'],
+                cwd=root,env=env,stdout=log,stderr=log,check=True)
+    assert manifest['binary_sha256']==sha((directory/'runner').read_bytes())
+    assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
+    bundle=dict(manifest=manifest,prior_sha256=sha(prior.read_bytes()),reference_sha256=sha(reference_path.read_bytes()),baseline_sha256=sha(baseline_path.read_bytes()),
+        rows=[json.loads(s) for s in (directory/'records.jsonl').read_text().splitlines()])
+    report=summarize(bundle,True)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='rows'},indent=2))
+
+
+if __name__=='__main__':main()

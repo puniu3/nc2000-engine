@@ -17,8 +17,10 @@ struct Game {
 struct Request { game: usize, decision: usize, side: usize }
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    assert!((11..=15).contains(&args.len()), "corpus requests output runs nodes depth call-runs cell-cap retain-prefix defer-frontier [profile-selection] [milliseconds] [resource-closure-nodes] [strategy-refinement]");
+    let mut args: Vec<String> = std::env::args().collect();
+    let correlation = args.last().is_some_and(|s|s=="--correlation");
+    if correlation { args.pop(); }
+    assert!((11..=15).contains(&args.len()), "corpus requests output runs nodes depth call-runs cell-cap retain-prefix defer-frontier [profile-selection] [milliseconds] [resource-closure-nodes] [strategy-refinement] [--correlation]");
     let requests: Vec<Request> = serde_json::from_str(&std::fs::read_to_string(&args[2]).unwrap()).unwrap();
     let work_budget: usize = args[4].parse().unwrap();
     let node_budget: usize = args[5].parse().unwrap();
@@ -108,6 +110,13 @@ fn main() {
                     record["strategy_refinement"]=json!({"enabled":strategy_refinement,
                         "policy_trials":stats.strategy_refinement_trials,"ceiling_trials":stats.strategy_ceiling_trials,
                         "sufficient_reply_skips":stats.sufficient_reply_skips});
+                }
+                if correlation {
+                    let started=Instant::now();
+                    let model=solver.root_correlation(&battle).unwrap();
+                    let bounds=model.loss_bounds();
+                    let milliseconds=started.elapsed().as_secs_f64()*1000.;
+                    record["correlation"]=json!({"model":model,"bounds":bounds,"milliseconds":milliseconds});
                 }
                 if profile_pending_selection {
                     record["pending_profile"]=json!({"nanoseconds":stats.pending_selection_ns,

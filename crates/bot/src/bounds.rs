@@ -17,6 +17,9 @@
 //! chance/simultaneous analogue of a null-window search. Default for
 //! corpus violation mining; width mode remains for numeric anchors.
 
+mod correlated;
+pub use correlated::{AffineCell, CorrelatedLoss, RootCorrelation};
+
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -4085,6 +4088,12 @@ mod tests {
                         for s in 0..2 {
                             let policy:Vec<_>=policies[s].actions.iter().map(|(_,p)|*p).collect();
                             assert!(exact.policy_loss(s,&policy).hi<=policies[s].max_loss+1e-8);
+                        }
+                    }
+                    if let Some(model)=solver.root_correlation(&root) {
+                        let correlated=model.loss_bounds();
+                        for s in 0..2 {
+                            assert!(exact.policy_loss(s,&model.policies[s]).hi<=correlated.max_loss[s]+1e-8);
                         }
                     }
                     if report.strategy(side,1e-8).is_some() { certified=true;break; }
