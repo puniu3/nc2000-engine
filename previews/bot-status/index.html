@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NC2000 — bot強化の現状</title>
+<style>
+:root{color-scheme:light;--ink:#26352f;--sub:#59675f;--line:#d6dcd2;--paper:#f5f3ec;--green:#265e46;--amber:#80591b}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.8 -apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;-webkit-tap-highlight-color:transparent}main{max-width:1000px;margin:auto;padding:44px 32px 60px}header{border-bottom:1px solid var(--line);padding-bottom:24px}.meta{font-size:13px;color:var(--sub);letter-spacing:.04em}.eyebrow{margin:0 0 15px;color:var(--green);font-weight:650}h1{font-size:clamp(27px,4.4vw,40px);line-height:1.45;letter-spacing:-.025em;margin:0 0 18px}h2{font-size:23px;margin:0 0 15px;line-height:1.5}h3{font-size:17px;margin:0 0 10px}p{margin:0 0 14px}.lead{max-width:780px;font-size:18px}.status{display:inline-block;border:1px solid #c9b486;border-radius:5px;background:#eee5ce;color:#624613;padding:3px 11px;font-size:13px;font-weight:650;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:25px 0 34px}.card{padding:19px 20px;background:#fffefa;border:1px solid var(--line);border-radius:8px}.card .label{font-size:13px;color:var(--sub)}.card strong{display:block;font-size:22px;line-height:1.45;margin:7px 0}.card p{font-size:14px;margin:0}.section{margin:34px 0}.note{color:var(--sub);font-size:14px}.evidence{display:grid;grid-template-columns:145px minmax(0,1fr);gap:22px;padding:22px 0;border-top:1px solid var(--line)}.metric{font-size:29px;font-weight:650;color:var(--green);line-height:1.25}.metric small{display:block;font-size:13px;font-weight:400;color:var(--sub);margin-top:9px}.evidence p:last-child{margin-bottom:0}.boundary{border-left:4px solid #b9914b;background:#eee9db;padding:19px 23px;margin:22px 0}.comparison{width:100%;border-collapse:collapse;font-size:15px}.comparison th,.comparison td{padding:13px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}.comparison th{font-weight:600;color:var(--sub)}.comparison td:first-child{width:29%;font-weight:600}ol{padding-left:1.5em}li{margin:9px 0}a{color:var(--green);text-underline-offset:4px}a:focus-visible,summary:focus-visible{outline:3px solid #a58b44;outline-offset:4px}details{border:1px solid var(--line);border-radius:7px;padding:15px 19px;background:#fffefa}summary{cursor:pointer;font-weight:600;padding:4px 0}details[open] summary{margin-bottom:15px}code{font-size:.92em;background:#e9eee7;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}footer{border-top:1px solid var(--line);padding-top:22px;margin-top:35px;font-size:13px;color:var(--sub)}.small{font-size:14px}.tag{font-size:12px;color:var(--amber);font-weight:650} @media(max-width:650px){main{padding:27px 20px 45px}.grid{grid-template-columns:1fr;gap:10px}.card{padding:14px 17px}.card strong{font-size:20px;margin:3px 0}.evidence{grid-template-columns:1fr;gap:13px}.metric small{display:inline;margin-left:12px}.comparison th,.comparison td{padding:11px 7px;font-size:14px}.comparison td:first-child{width:32%}.lead{font-size:17px}}
+</style>
+</head>
+<body><main>
+<header>
+<p class="eyebrow">NC2000 ENGINE / 開発状況</p>
+<span class="status">デプロイ版に対する強化：未確認</span>
+<h1>デプロイ済みbotより強いとは、<br>まだ言えません。</h1>
+<p class="lead">局面限定で誤手を減らす方法は証明できました。ただし、直近の成果は検証用です。非公開情報を含む本番条件への対応と、実際のbotへの組込みが残っています。</p>
+<p class="meta">確認日 2026年10月7日 JST · 研究版 <code>410505f</code> 時点</p>
+</header>
+<div class="grid">
+<article class="card"><span class="label">本番で動いている版</span><strong>c7b11e8</strong><p>10月6日 03:47 JST デプロイ成功。GitHub Pagesの履歴を今回確認。</p></article>
+<article class="card"><span class="label">ゲームの解析で分かったこと</span><strong>改善余地はある</strong><p>一部の終盤で最適でない選択を証明。ゲーム全体の天井は未確定。</p></article>
+<article class="card"><span class="label">直近の証明を本番へ適用</span><strong>未統合</strong><p>検証用の手の除外を、そのまま本番に適用できない反例も発見。</p></article>
+</div>
+<section class="section">
+<h2>「強くなった」と言える範囲</h2>
+<table class="comparison"><thead><tr><th>対象</th><th>現状</th></tr></thead><tbody>
+<tr><td>公開中のbot</td><td>今回の終盤証明・手の除外は入っていません。今回の研究による強化を公開版には反映していません。</td></tr>
+<tr><td>ローカルの通常bot</td><td>デプロイ版との差分はあります。しかし、現行ローカル版がデプロイ版を上回るという検証結果は、今回確認した記録にはありません。</td></tr>
+<tr><td>検証用の証明付き選択</td><td>相手の真の構成を固定した特定局面では誤手を除去できました。これを通常の非公開情報対戦の強さとは数えません。</td></tr>
+<tr><td>最適戦略への到達</td><td>一部の局面を狭い誤差で解けています。未公開の技・能力値・選出を含む全体の最適戦略は未解決です。</td></tr>
+</tbody></table>
+</section>
+<section class="section">
+<h2>今回の進展と、その限界</h2>
+<article class="evidence"><div class="metric">5 / 32 → 0<small>同一局面・探索乱数32通り</small></div><div><h3>構成が分かる条件では、誤手を取り除けた</h3><p>相手の真の構成を固定した探索で、27,000回探索後の誤手が5件。証明に基づく除外を記録済みの選択に適用すると0件になりました。完全情報探索でも9件から0件です。</p><p class="note">32試合の勝敗ではありません。本番対戦の勝率向上を示す数値ではありません。焦点の局面では証明に2,558回のエンジン実行を使用。</p></div></article>
+<article class="evidence"><div class="metric">同じ観測<small>未公開技だけが違う反例</small></div><div><h3>その除外規則を本番に移すと、勝ち目を消し得る</h3><p>未公開の「だいもんじ」を「なきごえ」に置き換えても、対戦ログと39時点の観測は同じでした。ところが前回唯一残した「すてみタックル」固定は、この構成に対して確定負けにできます。</p><p>「すてみタックル」と「じしん」を半々で選び、その後は「すてみタックル」を使う方針には、調べた両構成に対して<strong>少なくとも0.0422%の勝率保証</strong>があります。</p><p class="note">0.0422%は、この不利な局面での保証下限を切り下げた値です。全対戦の改善幅でも、未公開構成すべてへの保証でもありません。改善の証明が、ごく小さな勝ち目を扱う段階にあることも示しています。</p></div></article>
+<article class="evidence"><div class="metric" style="font-size:23px">14勝 / 18敗<small>以前の探索候補・小規模試験</small></div><div><h3>対戦試験からも、強化済みとは言えない</h3><p>相手の構成別に応手を評価する別の探索候補は、通常探索との32試合で14勝18敗。優位性を示していません。</p><p class="note">16組の先後入替試験。95%区間は約28.6〜58.9%。同じ27,000探索回数で、同一時間を強制した比較ではありません。現行ローカル版と最新デプロイ版の直接比較ではなく、直近の証明付き除外とも別の実験です。</p></div></article>
+</section>
+<div class="boundary"><strong>成果は「強化完了」ではなく、改善できる局面と、誤って強くなったと判断する条件の特定です。</strong><p class="small" style="margin:8px 0 0">直近の2コミットは検証コードと結果の追加で、通常bot・ゲームエンジン・ブラウザ実行部に変更はありません。一方、デプロイ版との差分全体には通常動作の変更も含まれるため、ローカル版と公開版が同一だとは扱っていません。</p></div>
+<section class="section">
+<h2>ここから「強くした」と言うために</h2>
+<ol>
+<li><strong>観測と矛盾しない構成へ証明を広げる。</strong>都合のよい真の構成だけで手を除外せず、未公開構成を増やしても保証できる方針を求める。</li>
+<li><strong>証明が足りなければ手を残す形で組み込む。</strong>改善が保証された局面だけで選択を変え、計算費用も計測する。</li>
+<li><strong>本番と同じ情報・計算時間で差分を確認する。</strong>ゲーム由来の証明を中心に、対戦試験を回帰確認として使う。人間プレイヤーの強さを天井や較正基準にはしない。</li>
+</ol>
+</section>
+<details><summary>根拠と確認範囲</summary>
+<p class="small">本番：<code>c7b11e8</code>。<a href="https://github.com/puniu3/nc2000-engine/actions/runs/37358345981">Pagesの成功履歴</a>と最新デプロイの成功ステータスを確認しました。ローカル研究：<code>410505f</code>。</p>
+<p class="small">公開版とローカルの <code>crates/bot/src</code> には20ファイルの差分があります。両方の既定の構成補完方針は EarlyPerish ですが、ローカルには選出の合計レベル制約などの変更もあります。差分の存在を強化の証明とは扱っていません。</p>
+<p class="small">証明資料：<code>terminal-certificate-v1</code> と <code>hidden-terminal-v1</code>。後者は全件再現、確率・局面ID・観測の改変を拒否する検査まで実施済み。今回の報告作成では保存結果とソース差分を確認し、新しい対戦実験は行っていません。</p>
+<p class="small">以前の対戦候補：<code>typed-agent-pilot-v1</code>。近縁の <code>positive-margin-agent-pilot-v1</code> も同じ14勝18敗で、独立した64試合として合算していません。</p>
+<a href="./evidence.json">確認記録・数値・資料のハッシュを開く</a>
+</details>
+<footer>NC2000 bot強化の現状 · このページはローカルpreviewです。公開botのデプロイは行っていません。</footer>
+</main></body></html>

@@ -1,0 +1,230 @@
+{
+  "checked_at": "2026-10-07T02:02:07.994424+09:00",
+  "local_research_commit": "410505f174c038944e893ce042c744f1b0444f6d",
+  "deployment": {
+    "sha": "c7b11e882d75e552fd62c530012eb7c2d82b9e64",
+    "id": 6867231409,
+    "state": "success",
+    "updated_at": "2026-10-05T18:47:23Z",
+    "url": "https://puniu3.github.io/nc2000-engine/",
+    "workflow_url": "https://github.com/puniu3/nc2000-engine/actions/runs/37358345981"
+  },
+  "bot_source_files_differing": [
+    "crates/bot/src/agent.rs",
+    "crates/bot/src/belief.rs",
+    "crates/bot/src/blind.rs",
+    "crates/bot/src/bounds.rs",
+    "crates/bot/src/bounds/correlated.rs",
+    "crates/bot/src/duel.rs",
+    "crates/bot/src/endgame.rs",
+    "crates/bot/src/exact.rs",
+    "crates/bot/src/exp3.rs",
+    "crates/bot/src/horizon_pp.rs",
+    "crates/bot/src/hp_evidence.rs",
+    "crates/bot/src/hp_transition.rs",
+    "crates/bot/src/import.rs",
+    "crates/bot/src/lib.rs",
+    "crates/bot/src/observe.rs",
+    "crates/bot/src/pick_prior.rs",
+    "crates/bot/src/position.rs",
+    "crates/bot/src/root_policy.rs",
+    "crates/bot/src/smmcts.rs",
+    "crates/bot/src/value.rs"
+  ],
+  "recent_runtime_diff": "",
+  "sources": {
+    "findings/terminal-certificate-v1/summary.json": {
+      "sha256": "2074712375fdce78b57bac4bcea68ceeb44e5584eb4f73d293a44747d774e4f1",
+      "data": {
+        "focus_counts": {
+          "skuct": {
+            "before": 9,
+            "after": 0
+          },
+          "pinned": {
+            "before": 5,
+            "after": 0
+          }
+        },
+        "focus_proof_runs": 2558,
+        "focus_side_one_bounds": [
+          0.0011268028580754066,
+          0.001126802920099368
+        ],
+        "scope": "All instrumented baseline search outputs match the previous archive exactly after removing joint-matrix fields. Matrix counts and reward sums reconstruct every action statistic. On the HP87 counterexample, most Earthquake reward in erroneous selections comes from other opposing root choices; positive reward remains when the opposing first choice is Earthquake. This does not isolate later exploration from rollout evaluation. Comparing only Double Edge and Earthquake against the most sampled reply or their worst observed reply leaves 5 pinned failures, fixing three old failures but introducing three new ones. No mean-ranking change is adopted. Separate one-step Double Edge and two-step Earthquake ledgers enumerate exact chance support. A qualitative complete-support proof makes the other three side-one first choices certain losses in twelve states. The HP86 state gives side one value zero for all choices. Numeric bounds are independently checked using rational backups and padding. A generic certificate filter removes an action only when its upper bound is strictly below an own-policy lower bound; the budget-one controls remove nothing. Applied to recorded searches, it corrects all observed certified mistakes without rejecting an optimal action. Side-one positive guarantees come entirely from immediate terminal outcomes and therefore hold for any legal later continuation after Double Edge, not just the fixed continuation used in longer searches. The focus value lies in a roughly 6.3e-11 interval with 2558 engine runs. These are full-state and true-roster-pinned diagnostics, not production belief certificates. The filter is implemented in this audit tool only. Hidden-state coverage, runtime integration and broader strength gains remain unproved. Engine transitions, chance support and guarded identities remain trusted. No production code was changed."
+      }
+    },
+    "findings/hidden-terminal-v1/summary.json": {
+      "sha256": "473190faf093b4065ee737b22ae9e9209a179c0cd54120a77c6df524f1574ff1",
+      "data": {
+        "two_roster_mixed_lower": 0.000422551054156736,
+        "mixed_policy_lower": 0.000422551054156736,
+        "side_one_pure_first_security_upper": {
+          "move doubleedge": 0,
+          "move earthquake": 0,
+          "move selfdestruct": 0,
+          "move curse": 0
+        },
+        "shared_history_states": 39,
+        "proof_runs": 278880,
+        "scope": "A replacement of unrevealed Fire Blast by level-one Growl preserves the original egg-move combination and all other roster fields. Both rosters pass the native flat-learnset validator; the archived source learnsets also identify Growl as a level-one move, with no new egg/event constraint. Both complete engine logs, side-one protocol projections and 39 Observer snapshots are identical. The first hidden move is never selected before the target. Original guarded keys are checked at each corpus decision and every recorded chance-path child. Each alternative ledger uses its own guarded identity. Against the Growl roster every pure side-one first action has security zero: Growl then Earthquake defeats Double Edge; Earthquake twice defeats the other three. A half Double Edge / half Earthquake first move followed by Double Edge has a strictly positive guarantee against every opposing first action and adaptive later choices. Mixed-policy weights are fixed before the simultaneous choice. Thus the previous full-state filter can remove all positive-security policies under an observationally identical legal roster. This is a two-roster counterexample to transferring that filter, not a solution of the complete information set or a claim about an optimal Bayesian prior. Partial enumeration and horizon leaves remain [0,1]. Production bot code is unchanged; no human-player calibration is used."
+      }
+    },
+    "findings/typed-agent-pilot-v1/summary.json": {
+      "sha256": "88c7388f9eb3eae7eff2a1ef401565310a3d1906efc9f5cd797fc4d1d8d3bf18",
+      "data": {
+        "games": 32,
+        "pairs": 16,
+        "result": {
+          "games": 32,
+          "pairs": 16,
+          "wins": 14,
+          "losses": 18,
+          "ties": 0,
+          "turn_caps": 0,
+          "invalid_games": 0,
+          "score": 0.4375,
+          "ci95": 0.15168910090488813,
+          "ci_unit": "side_swap_pair",
+          "pair_scores": [
+            0.5,
+            1.0,
+            1.0,
+            0.5,
+            0.5,
+            0.0,
+            0.5,
+            0.5,
+            0.5,
+            0.0,
+            0.0,
+            0.5,
+            0.5,
+            0.5,
+            0.0,
+            0.5
+          ],
+          "game_scores": [
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "split_pairs": 6,
+          "turns_sum": 500,
+          "avg_turns": 15.625,
+          "wall_secs": 182.203613417
+        },
+        "mean_think_ms": {
+          "a": 609.1461029641638,
+          "b": 609.9866625694915
+        },
+        "scope": "Uniform scheduling from the current 24-team catalog with the weighted 103-candidate belief pool; both agents use 27000 iterations. Timing is measured, not forced equal wall time. Root telemetry counts non-preview decisions with at least two legal actions. Sixteen paired schedule blocks screen activation and regressions, not optimality or general strength. Opponent replies are now optimized per sampled private type; the unrevealed Quick Claw coin is averaged within types. The probe phase balances joint cells within each sampled type."
+      }
+    },
+    "findings/positive-margin-agent-pilot-v1/summary.json": {
+      "sha256": "95c14665f2cf730c81e04510f8c6ec688618effbd9d875ce440ed21e32d02b5f",
+      "data": {
+        "games": 32,
+        "pairs": 16,
+        "result": {
+          "games": 32,
+          "pairs": 16,
+          "wins": 14,
+          "losses": 18,
+          "ties": 0,
+          "turn_caps": 0,
+          "invalid_games": 0,
+          "score": 0.4375,
+          "ci95": 0.15168910090488813,
+          "ci_unit": "side_swap_pair",
+          "pair_scores": [
+            0.5,
+            1.0,
+            1.0,
+            0.5,
+            0.5,
+            0.0,
+            0.5,
+            0.5,
+            0.5,
+            0.0,
+            0.0,
+            0.5,
+            0.5,
+            0.5,
+            0.0,
+            0.5
+          ],
+          "game_scores": [
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "split_pairs": 6,
+          "turns_sum": 500,
+          "avg_turns": 15.625,
+          "wall_secs": 230.78320375
+        },
+        "scope": "Uniform scheduling from the current 24-team catalog with the weighted 103-candidate belief pool; both agents use 27000 iterations. Timing is measured, not forced equal wall time. Root telemetry counts non-preview decisions with at least two legal actions. Sixteen paired schedule blocks screen activation and regressions, not optimality or general strength. Opponent replies are now optimized per sampled private type; the unrevealed Quick Claw coin is averaged within types. The probe phase balances joint cells within each sampled type. Mixture acceptance requires a positive heuristic margin above numerical tolerance, without a fixed two-point floor. The probe activation screen remains at two estimated points."
+      }
+    }
+  }
+}
