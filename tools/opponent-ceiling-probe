@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import json
+import math
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/opponent-ceiling-v1'
+refined = runpy.run_path(str(root / 'tools/root-refinement-probe'))
+late = refined['late']; policy = late['policy']; verify = late['verify']; sha = policy['sha']
+corpus = late['corpus']
+previous = 'findings/root-refinement-v1/records.json.gz'
+inputs = [previous, 'findings/root-refinement-v1/summary.json', corpus,
+          'findings/late-root-witness-v1/records.json.gz', 'tools/root-refinement-probe',
+          'tools/root-policy-probe', 'tools/policy-witness-probe', 'tools/opponent-ceiling-probe']
+
+
+def specs():
+    cases = {n: dict(late['specs']()[0][n], rounds=100, node_budget=500000)
+             for n in ['snorlax-curse', 'snorlax-earthquake']}
+    base = dict(game=21, decision=36, target_side=1, policy_side=1,
+                first_choice='move earthquake', priority=cases['snorlax-curse']['priority'],
+                rest_at_percent=None, horizon=10, work_budget=200000, cell_cap=32, guarded_keys=True)
+    ledgers = {'quake-support': base, 'curse-support': dict(base, first_choice='move curse')}
+    for cap in [128, 512]:
+        ledgers['all' + str(cap)] = dict(base, cell_cap=cap, horizon=6, work_budget=500000)
+    ledgers['floor'] = dict(base, cell_cap=1, horizon=1, work_budget=1)
+    return cases, ledgers
+
+
+def check_ledger(name, raw, record, state_key):
+    spec = specs()[1][name]
+    assert json.loads(raw) == record['config'] == spec
+    assert record['nodes'][-1]['state_key'] == state_key
+    assert record['scheduler'] == ('guided-support-v1' if name.endswith('support') else 'guided-mass-v1')
+    result = verify(record)
+    for n in record['nodes']:
+        for b in n.get('branches', []):
+            assert b['engine_pending'] >= 0 and b['deferred_mass'] >= 0
+            assert abs(b['engine_pending'] + b['deferred_mass'] - b['pending']) < 1e-10
+    if name == 'floor': assert result['bounds'] == [0, 1]
+    else: assert result['bounds'][0] > 0
+    result['reply_bounds'] = {b['choices'][0]: b['bounds'] for b in record['nodes'][-1]['branches']}
+    return result
+
+
+def summarize(bundle):
+    assert bundle['inputs'] == {p: sha((root / p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes'] == {p: sha((root / p).read_bytes()) for p in bundle['source_hashes']}
+    old = json.loads(gzip.decompress((root / previous).read_bytes()))
+    prior = refined['summarize'](old)
+    assert prior == json.loads((root / inputs[1]).read_bytes())
+    earlier = json.loads(gzip.decompress((root / inputs[3]).read_bytes()))
+    cases, ledgers = specs(); outputs = bundle['outputs']; manifests = bundle['manifests']
+    assert set(manifests) == set(outputs) == set(cases) | set(ledgers)
+    rows = {}; proofs = {}; prefixes = {}
+    for name, spec in cases.items():
+        assert json.loads(manifests[name]) == spec
+        rows[name] = policy['check'](manifests[name], late['projected'](outputs[name]))
+        count = 24 if name == 'snorlax-curse' else 25
+        assert outputs[name]['rounds'][:count] == earlier['outputs'][name]['rounds'][:count]
+        prefixes[name] = count
+        assert rows[name]['bounds'][0] == 0
+    state_key = outputs['snorlax-curse']['state_key']
+    for name in ledgers:
+        proofs[name] = check_ledger(name, manifests[name], outputs[name], state_key)
+    for fault in ['coverage', 'mass', 'unknown', 'accounting']:
+        if fault == 'accounting':
+            bad = copy.deepcopy(outputs['snorlax-curse']); bad['rounds'][-1]['total_runs'] += 1
+            check = lambda: policy['check'](manifests['snorlax-curse'], late['projected'](bad))
+        else:
+            bad = copy.deepcopy(outputs['all512']); node = bad['nodes'][-1]
+            if fault == 'coverage': node['branches'].pop()
+            elif fault == 'mass': node['branches'][0]['children'][0]['mass'] *= 2
+            else: next(n for n in bad['nodes'] if n['kind'] in ['budget', 'horizon'])['bounds'] = [1, 1]
+            check = lambda: verify(bad)
+        try: check()
+        except (AssertionError, ValueError): pass
+        else: raise AssertionError(fault)
+    lower = prior['side_zero_lower']
+    own_lower = max(p['bounds'][0] for p in proofs.values())
+    upper = math.nextafter(1 - own_lower, math.inf)
+    assert lower < upper < 1 and own_lower == proofs['all512']['bounds'][0]
+    pure_upper = {a: math.nextafter(1 - max(p['reply_bounds'][a][0] for p in proofs.values()), math.inf)
+                  for a in proofs['all512']['reply_bounds']}
+    assert all(v > lower for v in pure_upper.values())
+    return dict(rows=rows, proofs=proofs, preserved_prefix_rounds=prefixes,
+        side_zero_game_bounds=[lower, upper], side_one_game_bounds=[own_lower, math.nextafter(1 - lower, math.inf)],
+        side_zero_pure_first_upper=pure_upper, remaining_unresolved=prior['remaining_unresolved'],
+        witness_engine_runs=sum(r['runs'] for r in rows.values()) + sum(p['runs'] for p in proofs.values()),
+        scope='Exact game 21 decision 36. Increasing the two native opponent-policy searches to '
+              'two million runs and a 500000-node cap gives no positive whole-policy lower bound. '
+              'The Curse search reaches the node cap. Separate finite-horizon ledgers keep every '
+              'side-zero future action and fix side-one first Curse or Earthquake, then Double Edge '
+              'priority. Guided enumeration assigns exact scripted draw probabilities, never sample '
+              'frequencies; unknown chance and horizon mass remains [0,1]. The baseline scheduler '
+              'targets 1e-8 branch support and offers only endpoints for large draw alphabets. The '
+              'new scheduler offers every positive-mass draw class and targets 0.01 branch support; '
+              'it does not promise to reach that target. These are joint scheduling changes, not '
+              'a causal attribution to either change alone. Full ledgers are checked with rational '
+              'probability backups and outward padding, then reproducibly replayed. The strongest '
+              'single opponent-policy guarantee complements to an unrestricted side-zero game '
+              'upper bound, including simultaneous root mixtures. Per-pure-first upper bounds may '
+              'use different opponent policies and are not combined into a mixed-game bound. '
+              'They reject none of the side-zero first choices. The remaining game interval is '
+              'far too wide for a near-optimality claim. Engine transitions, chance partitioning '
+              'and guarded state identities remain trusted. No human calibration, production '
+              'search change, measured strength gain or normal hidden-information policy claim.')
+
+
+def execute(directory, manifests):
+    examples = ['root_policy_witness', 'support_policy_witness', 'support_mass_witness']
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot'] +
+                   [arg for n in examples for arg in ['--example', n]], cwd=root, check=True)
+    source = directory / 'corpus.jsonl'; source.write_bytes(gzip.decompress((root / corpus).read_bytes()))
+    env = dict(os.environ, NC2000_REPO_ROOT=str(root)); outputs = {}; cases, _ = specs()
+    for name, raw in manifests.items():
+        manifest = directory / 'manifest.json'; manifest.write_text(raw); output = directory / 'output.json'
+        example = 'root_policy_witness' if name in cases else 'support_policy_witness' if name.endswith('support') else 'support_mass_witness'
+        command = [str(root / 'target/release/examples' / example), str(source), str(manifest), str(output)]
+        subprocess.run(command + ([] if name in cases else ['guided']), cwd=root, env=env, check=True, stderr=subprocess.DEVNULL)
+        outputs[name] = json.loads(output.read_bytes()); print(name, 'replayed', flush=True)
+    return outputs
+
+
+def main():
+    parser = argparse.ArgumentParser(); parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--replay', action='store_true'); parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert summarize(bundle) == json.loads((archive / 'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-opponent-ceiling-') as d:
+                assert execute(pathlib.Path(d), bundle['manifests']) == bundle['outputs']
+        print('opponent-ceiling: policy bounds, probability ledgers, prefixes and rejection controls verified'); return
+    assert not archive.exists() and args.import_directory
+    cases, ledgers = specs(); names = list(cases) + list(ledgers)
+    old = json.loads(gzip.decompress((root / previous).read_bytes()))
+    paths = set(old['source_hashes']) | {f'crates/bot/examples/{n}.rs' for n in ['support_policy_witness', 'support_mass_witness']}
+    bundle = dict(inputs={p: sha((root / p).read_bytes()) for p in inputs},
+        source_hashes={p: sha((root / p).read_bytes()) for p in sorted(paths)},
+        manifests={n: (args.import_directory / (n + '.json')).read_text() for n in names},
+        outputs={n: json.loads((args.import_directory / (n + '.out.json')).read_bytes()) for n in names})
+    report = summarize(bundle); archive.mkdir()
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
+    print('side-zero game bounds:', report['side_zero_game_bounds'])
+
+
+if __name__ == '__main__': main()

@@ -1,0 +1,280 @@
+{
+  "rows": {
+    "snorlax-curse": {
+      "side": 1,
+      "first": "move curse",
+      "priority": [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move selfdestruct"
+      ],
+      "bounds": [
+        0,
+        0.5058204466106326
+      ],
+      "root_cells": {
+        "move thunder": [
+          0.4941795533893674,
+          1
+        ],
+        "move hiddenpowerice": [
+          0.34348560793774124,
+          1
+        ],
+        "move rest": [
+          0.016639122597482014,
+          1
+        ],
+        "move sleeptalk": [
+          0.058769372793491925,
+          0.9999275055394206
+        ],
+        "switch 2": [
+          0.09156284670398651,
+          1
+        ]
+      },
+      "runs": 1989240,
+      "stop": "NodeBudget"
+    },
+    "snorlax-earthquake": {
+      "side": 1,
+      "first": "move earthquake",
+      "priority": [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move selfdestruct"
+      ],
+      "bounds": [
+        0,
+        0.3310590174027912
+      ],
+      "root_cells": {
+        "move thunder": [
+          0.6689409825972088,
+          0.9800720898822499
+        ],
+        "move hiddenpowerice": [
+          0.6451770098882696,
+          0.9675958105232316
+        ],
+        "move rest": [
+          0.04055551382231214,
+          0.9983862489461897
+        ],
+        "move sleeptalk": [
+          0.13786429646938408,
+          0.9670806739691464
+        ],
+        "switch 2": [
+          0.08198730372204377,
+          1
+        ]
+      },
+      "runs": 2000000,
+      "stop": "WorkExhausted"
+    }
+  },
+  "proofs": {
+    "quake-support": {
+      "runs": 3889,
+      "nodes": 268,
+      "bounds": [
+        3.716564601420935e-09,
+        0.9988854420496674
+      ],
+      "node_kinds": {
+        "terminal": 204,
+        "decision": 64
+      },
+      "partial_branches": 175,
+      "reply_bounds": {
+        "move thunder": [
+          1.983382064111084e-08,
+          0.9988854420496674
+        ],
+        "move hiddenpowerice": [
+          7.981984084356555e-08,
+          0.9999988931003587
+        ],
+        "move rest": [
+          1.0848004458310569e-08,
+          0.9999998495228468
+        ],
+        "move sleeptalk": [
+          3.2553013507582364e-08,
+          0.9999995485595387
+        ],
+        "switch 2": [
+          3.716564601420935e-09,
+          0.999298735668471
+        ]
+      }
+    },
+    "curse-support": {
+      "runs": 90911,
+      "nodes": 7757,
+      "bounds": [
+        2.275084677271691e-09,
+        0.998397134079916
+      ],
+      "node_kinds": {
+        "terminal": 5403,
+        "decision": 2354
+      },
+      "partial_branches": 6952,
+      "reply_bounds": {
+        "move thunder": [
+          4.160425509729593e-09,
+          0.998406697825779
+        ],
+        "move hiddenpowerice": [
+          2.275084677271691e-09,
+          0.9998071134423323
+        ],
+        "move rest": [
+          4.041572205260227e-09,
+          0.9999949607808979
+        ],
+        "move sleeptalk": [
+          1.3268054156186338e-08,
+          0.9999993847007437
+        ],
+        "switch 2": [
+          1.0841756149144156e-08,
+          0.998397134079916
+        ]
+      }
+    },
+    "all128": {
+      "runs": 500000,
+      "nodes": 6382,
+      "bounds": [
+        1.4320268289408799e-06,
+        0.9949417446274273
+      ],
+      "node_kinds": {
+        "terminal": 4325,
+        "decision": 1743,
+        "horizon": 314
+      },
+      "partial_branches": 6038,
+      "reply_bounds": {
+        "move thunder": [
+          0.0004194166003019226,
+          0.9973315255776972
+        ],
+        "move hiddenpowerice": [
+          0.0001966950098904883,
+          0.99549249527245
+        ],
+        "move rest": [
+          1.4689109065958187e-05,
+          0.9999456439530143
+        ],
+        "move sleeptalk": [
+          0.0013714164521447605,
+          0.9949417446274273
+        ],
+        "switch 2": [
+          1.4320268289408799e-06,
+          0.9999024249768325
+        ]
+      }
+    },
+    "all512": {
+      "runs": 500000,
+      "nodes": 4094,
+      "bounds": [
+        0.0002887603375968567,
+        0.994255259082408
+      ],
+      "node_kinds": {
+        "terminal": 3202,
+        "decision": 890,
+        "horizon": 2
+      },
+      "partial_branches": 2261,
+      "reply_bounds": {
+        "move thunder": [
+          0.004015353795128372,
+          0.994255259082408
+        ],
+        "move hiddenpowerice": [
+          0.008719219545642618,
+          0.9982159052717
+        ],
+        "move rest": [
+          0.00044898014234215475,
+          0.999941157336071
+        ],
+        "move sleeptalk": [
+          0.009324564913957181,
+          0.9987102559420794
+        ],
+        "switch 2": [
+          0.0002887603375968567,
+          0.9999244496948617
+        ]
+      }
+    },
+    "floor": {
+      "runs": 1,
+      "nodes": 1,
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "node_kinds": {
+        "decision": 1
+      },
+      "partial_branches": 5,
+      "reply_bounds": {
+        "move thunder": [
+          0.0,
+          1.0
+        ],
+        "move hiddenpowerice": [
+          0.0,
+          1.0
+        ],
+        "move rest": [
+          0.0,
+          1.0
+        ],
+        "move sleeptalk": [
+          0.0,
+          1.0
+        ],
+        "switch 2": [
+          0.0,
+          1.0
+        ]
+      }
+    }
+  },
+  "preserved_prefix_rounds": {
+    "snorlax-curse": 24,
+    "snorlax-earthquake": 25
+  },
+  "side_zero_game_bounds": [
+    0.5594714803771639,
+    0.9997112396624033
+  ],
+  "side_one_game_bounds": [
+    0.0002887603375968567,
+    0.4405285196228362
+  ],
+  "side_zero_pure_first_upper": {
+    "move thunder": 0.9959846462048717,
+    "move hiddenpowerice": 0.9912807804543575,
+    "move rest": 0.9995510198576579,
+    "move sleeptalk": 0.9906754350860429,
+    "switch 2": 0.9997112396624033
+  },
+  "remaining_unresolved": 42,
+  "witness_engine_runs": 5084041,
+  "scope": "Exact game 21 decision 36. Increasing the two native opponent-policy searches to two million runs and a 500000-node cap gives no positive whole-policy lower bound. The Curse search reaches the node cap. Separate finite-horizon ledgers keep every side-zero future action and fix side-one first Curse or Earthquake, then Double Edge priority. Guided enumeration assigns exact scripted draw probabilities, never sample frequencies; unknown chance and horizon mass remains [0,1]. The baseline scheduler targets 1e-8 branch support and offers only endpoints for large draw alphabets. The new scheduler offers every positive-mass draw class and targets 0.01 branch support; it does not promise to reach that target. These are joint scheduling changes, not a causal attribution to either change alone. Full ledgers are checked with rational probability backups and outward padding, then reproducibly replayed. The strongest single opponent-policy guarantee complements to an unrestricted side-zero game upper bound, including simultaneous root mixtures. Per-pure-first upper bounds may use different opponent policies and are not combined into a mixed-game bound. They reject none of the side-zero first choices. The remaining game interval is far too wide for a near-optimality claim. Engine transitions, chance partitioning and guarded state identities remain trusted. No human calibration, production search change, measured strength gain or normal hidden-information policy claim."
+}
