@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import statistics
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/continuation-mean-v1'
+binary = root/'target/release/examples/counter_mix_probe'
+loss_exact = runpy.run_path(str(root/'tools/visit-policy-audit'))['loss']
+specs = [('screen', '2,3,4,5', 4, 27000, 2026110901, 10800, 'fresh-profile'),
+         ('failure', '4,5,6,7', 1, 108000, 13273324120501921058, 43200, 'adaptive')]
+modes = ['ucb', 'exp3', 'exp3-mean']
+references = ['findings/continuation-exp3-v1/27000/records.json.gz',
+              'findings/visit-policy-v1/holdout/records.json.gz']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def loss(record, side, policy):
+    assert min(policy) >= 0 and abs(sum(policy)-1) < 1e-10
+    fractions = list(map(F, policy))
+    total = sum(fractions)
+    return list(map(float, loss_exact(record, side, [p/total for p in fractions])))
+
+
+def summarize(bundle):
+    assert bundle['reference_sha256'] == {p: sha((root/p).read_bytes()) for p in references}
+    previous = json.loads(gzip.decompress((root/references[0]).read_bytes()))
+    failure = json.loads(gzip.decompress((root/references[1]).read_bytes()))['records']['bond-long']['record']
+    records = bundle['records']
+    for mode in ['ucb', 'exp3']:
+        rows = copy.deepcopy(records['screen-'+mode]['rows'])
+        for row in rows:
+            if row['mode'] == 'pinned':
+                del row['fresh_evidence']['profile']
+        assert rows == previous[mode]['rows'], mode
+    expected = [{**row, 'seed_index': 0} for row in failure['rows'] if row['seed_index'] == 15]
+    assert records['failure-ucb']['rows'] == expected
+    results = []
+    for label, battle_seed, count, iterations, seed_base, probes, phase in specs:
+        control = records[label+'-ucb']
+        for mode in modes:
+            r = records[label+'-'+mode]
+            assert r['source_hashes'] == control['source_hashes'] and r['binary_sha256'] == control['binary_sha256']
+            assert r['state_key'] == control['state_key'] and r['actions'] == control['actions']
+            assert (r['search_seeds'], r['iterations'], r['search_seed_base'], r['probe_iterations']) == (count, iterations, seed_base, probes)
+            assert r.get('continuation_exp3_ix', False) == (mode != 'ucb')
+            assert r.get('continuation_exp3_mean', False) == (mode == 'exp3-mean')
+            assert all(v['ok'] for v in r['validations'])
+            for row in r['rows']:
+                assert sum(row['visits']) == iterations
+                if row['mode'] != 'pinned':
+                    continue
+                side = row['side']
+                assert row['seed'] == seed_base ^ ((row['seed_index']*0x94d049bb133111eb) % (1 << 64))
+                assert sum(row['joint_probe_visits']) == row['probes_used']
+                fallback = [float(a == row['choice']) for a in r['actions'][side]]
+                policy = row['candidate_policy'] or fallback
+                cl, ch = r['proof']['cells'][4]
+                if side == 1:
+                    cl, ch = 1-ch, 1-cl
+                critical = next(c for c in row['joint'] if c['own'] == 1 and c['reply'] == r['actions'][1-side][1])
+                result = dict(case=label, mode=mode, side=side, seed=row['seed'], seed_index=row['seed_index'],
+                              fallback=row['choice'], fallback_loss=loss(r, side, fallback), policy=policy,
+                              candidate_loss=loss(r, side, policy), mixed=row['candidate_policy'] is not None,
+                              probes_used=row['probes_used'], critical_difference=[critical['mean']-ch, critical['mean']-cl])
+                if phase == 'fresh-profile':
+                    evidence = row['fresh_evidence']
+                    assert [v-p for v, p in zip(row['visits'], row['joint_probe_visits'])] == evidence['warm_visits']
+                    cells = evidence['phase_types'][0]['cells']
+                    assert sum(c['samples'] for c in cells) == probes
+                    fresh = next(c for c in cells if c['own'] == c['reply'] == 1)
+                    result['fresh_critical_difference'] = [fresh['mean']-ch, fresh['mean']-cl]
+                    result['search_ms'] = evidence['profile']['milliseconds']
+                    result['fresh_policy_loss'] = loss(r, side, evidence['phase_analysis']['policy'])
+                results.append(result)
+    groups = []
+    for label, *_ in specs:
+        for mode in modes:
+            for side in range(2):
+                rows = [r for r in results if (r['case'], r['mode'], r['side']) == (label, mode, side)]
+                groups.append(dict(case=label, mode=mode, side=side, seeds=len(rows), mixed=sum(r['mixed'] for r in rows),
+                                   mean_candidate_loss_upper=statistics.mean(r['candidate_loss'][1] for r in rows),
+                                   worst_candidate_loss_upper=max(r['candidate_loss'][1] for r in rows),
+                                   mean_fallback_loss_upper=statistics.mean(r['fallback_loss'][1] for r in rows),
+                                   mean_fresh_loss_upper=statistics.mean(r['fresh_policy_loss'][1] for r in rows) if label == 'screen' else None,
+                                   mean_search_ms=statistics.mean(r['search_ms'] for r in rows) if label == 'screen' else None))
+    pairs = []
+    for row in (r for r in results if r['mode'] == 'exp3-mean'):
+        before = next(r for r in results if (r['case'],r['mode'],r['side'],r['seed']) == (row['case'],'exp3',row['side'],row['seed']))
+        pairs.append(dict(case=row['case'], side=row['side'], seed=row['seed'],
+                          candidate_loss_change=[row['candidate_loss'][0]-before['candidate_loss'][1], row['candidate_loss'][1]-before['candidate_loss'][0]],
+                          fresh_loss_change=[row['fresh_policy_loss'][0]-before['fresh_policy_loss'][1],row['fresh_policy_loss'][1]-before['fresh_policy_loss'][0]] if row['case']=='screen' else None))
+    return dict(groups=groups, pairs=pairs, rows=results, default_and_exp3_archive_parity=True,
+                decision='Keep disabled by default. Averaging improves several Exp3 comparisons and avoids the known '
+                         'bad mixture, but ordinary-budget fresh-policy losses remain worse than UCB on both sides. '
+                         'The cumulative gated P0 mixture improves slightly; P1 retains the same pure fallback. '
+                         'These mixed signals do not establish general strength or justify adoption.',
+                scope='Four paired search seeds at 27000 simulations with fixed fresh probes, plus the known adaptive-probe '
+                      'counterexample at 108000 simulations. Both players are tested on legally replayed known-team Bond states. '
+                      'UCB and pre-existing Exp3 controls reproduce archived search rows exactly. Only non-root, non-preview '
+                      'Exp3 updates use sampled successor-decision mean returns; raw terminal returns still feed every node, '
+                      'public action totals and the root matrix. Forced nodes and newly expanded leaves receive raw statistics. '
+                      'Terminal and horizon returns are not averaged, and no convergence theorem is asserted for this game. '
+                      'Losses certify first-action distributions with optimal subsequent full-state play. Timing is diagnostic, '
+                      'not a matched-time strength result; the first UCB run overlapped the regression checks. '
+                      'The experimental flag is off by default.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle) == json.loads((archive/'summary.json').read_bytes())
+        print('continuation-mean: archived parity, paired seeds, probe accounting and certified losses verified')
+        return
+    assert not archive.exists()
+    directory = args.import_directory
+    if directory is None:
+        directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-continuation-mean-'))
+        print(directory, flush=True)
+        env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','counter_mix_probe'],cwd=root,env=env,check=True)
+        for name, seed, count, iterations, base, probes, phase in specs:
+            for mode in modes:
+                output = directory/(name+'-'+mode)
+                with output.with_suffix('.log').open('w') as log:
+                    subprocess.run([str(binary),str(output),seed,str(count),str(iterations),str(base),'bond',str(probes),phase,'16',mode],cwd=root,env=env,stdout=log,stderr=log,check=True)
+                print(name,mode,'complete',flush=True)
+    records = {name+'-'+mode: json.loads((directory/(name+'-'+mode)/'records.json').read_bytes()) for name,*_ in specs for mode in modes}
+    for record in records.values():
+        assert record['binary_sha256'] == sha(binary.read_bytes())
+        assert all(sha((root/p).read_bytes()) == h for p,h in record['source_hashes'])
+    bundle = dict(records=records, reference_sha256={p: sha((root/p).read_bytes()) for p in references})
+    report = summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report['groups'],indent=2))
+
+
+if __name__ == '__main__':
+    main()

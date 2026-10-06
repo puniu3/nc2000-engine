@@ -77,7 +77,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert!(
         (6..=11).contains(&args.len()),
-        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed|fresh|fresh-trace|fresh-profile|fresh-cutoff|fresh-cutoff-focus] [hp-buckets] [ucb|exp3]"
+        "output seed search-seeds iterations search-seed-base [family] [probe-iterations] [adaptive|typed|fresh|fresh-trace|fresh-profile|fresh-cutoff|fresh-cutoff-focus] [hp-buckets] [ucb|exp3|exp3-mean]"
     );
     let family = args.get(6).map(String::as_str).unwrap_or("counter");
     assert!(matches!(family, "counter" | "bond"));
@@ -100,9 +100,10 @@ fn main() {
     let hp_buckets: i64 = args.get(9).map(|s| s.parse().unwrap()).unwrap_or(16);
     let continuation_exp3_ix = match args.get(10).map(String::as_str).unwrap_or("ucb") {
         "ucb" => false,
-        "exp3" => true,
+        "exp3" | "exp3-mean" => true,
         mode => panic!("unknown continuation mode {mode}"),
     };
+    let continuation_exp3_mean = args.get(10).is_some_and(|mode| mode == "exp3-mean");
     let dex = conformance::load_dex();
     let teams: [Vec<PokemonSet>; 2] = if family == "bond" {
         bond::teams()
@@ -218,6 +219,7 @@ fn main() {
                 c: 0.4,
                 hp_buckets,
                 continuation_exp3_ix,
+                continuation_exp3_mean,
                 ..Default::default()
             },
             search_seed,
@@ -234,6 +236,7 @@ fn main() {
                     c: 0.4,
                     hp_buckets,
                     continuation_exp3_ix,
+                    continuation_exp3_mean,
                     ..Default::default()
                 },
                 s,
@@ -386,6 +389,7 @@ fn main() {
     if fresh { output["fresh_probes"] = json!(true); }
     if trace { output["trace_probes"] = json!(true); }
     if continuation_exp3_ix { output["continuation_exp3_ix"] = json!(true); }
+    if continuation_exp3_mean { output["continuation_exp3_mean"] = json!(true); }
     if profile { output["continuation_cutoff"] = json!(cutoff); }
     if cutoff_focus { output["continuation_cutoff_focus"] = json!(true); }
     if hp_buckets != 16 { output["hp_buckets"] = json!(hp_buckets); }

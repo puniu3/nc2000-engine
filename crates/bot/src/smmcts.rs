@@ -97,6 +97,7 @@ pub struct RmConfig {
     /// UCB1 exploration constant.
     pub c: f64,
     pub continuation_exp3_ix: bool,
+    pub continuation_exp3_mean: bool,
     /// Tree horizon in turns (same meaning as `MctsConfig::horizon`).
     pub horizon: u16,
     /// Rollout policy + leaf eval (shared with the M6 agent).
@@ -158,6 +159,7 @@ impl Default for RmConfig {
             mix_actions: 3,
             c: 1.0,
             continuation_exp3_ix: false,
+            continuation_exp3_mean: false,
             horizon: 100,
             playout: Playout::heavy(),
             threshold: 0.5,
@@ -183,7 +185,45 @@ pub(crate) struct Node {
     pub(crate) w: [Vec<f64>; 2],
     /// Team-preview node (always UCB1 + argmax).
     pub(crate) preview: bool,
-    exp3: [Option<crate::exp3::Exp3Ix>; 2],
+    continuation: Option<Box<ContinuationStats>>,
+}
+
+#[derive(Default)]
+struct ContinuationStats {
+    bandits: [Option<crate::exp3::Exp3Ix>; 2],
+    raw_count: u32,
+    raw_sum: f64,
+}
+
+fn record_raw_path(nodes: &mut [Node], path: &[usize], reward: f64) -> Vec<f64> {
+    for &index in path {
+        let stats = nodes[index].continuation.get_or_insert_with(Default::default);
+        stats.raw_count += 1;
+        stats.raw_sum += reward;
+    }
+    path.iter().skip(1).map(|&index| {
+        let stats = nodes[index].continuation.as_ref().unwrap();
+        stats.raw_sum/f64::from(stats.raw_count)
+    }).chain(std::iter::once(reward)).collect()
+}
+
+#[cfg(test)]
+mod mean_update_tests {
+    use super::*;
+
+    #[test]
+    fn child_means_credit_raw_returns_once_without_averaging_averages() {
+        let mut nodes: Vec<_> = [(2,1.),(4,1.),(1,0.)].into_iter().map(|(raw_count,raw_sum)| Node {
+            acts: [vec![],vec![]], n: [vec![],vec![]], w: [vec![],vec![]], preview: false,
+            continuation: Some(Box::new(ContinuationStats {raw_count,raw_sum,..Default::default()})),
+        }).collect();
+        assert_eq!(record_raw_path(&mut nodes,&[0,1,2],1.),vec![0.4,0.5,1.]);
+        assert_eq!(nodes.iter().map(|n| {
+            let stats=n.continuation.as_ref().unwrap(); (stats.raw_count,stats.raw_sum)
+        }).collect::<Vec<_>>(),vec![(3,2.),(5,2.),(2,1.)]);
+        assert_eq!(record_raw_path(&mut nodes,&[0],0.25),vec![0.25]);
+        assert_eq!(nodes[0].continuation.as_ref().unwrap().raw_sum,2.25);
+    }
 }
 
 pub enum SearchTrace<'a> {
@@ -210,7 +250,7 @@ impl Node {
             n: [vec![0; acts[0].len()], vec![0; acts[1].len()]],
             w: [vec![0.0; acts[0].len()], vec![0.0; acts[1].len()]],
             preview,
-            exp3: [None, None],
+            continuation: None,
             acts,
         }
     }
@@ -432,10 +472,13 @@ pub(crate) fn run_iteration_with_root_child_value(
 ) -> f64 {
     let mut path: Vec<(usize, usize, usize)> = Vec::new();
     let mut exp3_path = Vec::new();
+    let mut mean_path = Vec::new();
     let mut node_idx = start;
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
     let reward0 = loop {
+        let path_index = mean_path.len();
+        if cfg.continuation_exp3_mean { mean_path.push(node_idx); }
         let at_root = node_idx == start;
         let mut joint = [None, None];
         for s in 0..2 {
@@ -452,12 +495,13 @@ pub(crate) fn run_iteration_with_root_child_value(
                         nodes[node_idx].n[s][f] += 1;
                         f
                     }
-                    _ if cfg.continuation_exp3_ix && !at_root && !nodes[node_idx].preview => {
+                    _ if (cfg.continuation_exp3_ix || cfg.continuation_exp3_mean) && !at_root && !nodes[node_idx].preview => {
                         let node = &mut nodes[node_idx];
-                        let draw = node.exp3[s].get_or_insert_with(|| crate::exp3::Exp3Ix::new(k)).sample(rng);
+                        let stats = node.continuation.get_or_insert_with(Default::default);
+                        let draw = stats.bandits[s].get_or_insert_with(|| crate::exp3::Exp3Ix::new(k)).sample(rng);
                         let action = draw.action;
                         node.n[s][action] += 1;
-                        exp3_path.push((node_idx,s,draw));
+                        exp3_path.push((node_idx,s,draw,path_index));
                         action
                     }
                     _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
@@ -513,6 +557,7 @@ pub(crate) fn run_iteration_with_root_child_value(
                 let child = nodes.len();
                 nodes.push(Node::at(sim, dex));
                 table.insert(key, child);
+                if cfg.continuation_exp3_mean { mean_path.push(child); }
                 if let Some(trace) = trace.as_deref_mut() {
                     trace(SearchTrace::Leaf { battle: sim, rng, rollout: true });
                 }
@@ -528,8 +573,10 @@ pub(crate) fn run_iteration_with_root_child_value(
     for (ni, s, ai) in path {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
     }
-    for (ni,s,draw) in exp3_path {
-        nodes[ni].exp3[s].as_mut().unwrap().observe(draw,if s==0 {1.-reward0} else {reward0});
+    let mean_updates = if cfg.continuation_exp3_mean { record_raw_path(nodes,&mean_path,reward0) } else { Vec::new() };
+    for (ni,s,draw,index) in exp3_path {
+        let value = mean_updates.get(index).copied().unwrap_or(reward0);
+        nodes[ni].continuation.as_mut().unwrap().bandits[s].as_mut().unwrap().observe(draw,if s==0 {1.-value} else {value});
     }
     reward0
 }

@@ -1,0 +1,1290 @@
+{
+  "groups": [
+    {
+      "case": "screen",
+      "mode": "ucb",
+      "side": 0,
+      "seeds": 4,
+      "mixed": 4,
+      "mean_candidate_loss_upper": 0.004410621098937689,
+      "worst_candidate_loss_upper": 0.007983960847134623,
+      "mean_fallback_loss_upper": 0.11432647715078127,
+      "mean_fresh_loss_upper": 0.00471787777816332,
+      "mean_search_ms": 414.02247925
+    },
+    {
+      "case": "screen",
+      "mode": "ucb",
+      "side": 1,
+      "seeds": 4,
+      "mixed": 0,
+      "mean_candidate_loss_upper": 0.016332474424751078,
+      "worst_candidate_loss_upper": 0.016332474424751078,
+      "mean_fallback_loss_upper": 0.016332474424751078,
+      "mean_fresh_loss_upper": 0.020102210961691378,
+      "mean_search_ms": 404.7180415
+    },
+    {
+      "case": "screen",
+      "mode": "exp3",
+      "side": 0,
+      "seeds": 4,
+      "mixed": 3,
+      "mean_candidate_loss_upper": 0.031879806261613124,
+      "worst_candidate_loss_upper": 0.11432647715078127,
+      "mean_fallback_loss_upper": 0.11432647715078127,
+      "mean_fresh_loss_upper": 0.02030070919643659,
+      "mean_search_ms": 401.26084375
+    },
+    {
+      "case": "screen",
+      "mode": "exp3",
+      "side": 1,
+      "seeds": 4,
+      "mixed": 0,
+      "mean_candidate_loss_upper": 0.016332474424751078,
+      "worst_candidate_loss_upper": 0.016332474424751078,
+      "mean_fallback_loss_upper": 0.016332474424751078,
+      "mean_fresh_loss_upper": 0.029991990446903267,
+      "mean_search_ms": 414.55442675
+    },
+    {
+      "case": "screen",
+      "mode": "exp3-mean",
+      "side": 0,
+      "seeds": 4,
+      "mixed": 4,
+      "mean_candidate_loss_upper": 0.0032529134518038145,
+      "worst_candidate_loss_upper": 0.006948943615780699,
+      "mean_fallback_loss_upper": 0.11432647715078127,
+      "mean_fresh_loss_upper": 0.019334487710621854,
+      "mean_search_ms": 355.84194775
+    },
+    {
+      "case": "screen",
+      "mode": "exp3-mean",
+      "side": 1,
+      "seeds": 4,
+      "mixed": 0,
+      "mean_candidate_loss_upper": 0.016332474424751078,
+      "worst_candidate_loss_upper": 0.016332474424751078,
+      "mean_fallback_loss_upper": 0.016332474424751078,
+      "mean_fresh_loss_upper": 0.02326343259598349,
+      "mean_search_ms": 367.93171875
+    },
+    {
+      "case": "failure",
+      "mode": "ucb",
+      "side": 0,
+      "seeds": 1,
+      "mixed": 1,
+      "mean_candidate_loss_upper": 4.117001713083338e-05,
+      "worst_candidate_loss_upper": 4.117001713083338e-05,
+      "mean_fallback_loss_upper": 0.11432647715078127,
+      "mean_fresh_loss_upper": null,
+      "mean_search_ms": null
+    },
+    {
+      "case": "failure",
+      "mode": "ucb",
+      "side": 1,
+      "seeds": 1,
+      "mixed": 1,
+      "mean_candidate_loss_upper": 0.07417289879508643,
+      "worst_candidate_loss_upper": 0.07417289879508643,
+      "mean_fallback_loss_upper": 0.016332468081700174,
+      "mean_fresh_loss_upper": null,
+      "mean_search_ms": null
+    },
+    {
+      "case": "failure",
+      "mode": "exp3",
+      "side": 0,
+      "seeds": 1,
+      "mixed": 1,
+      "mean_candidate_loss_upper": 0.002775445264337179,
+      "worst_candidate_loss_upper": 0.002775445264337179,
+      "mean_fallback_loss_upper": 0.11432647715078127,
+      "mean_fresh_loss_upper": null,
+      "mean_search_ms": null
+    },
+    {
+      "case": "failure",
+      "mode": "exp3",
+      "side": 1,
+      "seeds": 1,
+      "mixed": 0,
+      "mean_candidate_loss_upper": 0.016332468081700174,
+      "worst_candidate_loss_upper": 0.016332468081700174,
+      "mean_fallback_loss_upper": 0.016332468081700174,
+      "mean_fresh_loss_upper": null,
+      "mean_search_ms": null
+    },
+    {
+      "case": "failure",
+      "mode": "exp3-mean",
+      "side": 0,
+      "seeds": 1,
+      "mixed": 1,
+      "mean_candidate_loss_upper": 9.846376114501976e-05,
+      "worst_candidate_loss_upper": 9.846376114501976e-05,
+      "mean_fallback_loss_upper": 0.11432647715078127,
+      "mean_fresh_loss_upper": null,
+      "mean_search_ms": null
+    },
+    {
+      "case": "failure",
+      "mode": "exp3-mean",
+      "side": 1,
+      "seeds": 1,
+      "mixed": 0,
+      "mean_candidate_loss_upper": 0.016332468081700174,
+      "worst_candidate_loss_upper": 0.016332468081700174,
+      "mean_fallback_loss_upper": 0.016332468081700174,
+      "mean_fresh_loss_upper": null,
+      "mean_search_ms": null
+    }
+  ],
+  "pairs": [
+    {
+      "case": "screen",
+      "side": 0,
+      "seed": 2026110901,
+      "candidate_loss_change": [
+        0.004717415950055721,
+        0.004717795336696965
+      ],
+      "fresh_loss_change": [
+        0.007264834986387517,
+        0.007265077487480901
+      ]
+    },
+    {
+      "case": "screen",
+      "side": 1,
+      "seed": 2026110901,
+      "candidate_loss_change": [
+        -2.778646667270235e-07,
+        2.778646667270235e-07
+      ],
+      "fresh_loss_change": [
+        0.01508406877064147,
+        0.015084311617541115
+      ]
+    },
+    {
+      "case": "screen",
+      "side": 0,
+      "seed": 10723151782087945822,
+      "candidate_loss_change": [
+        0.0016459344702484252,
+        0.001646176985845532
+      ],
+      "fresh_loss_change": [
+        0.01344003832651125,
+        0.013440280709089977
+      ]
+    },
+    {
+      "case": "screen",
+      "side": 1,
+      "seed": 10723151782087945822,
+      "candidate_loss_change": [
+        -2.778646667270235e-07,
+        2.778646667270235e-07
+      ],
+      "fresh_loss_change": [
+        -0.02214001569970542,
+        -0.022139772726071406
+      ]
+    },
+    {
+      "case": "screen",
+      "side": 0,
+      "seed": 2999559488431840355,
+      "candidate_loss_change": [
+        -0.11346978354602474,
+        -0.11346940570243336
+      ],
+      "fresh_loss_change": [
+        0.01316822024853687,
+        0.013168462624238986
+      ]
+    },
+    {
+      "case": "screen",
+      "side": 1,
+      "seed": 2999559488431840355,
+      "candidate_loss_change": [
+        -2.778646667270235e-07,
+        2.778646667270235e-07
+      ],
+      "fresh_loss_change": [
+        -0.0008955010500592865,
+        -0.0008952581854703989
+      ]
+    },
+    {
+      "case": "screen",
+      "side": 0,
+      "seed": 13722711268216851060,
+      "candidate_loss_change": [
+        -0.007401895534838776,
+        -0.007401516566672991
+      ],
+      "fresh_loss_change": [
+        -0.03773846424415677,
+        -0.03773822204594714
+      ]
+    },
+    {
+      "case": "screen",
+      "side": 1,
+      "seed": 13722711268216851060,
+      "candidate_loss_change": [
+        -2.778646667270235e-07,
+        2.778646667270235e-07
+      ],
+      "fresh_loss_change": [
+        -0.018963269104857246,
+        -0.01896302628076628
+      ]
+    },
+    {
+      "case": "failure",
+      "side": 0,
+      "seed": 13273324120501921058,
+      "candidate_loss_change": [
+        -0.0026772260129934913,
+        -0.002676866569944411
+      ],
+      "fresh_loss_change": null
+    },
+    {
+      "case": "failure",
+      "side": 1,
+      "seed": 13273324120501921058,
+      "candidate_loss_change": [
+        -2.632368170038535e-07,
+        2.632368170038535e-07
+      ],
+      "fresh_loss_change": null
+    }
+  ],
+  "rows": [
+    {
+      "case": "screen",
+      "mode": "ucb",
+      "side": 0,
+      "seed": 2026110901,
+      "seed_index": 0,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.11627065710639913,
+        0.8837293428936008
+      ],
+      "candidate_loss": [
+        0.007983839599595529,
+        0.007983960847134623
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.0036965461284374224,
+        0.00369670323275037
+      ],
+      "fresh_critical_difference": [
+        0.0004522801959325473,
+        0.0004524373002454951
+      ],
+      "search_ms": 465.357959,
+      "fresh_policy_loss": [
+        0.008960765857619023,
+        0.008960887099763878
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "ucb",
+      "side": 1,
+      "seed": 2026110901,
+      "seed_index": 0,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.0107188166232286,
+        -0.010718659518915596
+      ],
+      "fresh_critical_difference": [
+        0.0056586738108656,
+        0.005658830915178603
+      ],
+      "search_ms": 365.2485,
+      "fresh_policy_loss": [
+        0.0004326824524884876,
+        0.00043294118737132587
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "ucb",
+      "side": 0,
+      "seed": 10723151782087945822,
+      "seed_index": 1,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.13254729879977858,
+        0.8674527012002214
+      ],
+      "candidate_loss": [
+        0.0009860006773928433,
+        0.000986257705052531
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.01959068923837229,
+        0.019590846342685236
+      ],
+      "fresh_critical_difference": [
+        0.002118946862599197,
+        0.0021191039669121448
+      ],
+      "search_ms": 338.56883300000004,
+      "fresh_policy_loss": [
+        0.003136323941846371,
+        0.0031364452161517105
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "ucb",
+      "side": 1,
+      "seed": 10723151782087945822,
+      "seed_index": 1,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.02156667830181047,
+        -0.021566521197497468
+      ],
+      "fresh_critical_difference": [
+        -0.02156354841135666,
+        -0.021563391307043656
+      ],
+      "search_ms": 437.401708,
+      "fresh_policy_loss": [
+        0.018619749009202265,
+        0.018619870403637523
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "ucb",
+      "side": 0,
+      "seed": 2999559488431840355,
+      "seed_index": 2,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.12078152605623554,
+        0.8792184739437644
+      ],
+      "candidate_loss": [
+        0.0038581455558150866,
+        0.0038582668261347855
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.0031055915521727706,
+        0.0031057486564857184
+      ],
+      "fresh_critical_difference": [
+        -0.00121438647073413,
+        -0.0012142293664211823
+      ],
+      "search_ms": 427.178333,
+      "fresh_policy_loss": [
+        0.0031095596154274816,
+        0.0031096808898806037
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "ucb",
+      "side": 1,
+      "seed": 2999559488431840355,
+      "seed_index": 2,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.003972791963832711,
+        -0.003972634859519708
+      ],
+      "fresh_critical_difference": [
+        -0.007674659522467708,
+        -0.007674502418154705
+      ],
+      "search_ms": 432.171625,
+      "fresh_policy_loss": [
+        0.007069227021748752,
+        0.00706934835240616
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "ucb",
+      "side": 0,
+      "seed": 13722711268216851060,
+      "seed_index": 3,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.16184302945174195,
+        0.8381569705482581
+      ],
+      "candidate_loss": [
+        0.004813746595184338,
+        0.004813999017428816
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.05557695603874124,
+        0.05557711314305419
+      ],
+      "fresh_critical_difference": [
+        0.041007835751488086,
+        0.041007992855801034
+      ],
+      "search_ms": 424.984792,
+      "fresh_policy_loss": [
+        0.003664244101569851,
+        0.0036644979068570865
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "ucb",
+      "side": 1,
+      "seed": 13722711268216851060,
+      "seed_index": 3,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.06779846193630379,
+        -0.06779830483199079
+      ],
+      "fresh_critical_difference": [
+        -0.07489688174469,
+        -0.074896724640377
+      ],
+      "search_ms": 384.050333,
+      "fresh_policy_loss": [
+        0.05428656231197588,
+        0.05428668390335051
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3",
+      "side": 0,
+      "seed": 2026110901,
+      "seed_index": 0,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.12558926877602244,
+        0.8744107312239776
+      ],
+      "candidate_loss": [
+        7.687260901615338e-05,
+        7.713073050817045e-05
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.04641335364897886,
+        0.04641351075329181
+      ],
+      "fresh_critical_difference": [
+        0.03823005797371032,
+        0.038230215078023266
+      ],
+      "search_ms": 506.59175,
+      "fresh_policy_loss": [
+        0.003806668686235103,
+        0.003806789956839039
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3",
+      "side": 1,
+      "seed": 2026110901,
+      "seed_index": 0,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.04028197884088436,
+        -0.040281821736571355
+      ],
+      "fresh_critical_difference": [
+        -0.014341326189134418,
+        -0.014341169084821415
+      ],
+      "search_ms": 509.82883300000003,
+      "fresh_policy_loss": [
+        0.016332353042945943,
+        0.016332474424751015
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3",
+      "side": 0,
+      "seed": 10723151782087945822,
+      "seed_index": 1,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.11920203512007384,
+        0.8807979648799262
+      ],
+      "candidate_loss": [
+        0.005302766629935167,
+        0.005302887892278185
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.03954652933543054,
+        0.03954668643974349
+      ],
+      "fresh_critical_difference": [
+        0.024896724640376983,
+        0.02489688174468993
+      ],
+      "search_ms": 370.904958,
+      "fresh_policy_loss": [
+        0.011450897762354514,
+        0.011451018990749753
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3",
+      "side": 1,
+      "seed": 10723151782087945822,
+      "seed_index": 1,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.039012284701294586,
+        -0.03901212759698158
+      ],
+      "fresh_critical_difference": [
+        -0.05378577063357881,
+        -0.05378561352926581
+      ],
+      "search_ms": 388.52791599999995,
+      "fresh_policy_loss": [
+        0.046420543161670984,
+        0.04642066470961228
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3",
+      "side": 0,
+      "seed": 2999559488431840355,
+      "seed_index": 2,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.0,
+        1.0
+      ],
+      "candidate_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.02584416867710984,
+        0.02584432578142279
+      ],
+      "fresh_critical_difference": [
+        0.025452280195932542,
+        0.02545243730024549
+      ],
+      "search_ms": 373.21274999999997,
+      "fresh_policy_loss": [
+        0.012209503202351018,
+        0.01220962442655751
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3",
+      "side": 1,
+      "seed": 2999559488431840355,
+      "seed_index": 2,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.03864808823989241,
+        -0.038647931135579405
+      ],
+      "fresh_critical_difference": [
+        -0.02600799285580102,
+        -0.026007835751488018
+      ],
+      "search_ms": 381.112,
+      "fresh_policy_loss": [
+        0.02592394742910852,
+        0.025924068863874945
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3",
+      "side": 0,
+      "seed": 13722711268216851060,
+      "seed_index": 3,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.11645787486602534,
+        0.8835421251339747
+      ],
+      "candidate_loss": [
+        0.007812608024400296,
+        0.007812729272884868
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.03036329892954573,
+        0.030363456033858677
+      ],
+      "fresh_critical_difference": [
+        -0.04010327535962302,
+        -0.04010311825531007
+      ],
+      "search_ms": 354.333917,
+      "fresh_policy_loss": [
+        0.05373528241668406,
+        0.05373540341160006
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3",
+      "side": 1,
+      "seed": 13722711268216851060,
+      "seed_index": 3,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.044945833805647206,
+        -0.0449456767013342
+      ],
+      "fresh_critical_difference": [
+        -0.0354524373002455,
+        -0.035452280195932495
+      ],
+      "search_ms": 378.748958,
+      "fresh_policy_loss": [
+        0.03129063232497548,
+        0.03129075378937483
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3-mean",
+      "side": 0,
+      "seed": 2026110901,
+      "seed_index": 0,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.11975770249748452,
+        0.8802422975025156
+      ],
+      "candidate_loss": [
+        0.004794546680563891,
+        0.004794667945713118
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.044638579861588396,
+        0.04463873696590134
+      ],
+      "fresh_critical_difference": [
+        0.032118946862599196,
+        0.032119103966912144
+      ],
+      "search_ms": 355.921833,
+      "fresh_policy_loss": [
+        0.011071624943226556,
+        0.011071746173716004
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3-mean",
+      "side": 1,
+      "seed": 2026110901,
+      "seed_index": 0,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.04889527162103746,
+        -0.04889511451672446
+      ],
+      "fresh_critical_difference": [
+        -0.03267465952246773,
+        -0.03267450241815473
+      ],
+      "search_ms": 370.135333,
+      "fresh_policy_loss": [
+        0.031416543195392485,
+        0.03141666466048706
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3-mean",
+      "side": 0,
+      "seed": 10723151782087945822,
+      "seed_index": 1,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.1174023035803489,
+        0.8825976964196511
+      ],
+      "candidate_loss": [
+        0.006948822362526611,
+        0.006948943615780699
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.03944187518506451,
+        0.039442032289377454
+      ],
+      "fresh_critical_difference": [
+        0.012674502418154765,
+        0.012674659522467713
+      ],
+      "search_ms": 363.995083,
+      "fresh_policy_loss": [
+        0.024891057317261003,
+        0.02489117847144449
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3-mean",
+      "side": 1,
+      "seed": 10723151782087945822,
+      "seed_index": 1,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.037203676728650326,
+        -0.03720351962433732
+      ],
+      "fresh_critical_difference": [
+        -0.027119103966912195,
+        -0.02711894686259919
+      ],
+      "search_ms": 363.30825,
+      "fresh_policy_loss": [
+        0.024280649009906858,
+        0.024280770435599577
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3-mean",
+      "side": 0,
+      "seed": 2999559488431840355,
+      "seed_index": 2,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.13155764450905358,
+        0.8684423554909464
+      ],
+      "candidate_loss": [
+        0.0008566936047565246,
+        0.0008569507879941352
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.040889286239633144,
+        0.04088944334394609
+      ],
+      "fresh_critical_difference": [
+        -0.005103275359623016,
+        -0.0051031182553100685
+      ],
+      "search_ms": 342.01791599999996,
+      "fresh_policy_loss": [
+        0.02537784467509438,
+        0.025377965826590004
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3-mean",
+      "side": 1,
+      "seed": 2999559488431840355,
+      "seed_index": 2,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.04783206274584473,
+        -0.047831905641531725
+      ],
+      "fresh_critical_difference": [
+        -0.023230215078023253,
+        -0.02323005797371025
+      ],
+      "search_ms": 371.168667,
+      "fresh_policy_loss": [
+        0.02502856781381566,
+        0.02502868924363812
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3-mean",
+      "side": 0,
+      "seed": 13722711268216851060,
+      "seed_index": 3,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263564904275,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.12814524701867747,
+        0.8718547529813225
+      ],
+      "candidate_loss": [
+        0.000410833738046092,
+        0.00041109145772730553
+      ],
+      "mixed": true,
+      "probes_used": 10800,
+      "critical_difference": [
+        0.04575183182747805,
+        0.045751988931791
+      ],
+      "fresh_critical_difference": [
+        0.021563391307043656,
+        0.021563548411356603
+      ],
+      "search_ms": 361.432959,
+      "fresh_policy_loss": [
+        0.01599693916744329,
+        0.015997060370736917
+      ]
+    },
+    {
+      "case": "screen",
+      "mode": "exp3-mean",
+      "side": 1,
+      "seed": 13722711268216851060,
+      "seed_index": 3,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633219656008435,
+        0.016332474424751078
+      ],
+      "mixed": false,
+      "probes_used": 10800,
+      "critical_difference": [
+        -0.044234990841026,
+        -0.044234833736713
+      ],
+      "fresh_critical_difference": [
+        -0.009896881744689945,
+        -0.009896724640376942
+      ],
+      "search_ms": 367.11462500000005,
+      "fresh_policy_loss": [
+        0.01232748468451758,
+        0.012327606044209205
+      ]
+    },
+    {
+      "case": "failure",
+      "mode": "ucb",
+      "side": 0,
+      "seed": 13273324120501921058,
+      "seed_index": 0,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263628334784,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.12495498714826361,
+        0.8750450128517364
+      ],
+      "candidate_loss": [
+        4.105506878539603e-05,
+        4.117001713083338e-05
+      ],
+      "mixed": true,
+      "probes_used": 43200,
+      "critical_difference": [
+        0.0038599662379984467,
+        0.0038601150575125753
+      ]
+    },
+    {
+      "case": "failure",
+      "mode": "ucb",
+      "side": 1,
+      "seed": 13273324120501921058,
+      "seed_index": 0,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633220484488317,
+        0.016332468081700174
+      ],
+      "policy": [
+        0.20609755772588628,
+        0.7939024422741137,
+        0.0
+      ],
+      "candidate_loss": [
+        0.0741727834369581,
+        0.07417289879508643
+      ],
+      "mixed": true,
+      "probes_used": 43200,
+      "critical_difference": [
+        -0.10664712025704315,
+        -0.10664697143752899
+      ]
+    },
+    {
+      "case": "failure",
+      "mode": "exp3",
+      "side": 0,
+      "seed": 13273324120501921058,
+      "seed_index": 0,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263628334784,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.12196543987448388,
+        0.8780345601255162
+      ],
+      "candidate_loss": [
+        0.002775330331089431,
+        0.002775445264337179
+      ],
+      "mixed": true,
+      "probes_used": 43200,
+      "critical_difference": [
+        0.011897126221337817,
+        0.011897275040851946
+      ]
+    },
+    {
+      "case": "failure",
+      "mode": "exp3",
+      "side": 1,
+      "seed": 13273324120501921058,
+      "seed_index": 0,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633220484488317,
+        0.016332468081700174
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633220484488317,
+        0.016332468081700174
+      ],
+      "mixed": false,
+      "probes_used": 0,
+      "critical_difference": [
+        -0.012189094922439692,
+        -0.012188946102925535
+      ]
+    },
+    {
+      "case": "failure",
+      "mode": "exp3-mean",
+      "side": 0,
+      "seed": 13273324120501921058,
+      "seed_index": 0,
+      "fallback": "move curse",
+      "fallback_loss": [
+        0.1143263628334784,
+        0.11432647715078127
+      ],
+      "policy": [
+        0.12575259718732962,
+        0.8742474028126703
+      ],
+      "candidate_loss": [
+        9.821925134368785e-05,
+        9.846376114501976e-05
+      ],
+      "mixed": true,
+      "probes_used": 43200,
+      "critical_difference": [
+        0.016759140747759527,
+        0.016759289567273655
+      ]
+    },
+    {
+      "case": "failure",
+      "mode": "exp3-mean",
+      "side": 1,
+      "seed": 13273324120501921058,
+      "seed_index": 0,
+      "fallback": "move destinybond",
+      "fallback_loss": [
+        0.01633220484488317,
+        0.016332468081700174
+      ],
+      "policy": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "candidate_loss": [
+        0.01633220484488317,
+        0.016332468081700174
+      ],
+      "mixed": false,
+      "probes_used": 0,
+      "critical_difference": [
+        -0.01084054366504894,
+        -0.010840394845534784
+      ]
+    }
+  ],
+  "default_and_exp3_archive_parity": true,
+  "decision": "Keep disabled by default. Averaging improves several Exp3 comparisons and avoids the known bad mixture, but ordinary-budget fresh-policy losses remain worse than UCB on both sides. The cumulative gated P0 mixture improves slightly; P1 retains the same pure fallback. These mixed signals do not establish general strength or justify adoption.",
+  "scope": "Four paired search seeds at 27000 simulations with fixed fresh probes, plus the known adaptive-probe counterexample at 108000 simulations. Both players are tested on legally replayed known-team Bond states. UCB and pre-existing Exp3 controls reproduce archived search rows exactly. Only non-root, non-preview Exp3 updates use sampled successor-decision mean returns; raw terminal returns still feed every node, public action totals and the root matrix. Forced nodes and newly expanded leaves receive raw statistics. Terminal and horizon returns are not averaged, and no convergence theorem is asserted for this game. Losses certify first-action distributions with optimal subsequent full-state play. Timing is diagnostic, not a matched-time strength result; the first UCB run overlapped the regression checks. The experimental flag is off by default."
+}
