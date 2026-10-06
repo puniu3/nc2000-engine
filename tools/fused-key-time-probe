@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import shutil
+import statistics
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/fused-key-time-v1'
+frontier=runpy.run_path(str(root/'tools/strategy-frontier-probe'))
+loss=runpy.run_path(str(root/'tools/mixed-root-corpus'))['loss']
+canonical=runpy.run_path(str(root/'tools/strategy-corpus-probe'))['canonical_action']
+changed=['crates/engine/src/battle/search.rs','crates/engine/src/fxhash.rs']
+fixed=root/'findings/fused-key-v1/records.json.gz'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(bundle):
+    assert bundle['fixed_sha256']==sha(fixed.read_bytes())
+    assert bundle['corpus_sha256']==sha(frontier['corpus'].read_bytes())
+    assert bundle['reference_sha256']==sha(frontier['reference'].read_bytes())
+    assert bundle['selection_sha256']==sha(frontier['previous'].read_bytes())
+    manifests=bundle['manifests']
+    assert sorted(p for p,h in manifests['baseline']['sources'].items() if manifests['candidate']['sources'][p]!=h)==changed
+    frozen=json.loads(gzip.decompress(fixed.read_bytes()))
+    for arm in manifests:
+        for p in changed: assert manifests[arm]['sources'][p]==frozen['manifests'][arm]['source_hashes'][p]
+    reference={(p['game'],p['decision']):p for p in json.loads(gzip.decompress(frontier['reference'].read_bytes()))}
+    summaries=[]
+    for i,run in enumerate(bundle['runs']):
+        repeat=i//2
+        order=['baseline','candidate'] if repeat%2==0 else ['candidate','baseline']
+        assert run['repeat']==repeat and run['arm']==order[i%2]
+        assert [{k:r[k] for k in ['game','decision','side']} for r in run['rows']]==frontier['requests']()
+        rows=[]
+        for r in run['rows']:
+            p=reference[r['game'],r['decision']]
+            assert r['state_key']==p['state_key'] and r['time_budget_ms']==1000
+            assert (r['work_budget'],r['node_budget'],r['trial_depth'],r['call_budget'],r['cell_cap'])==(1000000,12000,24,1000,4096)
+            assert not r['retain_eager_prefix'] and not r['defer_eager_frontier']
+            assert r['runs']<r['work_budget']
+            assert [[canonical(a) if a is not None else a for a in aa] for aa in r['actions']]==p['reference']['actions']
+            assert r['value'][0]<=p['reference']['value']['hi']+1e-8 and r['value'][1]>=p['reference']['value']['lo']-1e-8
+            matrix=dict(actions=r['actions'],value=dict(zip(['lo','hi'],r['value'])),cells=[dict(zip(['lo','hi'],c)) for c in r['cells']])
+            if r['policies'] is not None:
+                for side in [0,1]:
+                    policy=r['policies'][side]
+                    assert min(policy)>=-1e-12
+                    assert abs(loss(matrix,side,policy)[1]-r['max_loss'][side])<1e-7
+                    assert loss(p['reference'],side,policy)[0]<=r['max_loss'][side]+1e-7
+            side=r['side']
+            certified=r['max_loss'] is not None and r['max_loss'][side]<=.005
+            assert certified or r['stop'] in ['NodeBudget','TimeBudget']
+            rows.append(dict(game=r['game'],decision=r['decision'],side=side,certified=certified,
+                max_loss=None if r['max_loss'] is None else r['max_loss'][side],
+                width=r['value'][1]-r['value'][0],milliseconds=r['milliseconds'],runs=r['runs'],stop=r['stop']))
+        summaries.append(dict(repeat=repeat,arm=run['arm'],certified=sum(r['certified'] for r in rows),
+            stops=dict(collections.Counter(r['stop'] for r in rows)),runs=sum(r['runs'] for r in rows),
+            max_ms=max(r['milliseconds'] for r in rows),rows=rows))
+    assert len(summaries)==6
+    pairs=[]
+    for repeat in range(3):
+        arms={r['arm']:r for r in summaries if r['repeat']==repeat}
+        a,b=arms['baseline'],arms['candidate']
+        pairs.append(dict(repeat=repeat,certified={arm:r['certified'] for arm,r in arms.items()},
+            runs_ratio=b['runs']/a['runs'],narrower=sum(y['width']<x['width']-1e-8 for x,y in zip(a['rows'],b['rows'])),
+            wider=sum(y['width']>x['width']+1e-8 for x,y in zip(a['rows'],b['rows'])),
+            gained=[dict(game=y['game'],decision=y['decision'],side=y['side']) for x,y in zip(a['rows'],b['rows']) if y['certified'] and not x['certified']],
+            lost=[dict(game=x['game'],decision=x['decision'],side=x['side']) for x,y in zip(a['rows'],b['rows']) if x['certified'] and not y['certified']]))
+    return dict(positions=41,repeats=3,budget_ms=1000,pairs=pairs,runs=summaries,
+        median_runs_ratio=statistics.median(p['runs_ratio'] for p in pairs),
+        scope='Matched soft 1000 ms budgets, alternating order, fixed unresolved corpus. Actual deadline overruns are recorded. '
+              'The 12000-node cap is identical; default scheduling and 1000-run chunks may make timed trajectories differ. '
+              'Certificates bound first-action loss under optimal full-information continuation, not hidden-information or complete-game strength.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        print('fused-key-time: verified 246 timed outcomes and policy loss bounds')
+        return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-fused-key-time-'))
+    print(directory,flush=True)
+    if args.import_directory:
+        manifests=json.loads((directory/'manifests.json').read_bytes())
+    else:
+        workspace=directory/'workspace'
+        workspace.mkdir()
+        shutil.copytree(root/'crates',workspace/'crates')
+        (workspace/'data').symlink_to(root/'data',target_is_directory=True)
+        for name in ['Cargo.toml','Cargo.lock']: shutil.copy2(root/name,workspace/name)
+        paths=sorted(str(p.relative_to(workspace)) for p in workspace.rglob('*') if p.is_file() and (p.suffix in ['.rs','.toml'] or p.name=='Cargo.lock'))
+        manifests={}
+        for arm in ['baseline','candidate']:
+            for p in changed:
+                raw=subprocess.check_output(['git','show',f'714a613:{p}'],cwd=root) if arm=='baseline' else (root/p).read_bytes()
+                (workspace/p).write_bytes(raw)
+            with (directory/f'build-{arm}.log').open('w') as log:
+                subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','strategy_frontier'],cwd=workspace,
+                    env={**os.environ,'CARGO_TARGET_DIR':str(root/'target')},stdout=log,stderr=log,check=True)
+            shutil.copy2(root/'target/release/examples/strategy_frontier',directory/arm)
+            manifests[arm]=dict(binary_sha256=sha((directory/arm).read_bytes()),sources={p:sha((workspace/p).read_bytes()) for p in paths})
+            print(f'{arm} built',flush=True)
+        (directory/'manifests.json').write_text(json.dumps(manifests))
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress(frontier['corpus'].read_bytes()))
+        (directory/'requests.json').write_text(json.dumps(frontier['requests']()))
+        for repeat in range(3):
+            for arm in (['baseline','candidate'] if repeat%2==0 else ['candidate','baseline']):
+                with (directory/f'{repeat}-{arm}.log').open('w') as log:
+                    subprocess.run([str(directory/arm),str(directory/'corpus.jsonl'),str(directory/'requests.json'),
+                        str(directory/f'{repeat}-{arm}.jsonl'),'1000000','12000','24','1000','4096','false','false','false','1000'],
+                        cwd=root,env={**os.environ,'NC2000_REPO_ROOT':str(root)},stdout=log,stderr=log,check=True)
+                print(f'{repeat} {arm} complete',flush=True)
+    for arm in manifests: assert manifests[arm]['binary_sha256']==sha((directory/arm).read_bytes())
+    bundle=dict(manifests=manifests,fixed_sha256=sha(fixed.read_bytes()),corpus_sha256=sha(frontier['corpus'].read_bytes()),
+        reference_sha256=sha(frontier['reference'].read_bytes()),selection_sha256=sha(frontier['previous'].read_bytes()),runs=[
+        dict(repeat=repeat,arm=arm,rows=[json.loads(s) for s in (directory/f'{repeat}-{arm}.jsonl').read_text().splitlines()])
+        for repeat in range(3) for arm in (['baseline','candidate'] if repeat%2==0 else ['candidate','baseline'])])
+    report=summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='runs'},indent=2))
+
+
+if __name__=='__main__': main()

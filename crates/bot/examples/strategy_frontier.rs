@@ -3,7 +3,7 @@ use nc2000_engine::{battle::PokemonSet, state::Battle};
 use serde::Deserialize;
 use serde_json::json;
 use std::io::{BufRead, Write};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Deserialize)]
 struct Decision { key: String, choices: [Option<usize>; 2] }
@@ -18,7 +18,7 @@ struct Request { game: usize, decision: usize, side: usize }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    assert!((11..=12).contains(&args.len()), "corpus requests output runs nodes depth call-runs cell-cap retain-prefix defer-frontier [profile-selection]");
+    assert!((11..=13).contains(&args.len()), "corpus requests output runs nodes depth call-runs cell-cap retain-prefix defer-frontier [profile-selection] [milliseconds]");
     let requests: Vec<Request> = serde_json::from_str(&std::fs::read_to_string(&args[2]).unwrap()).unwrap();
     let work_budget: usize = args[4].parse().unwrap();
     let node_budget: usize = args[5].parse().unwrap();
@@ -28,6 +28,8 @@ fn main() {
     let retain_eager_prefix: bool = args[9].parse().unwrap();
     let defer_eager_frontier: bool = args[10].parse().unwrap();
     let profile_pending_selection = args.get(11).is_some_and(|s|s.parse::<bool>().unwrap());
+    let time_budget = args.get(12).map(|s| Duration::from_millis(s.parse().unwrap()));
+    assert!(time_budget.is_none_or(|d| !d.is_zero()));
     assert!(!defer_eager_frontier || retain_eager_prefix);
     assert!(work_budget>0 && call_budget>0);
     let dex = conformance::load_dex();
@@ -46,8 +48,9 @@ fn main() {
                 let mut solver = BoundSolver::new(&dex,config);
                 let report = loop {
                     solver.cfg.work_budget=call_budget.min(work_budget-solver.stats.runs);
+                    solver.cfg.time_budget=time_budget.map(|limit|limit.saturating_sub(started.elapsed()));
                     let report=solver.solve_strategy(&battle,request.side,0.005);
-                    if report.strategy(request.side,0.005).is_some() || report.runs==0 || solver.stats.runs>=work_budget { break report; }
+                    if report.strategy(request.side,0.005).is_some() || report.runs==0 || solver.stats.runs>=work_budget || time_budget.is_some_and(|limit|started.elapsed()>=limit) { break report; }
                 };
                 let milliseconds = started.elapsed().as_secs_f64()*1000.;
                 let graph = solver.graph_diagnostics();
@@ -65,6 +68,10 @@ fn main() {
                     })).collect::<Vec<_>>()
                 })).collect();
                 let matrix = solver.root_payoffs(&battle).unwrap();
+                let policies = report.strategies.as_ref().map(|p| [0,1].map(|side| {
+                    matrix.actions[side].iter().map(|action|p[side].actions.iter()
+                        .find(|(a,_)|a==action).map_or(0.,|(_,mass)|*mass)).collect::<Vec<_>>()
+                }));
                 let stats = &solver.stats;
                 let mut record = json!({"game":game.game,"decision":index,"side":request.side,"state_key":decision.key,
                     "work_budget":work_budget,"node_budget":node_budget,"trial_depth":trial_depth,
@@ -86,6 +93,10 @@ fn main() {
                         "deferred_eager_leaves":stats.deferred_eager_leaves,
                         "reused_nodes":stats.reused_nodes,"lp_solves":stats.lp_solves,
                         "dominated_rows":stats.dominated_rows,"dominated_cols":stats.dominated_cols}});
+                if let Some(limit) = time_budget {
+                    record["time_budget_ms"]=json!(limit.as_millis());
+                    record["policies"]=json!(policies);
+                }
                 if profile_pending_selection {
                     record["pending_profile"]=json!({"nanoseconds":stats.pending_selection_ns,
                         "calls":stats.pending_selection_calls,"scanned_items":stats.pending_scan_items});
