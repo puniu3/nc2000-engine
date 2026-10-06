@@ -100,6 +100,7 @@ pub struct RmConfig {
     pub continuation_exp3_mean: bool,
     pub collapse_sleep_actions: bool,
     pub root_revisit_interval: u32,
+    pub canonical_claw_key: bool,
     /// Tree horizon in turns (same meaning as `MctsConfig::horizon`).
     pub horizon: u16,
     /// Rollout policy + leaf eval (shared with the M6 agent).
@@ -164,6 +165,7 @@ impl Default for RmConfig {
             continuation_exp3_mean: false,
             collapse_sleep_actions: false,
             root_revisit_interval: 0,
+            canonical_claw_key: false,
             horizon: 100,
             playout: Playout::heavy(),
             threshold: 0.5,
@@ -378,15 +380,18 @@ pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
 /// ones being hit and a damage estimate per bench mon would be paid on every
 /// descent step. The battle is restored before returning.
 pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
+    let hash = |b: &Battle, buckets, omit_damage| {
+        if cfg.canonical_claw_key {
+            b.search_key_canonical_claw(dex, buckets, omit_damage)
+        } else {
+            b.search_key(buckets, omit_damage)
+        }
+    };
     if cfg.hp_buckets <= 0 {
-        return b.search_key(None, false);
+        return hash(b, None, false);
     }
     if !cfg.threshold_key {
-        return if cfg.key_no_damage {
-            b.search_key(Some(cfg.hp_buckets), true)
-        } else {
-            b.search_key(Some(cfg.hp_buckets), false)
-        };
+        return hash(b, Some(cfg.hp_buckets), cfg.key_no_damage);
     }
     // Both classes are read before either mon is edited: Flail/Reversal make
     // the attacker's own HP an input to its damage.
@@ -401,11 +406,7 @@ pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
             p.hp = ((p.maxhp as i64 * (2 * c + 1) / (2 * HP_CLASSES)).max(1)) as i32;
         }
     }
-    let key = if cfg.key_no_damage {
-        b.search_key(Some(cfg.hp_buckets), true)
-    } else {
-        b.search_key(Some(cfg.hp_buckets), false)
-    };
+    let key = hash(b, Some(cfg.hp_buckets), cfg.key_no_damage);
     for entry in saved.into_iter().flatten() {
         let (id, hp) = entry;
         b.sides[id.side as usize].roster[id.slot as usize].hp = hp;
@@ -1849,6 +1850,48 @@ mod dominated_action_tests {
         b.choose(&dex, 0, "team 1, 2, 3").unwrap();
         b.choose(&dex, 1, "team 2, 1, 3").unwrap();
         (dex, b)
+    }
+
+    #[test]
+    fn canonical_claw_key_preserves_observable_rolls_and_restores_state() {
+        let (dex, root) = setup();
+        assert!(!RmConfig::default().canonical_claw_key);
+        let mut states = vec![(root.clone(), false)];
+        for slot in [0, 1] {
+            let mut holder = root.clone();
+            holder.sides[0].roster[slot].item = dex.known_items.quickclaw;
+            states.push((holder, true));
+        }
+        let mut unselected = root.clone();
+        let mut holder = unselected.sides[0].roster[0].clone();
+        holder.item = dex.known_items.quickclaw;
+        unselected.sides[0].roster.push(holder);
+        states.push((unselected.clone(), false));
+        unselected.request_state = nc2000_engine::state::RequestState::TeamPreview;
+        states.push((unselected, true));
+        let mut fainted = states[2].0.clone();
+        fainted.sides[0].roster[1].hp = 0;
+        fainted.sides[0].roster[1].fainted = true;
+        fainted.sides[0].pokemon_left -= 1;
+        states.push((fainted.clone(), false));
+        fainted.mid_turn = true;
+        states.push((fainted, true));
+        for (state, observable) in states {
+            assert_eq!(state.quick_claw_roll_observable(&dex), observable);
+            for (hp_buckets, threshold_key, key_no_damage) in [(0,false,false),(16,false,false),(16,true,false),(16,false,true)] {
+                let cfg = RmConfig { hp_buckets, threshold_key, key_no_damage, ..Default::default() };
+                let candidate = RmConfig { canonical_claw_key:true, ..cfg.clone() };
+                let mut a = state.clone();
+                a.quick_claw_roll = false;
+                let mut b = state.clone();
+                b.quick_claw_roll = true;
+                let before = [a.state_key128(),b.state_key128()];
+                assert_ne!(key_of(&cfg,&dex,&mut a),key_of(&cfg,&dex,&mut b));
+                assert_eq!(key_of(&candidate,&dex,&mut a),key_of(&cfg,&dex,&mut a));
+                assert_eq!(key_of(&candidate,&dex,&mut a) != key_of(&candidate,&dex,&mut b),observable);
+                assert_eq!(before,[a.state_key128(),b.state_key128()]);
+            }
+        }
     }
 
     fn mv(dex: &Dex, key: &str) -> SearchChoice {

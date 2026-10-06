@@ -2281,5 +2281,59 @@
     "sample_size_extended": false
   },
   "root_revisit_checked_at": "2026-10-07T04:17:49.972392+09:00",
-  "root_revisit_holdout_checked_at": "2026-10-07T05:11:19.801404+09:00"
+  "root_revisit_holdout_checked_at": "2026-10-07T05:11:19.801404+09:00",
+  "claw_key_trial": {
+    "roots": 24,
+    "repeats": 3,
+    "baseline_snapshots_reproduced": 48,
+    "metrics": [
+      {
+        "iterations": 3000,
+        "changed_choices": 9,
+        "node_counts": [
+          70650,
+          69815
+        ],
+        "node_ratio": 0.9881811748053786,
+        "median_run_ms_sum": [
+          2026.0221219999999,
+          2086.22679
+        ],
+        "aggregate_time_ratio": 1.0297157011990417,
+        "median_root_time_ratio": 1.0209124099855942
+      },
+      {
+        "iterations": 27000,
+        "changed_choices": 2,
+        "node_counts": [
+          610963,
+          602913
+        ],
+        "node_ratio": 0.9868240793632348,
+        "median_run_ms_sum": [
+          20626.375456,
+          21041.890832
+        ],
+        "aggregate_time_ratio": 1.0201448566126594,
+        "median_root_time_ratio": 1.020426780547993
+      }
+    ],
+    "default_enabled": false,
+    "strength_demonstrated": false,
+    "scope": "Previously selected 24 selfplay roots, fixed search seeds, alternating sequential arms. Median of three timings per root; repeats are not independent decisions. Native shared-host timings, not an iPad benchmark, optimality proof or deployed-bot comparison.",
+    "checks": {
+      "bot_tests_passed": 352,
+      "workspace_all_targets": "passed",
+      "negative_controls": [
+        "wrong_seed",
+        "missing_repeat",
+        "changed_snapshot"
+      ],
+      "timing_overlapped_regression_tests": true
+    },
+    "artifacts": {
+      "findings/claw-key-v1/records.json.gz": "d5814b636298f3b32233e085299f36a9a599ac0f18d5037f305d2e33a41565da",
+      "findings/claw-key-v1/summary.json": "845b626512c7e5d6f5d279132b461971352c696056edf7b61b527c38e9e3e6ef"
+    }
+  }
 }

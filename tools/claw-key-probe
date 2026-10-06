@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import statistics
+import subprocess
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/claw-key-v1'
+prior_path = 'findings/sleep-equivalence-v1/records.json.gz'
+
+
+def verify(result):
+    prior = json.loads(gzip.decompress((root / prior_path).read_bytes()))['outputs']['roots']['rows']
+    identity = lambda r: (r['game'], r['decision'], r['side'])
+    old = {identity(r): r for r in prior}
+    assert len(result['rows']) == len(old) == 24
+    assert {identity(r) for r in result['rows']} == set(old)
+    assert result['iterations'] == 27000 and result['repeats'] == 3
+    metrics = []
+    for checkpoint, budget in enumerate([3000, 27000]):
+        times = [[], []]
+        nodes = [0, 0]
+        changed = 0
+        for row in result['rows']:
+            previous = old[identity(row)]
+            assert (row['key'], row['seed']) == (previous['key'], previous['seed'])
+            assert len(row['runs']) == 6
+            assert {(r['repeat'],r['enabled']) for r in row['runs']} == {(r,e) for r in range(3) for e in [False,True]}
+            arms = []
+            for enabled in [False, True]:
+                runs = [r['checkpoints'][checkpoint] for r in row['runs'] if r['enabled'] == enabled]
+                assert all(len(r['checkpoints']) == 2 for r in row['runs'])
+                assert all(r['snapshot']['iterations'] == budget and r['elapsed_ms'] > 0 for r in runs)
+                assert all(r['snapshot'] == runs[0]['snapshot'] for r in runs)
+                snap = runs[0]['snapshot']
+                assert sum(snap['visits']) == budget
+                assert len(snap['visits']) == len(snap['means']) and snap['nodes'] > 0
+                if not enabled:
+                    saved = next(a for a in previous['arms'] if not a['enabled'])['checkpoints'][checkpoint]
+                    assert all(snap[k] == saved[k] for k in ['iterations','best','visits','means','nodes'])
+                arms.append(snap)
+                times[enabled].append(statistics.median(r['elapsed_ms'] for r in runs))
+                nodes[enabled] += snap['nodes']
+            changed += arms[0]['best'] != arms[1]['best']
+        metrics.append(dict(iterations=budget,changed_choices=changed,node_counts=nodes,
+            node_ratio=nodes[1]/nodes[0],median_run_ms_sum=list(map(sum,times)),
+            aggregate_time_ratio=sum(times[1])/sum(times[0]),
+            median_root_time_ratio=statistics.median(b/a for a,b in zip(*times))))
+    return dict(roots=24,repeats=3,baseline_snapshots_reproduced=48,metrics=metrics,
+        default_enabled=False,strength_demonstrated=False,
+        scope='Previously selected 24 selfplay roots, fixed search seeds, alternating sequential arms. '
+        'Median of three timings per root; repeats are not independent decisions. Native shared-host timings, '
+        'not an iPad benchmark, optimality proof or deployed-bot comparison.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', type=Path)
+    args = parser.parse_args()
+    if args.record:
+        assert not archive.exists()
+        result = json.loads(args.record.read_bytes())
+        summary = verify(result)
+        tracked = subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','crates/bot/tests','Cargo.lock','Cargo.toml','data/belief-pool-v3/belief-pool.json'],cwd=root,text=True).splitlines()
+        paths = tracked + [prior_path,'findings/policy-gap-v1/corpus.jsonl.gz','crates/bot/examples/claw_key_probe.rs','tools/claw-key-probe']
+        bundle = dict(result=result,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        archive.mkdir()
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,sort_keys=True).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in bundle['hashes'].items())
+    summary = verify(bundle['result'])
+    assert summary == json.loads((archive/'summary.json').read_bytes())
+    for corruption in ['seed','missing_repeat','snapshot']:
+        bad = copy.deepcopy(bundle['result'])
+        if corruption == 'seed': bad['rows'][0]['seed'] += 1
+        elif corruption == 'missing_repeat': bad['rows'][0]['runs'].pop()
+        else: bad['rows'][0]['runs'][0]['checkpoints'][0]['snapshot']['nodes'] += 1
+        try: verify(bad)
+        except AssertionError: pass
+        else: raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps(summary,indent=2))
+
+
+if __name__ == '__main__':
+    main()

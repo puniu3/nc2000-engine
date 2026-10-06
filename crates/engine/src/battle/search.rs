@@ -155,6 +155,13 @@ impl Battle {
         h.finish()
     }
 
+    pub fn search_key_canonical_claw(&self, dex: &Dex, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
+        use std::hash::Hasher;
+        let mut h = crate::fxhash::SearchHasher::default();
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping, !self.quick_claw_roll_observable(dex));
+        h.finish()
+    }
+
     /// Two-independent-hash fingerprint (FxHash ‖ SipHash) for
     /// certificate-grade state identity (M17e): the 64-bit search key
     /// tolerates collisions (mis-aggregated statistics), a proof-carrying
