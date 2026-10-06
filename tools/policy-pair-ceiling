@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import concurrent.futures
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/policy-pair-ceiling-v1'
+prior_path = 'findings/mean-corpus-v1/records.json.gz'
+summary_path = 'findings/mean-corpus-v1/summary.json'
+mean = runpy.run_path(str(root/'tools/mean-corpus-probe'))
+pruning = runpy.run_path(str(root/'tools/correlated-pruning-probe'))
+inputs = [prior_path, summary_path, *mean['inputs'][1:], 'data/gen2stadium2.json']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def read(path):
+    raw = (root/path).read_bytes()
+    return json.loads(gzip.decompress(raw) if path.endswith('.gz') else raw)
+
+
+def model_rows():
+    return [*[r for p in mean['inputs'][3:] for r in read(p)['rows']], *read(prior_path)['focus']['rows']]
+
+
+def coupled_delta(model, side, before, after):
+    _, pair = pruning['prepare'](model)
+    rows, cols = model['dimensions']
+    differences = []
+    for reply in range([cols, rows][side]):
+        a, b = ((before*cols+reply, after*cols+reply) if side==0
+                else (reply*cols+after, reply*cols+before))
+        differences.append((pair(a,b)[0]-F(1,10**10), -pair(b,a)[0]+F(1,10**10)))
+    return [min(d[0] for d in differences), max(d[1] for d in differences)]
+
+
+def controls():
+    model = dict(dimensions=[2,1],cell_bounds=[[.25,.75],[0.,.5]],children=[[0.,1.]],
+        cells=[dict(fixed=[.25,.25],pending_mass=0.,successors=[(0,.5)]),
+               dict(fixed=[0.,0.],pending_mass=0.,successors=[(0,.5)])])
+    lo, hi = coupled_delta(model,0,0,1)
+    assert .249999 < lo < hi < .250001
+    model['dimensions']=[1,2]
+    lo,hi=coupled_delta(model,1,0,1)
+    assert -.250001 < lo < hi < -.249999
+    model['dimensions']=[2,1]
+    model['children'].append([0.,1.]);model['cells'][1]['successors']=[(1,.5)]
+    lo,hi=coupled_delta(model,0,0,1)
+    assert lo<-.25 and hi>.75
+    model['cells'][1]['successors']=[(0,.5)]
+    model['cells'][0]['pending_mass']=.1
+    lo,hi=coupled_delta(model,0,0,1)
+    assert lo<.25 and hi>.35
+    for a in [(0,1),(.2,.8),(.6,.3)]:
+        for b in [(1,0),(.4,.1),(.2,.6)]:
+            difference=min(a)-min(b)
+            pointwise=[x-y for x,y in zip(a,b)]
+            assert min(pointwise)-1e-12<=difference<=max(pointwise)+1e-12
+
+
+def evaluate(extra=()):
+    prior = read(summary_path)
+    matrices = mean['certificates']([*read(prior_path)['focus']['rows'], *extra])
+    models = collections.defaultdict(list)
+    for r in [*model_rows(), *extra]:
+        assert mean['canonical_actions'](r['actions'])==mean['canonical_actions'](matrices[r['state_key']]['actions'])
+        models[r['state_key']].append(r.get('model',r.get('correlation',{}).get('model')))
+    results=[]
+    for r in prior['rows']:
+        if r['verdict']!='unresolved': continue
+        matrix=matrices[r['state_key']];side=r['side']
+        before,after=[r['actions'].index(r[k]) for k in ['before','after']]
+        policies=[[F(i==choice) for i in range(len(r['actions']))] for choice in [before,after]]
+        comparison=mean['compare'](matrix,side,*policies)
+        guarantees=[mean['guarantee'](matrix,side,p) for p in policies]
+        lo,hi=guarantees[0][0]-guarantees[1][1],guarantees[0][1]-guarantees[1][0]
+        for model in models[r['state_key']]:
+            assert model['dimensions']==list(map(len,matrix['actions']))
+            a,b=coupled_delta(model,side,before,after)
+            lo,hi=max(lo,a),min(hi,b)
+        assert lo<=hi,(r['id'],lo,hi)
+        epsilon=F(1,10**8)
+        verdict=('improved' if hi < -epsilon else 'regressed' if lo > epsilon else
+                 'equivalent_at_1e-8' if -epsilon<=lo<=hi<=epsilon else 'unresolved')
+        results.append(dict(id=r['id'],game=r['game'],decision=r['decision'],side=side,state_key=r['state_key'],
+            before=r['before'],after=r['after'],prior_loss_change=r['loss_change'],
+            independent_loss_change=comparison['loss_change'],loss_change=[float(lo),float(hi)],verdict=verdict,
+            baseline_loss=comparison['baseline_loss'],candidate_loss=comparison['candidate_loss']))
+    assert len(results)==52
+    return results
+
+
+def requests():
+    targets=collections.defaultdict(set)
+    for r in evaluate():
+        if r['verdict']=='unresolved':
+            targets[r['game'],r['decision']].update((r['side'],r[k]) for k in ['before','after'])
+    return [dict(game=g,decision=d,targets=[dict(side=s,choice=a) for s,a in sorted(v)])
+            for (g,d),v in sorted(targets.items())]
+
+
+def summarize(bundle):
+    controls()
+    assert bundle['input_sha256']=={p:sha((root/p).read_bytes()) for p in inputs}
+    assert [r['request'] for r in bundle['rows']]==requests()
+    for row in bundle['rows']:
+        assert row['budget_ms']==10000
+        assert (row['game'],row['decision'])==(row['request']['game'],row['request']['decision'])
+        assert row['model']['dimensions']==list(map(len,row['actions']))
+        assert len(row['model']['cells'])==len(row['model']['cell_bounds'])==len(row['chance'])
+        for cell in row['model']['cells']:
+            assert 0<=cell['fixed'][0]<=cell['fixed'][1] and cell['pending_mass']>=0
+            assert all(0<=key<len(row['model']['children']) and mass>=0 for key,mass in cell['successors'])
+            assert cell['fixed'][1]+cell['pending_mass']+sum(mass for _,mass in cell['successors'])<=1+1e-8
+        prior_runs=0
+        for call in row['calls']:
+            assert prior_runs+call['call_runs']==call['runs']
+            assert 0<=call['call_runs']<=1000
+            prior_runs=call['runs']
+        matrix=dict(actions=row['actions'],cells=[mean['padded'](c) for c in row['model']['cell_bounds']],
+                    value=mean['padded'](row['value']))
+        for target,found in zip(row['request']['targets'],row['calls'][-1]['guarantees'],strict=True):
+            policy=[F(a==target['choice']) for a in row['actions'][target['side']]]
+            expected=mean['guarantee'](matrix,target['side'],policy)
+            assert max(abs(float(a)-b) for a,b in zip(expected,found))<1e-8
+        for cell,chance in zip(row['model']['cell_bounds'],row['chance'],strict=True):
+            assert cell[1]-cell[0]<=chance['pending_mass']+chance['child_uncertainty']+1e-8
+    before=evaluate();after=evaluate(bundle['rows'])
+    return dict(prior_unresolved=52,roots_refined=len(bundle['rows']),
+        archive_only_verdicts=dict(collections.Counter(r['verdict'] for r in before)),
+        refined_verdicts=dict(collections.Counter(r['verdict'] for r in after)),
+        tightened_by_refinement=sum(b['loss_change'][0]>a['loss_change'][0]+1e-8 or b['loss_change'][1]<a['loss_change'][1]-1e-8
+                                    for a,b in zip(before,after)),
+        stops=dict(collections.Counter(r['reason'] for r in bundle['rows'])),
+        runs=sum(r['calls'][-1]['runs'] for r in bundle['rows']),
+        root_diagnostics=[dict(game=r['game'],decision=r['decision'],reason=r['reason'],nodes=r['nodes'],closed=r['closed'],
+            unexpanded_fraction=r['unexpanded_nodes']/r['nodes'],depth_limit_fraction=r['depth_limit_trials']/max(1,r['trials']),
+            pending_mass_sum=sum(c['pending_mass'] for c in r['chance']),
+            child_uncertainty_sum=sum(c['child_uncertainty'] for c in r['chance'])) for r in bundle['rows']],
+        rows=after,
+        scope='Only the 52 unresolved comparisons from mean-corpus-v1. First intersect archived independent security '
+              'bounds with coupled same-reply differences: min_j(A_j-B_j) <= min_j A_j-min_j B_j <= max_j(A_j-B_j). '
+              'Cancel shared child coefficients before bounding each difference with rational arithmetic and rounding pads. '
+              'Equivalent means within 1e-8, not exact transition equivalence. Refine every still-unresolved root with '
+              'all distinct selected actions on both sides in one graph, solve_policy_losses tolerance 0.005, 1000-run '
+              'calls, 120000 nodes, depth 24, resource threshold 9000 and 10-second soft limit. Intersect new bounds '
+              'with prior evidence, never replace tighter bounds. Root diagnostic sums are unweighted, not loss estimates. '
+              'Full-state first decisions with optimal continuation only; no whole-bot or blind information-set '
+              'exploitability claim. Three concurrent jobs, no matched-time strength claim or production change.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path);args=parser.parse_args()
+    if args.verify_only:
+        bundle=read('findings/policy-pair-ceiling-v1/records.json.gz')
+        assert summarize(bundle)==read('findings/policy-pair-ceiling-v1/summary.json')
+        print('policy-pair-ceiling: shared-successor controls, selection, policy bounds and comparisons verified');return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-policy-pair-'))
+    print(directory,flush=True)
+    binary=root/'target/release/examples/policy_pair_ceiling'
+    source_paths=sorted({*read(prior_path)['focus']['source_hashes'], 'crates/bot/examples/policy_pair_ceiling.rs'})
+    sources={p:sha((root/p).read_bytes()) for p in source_paths}
+    selected=requests()
+    if not args.import_directory:
+        env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','policy_pair_ceiling'],cwd=root,env=env,check=True)
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/mean['inputs'][2]).read_bytes()))
+        (directory/'manifest.json').write_text(json.dumps(dict(source_hashes=sources,binary_sha256=sha(binary.read_bytes()))))
+        def run(request):
+            name=f"g{request['game']:03}-d{request['decision']:04}"
+            (directory/(name+'.requests.json')).write_text(json.dumps([request]))
+            with (directory/(name+'.log')).open('w') as log:
+                subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/(name+'.requests.json')),
+                    str(directory/(name+'.jsonl')),'10000'],cwd=root,env=env,stdout=log,stderr=log,check=True)
+            print(name,'complete',flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            list(pool.map(run,selected))
+    manifest=json.loads((directory/'manifest.json').read_bytes())
+    assert manifest==dict(source_hashes=sources,binary_sha256=sha(binary.read_bytes()))
+    rows=[]
+    for request in selected:
+        path=directory/f"g{request['game']:03}-d{request['decision']:04}.jsonl"
+        rows.append(json.loads(path.read_bytes()))
+    bundle=dict(manifest=manifest,input_sha256={p:sha((root/p).read_bytes()) for p in inputs},rows=rows)
+    report=summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k not in ['rows','root_diagnostics']},indent=2))
+
+
+if __name__=='__main__':main()
