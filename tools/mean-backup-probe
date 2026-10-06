@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import gzip
+import hashlib
+import json
+import pathlib
+import statistics
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/mean-backup-v1'
+reference = root/'findings/continuation-choice-v1/records.json.gz'
+binary = root/'target/release/examples/mean_backup_probe'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def bounds(nodes, payoff):
+    lower = upper = payoff
+    for node in reversed(nodes):
+        policies = [[F(n, sum(ns)) if sum(ns) else F(1, len(ns)) for n in ns] for ns in node['visits']]
+        a, b = policies
+        lower = min(payoff*a[0], lower*a[1], payoff)
+        upper = max(payoff*(b[0]+b[2]), upper*b[1]+payoff*b[2])
+    return lower, upper
+
+
+def controls(payoff):
+    for levels in [1, 7]:
+        optimal = [dict(visits=[[1, levels-i], [1, levels-i, 0]]) for i in range(levels)]
+        assert bounds(optimal, payoff) == (payoff/(levels+1), payoff/(levels+1))
+        waiting = [dict(visits=[[0, 1], [0, 1, 0]]) for _ in range(levels)]
+        assert bounds(waiting, payoff) == (0, payoff)
+    oracle = json.loads(gzip.decompress(reference.read_bytes()))['result']['children']
+    for child in oracle:
+        depth = child['depth']
+        value = payoff/(8-depth)
+        assert F(child['value'][0])-F(1, 10**10) <= value <= F(child['value'][1])+F(1, 10**10)
+        cells = [payoff, 0, payoff, 0, payoff/(7-depth), payoff] if depth < 7 else [payoff, payoff, 0, payoff]
+        assert all(F(lo)-F(1, 10**10) <= expected <= F(hi)+F(1, 10**10)
+                   for expected, (lo, hi) in zip(cells, child['cells'], strict=True))
+
+
+def summarize(bundle):
+    assert bundle['reference_sha256'] == sha(reference.read_bytes())
+    record = bundle['record']
+    payoff = F(record['payoff'])
+    controls(payoff)
+    assert len(record['rows']) == 768
+    rows = {}
+    groups = collections.defaultdict(list)
+    for row in record['rows']:
+        levels, stochastic, iterations, exp3, average = [row[k] for k in ['levels', 'stochastic', 'iterations', 'exp3', 'average']]
+        key = (levels, stochastic, iterations, exp3, average, row['seed'])
+        assert key not in rows and levels in (1, 7) and iterations in (27000, 108000, 432000)
+        nodes = row['nodes']
+        assert len(nodes) == levels and nodes[0]['count'] == iterations
+        for i, node in enumerate(nodes):
+            assert list(map(len, node['visits'])) == [2, 3]
+            assert all(sum(ns) == node['count'] for ns in node['visits'])
+            assert 0 <= node['total'] <= node['count']
+            if not stochastic:
+                assert (F(node['total'])/payoff).denominator == 1
+            if i:
+                parent = nodes[i-1]
+                assert node['count'] <= min(ns[1] for ns in parent['visits'])
+                assert node['total'] <= parent['total']
+        lower, upper = bounds(nodes, payoff)
+        value = payoff/(levels+1)
+        assert lower <= value <= upper
+        measured = dict(gap=float(upper-lower), losses=[float(value-lower), float(upper-value)],
+                        root_value_error=float(F(nodes[0]['total'])/iterations-value))
+        rows[key] = (row, measured)
+        groups[key[:-1]].append(measured)
+    reports = []
+    for key, measured in sorted(groups.items()):
+        assert len(measured) == 16
+        levels, stochastic, iterations, exp3, average = key
+        pair = []
+        for seed_index in range(16):
+            seed = 2026121901 ^ ((seed_index*0x94d049bb133111eb) % (1 << 64))
+            row, result = rows[*key, seed]
+            control, before = rows[levels, stochastic, iterations, exp3, False, seed]
+            if levels == 1:
+                assert row['nodes'] == control['nodes']
+            pair.append(result['gap']-before['gap'])
+        reports.append(dict(levels=levels, stochastic=stochastic, iterations=iterations,
+                            selection='exp3_ix' if exp3 else 'ucb', child_mean_update=average, seeds=16,
+                            mean_gap=statistics.mean(m['gap'] for m in measured), worst_gap=max(m['gap'] for m in measured),
+                            mean_root_value_error=statistics.mean(m['root_value_error'] for m in measured),
+                            better_than_raw=sum(d < 0 for d in pair), worse_than_raw=sum(d > 0 for d in pair)))
+    return dict(groups=reports, exact_equilibrium_controls=True, single_stage_update_parity=True,
+                source='https://arxiv.org/html/1509.00149',
+                algorithm='At a nonterminal decision successor, update the selected bandits with its cumulative raw-return '
+                          'mean after the current simulation. Propagate and accumulate the raw terminal return. Terminal '
+                          'and Bernoulli chance outcomes remain unaveraged. The four arms cross UCB/Exp3-IX selection '
+                          'with raw/child-mean updates, using the same seed list and simulation checkpoints.',
+                decision='Do not add averaging alone to UCB: its whole-policy gap increases in this model. '
+                         'Exp3-IX with child-mean updates merits a separate native-game experiment; this model does not '
+                         'establish a bot improvement, a finite-budget guarantee or a general convergence theorem.',
+                scope='An abstract waiting-chain game with two row actions, three column actions and seven decision stages. '
+                      'The continue/continue pair advances one stage; other pairs terminate with payoff p or zero. '
+                      'p=0.91461181640625 and the resulting matrices agree with the archived Bond continuation intervals. '
+                      'Collapsed off-chain subgames grant optimal continuation; the actual engine, hidden information, '
+                      'rollouts and state abstraction are absent. The stochastic control uses a Bernoulli(p) terminal payoff. '
+                      'All nodes are available from the start. Exact rational backward best responses evaluate both players’ '
+                      'empirical behavioral policies over the entire abstract game. Gap is the sum of their value losses, '
+                      'not a single-player loss or the complete real-game exploitability. Default bot code is unchanged.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--import-output', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle) == json.loads((archive/'summary.json').read_bytes())
+        print('mean-backup: 768 policies, rational whole-game best responses and flat-game parity verified')
+        return
+    assert not archive.exists()
+    output = args.import_output
+    if output is None:
+        directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-mean-backup-'))
+        output = directory/'output.json'
+        subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'mean_backup_probe'], cwd=root, check=True)
+        subprocess.run([str(binary), str(output)], cwd=root, check=True)
+    paths = ['crates/bot/examples/mean_backup_probe.rs', 'crates/bot/src/exp3.rs', 'crates/bot/src/rng.rs']
+    bundle = dict(record=json.loads(output.read_bytes()), binary_sha256=sha(binary.read_bytes()),
+                  reference_sha256=sha(reference.read_bytes()), source_sha256={p: sha((root/p).read_bytes()) for p in paths})
+    report = summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report, indent=2)+'\n')
+    print(report['decision'])
+
+
+if __name__ == '__main__':
+    main()
