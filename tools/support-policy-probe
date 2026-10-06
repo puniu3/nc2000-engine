@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/support-policy-v1/results.json'
+corpus = 'findings/policy-gap-v1/corpus.jsonl.gz'
+native = 'crates/bot/examples/support_policy_witness.rs'
+legacy = runpy.run_path(str(root / 'tools/policy-witness-probe'))
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def specs():
+    base = dict(game=12, decision=15, target_side=1, first_choice='switch 2', policy_side=1,
+        priority=['move ' + a for a in ['hydropump', 'selfdestruct', 'submission', 'return',
+            'bellydrum', 'earthquake', 'bodyslam']] + ['switch 2', 'switch 3'],
+        rest_at_percent=None, horizon=10, work_budget=600000, cell_cap=4096,
+        guarded_keys=True, material_order=True)
+    cases = {}
+    for name, egg in [('boom', ['selfdestruct', 'bodyslam', 'return', 'hydropump', 'submission', 'earthquake']),
+                      ('body', ['bodyslam', 'return', 'hydropump', 'submission', 'earthquake', 'selfdestruct'])]:
+        m = dict(base, opponent_priority=dict(exeggutor=['move ' + a for a in egg],
+            tyranitar=['move ' + a for a in ['earthquake', 'hydropump', 'submission', 'bodyslam', 'selfdestruct', 'return']]))
+        cases[name] = dict(m, support_certificate=True, share_root_budget=True, share_budget_depth=3)
+        cases['guided-' + name] = dict(m, cell_cap=128)
+        cases['guided8-' + name] = dict(m, cell_cap=8)
+    cases['positive'] = dict(cases['guided-body'], game=22, decision=15, first_choice='switch 3',
+        priority=['move selfdestruct', 'move thunderbolt', 'switch 3'], opponent_priority={}, horizon=6, work_budget=50000)
+    cases['floor'] = dict(cases['guided-body'], horizon=1, work_budget=1, cell_cap=1)
+    return cases
+
+
+def check(name, m, raw):
+    record = json.loads(raw)
+    assert record['config'] == {k: v for k, v in m.items() if k != 'opponent_priority' or v}
+    data = gzip.decompress((root / corpus).read_bytes())
+    game = next(g for line in data.splitlines() if (g := json.loads(line))['game'] == m['game'])
+    assert record['nodes'][-1]['state_key'] == game['decisions'][m['decision']]['key']
+    result = legacy['verify'](record)
+    guided = name not in ['boom', 'body']
+    assert record.get('scheduler') == ('guided-support-v1' if guided else None)
+    if guided:
+        for n in record['nodes']:
+            for b in n.get('branches', []):
+                assert b['engine_pending'] >= 0 and b['deferred_mass'] >= 0
+                assert abs(b['engine_pending'] + b['deferred_mass'] - b['pending']) < 1e-10
+    result['root_replies'] = [dict(choices=b['choices'], bounds=b['bounds']) for b in record['nodes'][-1]['branches']]
+    if name == 'positive':
+        assert result['bounds'][0] > 0
+        for fault in ['coverage', 'mass', 'operator']:
+            bad = copy.deepcopy(record)
+            n = bad['nodes'][-1]
+            if fault == 'coverage':
+                n['branches'].pop()
+            elif fault == 'mass':
+                n['branches'][0]['children'][0]['mass'] *= 2
+            else:
+                n['maximizing'] = True
+            try:
+                legacy['verify'](bad)
+            except (AssertionError, ValueError):
+                pass
+            else:
+                raise AssertionError(fault)
+    elif name == 'floor':
+        assert result['bounds'] == [0, 1]
+    else:
+        assert result['bounds'][0] == 0
+    return dict(output_sha256=sha(raw), report=result)
+
+
+def fingerprints():
+    old = json.loads(gzip.decompress((root / 'findings/root-policy-v1/records.json.gz').read_bytes()))
+    paths = set(old['source_hashes']) | {native, 'crates/bot/examples/policy_witness.rs',
+        'tools/policy-witness-probe', 'tools/support-policy-probe', corpus}
+    return {p: sha((root / p).read_bytes()) for p in sorted(paths)}
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--replay', action='store_true')
+    parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    assert not (args.replay and args.import_directory)
+    prior = json.loads(archive.read_bytes()) if args.replay else None
+    if prior:
+        assert prior['source_hashes'] == fingerprints()
+    else:
+        assert not archive.exists()
+    if not args.import_directory:
+        subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'policy_witness',
+                        '--example', 'support_policy_witness'], cwd=root, check=True)
+    rows = {}
+    with tempfile.TemporaryDirectory(prefix='nc-support-policy-') as d:
+        directory = pathlib.Path(d)
+        source = directory / 'corpus.jsonl'
+        source.write_bytes(gzip.decompress((root / corpus).read_bytes()))
+        for name, m in specs().items():
+            if args.import_directory:
+                manifest = args.import_directory / (name + '.json')
+                output = args.import_directory / (name + '.out.json')
+                assert json.loads(manifest.read_bytes()) == m
+            else:
+                manifest = directory / 'config.json'
+                output = directory / 'output.json'
+                manifest.write_text(json.dumps(m))
+                example = 'policy_witness' if name in ['boom', 'body'] else 'support_policy_witness'
+                command = [str(root / 'target/release/examples' / example), str(source), str(manifest), str(output)]
+                if example == 'support_policy_witness':
+                    command.append('guided')
+                subprocess.run(command, cwd=root, env=dict(os.environ, NC2000_REPO_ROOT=str(root)),
+                               check=True, stderr=subprocess.DEVNULL)
+            rows[name] = dict(config=m, **check(name, m, output.read_bytes()))
+            print(name, rows[name]['report']['bounds'], flush=True)
+    result = dict(source_hashes=fingerprints(), cases=rows,
+        engine_runs=sum(x['report']['runs'] for x in rows.values()),
+        verdict='No positive whole-root lower bound for either contextual Switch continuation at the tested budgets.',
+        scope='Game 12 decision 15. Both policies select moves from the visible opposing species: '
+              'against Tyranitar, Earthquake for Snorlax and Hydro Pump for Poliwrath; against '
+              'Exeggutor, either Self-Destruct or Body Slam for Snorlax and Return for Poliwrath. '
+              'The baseline uses the existing finite-horizon ledger. The support scheduler allocates '
+              'work to every opponent reply, prioritizes favorable chance outcomes, and stops '
+              'refining a branch once its lower mass exceeds 1e-8. Guided chance exploration tries '
+              'valid script-prefix alternatives, retains distinct complete draw scripts with their '
+              'actual product probabilities, and leaves all omitted mass unknown. It is not a '
+              'Monte Carlo win-rate estimate or a favorable-outcome game model. All intervals '
+              'are checked by the existing rational ledger verifier. A previously solved positive '
+              'control, a one-execution unknown control, and corrupted-ledger rejection checks are '
+              'included. Native guided support is separately tested as a submeasure of complete '
+              'small kernels. Engine transitions, draw partitions and guarded identities remain '
+              'trusted. This compact archive stores exact output digests and verification reports; '
+              '--replay regenerates every full ledger, verifies it and compares all digests. '
+              'A zero lower bound here is inconclusive about the policy value. Upper bounds apply '
+              'only to each fixed continuation, not to unrestricted Switch play. The experiment '
+              'does not tighten the game-value interval or justify a production change.')
+    if prior:
+        assert result == prior
+        print('support-policy: every ledger regenerated, rationally verified and byte-matched')
+    else:
+        archive.parent.mkdir()
+        archive.write_text(json.dumps(result, indent=2) + '\n')
+
+
+if __name__ == '__main__':
+    main()
