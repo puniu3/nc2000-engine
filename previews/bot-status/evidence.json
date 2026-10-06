@@ -2435,6 +2435,424 @@
         ],
         "default_enabled": false
       }
+    },
+    "findings/hidden-endgame-screen-v1/summary.json": {
+      "sha256": "6a35e0166998b1f303b5e07a42636d550647a01b7b2528f456dda39f39605e5d",
+      "data": {
+        "roots": 24,
+        "available": 62,
+        "decisions": 557,
+        "samples_per_root": 16,
+        "engine_runs": 1980480,
+        "cells": 12288,
+        "partially_enumerated_cells": 2048,
+        "roots_with_distinct_payoff_types": 0,
+        "proven_selected_action_losses": 0,
+        "narrow_game_bounds": 2,
+        "rows": [
+          {
+            "game": 15,
+            "decision": 21,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.5673076821229949,
+              1.0
+            ],
+            "chosen": "move return",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 15,
+            "decision": 21,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0,
+              0.4326923178770051
+            ],
+            "chosen": "move hydropump",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 27,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0025540765369748645,
+              1.0
+            ],
+            "chosen": "move hydropump",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 27,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0,
+              0.9974459234630254
+            ],
+            "chosen": "move bodyslam",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 19,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0008513521793880679,
+              0.9573040006232997
+            ],
+            "chosen": "move sleeptalk",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 19,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0426959993767058,
+              0.9991486478206191
+            ],
+            "chosen": "move earthquake",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": [
+              "move selfdestruct"
+            ]
+          },
+          {
+            "game": 21,
+            "decision": 38,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.003205118203262575,
+              0.9999539733474613
+            ],
+            "chosen": "move earthquake",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 21,
+            "decision": 38,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              4.6026652538768126e-05,
+              0.9967948817967377
+            ],
+            "chosen": "move earthquake",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 21,
+            "decision": 40,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.99999999,
+              1.0
+            ],
+            "chosen": "move earthquake",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": [
+              "move fireblast",
+              "move rockslide",
+              "move swordsdance"
+            ]
+          },
+          {
+            "game": 21,
+            "decision": 40,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0,
+              1e-08
+            ],
+            "chosen": "move doubleedge",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 26,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0025540765369748645,
+              1.0
+            ],
+            "chosen": "move hydropump",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 26,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0,
+              0.9974459234630254
+            ],
+            "chosen": "move bodyslam",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 6,
+            "decision": 33,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.3333333232557231,
+              0.40364584326390857
+            ],
+            "chosen": "move sleeptalk",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": [
+              "move thunderbolt",
+              "move hiddenpowerice",
+              "move rest"
+            ]
+          },
+          {
+            "game": 6,
+            "decision": 33,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.5963541567360914,
+              0.6666666767442769
+            ],
+            "chosen": "move rockslide",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 21,
+            "decision": 39,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.06249999,
+              0.9911059826683464
+            ],
+            "chosen": "move earthquake",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 21,
+            "decision": 39,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.008894017331653762,
+              0.93750001
+            ],
+            "chosen": "move doubleedge",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 19,
+            "decision": 15,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0,
+              0.997771444296169
+            ],
+            "chosen": "move bodyslam",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 19,
+            "decision": 15,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0022285557038310092,
+              1.0
+            ],
+            "chosen": "move thunder",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 24,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.016175871416103993,
+              1.0
+            ],
+            "chosen": "move sleeptalk",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 24,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0,
+              0.9838241285838966
+            ],
+            "chosen": "move earthquake",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 20,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0008513521793880679,
+              0.9984688995226663
+            ],
+            "chosen": "move sleeptalk",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 20,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0015311004773337982,
+              0.999148647820612
+            ],
+            "chosen": "move bodyslam",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": [
+              "move selfdestruct"
+            ]
+          },
+          {
+            "game": 18,
+            "decision": 17,
+            "side": 0,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0498046775,
+              1.0
+            ],
+            "chosen": "move rest",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          },
+          {
+            "game": 18,
+            "decision": 17,
+            "side": 1,
+            "distinct_payoff_types": 1,
+            "game_bounds": [
+              0.0,
+              0.9501953225
+            ],
+            "chosen": "move bodyslam",
+            "regret_lower": 0.0,
+            "certified_inferior_alternatives": []
+          }
+        ],
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "decision": "No sampled hidden-roster payoff variation in this screen; do not deepen this sample to diagnose hidden-roster loss.",
+        "scope": "24 hash-selected own-side decisions from 62 eligible one-survivor-per-side decisions in the frozen 24-game corpus. Each model has 16 equally weighted draws from the current belief, with the Quick Claw coin averaged exactly before opponent responses. Opponent knows its sampled type; own root policy is common to all types. One decision-step enumeration retains nonterminal and unexpanded mass as [0,1]. Bounds apply only to this finite sampled model, not the entire prior or all legal unseen rosters. No terminal value is assigned to truncated play. Matrix strategy brackets are independently recomputed with rational arithmetic on recorded floating-point masses. All samples happen to have identical lower/upper payoff tables within each root; this fails to expose hidden-roster payoff uncertainty and does not establish that true opponents have no hidden alternatives. One 27000-iteration normal search seed per root is diagnostic, not a full-game strength result. Engine and belief semantics remain trusted."
+      }
+    },
+    "findings/hidden-ceiling-v1/summary.json": {
+      "sha256": "273a3b2c38e524210e6d628a59452105941de905e9e6f9d398c81a76f665870c",
+      "data": {
+        "lower": 0.00048290549909580006,
+        "upper": 0.0010918159157743952,
+        "lower_own_policy": {
+          "move doubleedge": 0.4285714183585102,
+          "move earthquake": 0.5714285816414898
+        },
+        "upper_opponent_policy": {
+          "growl_roster_earthquake_priority": 0.9689413181940969,
+          "growl_roster_growl_then_earthquake": 0.031058681805903106
+        },
+        "lower_reply_lines": [
+          [
+            0.0011268028580754066,
+            0.0
+          ],
+          [
+            0.046874998701,
+            0.0
+          ],
+          [
+            0.032584011103718016,
+            0.0
+          ],
+          [
+            0.046874999955,
+            0.0
+          ],
+          [
+            0.0011268028580754066,
+            0.0
+          ],
+          [
+            0.0,
+            0.0008451021083134722
+          ],
+          [
+            0.032584011103718016,
+            0.0
+          ],
+          [
+            0.046874999955,
+            0.0
+          ]
+        ],
+        "upper_action_lines": {
+          "move doubleedge": [
+            0.0011268029200993679,
+            2.9068703000234564e-10
+          ],
+          "move earthquake": [
+            7.409606261887802e-11,
+            0.03515300007910016
+          ],
+          "move selfdestruct": [
+            1.202393740129537e-11,
+            2.116867792167909e-10
+          ],
+          "move curse": [
+            1.2096101897896006e-11,
+            0.03295898498669869
+          ]
+        },
+        "lower_ratio_vs_previous_half_mix": 1.1428571632829798,
+        "max_possible_security_gain_percentage_points": 0.10918159157743951,
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "decision": "Deprioritize this witness for large strength gains; its security ceiling is below 0.11 percentage points.",
+        "scope": "Reuse the validated, same-observation Fire Blast/Growl Marowak counterexample. The lower certificate mixes Double Edge and Earthquake before the simultaneous choice and follows the archived Double Edge priority; it is valid against every response in those two roster worlds only. The upper certificate uses the legal Growl roster and randomizes two fixed opponent policies, Earthquake priority and Growl then Earthquake. Their full reply certificates cover all four own first actions and arbitrary later replies. The opponent chooses its policy before seeing the own random action. Thus the upper bound also limits security against any larger unseen-roster set containing this verified Growl world. It is not a Bayesian bound for a prior assigning this world negligible or zero probability. Linear envelopes are optimized and checked with exact rational arithmetic on archived conservative floating-point bounds, then padded by 1e-8. Historical engine certificates and public-history replay are reverified without rewriting their source hashes. This bounds one adverse decision, not average match improvement, occurrence frequency, or global distance to optimality."
+      }
     }
   },
   "foresight_fix": {
@@ -5071,6 +5489,428 @@
       "default_enabled": false
     },
     "strength_demonstrated": false,
+    "deployed": false
+  },
+  "hidden_endgame_screen_v1": {
+    "status": "analysis_complete",
+    "checked_at": "2026-10-07T08:43:28.085948+09:00",
+    "summary": {
+      "roots": 24,
+      "available": 62,
+      "decisions": 557,
+      "samples_per_root": 16,
+      "engine_runs": 1980480,
+      "cells": 12288,
+      "partially_enumerated_cells": 2048,
+      "roots_with_distinct_payoff_types": 0,
+      "proven_selected_action_losses": 0,
+      "narrow_game_bounds": 2,
+      "rows": [
+        {
+          "game": 15,
+          "decision": 21,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.5673076821229949,
+            1.0
+          ],
+          "chosen": "move return",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 15,
+          "decision": 21,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0,
+            0.4326923178770051
+          ],
+          "chosen": "move hydropump",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 27,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0025540765369748645,
+            1.0
+          ],
+          "chosen": "move hydropump",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 27,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0,
+            0.9974459234630254
+          ],
+          "chosen": "move bodyslam",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 19,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0008513521793880679,
+            0.9573040006232997
+          ],
+          "chosen": "move sleeptalk",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 19,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0426959993767058,
+            0.9991486478206191
+          ],
+          "chosen": "move earthquake",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": [
+            "move selfdestruct"
+          ]
+        },
+        {
+          "game": 21,
+          "decision": 38,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.003205118203262575,
+            0.9999539733474613
+          ],
+          "chosen": "move earthquake",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 21,
+          "decision": 38,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            4.6026652538768126e-05,
+            0.9967948817967377
+          ],
+          "chosen": "move earthquake",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 21,
+          "decision": 40,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.99999999,
+            1.0
+          ],
+          "chosen": "move earthquake",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": [
+            "move fireblast",
+            "move rockslide",
+            "move swordsdance"
+          ]
+        },
+        {
+          "game": 21,
+          "decision": 40,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0,
+            1e-08
+          ],
+          "chosen": "move doubleedge",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 26,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0025540765369748645,
+            1.0
+          ],
+          "chosen": "move hydropump",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 26,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0,
+            0.9974459234630254
+          ],
+          "chosen": "move bodyslam",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 6,
+          "decision": 33,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.3333333232557231,
+            0.40364584326390857
+          ],
+          "chosen": "move sleeptalk",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": [
+            "move thunderbolt",
+            "move hiddenpowerice",
+            "move rest"
+          ]
+        },
+        {
+          "game": 6,
+          "decision": 33,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.5963541567360914,
+            0.6666666767442769
+          ],
+          "chosen": "move rockslide",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 21,
+          "decision": 39,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.06249999,
+            0.9911059826683464
+          ],
+          "chosen": "move earthquake",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 21,
+          "decision": 39,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.008894017331653762,
+            0.93750001
+          ],
+          "chosen": "move doubleedge",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 19,
+          "decision": 15,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0,
+            0.997771444296169
+          ],
+          "chosen": "move bodyslam",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 19,
+          "decision": 15,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0022285557038310092,
+            1.0
+          ],
+          "chosen": "move thunder",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 24,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.016175871416103993,
+            1.0
+          ],
+          "chosen": "move sleeptalk",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 24,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0,
+            0.9838241285838966
+          ],
+          "chosen": "move earthquake",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 20,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0008513521793880679,
+            0.9984688995226663
+          ],
+          "chosen": "move sleeptalk",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 20,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0015311004773337982,
+            0.999148647820612
+          ],
+          "chosen": "move bodyslam",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": [
+            "move selfdestruct"
+          ]
+        },
+        {
+          "game": 18,
+          "decision": 17,
+          "side": 0,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0498046775,
+            1.0
+          ],
+          "chosen": "move rest",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        },
+        {
+          "game": 18,
+          "decision": 17,
+          "side": 1,
+          "distinct_payoff_types": 1,
+          "game_bounds": [
+            0.0,
+            0.9501953225
+          ],
+          "chosen": "move bodyslam",
+          "regret_lower": 0.0,
+          "certified_inferior_alternatives": []
+        }
+      ],
+      "production_changed": false,
+      "strength_demonstrated": false,
+      "decision": "No sampled hidden-roster payoff variation in this screen; do not deepen this sample to diagnose hidden-roster loss.",
+      "scope": "24 hash-selected own-side decisions from 62 eligible one-survivor-per-side decisions in the frozen 24-game corpus. Each model has 16 equally weighted draws from the current belief, with the Quick Claw coin averaged exactly before opponent responses. Opponent knows its sampled type; own root policy is common to all types. One decision-step enumeration retains nonterminal and unexpanded mass as [0,1]. Bounds apply only to this finite sampled model, not the entire prior or all legal unseen rosters. No terminal value is assigned to truncated play. Matrix strategy brackets are independently recomputed with rational arithmetic on recorded floating-point masses. All samples happen to have identical lower/upper payoff tables within each root; this fails to expose hidden-roster payoff uncertainty and does not establish that true opponents have no hidden alternatives. One 27000-iteration normal search seed per root is diagnostic, not a full-game strength result. Engine and belief semantics remain trusted."
+    },
+    "deployed": false
+  },
+  "hidden_ceiling_v1": {
+    "status": "analysis_complete",
+    "checked_at": "2026-10-07T08:43:28.086292+09:00",
+    "summary": {
+      "lower": 0.00048290549909580006,
+      "upper": 0.0010918159157743952,
+      "lower_own_policy": {
+        "move doubleedge": 0.4285714183585102,
+        "move earthquake": 0.5714285816414898
+      },
+      "upper_opponent_policy": {
+        "growl_roster_earthquake_priority": 0.9689413181940969,
+        "growl_roster_growl_then_earthquake": 0.031058681805903106
+      },
+      "lower_reply_lines": [
+        [
+          0.0011268028580754066,
+          0.0
+        ],
+        [
+          0.046874998701,
+          0.0
+        ],
+        [
+          0.032584011103718016,
+          0.0
+        ],
+        [
+          0.046874999955,
+          0.0
+        ],
+        [
+          0.0011268028580754066,
+          0.0
+        ],
+        [
+          0.0,
+          0.0008451021083134722
+        ],
+        [
+          0.032584011103718016,
+          0.0
+        ],
+        [
+          0.046874999955,
+          0.0
+        ]
+      ],
+      "upper_action_lines": {
+        "move doubleedge": [
+          0.0011268029200993679,
+          2.9068703000234564e-10
+        ],
+        "move earthquake": [
+          7.409606261887802e-11,
+          0.03515300007910016
+        ],
+        "move selfdestruct": [
+          1.202393740129537e-11,
+          2.116867792167909e-10
+        ],
+        "move curse": [
+          1.2096101897896006e-11,
+          0.03295898498669869
+        ]
+      },
+      "lower_ratio_vs_previous_half_mix": 1.1428571632829798,
+      "max_possible_security_gain_percentage_points": 0.10918159157743951,
+      "production_changed": false,
+      "strength_demonstrated": false,
+      "decision": "Deprioritize this witness for large strength gains; its security ceiling is below 0.11 percentage points.",
+      "scope": "Reuse the validated, same-observation Fire Blast/Growl Marowak counterexample. The lower certificate mixes Double Edge and Earthquake before the simultaneous choice and follows the archived Double Edge priority; it is valid against every response in those two roster worlds only. The upper certificate uses the legal Growl roster and randomizes two fixed opponent policies, Earthquake priority and Growl then Earthquake. Their full reply certificates cover all four own first actions and arbitrary later replies. The opponent chooses its policy before seeing the own random action. Thus the upper bound also limits security against any larger unseen-roster set containing this verified Growl world. It is not a Bayesian bound for a prior assigning this world negligible or zero probability. Linear envelopes are optimized and checked with exact rational arithmetic on archived conservative floating-point bounds, then padded by 1e-8. Historical engine certificates and public-history replay are reverified without rewriting their source hashes. This bounds one adverse decision, not average match improvement, occurrence frequency, or global distance to optimality."
+    },
     "deployed": false
   }
 }

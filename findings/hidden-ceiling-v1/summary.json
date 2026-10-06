@@ -1,0 +1,70 @@
+{
+  "lower": 0.00048290549909580006,
+  "upper": 0.0010918159157743952,
+  "lower_own_policy": {
+    "move doubleedge": 0.4285714183585102,
+    "move earthquake": 0.5714285816414898
+  },
+  "upper_opponent_policy": {
+    "growl_roster_earthquake_priority": 0.9689413181940969,
+    "growl_roster_growl_then_earthquake": 0.031058681805903106
+  },
+  "lower_reply_lines": [
+    [
+      0.0011268028580754066,
+      0.0
+    ],
+    [
+      0.046874998701,
+      0.0
+    ],
+    [
+      0.032584011103718016,
+      0.0
+    ],
+    [
+      0.046874999955,
+      0.0
+    ],
+    [
+      0.0011268028580754066,
+      0.0
+    ],
+    [
+      0.0,
+      0.0008451021083134722
+    ],
+    [
+      0.032584011103718016,
+      0.0
+    ],
+    [
+      0.046874999955,
+      0.0
+    ]
+  ],
+  "upper_action_lines": {
+    "move doubleedge": [
+      0.0011268029200993679,
+      2.9068703000234564e-10
+    ],
+    "move earthquake": [
+      7.409606261887802e-11,
+      0.03515300007910016
+    ],
+    "move selfdestruct": [
+      1.202393740129537e-11,
+      2.116867792167909e-10
+    ],
+    "move curse": [
+      1.2096101897896006e-11,
+      0.03295898498669869
+    ]
+  },
+  "lower_ratio_vs_previous_half_mix": 1.1428571632829798,
+  "max_possible_security_gain_percentage_points": 0.10918159157743951,
+  "production_changed": false,
+  "strength_demonstrated": false,
+  "decision": "Deprioritize this witness for large strength gains; its security ceiling is below 0.11 percentage points.",
+  "scope": "Reuse the validated, same-observation Fire Blast/Growl Marowak counterexample. The lower certificate mixes Double Edge and Earthquake before the simultaneous choice and follows the archived Double Edge priority; it is valid against every response in those two roster worlds only. The upper certificate uses the legal Growl roster and randomizes two fixed opponent policies, Earthquake priority and Growl then Earthquake. Their full reply certificates cover all four own first actions and arbitrary later replies. The opponent chooses its policy before seeing the own random action. Thus the upper bound also limits security against any larger unseen-roster set containing this verified Growl world. It is not a Bayesian bound for a prior assigning this world negligible or zero probability. Linear envelopes are optimized and checked with exact rational arithmetic on archived conservative floating-point bounds, then padded by 1e-8. Historical engine certificates and public-history replay are reverified without rewriting their source hashes. This bounds one adverse decision, not average match improvement, occurrence frequency, or global distance to optimality."
+}

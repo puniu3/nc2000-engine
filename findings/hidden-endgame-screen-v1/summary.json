@@ -1,0 +1,342 @@
+{
+  "roots": 24,
+  "available": 62,
+  "decisions": 557,
+  "samples_per_root": 16,
+  "engine_runs": 1980480,
+  "cells": 12288,
+  "partially_enumerated_cells": 2048,
+  "roots_with_distinct_payoff_types": 0,
+  "proven_selected_action_losses": 0,
+  "narrow_game_bounds": 2,
+  "rows": [
+    {
+      "game": 15,
+      "decision": 21,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.5673076821229949,
+        1.0
+      ],
+      "chosen": "move return",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 15,
+      "decision": 21,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0,
+        0.4326923178770051
+      ],
+      "chosen": "move hydropump",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 27,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0025540765369748645,
+        1.0
+      ],
+      "chosen": "move hydropump",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 27,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0,
+        0.9974459234630254
+      ],
+      "chosen": "move bodyslam",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 19,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0008513521793880679,
+        0.9573040006232997
+      ],
+      "chosen": "move sleeptalk",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 19,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0426959993767058,
+        0.9991486478206191
+      ],
+      "chosen": "move earthquake",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": [
+        "move selfdestruct"
+      ]
+    },
+    {
+      "game": 21,
+      "decision": 38,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.003205118203262575,
+        0.9999539733474613
+      ],
+      "chosen": "move earthquake",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 21,
+      "decision": 38,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        4.6026652538768126e-05,
+        0.9967948817967377
+      ],
+      "chosen": "move earthquake",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 21,
+      "decision": 40,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.99999999,
+        1.0
+      ],
+      "chosen": "move earthquake",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": [
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance"
+      ]
+    },
+    {
+      "game": 21,
+      "decision": 40,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0,
+        1e-08
+      ],
+      "chosen": "move doubleedge",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 26,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0025540765369748645,
+        1.0
+      ],
+      "chosen": "move hydropump",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 26,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0,
+        0.9974459234630254
+      ],
+      "chosen": "move bodyslam",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 6,
+      "decision": 33,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.3333333232557231,
+        0.40364584326390857
+      ],
+      "chosen": "move sleeptalk",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": [
+        "move thunderbolt",
+        "move hiddenpowerice",
+        "move rest"
+      ]
+    },
+    {
+      "game": 6,
+      "decision": 33,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.5963541567360914,
+        0.6666666767442769
+      ],
+      "chosen": "move rockslide",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 21,
+      "decision": 39,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.06249999,
+        0.9911059826683464
+      ],
+      "chosen": "move earthquake",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 21,
+      "decision": 39,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.008894017331653762,
+        0.93750001
+      ],
+      "chosen": "move doubleedge",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 19,
+      "decision": 15,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0,
+        0.997771444296169
+      ],
+      "chosen": "move bodyslam",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 19,
+      "decision": 15,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0022285557038310092,
+        1.0
+      ],
+      "chosen": "move thunder",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 24,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.016175871416103993,
+        1.0
+      ],
+      "chosen": "move sleeptalk",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 24,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0,
+        0.9838241285838966
+      ],
+      "chosen": "move earthquake",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 20,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0008513521793880679,
+        0.9984688995226663
+      ],
+      "chosen": "move sleeptalk",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 20,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0015311004773337982,
+        0.999148647820612
+      ],
+      "chosen": "move bodyslam",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": [
+        "move selfdestruct"
+      ]
+    },
+    {
+      "game": 18,
+      "decision": 17,
+      "side": 0,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0498046775,
+        1.0
+      ],
+      "chosen": "move rest",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    },
+    {
+      "game": 18,
+      "decision": 17,
+      "side": 1,
+      "distinct_payoff_types": 1,
+      "game_bounds": [
+        0.0,
+        0.9501953225
+      ],
+      "chosen": "move bodyslam",
+      "regret_lower": 0.0,
+      "certified_inferior_alternatives": []
+    }
+  ],
+  "production_changed": false,
+  "strength_demonstrated": false,
+  "decision": "No sampled hidden-roster payoff variation in this screen; do not deepen this sample to diagnose hidden-roster loss.",
+  "scope": "24 hash-selected own-side decisions from 62 eligible one-survivor-per-side decisions in the frozen 24-game corpus. Each model has 16 equally weighted draws from the current belief, with the Quick Claw coin averaged exactly before opponent responses. Opponent knows its sampled type; own root policy is common to all types. One decision-step enumeration retains nonterminal and unexpanded mass as [0,1]. Bounds apply only to this finite sampled model, not the entire prior or all legal unseen rosters. No terminal value is assigned to truncated play. Matrix strategy brackets are independently recomputed with rational arithmetic on recorded floating-point masses. All samples happen to have identical lower/upper payoff tables within each root; this fails to expose hidden-roster payoff uncertainty and does not establish that true opponents have no hidden alternatives. One 27000-iteration normal search seed per root is diagnostic, not a full-game strength result. Engine and belief semantics remain trusted."
+}

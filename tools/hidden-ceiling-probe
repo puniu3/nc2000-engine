@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+from fractions import Fraction as F
+import gzip
+import hashlib
+import itertools
+import json
+from pathlib import Path
+import runpy
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/hidden-ceiling-v1'
+hidden_path='findings/hidden-terminal-v1/records.json.gz'
+terminal_path='findings/terminal-certificate-v1/records.json.gz'
+
+
+def envelope(lines,maximize):
+    points={F(0),F(1)}
+    for (a,b),(c,d) in itertools.combinations(lines,2):
+        slope=a-b-c+d
+        if slope:
+            x=(d-b)/slope
+            if 0<=x<=1:points.add(x)
+    candidates=[(min(x*a+(1-x)*b for a,b in lines) if maximize else max(x*a+(1-x)*b for a,b in lines),x) for x in points]
+    return (max if maximize else min)(candidates)
+
+
+def derive(hidden):
+    ledgers={e['id']:e['ledger'] for e in hidden['output']['ledgers']}
+    branches={k:l['nodes'][l['root']]['branches'] for k,l in ledgers.items()}
+    assert all(l['config']['policy_side']==1 for k,l in ledgers.items() if 'doubleedge' in k or k=='1-earthquake-h3')
+    lower=[]
+    for b in branches['0-doubleedge-h1']:
+        lower.append([F(b['bounds'][0]),F(0)])
+    edge={b['choices'][0]:b for b in branches['1-doubleedge-h1']}
+    quake={b['choices'][0]:b for b in branches['1-earthquake-h3']}
+    assert edge.keys()==quake.keys()
+    for name in edge:lower.append([F(edge[name]['bounds'][0]),F(quake[name]['bounds'][0])])
+    guaranteed,p=envelope(lower,True)
+    adversaries=[branches['1-earthquake-h2'],branches['1-growl-h3']]
+    for name in ['1-earthquake-h2','1-growl-h3']:assert ledgers[name]['config']['policy_side']==0
+    order=[b['choices'][1] for b in adversaries[0]]
+    assert order==['move doubleedge','move earthquake','move selfdestruct','move curse']
+    assert [b['choices'][1] for b in adversaries[1]]==order
+    upper=[[1-F(a['bounds'][0]),1-F(b['bounds'][0])] for a,b in zip(*adversaries)]
+    ceiling,q=envelope(upper,False)
+    assert guaranteed>0 and guaranteed<ceiling< F(12,10000)
+    return dict(
+        lower=float(guaranteed-F(1,10**8)),upper=float(ceiling+F(1,10**8)),
+        lower_own_policy={'move doubleedge':float(p),'move earthquake':float(1-p)},
+        upper_opponent_policy={'growl_roster_earthquake_priority':float(q),'growl_roster_growl_then_earthquake':float(1-q)},
+        lower_reply_lines=[[float(a),float(b)] for a,b in lower],
+        upper_action_lines={a:[float(x),float(y)] for a,(x,y) in zip(order,upper)},
+        lower_ratio_vs_previous_half_mix=float(guaranteed/F('0.000422551054156736')),
+        max_possible_security_gain_percentage_points=float((ceiling+F(1,10**8))*100),
+        production_changed=False,strength_demonstrated=False,
+        decision='Deprioritize this witness for large strength gains; its security ceiling is below 0.11 percentage points.',
+        scope='Reuse the validated, same-observation Fire Blast/Growl Marowak counterexample. The lower certificate mixes '
+              'Double Edge and Earthquake before the simultaneous choice and follows the archived Double Edge priority; '
+              'it is valid against every response in those two roster worlds only. The upper certificate uses the legal Growl '
+              'roster and randomizes two fixed opponent policies, Earthquake priority and Growl then Earthquake. Their full '
+              'reply certificates cover all four own first actions and arbitrary later replies. The opponent chooses its '
+              'policy before seeing the own random action. Thus the upper bound also limits security against any larger '
+              'unseen-roster set containing this verified Growl world. It is not a Bayesian bound for a prior assigning '
+              'this world negligible or zero probability. Linear envelopes are optimized and checked with exact rational '
+              'arithmetic on archived conservative floating-point bounds, then padded by 1e-8. Historical engine certificates '
+              'and public-history replay are reverified without rewriting their source hashes. This bounds one adverse '
+              'decision, not average match improvement, occurrence frequency, or global distance to optimality.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',action='store_true');args=parser.parse_args()
+    hidden=json.loads(gzip.decompress((root/hidden_path).read_bytes()))
+    old=json.loads(gzip.decompress((root/terminal_path).read_bytes()))
+    verifier=runpy.run_path(str(root/'tools/hidden-terminal-probe'))
+    verifier['check'](hidden['manifest'],hidden['output'],old)
+    summary=derive(hidden)
+    known,p=envelope([[F(1),F(0)],[F(0),F(1)]],True)
+    assert known==F(1,2) and p==F(1,2)
+    known,p=envelope([[F(1),F(0)],[F(0),F(1)]],False)
+    assert known==F(1,2) and p==F(1,2)
+    paths=[hidden_path,terminal_path,'tools/hidden-ceiling-probe','tools/hidden-terminal-probe','tools/terminal-certificate-probe','tools/policy-witness-probe']
+    hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists();archive.mkdir()
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+        (archive/'hashes.json').write_text(json.dumps(hashes,indent=2)+'\n')
+    assert hashes==json.loads((archive/'hashes.json').read_bytes())
+    assert summary==json.loads((archive/'summary.json').read_bytes())
+    bad=copy.deepcopy(hidden)
+    bad['output']['ledgers'][2]['ledger']['nodes'][0]['bounds'][0]+=0.01
+    try:verifier['check'](bad['manifest'],bad['output'],old)
+    except AssertionError:pass
+    else:raise AssertionError('Accepted altered certificate')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['scope','lower_reply_lines','upper_action_lines']},indent=2))
+
+
+if __name__=='__main__':main()

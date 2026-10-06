@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+from fractions import Fraction as F
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/hidden-endgame-screen-v1'
+corpus='findings/policy-gap-v1/corpus.jsonl.gz'
+
+
+def close(a,b):
+    assert abs(float(a)-float(b))<1e-8,(a,b)
+
+
+def verify_solution(types,s):
+    n=len(types[0]);count=len(types)
+    x=list(map(F,s['own']));y=list(map(F,s['opponent']));replies=s['replies']
+    assert len(x)==n and len(y)==len(replies)>0
+    assert all(p>=0 for p in x+y)
+    close(sum(x),1);close(sum(y),1)
+    x=[p/sum(x) for p in x];y=[p/sum(y) for p in y]
+    lo=sum(min(sum(x[i]*t[i][j] for i in range(n)) for j in range(len(t[0]))) for t in types)/count
+    for r in replies:
+        assert len(r)==count and all(0<=j<len(t[0]) for t,j in zip(types,r))
+    hi=max(sum(p*sum(t[i][j] for t,j in zip(types,r))/count for p,r in zip(y,replies)) for i in range(n))
+    assert 0<=hi-lo<F(1,10**8)
+    close(lo,s['bounds'][0]);close(hi,s['bounds'][1])
+    return lo,hi
+
+
+def verify(data):
+    assert data['samples']==16 and data['sample_seed']==0x2026110201
+    assert data['cap']==512 and data['iterations']==27000
+    games=[json.loads(l) for l in gzip.decompress((root/corpus).read_bytes()).splitlines()]
+    assert data['decisions']==sum(len(g['decisions']) for g in games)
+    assert len(data['rows'])==min(24,data['available'])
+    identities=set();reports=[];runs=0;cells=0;exhausted=0
+    for row in data['rows']:
+        ident=(row['game'],row['decision'],row['side']);assert ident not in identities;identities.add(ident)
+        game=next(g for g in games if g['game']==row['game'])
+        assert row['key']==game['decisions'][row['decision']]['key']
+        n=len(row['actions']);assert n>1 and row['side'] in [0,1]
+        assert [t['sample'] for t in row['types']]==list(range(16))
+        matrices=[[],[]]
+        for t in row['types']:
+            m=len(t['replies']);assert m>0 and len(t['keys'])==2
+            tables=[[[F(0) for _ in range(m)] for _ in range(n)] for _ in range(2)]
+            assert len(t['cells'])==2*n*m
+            assert {(c['coin'],c['own'],c['reply']) for c in t['cells']}=={(coin,i,j) for coin in [False,True] for i in range(n) for j in range(m)}
+            for c in t['cells']:
+                mass=list(map(F,c['mass']));pending=F(c['pending'])
+                assert len(mass)==4 and all(0<=v<=1 for v in mass+[pending])
+                close(sum(mass)+pending,1);assert c['runs']>0
+                weight=F(60 if c['coin'] else 196,256)
+                lo=mass[0]+mass[1]/2;hi=lo+mass[3]+pending
+                for k,v in enumerate([lo,hi]):tables[k][c['own']][c['reply']]+=weight*v
+                runs+=c['runs'];cells+=1;exhausted+=pending>0
+            for k,name in enumerate(['lower','upper']):
+                assert len(t[name])==n and all(len(r)==m for r in t[name])
+                for a,b in zip(sum(tables[k],[]),sum(t[name],[])):close(a,b)
+                matrices[k].append(tables[k])
+        bounds=[verify_solution(tables,row[name]) for tables,name in zip(matrices,['lower_solution','upper_solution'])]
+        pure=[[sum(min(t[i]) for t in ts)/16 for i in range(n)] for ts in matrices]
+        for expected,name in zip(pure,['pure_lower','pure_upper']):
+            assert len(row[name])==n
+            for a,b in zip(expected,row[name]):close(a,b)
+        search=row['search'];chosen=search['chosen'];assert 0<=chosen<n
+        assert search['best']==row['actions'][chosen] and search['seed']==0x2026110202
+        assert len(search['visits'])==len(search['means'])==n and sum(search['visits'])==27000
+        assert all(v>=0 for v in search['visits']) and all(0<=v<=1 for v in search['means'])
+        regret=max(F(0),bounds[0][0]-pure[1][chosen]-F(1,10**8))
+        close(regret,row['regret_lower'])
+        reports.append(dict(game=row['game'],decision=row['decision'],side=row['side'],
+            distinct_payoff_types=len({json.dumps([t['lower'],t['upper']]) for t in row['types']}),
+            game_bounds=[max(0.,float(bounds[0][0])-1e-8),min(1.,float(bounds[1][1])+1e-8)],
+            chosen=search['best'],regret_lower=float(regret),
+            certified_inferior_alternatives=[row['actions'][i] for i in range(n) if pure[1][i]+F(1,10**8)<pure[0][chosen]]))
+    return dict(roots=len(reports),available=data['available'],decisions=data['decisions'],samples_per_root=16,
+        engine_runs=runs,cells=cells,partially_enumerated_cells=exhausted,
+        roots_with_distinct_payoff_types=sum(r['distinct_payoff_types']>1 for r in reports),
+        proven_selected_action_losses=sum(r['regret_lower']>0 for r in reports),
+        narrow_game_bounds=sum(r['game_bounds'][1]-r['game_bounds'][0]<1e-6 for r in reports),rows=reports,
+        production_changed=False,strength_demonstrated=False,
+        decision='No sampled hidden-roster payoff variation in this screen; do not deepen this sample to diagnose hidden-roster loss.',
+        scope='24 hash-selected own-side decisions from 62 eligible one-survivor-per-side decisions in the frozen 24-game corpus. '
+              'Each model has 16 equally weighted draws from the current belief, with the Quick Claw coin averaged exactly before '
+              'opponent responses. Opponent knows its sampled type; own root policy is common to all types. One decision-step '
+              'enumeration retains nonterminal and unexpanded mass as [0,1]. Bounds apply only to this finite sampled model, '
+              'not the entire prior or all legal unseen rosters. No terminal value is assigned to truncated play. Matrix '
+              'strategy brackets are independently recomputed with rational arithmetic on recorded floating-point masses. '
+              'All samples happen to have identical lower/upper payoff tables within each root; this fails to expose hidden-roster '
+              'payoff uncertainty and does not establish that true opponents have no hidden alternatives. One 27000-iteration '
+              'normal search seed per root is diagnostic, not a full-game strength result. Engine and belief semantics remain trusted.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',type=Path);args=parser.parse_args()
+    if args.record:
+        assert not archive.exists()
+        data=json.loads(args.record.read_bytes());summary=verify(data)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','crates/conformance/src','Cargo.toml','Cargo.lock'],cwd=root,text=True).splitlines()
+        paths+=['crates/bot/examples/hidden_endgame_screen.rs','tools/hidden-endgame-screen',corpus,'data/gen2stadium2.json','data/belief-pool-v3/belief-pool.json']
+        bundle=dict(result=data,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        archive.mkdir();(archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in bundle['hashes'].items())
+    summary=verify(bundle['result']);assert summary==json.loads((archive/'summary.json').read_bytes())
+    for corruption in ['mass','coin','solution','chosen','sample','seed']:
+        bad=copy.deepcopy(bundle['result']);r=bad['rows'][0]
+        if corruption=='mass':r['types'][0]['cells'][0]['mass'][0]+=.01
+        elif corruption=='coin':r['types'][0]['cells'][0]['coin']=not r['types'][0]['cells'][0]['coin']
+        elif corruption=='solution':r['lower_solution']['own'][0]+=.01
+        elif corruption=='chosen':r['search']['best']='invalid'
+        elif corruption=='seed':bad['sample_seed']+=1
+        else:r['types'].pop()
+        try:verify(bad)
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['rows','scope']},indent=2))
+
+
+if __name__=='__main__':main()
