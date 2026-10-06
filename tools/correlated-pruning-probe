@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+import argparse
+import hashlib
+import pathlib
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/correlated-pruning-v1'
+inputs=['findings/correlated-root-v1/records.json.gz','findings/baseline-ceiling-v1/records.json.gz']
+
+import json,gzip,collections
+from fractions import Fraction as F
+
+def prepare(model):
+ b=[list(map(F,c)) for c in model['cell_bounds']]
+ children=[list(map(F,c)) for c in model['children']]
+ expr=[]
+ for c in model['cells']:
+  e=collections.defaultdict(F)
+  for k,m in c['successors']:e[k]+=F(m)
+  expr.append((list(map(F,c['fixed'])),F(c['pending_mass']),dict(e)))
+ cache={}
+ def pair(a,bindex):
+  if (a,bindex) in cache:return cache[a,bindex]
+  ac,ap,ae=expr[a];bc,bp,be=expr[bindex]
+  value=ac[0]-bc[1]-bp
+  for key in ae.keys()|be.keys():
+   c=ae.get(key,F(0))-be.get(key,F(0));value+=c*children[key][c<0]
+  pad=F(1,10**12)*(len(ae)+len(be)+3)
+  exact=(not ap and not bp and ac[0]==ac[1]==bc[0]==bc[1] and ae==be)
+  cache[a,bindex]=(value-pad,exact)
+  return cache[a,bindex]
+ return b,pair
+
+def prune(model,mode):
+ b,pair=prepare(model);rows,cols=model['dimensions'];active=[list(range(rows)),list(range(cols))];removed=[]
+ while True:
+  found=False
+  for side in [0,1]:
+   if len(active[side])<=1:continue
+   for loser in active[side]:
+    for winner in active[side]:
+     if loser==winner:continue
+     proofs=[]
+     for reply in active[1-side]:
+      a,z=(winner*cols+reply,loser*cols+reply) if side==0 else (reply*cols+loser,reply*cols+winner)
+      ordinary=b[z][1]+F(1,10**12)<=b[a][0] or b[z][1]==b[a][0] and b[a][0] in [0,1]
+      lo,equal=pair(a,z)
+      proofs.append(ordinary or mode!='interval' and lo>=0 or mode=='equivalent' and equal)
+     if all(proofs):
+      active[side].remove(loser);removed.append((side,loser,winner));found=True;break
+    if found:break
+   if found:break
+  if not found:break
+ return active,removed
+
+def controls():
+    model=dict(dimensions=[2,1],cell_bounds=[[0.1,0.6],[0.,0.5]],children=[[0.,1.]],
+        cells=[dict(fixed=[0.1,0.1],pending_mass=0.,successors=[(0,0.5)]),
+               dict(fixed=[0.,0.],pending_mass=0.,successors=[(0,0.5)])])
+    assert len(prune(model,'interval')[1])==0
+    assert prune(model,'correlated')[1]==[(0,1,0)]
+    model['children'].append([0.,1.]);model['cells'][1]['successors']=[(1,0.5)]
+    assert len(prune(model,'correlated')[1])==0
+    model['cells'][1]['successors']=[(0,0.5)]
+    model['cell_bounds'][0]=[0.,0.5];model['cells'][0]['fixed']=[0.,0.]
+    assert len(prune(model,'correlated')[1])==0
+    assert len(prune(model,'equivalent')[1])==1
+    model['cells'][0]['pending_mass']=0.1
+    assert len(prune(model,'equivalent')[1])==0
+
+
+def summarize():
+    controls()
+    results=[];hashes={}
+    for path in inputs:
+        raw=(root/path).read_bytes();hashes[path]=hashlib.sha256(raw).hexdigest()
+        bundle=json.loads(gzip.decompress(raw))
+        for r in bundle['rows']:
+            model=r.get('model',r.get('correlation',{}).get('model'))
+            variants={mode:prune(model,mode) for mode in ['interval','correlated','equivalent']}
+            results.append(dict(source=path,game=r['game'],decision=r['decision'],dimensions=model['dimensions'],
+                active={mode:active for mode,(active,removed) in variants.items()},
+                removed={mode:removed for mode,(active,removed) in variants.items()},
+                additional_certified=len(variants['correlated'][1])-len(variants['interval'][1]),
+                additional_equivalence_candidates=len(variants['equivalent'][1])-len(variants['correlated'][1])))
+    return dict(source_sha256=hashes,snapshots=len(results),positions=len({(r['game'],r['decision']) for r in results}),
+        interval_removals=sum(len(r['removed']['interval']) for r in results),
+        correlated_removals=sum(len(r['removed']['correlated']) for r in results),
+        additional_certified=sum(r['additional_certified'] for r in results),
+        additional_equivalence_candidates=sum(r['additional_equivalence_candidates'] for r in results),
+        rows=results,decision='No pruning implementation or default change: only one additional strict dominance is established across the two frozen root snapshots per position.',
+        scope='Both players, all root actions, iterative pointwise dominance over the remaining opposing actions. '
+              'Shared-successor differences are computed with exact rational arithmetic over stored binary floating-point values, '
+              'with a per-term roundoff margin. Kernel-equality candidates have identical stored coefficients and no pending mass, '
+              'but equality of rounded probabilities is not an exact transition-kernel proof. They are reported separately and '
+              'must not be used for pruning without an exact probability or rule-level equivalence proof. '
+              'These are 82 snapshots of 41 positions, not 82 independent games. No downstream search savings or strength gain was measured.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true');args=parser.parse_args()
+    report=summarize()
+    if args.verify_only:
+        assert json.loads(json.dumps(report))==json.loads((archive/'summary.json').read_bytes())
+        print('correlated-pruning: verified rational dominance, distinct-successor controls and all 82 snapshots');return
+    archive.mkdir()
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='rows'},indent=2))
+
+
+if __name__=='__main__':main()
