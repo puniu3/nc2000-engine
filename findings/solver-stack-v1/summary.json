@@ -1,0 +1,126 @@
+{
+  "positions": 41,
+  "samples": 24336,
+  "frames": 108485,
+  "categories": {
+    "state_identity": {
+      "samples": 14753,
+      "fraction": 0.6062212360289283
+    },
+    "eager_enumeration": {
+      "samples": 14501,
+      "fraction": 0.5958662064431295
+    },
+    "scripted_transition": {
+      "samples": 3393,
+      "fraction": 0.13942307692307693
+    },
+    "battle_clone": {
+      "samples": 1934,
+      "fraction": 0.07947074293228139
+    }
+  },
+  "top_exclusive": [
+    {
+      "symbol": "_RNvXs3_NtNtCsedRpiqSkYaQ_4core4hash3sipINtB5_6HasherNtB5_11Sip13RoundsENtB7_6Hasher5writeCsbniYiRtySsY_17strategy_frontier",
+      "samples": 7109,
+      "fraction": 0.29211867192636426
+    },
+    {
+      "symbol": "_RNvMs_NtNtCsiUJM42X8V9v_13nc2000_engine6battle6searchNtNtB8_5state6Battle17state_key128_with",
+      "samples": 3871,
+      "fraction": 0.1590647600262985
+    },
+    {
+      "symbol": "_RINvMs_NtNtCsiUJM42X8V9v_13nc2000_engine6battle6searchNtNtB9_5state6Battle15state_hash_intoQNtNtNtCskP2HG43Jt7g_3std4hash6random13DefaultHasherEB9_",
+      "samples": 2866,
+      "fraction": 0.11776791584483892
+    },
+    {
+      "symbol": "_platform_memmove",
+      "samples": 1773,
+      "fraction": 0.07285502958579881
+    },
+    {
+      "symbol": "_RNvXs3y_NtCsiUJM42X8V9v_13nc2000_engine5stateNtB6_6BattleNtNtCsedRpiqSkYaQ_4core5clone5Clone5clone.1012",
+      "samples": 1250,
+      "fraction": 0.05136423405654175
+    },
+    {
+      "symbol": "_RINvXs3_NtNtCsedRpiqSkYaQ_4core4hash5implsRNtNtCsiUJM42X8V9v_13nc2000_engine5state11EffectStateNtB8_4Hash4hashQINtNtBJ_6fxhash10WordHasherKb0_EEBJ_",
+      "samples": 1233,
+      "fraction": 0.05066568047337278
+    },
+    {
+      "symbol": "_RINvYNtNtNtCskP2HG43Jt7g_3std4hash6random11RandomStateNtNtCsedRpiqSkYaQ_4core4hash11BuildHasher8hash_oneRNtNtCsfjdqvLnZKk9_10nc2000_bot6bounds7NodeKeyEB1J_",
+      "samples": 931,
+      "fraction": 0.0382560815253123
+    },
+    {
+      "symbol": "_RNvMs6_NtCsfjdqvLnZKk9_10nc2000_bot6boundsNtB5_11BoundSolver15trial_from_cell",
+      "samples": 756,
+      "fraction": 0.03106508875739645
+    },
+    {
+      "symbol": "_RNvMs0_NtNtCsiUJM42X8V9v_13nc2000_engine6battle6eventsNtNtB9_5state6Battle9run_event",
+      "samples": 415,
+      "fraction": 0.01705292570677186
+    },
+    {
+      "symbol": "write",
+      "samples": 311,
+      "fraction": 0.012779421433267588
+    },
+    {
+      "symbol": "madvise",
+      "samples": 280,
+      "fraction": 0.011505588428665352
+    },
+    {
+      "symbol": "_RINvYTNtNtCsiUJM42X8V9v_13nc2000_engine3dex6CondIdNtNtB8_5state11EffectStateENtNtCsedRpiqSkYaQ_4core4hash4Hash10hash_sliceQINtNtB8_6fxhash10WordHasherKb0_EEB8_",
+      "samples": 229,
+      "fraction": 0.009409927679158448
+    },
+    {
+      "symbol": "mi_free",
+      "samples": 190,
+      "fraction": 0.0078073635765943455
+    },
+    {
+      "symbol": "_RINvXs3_NtNtCsedRpiqSkYaQ_4core4hash5implsRNtNtCsiUJM42X8V9v_13nc2000_engine5state11EffectStateNtB8_4Hash4hashQNtNtNtCskP2HG43Jt7g_3std4hash6random13DefaultHasherEBJ_",
+      "samples": 151,
+      "fraction": 0.0062047994740302434
+    },
+    {
+      "symbol": "_RINvYTNtNtCsiUJM42X8V9v_13nc2000_engine3dex6CondIdNtNtB8_5state11EffectStateENtNtCsedRpiqSkYaQ_4core4hash4Hash10hash_sliceQNtNtNtCskP2HG43Jt7g_3std4hash6random13DefaultHasherEB8_",
+      "samples": 124,
+      "fraction": 0.005095332018408941
+    },
+    {
+      "symbol": "_RNvMs0_NtCsiUJM42X8V9v_13nc2000_engine4prngNtB5_9BattleRng34apply_damage_variance_with_context",
+      "samples": 108,
+      "fraction": 0.004437869822485207
+    },
+    {
+      "symbol": "_RNvMs0_NtNtCsiUJM42X8V9v_13nc2000_engine6battle6eventsNtNtB9_5state6Battle10each_event",
+      "samples": 88,
+      "fraction": 0.003616042077580539
+    },
+    {
+      "symbol": "_RNCNCNvMs6_NtCsfjdqvLnZKk9_10nc2000_bot6boundsNtB9_11BoundSolver15trial_from_cells7_00Bb_",
+      "samples": 78,
+      "fraction": 0.003205128205128205
+    },
+    {
+      "symbol": "_RNvMNtNtCsiUJM42X8V9v_13nc2000_engine6battle7choicesNtNtB6_5state6Battle14commit_choices",
+      "samples": 77,
+      "fraction": 0.0031640368178829717
+    },
+    {
+      "symbol": "_RNvMs0_NtNtCsiUJM42X8V9v_13nc2000_engine6battle6eventsNtNtB9_5state6Battle27find_pokemon_event_handlers",
+      "samples": 76,
+      "fraction": 0.0031229454306377384
+    }
+  ],
+  "scope": "One macOS sample run at a 1 ms interval, covering the complete 41-position control process. All recorded search outcomes and work counts match the prior archive. Samples are attributed to visible optimized stack frames; categories include descendants, overlap and must not be added. Recursive appearances are counted once per category per sample. This is diagnostic evidence, not a wall-time speedup or proof of stronger play."
+}

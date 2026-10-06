@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import re
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/solver-stack-v1'
+prior=root/'findings/pending-selection-v1/records.json.gz'
+frontier=runpy.run_path(str(root/'tools/strategy-frontier-probe'))
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def parse(text):
+    graph=text.split('Call graph:\n',1)[1].split('\nTotal number in stack',1)[0]
+    frames=[]
+    for line in graph.splitlines():
+        match=re.match(r'^([ +!|:]*)(\d+) (.*)$',line)
+        if match:
+            symbol=match[3].split('  (in ')[0]
+            if symbol.startswith('Thread_'): symbol='sampled_thread'
+            frames.append([len(match[1]),int(match[2]),symbol])
+    return frames
+
+
+def summarize(bundle):
+    assert bundle['prior_sha256']==sha(prior.read_bytes())
+    previous=json.loads(gzip.decompress(prior.read_bytes()))
+    assert bundle['source_hashes']==previous['source_hashes']
+    assert bundle['binary_sha256']==previous['binary_sha256']
+    old=copy.deepcopy(previous['arms']['control'])
+    current=copy.deepcopy(bundle['rows'])
+    for a,b in zip(current,old):
+        a.pop('milliseconds');b.pop('milliseconds');b.pop('pending_profile')
+        for ac,bc in zip(a['chance'],b['chance']):
+            assert abs(ac.pop('child_uncertainty')-bc.pop('child_uncertainty'))<1e-12
+    assert current==old and len(current)==41
+    checks={
+        'state_identity':lambda s:'state_key128' in s or 'state_hash_into' in s,
+        'eager_enumeration':lambda s:'enumerate_with_runner' in s,
+        'scripted_transition':lambda s:'run_scripted_with_damage_mode' in s,
+        'battle_clone':lambda s:'6Battle' in s and '5clone5Clone' in s,
+    }
+    nodes=[];stack=[]
+    for indent,count,symbol in bundle['frames']:
+        while stack and stack[-1][0]>=indent: stack.pop()
+        parent=stack[-1][1] if stack else None
+        categories=(nodes[parent]['categories'].copy() if parent is not None else set())
+        categories.update(k for k,match in checks.items() if match(symbol))
+        if parent is not None: nodes[parent]['children']+=count
+        nodes.append(dict(count=count,children=0,symbol=symbol,categories=categories,parent=parent))
+        stack.append((indent,len(nodes)-1))
+    counts=collections.Counter();exclusive=collections.Counter()
+    total=sum(n['count'] for n in nodes if n['parent'] is None)
+    for node in nodes:
+        weight=node['count']-node['children']
+        assert weight>=0
+        exclusive[node['symbol']]+=weight
+        for category in node['categories']: counts[category]+=weight
+    assert sum(exclusive.values())==total and total>0
+    return dict(positions=len(current),samples=total,frames=len(nodes),
+        categories={k:dict(samples=v,fraction=v/total) for k,v in counts.most_common()},
+        top_exclusive=[dict(symbol=k,samples=v,fraction=v/total) for k,v in exclusive.most_common(20)],
+        scope='One macOS sample run at a 1 ms interval, covering the complete 41-position control process. '
+            'All recorded search outcomes and work counts match the prior archive. Samples are attributed '
+            'to visible optimized stack frames; categories include descendants, overlap and must not be '
+            'added. Recursive appearances are counted once per category per sample. This is diagnostic '
+            'evidence, not a wall-time speedup or proof of stronger play.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        print('solver-stack: verified complete trajectories, stack accounting and non-duplicated category coverage')
+        return
+    assert not archive.exists()
+    previous=json.loads(gzip.decompress(prior.read_bytes()))
+    binary=root/'target/release/examples/strategy_frontier'
+    manifest={k:previous[k] for k in ['source_hashes','binary_sha256']}
+    assert all(sha((root/p).read_bytes())==h for p,h in manifest['source_hashes'].items())
+    assert sha(binary.read_bytes())==manifest['binary_sha256']
+    if args.import_directory:
+        directory=args.import_directory
+    else:
+        directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-solver-stack-'))
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress(frontier['corpus'].read_bytes()))
+        (directory/'requests.json').write_text(json.dumps(frontier['requests']()))
+        print(directory,flush=True)
+        with (directory/'run.log').open('w') as log:
+            process=subprocess.Popen([str(binary),str(directory/'corpus.jsonl'),str(directory/'requests.json'),
+                str(directory/'rows.jsonl'),'40000','12000','24','1000','4096','false','false','false'],
+                cwd=root,env={**os.environ,'NC2000_REPO_ROOT':str(root)},stdout=log,stderr=log)
+            with (directory/'sample.log').open('w') as output:
+                sampled=subprocess.run(['/usr/bin/sample',str(process.pid),'45','1','-mayDie','-file',str(directory/'sample.txt')],
+                    stdout=output,stderr=output)
+            assert process.wait()==0 and sampled.returncode==0
+    assert all(sha((root/p).read_bytes())==h for p,h in manifest['source_hashes'].items())
+    assert sha(binary.read_bytes())==manifest['binary_sha256']
+    bundle=dict(**manifest,prior_sha256=sha(prior.read_bytes()),
+        frames=parse((directory/'sample.txt').read_text()),
+        rows=[json.loads(s) for s in (directory/'rows.jsonl').read_text().splitlines()])
+    report=summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report['categories'],indent=2))
+
+
+if __name__=='__main__': main()

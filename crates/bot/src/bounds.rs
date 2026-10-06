@@ -52,6 +52,7 @@ pub struct BoundConfig {
     pub cell_cap: usize,
     pub retain_eager_prefix: bool,
     pub defer_eager_frontier: bool,
+    pub profile_pending_selection: bool,
     /// Max live nodes (memory guard; Battles are dropped from resolved
     /// nodes but frontier nodes hold one each).
     pub node_budget: usize,
@@ -116,6 +117,7 @@ impl Default for BoundConfig {
             cell_cap: 4096,
             retain_eager_prefix: false,
             defer_eager_frontier: false,
+            profile_pending_selection: false,
             eps: 0.02,
             trial_depth: 24,
             descend_floor: 0.1,
@@ -321,6 +323,9 @@ pub struct BoundStats {
     pub retained_eager_runs: usize,
     pub retained_eager_leaves: usize,
     pub deferred_eager_leaves: usize,
+    pub pending_selection_ns: u128,
+    pub pending_selection_calls: usize,
+    pub pending_scan_items: usize,
     pub reused_nodes: usize,
     pub reused_backups: usize,
     pub expansions: usize,
@@ -1804,6 +1809,7 @@ impl<'d> BoundSolver<'d> {
             let (i, j) = (ci / n1, ci % n1);
             let choices = [node.acts0[i], node.acts1[j]];
             let cell = &mut node.cells[ci];
+            let started = self.cfg.profile_pending_selection.then(Instant::now);
             let pi = cell
                 .pending
                 .iter()
@@ -1811,6 +1817,11 @@ impl<'d> BoundSolver<'d> {
                 .max_by(|a, b| a.1.mass.partial_cmp(&b.1.mass).unwrap())
                 .map(|(i, _)| i)
                 .unwrap();
+            if let Some(started) = started {
+                self.stats.pending_selection_ns += started.elapsed().as_nanos();
+                self.stats.pending_selection_calls += 1;
+                self.stats.pending_scan_items += cell.pending.len();
+            }
             let pending = cell.pending.swap_remove(pi);
             (
                 node.battle.take().expect("frontier node keeps its battle"),

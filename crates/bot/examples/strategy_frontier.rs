@@ -18,7 +18,7 @@ struct Request { game: usize, decision: usize, side: usize }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    assert_eq!(args.len(), 11, "corpus requests output runs nodes depth call-runs cell-cap retain-prefix defer-frontier");
+    assert!((11..=12).contains(&args.len()), "corpus requests output runs nodes depth call-runs cell-cap retain-prefix defer-frontier [profile-selection]");
     let requests: Vec<Request> = serde_json::from_str(&std::fs::read_to_string(&args[2]).unwrap()).unwrap();
     let work_budget: usize = args[4].parse().unwrap();
     let node_budget: usize = args[5].parse().unwrap();
@@ -27,6 +27,7 @@ fn main() {
     let cell_cap: usize = args[8].parse().unwrap();
     let retain_eager_prefix: bool = args[9].parse().unwrap();
     let defer_eager_frontier: bool = args[10].parse().unwrap();
+    let profile_pending_selection = args.get(11).is_some_and(|s|s.parse::<bool>().unwrap());
     assert!(!defer_eager_frontier || retain_eager_prefix);
     assert!(work_budget>0 && call_budget>0);
     let dex = conformance::load_dex();
@@ -40,7 +41,7 @@ fn main() {
             assert_eq!(battle.state_key128().to_string(), decision.key);
             let legal = [0,1].map(|s|battle.legal_choices(&dex,s));
             if let Some(request) = requests.iter().find(|r|r.game==game.game && r.decision==index) {
-                let config = BoundConfig { work_budget:call_budget, node_budget, trial_depth, cell_cap, retain_eager_prefix, defer_eager_frontier, eps:1e-10, ..Default::default() };
+                let config = BoundConfig { work_budget:call_budget, node_budget, trial_depth, cell_cap, retain_eager_prefix, defer_eager_frontier, profile_pending_selection, eps:1e-10, ..Default::default() };
                 let started = Instant::now();
                 let mut solver = BoundSolver::new(&dex,config);
                 let report = loop {
@@ -65,7 +66,7 @@ fn main() {
                 })).collect();
                 let matrix = solver.root_payoffs(&battle).unwrap();
                 let stats = &solver.stats;
-                let record = json!({"game":game.game,"decision":index,"side":request.side,"state_key":decision.key,
+                let mut record = json!({"game":game.game,"decision":index,"side":request.side,"state_key":decision.key,
                     "work_budget":work_budget,"node_budget":node_budget,"trial_depth":trial_depth,
                     "call_budget":call_budget,"cell_cap":cell_cap,
                     "retain_eager_prefix":retain_eager_prefix,
@@ -85,6 +86,10 @@ fn main() {
                         "deferred_eager_leaves":stats.deferred_eager_leaves,
                         "reused_nodes":stats.reused_nodes,"lp_solves":stats.lp_solves,
                         "dominated_rows":stats.dominated_rows,"dominated_cols":stats.dominated_cols}});
+                if profile_pending_selection {
+                    record["pending_profile"]=json!({"nanoseconds":stats.pending_selection_ns,
+                        "calls":stats.pending_selection_calls,"scanned_items":stats.pending_scan_items});
+                }
                 writeln!(output,"{record}").unwrap(); output.flush().unwrap();
                 eprintln!("game={} decision={index} side={} runs={} stop={:?}",game.game,request.side,stats.runs,report.stop);
             }

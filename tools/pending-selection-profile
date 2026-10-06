@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/pending-selection-v1'
+frontier=runpy.run_path(str(root/'tools/strategy-frontier-probe'))
+prior=root/'findings/deferred-frontier-v1/records.json.gz'
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(bundle):
+    assert bundle['prior_sha256']==sha(prior.read_bytes())
+    before=json.loads(gzip.decompress(prior.read_bytes()))
+    groups=[]
+    rows=[]
+    for mode,records in bundle['arms'].items():
+        assert mode in ['control','deferred']
+        frontier['summarize']({**before,**before['arms'][mode],'rows':records})
+        current=copy.deepcopy(records)
+        old=copy.deepcopy(before['arms'][mode]['rows'])
+        for a,b in zip(current,old):
+            a.pop('pending_profile');a.pop('milliseconds');b.pop('milliseconds')
+            for ac,bc in zip(a['chance'],b['chance']):
+                assert abs(ac.pop('child_uncertainty')-bc.pop('child_uncertainty'))<1e-12
+        assert current==old
+        for record in records:
+            p=record['pending_profile']
+            assert 0<=p['nanoseconds']<=record['milliseconds']*1e6
+            assert 0<=p['calls']<=record['stats']['expansions']
+            assert p['scanned_items']>=p['calls']
+            rows.append(dict(mode=mode,game=record['game'],decision=record['decision'],side=record['side'],
+                milliseconds=record['milliseconds'],selection_ms=p['nanoseconds']/1e6,
+                selection_fraction=p['nanoseconds']/1e6/record['milliseconds'],
+                calls=p['calls'],scanned_items=p['scanned_items']))
+        selected=[r for r in rows if r['mode']==mode]
+        elapsed=sum(r['milliseconds'] for r in selected)
+        selection=sum(r['selection_ms'] for r in selected)
+        groups.append(dict(mode=mode,positions=len(selected),milliseconds=elapsed,selection_ms=selection,
+            selection_fraction=selection/elapsed,max_selection_fraction=max(r['selection_fraction'] for r in selected),
+            calls=sum(r['calls'] for r in selected),scanned_items=sum(r['scanned_items'] for r in selected)))
+    return dict(groups=groups,rows=rows,
+        decision='Do not replace the pending-path scan based on this profile: its aggregate share is below '
+                 'one percent in both arms. Investigate other costs before adding a priority queue.',
+        parity='Both profiled arms match their unprofiled archived records except timing and sub-1e-12 diagnostic sums.',
+        scope='Timers surround only the linear maximum-mass scan, including clock overhead. This is a '
+              'profile of the existing operation, not a measured speedup from a replacement. Fixed run '
+              'budgets preserve the previous search trajectories. No strength or optimality claim.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        print('pending-selection: verified both 41-position trajectories, scan accounting and timing fractions')
+        return
+    assert not archive.exists()
+    sources=sorted(list((root/'crates/bot/src').rglob('*.rs'))+list((root/'crates/engine/src').rglob('*.rs'))+
+        [root/'crates/bot/examples/strategy_frontier.rs',root/'data/gen2stadium2.json',root/'data/learnsets-gen2.json'])
+    hashes={str(p.relative_to(root)):sha(p.read_bytes()) for p in sources}
+    binary=root/'target/release/examples/strategy_frontier'
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if args.import_directory:
+        directory=args.import_directory
+        manifest=json.loads((directory/'manifest.json').read_bytes())
+        assert manifest['source_hashes']==hashes and manifest['binary_sha256']==sha(binary.read_bytes())
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','strategy_frontier'],cwd=root,env=env,check=True)
+        directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-pending-selection-'))
+        manifest=dict(source_hashes=hashes,binary_sha256=sha(binary.read_bytes()))
+        (directory/'manifest.json').write_text(json.dumps(manifest))
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress(frontier['corpus'].read_bytes()))
+        (directory/'requests.json').write_text(json.dumps(frontier['requests']()))
+        print(directory,flush=True)
+        for mode in ['control','deferred']:
+            enabled=str(mode=='deferred').lower()
+            with (directory/f'{mode}.log').open('w') as log:
+                subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/'requests.json'),str(directory/f'{mode}.jsonl'),
+                    '40000','12000','24','1000','4096',enabled,enabled,'true'],
+                    cwd=root,env=env,stdout=log,stderr=log,check=True)
+            print(mode+' complete',flush=True)
+    assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
+    assert manifest['binary_sha256']==sha(binary.read_bytes())
+    bundle=dict(**manifest,prior_sha256=sha(prior.read_bytes()),arms={mode:
+        [json.loads(s) for s in (directory/f'{mode}.jsonl').read_text().splitlines()] for mode in ['control','deferred']})
+    report=summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report['groups'],indent=2))
+
+
+if __name__=='__main__': main()
