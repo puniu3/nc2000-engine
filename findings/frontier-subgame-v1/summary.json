@@ -1,0 +1,241 @@
+{
+  "rows": {
+    "subgame": {
+      "side": 0,
+      "priority": [
+        "move explosion",
+        "move dynamicpunch",
+        "move rockslide",
+        "move crunch",
+        "move explosion",
+        "move rockslide",
+        "move crunch",
+        "move razorleaf",
+        "switch 2",
+        "switch 3"
+      ],
+      "bounds": [
+        0.5716991342892468,
+        0.5722171561883322
+      ],
+      "solver_runs": 200000,
+      "replay_runs": 132,
+      "probe_runs": 272,
+      "stop": "WorkExhausted",
+      "nodes": 21667
+    },
+    "floor": {
+      "side": 0,
+      "priority": [
+        "move explosion",
+        "move dynamicpunch",
+        "move rockslide",
+        "move crunch",
+        "move explosion",
+        "move rockslide",
+        "move crunch",
+        "move razorleaf",
+        "switch 2",
+        "switch 3"
+      ],
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "solver_runs": 1,
+      "replay_runs": 132,
+      "probe_runs": 272,
+      "stop": "WorkExhausted",
+      "nodes": 1
+    },
+    "hydro": {
+      "side": 1,
+      "priority": [
+        "move hydropump",
+        "move submission",
+        "move return",
+        "move bellydrum"
+      ],
+      "bounds": [
+        0.05089501828195586,
+        0.43008588513885804
+      ],
+      "solver_runs": 181699,
+      "replay_runs": 132,
+      "probe_runs": 272,
+      "stop": "NodeBudget",
+      "nodes": 40243
+    },
+    "rock": {
+      "side": 0,
+      "priority": [
+        "move rockslide",
+        "move dynamicpunch",
+        "move crunch",
+        "move fireblast"
+      ],
+      "bounds": [
+        0.15031738432126804,
+        0.6949147556839379
+      ],
+      "solver_runs": 200000,
+      "replay_runs": 132,
+      "probe_runs": 272,
+      "stop": "WorkExhausted",
+      "nodes": 24348
+    },
+    "hydro-long": {
+      "side": 1,
+      "priority": [
+        "move hydropump",
+        "move submission",
+        "move return",
+        "move bellydrum"
+      ],
+      "bounds": [
+        0.057730705942657945,
+        0.42782680199029754
+      ],
+      "solver_runs": 1000000,
+      "replay_runs": 132,
+      "probe_runs": 272,
+      "stop": "WorkExhausted",
+      "nodes": 164149
+    },
+    "rock-long": {
+      "side": 0,
+      "priority": [
+        "move rockslide",
+        "move dynamicpunch",
+        "move crunch",
+        "move fireblast"
+      ],
+      "bounds": [
+        0.22984058405505775,
+        0.3538728720965783
+      ],
+      "solver_runs": 1000000,
+      "replay_runs": 132,
+      "probe_runs": 272,
+      "stop": "WorkExhausted",
+      "nodes": 92251
+    },
+    "crunch": {
+      "side": 0,
+      "priority": [
+        "move crunch",
+        "move dynamicpunch",
+        "move rockslide",
+        "move fireblast"
+      ],
+      "bounds": [
+        0.38259696960449313,
+        0.38259696960449313
+      ],
+      "solver_runs": 32667,
+      "replay_runs": 132,
+      "probe_runs": 272,
+      "stop": "WidthMet",
+      "nodes": 469
+    },
+    "fire": {
+      "side": 0,
+      "priority": [
+        "move fireblast",
+        "move dynamicpunch",
+        "move rockslide",
+        "move crunch"
+      ],
+      "bounds": [
+        0.28758187961797654,
+        0.3361101534967925
+      ],
+      "solver_runs": 1000000,
+      "replay_runs": 132,
+      "probe_runs": 272,
+      "stop": "WorkExhausted",
+      "nodes": 81757
+    },
+    "submission": {
+      "side": 1,
+      "priority": [
+        "move submission",
+        "move hydropump",
+        "move return",
+        "move bellydrum"
+      ],
+      "bounds": [
+        0.055482962168961425,
+        0.05548379461174435
+      ],
+      "solver_runs": 19375,
+      "replay_runs": 132,
+      "probe_runs": 272,
+      "stop": "WidthMet",
+      "nodes": 807
+    },
+    "return": {
+      "side": 1,
+      "priority": [
+        "move return",
+        "move hydropump",
+        "move submission",
+        "move bellydrum"
+      ],
+      "bounds": [
+        0.0,
+        0.04905235943739372
+      ],
+      "solver_runs": 200000,
+      "replay_runs": 132,
+      "probe_runs": 272,
+      "stop": "WorkExhausted",
+      "nodes": 17595
+    }
+  },
+  "unrestricted_side_one_score_bounds": [
+    0.05773070584265794,
+    0.4283008658107533
+  ],
+  "interval_width": 0.37057015996809534,
+  "separated_fixed_policies": [
+    {
+      "better": "subgame",
+      "worse": "rock-long"
+    },
+    {
+      "better": "subgame",
+      "worse": "crunch"
+    },
+    {
+      "better": "subgame",
+      "worse": "fire"
+    },
+    {
+      "better": "hydro",
+      "worse": "return"
+    },
+    {
+      "better": "hydro-long",
+      "worse": "submission"
+    },
+    {
+      "better": "hydro-long",
+      "worse": "return"
+    },
+    {
+      "better": "crunch",
+      "worse": "rock-long"
+    },
+    {
+      "better": "crunch",
+      "worse": "fire"
+    },
+    {
+      "better": "submission",
+      "worse": "return"
+    }
+  ],
+  "total_engine_runs": 3837782,
+  "scope": "One exact replayed 1v1 descendant of game 12 decision 15, from frontier 0-last target 3161. At every future decision a fixed side uses its first legal priority move; the other side retains every legal action. The admitted species and move sets cannot transform or switch to another living Pokemon, so the original context priority remains constant. Each policy interval is its score against an optimal full-state opponent, with win=1, draw=0.5 and loss=0. A side-one policy lower bound and one minus a side-zero policy lower bound bracket the unrestricted subgame value. Opposite endpoints do not transfer. The scalar reports trust the existing FixedPolicySolver, engine, chance enumeration and guarded state keys; this archive is a reproducible numerical certificate, not an independent serialized proof of the solver graph. Verification checks provenance, replay identity, side orientation, budgets, interval monotonicity and controls; --replay also repeats the native computations. The tiny-budget control leaves all value unknown. Policy separations compare complete stationary priority policies, not unrestricted first actions. This is not the original root value, a blind-information guarantee, a whole-game solution or a production bot improvement."
+}

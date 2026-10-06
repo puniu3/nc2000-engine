@@ -20,7 +20,17 @@ struct Config {
     rest_at_percent: Option<i64>, finishing_hp: Option<i32>,
 }
 #[derive(Deserialize)]
-struct Manifest { config: Config, targets: Vec<Target>, cap: usize }
+struct Manifest {
+    config: Config, targets: Vec<Target>, cap: usize,
+    #[serde(default)]
+    solve_budgets: Vec<usize>,
+    #[serde(default)]
+    solve_side: Option<usize>,
+    #[serde(default)]
+    solve_priority: Vec<String>,
+    #[serde(default)]
+    solve_node_budget: Option<usize>,
+}
 
 fn key(dex: &Dex, b: &Battle, guarded: bool) -> Key {
     let damage=guarded && !b.damage_bookkeeping_observable(dex);
@@ -93,9 +103,44 @@ fn main() {
         }}
         let active=[0,1].map(|s|b.active_id(s).map(|id|json!({"species":dex.species.key(b.poke(id).species),
             "hp":b.poke(id).hp,"speed":b.poke(id).speed,"stored_stats":b.poke(id).stored_stats})));
-        results.push(json!({"id":target.id,"cache_key":target.cache_key,"trace":trace,"state":b.essence(&dex),
+        let mut result=json!({"id":target.id,"cache_key":target.cache_key,"trace":trace,"state":b.essence(&dex),
             "active":active,"legal":aa.each_ref().map(|a|names(&dex,a)),
-            "selected":selected.each_ref().map(|a|names(&dex,a)),"probes":probes}));
+            "selected":selected.each_ref().map(|a|names(&dex,a)),"probes":probes});
+        if !m.solve_budgets.is_empty() {
+            use nc2000_bot::bounds::{BoundConfig, FixedPolicySolver};
+            assert_eq!((cfg.policy_side,cfg.target_side),(0,1));
+            assert!((0..2).all(|s|b.sides[s].pokemon_left==1 && b.active_id(s).is_some_and(|id|b.poke(id).hp>0)));
+            assert_eq!(active[0].as_ref().unwrap()["species"],json!("tyranitar"));
+            assert_eq!(active[1].as_ref().unwrap()["species"],json!("poliwrath"));
+            for (s,moves) in [(0,["rockslide","crunch","fireblast","dynamicpunch"]),
+                (1,["hydropump","submission","return","bellydrum"])] {
+                assert!(b.poke(b.active_id(s).unwrap()).move_slots.iter().all(|slot|moves.contains(&dex.moves.key(slot.id))));
+            }
+            let solve_side=m.solve_side.unwrap_or(side);assert!(solve_side<2);
+            assert!(!m.solve_priority.is_empty() || solve_side==side);
+            let context=cfg.opponent_priority.get(dex.species.key(b.poke(b.active_id(1-side).unwrap()).species));
+            let priority_names:Vec<_>=if m.solve_priority.is_empty() {context.into_iter().flatten().chain(&cfg.priority).cloned().collect()}
+                else {m.solve_priority.clone()};
+            let priority=priority_names.iter().filter_map(|name|name.strip_prefix("move "))
+                .map(|name|SearchChoice::Move(dex.moves.id(name).unwrap())).collect();
+            let mut rounds=Vec::new();
+            let bound_cfg=BoundConfig {work_budget:m.solve_budgets[0],node_budget:m.solve_node_budget.unwrap_or(40000),eps:1e-6,
+                dead_quick_claw_quotient:true,retain_eager_prefix:true,aggregate_lazy_children:true,
+                chance_fair_period:8,..BoundConfig::default()};
+            let mut solver=FixedPolicySolver::new(&dex,bound_cfg,solve_side,priority);
+            for &budget in &m.solve_budgets {
+                assert!(budget>0 && budget==m.solve_budgets[0]);
+                let report=solver.solve(&b);let graph=solver.graph_diagnostics();
+                rounds.push(json!({"budget":budget,"runs":report.runs,"total_runs":solver.stats().runs,
+                    "fixed_side_bounds":[report.guaranteed_score.lo,report.guaranteed_score.hi],
+                    "stop":format!("{:?}",report.stop),"nodes":solver.node_count(),
+                    "unexpanded_nodes":graph.unexpanded_nodes}));
+            }
+            result["subgame"]=json!(rounds);
+            result["subgame_side"]=json!(solve_side);
+            result["subgame_priority"]=json!(priority_names);
+        }
+        results.push(result);
     }
     let output=json!({"manifest_sha256":format!("{:x}",Sha256::digest(raw)),
         "corpus_sha256":format!("{:x}",Sha256::digest(std::fs::read(&args[1]).unwrap())),

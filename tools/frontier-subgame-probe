@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import json
+import math
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/frontier-subgame-v1'
+frontier=runpy.run_path(str(root/'tools/frontier-witness-probe'))
+legacy=frontier['legacy'];sha=legacy['sha']
+previous='findings/frontier-witness-v1/records.json.gz'
+corpus=frontier['corpus']
+native='crates/bot/examples/witness_frontier.rs'
+inputs=[previous,frontier['previous'],corpus,'tools/frontier-subgame-probe',
+        'tools/frontier-witness-probe',native,'data/gen2stadium2.json']
+
+
+def specs():
+    old=legacy['read'](previous)
+    base=json.loads(old['manifests']['0-last']);base['targets']=base['targets'][:1]
+    assert base['targets'][0]['id']==3161
+    base['solve_budgets']=[20000]*10
+    cases={'subgame':copy.deepcopy(base),'floor':dict(base,solve_budgets=[1])}
+    for name,side,priority,extended in [
+        ('hydro',1,['hydropump','submission','return','bellydrum'],False),
+        ('rock',0,['rockslide','dynamicpunch','crunch','fireblast'],False),
+        ('hydro-long',1,['hydropump','submission','return','bellydrum'],True),
+        ('rock-long',0,['rockslide','dynamicpunch','crunch','fireblast'],True),
+        ('crunch',0,['crunch','dynamicpunch','rockslide','fireblast'],True),
+        ('fire',0,['fireblast','dynamicpunch','rockslide','crunch'],True),
+        ('submission',1,['submission','hydropump','return','bellydrum'],False),
+        ('return',1,['return','hydropump','submission','bellydrum'],False),
+    ]:
+        m=copy.deepcopy(base);m.update(solve_side=side,solve_priority=['move '+p for p in priority])
+        if extended:m.update(solve_node_budget=200000,solve_budgets=[20000]*50)
+        cases[name]=m
+    return cases
+
+
+def check_subgame(manifest,output):
+    t=output['targets'][0];cfg=manifest['config'];side=manifest.get('solve_side',cfg['policy_side'])
+    priority=manifest.get('solve_priority') or cfg['opponent_priority']['poliwrath']+cfg['priority']
+    assert t['subgame_side']==side and t['subgame_priority']==priority
+    assert [a['species'] for a in t['active']]==['tyranitar','poliwrath']
+    assert [a['hp'] for a in t['active']]==[226,38]
+    assert len(t['subgame'])==len(manifest['solve_budgets'])
+    total=0;bounds=[0,1]
+    for budget,r in zip(manifest['solve_budgets'],t['subgame']):
+        assert r['budget']==budget and 0<=r['runs']<=budget
+        total+=r['runs'];assert r['total_runs']==total
+        lo,hi=r['fixed_side_bounds'];assert 0<=lo<=hi<=1
+        assert lo>=bounds[0]-1e-12 and hi<=bounds[1]+1e-12
+        assert r['stop'] in ['WorkExhausted','WidthMet','NodeBudget']
+        assert 0<=r['unexpanded_nodes']<=r['nodes']
+        if r['stop']=='WidthMet':assert hi-lo<=1e-6
+        bounds=[lo,hi]
+    return dict(side=side,priority=priority,bounds=bounds,solver_runs=total,
+                replay_runs=output['replay_runs'],probe_runs=output['probe_runs'],
+                stop=t['subgame'][-1]['stop'],nodes=t['subgame'][-1]['nodes'])
+
+
+def summarize(bundle):
+    assert bundle['inputs']=={p:sha((root/p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes']=={p:sha((root/p).read_bytes()) for p in bundle['source_hashes']}
+    parent=json.loads(legacy['read'](frontier['previous'])['raw']['explode-fair3'])
+    rows={}
+    for name,wanted in specs().items():
+        raw=bundle['manifests'][name];m=json.loads(raw);assert m==wanted
+        output=bundle['outputs'][name]
+        frontier['check_output'](parent,raw,output)
+        rows[name]=check_subgame(m,output)
+    assert set(bundle['outputs'])==set(rows)==set(bundle['manifests'])
+    assert rows['floor']['bounds']==[0,1]
+    base=copy.deepcopy(bundle['outputs']['subgame']['targets'][0])
+    for field in ['subgame','subgame_side','subgame_priority']:base.pop(field)
+    assert base==legacy['read'](previous)['outputs']['0-last']['targets'][0]
+    for short in ['hydro','rock']:
+        a=bundle['outputs'][short]['targets'][0]['subgame']
+        b=bundle['outputs'][short+'-long']['targets'][0]['subgame']
+        for x,y in zip(a,b):
+            if x['stop']=='NodeBudget':break
+            assert {k:v for k,v in x.items() if k!='nodes'}=={k:v for k,v in y.items() if k!='nodes'}
+    for fault in ['orientation','interval','accounting']:
+        bad=copy.deepcopy(bundle['outputs']['subgame'])
+        if fault=='orientation':bad['targets'][0]['subgame_side']=1
+        elif fault=='interval':bad['targets'][0]['subgame'][-1]['fixed_side_bounds']=[.9,.1]
+        else:bad['targets'][0]['subgame'][-1]['total_runs']+=1
+        try:check_subgame(specs()['subgame'],bad)
+        except AssertionError:pass
+        else:raise AssertionError(fault)
+    lower=max(r['bounds'][0] for r in rows.values() if r['side']==1)
+    upper=1-max(r['bounds'][0] for r in rows.values() if r['side']==0)
+    bounds=[math.nextafter(max(0,lower-1e-10),-math.inf),math.nextafter(min(1,upper+1e-10),math.inf)]
+    assert bounds[0]<=bounds[1]
+    better=[dict(better=a,worse=b) for a,x in rows.items() for b,y in rows.items()
+            if a!=b and x['side']==y['side'] and x['bounds'][0]>y['bounds'][1]+1e-10]
+    return dict(rows=rows,unrestricted_side_one_score_bounds=bounds,
+        interval_width=bounds[1]-bounds[0],separated_fixed_policies=better,
+        total_engine_runs=sum(r['solver_runs']+r['replay_runs']+r['probe_runs'] for r in rows.values()),
+        scope='One exact replayed 1v1 descendant of game 12 decision 15, from frontier 0-last target 3161. '
+              'At every future decision a fixed side uses its first legal priority move; the other side '
+              'retains every legal action. The admitted species and move sets cannot transform or switch '
+              'to another living Pokemon, so the original context priority remains constant. '
+              'Each policy interval is its score against an optimal full-state opponent, with win=1, '
+              'draw=0.5 and loss=0. A side-one policy lower bound and one minus a side-zero policy lower '
+              'bound bracket the unrestricted subgame value. Opposite endpoints do not transfer. '
+              'The scalar reports trust the existing FixedPolicySolver, engine, chance enumeration and '
+              'guarded state keys; this archive is a reproducible numerical certificate, not an '
+              'independent serialized proof of the solver graph. Verification checks provenance, '
+              'replay identity, side orientation, budgets, interval monotonicity and controls; --replay '
+              'also repeats the native computations. The tiny-budget control leaves all value unknown. '
+              'Policy separations compare complete stationary priority policies, not unrestricted first '
+              'actions. This is not the original root value, a blind-information guarantee, a whole-game '
+              'solution or a production bot improvement.')
+
+
+def execute(directory,manifests):
+    directory.mkdir(parents=True,exist_ok=True)
+    (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/corpus).read_bytes()))
+    binary=root/'target/release/examples/witness_frontier';outputs={}
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','witness_frontier'],cwd=root,env=env,check=True)
+    for name,raw in manifests.items():
+        m=directory/(name+'.json');o=directory/(name+'.out.json');m.write_text(raw)
+        subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(m),str(o)],cwd=root,env=env,check=True)
+        outputs[name]=json.loads(o.read_bytes())
+        print(name,outputs[name]['targets'][0]['subgame'][-1]['fixed_side_bounds'],flush=True)
+    return outputs
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--replay',action='store_true');parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle=legacy['read']('findings/frontier-subgame-v1/records.json.gz')
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-subgame-replay-') as d:
+                assert execute(pathlib.Path(d),bundle['manifests'])==bundle['outputs']
+        print('frontier-subgame: provenance, side orientation, intervals and controls verified');return
+    assert not archive.exists()
+    if args.import_directory:
+        manifests={n:(args.import_directory/(n+'.json')).read_text() for n in specs()}
+        outputs={n:json.loads((args.import_directory/(n+'.out.json')).read_bytes()) for n in specs()}
+    else:
+        manifests={n:json.dumps(m) for n,m in specs().items()}
+        with tempfile.TemporaryDirectory(prefix='nc-subgame-') as d:outputs=execute(pathlib.Path(d),manifests)
+    sources={p:sha((root/p).read_bytes()) for p in legacy['read'](previous)['source_hashes']
+             if p in ['Cargo.lock','Cargo.toml',native,'data/gen2stadium2.json']
+             or (p.startswith('crates/') and ('/src/' in p or p.endswith(('Cargo.toml','build.rs'))))}
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in inputs},source_hashes=sources,
+                binary_sha256=sha((root/'target/release/examples/witness_frontier').read_bytes()),
+                manifests=manifests,outputs=outputs)
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(report['unrestricted_side_one_score_bounds'],report['total_engine_runs'])
+
+
+if __name__=='__main__':main()
