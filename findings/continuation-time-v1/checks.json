@@ -1,0 +1,24 @@
+{
+  "identity_checkpoints": 2106,
+  "identity_preview_checkpoints": 96,
+  "null_games": 8,
+  "null_pair_scores": [
+    0.5,
+    0.5,
+    0.5,
+    0.5
+  ],
+  "all_trial_games_terminal": true,
+  "paired_scores_and_confidence_interval_recomputed": true,
+  "timing_valid": true,
+  "shared_policy_selected_actions": 15970239,
+  "negative_controls": [
+    "seed",
+    "score",
+    "deadline",
+    "sharing",
+    "missing_game"
+  ],
+  "default_enabled": false,
+  "decision": "Screen failed; no additional matches or adoption of this first-continuation-only candidate."
+}

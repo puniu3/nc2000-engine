@@ -3353,5 +3353,160 @@
       "findings/continuation-policy-v1/summary.json": "ff2927a39048a988dcb8d5a52e5214bc3544144e74ab95b16bfe8fbbf1aaa3ba",
       "findings/continuation-policy-v1/checks.json": "ee000b4fdd7b6b69ce5be073df5ce60a57bf7237ac1b83c56e6fbf5616988de6"
     }
+  },
+  "continuation_time": {
+    "status": "complete_screen_failed",
+    "frozen_harness_commit": "58087e7",
+    "protocol": {
+      "model_commit": "68482a9",
+      "cost_check_commit": "68482a9",
+      "games": 64,
+      "pairs": 32,
+      "base_seed": 2026103101,
+      "budget_ms": 500,
+      "batch": 64,
+      "threads": 4,
+      "max_turns": 500,
+      "pool": "data/belief-pool-v3/belief-pool.json",
+      "teams": "data/team-pool-v2/team-pool.json",
+      "candidate": "Explicit enable_first_continuation(true) on every non-forced search, including preview roots. Share own UCB only at the first continuation idle Move by own root action, full new protocol log and own ordered actions. Opponent and deeper own nodes remain full-state-conditioned. All RmConfig settings equal to baseline, c=0.4, UCB; other research switches OFF.",
+      "budget_scope": "Per non-forced choice: search construction, continuation setup, generated logs and search steps. Belief observation/sync, result recording and destruction excluded; total choose times also retained.",
+      "null_control": {
+        "games": 8,
+        "base_seed": 2026103100,
+        "iterations": 3000,
+        "arms_identical": true
+      },
+      "identity_check": "Both perspectives at every recorded decision in the frozen 24-game corpus; 128 fixed iterations. Baseline against BlindAgent; candidate against separately stepped BlindSearch with persistent observer/belief/RNG. Compare exact chosen action and search RNG.",
+      "timing_validity": {
+        "maximum_mean_search_ms": 505,
+        "maximum_p99_search_ms": 520
+      },
+      "decision_rule": "Exploratory fixed-size screen only. A lower paired 95% score bound above 0.5 warrants a separately prespecified fresh confirmation; otherwise do not claim superiority or extend this sample. No adoption from this 64-game screen.",
+      "scope": "Game-derived first-continuation information correction; native timed comparison against local default search, not an optimality proof or deployed-binary/human comparison. Both private split log branches are retained. Wall-clock runs are not exactly reproducible."
+    },
+    "prerequisites": {
+      "identity": {
+        "baseline_matches_native": true,
+        "candidate_matches_direct_search": true,
+        "checkpoints": 2106,
+        "choice_and_rng_identical": true,
+        "iterations": 128,
+        "previews": 96
+      },
+      "null": {
+        "games": 8,
+        "wins": 4,
+        "losses": 4,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.5,
+        "ci95": [
+          0.5,
+          0.5
+        ],
+        "timing_valid": true,
+        "arms": [
+          {
+            "searches": 176,
+            "previews": 8,
+            "shared_groups": 0,
+            "shared_selections": 0,
+            "mean_search_ms": 87.58609614204545,
+            "p99_search_ms": 118.1905,
+            "max_search_ms": 119.542958,
+            "iterations": 528000,
+            "mean_total_choose_ms": 85.26354555801106
+          },
+          {
+            "searches": 176,
+            "previews": 8,
+            "shared_groups": 0,
+            "shared_selections": 0,
+            "mean_search_ms": 87.87736627272727,
+            "p99_search_ms": 119.13625,
+            "max_search_ms": 120.834875,
+            "iterations": 528000,
+            "mean_total_choose_ms": 85.54369176243094
+          }
+        ],
+        "warrants_fresh_confirmation": false,
+        "default_enabled": false,
+        "scope": "Prespecified 64-game exploratory timed comparison, 32 side-swap blocks, 500 ms per non-forced search including construction, continuation setup and log generation but excluding observation/sync and destruction. Total choose times also recorded. Common seeds do not make wall-clock runs exactly reproducible. The identical-agent null is a separate fixed-3000-iteration test. This is a local default comparison, not deployed binary superiority, human calibration or a game-optimality certificate. No adoption from this screen."
+      },
+      "trial_result_recorded": false
+    },
+    "artifacts": {
+      "findings/continuation-time-v1/protocol.json": "d1b6d762cf1b43e5cd49ebf4c084e1cca47b031aade1945fad96fcfc6885c4ae",
+      "findings/continuation-time-v1/prerequisites.json.gz": "c13547b01cbd86aaeeb3d190e094bee7233f76470b8c9b74ce1deeebdf87f1fe",
+      "findings/continuation-time-v1/records.json.gz": "335cbc1beb6dc625bc7bfac4a053c01bf4e3405715e784b0f0c2161c66d84587",
+      "findings/continuation-time-v1/summary.json": "af47d16b8adcf4e15856ea26c2eaa291675eb85615c889c8a04ec39e8b90738e",
+      "findings/continuation-time-v1/checks.json": "d58af556611129018403c4ed953fef71b53b7e55aa0efd3ea49097f0ff61e7b6"
+    },
+    "summary": {
+      "games": 64,
+      "wins": 28,
+      "losses": 36,
+      "ties": 0,
+      "caps": 0,
+      "score": 0.4375,
+      "ci95": [
+        0.315,
+        0.5599999999999999
+      ],
+      "timing_valid": true,
+      "arms": [
+        {
+          "searches": 1258,
+          "previews": 64,
+          "shared_groups": 589530,
+          "shared_selections": 15970239,
+          "mean_search_ms": 500.9730136526232,
+          "p99_search_ms": 502.501125,
+          "max_search_ms": 502.759458,
+          "iterations": 23681920,
+          "mean_total_choose_ms": 481.4514385770992
+        },
+        {
+          "searches": 1237,
+          "previews": 64,
+          "shared_groups": 0,
+          "shared_selections": 0,
+          "mean_search_ms": 500.93810813177043,
+          "p99_search_ms": 502.306834,
+          "max_search_ms": 502.56725,
+          "iterations": 25192704,
+          "mean_total_choose_ms": 478.3908912924383
+        }
+      ],
+      "warrants_fresh_confirmation": false,
+      "default_enabled": false,
+      "scope": "Prespecified 64-game exploratory timed comparison, 32 side-swap blocks, 500 ms per non-forced search including construction, continuation setup and log generation but excluding observation/sync and destruction. Total choose times also recorded. Common seeds do not make wall-clock runs exactly reproducible. The identical-agent null is a separate fixed-3000-iteration test. This is a local default comparison, not deployed binary superiority, human calibration or a game-optimality certificate. No adoption from this screen."
+    },
+    "checks": {
+      "identity_checkpoints": 2106,
+      "identity_preview_checkpoints": 96,
+      "null_games": 8,
+      "null_pair_scores": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "all_trial_games_terminal": true,
+      "paired_scores_and_confidence_interval_recomputed": true,
+      "timing_valid": true,
+      "shared_policy_selected_actions": 15970239,
+      "negative_controls": [
+        "seed",
+        "score",
+        "deadline",
+        "sharing",
+        "missing_game"
+      ],
+      "default_enabled": false,
+      "decision": "Screen failed; no additional matches or adoption of this first-continuation-only candidate."
+    },
+    "elapsed_seconds": 316.334149417
   }
 }

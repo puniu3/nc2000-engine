@@ -1,0 +1,40 @@
+{
+  "games": 64,
+  "wins": 28,
+  "losses": 36,
+  "ties": 0,
+  "caps": 0,
+  "score": 0.4375,
+  "ci95": [
+    0.315,
+    0.5599999999999999
+  ],
+  "timing_valid": true,
+  "arms": [
+    {
+      "searches": 1258,
+      "previews": 64,
+      "shared_groups": 589530,
+      "shared_selections": 15970239,
+      "mean_search_ms": 500.9730136526232,
+      "p99_search_ms": 502.501125,
+      "max_search_ms": 502.759458,
+      "iterations": 23681920,
+      "mean_total_choose_ms": 481.4514385770992
+    },
+    {
+      "searches": 1237,
+      "previews": 64,
+      "shared_groups": 0,
+      "shared_selections": 0,
+      "mean_search_ms": 500.93810813177043,
+      "p99_search_ms": 502.306834,
+      "max_search_ms": 502.56725,
+      "iterations": 25192704,
+      "mean_total_choose_ms": 478.3908912924383
+    }
+  ],
+  "warrants_fresh_confirmation": false,
+  "default_enabled": false,
+  "scope": "Prespecified 64-game exploratory timed comparison, 32 side-swap blocks, 500 ms per non-forced search including construction, continuation setup and log generation but excluding observation/sync and destruction. Total choose times also recorded. Common seeds do not make wall-clock runs exactly reproducible. The identical-agent null is a separate fixed-3000-iteration test. This is a local default comparison, not deployed binary superiority, human calibration or a game-optimality certificate. No adoption from this screen."
+}
