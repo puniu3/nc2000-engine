@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import math
+from pathlib import Path
+import statistics
+import subprocess
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/root-revisit-holdout-v1'
+protocol_path = 'findings/root-revisit-v1/holdout-protocol.json'
+run_commit = '460a718'
+
+
+def verify(result, protocol):
+    assert result['null_control'] is False
+    assert result['games'] == protocol['games'] == 384
+    assert result['pairs'] == protocol['pairs'] == 192
+    assert result['iterations'] == protocol['iterations'] == 27000
+    assert result['base_seed'] == protocol['base_seed'] == 2026101901
+    scores = result['game_scores']
+    assert len(scores) == result['games'] and all(s in [0, .5, 1] for s in scores)
+    assert result['wins'] == scores.count(1) and result['losses'] == scores.count(0)
+    assert result['ties'] == scores.count(.5) and 0 <= result['caps'] <= result['ties']
+    pairs = [(a+b)/2 for a,b in zip(scores[::2],scores[1::2],strict=True)]
+    assert pairs == result['pair_scores']
+    mean = statistics.mean(pairs)
+    halfwidth = 1.96*statistics.stdev(pairs)/math.sqrt(len(pairs))
+    assert mean == result['score']
+    assert math.isclose(halfwidth,result['ci95_halfwidth'],abs_tol=1e-14)
+    interval = [mean-halfwidth,mean+halfwidth]
+    verdict = 'positive' if interval[0] > .5 else 'negative' if interval[1] < .5 else 'inconclusive'
+    assert result['seconds'] > 0 and all(t > 0 for t in result['mean_think_ms'])
+    return dict(games=len(scores),pairs=len(pairs),wins=result['wins'],losses=result['losses'],
+        ties=result['ties'],caps=result['caps'],score=mean,ci95=interval,verdict=verdict,
+        baseline_commit=run_commit,default_enabled=False,
+        scope='Prespecified 384-game follow-up, independent match seed, local default comparison at equal iteration budgets. '
+        'The 64-game exploratory pilot is not pooled into this decision. '
+        'This is neither a matched-wall-time trial nor a certificate of optimality or a direct deployed-bot comparison.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record',type=Path)
+    args = parser.parse_args()
+    protocol = json.loads((root/protocol_path).read_bytes())
+    frozen = json.loads(subprocess.check_output(['git','show',f'{run_commit}:{protocol_path}'],cwd=root))
+    assert protocol == frozen
+    if args.record:
+        assert not archive.exists()
+        result = json.loads(args.record.read_bytes())
+        summary = verify(result,protocol)
+        pilot = json.loads(gzip.decompress((root/'findings/root-revisit-v1/records.json.gz').read_bytes()))
+        assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in pilot['hashes'].items())
+        paths = [protocol_path,'findings/root-revisit-v1/records.json.gz','tools/root-revisit-holdout']
+        bundle = dict(result=result,protocol=protocol,run_commit=run_commit,
+            hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths},
+            checks=dict(complete_trial=True,engine_sources_match_pilot=True,native_full_replay=False,
+                        negative_controls=['truncated_trial','wrong_seed','wrong_score','wrong_interval']))
+        archive.mkdir()
+        (archive/'records.json').write_text(json.dumps(bundle,indent=2)+'\n')
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle = json.loads((archive/'records.json').read_bytes())
+    assert bundle['protocol'] == protocol and bundle['run_commit'] == run_commit
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in bundle['hashes'].items())
+    summary = verify(bundle['result'],protocol)
+    assert summary == json.loads((archive/'summary.json').read_bytes())
+    for key in bundle['checks']['negative_controls']:
+        bad = copy.deepcopy(bundle['result'])
+        if key == 'truncated_trial': bad['games'] -= 2
+        if key == 'wrong_seed': bad['base_seed'] += 1
+        if key == 'wrong_score': bad['game_scores'][0] = .25
+        if key == 'wrong_interval': bad['ci95_halfwidth'] += .01
+        try: verify(bad,protocol)
+        except AssertionError: pass
+        else: raise AssertionError(f'Accepted negative control: {key}')
+    print(json.dumps(summary,indent=2))
+
+
+if __name__ == '__main__':
+    main()
