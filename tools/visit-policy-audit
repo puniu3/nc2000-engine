@@ -1,0 +1,327 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+import tempfile
+from fractions import Fraction
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/visit-policy-v1'
+margin = 0.02
+holdout_specs = [
+    ('counter', '1,2,3,4', 32, 27000, 2026121701, 'counter', 10800),
+    ('bond', '2,3,4,5', 32, 27000, 2026121702, 'bond', 10800),
+    ('bond-long', '4,5,6,7', 16, 108000, 2026121703, 'bond', 43200),
+]
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def read(name, hashes):
+    path = f'findings/{name}/records.json.gz'
+    raw = (root / path).read_bytes()
+    hashes[path] = sha(raw)
+    return json.loads(gzip.decompress(raw))
+
+
+def policies(row, actions, candidate):
+    n = len(actions)
+    assert len(row['visits']) == len(row['dominated']) == n
+    probes = row.get('joint_probe_visits', [0] * n)
+    assert len(probes) == n and sum(probes) == row.get('probes_used', 0)
+    assert sum(row['visits']) == row['iterations']
+    ordinary = [v - p for v, p in zip(row['visits'], probes)]
+    assert min(ordinary) >= 0
+    if row.get('fresh_evidence') is not None:
+        assert ordinary == row['fresh_evidence']['warm_visits']
+    counts = [v if not d else 0 for v, d in zip(ordinary, row['dominated'])]
+    fallback = [Fraction(a == row['choice']) for a in actions]
+    assert sum(fallback) == 1
+    if candidate is None or sum(counts) == 0:
+        return fallback, fallback, False
+    assert len(candidate) == n and min(candidate) >= 0 and abs(sum(candidate) - 1) < 1e-10
+    assert all(p == 0 for p, d in zip(candidate, row['dominated']) if d)
+    return fallback, [Fraction(v, sum(counts)) for v in counts], True
+
+
+def loss(record, side, policy):
+    assert sum(policy) == 1 and min(policy) >= 0
+    n0, n1 = map(len, record['actions'])
+    assert len(policy) == [n0, n1][side]
+    epsilon = Fraction(1, 10**10)
+    lower, upper = [], []
+    for reply in range([n1, n0][side]):
+        lo = hi = Fraction(0)
+        for own, mass in enumerate(policy):
+            a, b = (own, reply) if side == 0 else (reply, own)
+            bounds = list(map(Fraction, record['proof']['cells'][a*n1+b]))
+            cl, ch = max(0, min(bounds)-epsilon), min(1, max(bounds)+epsilon)
+            assert cl <= ch
+            if side == 1:
+                cl, ch = 1-ch, 1-cl
+            lo += mass*cl
+            hi += mass*ch
+        lower.append(lo)
+        upper.append(hi)
+    bounds = list(map(Fraction, record['proof']['value']))
+    vl, vh = max(0, min(bounds)-epsilon), min(1, max(bounds)+epsilon)
+    if side == 1:
+        vl, vh = 1-vh, 1-vl
+    return [max(Fraction(0), vl-min(upper)), min(Fraction(1), max(Fraction(0), vh-min(lower)))]
+
+
+def controls():
+    record = dict(actions=[['a', 'b'], ['a', 'b']], proof=dict(value=[0.5, 0.5], cells=[[1, 1], [0, 0], [0, 0], [1, 1]]))
+    for side in range(2):
+        assert loss(record, side, [Fraction(1, 2)]*2)[1] <= Fraction(2, 10**10)
+        assert loss(record, side, [Fraction(1), Fraction(0)])[0] > Fraction(49, 100)
+    row = dict(choice='a', visits=[30, 70], joint_probe_visits=[20, 40], probes_used=60,
+               iterations=100, dominated=[False, False])
+    before, after, mixed = policies(row, ['a', 'b'], [0.5, 0.5])
+    assert mixed and after == [Fraction(1, 4), Fraction(3, 4)]
+    assert policies(row, ['a', 'b'], None) == (before, before, False)
+    row['dominated'][0] = True
+    assert policies(row, ['a', 'b'], [0, 1])[1] == [0, 1]
+    record['proof']['cells'] = [[0.5, 0.5]] * 4
+    assert loss(record, 0, [Fraction(1), Fraction(0)])[1] <= Fraction(2, 10**10)
+    record = dict(actions=[['a', 'b'], ['a']], proof=dict(value=[0.8, 0.8], cells=[[0.2, 0.2], [0.8, 0.8]]))
+    assert loss(record, 0, [Fraction(1), Fraction(0)])[0] > Fraction(59, 100)
+    assert loss(record, 1, [Fraction(1)])[1] < Fraction(3, 10**10)
+    record['proof'] = dict(value=[0, 1], cells=[[0, 1], [0, 1]])
+    assert loss(record, 0, [Fraction(1, 2)] * 2) == [0, 1]
+
+
+def evaluate(label, record, row, side, candidate):
+    before, after, mixed = policies(row, record['actions'][side], candidate)
+    old_loss, new_loss = loss(record, side, before), loss(record, side, after)
+    total_counts = [v if not d else 0 for v, d in zip(row['visits'], row['dominated'])]
+    all_visits = [Fraction(v, sum(total_counts)) for v in total_counts] if mixed else before
+    all_visits_loss = loss(record, side, all_visits)
+    verdict = ('unchanged' if before == after else 'improved' if new_loss[1] < old_loss[0]
+               else 'regressed' if new_loss[0] > old_loss[1] else 'unresolved')
+    delta = [new_loss[0]-old_loss[1], new_loss[1]-old_loss[0]]
+    return dict(id=label, state_key=record['state_key'], side=side, mode=row['mode'], seed=row['seed'],
+                iterations=row['iterations'], probes=sum(row.get('joint_probe_visits', [])),
+                actions=record['actions'][side], fallback=row['choice'], mixed=mixed,
+                ordinary_policy=list(map(float, after)), baseline_loss=list(map(float, old_loss)),
+                visit_loss=list(map(float, new_loss)), loss_change=list(map(float, delta)), verdict=verdict,
+                all_visits_policy=list(map(float, all_visits)), all_visits_loss=list(map(float, all_visits_loss)),
+                _record=record, _row=row, _policies=[before, after])
+
+
+def fixtures(name, record):
+    assert all(v['ok'] for v in record['validations'])
+    for row in record['rows']:
+        if row['mode'] != 'pinned':
+            continue
+        candidate = row['candidate_policy']
+        if candidate is not None and row['candidate_estimated_advantage'] <= margin:
+            candidate = None
+        yield evaluate(f"{name}:{row['side']}:{row['seed_index']}", record, row, row['side'], candidate)
+
+
+def broad(name, bundle, reference, extracted=None):
+    for key, record in bundle.items():
+        position = reference[record['state_key']]
+        matrix = position['reference']
+        proof = dict(cells=[[c['lo'], c['hi']] for c in matrix['cells']],
+                     value=[matrix['value']['lo'], matrix['value']['hi']])
+        certificate = dict(state_key=record['state_key'], actions=matrix['actions'], proof=proof)
+        side = record['observed']['side']
+        for row in record['observed']['rows']:
+            assert row['actions'] == certificate['actions'][side]
+            identifier = f"{key}:{row['mode']}:{row['seed_index']}"
+            if extracted is None:
+                candidate = row['candidate_policy']
+            else:
+                result = extracted[identifier]
+                candidate = result['policy'] if result['mixed'] and result['estimated_advantage'] > margin else None
+            yield evaluate(f'{name}:{identifier}', certificate, row, side, candidate)
+
+
+def frozen():
+    hashes, rows = {}, []
+    for name in ['root-mix-v1', 'bond-mix-v1']:
+        for label, record in read(name, hashes)['records'].items():
+            rows.extend(fixtures(f'{name}/{label}', record))
+    name = 'small-gain-probe-v1/864000-seed13722711268216851060'
+    rows.extend(fixtures(name, read(name, hashes)['record']))
+    reference = {p['state_key']: p for p in read('policy-gap-v1', hashes)}
+    original = read('mixed-root-corpus-v1', hashes)
+    extracted = {r['id']: r['result'] for r in original['extracted']['rows']}
+    rows.extend(broad('ordinary-corpus', original['records'], reference, extracted))
+    adaptive = read('adaptive-mix-corpus-v1', hashes)['records']
+    patched = read('adaptive-mix-visits-v1', hashes)['records']
+    for name, record in patched.items():
+        assert record['state_key'] == adaptive[name]['state_key']
+        adaptive[name] = record
+    rows.extend(broad('adaptive-corpus', adaptive, reference))
+    assert len(rows) == 1002
+    return rows, hashes
+
+
+def report(rows, hashes):
+    controls()
+    groups = collections.defaultdict(list)
+    for row in rows:
+        groups[row['id'].split(':')[0]].append(row)
+    summary = []
+    for name, group in groups.items():
+        summary.append(dict(name=name, searches=len(group), mixed=sum(r['mixed'] for r in group),
+                            verdicts=dict(collections.Counter(r['verdict'] for r in group))))
+    distributions = collections.defaultdict(list)
+    for row in rows:
+        key = (row['id'].split(':')[0], row['state_key'], row['side'], row['mode'], row['iterations'])
+        distributions[key].append(row)
+    aggregates = []
+    for (name, state_key, side, mode, iterations), group in distributions.items():
+        if not any(r['mixed'] for r in group):
+            continue
+        policies = [[sum(r['_policies'][k][i] for r in group)/len(group) for i in range(len(group[0]['actions']))]
+                    for k in range(2)]
+        losses = [loss(group[0]['_record'], side, p) for p in policies]
+        verdict = ('improved' if losses[1][1] < losses[0][0] else 'regressed' if losses[1][0] > losses[0][1]
+                   else 'unresolved')
+        aggregates.append(dict(name=name, state_key=state_key, side=side, mode=mode, iterations=iterations,
+                               seeds=len(group), baseline_policy=list(map(float, policies[0])),
+                               visit_policy=list(map(float, policies[1])), baseline_loss=list(map(float, losses[0])),
+                               visit_loss=list(map(float, losses[1])), verdict=verdict))
+    public_rows = [{k: v for k, v in row.items() if not k.startswith('_')} for row in rows]
+    counterexamples = []
+    for row in rows:
+        if row['verdict'] != 'regressed':
+            continue
+        record, observed, side = row['_record'], row['_row'], row['side']
+        cells = []
+        for cell in observed['joint']:
+            reply = record['actions'][1-side].index(cell['reply'])
+            a, b = (cell['own'], reply) if side == 0 else (reply, cell['own'])
+            lo, hi = record['proof']['cells'][a*len(record['actions'][1])+b]
+            if side == 1:
+                lo, hi = 1-hi, 1-lo
+            cells.append(dict(own=record['actions'][side][cell['own']], reply=cell['reply'],
+                              samples=cell['samples'], mean=cell['mean'], optimal_continuation=[lo, hi],
+                              bias=[cell['mean']-hi, cell['mean']-lo]))
+        counterexamples.append(dict(id=row['id'], gate_margin=observed.get('candidate_estimated_advantage'),
+                                    cells=cells))
+    return dict(source_sha256=hashes, searches=len(rows), mixed=sum(r['mixed'] for r in rows),
+                verdicts=dict(collections.Counter(r['verdict'] for r in rows)), groups=summary,
+                empirical_seed_distributions=aggregates,
+                all_policy_rows_sha256=sha(json.dumps(public_rows, separators=(',', ':')).encode()),
+                changed_rows=[r for r in public_rows if r['mixed']],
+                counterexamples=counterexamples,
+                decision=('Reject the claim that ordinary-visit sampling makes the gate safe: certified regressions remain. '
+                          'This is not a claim of worse average strength.' if counterexamples else
+                          'These frozen results alone do not justify adoption or establish gate safety.'),
+                proposal='Retain the archived mixed-policy eligibility gate, additionally requiring an available margin to exceed 0.02. '
+                         'When it passes, sample from eligible ordinary visit counts, excluding forced joint probes. '
+                         'Otherwise preserve the same-run pure fallback. Broad adaptive records retain their archived gate decision.',
+                scope='Offline selection-rule ablation on the same search tree; no default bot change. '
+                      'Loss intervals use all opposing root actions and optimal subsequent full-state play, computed with rational '
+                      'arithmetic on padded stored bounds. They do not certify blind information-set or whole-game policies. '
+                      'Repeated states, seeds, budgets and related tactical roots are not independent games or a population guarantee. '
+                      'Empirical seed distributions assign equal weight to the recorded seeds only. '
+                      'An unresolved interval is not evidence of safety. This comparison does not isolate the effect of probing itself.')
+
+
+def validate_holdout(bundle, old_rows, old_hashes):
+    assert bundle['specs'] == [list(s) for s in holdout_specs] or bundle['specs'] == holdout_specs
+    assert bundle['frozen_source_sha256'] == old_hashes
+    old_seeds = {r['seed'] for r in old_rows}
+    new_seeds = set()
+    assert list(bundle['records']) == [s[0] for s in holdout_specs]
+    for name, battle_seed, count, iterations, seed, family, probes in holdout_specs:
+        item = bundle['records'][name]
+        r = item['record']
+        assert item['battle_seed'] == battle_seed
+        assert (r['family'], r['search_seeds'], r['iterations'], r['search_seed_base'],
+                r['probe_iterations'], r['adaptive_probes']) == (family, count, iterations, seed, probes, True)
+        expected = [seed ^ ((i*0x94d049bb133111eb) % (1 << 64)) for i in range(count)]
+        assert old_seeds.isdisjoint(expected) and new_seeds.isdisjoint(expected)
+        new_seeds.update(expected)
+        assert [(row['seed'], row['side'], row['mode']) for row in r['rows']] == [
+            (value, side, mode) for value in expected for side in range(2) for mode in ['full', 'pinned']]
+        assert all(row['iterations'] == sum(row['visits']) == iterations for row in r['rows'])
+        corpus = json.loads(item['corpus'])
+        assert corpus['prefix_only'] and corpus['outcome'] is None
+        assert corpus['decisions'][-1]['key'] == r['state_key']
+        assert r['proof']['value'][1] - r['proof']['value'][0] < 2e-7
+
+
+def holdout(directory):
+    records = {}
+    old_rows, old_hashes = frozen()
+    old_seeds = {r['seed'] for r in old_rows}
+    rows = []
+    for name, battle_seed, count, iterations, seed, family, probes in holdout_specs:
+        record = json.loads((directory/name/'records.json').read_bytes())
+        assert (record['family'], record['search_seeds'], record['iterations'], record['search_seed_base'],
+                record['probe_iterations'], record['adaptive_probes']) == (family, count, iterations, seed, probes, True)
+        assert all(row['seed'] not in old_seeds for row in record['rows'])
+        assert all(sha((root/path).read_bytes()) == expected for path, expected in record['source_hashes'])
+        assert sha((root/'target/release/examples/counter_mix_probe').read_bytes()) == record['binary_sha256']
+        corpus = (directory/name/'corpus.jsonl').read_text()
+        records[name] = dict(record=record, corpus=corpus, battle_seed=battle_seed)
+        rows.extend(fixtures(name, record))
+    bundle = dict(specs=holdout_specs, records=records, frozen_source_sha256=old_hashes)
+    validate_holdout(bundle, old_rows, old_hashes)
+    return bundle, rows
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--holdout', action='store_true')
+    parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    destination = archive/'holdout' if args.holdout else archive
+    if args.holdout:
+        if args.verify_only:
+            raw = (destination/'records.json.gz').read_bytes()
+            bundle = json.loads(gzip.decompress(raw))
+            old_rows, old_hashes = frozen()
+            validate_holdout(bundle, old_rows, old_hashes)
+            rows = []
+            for name, item in bundle['records'].items():
+                rows.extend(fixtures(name, item['record']))
+            result = report(rows, {'records.json.gz': sha(raw)})
+        else:
+            assert not destination.exists()
+            directory = args.import_directory
+            if directory is None:
+                directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-visit-policy-'))
+                print(directory, flush=True)
+                env = {**os.environ, 'NC2000_REPO_ROOT': str(root)}
+                subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'counter_mix_probe'], cwd=root, env=env, check=True)
+                for name, battle_seed, count, iterations, seed, family, probes in holdout_specs:
+                    with (directory/(name+'.log')).open('w') as log:
+                        subprocess.run([str(root/'target/release/examples/counter_mix_probe'), str(directory/name), battle_seed,
+                                        str(count), str(iterations), str(seed), family, str(probes), 'adaptive'],
+                                       cwd=root, env=env, stdout=log, stderr=log, check=True)
+                    print(name, 'complete', flush=True)
+            bundle, rows = holdout(directory)
+            raw = gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0)
+            result = report(rows, {'records.json.gz': sha(raw)})
+            destination.mkdir()
+            (destination/'records.json.gz').write_bytes(raw)
+    else:
+        rows, hashes = frozen()
+        result = report(rows, hashes)
+    if args.verify_only:
+        assert result == json.loads((destination/'summary.json').read_bytes())
+        print('visit-policy: rational losses, probe exclusion, eligibility and archived policies verified')
+    else:
+        destination.mkdir(exist_ok=args.holdout)
+        (destination/'summary.json').write_text(json.dumps(result, indent=2)+'\n')
+        print(json.dumps({k: v for k, v in result.items() if k not in ('changed_rows', 'empirical_seed_distributions')}, indent=2))
+
+
+if __name__ == '__main__':
+    main()
