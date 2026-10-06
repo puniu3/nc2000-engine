@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import math
+import os
+import pathlib
+import subprocess
+import tempfile
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/root-policy-v1'
+native = 'crates/bot/examples/root_policy_witness.rs'
+corpus = 'findings/policy-gap-v1/corpus.jsonl.gz'
+return_summary = 'findings/witness-closure-v1/summary.json'
+switch_summary = 'findings/frontier-options-expand-v1/summary.json'
+inputs = [native, corpus, return_summary, switch_summary, 'tools/root-policy-probe', 'data/gen2stadium2.json']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def specs():
+    replies = ['move psychic', 'move explosion', 'move leechseed', 'move sleeppowder', 'switch 3']
+    base = dict(game=12, decision=15, side=1, first='switch 2', replies=replies,
+                rounds=25, work_budget=20000, node_budget=120000)
+    boom = ['hydropump', 'selfdestruct', 'submission', 'return', 'bellydrum', 'earthquake', 'bodyslam']
+    body = ['hydropump', 'submission', 'return', 'bellydrum', 'bodyslam', 'earthquake', 'selfdestruct']
+    quake = ['hydropump', 'submission', 'return', 'bellydrum', 'earthquake', 'bodyslam', 'selfdestruct']
+    cases = {'retained-' + name: dict(base, priority=['move ' + a for a in priority])
+             for name, priority in [('boom', boom), ('body', body), ('quake', quake)]}
+    cases['prefix'] = dict(cases['retained-boom'], rounds=5)
+    cases['floor'] = dict(cases['retained-boom'], rounds=5, work_budget=1)
+    cases['side-zero'] = dict(base, side=0, first='move explosion', rounds=5,
+        replies=['move hydropump', 'move submission', 'move return', 'move bellydrum', 'switch 2'],
+        priority=['move explosion', 'move dynamicpunch', 'move rockslide', 'move crunch', 'move psychic'])
+    return cases
+
+
+def check(raw, output):
+    m = json.loads(raw)
+    assert output['manifest_sha256'] == sha(raw.encode())
+    data = gzip.decompress((root / corpus).read_bytes())
+    assert output['corpus_sha256'] == sha(data)
+    game = next(g for line in data.splitlines() if (g := json.loads(line))['game'] == m['game'])
+    assert output['state_key'] == game['decisions'][m['decision']]['key']
+    legal = output['legal'][1 - m['side']]
+    assert len(legal) == len(set(legal)) and set(m['replies']) <= set(legal)
+    assert m['first'] in output['legal'][m['side']]
+    assert len(output['rounds']) == m['rounds']
+    cells = {a: [0, 1] for a in legal}
+    total = 0
+    bounds = [0, 1]
+    for i, r in enumerate(output['rounds']):
+        assert r['reply'] == m['replies'][i % len(m['replies'])]
+        assert 0 <= r['runs'] <= m['work_budget']
+        total += r['runs']
+        assert total == r['total_runs']
+        assert [c['reply'] for c in r['root_cells']] == legal
+        new = {c['reply']: c['side_zero_bounds'] for c in r['root_cells']}
+        for a, (lo, hi) in new.items():
+            assert 0 <= lo <= hi <= 1
+            assert lo >= cells[a][0] - 1e-10 and hi <= cells[a][1] + 1e-10
+        cells = new
+        assert r['reply_side_zero_bounds'] == cells[r['reply']]
+        expected = [min(c[k] for c in cells.values()) for k in [0, 1]] if m['side'] == 0 else [
+            1 - max(c[1] for c in cells.values()), 1 - max(c[0] for c in cells.values())]
+        assert all(abs(a - b) < 1e-10 for a, b in zip(expected, r['fixed_side_bounds']))
+        lo, hi = r['fixed_side_bounds']
+        assert 0 <= lo <= hi <= 1 and lo >= bounds[0] - 1e-10 and hi <= bounds[1] + 1e-10
+        bounds = [lo, hi]
+        assert r['stop'] in ['WidthMet', 'WorkExhausted', 'NodeBudget']
+        if r['stop'] == 'WidthMet':
+            assert r['reply_side_zero_bounds'][1] - r['reply_side_zero_bounds'][0] <= 1e-6
+    return dict(side=m['side'], first=m['first'], priority=m['priority'], bounds=bounds,
+                root_cells=cells, runs=total, stop=output['rounds'][-1]['stop'])
+
+
+def summarize(bundle):
+    assert bundle['inputs'] == {p: sha((root / p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes'] == {p: sha((root / p).read_bytes()) for p in bundle['source_hashes']}
+    cases = specs()
+    assert set(cases) == set(bundle['manifests']) == set(bundle['outputs'])
+    rows = {}
+    for name, m in cases.items():
+        raw = bundle['manifests'][name]
+        assert json.loads(raw) == m
+        rows[name] = check(raw, bundle['outputs'][name])
+    assert bundle['outputs']['prefix']['rounds'] == bundle['outputs']['retained-boom']['rounds'][:5]
+    assert rows['floor']['bounds'] == [0, 1]
+    for fault in ['coverage', 'orientation', 'accounting', 'identity']:
+        bad = copy.deepcopy(bundle['outputs']['retained-boom'])
+        r = bad['rounds'][-1]
+        if fault == 'coverage':
+            r['root_cells'].pop()
+        elif fault == 'orientation':
+            r['fixed_side_bounds'] = [1 - r['fixed_side_bounds'][1], 1 - r['fixed_side_bounds'][0]]
+        elif fault == 'accounting':
+            r['total_runs'] += 1
+        else:
+            bad['state_key'] = '0'
+        try:
+            check(bundle['manifests']['retained-boom'], bad)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError(fault)
+    prior_return = json.loads((root / return_summary).read_bytes())
+    assert prior_return['inputs'] == {p: sha((root / p).read_bytes()) for p in prior_return['inputs']}
+    return_lower = prior_return['report']['closure']['bounds'][0]
+    boom_upper = min(1, math.nextafter(rows['retained-boom']['bounds'][1] + 1e-10, math.inf))
+    assert boom_upper < return_lower
+    switch = json.loads((root / switch_summary).read_bytes())['unrestricted_switch_bounds']
+    assert all(rows[n]['bounds'][0] == 0 for n in ['retained-boom', 'retained-body', 'retained-quake'])
+    return dict(rows=rows, total_engine_runs=sum(r['runs'] for r in rows.values()),
+        prior_return_lower=return_lower, boom_policy_upper=boom_upper,
+        boom_policy_security_deficit_lower=math.nextafter(return_lower - boom_upper, -math.inf),
+        unrestricted_switch_bounds=switch,
+        scope='Exact game 12 decision 15, full-state score (win=1, draw=0.5). First Switch 2 is '
+              'fixed for side one, followed by the stated constant move priority with first-legal '
+              'fallback. Every legal opponent action remains available at every later decision. '
+              'Reply scheduling allocates computation, not opponent policy; whole-policy bounds '
+              'minimize across all root replies, including unrefined cells. Each native report is '
+              'checked for identity, complete root replies, orientation, monotonicity and accounting. '
+              'The low-budget control remains unknown; the screened prefix must replay identically, '
+              'and a side-zero case checks the other orientation. Native engine transitions, guarded '
+              'keys and floating-point FixedPolicySolver bounds remain trusted; the archive does not '
+              'contain an independently verified full solver graph. The previous Return lower '
+              'certificate rejects only the tested boom continuation. No tested policy obtains a '
+              'positive whole-root lower bound. Their upper bounds do not bound unrestricted Switch '
+              'play. The previous unrestricted Switch interval is retained unchanged. This does '
+              'not prove first-action ordering, mixed-strategy dominance, hidden-information strength '
+              'or a production improvement. No production search was changed.')
+
+
+def execute(directory, manifests):
+    binary = root / 'target/release/examples/root_policy_witness'
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'root_policy_witness'], cwd=root, check=True)
+    source = directory / 'corpus.jsonl'
+    source.write_bytes(gzip.decompress((root / corpus).read_bytes()))
+    result = {}
+    for name, raw in manifests.items():
+        manifest = directory / (name + '.json')
+        output = directory / (name + '.out.json')
+        manifest.write_text(raw)
+        subprocess.run([str(binary), str(source), str(manifest), str(output)], cwd=root,
+                       env=dict(os.environ, NC2000_REPO_ROOT=str(root)), check=True, stderr=subprocess.DEVNULL)
+        result[name] = json.loads(output.read_bytes())
+        print(name, result[name]['rounds'][-1]['fixed_side_bounds'], flush=True)
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--replay', action='store_true')
+    parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert summarize(bundle) == json.loads((archive / 'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-root-policy-replay-') as d:
+                assert execute(pathlib.Path(d), bundle['manifests']) == bundle['outputs']
+        print('root-policy: identity, replies, orientation, budgets, prefix and rejection controls verified')
+        return
+    assert not archive.exists()
+    if args.import_directory:
+        manifests = {n: (args.import_directory / (n + '.json')).read_text() for n in specs()}
+        outputs = {n: json.loads((args.import_directory / (n + '.out.json')).read_bytes()) for n in specs()}
+    else:
+        manifests = {n: json.dumps(m) for n, m in specs().items()}
+        with tempfile.TemporaryDirectory(prefix='nc-root-policy-') as d:
+            outputs = execute(pathlib.Path(d), manifests)
+    paths = {native, 'Cargo.toml', 'Cargo.lock', 'data/gen2stadium2.json'}
+    for name in ['engine', 'bot', 'conformance']:
+        paths.add(f'crates/{name}/Cargo.toml')
+        paths.update(str(p.relative_to(root)) for p in (root / 'crates' / name / 'src').rglob('*.rs'))
+        build = root / 'crates' / name / 'build.rs'
+        if build.exists():
+            paths.add(str(build.relative_to(root)))
+    bundle = dict(inputs={p: sha((root / p).read_bytes()) for p in inputs},
+        source_hashes={p: sha((root / p).read_bytes()) for p in sorted(paths)},
+        binary_sha256=sha((root / 'target/release/examples/root_policy_witness').read_bytes()),
+        manifests=manifests, outputs=outputs)
+    report = summarize(bundle)
+    archive.mkdir()
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
+    print(report['boom_policy_upper'], report['boom_policy_security_deficit_lower'])
+
+
+if __name__ == '__main__':
+    main()

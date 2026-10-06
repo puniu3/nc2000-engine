@@ -1,0 +1,257 @@
+{
+  "rows": {
+    "retained-boom": {
+      "side": 1,
+      "first": "switch 2",
+      "priority": [
+        "move hydropump",
+        "move selfdestruct",
+        "move submission",
+        "move return",
+        "move bellydrum",
+        "move earthquake",
+        "move bodyslam"
+      ],
+      "bounds": [
+        0.0,
+        0.021858670730018903
+      ],
+      "root_cells": {
+        "move psychic": [
+          0.9765349839506912,
+          1.0
+        ],
+        "move explosion": [
+          0.2064002310552442,
+          0.9819563221380057
+        ],
+        "move leechseed": [
+          0.9594697762611994,
+          1.0
+        ],
+        "move sleeppowder": [
+          0.9781413292699811,
+          1.0
+        ],
+        "switch 3": [
+          0.4713859558105469,
+          1.0
+        ]
+      },
+      "runs": 472745,
+      "stop": "NodeBudget"
+    },
+    "retained-body": {
+      "side": 1,
+      "first": "switch 2",
+      "priority": [
+        "move hydropump",
+        "move submission",
+        "move return",
+        "move bellydrum",
+        "move bodyslam",
+        "move earthquake",
+        "move selfdestruct"
+      ],
+      "bounds": [
+        0.0,
+        0.6114571513800757
+      ],
+      "root_cells": {
+        "move psychic": [
+          0.38854284861992433,
+          1.0
+        ],
+        "move explosion": [
+          0.21773162426861797,
+          0.9821377935659834
+        ],
+        "move leechseed": [
+          0.16543834018128345,
+          1.0
+        ],
+        "move sleeppowder": [
+          0.16543834018128345,
+          1.0
+        ],
+        "switch 3": [
+          0.05592491967551388,
+          1.0
+        ]
+      },
+      "runs": 500000,
+      "stop": "WorkExhausted"
+    },
+    "retained-quake": {
+      "side": 1,
+      "first": "switch 2",
+      "priority": [
+        "move hydropump",
+        "move submission",
+        "move return",
+        "move bellydrum",
+        "move earthquake",
+        "move bodyslam",
+        "move selfdestruct"
+      ],
+      "bounds": [
+        0.0,
+        0.5842463210270818
+      ],
+      "root_cells": {
+        "move psychic": [
+          0.41575367897291815,
+          1.0
+        ],
+        "move explosion": [
+          0.21773162426861797,
+          0.9821378024103276
+        ],
+        "move leechseed": [
+          0.2987304918651054,
+          1.0
+        ],
+        "move sleeppowder": [
+          0.16543834018128345,
+          1.0
+        ],
+        "switch 3": [
+          0.039768831787310145,
+          1.0
+        ]
+      },
+      "runs": 464568,
+      "stop": "NodeBudget"
+    },
+    "prefix": {
+      "side": 1,
+      "first": "switch 2",
+      "priority": [
+        "move hydropump",
+        "move selfdestruct",
+        "move submission",
+        "move return",
+        "move bellydrum",
+        "move earthquake",
+        "move bodyslam"
+      ],
+      "bounds": [
+        0.0,
+        0.12958559621506105
+      ],
+      "root_cells": {
+        "move psychic": [
+          0.7654234684195051,
+          1.0
+        ],
+        "move explosion": [
+          0.18237193982020022,
+          0.982146000354855
+        ],
+        "move leechseed": [
+          0.8240998599868118,
+          1.0
+        ],
+        "move sleeppowder": [
+          0.870414403784939,
+          1.0
+        ],
+        "switch 3": [
+          0.4713859558105469,
+          1.0
+        ]
+      },
+      "runs": 100000,
+      "stop": "WorkExhausted"
+    },
+    "floor": {
+      "side": 1,
+      "first": "switch 2",
+      "priority": [
+        "move hydropump",
+        "move selfdestruct",
+        "move submission",
+        "move return",
+        "move bellydrum",
+        "move earthquake",
+        "move bodyslam"
+      ],
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "root_cells": {
+        "move psychic": [
+          0.0,
+          1.0
+        ],
+        "move explosion": [
+          0.0,
+          1.0
+        ],
+        "move leechseed": [
+          0.0,
+          1.0
+        ],
+        "move sleeppowder": [
+          0.0,
+          1.0
+        ],
+        "switch 3": [
+          0.0,
+          1.0
+        ]
+      },
+      "runs": 5,
+      "stop": "WorkExhausted"
+    },
+    "side-zero": {
+      "side": 0,
+      "first": "move explosion",
+      "priority": [
+        "move explosion",
+        "move dynamicpunch",
+        "move rockslide",
+        "move crunch",
+        "move psychic"
+      ],
+      "bounds": [
+        0.0008026664774892889,
+        0.6053936298344513
+      ],
+      "root_cells": {
+        "move hydropump": [
+          0.001590044069587293,
+          0.9999999999999979
+        ],
+        "move submission": [
+          0.0015108524215902697,
+          0.9999999999999974
+        ],
+        "move return": [
+          0.0008026664774892889,
+          0.6053936298344513
+        ],
+        "move bellydrum": [
+          0.001590044069587293,
+          0.9999999999999974
+        ],
+        "switch 2": [
+          0.18430283184097945,
+          0.8646657330112599
+        ]
+      },
+      "runs": 100000,
+      "stop": "WorkExhausted"
+    }
+  },
+  "total_engine_runs": 1637318,
+  "prior_return_lower": 0.07387508188302666,
+  "boom_policy_upper": 0.021858670830018908,
+  "boom_policy_security_deficit_lower": 0.05201641105300774,
+  "unrestricted_switch_bounds": [
+    0,
+    0.6975393651254296
+  ],
+  "scope": "Exact game 12 decision 15, full-state score (win=1, draw=0.5). First Switch 2 is fixed for side one, followed by the stated constant move priority with first-legal fallback. Every legal opponent action remains available at every later decision. Reply scheduling allocates computation, not opponent policy; whole-policy bounds minimize across all root replies, including unrefined cells. Each native report is checked for identity, complete root replies, orientation, monotonicity and accounting. The low-budget control remains unknown; the screened prefix must replay identically, and a side-zero case checks the other orientation. Native engine transitions, guarded keys and floating-point FixedPolicySolver bounds remain trusted; the archive does not contain an independently verified full solver graph. The previous Return lower certificate rejects only the tested boom continuation. No tested policy obtains a positive whole-root lower bound. Their upper bounds do not bound unrestricted Switch play. The previous unrestricted Switch interval is retained unchanged. This does not prove first-action ordering, mixed-strategy dominance, hidden-information strength or a production improvement. No production search was changed."
+}
