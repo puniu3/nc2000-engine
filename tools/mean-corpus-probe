@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import concurrent.futures
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root/'findings/mean-corpus-v1'
+binary = root/'target/release/examples/fixed_reply_counterpolicy'
+selection = runpy.run_path(str(root/'tools/mixed-root-corpus'))['selected']
+inputs = ['findings/mixed-root-corpus-v1/records.json.gz', 'findings/policy-gap-v1/records.json.gz',
+          'findings/policy-gap-v1/corpus.jsonl.gz', 'findings/correlated-root-v1/records.json.gz',
+          'findings/baseline-ceiling-v1/records.json.gz']
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def read(path):
+    return json.loads(gzip.decompress((root/path).read_bytes()))
+
+
+def padded(bounds):
+    lo, hi = sorted(map(F, bounds))
+    return [max(F(0), lo-F(1, 10**10)), min(F(1), hi+F(1, 10**10))]
+
+
+def canonical_actions(actions):
+    result = [['move hiddenpower' if isinstance(a, str) and a.startswith('move hiddenpower') else a for a in side]
+              for side in actions]
+    assert all(len(set(side)) == len(side) for side in result)
+    return result
+
+
+def certificates(extra=()):
+    matrices = {}
+    for position in read(inputs[1]):
+        matrix = position['reference']
+        matrices[position['state_key']] = dict(actions=matrix['actions'],
+            cells=[padded([c['lo'], c['hi']]) for c in matrix['cells']],
+            value=padded([matrix['value']['lo'], matrix['value']['hi']]))
+    for rows in [*[read(path)['rows'] for path in inputs[3:]], extra]:
+        for row in rows:
+            matrix = matrices[row['state_key']]
+            assert canonical_actions(matrix['actions']) == canonical_actions(row['actions'])
+            cells = row['model']['cell_bounds'] if 'model' in row else row['cells']
+            assert len(cells) == len(matrix['cells'])
+            for before, after in zip([matrix['value'], *matrix['cells']], [row['value'], *cells]):
+                lo, hi = padded(after)
+                before[0], before[1] = max(before[0], lo), min(before[1], hi)
+                assert before[0] <= before[1]
+    return matrices
+
+
+def guarantee(matrix, side, policy):
+    assert sum(policy) == 1 and min(policy) >= 0
+    n, m = map(len, matrix['actions'])
+    replies = []
+    for j in range([m, n][side]):
+        lo = hi = F(0)
+        for i, mass in enumerate(policy):
+            a, b = (i, j) if side == 0 else (j, i)
+            cl, ch = matrix['cells'][a*m+b]
+            if side == 1:
+                cl, ch = 1-ch, 1-cl
+            lo += mass*cl
+            hi += mass*ch
+        replies.append([lo, hi])
+    return [min(r[k] for r in replies) for k in range(2)]
+
+
+def compare(matrix, side, before, after):
+    a, b = [guarantee(matrix, side, p) for p in [before, after]]
+    delta = [a[0]-b[1], a[1]-b[0]] if before != after else [F(0), F(0)]
+    vl, vh = matrix['value']
+    if side == 1:
+        vl, vh = 1-vh, 1-vl
+    losses = [[float(max(0, vl-g[1])), float(max(0, vh-g[0]))] for g in [a, b]]
+    epsilon = F(1, 10**8)
+    verdict = ('unchanged' if before == after else 'improved' if delta[1] < -epsilon
+               else 'regressed' if delta[0] > epsilon
+               else 'equivalent_at_1e-8' if -epsilon <= delta[0] <= delta[1] <= epsilon else 'unresolved')
+    return dict(verdict=verdict, loss_change=list(map(float, delta)), baseline_loss=losses[0], candidate_loss=losses[1],
+                baseline_guarantee=list(map(float, a)), candidate_guarantee=list(map(float, b)))
+
+
+def controls():
+    matrix = dict(actions=[['a', 'b'], ['a', 'b']], value=[F(0), F(1)],
+                  cells=[[F(1,5)]*2, [F(2,5)]*2, [F(3,5)]*2, [F(4,5)]*2])
+    result = compare(matrix, 0, [F(1), F(0)], [F(0), F(1)])
+    assert result['verdict'] == 'improved' and result['loss_change'] == [-0.4, -0.4]
+    assert result['baseline_loss'][0] == result['candidate_loss'][0] == 0
+    assert compare(matrix, 1, [F(1), F(0)], [F(0), F(1)])['verdict'] == 'regressed'
+    assert compare(matrix, 0, [F(1), F(0)], [F(1), F(0)])['loss_change'] == [0, 0]
+    matrix['cells'] = [[F(0), F(1)] for _ in range(4)]
+    assert compare(matrix, 0, [F(1), F(0)], [F(0), F(1)])['verdict'] == 'unresolved'
+    matrix['cells'] = [[F(1,2), F(1,2)+F(1,10**9)] for _ in range(4)]
+    assert compare(matrix, 0, [F(1), F(0)], [F(0), F(1)])['verdict'] == 'equivalent_at_1e-8'
+
+
+def summarize(bundle):
+    controls()
+    assert bundle['input_sha256'] == {p: sha((root/p).read_bytes()) for p in inputs}
+    old = read(inputs[0])['records']
+    matrices = certificates(bundle.get('focus', {}).get('rows', []))
+    selected = selection()
+    assert list(bundle['records']) == [n for _, _, n in selected]
+    results, aggregate = [], []
+    for position, endpoint, name in selected:
+        base, candidate = [bundle['records'][name][arm] for arm in ['ucb', 'mean']]
+        side = endpoint['side']
+        matrix = matrices[position['state_key']]
+        assert base['config'] == old[name]['config']
+        assert candidate['config'] == {**base['config'], 'continuation':'exp3_mean'}
+        assert base['state_key'] == candidate['state_key'] == position['state_key']
+        assert base['search_source_hashes'] == candidate['search_source_hashes']
+        assert base['manifest']['source_hashes'] == candidate['manifest']['source_hashes']
+        assert base['manifest']['dex_fingerprint'] == candidate['manifest']['dex_fingerprint']
+        assert base['observed']['belief'] == candidate['observed']['belief'] == old[name]['observed']['belief']
+        assert base['observed']['pool_sha256'] == candidate['observed']['pool_sha256'] == old[name]['observed']['pool_sha256']
+        policies = collections.defaultdict(list)
+        for previous, a, b in zip(old[name]['observed']['rows'], base['observed']['rows'], candidate['observed']['rows'], strict=True):
+            assert all(a[k] == value for k, value in previous.items() if k != 'elapsed_ms'), (name, a['mode'], a['seed_index'])
+            assert (a['seed'],a['seed_index'],a['mode'],a['iterations'],a['actions']) == (b['seed'],b['seed_index'],b['mode'],b['iterations'],b['actions'])
+            assert a['actions'] == matrix['actions'][side]
+            assert sum(a['visits']) == sum(b['visits']) == 27000
+            assert a['probes_used'] == b['probes_used'] == 0
+            before, after = [[F(action == row['choice']) for action in row['actions']] for row in [a, b]]
+            policies[a['mode']].append((before, after))
+            results.append(dict(id=f"{name}:{a['mode']}:{a['seed_index']}", game=position['game'], decision=position['decision'],
+                state_key=position['state_key'], side=side, mode=a['mode'], seed=a['seed'], actions=a['actions'],
+                before=a['choice'], after=b['choice'], baseline_nodes=a['nodes'], candidate_nodes=b['nodes'],
+                **compare(matrix, side, before, after)))
+        for mode, pairs in policies.items():
+            distributions = [[sum(p[k][i] for p in pairs)/len(pairs) for i in range(len(matrix['actions'][side]))] for k in [0,1]]
+            aggregate.append(dict(id=f'{name}:{mode}', mode=mode, seeds=len(pairs),
+                                  **compare(matrix, side, *distributions)))
+    assert len(results) == 372
+    focus = bundle.get('focus')
+    focused = []
+    if focus is not None:
+        original = summarize({k:v for k,v in bundle.items() if k != 'focus'})
+        requests = focus_requests(original)
+        assert focus['requests'] == requests
+        assert [{k:r[k] for k in ['game','decision','side','baseline_choice']} for r in focus['rows']] == requests
+        for row in focus['rows']:
+            assert row['budget_ms'] == 30000
+            assert row['baseline_policy'] == [float(a==row['baseline_choice']) for a in row['actions'][row['side']]]
+            matching = [r for r in results if (r['game'],r['decision'],r['side']) == (row['game'],row['decision'],row['side'])
+                        and r['after'] == row['baseline_choice'] and r['before'] != r['after']]
+            assert matching and all(r['state_key'] == row['state_key'] for r in matching)
+            focused.append(dict(game=row['game'],decision=row['decision'],side=row['side'],
+                choice=row['baseline_choice'],reason=row['reason'],runs=row['calls'][-1]['runs'],
+                milliseconds=row['calls'][-1]['milliseconds'],candidate_loss=matching[0]['candidate_loss'],
+                affected_searches=len(matching)))
+    return dict(corpus_positions=72, tested_positions=len({r['state_key'] for r in results}), endpoints=len(selected),
+                paired_searches=len(results), baseline_archive_parity=True,
+                focused_refinement=focused,
+                equivalence_tolerance=1e-8,
+                changed_with_both_loss_upper_at_most_0_005=sum(r['before']!=r['after'] and
+                    max(r['baseline_loss'][1],r['candidate_loss'][1])<=.005 for r in results),
+                verdicts=dict(collections.Counter(r['verdict'] for r in results)),
+                by_mode={mode: dict(collections.Counter(r['verdict'] for r in results if r['mode']==mode)) for mode in ['pinned','blind']},
+                empirical_seed_distributions=aggregate,
+                rows=results,
+                scope='All 93 non-forced endpoints in the frozen 72-position corpus, using two seeds in pinned-team and '
+                      'shipped-pool searches. Compare actual pure best() selections at 27000 simulations with no root probes '
+                      'or mixed-policy override. UCB controls reproduce every archived search field except elapsed time. '
+                      'Intersect consistent archived root-cell and game-value bounds by exact state and action identity. '
+                      'Rational worst-response guarantees compare policies directly, cancelling uncertainty in the common '
+                      'game value. Equivalent means absolute loss change at most 1e-8, not exact equality. '
+                      'Remaining unresolved comparisons are not evidence of equality or safety. '
+                      'Changed choices leaving a baseline with loss at most 1e-8 for a candidate with loss upper '
+                      'bound above 0.005 receive a targeted 30-second policy refinement per distinct choice. '
+                      'These bounds concern the actual full state and optimal continuation, not whole-game or blind '
+                      'information-set exploitability. Empirical distributions describe these two recorded seeds only. '
+                      'Four concurrent jobs make elapsed times unsuitable for matched-time strength claims. No default change.')
+
+
+def focus_requests(report):
+    requests = {(r['game'],r['decision'],r['side'],r['after']) for r in report['rows']
+                if r['before'] != r['after'] and r['baseline_loss'][1]<=1e-8 and r['candidate_loss'][1]>.005}
+    return [dict(zip(['game','decision','side','baseline_choice'],r)) for r in sorted(requests)]
+
+
+def focus_bundle(directory, report, imported):
+    requests = focus_requests(report)
+    if not requests:
+        return None
+    solver = root/'target/release/examples/baseline_ceiling'
+    paths = read(inputs[4])['manifest']['sources']
+    sources = {p:sha((root/p).read_bytes()) for p in paths}
+    if not imported:
+        env = {**os.environ, 'NC2000_REPO_ROOT':str(root)}
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','baseline_ceiling'],cwd=root,env=env,check=True)
+        (directory/'focus-requests.json').write_text(json.dumps(requests))
+        subprocess.run([str(solver),str(directory/'corpus.jsonl'),str(directory/'focus-requests.json'),
+                        str(directory/'focus.jsonl'),'30000'],cwd=root,env=env,check=True)
+    assert json.loads((directory/'focus-requests.json').read_bytes()) == requests
+    assert sources == {p:sha((root/p).read_bytes()) for p in paths}
+    return dict(requests=requests,rows=[json.loads(line) for line in (directory/'focus.jsonl').read_text().splitlines()],
+                source_hashes=sources,binary_sha256=sha(solver.read_bytes()))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle) == json.loads((archive/'summary.json').read_bytes())
+        print('mean-corpus: baseline parity, bound intersections and relative security guarantees verified')
+        return
+    assert not archive.exists()
+    directory = args.import_directory
+    if directory is None:
+        directory = pathlib.Path(tempfile.mkdtemp(prefix='nc-mean-corpus-'))
+        print(directory, flush=True)
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/inputs[2]).read_bytes()))
+        env = {**os.environ, 'NC2000_REPO_ROOT':str(root)}
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','fixed_reply_counterpolicy'],cwd=root,env=env,check=True)
+        def run(entry):
+            position, endpoint, name = entry
+            for arm in ['ucb','mean']:
+                cfg = dict(game=position['game'],decision=position['decision'],observed_side=endpoint['side'],
+                           iterations=[27000],search_seeds=2,seed=2026110501,full_state=False)
+                if arm == 'mean': cfg['continuation'] = 'exp3_mean'
+                path = directory/(name+'-'+arm)
+                path.with_suffix('.config.json').write_text(json.dumps(cfg))
+                with path.with_suffix('.log').open('w') as log:
+                    subprocess.run([str(binary),str(directory/'corpus.jsonl'),'corpus-search',str(path.with_suffix('.config.json')),
+                                    str(path.with_suffix('.json'))],cwd=root,env=env,stdout=log,stderr=log,check=True)
+            print(name,'complete',flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(run, selection()))
+    records = {}
+    for _, _, name in selection():
+        records[name] = {}
+        for arm in ['ucb','mean']:
+            path = directory/(name+'-'+arm)
+            record = json.loads(path.with_suffix('.json').read_bytes())
+            assert record['config_sha256'] == sha(path.with_suffix('.config.json').read_bytes())
+            assert record['manifest']['corpus_sha256'] == sha((directory/'corpus.jsonl').read_bytes())
+            assert all(sha((root/p).read_bytes()) == h for p,h in record['search_source_hashes'])
+            records[name][arm] = record
+    bundle = dict(records=records, binary_sha256=sha(binary.read_bytes()), input_sha256={p:sha((root/p).read_bytes()) for p in inputs})
+    focus = focus_bundle(directory, summarize(bundle), args.import_directory is not None)
+    if focus is not None:
+        bundle['focus'] = focus
+    report = summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k not in ('rows','empirical_seed_distributions')},indent=2))
+
+
+if __name__ == '__main__':
+    main()

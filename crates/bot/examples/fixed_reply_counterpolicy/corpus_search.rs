@@ -3,6 +3,10 @@ use nc2000_bot::{Belief,BlindSearch,Observer,RmConfig,SkuctSearch};
 use std::path::Path;
 
 #[derive(Deserialize,Serialize)]
+#[serde(rename_all="snake_case")]
+enum Continuation { Ucb,Exp3,Exp3Mean }
+
+#[derive(Deserialize,Serialize)]
 #[serde(deny_unknown_fields)]
 struct Config {
     game:usize,decision:usize,iterations:Vec<u32>,search_seeds:usize,seed:u64,
@@ -16,6 +20,17 @@ struct Config {
     root_diagnostics:Option<bool>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     typed_probes:Option<bool>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    continuation:Option<Continuation>,
+}
+
+impl Config {
+    fn search_config(&self)->RmConfig {
+        RmConfig { c:0.4,
+            continuation_exp3_ix:matches!(self.continuation,Some(Continuation::Exp3|Continuation::Exp3Mean)),
+            continuation_exp3_mean:matches!(self.continuation,Some(Continuation::Exp3Mean)),
+            ..Default::default() }
+    }
 }
 
 fn search_seed(cfg:&Config,index:usize)->u64 {
@@ -45,7 +60,7 @@ fn observed_search(dex:&Dex,game:&Game,cfg:&Config,root:&Battle)->Value {
     for (mode,belief) in [("pinned",&pinned),("blind",&blind)] {
         for index in 0..cfg.search_seeds {
             let seed=search_seed(cfg,index);let started=Instant::now();
-            let mut search=BlindSearch::new(&b,dex,RmConfig {c:0.4,..Default::default()},side,seed);
+            let mut search=BlindSearch::new(&b,dex,cfg.search_config(),side,seed);
             for &iterations in &cfg.iterations {
                 let probes_used=if let Some(probes)=cfg.probe_iterations {
                     assert_eq!(cfg.iterations.len(),1);
@@ -89,7 +104,7 @@ pub(super) fn execute(args:&[String]) {
     let root=reconstruct(&dex,&game,cfg.decision);let mut rows=Vec::new();
     for index in 0..if cfg.full_state.unwrap_or(true) {cfg.search_seeds} else {0} {
         let seed=search_seed(&cfg,index);
-        let mut search=SkuctSearch::new(&root,&dex,RmConfig {c:0.4,..Default::default()},seed);
+        let mut search=SkuctSearch::new(&root,&dex,cfg.search_config(),seed);
         let dimensions=[0,1].map(|side|search.actions(side).len().max(1));
         let mut joint_n=vec![0u32;dimensions[0]*dimensions[1]];let mut joint_w=vec![0.0; joint_n.len()];
         let started=Instant::now();
@@ -109,7 +124,8 @@ pub(super) fn execute(args:&[String]) {
     let observed=observed_search(&dex,&game,&cfg,&root);
     let paths=["crates/bot/examples/fixed_reply_counterpolicy/corpus_search.rs","crates/bot/src/smmcts.rs",
         "crates/bot/src/mcts.rs","crates/bot/src/eval.rs","crates/bot/src/agent.rs","crates/bot/src/rng.rs",
-        "crates/bot/src/blind.rs","crates/bot/src/belief.rs","crates/bot/src/observe.rs","crates/bot/src/root_policy.rs"];
+        "crates/bot/src/blind.rs","crates/bot/src/belief.rs","crates/bot/src/observe.rs","crates/bot/src/root_policy.rs",
+        "crates/bot/src/exp3.rs"];
     let output=json!({"schema":"nc2000-corpus-search-v1","config":cfg,"config_sha256":sha(&cfg_raw),
         "state_key":root.state_key128().to_string(),"state":root.essence(&dex),"rows":rows,"observed":observed,
         "manifest":manifest(&dex,&raw),"search_source_hashes":paths.map(|p|(p,sha(&std::fs::read(p).unwrap()))),
