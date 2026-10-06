@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/hidden-mask-v1'
+
+
+def verify(census, items):
+    assert census['decisions'] == 930
+    assert census['draws'] == 32 * census['decisions']
+    assert census['changed_draws'] == census['changed_decisions'] == 0
+    assert census['reasons'] == {} and census['cases'] == []
+    rows = items['rows']
+    assert len(rows) == items['openings'] == 47
+    assert len({(r['game'], r['side']) for r in rows}) == 47
+    changes = [0, 0]
+    masked = 0
+    reasons = {}
+    for r in rows:
+        assert 0 <= r['game'] < 24 and r['side'] in [0, 1]
+        assert r['seed'] == 0x2026102800 ^ r['game'] ^ (r['side'] << 32)
+        assert r['public_logs_identical'] and r['observations_identical'] and r['legal_alternate_team']
+        assert r['projection_checks'] == 32
+        assert r['original_item'] != r['alternate_item']
+        assert 'Quick Claw' in [r['original_item'], r['alternate_item']]
+        assert len(r['masks']) == 2
+        assert all(len(m) == len(r['actions']) for m in r['masks'])
+        assert r['mask_changed'] == (r['masks'][0] != r['masks'][1])
+        if not r['mask_changed']:
+            assert r['checkpoints'] == []
+            continue
+        masked += 1
+        for a, x, y in zip(r['actions'], *r['masks']):
+            if x != y:
+                reasons[a] = reasons.get(a, 0) + 1
+        assert [c['iterations'] for c in r['checkpoints']] == [3000, 27000]
+        for i, c in enumerate(r['checkpoints']):
+            assert len(c['visits']) == len(c['means']) == len(r['actions'])
+            assert sum(c['visits']) == c['iterations']
+            assert all(n >= 0 for n in c['visits']) and all(0 <= v <= 1 for v in c['means'])
+            assert len(c['choices']) == 2
+            assert all(a in r['actions'] for a in c['choices'])
+            changes[i] += c['choices'][0] != c['choices'][1]
+    return dict(corpus_decisions=census['decisions'], imputed_roots=census['draws'],
+                within_prior_mask_changes=0, counterfactual_openings=len(rows),
+                identical_projection_checks=32 * len(rows), changed_masks=masked,
+                changed_actions=reasons, final_choice_changes=dict(zip(['3000', '27000'], changes)),
+                production_changed=False, strength_demonstrated=False,
+                scope='Exploratory diagnostics with the Quick Claw coin fixed false and both cached speeds refreshed '
+                      'before mask comparison. Current-prior samples change no masks in this corpus. Counterfactual '
+                      'opening teams change only held items, retaining item presence and item-clause legality; '
+                      'move combinations are unchanged. Full logs and exposed Observer fields agree; 32 paired '
+                      'determinizations have identical guarded keys. Mask-sensitive searches have identical visits, '
+                      'means and final RNG before final filtering. Fourteen root masks differ, but no final choices '
+                      'differ at either measured budget. This establishes a hidden-item dependency in exclusions, '
+                      'not a measured strength loss, a useful fix, or whole-game optimality.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', nargs=2, type=Path)
+    args = parser.parse_args()
+    if args.record:
+        assert not (archive / 'records.json.gz').exists()
+        census, items = [json.loads(p.read_bytes()) for p in args.record]
+        summary = verify(census, items)
+        paths = subprocess.check_output(['git', 'ls-files', 'crates/engine', 'crates/bot/src', 'Cargo.toml', 'Cargo.lock'], cwd=root, text=True).splitlines()
+        paths += ['crates/bot/examples/hidden_mask_census.rs', 'crates/bot/examples/hidden_item_mask_probe.rs',
+                  'tools/hidden-mask-probe', 'findings/policy-gap-v1/corpus.jsonl.gz',
+                  'data/belief-pool-v3/belief-pool.json', 'data/learnsets-gen2.json']
+        archive.mkdir(parents=True, exist_ok=True)
+        bundle = dict(census=census, items=items, hashes={p: hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, sort_keys=True).encode(), mtime=0))
+        (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest() == h for p, h in bundle['hashes'].items())
+    summary = verify(bundle['census'], bundle['items'])
+    assert summary == json.loads((archive / 'summary.json').read_bytes())
+    for corruption in ['missing', 'seed', 'public', 'mask', 'visits']:
+        bad = copy.deepcopy(bundle['items'])
+        if corruption == 'missing': bad['rows'].pop()
+        elif corruption == 'seed': bad['rows'][0]['seed'] += 1
+        elif corruption == 'public': bad['rows'][0]['public_logs_identical'] = False
+        elif corruption == 'mask': bad['rows'][0]['mask_changed'] = not bad['rows'][0]['mask_changed']
+        else: next(r for r in bad['rows'] if r['mask_changed'])['checkpoints'][0]['visits'][0] += 1
+        try: verify(bundle['census'], bad)
+        except AssertionError: pass
+        else: raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == '__main__':
+    main()

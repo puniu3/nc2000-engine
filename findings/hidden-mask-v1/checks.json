@@ -1,0 +1,16 @@
+{
+  "replay_exact": true,
+  "both_examples_compile": true,
+  "public_log_pairs": 47,
+  "observation_pairs": 47,
+  "equal_determinized_keys": 1504,
+  "paired_search_statistics_equal": true,
+  "negative_controls": [
+    "missing_pair",
+    "wrong_seed",
+    "public_log_mismatch",
+    "wrong_mask_flag",
+    "wrong_visit_total"
+  ],
+  "production_changed": false
+}

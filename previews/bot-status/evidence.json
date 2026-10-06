@@ -2800,5 +2800,50 @@
       "findings/preview-time-v1/summary.json": "cb2e9c85ec185f77955cd56f07f69ffd14f3a0248f2930ab6d010a9fe30f1e88",
       "findings/preview-time-v1/checks.json": "c609387e92965acb63352096c24b750c105f2553b15b9e520d580bf805f48f54"
     }
+  },
+  "hidden_mask": {
+    "status": "diagnostic_complete",
+    "source_baseline_commit": "378434f",
+    "summary": {
+      "corpus_decisions": 930,
+      "imputed_roots": 29760,
+      "within_prior_mask_changes": 0,
+      "counterfactual_openings": 47,
+      "identical_projection_checks": 1504,
+      "changed_masks": 14,
+      "changed_actions": {
+        "move recover": 4,
+        "move rest": 10,
+        "move sleeptalk": 4
+      },
+      "final_choice_changes": {
+        "3000": 0,
+        "27000": 0
+      },
+      "production_changed": false,
+      "strength_demonstrated": false,
+      "scope": "Exploratory diagnostics with the Quick Claw coin fixed false and both cached speeds refreshed before mask comparison. Current-prior samples change no masks in this corpus. Counterfactual opening teams change only held items, retaining item presence and item-clause legality; move combinations are unchanged. Full logs and exposed Observer fields agree; 32 paired determinizations have identical guarded keys. Mask-sensitive searches have identical visits, means and final RNG before final filtering. Fourteen root masks differ, but no final choices differ at either measured budget. This establishes a hidden-item dependency in exclusions, not a measured strength loss, a useful fix, or whole-game optimality."
+    },
+    "checks": {
+      "replay_exact": true,
+      "both_examples_compile": true,
+      "public_log_pairs": 47,
+      "observation_pairs": 47,
+      "equal_determinized_keys": 1504,
+      "paired_search_statistics_equal": true,
+      "negative_controls": [
+        "missing_pair",
+        "wrong_seed",
+        "public_log_mismatch",
+        "wrong_mask_flag",
+        "wrong_visit_total"
+      ],
+      "production_changed": false
+    },
+    "artifacts": {
+      "findings/hidden-mask-v1/records.json.gz": "96a9bbcd64445dd36ce0e9eb578ce221be7ae36cf02d81d94d321c2a0c96abff",
+      "findings/hidden-mask-v1/summary.json": "c35e44b29be3d19172e43e946c91f9889e7b8c53d5ba0f34b7053ed233b7e8d5",
+      "findings/hidden-mask-v1/checks.json": "df2b4c7db0b75675dd59b14c79e36453cffa3f200c733107d339567464335593"
+    }
   }
 }
