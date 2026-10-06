@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import json
+import os
+import pathlib
+import runpy
+import shutil
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/baseline-ceiling-v1'
+correlated=runpy.run_path(str(root/'tools/correlated-root-probe'))
+frontier=correlated['frontier']
+sha=correlated['sha']
+prior=correlated['archive']/'records.json.gz'
+
+
+def requests():
+    baseline={(r['game'],r['decision'],r['side']):r['baseline']['choice']
+        for r in json.loads(gzip.decompress(correlated['baseline_path'].read_bytes()))['rows']}
+    return [dict(r,baseline_choice=baseline[r['game'],r['decision'],r['side']]) for r in frontier['requests']()]
+
+
+def validate_bounds(model,bounds):
+    cell,successor=correlated['exact_gaps'](model)
+    assert correlated['F'](bounds['cell_gap'])>=cell
+    assert correlated['F'](bounds['successor_gap'])>=successor
+    assert bounds['max_loss']==[min(v,bounds['cell_gap'],bounds['successor_gap']) for v in model['independent_loss']]
+
+
+def summarize(bundle,progress=False):
+    assert bundle['prior_sha256']==sha(prior.read_bytes())
+    assert bundle['baseline_sha256']==sha(correlated['baseline_path'].read_bytes())
+    assert bundle['corpus_sha256']==sha(frontier['corpus'].read_bytes())
+    assert bundle['reference_sha256']==sha(correlated['reference_path'].read_bytes())
+    assert bundle['selection_sha256']==sha(frontier['previous'].read_bytes())
+    old=json.loads(gzip.decompress(prior.read_bytes()))['manifest']['sources']
+    sources=bundle['manifest']['sources']
+    assert sorted(p for p,h in old.items() if sources[p]!=h)==['crates/bot/src/bounds.rs','crates/bot/src/bounds/correlated.rs']
+    assert sorted(set(sources)-set(old))==['crates/bot/examples/baseline_ceiling.rs']
+    assert [{k:r[k] for k in ['game','decision','side','baseline_choice']} for r in bundle['rows']]==requests()
+    references={(r['game'],r['decision']):r for r in json.loads(gzip.decompress(correlated['reference_path'].read_bytes()))}
+    summaries=[]
+    for index,r in enumerate(bundle['rows']):
+        side=r['side'];ref=references[r['game'],r['decision']]
+        assert r['state_key']==ref['state_key']
+        assert (r['budget_ms'],r['node_budget'],r['call_budget'],r['resource_closure_nodes'])==(10000,120000,1000,9000)
+        assert r['baseline_policy']==[float(a==r['baseline_choice']) for a in r['actions'][side]]
+        assert sum(r['baseline_policy'])==1.
+        assert [[correlated['timed']['canonical'](a) if a is not None else a for a in aa] for aa in r['actions']]==ref['reference']['actions']
+        model=r['model'];assert model['dimensions']==list(map(len,r['actions']))
+        validate_bounds(model,r['candidate_bounds'])
+        matrix=dict(actions=r['actions'],value=dict(zip(['lo','hi'],r['value'])),cells=[dict(zip(['lo','hi'],c)) for c in model['cell_bounds']])
+        independent=correlated['timed']['loss'](matrix,side,r['baseline_policy'])
+        assert all(abs(a-b)<1e-7 for a,b in zip(independent,r['baseline_independent_loss']))
+        baseline=copy.deepcopy(model)
+        baseline['policies'][side]=r['baseline_policy']
+        baseline['independent_loss'][side]=r['baseline_independent_loss'][1]
+        validate_bounds(baseline,r['baseline_bounds'])
+        base_ref=correlated['timed']['loss'](ref['reference'],side,r['baseline_policy'])
+        total=0;previous_ms=0.;previous_value=[0.,1.]
+        for call in r['calls']:
+            assert previous_ms<10000 and call['milliseconds']>=previous_ms
+            previous_ms=call['milliseconds'];total+=call['call_runs']
+            assert total==call['runs'] and call['call_runs']<=1000
+            value=call['value']
+            assert value[0]>=previous_value[0]-1e-8 and value[1]<=previous_value[1]+1e-8
+            assert value[0]<=ref['reference']['value']['hi']+1e-8 and value[1]>=ref['reference']['value']['lo']-1e-8
+            previous_value=value
+            assert call['baseline_loss'][0]<=base_ref[1]+1e-7 and call['baseline_loss'][1]>=base_ref[0]-1e-7
+        last=r['calls'][-1]
+        lo,hi=last['baseline_loss'];candidate=last['candidate_max_loss']
+        assert last['value']==r['value']
+        assert lo==r['baseline_independent_loss'][0] and hi==r['baseline_bounds']['max_loss'][side]
+        assert candidate==r['candidate_bounds']['max_loss'][side]
+        assert correlated['timed']['loss'](ref['reference'],side,model['policies'][side])[0]<=candidate+1e-7
+        improvement=candidate+1e-8<lo
+        certified=hi<=.005
+        error=lo>.005+1e-8
+        expected=('ImprovementProven' if improvement else 'BaselineCertified' if certified else 'BaselineError' if error
+                  else 'TimeBudget' if last['milliseconds']>=10000 else 'NoProgress' if last['call_runs']==0
+                  else 'NodeBudget' if last['stop']=='NodeBudget' else 'PolicyIntervalTight')
+        assert r['reason']==expected
+        first_second=next((c for c in r['calls'] if c['milliseconds']>=1000),last)
+        summaries.append(dict(game=r['game'],decision=r['decision'],side=side,baseline_choice=r['baseline_choice'],
+            reason=r['reason'],baseline_loss=[lo,hi],candidate_max_loss=candidate,candidate_policy=model['policies'][side],
+            baseline_certified=certified,baseline_error_proven=error,improvement_proven=improvement,
+            milliseconds=last['milliseconds'],runs=last['runs'],nodes=r['nodes'],closed=r['closed'],
+            unexpanded_fraction=r['unexpanded_nodes']/r['nodes'],witness_fallbacks=r['witness_fallbacks'],
+            first_second_baseline_loss=first_second['baseline_loss']))
+        if progress:print(f'verified {index+1}/41 {r["reason"]}',flush=True)
+    return dict(positions=41,budget_ms=10000,counts={k:sum(r[k] for r in summaries) for k in ['baseline_certified','baseline_error_proven','improvement_proven']},
+        total_seconds=sum(r['milliseconds'] for r in summaries)/1000,rows=summaries,
+        scope='Frozen full-information search choices from one archived seed per position, not human choices or a population policy. '
+              'All 41 previously selected unresolved positions are included. Each fixed baseline policy is refined with '
+              'solve_policy_losses, 1000-run calls, a 120000-node limit, fixed 9000-node resource threshold and a soft 10-second limit. '
+              'Correlated certificates are checked after every call and can stop analysis early. If a valid LP witness is unavailable, '
+              'the baseline policy and a uniform opposing policy provide conservative bounds. This is a ceiling audit, not a matched-time comparison or a production policy change. Bounds concern only the first decision with optimal '
+              'full-information continuation. Final correlated upper bounds are independently checked with exact rational arithmetic.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        print('baseline-ceiling: verified all 41 fixed choices, correlated certificates and headroom classifications')
+        return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-baseline-ceiling-'))
+    print(directory,flush=True)
+    paths=list(json.loads(gzip.decompress(prior.read_bytes()))['manifest']['sources'])+['crates/bot/examples/baseline_ceiling.rs']
+    hashes={p:sha((root/p).read_bytes()) for p in paths}
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if args.import_directory:
+        manifest=json.loads((directory/'manifest.json').read_bytes());assert manifest['sources']==hashes
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','baseline_ceiling'],cwd=root,env=env,check=True)
+        shutil.copy2(root/'target/release/examples/baseline_ceiling',directory/'runner')
+        manifest=dict(sources=hashes,binary_sha256=sha((directory/'runner').read_bytes()))
+        (directory/'manifest.json').write_text(json.dumps(manifest))
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress(frontier['corpus'].read_bytes()))
+        (directory/'requests.json').write_text(json.dumps(requests()))
+        with (directory/'run.log').open('w') as log:
+            subprocess.run([str(directory/'runner'),str(directory/'corpus.jsonl'),str(directory/'requests.json'),str(directory/'records.jsonl'),'10000'],
+                cwd=root,env=env,stdout=log,stderr=log,check=True)
+    assert manifest['binary_sha256']==sha((directory/'runner').read_bytes())
+    assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
+    bundle=dict(manifest=manifest,prior_sha256=sha(prior.read_bytes()),baseline_sha256=sha(correlated['baseline_path'].read_bytes()),
+        corpus_sha256=sha(frontier['corpus'].read_bytes()),reference_sha256=sha(correlated['reference_path'].read_bytes()),selection_sha256=sha(frontier['previous'].read_bytes()),
+        rows=[json.loads(s) for s in (directory/'records.jsonl').read_text().splitlines()])
+    report=summarize(bundle,True)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='rows'},indent=2))
+
+
+if __name__=='__main__':main()

@@ -91,17 +91,31 @@ impl BoundSolver<'_> {
     pub fn root_correlation(&self, battle: &Battle) -> Option<RootCorrelation> {
         let node=self.nodes.get(&self.node_key(battle))?;
         let policies=node_strategies(node)?;
+        Some(self.correlation_model(node,
+            policies.clone().map(|p|p.actions.into_iter().map(|(_,mass)|mass).collect()),
+            policies.map(|p|p.max_loss)))
+    }
+
+    pub fn root_correlation_for_policies(&self, battle: &Battle, policies: [Vec<f64>;2]) -> Option<RootCorrelation> {
+        let node=self.nodes.get(&self.node_key(battle))?;
+        let payoffs=self.root_payoffs(battle)?;
+        let policies=[normalized_policy(&policies[0])?,normalized_policy(&policies[1])?];
+        if (0..2).any(|side|policies[side].len()!=payoffs.actions[side].len()) {return None;}
+        let independent_loss=[0,1].map(|side|payoffs.policy_loss(side,&policies[side]).hi);
+        Some(self.correlation_model(node,policies,independent_loss))
+    }
+
+    fn correlation_model(&self, node: &super::Node, policies: [Vec<f64>;2], independent_loss: [f64;2]) -> RootCorrelation {
         let keys:BTreeSet<_>=node.cells.iter().flat_map(|c|c.resolved.iter().map(|(_,key)|*key)).collect();
         let index:HashMap<_,_>=keys.iter().enumerate().map(|(i,key)|(*key,i)).collect();
-        Some(RootCorrelation {
+        RootCorrelation {
             dimensions:[node.acts0.len(),node.acts1.len()],
             cell_bounds:node.cells.iter().map(|c|[c.lo,c.hi]).collect(),
             children:keys.iter().map(|key|{let n=&self.nodes[key];[n.lo,n.hi]}).collect(),
             cells:node.cells.iter().map(|c|AffineCell {fixed:[c.fixed_lo,c.fixed_hi],pending_mass:c.pending_mass,
                 successors:c.resolved.iter().map(|&(mass,key)|(index[&key],mass)).collect()}).collect(),
-            policies:policies.clone().map(|p|p.actions.into_iter().map(|(_,mass)|mass).collect()),
-            independent_loss:policies.map(|p|p.max_loss),
-        })
+            policies, independent_loss,
+        }
     }
 }
 

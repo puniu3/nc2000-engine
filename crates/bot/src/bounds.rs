@@ -4052,6 +4052,21 @@ mod tests {
     }
 
     #[test]
+    fn explicit_correlated_policies_do_not_require_a_root_witness() {
+        let dex=conformance::load_dex();
+        let mut root=battle(&dex,&["Quick Attack","Splash"],&["Quick Attack","Splash"]);
+        let preview=[0,1].map(|side|root.legal_choices(&dex,side).first().copied());
+        root.apply_choices(&dex,preview).unwrap();
+        let mut solver=BoundSolver::new(&dex,BoundConfig::default());
+        let key=solver.intern(root.clone());
+        solver.init_cells(key);
+        assert!(solver.root_correlation(&root).is_none());
+        let model=solver.root_correlation_for_policies(&root,[vec![1.,1.],vec![1.,1.]]).unwrap();
+        assert!(model.loss_bounds().max_loss.iter().all(|&loss|loss<=0.5+1e-9));
+        assert!(solver.root_correlation_for_policies(&root,[vec![0.,0.],vec![1.,1.]]).is_none());
+    }
+
+    #[test]
     fn strategy_refinement_encloses_exhaustive_policies_and_resumes() {
         let dex = conformance::load_dex();
         for (moves,turn,hp) in [(["Quick Attack","Splash"],1000,[1,1]),

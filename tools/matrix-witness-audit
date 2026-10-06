@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+import argparse
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+prior=root/'findings/baseline-ceiling-v1/records.json.gz'
+archive=root/'findings/matrix-witness-v1'
+
+
+def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(bundle,recheck):
+    assert bundle['prior_sha256']==sha(prior.read_bytes())
+    raw=gzip.decompress(prior.read_bytes());source=json.loads(raw)
+    result=bundle['result'];assert result['input_sha256']==sha(raw)
+    hashes=dict(result['source_hashes'])
+    old=source['manifest']['sources']['crates/bot/src/exact.rs']
+    assert (hashes['crates/bot/src/exact.rs']!=old)==recheck
+    assert hashes['crates/bot/examples/matrix_witness_audit.rs']==sha((root/'crates/bot/examples/matrix_witness_audit.rs').read_bytes())
+    rows={(r['game'],r['decision']):r for r in source['rows']}
+    expected=sum(2*((1<<r['model']['dimensions'][0])-1-r['model']['dimensions'][0])*
+                 ((1<<r['model']['dimensions'][1])-1-r['model']['dimensions'][1]) for r in rows.values())
+    assert result['matrices']==expected and sum(r['invalid_submatrices'] for r in result['records'])==result['invalid']
+    for r in result['records']:
+        source=rows[r['game'],r['decision']]['model']
+        assert r['matrix']==[source['cell_bounds'][i*source['dimensions'][1]+j][r['endpoint']] for i in r['rows'] for j in r['cols']]
+        assert len(r['x'])==len(r['rows']) and len(r['y'])==len(r['cols'])
+        assert r['minimum_weight']==min(r['x']+r['y'])<0
+        assert abs(sum(r['x'])-1)<1e-8 and abs(sum(r['y'])-1)<1e-8
+    assert (result['invalid']==0)==recheck
+    return dict(matrices=result['matrices'],invalid_distributions=result['invalid'],affected_roots=len(result['records']),
+        minimum_weight=min((r['minimum_weight'] for r in result['records']),default=0.),
+        scope='All row/column restrictions with at least two actions per side from both endpoint matrices of the 41-position '
+              'ceiling audit. Restrictions include but are not limited to the live solver supports. Negative probabilities '
+              'reproduce the invalid-policy condition; this does not establish the cause of every observed fallback or its strength impact.')
+
+
+def main():
+    global archive
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--recheck',action='store_true');parser.add_argument('--import-output',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.recheck:archive=archive/'recheck'
+    if args.verify_only:
+        bundle=json.loads((archive/'records.json').read_bytes())
+        assert summarize(bundle,args.recheck)==json.loads((archive/'summary.json').read_bytes())
+        print('matrix-witness: verified frozen matrices and probability validity counts');return
+    assert not (archive/'records.json').exists()
+    if args.import_output:output=args.import_output
+    else:
+        directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-matrix-witness-'))
+        source=directory/'input.json';source.write_bytes(gzip.decompress(prior.read_bytes()));output=directory/'output.json'
+        subprocess.run(['cargo','run','--release','-p','nc2000-bot','--example','matrix_witness_audit','--',str(source),str(output)],
+            cwd=root,env={**os.environ,'NC2000_REPO_ROOT':str(root)},check=True)
+    bundle=dict(prior_sha256=sha(prior.read_bytes()),result=json.loads(output.read_bytes()))
+    report=summarize(bundle,args.recheck)
+    archive.mkdir(exist_ok=True)
+    (archive/'records.json').write_text(json.dumps(bundle,indent=2)+'\n')
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report,indent=2))
+
+
+if __name__=='__main__':main()
