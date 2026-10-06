@@ -101,6 +101,7 @@ pub struct RmConfig {
     pub collapse_sleep_actions: bool,
     pub root_revisit_interval: u32,
     pub canonical_claw_key: bool,
+    pub unseen_claw_root: bool,
     /// Tree horizon in turns (same meaning as `MctsConfig::horizon`).
     pub horizon: u16,
     /// Rollout policy + leaf eval (shared with the M6 agent).
@@ -166,6 +167,7 @@ impl Default for RmConfig {
             collapse_sleep_actions: false,
             root_revisit_interval: 0,
             canonical_claw_key: false,
+            unseen_claw_root: false,
             horizon: 100,
             playout: Playout::heavy(),
             threshold: 0.5,

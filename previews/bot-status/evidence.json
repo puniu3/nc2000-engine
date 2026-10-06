@@ -2335,5 +2335,80 @@
       "findings/claw-key-v1/records.json.gz": "d5814b636298f3b32233e085299f36a9a599ac0f18d5037f305d2e33a41565da",
       "findings/claw-key-v1/summary.json": "845b626512c7e5d6f5d279132b461971352c696056edf7b61b527c38e9e3e6ef"
     }
+  },
+  "claw_information_trial": {
+    "witness": {
+      "engine_runs": 281,
+      "cells": 8,
+      "score_convention": "win 1, tie 0.5, loss 0",
+      "correct_value": 0.1171875,
+      "clairvoyant_opponent_value": 0.10928276856569023,
+      "pure_action_security": [
+        0.1171875,
+        0.104827880859375
+      ],
+      "wrong_choices": [
+        31,
+        1
+      ],
+      "seeds": 32,
+      "conditional_mean_action_loss": [
+        0.011973381042480469,
+        0.00038623809814453125
+      ]
+    },
+    "ordinary_roots": {
+      "positions": 12,
+      "seeds_each": 2,
+      "searches": 24,
+      "active_claw_positions": 8,
+      "controls": 4,
+      "changed_choices": 0,
+      "node_identity_checks": [
+        {
+          "enabled": false,
+          "paired_idle_types": 120,
+          "shared_node_types": 0
+        },
+        {
+          "enabled": true,
+          "paired_idle_types": 120,
+          "shared_node_types": 120
+        }
+      ]
+    },
+    "default_enabled": false,
+    "scope": "Constructed turn-1000 position using the engine turn-limit rule, not a replay proving reachability from an initial regulation team. Complete one-step native enumeration; dual strategy bounds checked with rational arithmetic on recorded floating-point masses. Engine semantics remain trusted. Both sheets are known in the witness but the preempt coin is hidden to both players. Fixed search seeds are diagnostic repetitions, not match wins. Ordinary roots are selected by state hash before outcomes. Root-only candidate; continuation information sets remain unchanged. No human calibration, matched-time full-game test, or deployed-bot superiority claim.",
+    "checks": {
+      "tests": {
+        "library": 226,
+        "blind_integration": 9,
+        "claw_information_integration": 1,
+        "failed": 0
+      },
+      "workspace_all_targets": "passed",
+      "native_baseline_replay": {
+        "witness_searches": 32,
+        "terminal_cells": 8,
+        "ordinary_searches": 24
+      },
+      "regressions": {
+        "unseen_own_claw_changes_default_root_mask": true,
+        "candidate_mask_and_search_invariant": true,
+        "frozen_root_lookup_shares_both_coin_values": true
+      },
+      "negative_controls": [
+        "wrong_probability",
+        "changed_payoff",
+        "changed_solution",
+        "missing_search_seed"
+      ],
+      "extra_test_sha256": "8a9484b57e80d4cfc4766264de8647da463410d65b5e1158ecc1767f9c960b46"
+    },
+    "artifacts": {
+      "findings/claw-information-v1/records.json.gz": "f1c2d775a0d01b659256da4c845d01d8c1126407409962f52cbacf16a60f586a",
+      "findings/claw-information-v1/summary.json": "ebfae19b5116aeefa06b5d573bd824cfaf9ba7fef2f6c27bae8e9ad6a8fbcc70",
+      "findings/claw-information-v1/checks.json": "db6a069c7e73d84a979bd78dbba541069a2d94bf6a07e848a38aaccb8ac90d01"
+    }
   }
 }

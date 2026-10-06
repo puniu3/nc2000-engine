@@ -74,7 +74,9 @@ pub(crate) fn evaluate_sim(
                 Playout::Heavy { weights, .. } => crate::eval::eval_leaf(sim, dex, weights),
             };
         }
-        let key = key_of(cfg, dex, sim);
+        let key = if tree_choices == 0 {
+            crate::blind::root_search_key(cfg, dex, sim)
+        } else { key_of(cfg, dex, sim) };
         let node_id = table.get(&key).copied();
         let node = node_id.map(|i| &nodes[i]);
         let acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];

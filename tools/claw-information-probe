@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+from fractions import Fraction
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/claw-information-v1'
+
+
+def verify(witness, baseline, candidate):
+    assert witness['turn']==1000 and witness['hp']==[40,1]
+    assert witness['actions']==[['move rest','move swagger'],['move seismictoss','move crosschop']]
+    p=Fraction(60,256)
+    assert Fraction(witness['claw_probability'])==p
+    matrices=[[],[]]
+    assert len(witness['cells'])==8
+    for index,cell in enumerate(witness['cells']):
+        coin,i,j=index//4,index//2%2,index%2
+        assert cell['coin']==coin and cell['own']==witness['actions'][0][i] and cell['reply']==witness['actions'][1][j]
+        outcomes=list(map(Fraction,cell['outcomes']))
+        assert all(0<=v<=1 for v in outcomes) and abs(sum(outcomes)-1)<Fraction(1,10**10)
+        value=outcomes[0]+outcomes[1]/2
+        assert abs(value-Fraction(cell['value']))<Fraction(1,10**12)
+        matrices[coin].append(value)
+    assert witness['runs']==sum(c['runs'] for c in witness['cells'])
+    hidden=[(1-p)*a+p*b for a,b in zip(*matrices)]
+    informed=[(1-p)*matrices[0][i*2+a]+p*matrices[1][i*2+b] for i in range(2) for a in range(2) for b in range(2)]
+    for name,matrix,columns in [('hidden',hidden,2),('informed',informed,4)]:
+        assert all(abs(a-Fraction(b))<Fraction(1,10**12) for a,b in zip(matrix,witness[name+'_matrix'],strict=True))
+        solution=witness[name+'_solution'];x=list(map(Fraction,solution['own']));y=list(map(Fraction,solution['opponent']))
+        assert len(x)==2 and len(y)==columns and all(v>=0 for v in x+y)
+        assert abs(sum(x)-1)<Fraction(1,10**12) and abs(sum(y)-1)<Fraction(1,10**12)
+        lower=min(sum(x[i]*matrix[i*columns+j] for i in range(2)) for j in range(columns))
+        upper=max(sum(y[j]*matrix[i*columns+j] for j in range(columns)) for i in range(2))
+        assert abs(upper-lower)<Fraction(1,10**10)
+        assert abs(Fraction(solution['value'])-(lower+upper)/2)<Fraction(1,10**10)
+    security=[min(hidden[i*2:i*2+2]) for i in range(2)]
+    assert security[0]>security[1]
+    assert witness['hidden_solution']['own']==[1,0]
+    searches=witness['searches'];assert len(searches)==64
+    assert {(s['enabled'],s['seed']) for s in searches}=={(e,0x2026102200+i) for e in [False,True] for i in range(32)}
+    errors=[]
+    for enabled in [False,True]:
+        rows=[s for s in searches if s['enabled']==enabled]
+        for s in rows:
+            assert sum(s['visits'])==27000 and len(s['means'])==2
+            assert s['best']==witness['actions'][0][max(range(2),key=lambda i:s['visits'][i])]
+        errors.append(sum(s['best']!='move rest' for s in rows))
+    summaries=[]
+    for result,enabled in [(baseline,False),(candidate,True)]:
+        assert result['enabled']==enabled and result['iterations']==27000 and len(result['rows'])==24
+        paired=shared=0
+        for row in result['rows']:
+            assert sum(sum(t['samples']) for t in row['types'])==27000
+            assert sum(row['visits'])==27000
+            for t in row['types']:
+                a,b=t['coins']
+                if a is None or b is None:continue
+                assert a['actions']==b['actions'] and a['idle']==b['idle']
+                if not a['idle']:continue
+                paired+=1;shared+=a['node']==b['node']
+                assert (a['node']==b['node'])==enabled
+        summaries.append(dict(enabled=enabled,paired_idle_types=paired,shared_node_types=shared))
+    identity=lambda r:(r['game'],r['decision'],r['side'],r['seed'])
+    left={identity(r):r for r in baseline['rows']};right={identity(r):r for r in candidate['rows']}
+    assert left.keys()==right.keys() and len(left)==24
+    changed=sum(left[k]['best']!=right[k]['best'] for k in left)
+    return dict(witness=dict(engine_runs=witness['runs'],cells=8,score_convention='win 1, tie 0.5, loss 0',
+        correct_value=witness['hidden_solution']['value'],clairvoyant_opponent_value=witness['informed_solution']['value'],
+        pure_action_security=list(map(float,security)),wrong_choices=errors,seeds=32,
+        conditional_mean_action_loss=[float((security[0]-security[1])*e/32) for e in errors]),
+        ordinary_roots=dict(positions=12,seeds_each=2,searches=24,active_claw_positions=8,controls=4,
+            changed_choices=changed,node_identity_checks=summaries),default_enabled=False,
+        scope='Constructed turn-1000 position using the engine turn-limit rule, not a replay proving reachability '
+        'from an initial regulation team. Complete one-step native enumeration; dual strategy bounds checked with '
+        'rational arithmetic on recorded floating-point masses. Engine semantics remain trusted. Both sheets '
+        'are known in the witness but the preempt coin is hidden to both players. Fixed search seeds are '
+        'diagnostic repetitions, not match wins. Ordinary roots are selected by state hash before outcomes. '
+        'Root-only candidate; continuation information sets remain unchanged. No human calibration, '
+        'matched-time full-game test, or deployed-bot superiority claim.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',nargs=3,type=Path);args=parser.parse_args()
+    if args.record:
+        assert not archive.exists()
+        data=[json.loads(p.read_bytes()) for p in args.record]
+        summary=verify(*data)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','crates/bot/tests','Cargo.lock','Cargo.toml','data/belief-pool-v3/belief-pool.json'],cwd=root,text=True).splitlines()
+        paths+=['crates/bot/examples/claw_information_probe.rs','crates/bot/examples/claw_information_witness.rs','tools/claw-information-probe','findings/policy-gap-v1/corpus.jsonl.gz']
+        bundle=dict(witness=data[0],baseline=data[1],candidate=data[2],hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        archive.mkdir();(archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,sort_keys=True).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in bundle['hashes'].items())
+    summary=verify(bundle['witness'],bundle['baseline'],bundle['candidate'])
+    assert summary==json.loads((archive/'summary.json').read_bytes())
+    for corruption in ['probability','payoff','solution','missing_seed']:
+        bad=copy.deepcopy(bundle['witness'])
+        if corruption=='probability':bad['claw_probability']+=.01
+        elif corruption=='payoff':bad['hidden_matrix'][0]+=.01
+        elif corruption=='solution':bad['hidden_solution']['value']+=.01
+        else:bad['searches'].pop()
+        try:verify(bad,bundle['baseline'],bundle['candidate'])
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {corruption}')
+    print(json.dumps(summary,indent=2))
+
+
+if __name__=='__main__':main()

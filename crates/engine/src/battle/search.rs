@@ -196,7 +196,15 @@ impl Battle {
     pub fn quick_claw_roll_observable(&self, dex: &Dex) -> bool {
         let selected = self.started && self.turn > 0 && self.request_state != RequestState::TeamPreview
             && !self.queue.iter().any(|action| matches!(action.choice, ActionKind::Team { .. } | ActionKind::Start));
-        let idle = self.started && !self.ended && self.request_state == RequestState::Move
+        let idle = self.is_idle_move_request();
+        dex.known_items.quickclaw.is_some_and(|item| self.sides.iter().any(|side|
+            side.roster.iter().enumerate().any(|(slot,pokemon)| pokemon.item == Some(item)
+                && (!selected || side.party.contains(&(slot as u8)))
+                && (!idle || !pokemon.fainted || pokemon.hp > 0))))
+    }
+
+    pub fn is_idle_move_request(&self) -> bool {
+        self.started && !self.ended && self.request_state == RequestState::Move
             && self.needs_choice() == [true, true] && !self.mid_turn
             && self.queue.is_empty() && self.faint_queue.is_empty()
             && self.event_stack.is_empty() && self.effect_stack.is_empty()
@@ -204,11 +212,7 @@ impl Battle {
             && self.active_target.is_none() && self.pending_boosts.is_none()
             && self.sides.iter().all(|side| side.choice.actions.is_empty()
                 && side.choice.switch_ins.is_empty() && side.choice.forced_switches_left == 0
-                && side.choice.forced_passes_left == 0);
-        dex.known_items.quickclaw.is_some_and(|item| self.sides.iter().any(|side|
-            side.roster.iter().enumerate().any(|(slot,pokemon)| pokemon.item == Some(item)
-                && (!selected || side.party.contains(&(slot as u8)))
-                && (!idle || !pokemon.fainted || pokemon.hp > 0))))
+                && side.choice.forced_passes_left == 0)
     }
 
     /// Whether dropping damage-history fields can change future behavior.

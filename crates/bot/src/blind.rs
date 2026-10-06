@@ -25,6 +25,8 @@
 //!   one root node panics the moment two candidates disagree on the active
 //!   mon's moves — the collision pair). This is decoupled UCB where the
 //!   opponent is modeled knowing their own team, which they do.
+//!   With `unseen_claw_root`, idle root statistics also share the hidden
+//!   preempt coin; simulated transitions retain its sampled value.
 //!
 //! Final choice excludes joint-probe counts whenever eligible ordinary visits exist.
 //!
@@ -319,6 +321,20 @@ struct RootTypeStats {
     cells: Vec<(u32, f64)>,
 }
 
+pub(crate) fn root_search_key(cfg: &RmConfig, dex: &Dex, battle: &mut Battle) -> u64 {
+    if !cfg.unseen_claw_root || !battle.is_idle_move_request() {
+        return key_of(cfg, dex, battle);
+    }
+    let coin = battle.quick_claw_roll;
+    let speeds = [0,1].map(|side| battle.active_id(side).map(|id| (id,battle.poke(id).speed)));
+    battle.quick_claw_roll = false;
+    battle.update_all_speeds(dex);
+    let key = key_of(cfg, dex, battle);
+    battle.quick_claw_roll = coin;
+    for (id,speed) in speeds.into_iter().flatten() { battle.poke_mut(id).speed=speed; }
+    key
+}
+
 fn root_type_key(battle: &mut Battle) -> u64 {
     let coin = battle.quick_claw_roll;
     battle.quick_claw_roll = false;
@@ -399,6 +415,10 @@ impl BlindSearch {
         }
         let mut base = battle.clone();
         base.set_log_enabled(false);
+        if cfg.unseen_claw_root && base.is_idle_move_request() {
+            base.quick_claw_roll=false;
+            base.update_all_speeds(dex);
+        }
         let turn_cap = base.turn.saturating_add(cfg.horizon);
         let my_acts = base.legal_choices(dex, side);
         let my_dominated = my_acts
@@ -456,9 +476,10 @@ impl BlindSearch {
             None => Box::new(self.base.clone()),
         };
         belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
+        if self.cfg.unseen_claw_root && sim.is_idle_move_request() { sim.update_all_speeds(dex); }
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         let type_key = root_type_key(&mut sim);
-        let key = key_of(&self.cfg, dex, &mut sim);
+        let key = root_search_key(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
             None => {
@@ -640,9 +661,10 @@ impl BlindSearch {
             None => Box::new(self.base.clone()),
         };
         belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
+        if self.cfg.unseen_claw_root && sim.is_idle_move_request() { sim.update_all_speeds(dex); }
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         let type_key = root_type_key(&mut sim);
-        let key = key_of(&self.cfg, dex, &mut sim);
+        let key = root_search_key(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
             None => {
@@ -1004,6 +1026,7 @@ impl BlindSearch {
         let mut rng = SplitMix64::new(seed);
         let pick = belief.sample(&mut rng);
         let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut rng);
+        if self.cfg.unseen_claw_root && sim.is_idle_move_request() { sim.update_all_speeds(dex); }
         crate::frozen::evaluate_sim(
             dex, &self.cfg, &mut sim, &self.nodes, &self.table,
             forced, policy, &mut rng, trace,
@@ -1351,6 +1374,7 @@ impl Agent for BlindAgent {
             name.push_str(&format!(":mix-probes={}", mixture.probe_iterations));
         }
         if self.root_pruning { name.push_str(":root-prune"); }
+        if self.cfg.unseen_claw_root { name.push_str(":unseen-claw-root"); }
         if self.cfg.canonical_claw_key { name.push_str(":canonical-claw"); }
         if self.cfg.collapse_sleep_actions { name.push_str(":sleep-collapse"); }
         if self.cfg.root_revisit_interval > 0 { name.push_str(&format!(":revisit-{}", self.cfg.root_revisit_interval)); }
@@ -1647,6 +1671,70 @@ mod mixed_selection_tests {
                 assert_eq!(plain.root_matrix(), reference.root_matrix());
             }
         }
+    }
+
+    #[test]
+    fn unseen_claw_root_shares_policy_but_preserves_transitions_and_phase_boundaries() {
+        let dex = conformance::load_dex();
+        let set: nc2000_engine::battle::PokemonSet = serde_json::from_value(serde_json::json!({
+            "species":"Snorlax","name":"Snorlax","level":50,"item":"Quick Claw","moves":["Rest","Swagger"]
+        })).unwrap();
+        let mut b = Battle::from_fixture(&dex,"1,2,3,4",&[set.clone()],&[set]).unwrap();
+        let cfg = RmConfig {unseen_claw_root:true,..Default::default()};
+        assert!(!RmConfig::default().unseen_claw_root);
+        for idle in [false,true] {
+            if idle {
+                b.choose(&dex,0,"team 1").unwrap();
+                b.choose(&dex,1,"team 1").unwrap();
+            }
+            assert_eq!(b.is_idle_move_request(),idle);
+            let mut roots=Vec::new();let mut continuation=Vec::new();
+            for coin in [false,true] {
+                b.quick_claw_roll=coin;
+                let before=format!("{b:?}");
+                roots.push(root_search_key(&cfg,&dex,&mut b));
+                continuation.push(key_of(&cfg,&dex,&mut b));
+                assert_eq!(before,format!("{b:?}"));
+            }
+            assert_eq!(roots[0]==roots[1],idle);
+            assert_ne!(continuation[0],continuation[1]);
+        }
+        let obs=Observer::new(&b,0);
+        let belief=Belief::pinned_from_battle(&b,&obs);
+        let mut alternative=b.clone();
+        alternative.quick_claw_roll=!b.quick_claw_roll;
+        alternative.update_all_speeds(&dex);
+        let mut states=[&b,&alternative].map(|state| BlindSearch::new(state,&dex,RmConfig {horizon:1,..cfg.clone()},0,771));
+        assert_eq!(states[0].dominated(),states[1].dominated());
+        for state in &mut states { state.step(&dex,&belief,&obs,256); }
+        assert_eq!(states[0].visits(),states[1].visits());
+        assert_eq!(states[0].means(),states[1].means());
+        assert_eq!(states[0].node_count(),states[1].node_count());
+        let mut search=BlindSearch::new(&b,&dex,RmConfig {horizon:1,..cfg.clone()},0,771);
+        search.step(&dex,&belief,&obs,256);
+        let before=(search.visits().to_vec(),search.means(),search.node_count());
+        let mut roots=std::collections::BTreeSet::new();
+        let mut coins=std::collections::BTreeSet::new();
+        for seed in 0..64 {
+            let mut first=true;
+            search.evaluate_frozen_joint(&dex,&belief,&obs,[None,None],
+                [crate::frozen::FrozenPolicy::MostVisited;2],seed,&mut |choice| {
+                    if first {
+                        first=false;
+                        roots.insert(choice.node.expect("shared frozen root"));
+                        coins.insert(choice.battle.quick_claw_roll);
+                    }
+                });
+        }
+        assert_eq!(roots.len(),1);
+        assert_eq!(coins.len(),2);
+        assert_eq!(before,(search.visits().to_vec(),search.means(),search.node_count()));
+        b.mid_turn=true;
+        assert!(!b.is_idle_move_request());
+        b.quick_claw_roll=false;
+        let key=root_search_key(&cfg,&dex,&mut b);
+        b.quick_claw_roll=true;
+        assert_ne!(key,root_search_key(&cfg,&dex,&mut b));
     }
 
     #[test]

@@ -91,27 +91,27 @@ fn projection(
 
 #[test]
 fn no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(false, false, false, false, false);
+    collision_invariance(false, false, false, false, false, false);
 }
 
 #[test]
 fn adaptive_mixture_has_no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(true, false, false, false, false);
+    collision_invariance(true, false, false, false, false, false);
 }
 
 #[test]
 fn root_pruning_has_no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(false, true, false, false, false);
+    collision_invariance(false, true, false, false, false, false);
 }
 
 #[test]
 fn sleep_collapsing_has_no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(false, false, true, false, false);
+    collision_invariance(false, false, true, false, false, false);
 }
 
 #[test]
 fn root_revisits_have_no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(false, false, false, true, false);
+    collision_invariance(false, false, false, true, false, false);
 }
 
 #[test]
@@ -173,10 +173,15 @@ fn active_mixture_is_identical_across_ambiguous_hidden_stats() {
 
 #[test]
 fn canonical_claw_hidden_state_collision_invariance() {
-    collision_invariance(false, false, false, false, true);
+    collision_invariance(false, false, false, false, true, false);
 }
 
-fn collision_invariance(mixed: bool, prune: bool, sleep_collapse: bool, revisit: bool, canonical_claw_key: bool) {
+#[test]
+fn unseen_claw_root_has_no_psychic_tells() {
+    collision_invariance(false, false, false, false, false, true);
+}
+
+fn collision_invariance(mixed: bool, prune: bool, sleep_collapse: bool, revisit: bool, canonical_claw_key: bool, unseen_claw_root: bool) {
     let dex = load_dex();
     let meta = pool();
     let (ci, cj) = collision_pair(&meta);
@@ -193,7 +198,7 @@ fn collision_invariance(mixed: bool, prune: bool, sleep_collapse: bool, revisit:
         // outer battles log-ON: the observer's log channel is part of the
         // surface under test
 
-        let cfg = RmConfig { iterations: 96, canonical_claw_key, collapse_sleep_actions: sleep_collapse, root_revisit_interval: if revisit {64} else {0}, ..Default::default() };
+        let cfg = RmConfig { iterations: 96, canonical_claw_key, unseen_claw_root, collapse_sleep_actions: sleep_collapse, root_revisit_interval: if revisit {64} else {0}, ..Default::default() };
         let agent_seed = 0xB11D + run as u64;
         let mut agent_a = BlindAgent::new(cfg.clone(), meta.clone(), None, agent_seed);
         let mut agent_b = BlindAgent::new(cfg.clone(), meta.clone(), None, agent_seed);

@@ -1,0 +1,44 @@
+{
+  "witness": {
+    "engine_runs": 281,
+    "cells": 8,
+    "score_convention": "win 1, tie 0.5, loss 0",
+    "correct_value": 0.1171875,
+    "clairvoyant_opponent_value": 0.10928276856569023,
+    "pure_action_security": [
+      0.1171875,
+      0.104827880859375
+    ],
+    "wrong_choices": [
+      31,
+      1
+    ],
+    "seeds": 32,
+    "conditional_mean_action_loss": [
+      0.011973381042480469,
+      0.00038623809814453125
+    ]
+  },
+  "ordinary_roots": {
+    "positions": 12,
+    "seeds_each": 2,
+    "searches": 24,
+    "active_claw_positions": 8,
+    "controls": 4,
+    "changed_choices": 0,
+    "node_identity_checks": [
+      {
+        "enabled": false,
+        "paired_idle_types": 120,
+        "shared_node_types": 0
+      },
+      {
+        "enabled": true,
+        "paired_idle_types": 120,
+        "shared_node_types": 120
+      }
+    ]
+  },
+  "default_enabled": false,
+  "scope": "Constructed turn-1000 position using the engine turn-limit rule, not a replay proving reachability from an initial regulation team. Complete one-step native enumeration; dual strategy bounds checked with rational arithmetic on recorded floating-point masses. Engine semantics remain trusted. Both sheets are known in the witness but the preempt coin is hidden to both players. Fixed search seeds are diagnostic repetitions, not match wins. Ordinary roots are selected by state hash before outcomes. Root-only candidate; continuation information sets remain unchanged. No human calibration, matched-time full-game test, or deployed-bot superiority claim."
+}
