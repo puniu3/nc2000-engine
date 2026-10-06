@@ -456,10 +456,18 @@ pub fn solve_matrix_full(a: &[f64], n0: usize, n1: usize) -> MatrixSolution {
     for i in 0..n0 {
         x[i] = tab[n0 * cols + n1 + i] * vp;
     }
-    // Normalize away accumulated fp drift.
-    let (sx, sy) = (x.iter().sum::<f64>(), y.iter().sum::<f64>());
-    x.iter_mut().for_each(|v| *v /= sx.max(EPS));
-    y.iter_mut().for_each(|v| *v /= sy.max(EPS));
+    for weights in [&mut x, &mut y] {
+        for weight in weights.iter_mut() {
+            *weight = if weight.is_finite() { weight.max(0.0) } else { 0.0 };
+        }
+        let sum = weights.iter().sum::<f64>();
+        if sum.is_finite() && sum > 0.0 {
+            weights.iter_mut().for_each(|weight| *weight /= sum);
+        } else {
+            let uniform = 1.0 / weights.len() as f64;
+            weights.fill(uniform);
+        }
+    }
 
     // Certified bracket in the ORIGINAL payoffs.
     let lower = (0..n1)
@@ -474,6 +482,20 @@ pub fn solve_matrix_full(a: &[f64], n0: usize, n1: usize) -> MatrixSolution {
 #[cfg(test)]
 mod tests {
     use super::solve_matrix;
+
+    #[test]
+    fn degenerate_matrix_has_legal_witnesses_before_bounding_value() {
+        let matrix = [0.9999999999999988, 0.9999508422226046,
+                      0.9999999999999998, 1.0];
+        let solution = super::solve_matrix_full(&matrix, 2, 2);
+        for policy in [&solution.x, &solution.y] {
+            assert!(policy.iter().all(|p| p.is_finite() && *p >= 0.0));
+            assert!((policy.iter().sum::<f64>() - 1.0).abs() < 1e-15);
+        }
+        let exact = matrix[2];
+        assert!(solution.value - solution.gap * 0.5 <= exact + 1e-15);
+        assert!(solution.value + solution.gap * 0.5 >= exact - 1e-15);
+    }
 
     #[test]
     fn matching_pennies() {

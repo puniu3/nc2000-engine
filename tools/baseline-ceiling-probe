@@ -18,10 +18,15 @@ sha=correlated['sha']
 prior=correlated['archive']/'records.json.gz'
 
 
-def requests():
+def requests(witness_recheck=False):
     baseline={(r['game'],r['decision'],r['side']):r['baseline']['choice']
         for r in json.loads(gzip.decompress(correlated['baseline_path'].read_bytes()))['rows']}
-    return [dict(r,baseline_choice=baseline[r['game'],r['decision'],r['side']]) for r in frontier['requests']()]
+    selected=frontier['requests']()
+    if witness_recheck:
+        old=json.loads((root/'findings/baseline-ceiling-v1/summary.json').read_bytes())
+        keys={(r['game'],r['decision'],r['side']) for r in old['rows'] if r['witness_fallbacks']>0}
+        selected=[r for r in selected if (r['game'],r['decision'],r['side']) in keys]
+    return [dict(r,baseline_choice=baseline[r['game'],r['decision'],r['side']]) for r in selected]
 
 
 def validate_bounds(model,bounds):
@@ -31,7 +36,7 @@ def validate_bounds(model,bounds):
     assert bounds['max_loss']==[min(v,bounds['cell_gap'],bounds['successor_gap']) for v in model['independent_loss']]
 
 
-def summarize(bundle,progress=False):
+def summarize(bundle,progress=False,witness_recheck=False):
     assert bundle['prior_sha256']==sha(prior.read_bytes())
     assert bundle['baseline_sha256']==sha(correlated['baseline_path'].read_bytes())
     assert bundle['corpus_sha256']==sha(frontier['corpus'].read_bytes())
@@ -39,9 +44,14 @@ def summarize(bundle,progress=False):
     assert bundle['selection_sha256']==sha(frontier['previous'].read_bytes())
     old=json.loads(gzip.decompress(prior.read_bytes()))['manifest']['sources']
     sources=bundle['manifest']['sources']
-    assert sorted(p for p,h in old.items() if sources[p]!=h)==['crates/bot/src/bounds.rs','crates/bot/src/bounds/correlated.rs']
+    expected_changes=['crates/bot/src/bounds.rs','crates/bot/src/bounds/correlated.rs']
+    if witness_recheck:
+        expected_changes.append('crates/bot/src/exact.rs')
+        assert bundle['witness_prior_sha256']==sha((root/'findings/baseline-ceiling-v1/records.json.gz').read_bytes())
+        assert all(r['witness_fallbacks']==0 for r in bundle['rows'])
+    assert sorted(p for p,h in old.items() if sources[p]!=h)==expected_changes
     assert sorted(set(sources)-set(old))==['crates/bot/examples/baseline_ceiling.rs']
-    assert [{k:r[k] for k in ['game','decision','side','baseline_choice']} for r in bundle['rows']]==requests()
+    assert [{k:r[k] for k in ['game','decision','side','baseline_choice']} for r in bundle['rows']]==requests(witness_recheck)
     references={(r['game'],r['decision']):r for r in json.loads(gzip.decompress(correlated['reference_path'].read_bytes()))}
     summaries=[]
     for index,r in enumerate(bundle['rows']):
@@ -91,11 +101,12 @@ def summarize(bundle,progress=False):
             milliseconds=last['milliseconds'],runs=last['runs'],nodes=r['nodes'],closed=r['closed'],
             unexpanded_fraction=r['unexpanded_nodes']/r['nodes'],witness_fallbacks=r['witness_fallbacks'],
             first_second_baseline_loss=first_second['baseline_loss']))
-        if progress:print(f'verified {index+1}/41 {r["reason"]}',flush=True)
-    return dict(positions=41,budget_ms=10000,counts={k:sum(r[k] for r in summaries) for k in ['baseline_certified','baseline_error_proven','improvement_proven']},
+        if progress:print(f'verified {index+1}/{len(bundle["rows"])} {r["reason"]}',flush=True)
+    return dict(positions=len(summaries),budget_ms=10000,counts={k:sum(r[k] for r in summaries) for k in ['baseline_certified','baseline_error_proven','improvement_proven']},
         total_seconds=sum(r['milliseconds'] for r in summaries)/1000,rows=summaries,
+        selection=('Only the three positions with missing witnesses in the earlier audit are replayed.' if witness_recheck else 'All 41 previously selected unresolved positions are included.'),
         scope='Frozen full-information search choices from one archived seed per position, not human choices or a population policy. '
-              'All 41 previously selected unresolved positions are included. Each fixed baseline policy is refined with '
+              'Each fixed baseline policy is refined with '
               'solve_policy_losses, 1000-run calls, a 120000-node limit, fixed 9000-node resource threshold and a soft 10-second limit. '
               'Correlated certificates are checked after every call and can stop analysis early. If a valid LP witness is unavailable, '
               'the baseline policy and a uniform opposing policy provide conservative bounds. This is a ceiling audit, not a matched-time comparison or a production policy change. Bounds concern only the first decision with optimal '
@@ -103,14 +114,17 @@ def summarize(bundle,progress=False):
 
 
 def main():
+    global archive
     parser=argparse.ArgumentParser()
+    parser.add_argument('--witness-recheck',action='store_true')
     parser.add_argument('--verify-only',action='store_true')
     parser.add_argument('--import-directory',type=pathlib.Path)
     args=parser.parse_args()
+    if args.witness_recheck: archive=archive/'witness-recheck'
     if args.verify_only:
         bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
-        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
-        print('baseline-ceiling: verified all 41 fixed choices, correlated certificates and headroom classifications')
+        assert summarize(bundle,witness_recheck=args.witness_recheck)==json.loads((archive/'summary.json').read_bytes())
+        print('baseline-ceiling: verified selected fixed choices, correlated certificates and headroom classifications')
         return
     assert not archive.exists()
     directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-baseline-ceiling-'))
@@ -126,7 +140,7 @@ def main():
         manifest=dict(sources=hashes,binary_sha256=sha((directory/'runner').read_bytes()))
         (directory/'manifest.json').write_text(json.dumps(manifest))
         (directory/'corpus.jsonl').write_bytes(gzip.decompress(frontier['corpus'].read_bytes()))
-        (directory/'requests.json').write_text(json.dumps(requests()))
+        (directory/'requests.json').write_text(json.dumps(requests(args.witness_recheck)))
         with (directory/'run.log').open('w') as log:
             subprocess.run([str(directory/'runner'),str(directory/'corpus.jsonl'),str(directory/'requests.json'),str(directory/'records.jsonl'),'10000'],
                 cwd=root,env=env,stdout=log,stderr=log,check=True)
@@ -135,7 +149,8 @@ def main():
     bundle=dict(manifest=manifest,prior_sha256=sha(prior.read_bytes()),baseline_sha256=sha(correlated['baseline_path'].read_bytes()),
         corpus_sha256=sha(frontier['corpus'].read_bytes()),reference_sha256=sha(correlated['reference_path'].read_bytes()),selection_sha256=sha(frontier['previous'].read_bytes()),
         rows=[json.loads(s) for s in (directory/'records.jsonl').read_text().splitlines()])
-    report=summarize(bundle,True)
+    if args.witness_recheck: bundle['witness_prior_sha256']=sha((root/'findings/baseline-ceiling-v1/records.json.gz').read_bytes())
+    report=summarize(bundle,True,args.witness_recheck)
     archive.mkdir()
     (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
     (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')

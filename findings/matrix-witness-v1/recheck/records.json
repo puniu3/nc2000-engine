@@ -1,0 +1,19 @@
+{
+  "prior_sha256": "f50e174fc3f4add495a0db7733fb682dbc328cbae86a0723153504db10ed1d98",
+  "result": {
+    "matrices": 21028,
+    "invalid": 0,
+    "records": [],
+    "input_sha256": "f35be3257fd9123f3535c50755fd8f167ea109610c21544b46f5bde696db969d",
+    "source_hashes": [
+      [
+        "crates/bot/src/exact.rs",
+        "6a84cb010c25f0c3fc6ba1b30325f19007fd95b79bccc343482fe1eedaed93b6"
+      ],
+      [
+        "crates/bot/examples/matrix_witness_audit.rs",
+        "d8a9d91ec1a07bbb73bb2a6ad04a595358bb936e4c4ba0dac665557c44d9f9ef"
+      ]
+    ]
+  }
+}
