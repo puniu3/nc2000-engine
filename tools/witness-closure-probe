@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import json
+import math
+import pathlib
+import runpy
+from fractions import Fraction as F
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/witness-closure-v1'
+coverage=runpy.run_path(str(root/'tools/witness-coverage-probe'))
+source='findings/witness-coverage-v1/records.json.gz'
+backtrack='findings/witness-backtrack-v1/records.json.gz'
+
+
+def key(node):return (*node['cache_key'],node['depth'])
+
+
+def outward(value,upper):
+    result=float(value)
+    if (upper and F(result)<value) or (not upper and F(result)>value):
+        result=math.nextafter(result,math.inf if upper else -math.inf)
+    return result
+
+
+def closure(records):
+    base=next(iter(records.values()))
+    policy={k:v for k,v in base['config'].items() if k not in coverage['ignored']}
+    root_key=key(base['nodes'][-1]);groups=collections.defaultdict(list)
+    for name,r in records.items():
+        assert {k:v for k,v in r['config'].items() if k not in coverage['ignored']}==policy
+        assert key(r['nodes'][-1])==root_key
+        for index,node in enumerate(r['nodes']):groups[key(node)].append((name,index))
+    values={};improved=[];recomputed=0;root_replies=None
+    for identity,refs in sorted(groups.items(),key=lambda item:-item[0][-1]):
+        before=[max(records[n]['nodes'][i]['bounds'][0] for n,i in refs),
+                min(records[n]['nodes'][i]['bounds'][1] for n,i in refs)]
+        branches={};sources={};expected=None;legal=None;selected=None
+        for name,index in refs:
+            nodes=records[name]['nodes'];node=nodes[index]
+            if node['kind']!='decision':continue
+            assert not node['maximizing']
+            actions={tuple(b['choices']) for b in node['branches']}
+            node_legal=[set(a) for a in node['legal']];node_selected=[set(a) for a in node['selected']]
+            if expected is None:expected=actions;legal=node_legal;selected=node_selected
+            else:assert actions==expected and node_legal==legal and node_selected==selected
+            for branch_index,branch in enumerate(node['branches']):
+                found=list(branch['bounds']);changed=False
+                for child in branch['children']:
+                    child_node=nodes[child['node']];assert child_node['depth']==node['depth']+1
+                    value=values[key(child_node)]
+                    changed |= value!=child_node['bounds']
+                if changed:
+                    recomputed+=1;value=[F(0),F(branch['pending'])]
+                    for child in branch['children']:
+                        child_value=values[key(nodes[child['node']])];mass=F(child['mass'])
+                        for k in [0,1]:value[k]+=mass*F(child_value[k])
+                    pad=F(len(branch['children'])+2,10**12)
+                    found=[max(found[0],outward(max(F(0),value[0]-pad),False)),
+                           min(found[1],outward(min(F(1),value[1]+pad),True))]
+                action=tuple(branch['choices'])
+                current=branches.setdefault(action,[0.,1.]);origin=sources.setdefault(action,[None,None])
+                for k,op in [(0,max),(1,min)]:
+                    if op(current[k],found[k])!=current[k]:
+                        current[k]=found[k];origin[k]=[name,index,branch_index]
+                assert current[0]<=current[1]
+        after=list(before)
+        if branches:
+            after=[max(after[0],min(b[0] for b in branches.values())),
+                   min(after[1],min(b[1] for b in branches.values()))]
+        assert 0<=after[0]<=after[1]<=1
+        values[identity]=after
+        if after[0]>before[0]+1e-8 or after[1]<before[1]-1e-8:
+            improved.append(dict(identity=list(identity),before=before,after=after,
+                                 occurrences=[list(r) for r in refs]))
+        if identity==root_key:
+            root_replies=[dict(choices=list(a),bounds=branches[a],sources=sources[a]) for a in sorted(branches)]
+    return dict(bounds=values[root_key],unique_nodes=len(groups),recomputed_branches=recomputed,
+                improved=improved,root_replies=root_replies)
+
+
+def summarize(bundle):
+    assert coverage['summarize'](bundle)==json.loads((root/'findings/witness-coverage-v1/summary.json').read_bytes())
+    records={n:json.loads(raw) for n,raw in bundle['raw'].items() if n not in ['shared-certain','shared-floor']}
+    assert all(node['bounds'][0] in [0,1] for r in records.values() for node in r['nodes'] if node['kind']=='terminal')
+    merged=closure(records)
+    reversed_merge=closure(dict(reversed(list(records.items()))))
+    assert merged['bounds']==reversed_merge['bounds']
+    assert [(b['choices'],b['bounds']) for b in merged['root_replies']]==[(b['choices'],b['bounds']) for b in reversed_merge['root_replies']]
+    root_only=coverage['combine'](records)['bounds']
+    assert merged['bounds'][0]>root_only[0]
+    old=coverage['read'](backtrack)
+    upper=old['records']['a15-move-return-ordered']['bounds'][1]
+    worse=[a for a in ['move hydropump','move submission','move bellydrum','switch 2']
+           if old['records']['a15-'+a.replace(' ','-')+'-ordered']['bounds'][1]<merged['bounds'][0]]
+    assert worse==['move hydropump','move submission','move bellydrum']
+    for fault in ['policy','coverage','operator']:
+        bad=copy.deepcopy(records['h2'])
+        if fault=='policy':bad['config']['finishing_hp']+=1
+        elif fault=='coverage':bad['nodes'][-1]['branches'].pop()
+        else:bad['nodes'][-1]['maximizing']=True
+        try:closure({'base':records['h3'],'bad':bad})
+        except AssertionError:pass
+        else:raise AssertionError(fault)
+    return dict(closure=merged,root_only_bounds=root_only,
+        win_probability_bounds=[merged['bounds'][0],upper],proven_worse_pure_first_choices=worse,
+        additional_engine_executions=0,order_independent_bounds=True,
+        scope='Game 12 decision 15, side one Return under the same fixed continuation policy. '
+              'Join verified intervals at equal guarded state identity and depth. Recompute each chance '
+              'branch from joined descendant intervals using exact rational arithmetic over the recorded '
+              'masses, preserving the existing probability margins and rounding outward. Intersect branch '
+              'certificates across runs, then minimize over the unchanged complete opponent action set. '
+              'Process depths in descending order; no cyclic or optimistic self-support is possible. '
+              'All imports are included and verified before closure. Policy and legal-choice equality are '
+              'required; response-specific policies cannot be substituted. Resolved terminals contain no '
+              'draws, so the positive lower bound also guarantees win probability. Engine transitions and '
+              'guarded keys remain trusted. The upper bound comes from the previous unrestricted-player '
+              'counterpolicy certificate. Pure first-action security comparisons do not establish dominance '
+              'inside mixtures or optimality of Return; switching remains unresolved. This is full-state '
+              'analysis, not a blind information-set guarantee, a whole-game solution or a production change.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true');args=parser.parse_args()
+    inputs={p:coverage['sha']((root/p).read_bytes()) for p in [source,backtrack,
+        'findings/witness-coverage-v1/summary.json','tools/witness-coverage-probe','tools/policy-witness-probe',
+        'tools/witness-closure-probe']}
+    bundle=coverage['read'](source);report=summarize(bundle)
+    if args.verify_only:
+        stored=json.loads((archive/'summary.json').read_bytes())
+        assert stored==dict(inputs=inputs,report=report)
+        print('witness-closure: verified inputs, rational descendant backups, complete reply sets and rejection controls passed');return
+    assert not archive.exists();archive.mkdir()
+    (archive/'summary.json').write_text(json.dumps(dict(inputs=inputs,report=report),indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='closure'},indent=2))
+    print('Improved nodes:',len(report['closure']['improved']))
+
+
+if __name__=='__main__':main()
