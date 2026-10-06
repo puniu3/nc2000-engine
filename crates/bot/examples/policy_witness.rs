@@ -38,6 +38,8 @@ struct Config {
     finishing_hp: Option<i32>,
     #[serde(default, skip_serializing_if="Vec::is_empty")]
     finishing_priority: Vec<String>,
+    #[serde(default, skip_serializing_if="is_false")]
+    share_root_budget: bool,
 }
 
 struct Witness<'a> {
@@ -83,7 +85,7 @@ impl Witness<'_> {
         vec![legal[0]]
     }
 
-    fn visit(&mut self, mut battle: Battle, depth: usize) -> usize {
+    fn visit(&mut self, mut battle: Battle, depth: usize, limit: usize) -> usize {
         let key=battle.state_key128();
         let cache_key=self.key(&battle,depth);
         let (damage,claw,semantic,_)=cache_key;
@@ -104,7 +106,7 @@ impl Witness<'_> {
             record["kind"]=json!("policy_cut");record["bounds"]=json!([0.,1.]);
             record["target_living"]=json!(battle.sides[self.cfg.target_side].pokemon_left);
             record["target_asleep"]=json!(battle.active_id(self.cfg.target_side).is_some_and(|id|battle.poke(id).status==Status::Slp));
-        } else if depth>=self.cfg.horizon || self.runs>=self.cfg.work_budget {
+        } else if depth>=self.cfg.horizon || self.runs>=limit {
             record["kind"]=json!(if depth>=self.cfg.horizon {"horizon"} else {"budget"});
             record["bounds"]=json!([0.,1.]);
         } else {
@@ -116,9 +118,13 @@ impl Witness<'_> {
             let maximizing=self.cfg.policy_side!=self.cfg.target_side;
             let mut bounds=if maximizing {[0f64,0f64]} else {[1f64,1f64]};
             let mut branches=Vec::new();
+            let mut branches_left=selected[0].len()*selected[1].len();
             for &a in &selected[0] { for &b in &selected[1] {
                 let choices=[a,b];
-                let remaining=self.cfg.work_budget.saturating_sub(self.runs);
+                let sharing=depth==0 && self.cfg.share_root_budget;
+                let branch_limit=if sharing {self.runs+limit.saturating_sub(self.runs)/branches_left} else {limit};
+                branches_left-=1;
+                let remaining=branch_limit.saturating_sub(self.runs);
                 let mut children=Vec::new();
                 let mut branch=[0.,1.];
                 let mut pending=1.;
@@ -149,8 +155,11 @@ impl Witness<'_> {
                         };
                         step.leaves.sort_by(|a,b|score(b).total_cmp(&score(a)));
                     }
+                    let mut leaves_left=step.leaves.len();
                     for leaf in step.leaves {
-                        let child=self.visit(leaf.battle,depth+1);
+                        let child_limit=if sharing {self.runs+branch_limit.saturating_sub(self.runs)/leaves_left} else {branch_limit};
+                        leaves_left-=1;
+                        let child=self.visit(leaf.battle,depth+1,child_limit);
                         for k in 0..2 { branch[k]+=leaf.prob*self.nodes[child]["bounds"][k].as_f64().unwrap(); }
                         children.push(json!({"mass":leaf.prob,"node":child}));
                     }
@@ -201,7 +210,7 @@ fn main() {
     if let Some(path)=args.get(4) {
         let raw=std::fs::read(path).unwrap();let previous:Value=serde_json::from_slice(&raw).unwrap();
         let mut before=previous["config"].clone();let mut after=serde_json::to_value(&cfg).unwrap();
-        for name in ["horizon","work_budget","cell_cap","reverse_replies"] {
+        for name in ["horizon","work_budget","cell_cap","reverse_replies","share_root_budget"] {
             before.as_object_mut().unwrap().remove(name);after.as_object_mut().unwrap().remove(name);
         }
         assert_eq!(before,after,"prior policy and key configuration must match");
@@ -217,7 +226,7 @@ fn main() {
     }
     let prioritize=args.get(5).is_some_and(|s| {assert_eq!(s,"priority");true});
     let mut witness=Witness {dex:&dex,cfg,runs:0,memo:HashMap::new(),nodes:Vec::new(),prior,prioritize};
-    let root=witness.visit(battle,0);
+    let root=witness.visit(battle,0,witness.cfg.work_budget);
     let mut output=json!({"config":witness.cfg,"runs":witness.runs,"root":root,
         "bounds":witness.nodes[root]["bounds"],"nodes":witness.nodes});
     if let Some(hash)=prior_hash {output["prior_sha256"]=json!(hash);output["prioritize_uncertainty"]=json!(prioritize);}

@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import concurrent.futures
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/witness-coverage-v1'
+previous='findings/witness-backtrack-v1/records.json.gz'
+corpus='findings/policy-gap-v1/corpus.jsonl.gz'
+verify=runpy.run_path(str(root/'tools/policy-witness-probe'))['verify']
+support=runpy.run_path(str(root/'tools/support-witness-probe'))['support_bounds']
+ignored={'horizon','work_budget','cell_cap','reverse_replies','share_root_budget'}
+
+
+def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+
+def read(path):return json.loads(gzip.decompress((root/path).read_bytes()))
+
+
+def specs():
+    old=read(previous)['records'];base=old['return-finish']['config']
+    cfgs={f'h{h}':dict(base,horizon=h) for h in range(2,9)}
+    cfgs.update(shared=dict(base,share_root_budget=True),
+        **{'shared-long':dict(base,share_root_budget=True,work_budget=1000000),
+           'cold-long':dict(base,work_budget=1000000),'parity':base,
+           'forward-long':dict(base,work_budget=1000000),
+           'priority-long':dict(base,work_budget=1000000)})
+    cfgs['forward-long'].pop('reverse_replies')
+    certain=dict(old['legacy-control']['config'],share_root_budget=True)
+    cfgs.update({'shared-certain':certain,'shared-floor':dict(certain,work_budget=1,cell_cap=1)})
+    return cfgs
+
+
+def parent(name):
+    if name=='priority-long':return 'h2'
+    if name.startswith('h') and name!='h2':return 'h'+str(int(name[1:])-1)
+    return None
+
+
+def combine(records):
+    base=next(iter(records.values()))
+    policy={k:v for k,v in base['config'].items() if k not in ignored}
+    start=base['nodes'][-1]
+    assert not start['maximizing']
+    expected={tuple(b['choices']) for b in start['branches']}
+    bounds={a:[0.,1.] for a in expected};sources={a:[None,None] for a in expected}
+    for name,r in records.items():
+        assert {k:v for k,v in r['config'].items() if k not in ignored}==policy
+        node=r['nodes'][-1]
+        assert node['state_key']==start['state_key'] and node['legal']==start['legal']
+        assert not node['maximizing'] and {tuple(b['choices']) for b in node['branches']}==expected
+        for b in node['branches']:
+            a=tuple(b['choices'])
+            for k,op in [(0,max),(1,min)]:
+                if op(bounds[a][k],b['bounds'][k])!=bounds[a][k]:
+                    bounds[a][k]=b['bounds'][k];sources[a][k]=name
+            assert bounds[a][0]<=bounds[a][1]
+    return dict(bounds=[min(b[k] for b in bounds.values()) for k in [0,1]],
+        replies=[dict(choices=list(a),bounds=bounds[a],sources=sources[a]) for a in sorted(bounds)])
+
+
+def summarize(bundle):
+    assert bundle['inputs']=={p:sha((root/p).read_bytes()) for p in [previous,corpus,'data/gen2stadium2.json']}
+    old=read(previous)
+    assert sorted(p for p,h in old['source_hashes'].items() if bundle['source_hashes'][p]!=h)==['crates/bot/examples/policy_witness.rs']
+    records={n:json.loads(raw) for n,raw in bundle['raw'].items()}
+    assert list(records)==list(specs())
+    reports={}
+    for name,cfg in specs().items():
+        r=records[name];assert r['config']==cfg
+        p=parent(name)
+        if p:assert r['prior_sha256']==sha(bundle['raw'][p].encode())
+        reports[name]=verify(r,records[p] if p else None)
+        coverage=[]
+        for b in r['nodes'][-1]['branches']:
+            masses=collections.defaultdict(float)
+            for c in b['children']:masses[r['nodes'][c['node']]['kind']]+=c['mass']
+            coverage.append(dict(choices=b['choices'],bounds=b['bounds'],pending=b['pending'],child_mass=dict(masses)))
+        reports[name]['root_coverage']=coverage
+    assert records['parity']==old['records']['return-finish']
+    assert support(records['shared-certain'])==[1,1]
+    assert support(records['shared-floor'])==[0,1]
+    candidates={n:r for n,r in records.items() if n not in ['shared-certain','shared-floor']}
+    combined=combine(candidates)
+    assert all(r['bounds'][0]==0 for r in candidates.values())
+    assert all(n['bounds'][0] in [0,1] for r in candidates.values() for n in r['nodes'] if n['kind']=='terminal')
+    assert combined['bounds'][0]>0
+    for fault in ['different_policy','missing_reply']:
+        bad=copy.deepcopy(records['h2'])
+        if fault=='different_policy':bad['config']['finishing_hp']+=1
+        else:bad['nodes'][-1]['branches'].pop()
+        try:combine({'base':records['h3'],'bad':bad})
+        except AssertionError:pass
+        else:raise AssertionError(fault)
+    upper=old['records']['a15-move-return-ordered']['bounds'][1]
+    worse=[a for a in ['move hydropump','move submission','move bellydrum','switch 2']
+           if old['records']['a15-'+a.replace(' ','-')+'-ordered']['bounds'][1]<combined['bounds'][0]]
+    assert worse==['move hydropump','move bellydrum']
+    return dict(rows=reports,combined_fixed_policy=combined,
+        unrestricted_return_bounds=[combined['bounds'][0],upper],legacy_parity=True,
+        win_probability_bounds=[combined['bounds'][0],upper],proven_worse_pure_first_choices=worse,
+        scope='Game 12 decision 15, side one first Return. Same fixed continuation policy in every record. '
+              'Each legal root reply has a separately certified interval; intersect its intervals across '
+              'runs before taking the minimum across the complete reply set. The policy cannot change '
+              'in response to the opponent concurrent choice. Different horizons, scheduling and conservative '
+              'cutoffs only affect certificate completeness. Bounds measure win plus half draw under full '
+              'state information and trust the existing engine, chance enumeration and guarded keys. '
+              'Every resolved terminal in the full import chain is win or loss, so its lower bound also '
+              'guarantees win probability; the previous score upper bound bounds win probability above. '
+              'Strict pure-action security comparisons do not prove domination inside mixed strategies. '
+              'Root budget sharing improves immediate coverage but produces no positive root guarantee; '
+              'unused quotas and memo reuse mean equal caps are not equal consumed work. All individual '
+              'root lower bounds remain zero. This is neither a whole-game nor a blind-information solution '
+              'and establishes no production bot strength improvement. No production search was changed.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path);args=parser.parse_args()
+    if args.verify_only:
+        assert summarize(read('findings/witness-coverage-v1/records.json.gz'))==json.loads((archive/'summary.json').read_bytes())
+        print('witness-coverage: reply coverage, policy identity, rational backups, import chain and legacy parity verified');return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-witness-coverage-'));print(directory,flush=True)
+    old=read(previous);sources={p:sha((root/p).read_bytes()) for p in old['source_hashes']}
+    sources.update({p:sha((root/p).read_bytes()) for p in ['tools/policy-witness-probe','tools/witness-coverage-probe']})
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','policy_witness'],cwd=root,env=env,check=True)
+    binary=root/'target/release/examples/policy_witness'
+    (directory/'corpus.jsonl').write_bytes(gzip.decompress((root/corpus).read_bytes()))
+    configs=specs()
+    def run(name):
+        (directory/(name+'.json')).write_text(json.dumps(configs[name]))
+        cmd=[str(binary),str(directory/'corpus.jsonl'),str(directory/(name+'.json')),str(directory/(name+'.out.json'))]
+        if parent(name):cmd +=[str(directory/(parent(name)+'.out.json')),'priority']
+        subprocess.run(cmd,cwd=root,env=env,check=True);print(name,'complete',flush=True)
+    if not args.import_directory:
+        for h in range(2,9):run(f'h{h}')
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            list(pool.map(run,[n for n in configs if not n.startswith('h')]))
+    bundle=dict(inputs={p:sha((root/p).read_bytes()) for p in [previous,corpus,'data/gen2stadium2.json']},
+        source_hashes=sources,binary_sha256=sha(binary.read_bytes()),
+        raw={n:(directory/(n+'.out.json')).read_text() for n in configs})
+    assert sources=={p:sha((root/p).read_bytes()) for p in sources}
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps(report['combined_fixed_policy'],indent=2))
+
+
+if __name__=='__main__':main()

@@ -44,7 +44,7 @@ def specs():
 def verify(record, prior=None):
     cfg=record['config'];nodes=record['nodes'];runs=0;identities=set()
     if prior is not None:
-        ignored={'horizon','work_budget','cell_cap','reverse_replies'}
+        ignored={'horizon','work_budget','cell_cap','reverse_replies','share_root_budget'}
         assert {k:v for k,v in cfg.items() if k not in ignored}=={k:v for k,v in prior['config'].items() if k not in ignored}
         assert nodes[-1]['state_key']==prior['nodes'][-1]['state_key']
     assert record['root']==len(nodes)-1
