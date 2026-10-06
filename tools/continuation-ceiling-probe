@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import itertools
+import json
+import math
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+from fractions import Fraction as F
+
+root = pathlib.Path(__file__).resolve().parents[1]
+archive = root / 'findings/continuation-ceiling-v1'
+bot = runpy.run_path(str(root / 'tools/frontier-bot-probe'))
+reply = bot['reply']; legacy = bot['legacy']; sha = bot['sha']
+previous = 'findings/frontier-reply-v1/records.json.gz'
+inputs = [previous, 'findings/frontier-reply-v1/summary.json', bot['corpus'], bot['native'],
+          'crates/bot/examples/witness_frontier.rs', 'tools/frontier-bot-probe',
+          'tools/frontier-reply-probe', 'tools/continuation-ceiling-probe']
+
+
+def specs():
+    old = legacy['read'](previous)
+    m = json.loads(old['manifests']['dp-cycle'])
+    parent = old['outputs']['dp-cycle']['targets'][0]
+    probe = parent['probes'][0]
+    assert probe['choices'] == ['move dynamicpunch', 'move hydropump'] and probe['complete'] and probe['pending'] == 0
+    groups = {}
+    for leaf in probe['leaves']:
+        if leaf['terminal'] is None:
+            key = tuple(leaf['cache_key'])
+            groups[key] = groups.get(key, 0) + leaf['mass']
+    targets = [dict(id=i, cache_key=list(key), mass=mass,
+        path=m['targets'][0]['path'] + [dict(choices=probe['choices'], child=list(key))])
+        for i, (key, mass) in enumerate(sorted(groups.items(), key=lambda kv: (-kv[1], kv[0])))]
+    base = dict(config=m['config'], cap=4096, targets=targets)
+    cases = {'census': base}
+    for name, side, priority in [('dp', 0, ['dynamicpunch', 'rockslide', 'crunch', 'fireblast']),
+                                ('hydro', 1, ['hydropump', 'submission', 'return', 'bellydrum']),
+                                ('submission', 1, ['submission', 'hydropump', 'return', 'bellydrum'])]:
+        cases[name] = dict(base, solve_side=side, solve_priority=['move ' + a for a in priority],
+                          solve_budgets=[20000] * 10, solve_node_budget=120000)
+    for name, cycle, focus, count, prefix in [
+        ('hydro', ['dynamicpunch', 'crunch', 'rockslide', 'fireblast'], 'dynamicpunch', 100, 52),
+        ('dp', ['hydropump', 'submission', 'return', 'bellydrum'], 'hydropump', 48, 12)]:
+        cases[name + '-focus'] = dict(cases[name], targets=targets[:1], solve_node_budget=400000,
+            solve_budgets=[20000] * count,
+            solve_reply_order=['move ' + a for a in cycle * (prefix // 4) + [focus] * (count - prefix)])
+    for t in targets:
+        cases['bot-' + str(t['id'])] = dict(base, targets=[t], search_c=[.4], search_seeds=[0, 1],
+            search_budgets=[300, 3000, 27000], search_pinned=True)
+    return cases
+
+
+def check_census(raw, output):
+    m = json.loads(raw)
+    assert output['manifest_sha256'] == sha(raw.encode())
+    assert output['corpus_sha256'] == sha(gzip.decompress((root / bot['corpus']).read_bytes()))
+    old = legacy['read'](previous)
+    assert output['root_state_key'] == old['outputs']['dp-cycle']['root_state_key']
+    assert [t['id'] for t in output['targets']] == [t['id'] for t in m['targets']]
+    replay = 0; probes = 0
+    for wanted, t in zip(m['targets'], output['targets']):
+        assert t['cache_key'] == wanted['cache_key'] and len(t['trace']) == len(wanted['path'])
+        for step, trace in zip(wanted['path'], t['trace']):
+            assert step['child'] == trace['cache_key']; replay += trace['runs']
+        assert t['selected'] == [['move dynamicpunch'], t['legal'][1]]
+        assert [p['choices'] for p in t['probes']] == list(map(list, itertools.product(*t['selected'])))
+        for p in t['probes']:
+            probes += p['runs']
+            assert 0 < p['runs'] <= m['cap'] and 0 <= p['pending'] <= 1
+            assert abs(sum(F(l['mass']) for l in p['leaves']) + F(p['pending']) - 1) < F(1, 10**9)
+            assert p['complete'] == (p['pending_scripts'] == 0)
+            assert all(l['mass'] >= 0 and l['terminal'] in [None, 0, .5, 1] for l in p['leaves'])
+    assert replay == output['replay_runs'] and probes == output['probe_runs']
+
+
+def check_policy(m, t, reference):
+    assert {k: v for k, v in t.items() if not k.startswith('subgame')} == reference
+    assert t['subgame_side'] == m['solve_side'] and t['subgame_priority'] == m['solve_priority']
+    assert len(t['subgame']) == len(m['solve_budgets'])
+    bounds = [0, 1]; total = 0
+    for budget, r in zip(m['solve_budgets'], t['subgame']):
+        assert r['budget'] == budget and 0 <= r['runs'] <= budget
+        total += r['runs']; assert total == r['total_runs']
+        lo, hi = r['fixed_side_bounds']
+        assert 0 <= lo <= hi <= 1 and lo >= bounds[0] - 1e-10 and hi <= bounds[1] + 1e-10
+        bounds = [lo, hi]
+        assert r['stop'] in ['WidthMet', 'WorkExhausted', 'NodeBudget']
+        if r['stop'] == 'WidthMet': assert hi - lo <= 1e-6
+    return dict(bounds=bounds, runs=total, stop=t['subgame'][-1]['stop'])
+
+
+def summarize(bundle):
+    assert bundle['inputs'] == {p: sha((root / p).read_bytes()) for p in inputs}
+    assert bundle['source_hashes'] == {p: sha((root / p).read_bytes()) for p in bundle['source_hashes']}
+    old = legacy['read'](previous)
+    prior = reply['summarize'](old)
+    assert prior == json.loads((root / 'findings/frontier-reply-v1/summary.json').read_bytes())
+    cases = specs(); outputs = bundle['outputs']; manifests = bundle['manifests']
+    assert set(cases) == set(outputs) == set(manifests)
+    census = outputs['census']; rows = {}; engine_runs = 0
+    for name, m in cases.items():
+        assert json.loads(manifests[name]) == m
+        out = outputs[name]
+        if name.startswith('bot-'):
+            index = m['targets'][0]['id']
+            reference = dict(census, targets=[census['targets'][index]])
+            bot['check'](manifests[name], out, reference)
+            continue
+        check_census(manifests[name], out)
+        engine_runs += out['replay_runs'] + out['probe_runs']
+        if name == 'census': continue
+        if name.endswith('-focus'):
+            t = out['targets'][0]
+            assert {k: v for k, v in t.items() if not k.startswith('subgame')} == census['targets'][0]
+            r = reply['check'](m, out)
+            rows[name] = [dict(bounds=r['bounds'], runs=r['solver_runs'], stop=r['stop'])]
+        else:
+            rows[name] = [check_policy(m, t, census['targets'][t['id']]) for t in out['targets']]
+        engine_runs += sum(r['runs'] for r in rows[name])
+    values = []; selection = collections.defaultdict(collections.Counter); losses = collections.defaultdict(list)
+    policy_lower = {}
+    for i, t in enumerate(census['targets']):
+        bounds = {n: list(rows[n][i]['bounds']) for n in ['dp', 'hydro', 'submission']}
+        if i == 0:
+            for n in ['dp', 'hydro']:
+                b = rows[n + '-focus'][0]['bounds']
+                bounds[n] = [max(bounds[n][0], b[0]), min(bounds[n][1], b[1])]
+        lower = max(bounds[n][0] for n in ['hydro', 'submission']) - 1e-10
+        upper = 1 - bounds['dp'][0] + 1e-10
+        lower = math.nextafter(lower, -math.inf); upper = math.nextafter(upper, math.inf)
+        assert lower <= upper
+        policy_lower[tuple(t['cache_key'])] = max(0, math.nextafter(bounds['hydro'][0] - 1e-10, -math.inf))
+        values.append(dict(id=i, hp=[a['hp'] for a in t['active']], bounds=[lower, upper],
+                           width=upper - lower, policy_bounds=bounds))
+        for search in outputs['bot-' + str(i)]['searches']:
+            for c in search['checkpoints']:
+                for s in [0, 1]:
+                    action = c['sides'][s]['chosen']; key = (search['kind'], c['iterations'], s)
+                    selection[key][action] += 1
+                    own = {'move dynamicpunch': bounds['dp'][0]} if s == 0 else {
+                        'move hydropump': bounds['hydro'][0], 'move submission': bounds['submission'][0]}
+                    optimal_upper = 1 - lower if s == 0 else upper
+                    losses[key].append(min(1, optimal_upper - max(0, own.get(action, 0) - 1e-10)))
+    assert len(values) == 24 and all(v['width'] < 1e-6 for v in values[1:])
+    probe = old['outputs']['dp-cycle']['targets'][0]['probes'][0]
+    assert cases['hydro']['solve_priority'] == old['outputs']['hydro-focus-large']['targets'][0]['subgame_priority']
+    chance_lower = sum(F(l['mass']) * (F(l['terminal']) if l['terminal'] is not None
+        else F(policy_lower[tuple(l['cache_key'])])) for l in probe['leaves'])
+    chance_lower -= F(len(probe['leaves']) + 2, 10**12)
+    chance_lower = math.nextafter(float(chance_lower), -math.inf)
+    parent_cells = old['outputs']['hydro-focus-large']['targets'][0]['subgame'][-1]['root_cells']
+    parent_lower = min(chance_lower if c['reply'] == 'move dynamicpunch'
+        else math.nextafter(1 - c['side_zero_bounds'][1] - 1e-10, -math.inf) for c in parent_cells)
+    parent_bounds = [parent_lower, prior['unrestricted_side_one_score_bounds'][1]]
+    assert prior['unrestricted_side_one_score_bounds'][0] < parent_lower <= parent_bounds[1]
+    for fault in ['coverage', 'accounting', 'selection']:
+        if fault == 'selection':
+            bad = copy.deepcopy(outputs['bot-0']); bad['searches'][0]['checkpoints'][0]['sides'][1]['chosen'] = 'move splash'
+            check = lambda: bot['check'](manifests['bot-0'], bad, dict(census, targets=census['targets'][:1]))
+        elif fault == 'coverage':
+            bad = copy.deepcopy(census); bad['targets'][0]['probes'].pop()
+            check = lambda: check_census(manifests['census'], bad)
+        else:
+            bad = copy.deepcopy(outputs['hydro']['targets'][0]); bad['subgame'][-1]['total_runs'] += 1
+            check = lambda: check_policy(cases['hydro'], bad, census['targets'][0])
+        try: check()
+        except AssertionError: pass
+        else: raise AssertionError(fault)
+    selections = [dict(kind=k[0], iterations=k[1], side=k[2], choices=dict(v), regret_upper=max(losses[k]))
+                  for k, v in sorted(selection.items())]
+    return dict(values=values, selections=selections, rows=rows, certificate_engine_runs=engine_runs,
+        search_iterations=24 * 2 * 3 * 27000,
+        reachable_nonterminal_mass=sum(t['mass'] for t in cases['census']['targets']),
+        previous_parent_bounds=prior['unrestricted_side_one_score_bounds'],
+        parent_bounds=parent_bounds, parent_hydro_policy_regret_upper=parent_bounds[1] - parent_bounds[0],
+        scope='Enumerate every nonterminal child of Dynamic Punch versus Hydro Pump at the previously '
+              'certified one-on-one frontier; group only equal guarded identities and replay all 24 '
+              'states. They cover 0.4788093566894531 unconditional chance mass under that joint move, '
+              'not all possible game continuations. Opposing fixed policies retain all future replies '
+              'and bracket each local full-state score (win=1, draw=0.5). Both Hydro Pump and Submission '
+              'priorities are within 1e-6 of the local optimum at the 23 damaged-Tyranitar children. '
+              'The unchanged-HP child is separately refined with complete reply schedules. Recombine '
+              'the exact recorded chance masses with the matching Hydro policy lower bounds using '
+              'rational arithmetic and outward margins. Intersect this improved Dynamic Punch reply '
+              'lower bound with the unchanged other-reply bounds to certify the same parent Hydro '
+              'continuation; the parent game upper bound is unchanged. No opponent-specific own '
+              'policies are spliced across hidden simultaneous choices. The bot audit uses two seeds '
+              'at c=0.4, full-state search and true-roster-pinned BlindSearch with the existing native '
+              'identity controls. Selection regret bounds certify only the chosen first action with '
+              'optimal later play, not actual search continuation or production hidden-information '
+              'strength. Search means are not certificates. Native engine, guarded keys and fixed-policy '
+              'floating-point solver bounds remain trusted. No production search was modified.')
+
+
+def execute(directory, manifests):
+    subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'witness_frontier',
+                    '--example', 'frontier_bot'], cwd=root, check=True)
+    source = directory / 'corpus.jsonl'; source.write_bytes(gzip.decompress((root / bot['corpus']).read_bytes()))
+    outputs = {}
+    for name, raw in manifests.items():
+        manifest = directory / 'manifest.json'; manifest.write_text(raw)
+        output = directory / 'output.json'
+        example = 'frontier_bot' if name.startswith('bot-') else 'witness_frontier'
+        subprocess.run([str(root / 'target/release/examples' / example), str(source), str(manifest), str(output)],
+            cwd=root, env=dict(os.environ, NC2000_REPO_ROOT=str(root)), check=True, stderr=subprocess.DEVNULL)
+        outputs[name] = json.loads(output.read_bytes())
+        print(name, 'replayed', flush=True)
+    return outputs
+
+
+def main():
+    parser = argparse.ArgumentParser(); parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--replay', action='store_true'); parser.add_argument('--import-directory', type=pathlib.Path)
+    args = parser.parse_args()
+    if args.verify_only or args.replay:
+        bundle = legacy['read']('findings/continuation-ceiling-v1/records.json.gz')
+        assert summarize(bundle) == json.loads((archive / 'summary.json').read_bytes())
+        if args.replay:
+            with tempfile.TemporaryDirectory(prefix='nc-continuation-replay-') as d:
+                assert execute(pathlib.Path(d), bundle['manifests']) == bundle['outputs']
+        print('continuation-ceiling: complete children, policy bounds, rational parent backup and bot audit verified'); return
+    assert not archive.exists()
+    if args.import_directory:
+        manifests = {n: (args.import_directory / (n + '.json')).read_text() for n in specs()}
+        outputs = {n: json.loads((args.import_directory / (n + '.out.json')).read_bytes()) for n in specs()}
+    else:
+        manifests = {n: json.dumps(m) for n, m in specs().items()}
+        with tempfile.TemporaryDirectory(prefix='nc-continuation-') as d: outputs = execute(pathlib.Path(d), manifests)
+    sources = dict(legacy['read'](previous)['source_hashes']); sources[bot['native']] = sha((root / bot['native']).read_bytes())
+    bundle = dict(inputs={p: sha((root / p).read_bytes()) for p in inputs}, source_hashes=sources,
+        manifests=manifests, outputs=outputs)
+    report = summarize(bundle); archive.mkdir()
+    (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+    (archive / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
+    print(report['parent_bounds'], report['parent_hydro_policy_regret_upper'])
+
+
+if __name__ == '__main__': main()
