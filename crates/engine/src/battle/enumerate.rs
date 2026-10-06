@@ -56,6 +56,8 @@ pub struct ChancePrefix {
 
 pub struct PartialStepEnum {
     pub leaves: Vec<ChanceLeaf>,
+    /// Full draw scripts aligned with leaves after an exhausted enumeration.
+    pub leaf_scripts: Option<Vec<Vec<usize>>>,
     pub pending: Vec<ChancePrefix>,
     pub runs: usize,
     pub exhausted: bool,
@@ -115,19 +117,21 @@ pub fn enumerate_step_partial(
     };
     if let Some(step) = complete {
         assert_eq!(step.runs, runs);
-        return PartialStepEnum { leaves: step.leaves, pending: Vec::new(), runs, exhausted: false };
+        return PartialStepEnum { leaves: step.leaves, leaf_scripts: None, pending: Vec::new(), runs, exhausted: false };
     }
     let mut observed: Vec<_> = observed.into_iter().collect();
     observed.sort_by(|a,b| a.0.cmp(&b.0));
     let mut partition = TracePartition::default();
-    let leaves = observed.into_iter().map(|(_, (battle, trace))| {
+    let mut scripts = Vec::new();
+    let leaves = observed.into_iter().map(|(script, (battle, trace))| {
+        scripts.push(script);
         partition.insert(&trace);
         ChanceLeaf { battle, prob: trace.iter().map(Draw::prob).product(), draws: trace.len() }
     }).collect::<Vec<_>>();
     let mut pending = Vec::new();
     partition.pending(&mut Vec::new(), 1., &mut pending);
     assert!((leaves.iter().map(|l|l.prob).sum::<f64>() + pending.iter().map(|p|p.mass).sum::<f64>() - 1.).abs()<1e-9);
-    PartialStepEnum { leaves, pending, runs, exhausted: true }
+    PartialStepEnum { leaves, leaf_scripts: Some(scripts), pending, runs, exhausted: true }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

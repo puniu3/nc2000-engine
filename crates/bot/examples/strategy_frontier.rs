@@ -18,7 +18,7 @@ struct Request { game: usize, decision: usize, side: usize }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    assert_eq!(args.len(), 10, "corpus requests output runs nodes depth call-runs cell-cap retain-prefix");
+    assert_eq!(args.len(), 11, "corpus requests output runs nodes depth call-runs cell-cap retain-prefix defer-frontier");
     let requests: Vec<Request> = serde_json::from_str(&std::fs::read_to_string(&args[2]).unwrap()).unwrap();
     let work_budget: usize = args[4].parse().unwrap();
     let node_budget: usize = args[5].parse().unwrap();
@@ -26,6 +26,8 @@ fn main() {
     let call_budget: usize = args[7].parse().unwrap();
     let cell_cap: usize = args[8].parse().unwrap();
     let retain_eager_prefix: bool = args[9].parse().unwrap();
+    let defer_eager_frontier: bool = args[10].parse().unwrap();
+    assert!(!defer_eager_frontier || retain_eager_prefix);
     assert!(work_budget>0 && call_budget>0);
     let dex = conformance::load_dex();
     let input = std::io::BufReader::new(std::fs::File::open(&args[1]).unwrap());
@@ -38,7 +40,7 @@ fn main() {
             assert_eq!(battle.state_key128().to_string(), decision.key);
             let legal = [0,1].map(|s|battle.legal_choices(&dex,s));
             if let Some(request) = requests.iter().find(|r|r.game==game.game && r.decision==index) {
-                let config = BoundConfig { work_budget:call_budget, node_budget, trial_depth, cell_cap, retain_eager_prefix, eps:1e-10, ..Default::default() };
+                let config = BoundConfig { work_budget:call_budget, node_budget, trial_depth, cell_cap, retain_eager_prefix, defer_eager_frontier, eps:1e-10, ..Default::default() };
                 let started = Instant::now();
                 let mut solver = BoundSolver::new(&dex,config);
                 let report = loop {
@@ -67,17 +69,20 @@ fn main() {
                     "work_budget":work_budget,"node_budget":node_budget,"trial_depth":trial_depth,
                     "call_budget":call_budget,"cell_cap":cell_cap,
                     "retain_eager_prefix":retain_eager_prefix,
+                    "defer_eager_frontier":defer_eager_frontier,
                     "milliseconds":milliseconds,"runs":stats.runs,"stop":format!("{:?}",report.stop),
                     "value":[report.bounds.lo,report.bounds.hi],"max_loss":report.strategies.map(|p|p.map(|p|p.max_loss)),
                     "actions":matrix.actions.map(|aa|aa.into_iter().map(|a|a.map(|a|a.to_input(&dex))).collect::<Vec<_>>()),
                     "cells":matrix.cells.iter().map(|b|[b.lo,b.hi]).collect::<Vec<_>>(),"chance":chance,
                     "graph":{"nodes":solver.node_count(),"closed":solver.closed_count(),
                         "unexpanded":graph.unexpanded_nodes,"initialized":graph.initialized_nodes,"stored_battles":graph.stored_battles,
-                        "edges":graph.resolved_edges,"unique_edges":graph.unique_child_edges},
+                        "edges":graph.resolved_edges,"unique_edges":graph.unique_child_edges,
+                        "pending_scripts":graph.pending_scripts,"pending_script_entries":graph.pending_script_entries},
                     "stats":{"trials":stats.trials,"depth_limit_trials":stats.depth_limit_trials,
                         "depth_counts":stats.trial_depth_counts,"eager_runs":stats.eager_runs,
                         "eager_failures":stats.eager_failures,"expansions":stats.expansions,
                         "retained_eager_runs":stats.retained_eager_runs,"retained_eager_leaves":stats.retained_eager_leaves,
+                        "deferred_eager_leaves":stats.deferred_eager_leaves,
                         "reused_nodes":stats.reused_nodes,"lp_solves":stats.lp_solves,
                         "dominated_rows":stats.dominated_rows,"dominated_cols":stats.dominated_cols}});
                 writeln!(output,"{record}").unwrap(); output.flush().unwrap();

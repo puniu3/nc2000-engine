@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import statistics
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/deferred-frontier-v1'
+frontier=runpy.run_path(str(root/'tools/strategy-frontier-probe'))
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def summarize(bundle):
+    reports={mode:frontier['summarize']({**bundle,**record}) for mode,record in bundle['arms'].items()}
+    for mode,suffix in [('control','recheck'),('retained','retained')]:
+        path=root/f'findings/strategy-frontier-v1/depth24-nodes12000-slice1000-cap4096-{suffix}/records.json.gz'
+        old=copy.deepcopy(json.loads(gzip.decompress(path.read_bytes()))['rows'])
+        current=copy.deepcopy(bundle['arms'][mode]['rows'])
+        for a,b in zip(current,old):
+            assert not a.pop('defer_eager_frontier')
+            assert a['stats'].pop('deferred_eager_leaves')==0
+            for field in ['pending_scripts','pending_script_entries']: assert a['graph'].pop(field)>=0
+            a.pop('milliseconds');b.pop('milliseconds')
+            for ac,bc in zip(a['chance'],b['chance']):
+                assert abs(ac.pop('child_uncertainty')-bc.pop('child_uncertainty'))<1e-12
+        assert current==old
+    groups=[]
+    for mode,report in reports.items():
+        rr=bundle['arms'][mode]['rows']
+        for r in rr:
+            assert sum(c['pending_scripts'] for c in r['chance'])<=r['graph']['pending_scripts']
+            assert r['graph']['pending_script_entries']>=0
+        groups.append(dict(mode=mode,certified=report['certified'],stops=report['stops'],
+            total_ms=sum(r['milliseconds'] for r in rr),total_runs=sum(r['runs'] for r in rr),
+            median_unexpanded_fraction=report['median_unexpanded_fraction'],
+            median_pending_scripts=statistics.median(r['graph']['pending_scripts'] for r in rr),
+            max_pending_script_entries=max(r['graph']['pending_script_entries'] for r in rr),
+            deferred_leaves=sum(r['stats']['deferred_eager_leaves'] for r in rr)))
+    pairs=[]
+    for i,base in enumerate(reports['control']['rows']):
+        candidate=reports['deferred']['rows'][i]
+        pairs.append(dict(game=base['game'],decision=base['decision'],side=base['side'],
+            width_change=candidate['value_width']-base['value_width'],
+            certified=[base['certified'],candidate['certified']],
+            milliseconds=[base['milliseconds'],candidate['milliseconds']],
+            runs=[base['runs'],candidate['runs']]))
+    return dict(groups=groups,narrower=sum(r['width_change']< -1e-8 for r in pairs),
+        wider=sum(r['width_change']>1e-8 for r in pairs),pairs=pairs,
+        null_parity='Both non-deferred arms reproduce the previous archives, excluding timing and sub-1e-12 diagnostic sums.',
+        decision='Not adopted. Deferral reduces node-budget stops but increases queued paths and elapsed time '
+            'relative to the original control, without adding strategy certificates. Lower graph-node '
+            'pressure is not sufficient evidence of stronger or more efficient decisions.',
+        scope='All 41 previously selected unresolved positions, one side per position. Same binary and source '
+            'snapshot, 40000 engine executions, 12000 live nodes, 1000 executions per call. Deferred paths '
+            'are fully specified chance outcomes replayed when selected; replay executions are charged. '
+            'Queued scripts are counted separately from graph nodes and are not a process-memory measurement. '
+            'This is not a matched-time strength comparison or a complete-policy certificate.')
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path)
+    args=parser.parse_args()
+    if args.verify_only:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert summarize(bundle)==json.loads((archive/'summary.json').read_bytes())
+        print('deferred-frontier: verified 41 paired positions, both null arms, work limits and queued-script accounting')
+        return
+    assert not archive.exists()
+    sources=sorted(list((root/'crates/bot/src').rglob('*.rs'))+list((root/'crates/engine/src').rglob('*.rs'))+
+        [root/'crates/bot/examples/strategy_frontier.rs',root/'data/gen2stadium2.json',root/'data/learnsets-gen2.json'])
+    hashes={str(p.relative_to(root)):sha(p.read_bytes()) for p in sources}
+    binary=root/'target/release/examples/strategy_frontier'
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if args.import_directory:
+        directory=args.import_directory
+        manifest=json.loads((directory/'manifest.json').read_bytes())
+        assert manifest['source_hashes']==hashes and manifest['binary_sha256']==sha(binary.read_bytes())
+    else:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','strategy_frontier'],cwd=root,env=env,check=True)
+        directory=pathlib.Path(tempfile.mkdtemp(prefix='nc-deferred-frontier-'))
+        manifest=dict(source_hashes=hashes,binary_sha256=sha(binary.read_bytes()))
+        (directory/'manifest.json').write_text(json.dumps(manifest))
+        (directory/'corpus.jsonl').write_bytes(gzip.decompress(frontier['corpus'].read_bytes()))
+        (directory/'requests.json').write_text(json.dumps(frontier['requests']()))
+        print(directory,flush=True)
+        for mode,retain,defer in [('control',False,False),('retained',True,False),('deferred',True,True)]:
+            with (directory/f'{mode}.log').open('w') as log:
+                subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/'requests.json'),str(directory/f'{mode}.jsonl'),
+                    '40000','12000','24','1000','4096',str(retain).lower(),str(defer).lower()],
+                    cwd=root,env=env,stdout=log,stderr=log,check=True)
+            print(mode+' complete',flush=True)
+    assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
+    assert manifest['binary_sha256']==sha(binary.read_bytes())
+    bundle=dict(**manifest,depth=24,nodes=12000,slice=1000,cell_cap=4096,
+        selection_sha256=sha(frontier['previous'].read_bytes()),corpus_sha256=sha(frontier['corpus'].read_bytes()),
+        reference_sha256=sha(frontier['reference'].read_bytes()),arms={mode:dict(retain_eager_prefix=retain,defer_eager_frontier=defer,
+            rows=[json.loads(s) for s in (directory/f'{mode}.jsonl').read_text().splitlines()])
+            for mode,retain,defer in [('control',False,False),('retained',True,False),('deferred',True,True)]})
+    report=summarize(bundle)
+    archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k!='pairs'},indent=2))
+
+
+if __name__=='__main__': main()

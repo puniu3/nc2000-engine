@@ -51,6 +51,7 @@ pub struct BoundConfig {
     /// class (b60: 411k runs vs the eager solver's 11.7k).
     pub cell_cap: usize,
     pub retain_eager_prefix: bool,
+    pub defer_eager_frontier: bool,
     /// Max live nodes (memory guard; Battles are dropped from resolved
     /// nodes but frontier nodes hold one each).
     pub node_budget: usize,
@@ -114,6 +115,7 @@ impl Default for BoundConfig {
             node_budget: 120_000,
             cell_cap: 4096,
             retain_eager_prefix: false,
+            defer_eager_frontier: false,
             eps: 0.02,
             trial_depth: 24,
             descend_floor: 0.1,
@@ -318,6 +320,7 @@ pub struct BoundStats {
     pub eager_failures: usize,
     pub retained_eager_runs: usize,
     pub retained_eager_leaves: usize,
+    pub deferred_eager_leaves: usize,
     pub reused_nodes: usize,
     pub reused_backups: usize,
     pub expansions: usize,
@@ -387,6 +390,8 @@ pub struct GraphDiagnostics {
     pub stored_battles: usize,
     pub resolved_edges: usize,
     pub unique_child_edges: usize,
+    pub pending_scripts: usize,
+    pub pending_script_entries: usize,
 }
 
 struct Pending {
@@ -845,6 +850,8 @@ impl<'d> BoundSolver<'d> {
             }
             result.stored_battles += usize::from(node.battle.is_some());
             for cell in &node.cells {
+                result.pending_scripts += cell.pending.len();
+                result.pending_script_entries += cell.pending.iter().map(|p|p.script.len()).sum::<usize>();
                 result.resolved_edges += cell.resolved.len();
                 result.unique_child_edges += cell.resolved.iter()
                     .map(|&(_, key)| key).collect::<HashSet<_>>().len();
@@ -1704,7 +1711,7 @@ impl<'d> BoundSolver<'d> {
                 [node.acts0[i], node.acts1[j]],
             )
         };
-        let (leaves, pending, runs) = if self.cfg.retain_eager_prefix {
+        let (leaves, mut pending, runs, scripts) = if self.cfg.retain_eager_prefix {
             assert!(!self.cfg.hp_transition_eager);
             let partial = enumerate_step_partial(self.dex, &battle, choices, cap);
             if partial.exhausted {
@@ -1712,7 +1719,7 @@ impl<'d> BoundSolver<'d> {
                 self.stats.retained_eager_runs += partial.runs;
                 self.stats.retained_eager_leaves += partial.leaves.len();
             }
-            (partial.leaves, partial.pending.into_iter().map(|p|Pending {script:p.script,mass:p.mass}).collect::<Vec<_>>(), partial.runs)
+            (partial.leaves, partial.pending.into_iter().map(|p|Pending {script:p.script,mass:p.mass}).collect::<Vec<_>>(), partial.runs, partial.leaf_scripts)
         } else {
             let step = if self.cfg.hp_transition_eager && self.cfg.hp_transition_capacity>0
                 && self.cfg.dead_damage_quotient && self.cfg.dead_quick_claw_quotient {
@@ -1738,7 +1745,7 @@ impl<'d> BoundSolver<'d> {
                 self.stats.eager_failures += 1;
                 return false;
             };
-            (step.leaves, Vec::new(), step.runs)
+            (step.leaves, Vec::new(), step.runs, None)
         };
         self.stats.runs += runs;
         self.stats.eager_runs += runs;
@@ -1746,7 +1753,9 @@ impl<'d> BoundSolver<'d> {
         let mut agg: HashMap<NodeKey, f64> = HashMap::new();
         let mut fixed_lo = 0.0;
         let mut fixed_hi = 0.0;
+        let mut scripts = scripts.map(|s|s.into_iter());
         for l in leaves {
+            let script = scripts.as_mut().map(|s|s.next().expect("one script per retained leaf"));
             let prob = l.prob;
             self.check_stall_edge(&battle, &l.battle);
             if self.cfg.fold_terminal_nodes {
@@ -1761,6 +1770,13 @@ impl<'d> BoundSolver<'d> {
                 fixed_lo += prob * bounds.lo;
                 fixed_hi += prob * bounds.hi;
                 continue;
+            }
+            if self.cfg.defer_eager_frontier && l.battle.outcome().is_none() && !self.nodes.contains_key(&lookup) {
+                if let Some(script) = script {
+                    pending.push(Pending { script, mass:prob });
+                    self.stats.deferred_eager_leaves += 1;
+                    continue;
+                }
             }
             let k = self.intern(l.battle);
             *agg.entry(k).or_default() += prob;
@@ -2800,9 +2816,9 @@ mod tests {
         let targets: Vec<_> = (0..2).flat_map(|side| {
             [vec![1.0, 0.0], vec![0.0, 1.0], vec![0.3, 0.7]].map(|p| (side, p))
         }).collect();
-        for retain_eager_prefix in [false,true] {
+        for (retain_eager_prefix,defer_eager_frontier) in [(false,false),(true,false),(true,true)] {
             let mut solver = BoundSolver::new(&dex, BoundConfig {
-                work_budget: 1, cell_cap: usize::from(retain_eager_prefix), retain_eager_prefix,
+                work_budget: 1, cell_cap: usize::from(retain_eager_prefix), retain_eager_prefix, defer_eager_frontier,
                 ..BoundConfig::default()
             });
             let mut closed = false;
@@ -3505,9 +3521,9 @@ mod tests {
         root.apply_choices(&dex,preview).unwrap();
         let choices = [0,1].map(|s|Some(root.legal_choices(&dex,s)[0]));
         let exact = enumerate_step(&dex,&root,choices,100_000).unwrap();
-        for cap in [1,7] {
+        for (cap,defer_eager_frontier) in [(1,false),(7,false),(1,true),(7,true)] {
             let mut solver = BoundSolver::new(&dex,BoundConfig {
-                retain_eager_prefix:true,fold_terminal_nodes:false,..Default::default()
+                retain_eager_prefix:true,defer_eager_frontier,fold_terminal_nodes:false,..Default::default()
             });
             let key = solver.intern(root.clone());
             solver.init_cells(key);
@@ -3515,6 +3531,7 @@ mod tests {
             assert_eq!(solver.stats.runs,cap);
             assert_eq!(solver.stats.retained_eager_runs,cap);
             assert!(solver.stats.retained_eager_leaves>0);
+            if defer_eager_frontier { assert!(solver.stats.deferred_eager_leaves>0); }
             assert!(!solver.nodes[&key].cells[0].pending.is_empty());
             while !solver.nodes[&key].cells[0].pending.is_empty() {
                 solver.expand(key,0);

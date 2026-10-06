@@ -46,6 +46,7 @@ def summarize(bundle):
         assert r.get('call_budget',40000)==bundle.get('slice',40000)
         assert r.get('cell_cap',4096)==bundle.get('cell_cap',4096)
         assert r.get('retain_eager_prefix',False)==bundle.get('retain_eager_prefix',False)
+        assert r.get('defer_eager_frontier',False)==bundle.get('defer_eager_frontier',False)
         assert r['value'][0]<=p['reference']['value']['hi']+1e-8
         assert r['value'][1]>=p['reference']['value']['lo']-1e-8
         g=r['graph'];stats=r['stats']
@@ -53,6 +54,7 @@ def summarize(bundle):
         assert g['unique_edges']<=g['edges'] and stats['eager_runs']<=r['runs']
         assert stats['depth_limit_trials']<=stats['trials']
         assert stats.get('retained_eager_leaves',0)<=stats.get('retained_eager_runs',0)<=stats['eager_runs']
+        assert 0<=stats.get('deferred_eager_leaves',0)<=stats.get('retained_eager_leaves',0)
         assert len(r['cells'])==len(r['chance'])==len(r['actions'][0])*len(r['actions'][1])
         pending=children=0
         for cell,c in zip(r['cells'],r['chance']):
@@ -217,7 +219,7 @@ def main():
         print(directory,flush=True)
         with (directory/'run.log').open('w') as log:
             subprocess.run([str(binary),str(directory/'corpus.jsonl'),str(directory/'requests.json'),str(directory/'rows.jsonl'),
-                            '40000',str(args.nodes),str(args.depth),str(args.slice),str(args.cell_cap),str(args.retain_eager).lower()],cwd=root,env=env,stdout=log,stderr=log,check=True)
+                            '40000',str(args.nodes),str(args.depth),str(args.slice),str(args.cell_cap),str(args.retain_eager).lower(),'false'],cwd=root,env=env,stdout=log,stderr=log,check=True)
     assert all(sha((root/p).read_bytes())==h for p,h in hashes.items())
     assert manifest['binary_sha256']==sha(binary.read_bytes())
     bundle=dict(**manifest,depth=args.depth,nodes=args.nodes,slice=args.slice,cell_cap=args.cell_cap,retain_eager_prefix=args.retain_eager,selection_sha256=sha(previous.read_bytes()),

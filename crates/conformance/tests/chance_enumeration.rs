@@ -73,6 +73,16 @@ fn reused_traces_preserve_exhaustive_successor_distributions_and_run_caps() {
         assert!(enumerate_step(&dex, &root, actions, 0).is_none());
         for cap in [0, 1, 7, result.runs - 1, result.runs] {
             let partial = enumerate_step_partial(&dex, &root, actions, cap);
+            assert_eq!(partial.leaf_scripts.is_some(),partial.exhausted);
+            if let Some(scripts) = &partial.leaf_scripts {
+                assert_eq!(scripts.len(),partial.leaves.len());
+                for (script,leaf) in scripts.iter().zip(&partial.leaves) {
+                    let (replayed,trace) = run_scripted(&dex,&root,actions,script);
+                    assert_eq!(script.len(),trace.len());
+                    assert_eq!(replayed.state_key128(),leaf.battle.state_key128());
+                    assert!((trace.iter().map(|d|d.prob()).product::<f64>()-leaf.prob).abs()<1e-12);
+                }
+            }
             assert!(partial.runs <= cap);
             if !partial.pending.is_empty() { assert_eq!(partial.runs, cap); }
             assert!((partial.leaves.iter().map(|l|l.prob).sum::<f64>()
