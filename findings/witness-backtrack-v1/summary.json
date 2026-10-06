@@ -1,0 +1,781 @@
+{
+  "rows": {
+    "w12-ordered": {
+      "runs": 20000,
+      "nodes": 1970,
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 3,
+        "decision": 159,
+        "horizon": 493,
+        "budget": 1315
+      },
+      "partial_branches": 15,
+      "support_bounds": [
+        0,
+        1.0
+      ]
+    },
+    "w13-ordered": {
+      "runs": 20000,
+      "nodes": 2038,
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 11,
+        "horizon": 812,
+        "decision": 330,
+        "budget": 885
+      },
+      "partial_branches": 11,
+      "support_bounds": [
+        0,
+        1.0
+      ]
+    },
+    "w14-ordered": {
+      "runs": 20000,
+      "nodes": 3222,
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 174,
+        "decision": 234,
+        "horizon": 108,
+        "budget": 2706
+      },
+      "partial_branches": 14,
+      "support_bounds": [
+        0,
+        1.0
+      ]
+    },
+    "w15-ordered": {
+      "runs": 20000,
+      "nodes": 3172,
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 126,
+        "decision": 225,
+        "horizon": 92,
+        "budget": 2729
+      },
+      "partial_branches": 18,
+      "support_bounds": [
+        0,
+        1.0
+      ]
+    },
+    "w16": {
+      "runs": 624,
+      "nodes": 58,
+      "bounds": [
+        0.9999999999578079,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 2,
+        "decision": 56
+      },
+      "partial_branches": 0,
+      "support_bounds": [
+        1.0,
+        1.0
+      ]
+    },
+    "w17": {
+      "runs": 622,
+      "nodes": 57,
+      "bounds": [
+        0.9999999999618079,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 2,
+        "decision": 55
+      },
+      "partial_branches": 0,
+      "support_bounds": [
+        1.0,
+        1.0
+      ]
+    },
+    "w18": {
+      "runs": 18,
+      "nodes": 3,
+      "bounds": [
+        0.999999999992,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 1,
+        "decision": 2
+      },
+      "partial_branches": 0,
+      "support_bounds": [
+        1.0,
+        1.0
+      ]
+    },
+    "w19": {
+      "runs": 16,
+      "nodes": 2,
+      "bounds": [
+        0.999999999996,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 1,
+        "decision": 1
+      },
+      "partial_branches": 0,
+      "support_bounds": [
+        1.0,
+        1.0
+      ]
+    },
+    "a15-move-hydropump-ordered": {
+      "runs": 4178,
+      "nodes": 109,
+      "bounds": [
+        0.0,
+        9.619230769365097e-11
+      ],
+      "node_kinds": {
+        "terminal": 2,
+        "decision": 107
+      },
+      "partial_branches": 0,
+      "support_bounds": [
+        0.0,
+        0.0
+      ]
+    },
+    "a15-move-submission-ordered": {
+      "runs": 200000,
+      "nodes": 6919,
+      "bounds": [
+        0.0,
+        0.04980468758909093
+      ],
+      "node_kinds": {
+        "terminal": 611,
+        "decision": 990,
+        "horizon": 2766,
+        "budget": 2552
+      },
+      "partial_branches": 15,
+      "support_bounds": [
+        0.0,
+        1
+      ]
+    },
+    "a15-move-return-ordered": {
+      "runs": 200000,
+      "nodes": 18362,
+      "bounds": [
+        0.024663001274279155,
+        0.4951923077240254
+      ],
+      "node_kinds": {
+        "terminal": 387,
+        "decision": 133,
+        "horizon": 16204,
+        "budget": 1638
+      },
+      "partial_branches": 49,
+      "support_bounds": [
+        0.0,
+        1
+      ]
+    },
+    "a15-move-bellydrum-ordered": {
+      "runs": 628,
+      "nodes": 59,
+      "bounds": [
+        0.0,
+        4.6192307693650945e-11
+      ],
+      "node_kinds": {
+        "terminal": 2,
+        "decision": 57
+      },
+      "partial_branches": 0,
+      "support_bounds": [
+        0.0,
+        0.0
+      ]
+    },
+    "a15-switch-2-ordered": {
+      "runs": 200000,
+      "nodes": 6621,
+      "bounds": [
+        0.0001932475137977745,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 729,
+        "decision": 1252,
+        "horizon": 3090,
+        "budget": 1550
+      },
+      "partial_branches": 10,
+      "support_bounds": [
+        0.0,
+        1.0
+      ]
+    },
+    "a15-move-return": {
+      "runs": 200000,
+      "nodes": 18460,
+      "bounds": [
+        0.024663005560731917,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 385,
+        "horizon": 16376,
+        "decision": 44,
+        "budget": 1655
+      },
+      "partial_branches": 50,
+      "support_bounds": [
+        0,
+        1.0
+      ]
+    },
+    "a15-switch-2": {
+      "runs": 200000,
+      "nodes": 6621,
+      "bounds": [
+        0.00019324751379777447,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 729,
+        "decision": 1252,
+        "horizon": 3090,
+        "budget": 1550
+      },
+      "partial_branches": 10,
+      "support_bounds": [
+        0.0,
+        1.0
+      ]
+    },
+    "return-lower": {
+      "runs": 200000,
+      "nodes": 61742,
+      "bounds": [
+        0.0,
+        0.9999708758226248
+      ],
+      "node_kinds": {
+        "terminal": 235,
+        "horizon": 59148,
+        "decision": 480,
+        "budget": 1879
+      },
+      "partial_branches": 36,
+      "support_bounds": [
+        0,
+        1.0
+      ]
+    },
+    "return-cut": {
+      "runs": 200000,
+      "nodes": 23779,
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 101,
+        "horizon": 16284,
+        "policy_cut": 2378,
+        "decision": 4937,
+        "budget": 79
+      },
+      "partial_branches": 14,
+      "support_bounds": [
+        0,
+        1.0
+      ]
+    },
+    "return-finish": {
+      "runs": 200000,
+      "nodes": 33369,
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "node_kinds": {
+        "policy_cut": 2329,
+        "terminal": 5305,
+        "decision": 6089,
+        "horizon": 19592,
+        "budget": 54
+      },
+      "partial_branches": 19,
+      "support_bounds": [
+        0,
+        1
+      ]
+    },
+    "legacy-control": {
+      "runs": 622,
+      "nodes": 57,
+      "bounds": [
+        0.9999999999618079,
+        1.0
+      ],
+      "node_kinds": {
+        "terminal": 2,
+        "decision": 55
+      },
+      "partial_branches": 0,
+      "support_bounds": [
+        1.0,
+        1.0
+      ]
+    },
+    "return-cut-reverse": {
+      "runs": 200000,
+      "nodes": 26141,
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "node_kinds": {
+        "policy_cut": 12170,
+        "terminal": 18,
+        "decision": 5635,
+        "horizon": 8271,
+        "budget": 47
+      },
+      "partial_branches": 16,
+      "support_bounds": [
+        0,
+        1
+      ]
+    }
+  },
+  "trajectory": [
+    {
+      "decision": 10,
+      "state_key": "292960850418782733011832449067409238989",
+      "played": [
+        "move razorleaf",
+        "switch 2"
+      ],
+      "living": [
+        [
+          {
+            "species": "venusaur",
+            "hp": 186,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "exeggutor",
+            "hp": 201,
+            "status": "",
+            "active": false
+          },
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "status": "",
+            "active": false
+          }
+        ],
+        [
+          {
+            "species": "snorlax",
+            "hp": 266,
+            "status": "slp",
+            "active": true
+          },
+          {
+            "species": "golem",
+            "hp": 186,
+            "status": "",
+            "active": false
+          },
+          {
+            "species": "poliwrath",
+            "hp": 215,
+            "status": "",
+            "active": false
+          }
+        ]
+      ]
+    },
+    {
+      "decision": 11,
+      "state_key": "62768517036338117945393038192961663820",
+      "played": [
+        null,
+        "switch 3"
+      ],
+      "living": [
+        [
+          {
+            "species": "venusaur",
+            "hp": 186,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "exeggutor",
+            "hp": 201,
+            "status": "",
+            "active": false
+          },
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "status": "",
+            "active": false
+          }
+        ],
+        [
+          {
+            "species": "snorlax",
+            "hp": 266,
+            "status": "slp",
+            "active": false
+          },
+          {
+            "species": "poliwrath",
+            "hp": 215,
+            "status": "",
+            "active": false
+          }
+        ]
+      ]
+    },
+    {
+      "decision": 12,
+      "state_key": "102897846052941778057368807947025620347",
+      "played": [
+        "move razorleaf",
+        "move bellydrum"
+      ],
+      "living": [
+        [
+          {
+            "species": "venusaur",
+            "hp": 186,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "exeggutor",
+            "hp": 201,
+            "status": "",
+            "active": false
+          },
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "status": "",
+            "active": false
+          }
+        ],
+        [
+          {
+            "species": "poliwrath",
+            "hp": 215,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "snorlax",
+            "hp": 266,
+            "status": "slp",
+            "active": false
+          }
+        ]
+      ]
+    },
+    {
+      "decision": 13,
+      "state_key": "42925567136852165867310569259465702641",
+      "played": [
+        "move leechseed",
+        "move return"
+      ],
+      "living": [
+        [
+          {
+            "species": "venusaur",
+            "hp": 186,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "exeggutor",
+            "hp": 201,
+            "status": "",
+            "active": false
+          },
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "status": "",
+            "active": false
+          }
+        ],
+        [
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "snorlax",
+            "hp": 266,
+            "status": "slp",
+            "active": false
+          }
+        ]
+      ]
+    },
+    {
+      "decision": 14,
+      "state_key": "140866707775852603900427558528553618219",
+      "played": [
+        "switch 2",
+        null
+      ],
+      "living": [
+        [
+          {
+            "species": "exeggutor",
+            "hp": 201,
+            "status": "",
+            "active": false
+          },
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "status": "",
+            "active": false
+          }
+        ],
+        [
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "snorlax",
+            "hp": 266,
+            "status": "slp",
+            "active": false
+          }
+        ]
+      ]
+    },
+    {
+      "decision": 15,
+      "state_key": "99159926264236737347673662977623906715",
+      "played": [
+        "move psychic",
+        "move return"
+      ],
+      "living": [
+        [
+          {
+            "species": "exeggutor",
+            "hp": 201,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "status": "",
+            "active": false
+          }
+        ],
+        [
+          {
+            "species": "poliwrath",
+            "hp": 38,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "snorlax",
+            "hp": 266,
+            "status": "slp",
+            "active": false
+          }
+        ]
+      ]
+    },
+    {
+      "decision": 16,
+      "state_key": "36235546407931480859385030006278264213",
+      "played": [
+        null,
+        "switch 2"
+      ],
+      "living": [
+        [
+          {
+            "species": "exeggutor",
+            "hp": 8,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "status": "",
+            "active": false
+          }
+        ],
+        [
+          {
+            "species": "snorlax",
+            "hp": 266,
+            "status": "slp",
+            "active": false
+          }
+        ]
+      ]
+    },
+    {
+      "decision": 17,
+      "state_key": "268273119095724387654552719009312127477",
+      "played": [
+        "move explosion",
+        "move curse"
+      ],
+      "living": [
+        [
+          {
+            "species": "exeggutor",
+            "hp": 8,
+            "status": "",
+            "active": true
+          },
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "status": "",
+            "active": false
+          }
+        ],
+        [
+          {
+            "species": "snorlax",
+            "hp": 266,
+            "status": "slp",
+            "active": true
+          }
+        ]
+      ]
+    },
+    {
+      "decision": 18,
+      "state_key": "124955948411476706156731684547262149565",
+      "played": [
+        "switch 3",
+        null
+      ],
+      "living": [
+        [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "status": "",
+            "active": false
+          }
+        ],
+        [
+          {
+            "species": "snorlax",
+            "hp": 12,
+            "status": "slp",
+            "active": true
+          }
+        ]
+      ]
+    },
+    {
+      "decision": 19,
+      "state_key": "305689238913557296557524109825912631483",
+      "played": [
+        "move crunch",
+        "move curse"
+      ],
+      "living": [
+        [
+          {
+            "species": "tyranitar",
+            "hp": 226,
+            "status": "",
+            "active": true
+          }
+        ],
+        [
+          {
+            "species": "snorlax",
+            "hp": 28,
+            "status": "slp",
+            "active": true
+          }
+        ]
+      ]
+    }
+  ],
+  "earliest_proven_loss_in_window": 16,
+  "unresolved_earlier_positions": [
+    12,
+    13,
+    14,
+    15
+  ],
+  "side_one_first_choice_bounds_at_15": {
+    "move hydropump": [
+      0,
+      0.0
+    ],
+    "move submission": [
+      0,
+      0.04980468758909093
+    ],
+    "move return": [
+      0.0,
+      0.4951923077240254
+    ],
+    "move bellydrum": [
+      0,
+      0.0
+    ],
+    "switch 2": [
+      0,
+      1.0
+    ]
+  },
+  "observed_return_was_proven_suboptimal": false,
+  "default_archive_parity": true,
+  "scope": "One exact game trajectory, positions 12 through 19, with 10 through 19 reconstructed for context. The earliest certified loss in this bounded audit is position 16; earlier positions remain unknown, not proven recoverable. Position 15 actually played Psychic versus Return and reached the certified loss after Exeggutor survived at 8 HP. Fixed-policy upper bounds allow side one to optimize all subsequent play. The side-zero counterpolicy consults active opponent species: Psychic against Poliwrath, otherwise Explosion/Crunch/Razor Leaf before switching. This bounds pure first choices from above; it does not prove they are dominated inside a mixed strategy. Lower-bound attempts keep every opponent response unrestricted and remain in the archive even when uninformative. Material ordering changes expansion order only. Material/sleep cutoffs remain [0,1]; finishing priority uses exact opponent HP, so these are full-state certificates. Reply reversal preserves the legal-action set and imported same-policy bounds; it cannot create a stronger guarantee by omitting actions. The observed losing outcome alone is not a proof of a bad decision. No human calibration, blind information-set guarantee, whole-game solution or production change."
+}

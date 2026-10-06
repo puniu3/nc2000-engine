@@ -44,7 +44,7 @@ def specs():
 def verify(record, prior=None):
     cfg=record['config'];nodes=record['nodes'];runs=0;identities=set()
     if prior is not None:
-        ignored={'horizon','work_budget','cell_cap'}
+        ignored={'horizon','work_budget','cell_cap','reverse_replies'}
         assert {k:v for k,v in cfg.items() if k not in ignored}=={k:v for k,v in prior['config'].items() if k not in ignored}
         assert nodes[-1]['state_key']==prior['nodes'][-1]['state_key']
     assert record['root']==len(nodes)-1
@@ -70,6 +70,10 @@ def verify(record, prior=None):
         elif node['kind']=='reused':
             assert 'prior_node' in node and raw==[0,1]
             assert previous['bounds'][1]-previous['bounds'][0]<=1e-8
+        elif node['kind']=='policy_cut':
+            assert raw==[0,1]
+            assert (cfg.get('minimum_target_living') is not None and node['target_living']<cfg['minimum_target_living'] or
+                    cfg.get('stop_if_asleep',False) and node['target_asleep'])
         else:
             assert node['kind']=='decision' and node['depth']<cfg['horizon']
             assert node['maximizing']==(cfg['policy_side']!=cfg['target_side'])
@@ -79,7 +83,7 @@ def verify(record, prior=None):
                 if node['depth']==0 and side==cfg['target_side'] and legal!=[None]:
                     assert selected==[cfg['first_choice']]
                 elif side==cfg['policy_side']:assert len(selected)==1
-                else:assert selected==legal
+                else:assert len(selected)==len(legal) and set(selected)==set(legal)
             assert [b['choices'] for b in node['branches']]==list(map(list,itertools.product(*node['selected'])))
             for branch in node['branches']:
                 runs+=branch['runs'];pending=F(branch['pending']);assert 0<=pending<=1

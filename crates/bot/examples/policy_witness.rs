@@ -1,8 +1,8 @@
-use nc2000_engine::{battle::{Outcome, PokemonSet, SearchChoice}, dex::Dex, state::Battle};
+use nc2000_engine::{battle::{Outcome, PokemonSet, SearchChoice}, dex::Dex, state::{Battle, Status}};
 use nc2000_engine::battle::enumerate::enumerate_step_partial;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::BufRead;
 use sha2::{Digest, Sha256};
 
@@ -24,6 +24,20 @@ struct Config {
     guarded_keys: bool,
     #[serde(default, skip_serializing_if="is_false")]
     support_certificate: bool,
+    #[serde(default, skip_serializing_if="BTreeMap::is_empty")]
+    opponent_priority: BTreeMap<String, Vec<String>>,
+    #[serde(default, skip_serializing_if="is_false")]
+    material_order: bool,
+    #[serde(default, skip_serializing_if="Option::is_none")]
+    minimum_target_living: Option<usize>,
+    #[serde(default, skip_serializing_if="is_false")]
+    stop_if_asleep: bool,
+    #[serde(default, skip_serializing_if="is_false")]
+    reverse_replies: bool,
+    #[serde(default, skip_serializing_if="Option::is_none")]
+    finishing_hp: Option<i32>,
+    #[serde(default, skip_serializing_if="Vec::is_empty")]
+    finishing_priority: Vec<String>,
 }
 
 struct Witness<'a> {
@@ -48,14 +62,22 @@ impl Witness<'_> {
             assert_eq!(selected.len(),1);
             return selected;
         }
-        if side != self.cfg.policy_side { return legal.to_vec(); }
+        if side != self.cfg.policy_side {
+            let mut choices=legal.to_vec();
+            if self.cfg.reverse_replies { choices.reverse(); }
+            return choices;
+        }
         let names: Vec<_> = legal.iter().map(|a|a.map(|a|a.to_input(self.dex))).collect();
         if self.cfg.rest_at_percent.is_some_and(|pct|b.active_id(side).is_some_and(|id| {
             let p=b.poke(id);i64::from(p.hp)*100<=i64::from(p.maxhp)*pct
         })) {
             if let Some(i)=names.iter().position(|a|a.as_deref()==Some("move rest")) { return vec![legal[i]]; }
         }
-        for name in &self.cfg.priority {
+        let contextual=b.active_id(1-side).and_then(|id|
+            self.cfg.opponent_priority.get(self.dex.species.key(b.poke(id).species)));
+        let finishing=self.cfg.finishing_hp.filter(|&hp|b.active_id(1-side).is_some_and(|id|b.poke(id).hp<=hp))
+            .map(|_|&self.cfg.finishing_priority);
+        for name in finishing.into_iter().flatten().chain(contextual.into_iter().flatten()).chain(&self.cfg.priority) {
             if let Some(i)=names.iter().position(|a|a.as_ref()==Some(name)) { return vec![legal[i]]; }
         }
         vec![legal[0]]
@@ -77,6 +99,11 @@ impl Witness<'_> {
             record["kind"]=json!("terminal");record["bounds"]=json!([value,value]);
         } else if prior.is_some_and(|(_,b)|b[1]-b[0]<=1e-8) {
             record["kind"]=json!("reused");record["bounds"]=json!([0.,1.]);
+        } else if self.cfg.minimum_target_living.is_some_and(|n| (battle.sides[self.cfg.target_side].pokemon_left as usize)<n)
+            || self.cfg.stop_if_asleep && battle.active_id(self.cfg.target_side).is_some_and(|id|battle.poke(id).status==Status::Slp) {
+            record["kind"]=json!("policy_cut");record["bounds"]=json!([0.,1.]);
+            record["target_living"]=json!(battle.sides[self.cfg.target_side].pokemon_left);
+            record["target_asleep"]=json!(battle.active_id(self.cfg.target_side).is_some_and(|id|battle.poke(id).status==Status::Slp));
         } else if depth>=self.cfg.horizon || self.runs>=self.cfg.work_budget {
             record["kind"]=json!(if depth>=self.cfg.horizon {"horizon"} else {"budget"});
             record["bounds"]=json!([0.,1.]);
@@ -106,6 +133,13 @@ impl Witness<'_> {
                     branch=[0.,pending];
                     let mass=step.leaves.iter().map(|l|l.prob).sum::<f64>()+pending;
                     assert!((mass-1.).abs()<1e-8);
+                    if self.cfg.material_order {
+                        step.leaves.sort_by_cached_key(|leaf| {
+                            let own=leaf.battle.sides[self.cfg.target_side].pokemon_left as i32;
+                            let opposing=leaf.battle.sides[1-self.cfg.target_side].pokemon_left as i32;
+                            std::cmp::Reverse(if maximizing {opposing-own} else {own-opposing})
+                        });
+                    }
                     if self.prioritize {
                         let score=|leaf:&nc2000_engine::battle::enumerate::ChanceLeaf| {
                             let width=if leaf.battle.outcome().is_some() {0.} else {
@@ -167,7 +201,7 @@ fn main() {
     if let Some(path)=args.get(4) {
         let raw=std::fs::read(path).unwrap();let previous:Value=serde_json::from_slice(&raw).unwrap();
         let mut before=previous["config"].clone();let mut after=serde_json::to_value(&cfg).unwrap();
-        for name in ["horizon","work_budget","cell_cap"] {
+        for name in ["horizon","work_budget","cell_cap","reverse_replies"] {
             before.as_object_mut().unwrap().remove(name);after.as_object_mut().unwrap().remove(name);
         }
         assert_eq!(before,after,"prior policy and key configuration must match");

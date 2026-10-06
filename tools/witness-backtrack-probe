@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+import argparse
+import concurrent.futures
+import copy
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import subprocess
+import tempfile
+
+root=pathlib.Path(__file__).resolve().parents[1]
+archive=root/'findings/witness-backtrack-v1'
+prior='findings/support-witness-v1/records.json.gz'
+corpus='findings/policy-gap-v1/corpus.jsonl.gz'
+verify=runpy.run_path(str(root/'tools/policy-witness-probe'))['verify']
+support=runpy.run_path(str(root/'tools/support-witness-probe'))['support_bounds']
+
+
+def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+
+def read(path):return json.loads(gzip.decompress((root/path).read_bytes()))
+
+
+def specs():
+    legacy=read(prior)['records']['explosion']['config']
+    base=dict(legacy,priority=['move explosion','move crunch','move razorleaf','switch 2','switch 3'],
+              opponent_priority={'poliwrath':['move psychic','move crunch']})
+    configs={}
+    for d,a in [(12,'move razorleaf'),(13,'move razorleaf'),(14,'switch 2'),(15,'move psychic'),
+                (16,''),(17,'move explosion'),(18,'switch 3'),(19,'move crunch')]:
+        cfg=dict(base,decision=d,first_choice=a,horizon=7 if d>=16 else 6)
+        if d<16:cfg.update(material_order=True,work_budget=20000)
+        configs[f'w{d}'+('-ordered' if d<16 else '')]=cfg
+    for a in ['move hydropump','move submission','move return','move bellydrum','switch 2']:
+        cfg=dict(base,decision=15,target_side=1,first_choice=a,material_order=True)
+        configs['a15-'+a.replace(' ','-')+'-ordered']=cfg
+    for a in ['move return','switch 2']:
+        configs['a15-'+a.replace(' ','-')]=dict(base,decision=15,target_side=1,first_choice=a)
+    lower=dict(configs['a15-move-return-ordered'],policy_side=1,
+        priority=['move return','move bodyslam','move submission','move earthquake','switch 2','switch 3'],
+        opponent_priority={'tyranitar':['move submission','move earthquake']})
+    configs['return-lower']=lower
+    configs['return-cut']=dict(lower,minimum_target_living=2,stop_if_asleep=True)
+    configs['return-finish']=dict(configs['return-cut'],reverse_replies=True,finishing_hp=80,
+        finishing_priority=['move return','move earthquake'])
+    configs['legacy-control']=legacy
+    configs['return-cut-reverse']=dict(configs['return-cut'],reverse_replies=True)
+    return configs
+
+
+def summarize(bundle):
+    assert bundle['input_sha256']=={p:sha((root/p).read_bytes()) for p in [prior,corpus,'data/gen2stadium2.json']}
+    old=read(prior)
+    assert sorted(p for p,h in old['source_hashes'].items() if bundle['source_hashes'][p]!=h)==['crates/bot/examples/policy_witness.rs']
+    assert list(bundle['records'])==list(specs())
+    assert bundle['records']['legacy-control']==old['records']['explosion']
+    assert json.loads(bundle['return_cut_raw'])==bundle['records']['return-cut']
+    game=next(json.loads(l) for l in gzip.decompress((root/corpus).read_bytes()).splitlines() if json.loads(l)['game']==12)
+    reports={}
+    for name,cfg in specs().items():
+        r=bundle['records'][name];assert r['config']==cfg
+        parent=bundle['records']['return-cut'] if name=='return-cut-reverse' else None
+        if parent:assert r['prior_sha256']==sha(bundle['return_cut_raw'].encode())
+        assert r['nodes'][-1]['state_key']==game['decisions'][cfg['decision']]['key']
+        reports[name]=dict(**verify(r,parent),support_bounds=support(r))
+    bad=copy.deepcopy(bundle['records']['return-cut'])
+    next(n for n in bad['nodes'] if n['kind']=='policy_cut')['bounds']=[1,1]
+    try:verify(bad)
+    except AssertionError:pass
+    else:raise AssertionError('an unknown cutoff was accepted as a win')
+    trajectory=[]
+    for d in range(10,20):
+        r=bundle['states'][str(d)]
+        assert r['state_key']==game['decisions'][d]['key']
+        assert r['manifest']['corpus_sha256']==sha(gzip.decompress((root/corpus).read_bytes()))
+        actions=r['rows'][0]['actions']
+        played=[None if i is None else actions[s][i] for s,i in enumerate(game['decisions'][d]['choices'])]
+        living=[[dict(species=p['species'],hp=p['hp'],status=p['status'],active=p['active'])
+                 for p in side['pokemon'] if p['hp']>0] for side in r['state']['sides']]
+        trajectory.append(dict(decision=d,state_key=r['state_key'],played=played,living=living))
+    assert trajectory[5]['played']==['move psychic','move return']
+    certain=[d for d in range(12,20) if reports[f'w{d}'+('-ordered' if d<16 else '')]['support_bounds']==[1,1]]
+    assert certain==[16,17,18,19]
+    first_choice_bounds={}
+    for action in ['move hydropump','move submission','move return','move bellydrum','switch 2']:
+        r=reports['a15-'+action.replace(' ','-')+'-ordered']
+        first_choice_bounds[action]=[0,min(r['bounds'][1],r['support_bounds'][1])]
+    return_lower=max(reports[n]['bounds'][0] for n in ['return-lower','return-cut','return-finish','return-cut-reverse'])
+    first_choice_bounds['move return'][0]=return_lower
+    assert first_choice_bounds['move return'][0]<=first_choice_bounds['move return'][1]
+    assert first_choice_bounds['move hydropump']==first_choice_bounds['move bellydrum']==[0,0]
+    return dict(rows=reports,trajectory=trajectory,earliest_proven_loss_in_window=min(certain),
+        unresolved_earlier_positions=[12,13,14,15],side_one_first_choice_bounds_at_15=first_choice_bounds,
+        observed_return_was_proven_suboptimal=False,default_archive_parity=True,
+        scope='One exact game trajectory, positions 12 through 19, with 10 through 19 reconstructed for context. '
+              'The earliest certified loss in this bounded audit is position 16; earlier positions remain unknown, '
+              'not proven recoverable. Position 15 actually played Psychic versus Return and reached the certified '
+              'loss after Exeggutor survived at 8 HP. Fixed-policy upper bounds allow side one to optimize all '
+              'subsequent play. The side-zero counterpolicy consults active opponent species: Psychic against '
+              'Poliwrath, otherwise Explosion/Crunch/Razor Leaf before switching. This bounds pure first choices '
+              'from above; it does not prove they are dominated inside a mixed strategy. Lower-bound attempts '
+              'keep every opponent response unrestricted and remain in the archive even when uninformative. '
+              'Material ordering changes expansion order only. Material/sleep cutoffs remain [0,1]; finishing '
+              'priority uses exact opponent HP, so these are full-state certificates. Reply reversal preserves '
+              'the legal-action set and imported same-policy bounds; it cannot create a stronger guarantee by '
+              'omitting actions. The observed losing outcome alone is not a proof of a bad decision. No human '
+              'calibration, blind information-set guarantee, whole-game solution or production change.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--verify-only',action='store_true')
+    parser.add_argument('--import-directory',type=pathlib.Path);args=parser.parse_args()
+    if args.verify_only:
+        assert summarize(read('findings/witness-backtrack-v1/records.json.gz'))==json.loads((archive/'summary.json').read_bytes())
+        print('witness-backtrack: trajectory, forced losses, action bounds, cutoffs and legacy parity verified');return
+    assert not archive.exists()
+    directory=args.import_directory or pathlib.Path(tempfile.mkdtemp(prefix='nc-witness-backtrack-'))
+    print(directory,flush=True);binary=root/'target/release/examples/policy_witness'
+    old=read(prior);sources={p:sha((root/p).read_bytes()) for p in old['source_hashes']}
+    env={**os.environ,'NC2000_REPO_ROOT':str(root)}
+    if not args.import_directory:
+        subprocess.run(['cargo','build','--release','-p','nc2000-bot','--example','policy_witness','--example','fixed_reply_counterpolicy'],cwd=root,env=env,check=True)
+        raw=gzip.decompress((root/corpus).read_bytes());(directory/'corpus.jsonl').write_bytes(raw)
+        game=next(json.loads(l) for l in raw.splitlines() if json.loads(l)['game']==12)
+        for d in range(10,20):
+            cfg=dict(game=12,decision=d,observed_side=0 if game['decisions'][d]['choices'][0] is not None else 1,
+                     iterations=[1],search_seeds=1,seed=2026111801,full_state=True)
+            (directory/f'd{d}.json').write_text(json.dumps(cfg))
+            subprocess.run([str(root/'target/release/examples/fixed_reply_counterpolicy'),str(directory/'corpus.jsonl'),
+                'corpus-search',str(directory/f'd{d}.json'),str(directory/f'd{d}.out.json')],cwd=root,env=env,check=True)
+        def run(name):
+            (directory/(name+'.json')).write_text(json.dumps(specs()[name]))
+            cmd=[str(binary),str(directory/'corpus.jsonl'),str(directory/(name+'.json')),str(directory/(name+'.out.json'))]
+            if name=='return-cut-reverse':cmd.append(str(directory/'return-cut.out.json'))
+            with (directory/(name+'.log')).open('w') as log:subprocess.run(cmd,cwd=root,env=env,stdout=log,stderr=log,check=True)
+            print(name,'complete',flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            list(pool.map(run,[n for n in specs() if n!='return-cut-reverse']))
+        run('return-cut-reverse')
+    bundle=dict(input_sha256={p:sha((root/p).read_bytes()) for p in [prior,corpus,'data/gen2stadium2.json']},
+        source_hashes=sources,binary_sha256=sha(binary.read_bytes()),
+        records={n:json.loads((directory/(n+'.out.json')).read_bytes()) for n in specs()},
+        return_cut_raw=(directory/'return-cut.out.json').read_text(),
+        states={str(d):json.loads((directory/f'd{d}.out.json').read_bytes()) for d in range(10,20)})
+    assert sources=={p:sha((root/p).read_bytes()) for p in sources}
+    report=summarize(bundle);archive.mkdir()
+    (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+    (archive/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in report.items() if k not in ['rows','trajectory']},indent=2))
+
+
+if __name__=='__main__':main()
