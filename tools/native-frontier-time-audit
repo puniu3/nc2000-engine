@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+import copy
+import json
+import runpy
+import subprocess
+from pathlib import Path
+
+
+def check(actual, protocol, root, prior):
+    assert len(actual) == 4
+    normalized = copy.deepcopy(actual)
+    for row, norm, job in zip(actual, normalized, protocol['jobs']):
+        assert row['job'] == job
+        assert row['elapsed_ms'] <= protocol['time_budget_ms']+protocol['allowed_time_overshoot_ms']
+        assert row['stop'] in ['TimeBudget','NodeBudget']
+        if row['stop'] == 'TimeBudget': assert row['elapsed_ms'] >= protocol['time_budget_ms']
+        else: assert row['nodes'] >= protocol['node_budget']
+        assert row['runs'] < protocol['work_budget']
+        enabled = str(job['defer']).lower()
+        assert f'retain_eager_prefix: {enabled}' in row['config']
+        assert f'defer_eager_frontier: {enabled}' in row['config']
+        assert row['deferred_eager_leaves'] > 0 if job['defer'] else row['deferred_eager_leaves'] == 0
+        assert 'time_budget: Some(40s)' in row['config']
+        norm['config'] = norm['config'].replace('time_budget: Some(40s)', 'time_budget: None')
+        if norm['stop'] == 'TimeBudget': norm['stop'] = 'WorkExhausted'
+    base = runpy.run_path('tools/native-snorlax-witness-audit')['check'](normalized, protocol, root, prior)
+    control = [actual[i]['transfer_bound'] for i in [0,3]]
+    candidate = [actual[i]['transfer_bound'] for i in [1,2]]
+    base['results'] = [{k:r[k] for k in ['id','transfer_bound','target_score_interval','stop','runs','nodes','elapsed_ms','deferred_eager_leaves','trials']} for r in actual]
+    base.update(control_lower_bounds=control, candidate_lower_bounds=candidate,
+                min_candidate_minus_max_control=min(candidate)-max(control),
+                candidate_better_in_both_runs=min(candidate)>max(control)+1e-8,
+                time_overshoot_gate_passed=True, work_ceiling_nonbinding=True)
+    return base
+
+
+def main():
+    p = Path('findings/native-frontier-time-v1')
+    t = Path('tmp/native-frontier-time-v1')
+    m = runpy.run_path('tools/native-snorlax-witness-audit')
+    protocol = json.loads((p/'protocol.json').read_text())
+    for file,key in [(p/'native_frontier_time.rs','helper_sha256'),(t/'solver','solver_binary_sha256'),('tmp/native-endgame-census-v1/roots.jsonl','roots_sha256'),(protocol['reference_archive'],'reference_archive_sha256')]:
+        assert m['digest'](file) == protocol[key]
+    import hashlib
+    for file,key in [('crates/bot/src/bounds.rs','bounds_sha256'),('crates/engine/src/battle/enumerate.rs','enumerate_sha256')]:
+        assert hashlib.sha256(subprocess.check_output(['git','show',protocol['implementation_commit']+':'+file])).hexdigest() == protocol[key]
+    root = next(r['record'] for r in m['rows']('tmp/native-endgame-census-v1/roots.jsonl') if (r['record']['game'],r['record']['frame']) == (87,49))
+    prior = next(r for r in m['rows'](protocol['reference_archive']) if (r['game'],r['frame']) == (87,49))
+    actual = m['rows'](t/'main.jsonl')
+    result = check(actual,protocol,root,prior)
+    rejected = []
+    for kind in ['missing_job','false_bound','wrong_mode','time_overrun','false_stop']:
+        r = copy.deepcopy(actual)
+        if kind == 'missing_job': r.pop()
+        elif kind == 'false_bound': r[1]['transfer_bound'] = 1.
+        elif kind == 'wrong_mode': r[1]['config'] = r[0]['config']
+        elif kind == 'time_overrun': r[1]['elapsed_ms'] = 100000.
+        else: r[1]['stop'] = 'WorkExhausted'
+        try: check(r,protocol,root,prior)
+        except AssertionError: rejected.append(kind)
+        else: raise AssertionError('accepted '+kind)
+    result.update(schema=protocol['schema'],protocol_sha256=m['digest'](p/'protocol.json'),records_sha256=m['digest'](t/'main.jsonl'),rejected_mutations=rejected,ordinary_bot_changed=False,strength_improvement_proven=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__ == '__main__':
+    main()

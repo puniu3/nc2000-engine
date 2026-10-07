@@ -1,0 +1,106 @@
+{
+  "results": [
+    {
+      "id": "trial-0",
+      "transfer_bound": 0.29112396195450885,
+      "target_score_interval": [
+        0.29112396195450885,
+        1.0
+      ],
+      "stop": "TimeBudget",
+      "runs": 839190,
+      "nodes": 183372,
+      "elapsed_ms": 40029.196292,
+      "deferred_eager_leaves": 0,
+      "trials": 5300
+    },
+    {
+      "id": "trial-1",
+      "transfer_bound": 0.2837048150389542,
+      "target_score_interval": [
+        0.2837048150389542,
+        1.0
+      ],
+      "stop": "TimeBudget",
+      "runs": 1025122,
+      "nodes": 25507,
+      "elapsed_ms": 40037.4785,
+      "deferred_eager_leaves": 587706,
+      "trials": 68721
+    },
+    {
+      "id": "trial-2",
+      "transfer_bound": 0.28978841156229573,
+      "target_score_interval": [
+        0.28978841156229573,
+        1.0
+      ],
+      "stop": "TimeBudget",
+      "runs": 1057918,
+      "nodes": 25936,
+      "elapsed_ms": 40004.629417,
+      "deferred_eager_leaves": 607360,
+      "trials": 69837
+    },
+    {
+      "id": "trial-3",
+      "transfer_bound": 0.29167290387717026,
+      "target_score_interval": [
+        0.29167290387717026,
+        1.0
+      ],
+      "stop": "TimeBudget",
+      "runs": 845058,
+      "nodes": 184584,
+      "elapsed_ms": 40022.159291,
+      "deferred_eager_leaves": 0,
+      "trials": 5349
+    }
+  ],
+  "combined_first_action_guarantees": {
+    "move doubleedge": [
+      0.8420197907628891,
+      0.9999906503889959
+    ],
+    "move curse": [
+      0.0,
+      0.9999906503889959
+    ],
+    "move rest": [
+      0.29167290387717026,
+      0.9999906503889959
+    ],
+    "move sleeptalk": [
+      0.0,
+      0.9999906503889959
+    ]
+  },
+  "actual_rest_pure_loss_lower": 0.0,
+  "actual_rest_error_proven": false,
+  "rest_over_doubleedge_security_advantage_lower": 0.0,
+  "rest_better_than_doubleedge_proven": false,
+  "control_lower_bounds": [
+    0.29112396195450885,
+    0.29167290387717026
+  ],
+  "candidate_lower_bounds": [
+    0.2837048150389542,
+    0.28978841156229573
+  ],
+  "min_candidate_minus_max_control": -0.007968088838216092,
+  "candidate_better_in_both_runs": false,
+  "time_overshoot_gate_passed": true,
+  "work_ceiling_nonbinding": true,
+  "schema": "nc2000-native-frontier-time-v1",
+  "protocol_sha256": "57fddb3510c05cecd2739e5690dfd279289a2701d97651e7583194ab8c2db2e9",
+  "records_sha256": "8c0abc3c5da52fdb1942515d62a386629a7bc3008c24039b5d2e6e27f176030b",
+  "rejected_mutations": [
+    "missing_job",
+    "false_bound",
+    "wrong_mode",
+    "time_overrun",
+    "false_stop"
+  ],
+  "ordinary_bot_changed": false,
+  "strength_improvement_proven": false
+}
