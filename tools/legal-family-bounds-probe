@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from fractions import Fraction as F
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/legal-family-bounds-v1'
+ledger_check = runpy.run_path(str(root / 'tools/policy-witness-probe'))['verify']
+policy_check = runpy.run_path(str(root / 'tools/hidden-move-witness-probe'))['check_policy']
+
+
+def verify(result, repeat, previous, family):
+    expected = previous['names']
+    assert len(expected) == 40
+    for run in [result, repeat]:
+        assert [r['move'] for r in run['rows']] == expected
+        assert (run['case']['game'], run['case']['decision'], run['case']['side']) == (6, 32, 1)
+        assert 0 <= run['generation_seconds'] <= run['seconds']
+        assert all(r['seconds'] >= 0 for r in run['rows'])
+        assert sum(r['seconds'] for r in run['rows']) <= run['seconds']
+    assert result['case'] == repeat['case']
+    assert [r['ledger'] for r in result['rows']] == [r['ledger'] for r in repeat['rows']]
+    keys = previous['generation_checks'][0]['keys']
+    reports = []
+    for row, key in zip(result['rows'], keys):
+        ledger = row['ledger']
+        assert ledger['config'] == dict(game=6, decision=32, target_side=1, policy_side=1,
+            first_choice='move rockslide', priority=['move rockslide'], rest_at_percent=None,
+            horizon=2, work_budget=200000, cell_cap=10000, guarded_keys=True, support_certificate=True)
+        assert ledger['nodes'][ledger['root']]['state_key'] == key
+        report = ledger_check(ledger)
+        policy_check(ledger)
+        reports.append(dict(move=row['move'], **report))
+    lower = min(F(r['bounds'][0]) for r in reports)
+    assert lower == F(family['forty_world_game_bounds'][0])
+    upper = F(family['forty_world_game_bounds'][1])
+    return dict(worlds=40, horizon=2, independent_replay_identities=40,
+        runs=sum(r['runs'] for r in reports), lower=float(lower), inherited_upper=float(upper),
+        swordsdance_security_upper=family['swordsdance_security_upper'],
+        limiting_worlds=[r['move'] for r in reports if F(r['bounds'][0]) == lower],
+        seconds=[r['seconds'] for r in [result, repeat]], rows=reports,
+        production_changed=False, strength_demonstrated=False,
+        scope='One previously certified 40-world endgame family; only the unseen fourth move varies. '
+              'The same observable Rock Slide policy is used in every world. Two-step enumeration '
+              'leaves unresolved outcomes in [0,1] and preserves the earlier three-step lower bound. '
+              'Root keys match the archived observation-based model generator. All ledgers repeat '
+              'exactly; backups and policy choices are independently checked, while engine transitions '
+              'and guarded key contracts remain trusted. The upper bound is inherited from the '
+              'earlier adversary certificate, not newly computed here. Native timings include model '
+              'generation, enumeration and ledger construction but exclude table loading, replay, '
+              'final JSON serialization and independent verification. Two timings are feasibility '
+              'measurements, not a speedup benchmark or iPad measurements. No human calibration, '
+              'complete information-set coverage, live bot integration or deployed-bot comparison.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', nargs=2, type=Path)
+    args = parser.parse_args()
+    previous_path = root / 'findings/legal-family-search-v1/records.json.gz'
+    previous = json.loads(gzip.decompress(previous_path.read_bytes()))['result']
+    family_path = root / 'findings/legal-family-search-v1/summary.json'
+    family = json.loads(family_path.read_bytes())
+    paths = [Path(__file__).resolve(), previous_path, family_path,
+        root / 'crates/bot/examples/legal_family_bounds.rs',
+        root / 'crates/bot/examples/legal_move_models/mod.rs',
+        root / 'crates/bot/examples/hidden_family_search.rs',
+        root / 'crates/bot/examples/hidden_terminal.rs', root / 'crates/bot/examples/policy_witness.rs',
+        root / 'tools/policy-witness-probe', root / 'tools/hidden-move-witness-probe',
+        root / 'data/legal-move-sources-gen2.json', root / 'data/learnsets-gen2.json',
+        root / 'data/gen2stadium2.json', root / 'data/belief-pool-v3/belief-pool.json',
+        root / 'findings/policy-gap-v1/corpus.jsonl.gz']
+    for directory in ['crates/bot/src', 'crates/engine/src']:
+        paths += list((root / directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists()
+        result, repeat = [json.loads(p.read_bytes()) for p in args.record]
+    else:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert bundle['hashes'] == hashes
+        result, repeat = bundle['result'], bundle['repeat']
+    summary = verify(result, repeat, previous, family)
+    controls = ['bound', 'omit_reply', 'policy']
+    for fault in controls:
+        ledger = copy.deepcopy(result['rows'][0]['ledger'])
+        node = ledger['nodes'][ledger['root']]
+        if fault == 'bound':
+            ledger['bounds'][0] += .01
+        elif fault == 'omit_reply':
+            node['branches'].pop()
+        else:
+            ledger['config']['first_choice'] = 'move swordsdance'
+        try:
+            ledger_check(ledger)
+            policy_check(ledger)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError(f'Accepted corruption: {fault}')
+    checks = dict(ledgers_verified=40, exact_repeat_identities=40,
+        root_model_identities=40, negative_controls=controls, production_changed=False)
+    if args.record:
+        archive.mkdir()
+        bundle = dict(result=result, repeat=repeat, hashes=hashes)
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+        for name, value in [('summary', summary), ('checks', checks)]:
+            (archive / (name + '.json')).write_text(json.dumps(value, indent=2) + '\n')
+    else:
+        assert summary == json.loads((archive / 'summary.json').read_bytes())
+        assert checks == json.loads((archive / 'checks.json').read_bytes())
+    print(json.dumps({k: v for k, v in summary.items() if k not in ['rows', 'scope']}, indent=2))
+
+
+if __name__ == '__main__':
+    main()
