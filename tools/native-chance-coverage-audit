@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import math
+from pathlib import Path
+
+
+def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check(records,protocol,baseline):
+    expected=[(a,b) for a in baseline['actions'][0] for b in baseline['actions'][1]]
+    assert [(r['own'],r['reply']) for r in records]==expected
+    result=[];leaf_count=0;pending_count=0;complete=0;improved=0
+    for r,old in zip(records,baseline['cells']):
+        assert (r['game'],r['frame'],r['state_sha256'])==(baseline['game'],baseline['frame'],baseline['state_sha256'])
+        b=r['baseline'];c=r['candidate']
+        assert b['mass']==old['outcome_mass_p0win_p1win_tie_live'] and b['pending_mass']==old['pending_mass']
+        assert (b['runs'],b['exhausted'])==(old['runs'],old['exhausted'])
+        assert 0<c['runs']<=protocol['cell_cap'] and len(c['leaves'])==c['runs']
+        assert c['exhausted']==bool(c['pending'])
+        entries=c['leaves']+c['pending']
+        prefixes=sorted(tuple(v['script']) for v in entries)
+        for x,y in zip(prefixes,prefixes[1:]):assert y[:len(x)]!=x
+        assert all(all(isinstance(i,int) and i>=0 for i in v['script']) and math.isfinite(v['mass']) and 0<v['mass']<=1 for v in entries)
+        assert abs(sum(v['mass'] for v in entries)-1.)<1e-9
+        mass=[0.]*4
+        for l in c['leaves']:
+            assert l['outcome'] in range(4)
+            mass[l['outcome']]+=l['mass']
+        assert mass==c['mass'] and abs(sum(v['mass'] for v in c['pending'])-c['pending_mass'])<1e-12
+        for x,y in zip(b['mass'],mass):assert max(x,y)<=min(x+b['pending_mass'],y+c['pending_mass'])+1e-9
+        if not b['exhausted']:
+            assert not c['exhausted'] and all(abs(x-y)<1e-9 for x,y in zip(b['mass'],mass));complete+=1
+        before=sum(b['mass']);after=sum(mass);improved+=after>before+1e-8
+        result.append(dict(own=r['own'],reply=r['reply'],baseline_resolved_mass=before,candidate_resolved_mass=after,baseline_runs=b['runs'],candidate_runs=c['runs'],candidate_complete=not c['exhausted'],candidate_terminal_mass=sum(mass[:3])))
+        leaf_count+=len(c['leaves']);pending_count+=len(c['pending'])
+    return dict(cells=result,improved_cells=improved,old_complete_cells_preserved=complete,leaf_count=leaf_count,pending_count=pending_count,baseline_runs=sum(r['baseline']['runs'] for r in records),candidate_runs=sum(r['candidate']['runs'] for r in records),prefix_partition_checks=len(records))
+
+
+def main():
+    p=Path('findings/native-chance-coverage-v1');t=Path('tmp/native-chance-coverage-v1')
+    protocol=json.loads((p/'protocol.json').read_text())
+    assert sha(p/'native_chance_coverage.rs')==protocol['helper_sha256']
+    assert sha(t/'solver')==protocol['solver_binary_sha256']
+    assert sha(protocol['baseline_archive'])==protocol['baseline_archive_sha256']
+    baseline=next(r for r in map(json.loads,gzip.decompress(Path(protocol['baseline_archive']).read_bytes()).splitlines()) if (r['game'],r['frame'])==(62,92))
+    records=[json.loads(l) for l in (t/'main.jsonl').read_text().splitlines()]
+    result=check(records,protocol,baseline)
+    vp=json.loads((p/'verification-protocol.json').read_text());v=json.loads((t/'verification.json').read_text())
+    assert sha(p/'native_chance_coverage_verify.rs')==vp['helper_sha256']
+    assert sha(t/'verify-solver')==vp['binary_sha256']
+    assert sha(t/'main.jsonl')==vp['records_sha256']==v['records_sha256']
+    assert v['cells_checked']==len(records) and v['leaf_replays']==result['leaf_count'] and v['pending_replays']==result['pending_count']
+    assert v['total_extra_runs']==result['leaf_count']+result['pending_count'] and v['max_probability_error']<1e-10
+    assert v['performance_sample'] is False
+    rejected=[]
+    for kind in ['missing_cell','wrong_reply','overlapping_prefix','false_mass','false_baseline']:
+        r=copy.deepcopy(records)
+        if kind=='missing_cell':r.pop()
+        elif kind=='wrong_reply':r[0]['reply']='move splash'
+        elif kind=='overlapping_prefix':r[0]['candidate']['pending'][0]['script']=r[0]['candidate']['leaves'][0]['script']
+        elif kind=='false_mass':r[0]['candidate']['pending_mass']=0.
+        else:r[0]['baseline']['mass'][0]=1.
+        try:check(r,protocol,baseline)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    result.update(schema=protocol['schema'],records_sha256=sha(t/'main.jsonl'),protocol_sha256=sha(p/'protocol.json'),replay_verification=v,rejected_mutations=rejected,graph_search_changed=False,ordinary_bot_changed=False,strength_improvement_proven=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()
