@@ -1,0 +1,5 @@
+pass=0 arm=control calls=96 runs=35815 ms=557
+
+thread 'main' (22120259) panicked at crates/bot/examples/native_attack_kernel_bench.rs:68:48:
+no entry found for key
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

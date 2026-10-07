@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+import json,collections,hashlib
+from pathlib import Path
+s=json.load(open('tmp/native-attack-kernels-v1/mismatch.json'))
+def norm(b):
+ b=json.loads(json.dumps(b))
+ for k in ['prng','log','sent_log_pos','last_move_line']:b.pop(k)
+ b['last_damage']=0;b['quick_claw_roll']=False
+ for side in b['sides']:
+  for p in side['roster']:
+   p['hurt_this_turn']=None;p['last_damage']=0;p['attacked_by']=[]
+ return json.dumps(b,sort_keys=True,separators=(',',':'))
+def group(xs):
+ out={}
+ for x in xs:
+  k=norm(x['battle'])
+  if k not in out:out[k]={'battle':x['battle'],'prob':0.}
+  out[k]['prob']+=x['prob']
+ return out
+a=group(s['actual']);b=group(s['expected']);print('normalized states',len(a),len(b),'same',set(a)==set(b))
+def diffs(a,b,path=''):
+ if type(a)!=type(b):return [(path,a,b)]
+ if isinstance(a,dict):return sum((diffs(a.get(k),b.get(k),path+'/'+k) for k in a.keys()|b.keys()),[])
+ if isinstance(a,list):return sum((diffs(x,y,path+'/'+str(i)) for i,(x,y) in enumerate(zip(a,b))),[]) if len(a)==len(b) else [(path,a,b)]
+ return [] if a==b else [(path,a,b)]
+paths=collections.Counter();examples={}
+for k in a.keys()&b.keys():
+ assert abs(a[k]['prob']-b[k]['prob'])<1e-10
+ for path,x,y in diffs(a[k]['battle'],b[k]['battle']):paths[path]+=1;examples.setdefault(path,[x,y])
+assert set(a)==set(b)
+out={'case':s['case'],'arm':s['arm'],'state':s['index'],'normalized_states':len(a),'probabilities_match':True,'difference_paths':dict(paths),'examples':examples,'raw_diagnostic_sha256':hashlib.sha256(Path('tmp/native-attack-kernels-v1/mismatch.json').read_bytes()).hexdigest()}
+Path('tmp/native-attack-kernels-v1/mismatch-summary.json').write_text(json.dumps(out,indent=2)+'\n')
+assert set(paths)=={'/sides/1/roster/2/attacked_by/0/damage','/sides/1/roster/2/attacked_by/0/damage_value'}
+print(dict(paths));print(examples)
