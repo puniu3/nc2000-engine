@@ -1,0 +1,7 @@
+{
+  "decisions": 720,
+  "candidate_library_matches_independent_ranking": true,
+  "default_library_output_unchanged": true,
+  "output_sha256": "e00d4ccc35c5e6b16f11b9ee7fe9f0be79f4b1906b0a6c046d941ddbf42ccfbc",
+  "library_protocol_sha256": "f755c1c1814167000e03da7d49bfe7b85d149a27db731e2d25467bf3bd5c80cf"
+}
