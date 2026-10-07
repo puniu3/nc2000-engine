@@ -1,0 +1,9 @@
+{
+  "completed_at": "2026-10-07T09:27:10.149747+00:00",
+  "archive_sha256": "78618e81d5d266874d667df7f2d407babe8ebce80f3de509b6c52345fc7e26b6",
+  "uncompressed_sha256": "bffa990fd1f36e828cf4ce16c97ef8c09c7b3e13bd83b67d2999211c534a49de",
+  "decision": "Current default scores 99 wins and 93 losses, but the prespecified pair-based betting95 interval contains 0.5. Superiority over the deployed bot is not established; equivalence is not established either. No sample extension and no runtime or deployment change.",
+  "runtime_changed": false,
+  "deployed": false,
+  "all_binary_and_data_hashes_match_registration": true
+}
