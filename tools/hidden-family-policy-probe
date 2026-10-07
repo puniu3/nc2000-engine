@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+from collections import defaultdict
+from fractions import Fraction as F
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/hidden-family-policy-v1'
+
+
+def read_gzip(path):
+    return json.loads(gzip.decompress((root / path).read_bytes()))
+
+
+def verify(policies, kernels, searches, ledgers, family):
+    original = {r['seed']: r for r in searches['rows'] if r['mode'] == 'robust' and r['timed'] and r['template'] == 0}
+    assert len(policies['rows']) == len(original) == 16
+    assert {r['seed'] for r in policies['rows']} == set(original)
+    assert len(kernels['rows']) == len(ledgers) == 39
+    assert {r['case']['replacement'] for r in kernels['rows']} == set(ledgers)
+    prepared = {}
+    total_runs = total_leaves = 0
+    for kernel in kernels['rows']:
+        name = kernel['case']['replacement']
+        ledger = ledgers[name]
+        assert ledger['config']['opening'] == ['move sleeptalk', 'move sleeptalk', 'move hiddenpowerice']
+        assert ledger['config']['policy_side'] == ledger['config']['target_side'] == 0
+        nodes = ledger['nodes']
+        branch = next(b for b in nodes[ledger['root']]['branches'] if b['choices'] == ['move sleeptalk', 'move rockslide'])
+        assert branch['complete_enumeration'] and abs(branch['pending']) < 1e-12
+        archived = defaultdict(F)
+        for child in branch['children']:
+            archived[tuple(nodes[child['node']]['cache_key'])] += F(child['mass'])
+        index = {tuple(n['cache_key']): n for n in nodes if n['depth'] == 1}
+        assert len(index) == sum(n['depth'] == 1 for n in nodes)
+        partition = {}
+        terminal_paths = set()
+        mass_by_key = defaultdict(F)
+        leaves = []
+        for leaf in kernel['leaves']:
+            script = tuple(leaf['script'])
+            assert script not in terminal_paths and len(script) == len(leaf['trace'])
+            terminal_paths.add(script)
+            mass = F(1)
+            for i, d in enumerate(leaf['trace']):
+                counts = tuple(d['counts'])
+                assert sum(counts) == 2**32 and all(type(c) is int and c >= 0 for c in counts)
+                assert script[i] == d['chosen'] and counts[d['chosen']] > 0
+                prefix = script[:i]
+                signature = (d['label'], counts)
+                assert partition.setdefault(prefix, signature) == signature
+                mass *= F(counts[d['chosen']], 2**32)
+            key = tuple(leaf['cache_key'])
+            assert key in index
+            mass_by_key[key] += mass
+            leaves.append((leaf, mass, index[key]))
+        assert not set(partition) & terminal_paths
+        for prefix, (_, counts) in partition.items():
+            for i, count in enumerate(counts):
+                if count:
+                    child = prefix + (i,)
+                    assert child in partition or child in terminal_paths
+        assert kernel['runs'] == len(partition) + len(terminal_paths)
+        assert sum(mass_by_key.values()) == 1
+        assert set(mass_by_key) == set(archived)
+        assert all(abs(mass_by_key[k] - archived[k]) < F(1, 10**12) for k in archived)
+        prepared[name] = leaves
+        total_runs += kernel['runs']
+        total_leaves += len(leaves)
+    rows = []
+    optimum = F(family['robust_rockslide_bounds'][0])
+    controls = {}
+    for policy in policies['rows']:
+        old = original[policy['seed']]
+        assert policy['iterations'] == old['iterations']
+        assert all(value == old[k] for k, value in policy['snapshot'].items())
+        assert policy['snapshot']['best'] == 'move rockslide'
+        histories = policy['histories']
+        for i, h in enumerate(histories, 1):
+            assert 0 <= h['parent'] < i
+            assert h['depth'] == (1 if h['parent'] == 0 else histories[h['parent'] - 1]['depth'] + 1)
+        history_index = {(h['own_action'], h['request'], tuple(h['log'])): i
+                         for i, h in enumerate(histories, 1) if h['parent'] == 0}
+        assert len(history_index) == sum(h['parent'] == 0 for h in histories)
+        groups = {g['history']: g for g in policy['groups']}
+        assert len(groups) == len(policy['groups'])
+        for hid, g in groups.items():
+            assert 1 <= hid <= len(histories)
+            assert len(g['actions']) == len(g['visits']) == len(g['rewards'])
+            assert all(type(n) is int and n >= 0 and 0 <= w <= n for n, w in zip(g['visits'], g['rewards']))
+            best = max(range(len(g['actions'])), key=lambda i: (g['visits'][i], i))
+            assert g['best'] == g['actions'][best]
+        worlds = []
+        for name, leaves in prepared.items():
+            upper = F(0)
+            matched_mass = F(0)
+            deviation_mass = F(0)
+            second_choices = defaultdict(F)
+            control_values = defaultdict(F)
+            for leaf, mass, node in leaves:
+                unconstrained = 1 - F(node['bounds'][0])
+                value = unconstrained
+                hid = history_index.get(('move rockslide', leaf['request'], tuple(leaf['log'])))
+                group = groups.get(hid)
+                if node['kind'] == 'decision':
+                    choices = {b['choices'][1]: 1 - F(b['bounds'][0]) for b in node['branches']}
+                    assert all(b['choices'][0] == 'move sleeptalk' for b in node['branches'])
+                    if group:
+                        assert group['actions'] == leaf['legal'] == node['legal'][1]
+                        value = choices[group['best']]
+                        matched_mass += mass
+                        second_choices[group['best']] += mass
+                        if group['best'] != 'move rockslide': deviation_mass += mass
+                    for label, choice in [('fixed_rockslide', 'move rockslide'), ('empty_earthquake', 'move earthquake')]:
+                        control_values[label] += mass * choices[choice]
+                else:
+                    for label in ['fixed_rockslide', 'empty_earthquake']: control_values[label] += mass * unconstrained
+                control_values['unconstrained_continuation'] += mass * unconstrained
+                upper += mass * value
+            for label, value in control_values.items():
+                controls.setdefault(label, {})[name] = float(value)
+            worlds.append(dict(world=name, score_upper=float(upper), matched_second_decision_mass=float(matched_mass),
+                non_rockslide_mass=float(deviation_mass), second_choices={a: float(p) for a, p in second_choices.items()}))
+        limiting = min(worlds, key=lambda w: w['score_upper'])
+        gap = max(F(0), optimum - F(limiting['score_upper']) - F(1, 10**8))
+        rows.append(dict(seed=policy['seed'], iterations=policy['iterations'], worlds=worlds,
+            limiting_world=limiting['world'], security_upper=limiting['score_upper'], first_two_decisions_loss_lower=float(gap)))
+    control_minima = {label: min(values.values()) for label, values in controls.items()}
+    assert abs(control_minima['fixed_rockslide'] - float(optimum)) < 1e-8
+    assert abs(control_minima['unconstrained_continuation'] - float(optimum)) < 1e-8
+    assert control_minima['empty_earthquake'] < float(optimum) - .05
+    losses = [r['first_two_decisions_loss_lower'] for r in rows if r['first_two_decisions_loss_lower'] > 0]
+    return dict(policies=16, archived_search_identities=16, worlds=39, kernel_runs=total_runs,
+        exact_chance_leaves=total_leaves, root_kernel_archive_identities=39,
+        frozen_policies_with_certified_continuation_loss=len(losses),
+        certified_loss_range=[min(losses), max(losses)] if losses else [],
+        control_minima=control_minima, rows=rows, production_changed=False,
+        scope='The previous 500ms snapshots are reproduced at their recorded iteration counts; no new time '
+              'comparison is made. Extract the most-visited pure action at each learned own history, resolving '
+              'ties by final action index. Only the first two decisions are constrained. At an unvisited '
+              'history and after the second decision the policy is given optimal play, so these are optimistic '
+              'upper bounds, not lower guarantees or complete policy values. The adversary uses the same '
+              'fixed Sleep Talk, Sleep Talk, Hidden Power Ice schedule used in the archived certificates; '
+              'it does not observe the current simultaneous draw. All root chance traces are enumerated '
+              'without state/log merging and their exact rational masses reproduce all 39 archived root '
+              'kernels. The existing deeper counterpolicy ledgers supply the bounds. This diagnoses frozen '
+              'continuation extraction, not a bot that replans with a fresh 500ms after every observation. '
+              'The 39-world model, fixed stats/items/sleep clock and full engine history restrictions remain.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', nargs=2, type=Path, metavar=('POLICIES', 'KERNELS'))
+    args = parser.parse_args()
+    searches = read_gzip('findings/hidden-family-search-v1/records.json.gz')['result']
+    family = json.loads((root / 'findings/hidden-move-family-v1/summary.json').read_bytes())
+    proof = read_gzip('findings/hidden-move-family-v1/records.json.gz')['result']['rows']
+    old = read_gzip('findings/hidden-move-witness-v1/records.json.gz')
+    ledgers = {w['case']['replacement']: next(x['ledger'] for x in w['ledgers'] if x['first'] == 'sleeptalk') for w in proof}
+    ledgers['rest'] = next(x['ledger'] for x in old['scheduled']['ledgers'] if x['variant'] == 0 and x['first'] == 'sleeptalk')
+    paths = [Path(__file__).resolve(), root / 'crates/bot/examples/hidden_family_policy.rs',
+             root / 'crates/bot/examples/hidden_family_kernel.rs', root / 'crates/bot/examples/hidden_family_search.rs',
+             root / 'data/gen2stadium2.json', root / 'findings/hidden-family-search-v1/records.json.gz',
+             root / 'findings/hidden-move-family-v1/records.json.gz', root / 'findings/hidden-move-family-v1/summary.json',
+             root / 'findings/hidden-move-witness-v1/records.json.gz']
+    for directory in ['crates/bot/src', 'crates/engine/src']:
+        paths += list((root / directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not (archive / 'records.json.gz').exists()
+        policies, kernels = [json.loads(p.read_bytes()) for p in args.record]
+        summary = verify(policies, kernels, searches, ledgers, family)
+        archive.mkdir(exist_ok=True)
+        bundle = dict(policies=policies, kernels=kernels, hashes=hashes)
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+        (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    assert bundle['hashes'] == hashes
+    summary = verify(bundle['policies'], bundle['kernels'], searches, ledgers, family)
+    assert summary == json.loads((archive / 'summary.json').read_bytes())
+    faults = ['missing_policy', 'selected_action', 'trace_probability', 'missing_leaf', 'log']
+    for fault in faults:
+        policies, kernels = copy.deepcopy(bundle['policies']), copy.deepcopy(bundle['kernels'])
+        if fault == 'missing_policy': policies['rows'].pop()
+        elif fault == 'selected_action': policies['rows'][0]['groups'][0]['best'] = 'invalid'
+        elif fault == 'trace_probability': kernels['rows'][0]['leaves'][0]['trace'][0]['counts'][0] += 1
+        elif fault == 'missing_leaf': kernels['rows'][0]['leaves'].pop()
+        elif fault == 'log': kernels['rows'][0]['leaves'][0]['cache_key'][2] = '0'
+        try: verify(policies, kernels, searches, ledgers, family)
+        except (AssertionError, KeyError): pass
+        else: raise AssertionError(f'Accepted corruption: {fault}')
+    print(json.dumps({k: v for k, v in summary.items() if k not in ['rows', 'scope']}, indent=2))
+
+
+if __name__ == '__main__':
+    main()
