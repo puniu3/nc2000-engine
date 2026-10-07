@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from pathlib import Path
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def compare(old, new):
+    complete = 0
+    checked = 0
+    for a, b in zip(old['frontier_probe']['samples'], new['frontier_probe']['samples']):
+        for key in ['index', 'state_key128', 'state_sha256', 'battle_json', 'fixed_action']:
+            assert a[key] == b[key]
+        assert len(a['cells']) == len(b['cells'])
+        for x, y in zip(a['cells'], b['cells']):
+            assert x['reply'] == y['reply']
+            if not x['exhausted']:
+                assert x == y
+                complete += 1
+            for u, v in zip(x['mass'], y['mass']):
+                assert max(u, v) <= min(u+x['pending_mass'], v+y['pending_mass'])+1e-9
+                checked += 1
+    return dict(old_complete_cells_unchanged=complete, event_interval_checks=checked)
+
+
+def main():
+    p = Path('findings/native-frontier-refine-v1')
+    t = Path('tmp/native-frontier-refine-v1')
+    protocol = json.loads((p/'protocol.json').read_text())
+    old_raw = gzip.decompress(Path('findings/native-frontier-step-v1/records.jsonl.gz').read_bytes())
+    assert hashlib.sha256(old_raw).hexdigest() == protocol['input_records_sha256']
+    assert sha(p/'native_frontier_refine.rs') == protocol['helper_sha256']
+    assert sha(t/'solver') == protocol['solver_binary_sha256']
+    old = json.loads(old_raw)
+    new = json.loads((t/'main.jsonl').read_text())
+    module = runpy.run_path('tools/native-frontier-step-audit')
+    parent = next(r for r in map(json.loads, gzip.decompress(Path('findings/native-snorlax-witness-v1/records.jsonl.gz').read_bytes()).splitlines()) if r['id'] == 'rest-guarantee')
+    result = module['check'](new, protocol, parent)
+    result.update(compare(old, new))
+    verification = json.loads((t/'verification.json').read_text())
+    assert verification['records_sha256'] == sha(t/'main.jsonl')
+    assert verification['cells_checked'] == result['total_cells']
+    assert verification['extra_engine_runs'] == result['additional_probe_runs']
+    assert verification['policy_validation_runs'] == result['samples']
+    assert verification['max_probability_error'] < 1e-10
+    assert verification['performance_sample'] is False
+    verifier = json.loads(Path('findings/native-frontier-step-v1/verification-protocol.json').read_text())
+    assert sha('tmp/native-frontier-step-v1/verify-solver') == verifier['binary_sha256']
+    rejected = []
+    for kind in ['changed_state', 'wrong_reply', 'false_bound', 'hidden_live_mass']:
+        r = copy.deepcopy(new)
+        sample = r['frontier_probe']['samples'][0]
+        if kind == 'changed_state': sample['battle_json'] += ' '
+        elif kind == 'wrong_reply': sample['cells'][0]['reply'] = 'move splash'
+        elif kind == 'false_bound': sample['one_step_score_bounds'] = [1., 1.]
+        else: sample['cells'][0]['mass'][3] += 0.1
+        try:
+            module['check'](r, protocol, parent)
+            compare(old, r)
+        except AssertionError:
+            rejected.append(kind)
+        else:
+            raise AssertionError('accepted '+kind)
+    result.update(schema=protocol['schema'], protocol_sha256=sha(p/'protocol.json'), records_sha256=sha(t/'main.jsonl'),
+                  replay_verification=verification, verifier_binary_sha256=verifier['binary_sha256'],
+                  rejected_mutations=rejected, ordinary_bot_changed=False, strength_improvement_proven=False)
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()
