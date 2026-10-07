@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+import gzip
+import hashlib
+import json
+import runpy
+import sys
+from collections import Counter
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def rows(path):
+    p=Path(path)
+    data=gzip.decompress(p.read_bytes()) if p.suffix=='.gz' else p.read_bytes()
+    return [json.loads(l) for l in data.decode().splitlines()]
+
+
+def main():
+    scratch, roots_path = map(Path,sys.argv[1:])
+    directory=Path('findings/native-endgame-quotient-v1')
+    protocol=json.loads((directory/'protocol.json').read_text())
+    parent_protocol=json.loads(Path('findings/native-endgame-refine-v1/protocol.json').read_text())
+    tuning_protocol=json.loads(Path('findings/native-endgame-scheduling-v1/protocol.json').read_text())
+    assert protocol['indices']==[i for i in parent_protocol['indices'] if i not in tuning_protocol['indices']]
+    assert len(protocol['indices'])==64
+    assert protocol['dead_quick_claw_quotient'] and not protocol['retain_eager_prefix'] and not protocol['selected_only']
+    assert digest(roots_path)==protocol['roots_sha256']
+    assert digest('findings/native-endgame-scheduling-v1/native_endgame_scheduling.rs')==protocol['helper_sha256']
+    assert digest('tmp/native-endgame-scheduling-v1/solver')==protocol['solver_binary_sha256']
+    parent_bytes=gzip.decompress(Path('findings/native-endgame-refine-v1/records.jsonl.gz').read_bytes())
+    assert hashlib.sha256(parent_bytes).hexdigest()==protocol['refine_records_sha256']
+    baseline={(r['game'],r['frame']):r for r in map(json.loads,parent_bytes.decode().splitlines())}
+    records=rows(scratch/'main.jsonl')
+    result=runpy.run_path('tools/native-endgame-bounds-audit')['check'](records,protocol,rows(roots_path))
+    comparisons=[]
+    for r in sorted(records,key=lambda r:(r['game'],r['frame'])):
+        key=r['game'],r['frame']; old=baseline[key]
+        assert 'dead_quick_claw_quotient: true' in r['config'] and 'retain_eager_prefix: false' in r['config']
+        for a,b in zip([old['value_p0'],*old['cells_p0']],[r['value_p0'],*r['cells_p0']]):
+            assert max(a[0],b[0])<=min(a[1],b[1])+1e-8
+        comparisons.append({'game':r['game'],'frame':r['frame'],'old_loss':old['pure_action_losses'][old['selected']],
+                            'new_loss':r['pure_action_losses'][r['selected']],
+                            'old_runs':old['runs'],'new_runs':r['runs'],'old_stop':old['stop'],'new_stop':r['stop']})
+    first_better=next((c['game'],c['frame']) for c in comparisons if c['new_loss'][1]<c['old_loss'][1]-1e-8)
+    first_worse=next((c['game'],c['frame']) for c in comparisons if c['new_loss'][1]>c['old_loss'][1]+1e-8)
+    repeats=rows(scratch/'repeat.jsonl')
+    assert {(r['game'],r['frame']) for r in repeats}=={(1,37),first_better,first_worse}
+    tuning=rows('findings/native-endgame-scheduling-v1/quotient.jsonl.gz')
+    combined={(r['game'],r['frame']):r for r in [*records,*tuning]}
+    assert len(combined)==70
+    for r in repeats:
+        old=combined[r['game'],r['frame']]
+        assert {k:v for k,v in r.items() if k!='elapsed_ms'}=={k:v for k,v in old.items() if k!='elapsed_ms'}
+    prior_small=json.loads(Path('findings/native-endgame-bounds-v1/summary.json').read_text())['selected_pure_loss_at_most_002']['keys']
+    small=set(map(tuple,prior_small))
+    for r in [*baseline.values(),*combined.values()]:
+        if r['pure_action_losses'][r['selected']][1]<=.02:
+            small.add((r['game'],r['frame']))
+    result.update({'schema':protocol['schema'],'protocol_sha256':digest(directory/'protocol.json'),
+                   'records_sha256':digest(scratch/'main.jsonl'),'repeat_sha256':digest(scratch/'repeat.jsonl'),
+                   'unused_selection_verified':True,'all_intervals_overlap_frozen':True,
+                   'repeat_three_roots_identical_except_time':True,'binaries_match_protocol':True,
+                   'comparisons':comparisons,
+                   'upper_improved':sum(c['new_loss'][1]<c['old_loss'][1]-1e-8 for c in comparisons),
+                   'upper_worsened':sum(c['new_loss'][1]>c['old_loss'][1]+1e-8 for c in comparisons),
+                   'baseline_stops':dict(Counter(c['old_stop'] for c in comparisons)),
+                   'baseline_runs':sum(c['old_runs'] for c in comparisons),
+                   'combined_small_loss_roots':len(small),'combined_small_loss_games':len({g for g,f in small}),
+                   'combined_unresolved_roots':360-len(small),
+                   'strength_improvement_proven':False,'blind_policy_error_proven':False})
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':
+    main()
