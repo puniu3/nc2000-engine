@@ -16672,6 +16672,180 @@
     },
     "findings/adaptive-opening-mix-v1/proofs.jsonl.gz": {
       "sha256": "e3b16895c641ab2b56cee5c4fca94cedb7fe318f599ad24adf24d9a5d8b0917d"
+    },
+    "findings/reused-opening-mix-v1/summary.json": {
+      "sha256": "2f8c237a0bd771e55fa822e7fd96b04f801fed4b585ea1c7003b57ea27d38ad6",
+      "data": {
+        "negative_controls": [
+          "wrong_root",
+          "inflated_value",
+          "inflated_runs"
+        ],
+        "census": {
+          "counts": {
+            "nodes_terminal": 78880,
+            "nodes_horizon": 314133,
+            "nodes_decision": 38262,
+            "runs_depth_1": 2229975,
+            "runs_depth_0": 127102,
+            "runs_depth_2": 37360,
+            "duplicate_decisions": 1
+          },
+          "cross_call_duplicate_runs": 224,
+          "identical_complete_kernel_runs": 677742,
+          "identical_complete_kernel_branches": 75533
+        },
+        "calls": 2534,
+        "counts": {
+          "alias_count": 67749,
+          "audit_runs": 0,
+          "audit_leaves": 0,
+          "runs": 1748361,
+          "saved_runs": 646076
+        },
+        "alias_audit": {
+          "alias_count": 67749,
+          "audit_runs": 10764122,
+          "audit_leaves": 4760246,
+          "runs": 1748361,
+          "saved_runs": 646076
+        },
+        "bounds": [
+          0.08927540472102805,
+          0.08928985574286728
+        ],
+        "mix": [
+          0.4442382191836303,
+          0.5557617808163698
+        ],
+        "numeric_reference_seconds": [
+          45.949828625,
+          45.95653925
+        ],
+        "reuse_seconds": [
+          24.497401625,
+          24.274691875
+        ],
+        "engine_run_reduction": 0.26982376232909866,
+        "half_second": {
+          "counts": {
+            "alias_count": 1012,
+            "audit_runs": 0,
+            "audit_leaves": 0,
+            "runs": 37194,
+            "saved_runs": 8730
+          },
+          "result": {
+            "kind": "result",
+            "seconds": 0.52055,
+            "setup_seconds": 0.295540042,
+            "mix": [
+              0.0,
+              1.0
+            ],
+            "adversary": [],
+            "bounds": [
+              0.0,
+              1.0
+            ],
+            "calls": 95,
+            "runs": 37194,
+            "snapshots": [
+              {
+                "checkpoint_seconds": 0.5,
+                "seconds": 0.520549333,
+                "lower": 0.0,
+                "upper": 1.0,
+                "mix": [
+                  0.0,
+                  1.0
+                ],
+                "swords": 95,
+                "rocks": 0,
+                "calls": 95,
+                "runs": 37194
+              }
+            ],
+            "swords": 95,
+            "rocks": 0,
+            "uppers": 0,
+            "converged": false
+          },
+          "header": {
+            "kind": "config",
+            "case": {
+              "game": 6,
+              "decision": 32,
+              "side": 1,
+              "key": "339473314819185432203498695073713293243",
+              "alternate_key": "211835714283966002859083962342625083548",
+              "foe_slot": 5,
+              "species": "zapdos",
+              "move_slot": 2,
+              "original_move": "rest",
+              "replacement": "reflect",
+              "sources": [
+                "1M"
+              ],
+              "prefix_checks": 33,
+              "log_hash": "b71b5f694e82251c565ad15143e138c2690c48c8d5f74c312b626a8b6eafbf33",
+              "observer_hash": "7bad93794ab4538b683132611c1e46ad8ddd39837e2caba810a4681077e691b4",
+              "turn": 28,
+              "actions": [
+                "move earthquake",
+                "move rockslide",
+                "move swordsdance",
+                "move hiddenpowerflying"
+              ],
+              "original_replies": [
+                "move thunderbolt",
+                "move hiddenpowerice",
+                "move rest",
+                "move sleeptalk"
+              ],
+              "alternate_replies": [
+                "move thunderbolt",
+                "move hiddenpowerice",
+                "move reflect",
+                "move sleeptalk"
+              ],
+              "hp": [
+                196,
+                33
+              ]
+            },
+            "worlds": 2200,
+            "own_actions": [
+              "move earthquake",
+              "move rockslide",
+              "move swordsdance",
+              "move hiddenpowerflying"
+            ],
+            "policies": [
+              "move rockslide",
+              "move swordsdance"
+            ],
+            "continuation": [
+              "move rockslide"
+            ],
+            "opponent_opening": [
+              "move sleeptalk",
+              "move sleeptalk",
+              "move hiddenpowerice"
+            ],
+            "budget_ms": 500,
+            "backend": "reuse",
+            "gap_tolerance": 2e-05,
+            "setup_seconds": 0.295540042
+          }
+        },
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "Reuses only opponent sleep-action aliases selected by the existing collapse_sleep_choices rule. Terminal and horizon leaves return before key construction. All 2534 computed values, root-action bounds, schedules, mixtures and final bounds equal the immutable full-proof reference exactly. Every alias in the audited run is replayed over all chance paths; raw state keys, logs and draw traces match the representative. The audit runs separately from both timing runs. Full original certificates are independently rechecked. The finite input family and prescribed policy templates are unchanged; this is not a full-information-set guarantee or a deployed bot improvement. Times include calculation and output, exclude input loading and model setup, and are Mac timings. The 500ms budget is checked between cells and may overrun. The archived-kernel census is diagnostic, not an authorization to merge arbitrary equal-looking payoffs or partial kernels."
+      }
+    },
+    "findings/reused-opening-mix-v1/records.json.gz": {
+      "sha256": "1a020381f1f7f8cbef2b4b230c9fae83dc100d55adbcdf6099de47adba63007c"
     }
   },
   "foresight_fix": {

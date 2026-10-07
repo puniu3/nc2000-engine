@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from collections import Counter
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root/'findings/reused-opening-mix-v1'
+prior = root/'findings/adaptive-opening-mix-v1/proofs.jsonl.gz'
+original = [json.loads(l) for l in gzip.decompress(prior.read_bytes()).splitlines()]
+checker = runpy.run_path(str(root/'tools/adaptive-opening-mix-probe'))
+
+
+def census():
+    seen = set()
+    counts = Counter()
+    duplicate_runs = kernel_runs = kernel_branches = 0
+    for row in original[1:-1]:
+        ledger = row['ledger']; cfg = ledger['config']
+        for node in ledger['nodes']:
+            counts['nodes_'+node['kind']] += 1
+            if node['kind'] != 'decision': continue
+            depth = node['depth']
+            key = (cfg['target_side'],cfg['horizon']-depth,tuple(cfg['priority']),
+                   tuple(cfg.get('opening',[])[depth:]),tuple(node['cache_key']),cfg['first_choice'] if depth == 0 else None)
+            runs = sum(b['runs'] for b in node['branches'])
+            counts[f'runs_depth_{depth}'] += runs
+            if key in seen:
+                duplicate_runs += runs
+                counts['duplicate_decisions'] += 1
+            seen.add(key)
+            kernels = set()
+            for branch in node['branches']:
+                if branch['pending'] != 0: continue
+                kernel = tuple((c['mass'],c['node']) for c in branch['children'])
+                if kernel in kernels:
+                    kernel_runs += branch['runs']; kernel_branches += 1
+                kernels.add(kernel)
+    assert sum(v for k,v in counts.items() if k.startswith('runs_depth_')) == original[-1]['runs']
+    return dict(counts=counts,cross_call_duplicate_runs=duplicate_runs,
+                identical_complete_kernel_runs=kernel_runs,identical_complete_kernel_branches=kernel_branches)
+
+
+def compare(rows, audited=False, partial=False):
+    header = rows[0]
+    assert header['backend'] == ('audit' if audited else 'reuse')
+    assert {k:v for k,v in header.items() if k not in ['backend','budget_ms','setup_seconds']} == {
+        k:v for k,v in original[0].items() if k not in ['backend','budget_ms','setup_seconds']}
+    assert len(rows) == len(original) if not partial else len(rows) < len(original)
+    counts = Counter()
+    last_seconds = 0.
+    for baseline, actual in zip(original[1:-1],rows[1:-1]):
+        assert 0 <= last_seconds <= actual['seconds'] and actual['cell_seconds'] >= 0
+        last_seconds = actual['seconds']
+        for key in ['kind','index','id','mix','adversary','bounds','calls']:
+            assert baseline[key] == actual[key]
+        expected = checker['compact'](baseline['ledger'])
+        value = actual['ledger']
+        assert all(isinstance(value[k],int) and value[k] >= 0 for k in ['alias_count','audit_runs','audit_leaves','runs'])
+        assert {k:v for k,v in value.items() if k not in ['alias_count','audit_runs','audit_leaves','runs']} == {
+            k:v for k,v in expected.items() if k != 'runs'}
+        assert 0 <= value['runs'] <= expected['runs']
+        if value['alias_count'] == 0: assert value['runs'] == expected['runs']
+        if audited:
+            assert value['audit_runs'] >= 2*value['audit_leaves'] >= 2*value['alias_count']
+        else: assert value['audit_runs'] == value['audit_leaves'] == 0
+        for key in ['alias_count','audit_runs','audit_leaves','runs']: counts[key] += value[key]
+        counts['saved_runs'] += expected['runs']-value['runs']
+        assert actual['runs'] == counts['runs']
+    result = rows[-1]
+    assert result['calls'] == len(rows)-2 and result['runs'] == counts['runs']
+    assert result['setup_seconds'] == header['setup_seconds'] and result['seconds'] >= last_seconds
+    if not partial:
+        for key in ['mix','adversary','bounds','calls','swords','rocks','uppers','converged']:
+            assert result[key] == original[-1][key]
+    else:
+        assert result['bounds'] == [0.,1.] and not result['converged'] and result['seconds']*1000 >= header['budget_ms']
+    for snapshot in result['snapshots']:
+        assert snapshot['seconds'] >= snapshot['checkpoint_seconds']
+        state = rows[snapshot['calls']] if snapshot['calls'] else dict(mix=[0.,1.],bounds=[0.,1.],runs=0)
+        assert snapshot['mix'] == state['mix'] and snapshot['runs'] == state['runs']
+        assert [snapshot['lower'],snapshot['upper']] == state['bounds']
+    return dict(counts=counts,result=result,header=header)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record',nargs=4,type=Path)
+    args = parser.parse_args()
+    paths = [Path(__file__).resolve(),prior,root/'findings/adaptive-opening-mix-v1/summary.json',
+             root/'tools/adaptive-opening-mix-probe',root/'tools/policy-witness-probe',root/'tools/hidden-move-witness-probe',
+             root/'crates/bot/examples/reused_opening_mix.rs',root/'crates/bot/examples/reused_witness.rs',
+             root/'crates/bot/examples/numeric_witness.rs',root/'crates/bot/examples/policy_witness.rs',
+             root/'crates/bot/examples/aliased_witness/mod.rs',root/'crates/bot/examples/threshold_witness/mod.rs',
+             root/'findings/item-move-product-v1/records.json.gz',root/'data/gen2stadium2.json']
+    for directory in ['crates/bot/src','crates/engine/src']:paths += list((root/directory).rglob('*.rs'))
+    hashes={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists()
+        data = [[json.loads(l) for l in p.read_bytes().splitlines()] for p in args.record]
+    else:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert bundle['hashes']==hashes
+        data=bundle['data']
+    checker['verify_full'](original)
+    reports=[compare(rows,audited=i==2,partial=i==3) for i,rows in enumerate(data)]
+    for rows in data[1:3]:
+        for a,b in zip(data[0][1:-1],rows[1:-1]):
+            assert {k:v for k,v in a.items() if k not in ['seconds','cell_seconds','ledger']} == {
+                k:v for k,v in b.items() if k not in ['seconds','cell_seconds','ledger']}
+            assert {k:v for k,v in a['ledger'].items() if not k.startswith('audit_')} == {
+                k:v for k,v in b['ledger'].items() if not k.startswith('audit_')}
+    for fault in ['wrong_root','inflated_value','inflated_runs']:
+        bad=copy.deepcopy(data[0])
+        ledger=bad[1]['ledger']
+        if fault=='wrong_root':ledger['nodes'][0]['state_key']='0'
+        elif fault=='inflated_value':ledger['bounds'][0]+=.01
+        else:ledger['runs']+=1000000
+        try:compare(bad)
+        except AssertionError:pass
+        else:raise AssertionError('Accepted corruption: '+fault)
+    old=json.loads((root/'findings/adaptive-opening-mix-v1/summary.json').read_bytes())
+    summary=dict(negative_controls=['wrong_root','inflated_value','inflated_runs'],census=census(),calls=data[0][-1]['calls'],counts=reports[0]['counts'],
+                 alias_audit=reports[2]['counts'],bounds=data[0][-1]['bounds'],mix=data[0][-1]['mix'],
+                 numeric_reference_seconds=old['numeric_seconds'],reuse_seconds=[r['result']['seconds'] for r in reports[:2]],
+                 engine_run_reduction=reports[0]['counts']['saved_runs']/original[-1]['runs'],
+                 half_second=reports[3],production_changed=False,strength_demonstrated=False,
+                 scope='Reuses only opponent sleep-action aliases selected by the existing collapse_sleep_choices rule. '
+                 'Terminal and horizon leaves return before key construction. All 2534 computed values, root-action '
+                 'bounds, schedules, mixtures and final bounds equal the immutable full-proof reference exactly. '
+                 'Every alias in the audited run is replayed over all chance paths; raw state keys, logs and draw '
+                 'traces match the representative. The audit runs separately from both timing runs. Full original '
+                 'certificates are independently rechecked. The finite input family and prescribed policy templates '
+                 'are unchanged; this is not a full-information-set guarantee or a deployed bot improvement. '
+                 'Times include calculation and output, exclude input loading and model setup, and are Mac timings. '
+                 'The 500ms budget is checked between cells and may overrun. The archived-kernel census is diagnostic, '
+                 'not an authorization to merge arbitrary equal-looking payoffs or partial kernels.')
+    if args.record:
+        archive.mkdir()
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(dict(hashes=hashes,data=data),separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    else: assert summary==json.loads((archive/'summary.json').read_bytes())
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['scope','half_second']},indent=2))
+
+
+if __name__=='__main__':main()
