@@ -1,0 +1,102 @@
+{
+  "results": [
+    {
+      "id": "trial-0",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.29620143242332375,
+      "target_score_interval": [
+        0.29620143242332375,
+        1.0
+      ],
+      "stop": "NodeBudget",
+      "runs": 921554,
+      "nodes": 200068,
+      "elapsed_ms": 39703.589416
+    },
+    {
+      "id": "trial-1",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.29620143242332375,
+      "target_score_interval": [
+        0.29620143242332375,
+        1.0
+      ],
+      "stop": "NodeBudget",
+      "runs": 921554,
+      "nodes": 200068,
+      "elapsed_ms": 42930.176334
+    },
+    {
+      "id": "trial-2",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.29620143242332375,
+      "target_score_interval": [
+        0.29620143242332375,
+        1.0
+      ],
+      "stop": "NodeBudget",
+      "runs": 921554,
+      "nodes": 200068,
+      "elapsed_ms": 42807.14775
+    },
+    {
+      "id": "trial-3",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.29620143242332375,
+      "target_score_interval": [
+        0.29620143242332375,
+        1.0
+      ],
+      "stop": "NodeBudget",
+      "runs": 921554,
+      "nodes": 200068,
+      "elapsed_ms": 39602.298959
+    }
+  ],
+  "combined_first_action_guarantees": {
+    "move doubleedge": [
+      0.8420197907628891,
+      0.9999906503889959
+    ],
+    "move curse": [
+      0.0,
+      0.9999906503889959
+    ],
+    "move rest": [
+      0.29620143242332375,
+      0.9999906503889959
+    ],
+    "move sleeptalk": [
+      0.0,
+      0.9999906503889959
+    ]
+  },
+  "actual_rest_pure_loss_lower": 0.0,
+  "actual_rest_error_proven": false,
+  "rest_over_doubleedge_security_advantage_lower": 0.0,
+  "rest_better_than_doubleedge_proven": false,
+  "repeats_match": true,
+  "control_reproduces_parent": true,
+  "candidate_activated": false,
+  "lower_bound_change": 0.0,
+  "interval_width_change": 0.0,
+  "deferred_eager_leaves": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "schema": "nc2000-native-frontier-defer-v1",
+  "protocol_sha256": "8f8c1dba3ab9cf67cc139e1dcb391df429e1cbe2892112cc5c7e208d544df044",
+  "records_sha256": "e4d86aa9bc4da3d1a0c8e59191be6ed367cf06db695412605103f4ff3b674ad9",
+  "rejected_mutations": [
+    "missing_job",
+    "false_bound",
+    "wrong_mode",
+    "changed_repeat",
+    "restricted_reply"
+  ],
+  "ordinary_bot_changed": false,
+  "strength_improvement_proven": false,
+  "matched_time_comparison": false
+}
