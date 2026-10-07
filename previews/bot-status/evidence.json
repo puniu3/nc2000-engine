@@ -16846,6 +16846,268 @@
     },
     "findings/reused-opening-mix-v1/records.json.gz": {
       "sha256": "1a020381f1f7f8cbef2b4b230c9fae83dc100d55adbcdf6099de47adba63007c"
+    },
+    "findings/cutting-opening-mix-v1/summary.json": {
+      "sha256": "dd7bede5309ca95351a220a8d1ace2bf64742186c4d3742ebc5cf1425ade5147",
+      "data": {
+        "calls": 2973,
+        "proof_runs": 1006366,
+        "kind_counts": {
+          "swordsdance": 2460,
+          "rockslide": 507,
+          "upper": 6
+        },
+        "root_branches_pruned": 11442,
+        "certificate_nodes": 166279,
+        "active_worlds": [
+          "berry/rest",
+          "berry/bide",
+          "berry/doubleedge",
+          "brightpowder/detect",
+          "brightpowder/doubleedge",
+          "focusband/doubleedge"
+        ],
+        "mix": [
+          0.44423821918360906,
+          0.5557617808163908
+        ],
+        "bounds": [
+          0.08926996924045259,
+          0.08928985574286724
+        ],
+        "negative_controls": [
+          "inflated_lower",
+          "invalid_mix",
+          "wrong_adversary"
+        ],
+        "proof_seconds": [
+          21.618801875,
+          21.86699375
+        ],
+        "numeric_seconds": [
+          10.547082,
+          10.804043083
+        ],
+        "numeric_runs": 765666,
+        "alias_count": 31588,
+        "pruned_leaves": 103205,
+        "zero_budget": {
+          "header": {
+            "kind": "config",
+            "case": {
+              "game": 6,
+              "decision": 32,
+              "side": 1,
+              "key": "339473314819185432203498695073713293243",
+              "alternate_key": "211835714283966002859083962342625083548",
+              "foe_slot": 5,
+              "species": "zapdos",
+              "move_slot": 2,
+              "original_move": "rest",
+              "replacement": "reflect",
+              "sources": [
+                "1M"
+              ],
+              "prefix_checks": 33,
+              "log_hash": "b71b5f694e82251c565ad15143e138c2690c48c8d5f74c312b626a8b6eafbf33",
+              "observer_hash": "7bad93794ab4538b683132611c1e46ad8ddd39837e2caba810a4681077e691b4",
+              "turn": 28,
+              "actions": [
+                "move earthquake",
+                "move rockslide",
+                "move swordsdance",
+                "move hiddenpowerflying"
+              ],
+              "original_replies": [
+                "move thunderbolt",
+                "move hiddenpowerice",
+                "move rest",
+                "move sleeptalk"
+              ],
+              "alternate_replies": [
+                "move thunderbolt",
+                "move hiddenpowerice",
+                "move reflect",
+                "move sleeptalk"
+              ],
+              "hp": [
+                196,
+                33
+              ]
+            },
+            "worlds": 2200,
+            "own_actions": [
+              "move earthquake",
+              "move rockslide",
+              "move swordsdance",
+              "move hiddenpowerflying"
+            ],
+            "policies": [
+              "move rockslide",
+              "move swordsdance"
+            ],
+            "continuation": [
+              "move rockslide"
+            ],
+            "opponent_opening": [
+              "move sleeptalk",
+              "move sleeptalk",
+              "move hiddenpowerice"
+            ],
+            "budget_ms": 0,
+            "backend": "numeric",
+            "gap_tolerance": 2e-05,
+            "setup_seconds": 0.292429583
+          },
+          "result": {
+            "kind": "result",
+            "seconds": 1.1375e-05,
+            "setup_seconds": 0.292429583,
+            "mix": [
+              0.0,
+              1.0
+            ],
+            "adversary": [],
+            "bounds": [
+              0.0,
+              1.0
+            ],
+            "calls": 0,
+            "runs": 0,
+            "snapshots": [],
+            "active": [
+              0
+            ],
+            "converged": false
+          },
+          "aliases": 0,
+          "pruned_leaves": 0,
+          "stable_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "half_second": {
+          "header": {
+            "kind": "config",
+            "case": {
+              "game": 6,
+              "decision": 32,
+              "side": 1,
+              "key": "339473314819185432203498695073713293243",
+              "alternate_key": "211835714283966002859083962342625083548",
+              "foe_slot": 5,
+              "species": "zapdos",
+              "move_slot": 2,
+              "original_move": "rest",
+              "replacement": "reflect",
+              "sources": [
+                "1M"
+              ],
+              "prefix_checks": 33,
+              "log_hash": "b71b5f694e82251c565ad15143e138c2690c48c8d5f74c312b626a8b6eafbf33",
+              "observer_hash": "7bad93794ab4538b683132611c1e46ad8ddd39837e2caba810a4681077e691b4",
+              "turn": 28,
+              "actions": [
+                "move earthquake",
+                "move rockslide",
+                "move swordsdance",
+                "move hiddenpowerflying"
+              ],
+              "original_replies": [
+                "move thunderbolt",
+                "move hiddenpowerice",
+                "move rest",
+                "move sleeptalk"
+              ],
+              "alternate_replies": [
+                "move thunderbolt",
+                "move hiddenpowerice",
+                "move reflect",
+                "move sleeptalk"
+              ],
+              "hp": [
+                196,
+                33
+              ]
+            },
+            "worlds": 2200,
+            "own_actions": [
+              "move earthquake",
+              "move rockslide",
+              "move swordsdance",
+              "move hiddenpowerflying"
+            ],
+            "policies": [
+              "move rockslide",
+              "move swordsdance"
+            ],
+            "continuation": [
+              "move rockslide"
+            ],
+            "opponent_opening": [
+              "move sleeptalk",
+              "move sleeptalk",
+              "move hiddenpowerice"
+            ],
+            "budget_ms": 500,
+            "backend": "numeric",
+            "gap_tolerance": 2e-05,
+            "setup_seconds": 0.290825125
+          },
+          "result": {
+            "kind": "result",
+            "seconds": 0.523223416,
+            "setup_seconds": 0.290825125,
+            "mix": [
+              0.0,
+              1.0
+            ],
+            "adversary": [
+              [
+                0,
+                1.0
+              ]
+            ],
+            "bounds": [
+              0.0,
+              0.3975694545531983
+            ],
+            "calls": 3,
+            "runs": 34533,
+            "snapshots": [
+              {
+                "checkpoint_seconds": 0.5,
+                "seconds": 0.523222666,
+                "lower": 0.0,
+                "upper": 0.3975694545531983,
+                "mix": [
+                  0.0,
+                  1.0
+                ],
+                "calls": 3,
+                "runs": 34533,
+                "active": [
+                  0
+                ]
+              }
+            ],
+            "active": [
+              0
+            ],
+            "converged": false
+          },
+          "aliases": 166,
+          "pruned_leaves": 0,
+          "stable_sha256": "0718c1d5daaeb4bf966e21ec2c64eed856fef6d212a5f4b91911effe0cec32d0"
+        },
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "Constraint generation over the same supplied 2200-model family and prescribed policy templates. Begin with the first model, compute both own policy lower bounds and the opponent-policy upper bounds, and derive a candidate mixture from active models. Verify remaining models against the current dual ceiling minus the predeclared 2e-5 tolerance. Stop root continuations only after their accumulated lower mass suffices; unvisited mass remains [0,1]. Add models that fail verification and recompute the mixture. The reported lower bound always covers all 2200 models, including unseen models with lower zero. All unmerged proof ledgers and the controller schedule, thresholds, candidate optima, and mixture bounds are independently checked. Every numeric calculation matches the unmerged reference exactly in root values and policy decisions; engine counts differ through previously implemented sleep aliases. Two timing runs per backend, plus zero/500ms controls. Times exclude input loading and model replay, and deadlines are checked between cells. This does not cover all hidden stats or strategies, integrate a production bot, or prove deployed-bot superiority."
+      }
+    },
+    "findings/cutting-opening-mix-v1/records.json.gz": {
+      "sha256": "e120927c619d10b4230b50c64de6216d7ff50c83fa5435bd651f4d05d506c2c3"
+    },
+    "findings/cutting-opening-mix-v1/proofs.jsonl.gz": {
+      "sha256": "4f6e70f298dbf175b54d27ea642d26fbb52189df54e2134059cb422c74f3bf35"
     }
   },
   "foresight_fix": {

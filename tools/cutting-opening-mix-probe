@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import itertools
+import json
+import runpy
+from collections import Counter
+from fractions import Fraction as F
+from pathlib import Path
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/cutting-opening-mix-v1'
+checks=runpy.run_path(str(root/'tools/adaptive-opening-mix-probe'))
+screen=checks['screen']
+
+
+def compact(ledger):
+    result=checks['compact'](ledger)
+    return {k:v for k,v in result.items() if k != 'runs'}
+
+
+def active_value(lower,active):
+    lines=[tuple(map(F,lower[i])) for i in active]
+    candidates={F(0),F(1)}
+    for (a,b),(c,d) in itertools.combinations(lines,2):
+        if a-b-c+d:
+            p=(d-b)/(a-b-c+d)
+            if 0<=p<=1:candidates.add(p)
+    return max(min(p*a+(1-p)*b for a,b in lines) for p in candidates)
+
+
+def verify(rows):
+    cfg,result=rows[0],rows[-1]
+    assert cfg['backend']=='ledger' and cfg['budget_ms']==180000 and cfg['gap_tolerance']==2e-5
+    assert cfg['worlds']==2200 and cfg['case']==screen['case']
+    assert cfg['policies']==['move rockslide','move swordsdance'] and cfg['continuation']==['move rockslide']
+    assert cfg['opponent_opening']==['move sleeptalk','move sleeptalk','move hiddenpowerice']
+    assert cfg['own_actions']==screen['case']['actions']
+    lower=[[0.,0.] for _ in range(2200)]
+    full=[[False,False] for _ in range(2200)]
+    attempted=[[0,0] for _ in range(2200)]
+    active=[0];upper={};mix=[0.,1.];hi=1.;runs=0;last_seconds=0.;reports=[]
+    root_cuts=0;kind_counts=Counter()
+    for call,row in enumerate(rows[1:-1],1):
+        assert row['seconds']>=last_seconds and row['cell_seconds']>=0
+        last_seconds=row['seconds']
+        while True:
+            target=max(0.,hi-2e-5+2e-8)
+            preparation=next(((i,'swordsdance',1.) if not full[i][1] else (i,'rockslide',1.) if not full[i][0]
+                              else (i,'upper',1.) for i in active if not all(full[i]) or i not in upper),None)
+            if preparation:
+                index,kind,threshold=preparation;break
+            index=next(i for i in range(2200) if i not in active and mix[0]*lower[i][0]+mix[1]*lower[i][1]<target)
+            if mix[1]>0 and not full[index][1] and attempted[index][1]!=len(active):
+                kind='swordsdance';threshold=min(1.,max(0.,(target+1e-9-mix[0]*lower[index][0])/mix[1]));break
+            if mix[0]>0 and not full[index][0] and attempted[index][0]!=len(active):
+                kind='rockslide';threshold=min(1.,max(0.,(target+1e-9-mix[1]*lower[index][1])/mix[0]));break
+            active.append(index)
+        assert (row['index'],row['kind'],row['threshold'])==(index,kind,threshold)
+        assert row['active']==active and row['id']==screen['rows'][index]['request']['id']
+        ledger=row['ledger'];side=0 if kind=='upper' else 1
+        expected=dict(game=6,decision=32,target_side=side,policy_side=side,
+            first_choice='move '+('sleeptalk' if kind=='upper' else kind),
+            priority=['move hiddenpowerice' if kind=='upper' else 'move rockslide'],rest_at_percent=None,
+            horizon=3 if kind=='upper' else 2,work_budget=200000,cell_cap=10000,guarded_keys=True,support_certificate=True)
+        if kind=='upper':expected['opening']=cfg['opponent_opening']
+        assert ledger['config']==expected
+        node=ledger['nodes'][ledger['root']]
+        assert node['state_key']==screen['rows'][index]['root']['key']
+        reports.append(checks['ledger_check'](ledger));checks['policy_check'](ledger)
+        if kind=='upper':
+            upper[index]=[1-next(b['bounds'][0] for b in node['branches'] if b['choices'][1]==a) for a in cfg['own_actions']]
+        else:
+            action=int(kind=='swordsdance')
+            lower[index][action]=max(lower[index][action],ledger['bounds'][0])
+            full[index][action] |= threshold==1.
+            attempted[index][action]=len(active)
+            root_cuts+=sum(b['continuation_pending_mass']>0 for b in node['branches'])
+        if all(all(full[i]) and i in upper for i in active):
+            p=checks['normalized'](row['mix'])
+            value=min(p[0]*F(lower[i][0])+p[1]*F(lower[i][1]) for i in active)
+            assert active_value(lower,active)-value<F(1,10**10)
+        else:assert row['mix']==mix
+        checks['bound_check'](row,lower,upper,cfg['own_actions'])
+        mix=row['mix'];hi=row['bounds'][1];runs+=ledger['runs'];kind_counts[kind]+=1
+        assert row['calls']==call and row['runs']==runs
+    assert result['converged'] and result['bounds'][1]-result['bounds'][0]<=2e-5
+    assert result['active']==active and result['setup_seconds']==cfg['setup_seconds']
+    assert result['seconds']>=last_seconds
+    for k in ['mix','adversary','bounds','calls','runs']:assert result[k]==rows[-2][k]
+    for snapshot in result['snapshots']:
+        assert snapshot['seconds']>=snapshot['checkpoint_seconds']
+        state=rows[snapshot['calls']] if snapshot['calls'] else dict(mix=[0.,1.],bounds=[0.,1.],runs=0)
+        assert snapshot['mix']==state['mix'] and snapshot['runs']==state['runs']
+        assert [snapshot['lower'],snapshot['upper']]==state['bounds']
+    for fault in ['inflated_lower','invalid_mix','wrong_adversary']:
+        bad=copy.deepcopy(result)
+        if fault=='inflated_lower':bad['bounds'][0]+=.001
+        elif fault=='invalid_mix':bad['mix']=[1.,1.]
+        else:bad['adversary'][0][0]=100000
+        try:checks['bound_check'](bad,lower,upper,cfg['own_actions'])
+        except AssertionError:pass
+        else:raise AssertionError('Accepted corruption: '+fault)
+    return dict(calls=result['calls'],proof_runs=runs,kind_counts=kind_counts,
+        root_branches_pruned=root_cuts,certificate_nodes=sum(r['nodes'] for r in reports),
+        active_worlds=[screen['rows'][i]['request']['id'] for i in active],mix=mix,bounds=result['bounds'],
+        negative_controls=['inflated_lower','invalid_mix','wrong_adversary'])
+
+
+def identity(reference,other,numeric,partial=False):
+    assert other[0]['backend']==('numeric' if numeric else 'ledger')
+    assert {k:v for k,v in reference[0].items() if k not in ['backend','budget_ms','setup_seconds']}=={
+        k:v for k,v in other[0].items() if k not in ['backend','budget_ms','setup_seconds']}
+    assert len(other)<=len(reference) if partial else len(other)==len(reference)
+    runs=0;aliases=pruned=0
+    for a,b in zip(reference[1:-1],other[1:-1]):
+        assert {k:v for k,v in a.items() if k not in ['ledger','seconds','cell_seconds','runs']}=={
+            k:v for k,v in b.items() if k not in ['ledger','seconds','cell_seconds','runs']}
+        value=b['ledger']
+        if numeric:
+            assert {k:v for k,v in value.items() if k not in ['runs','threshold','pruned_leaves','alias_count']}==compact(a['ledger'])
+            assert value['threshold']==b['threshold'] and 0<=value['runs']<=a['ledger']['runs']
+            assert value['pruned_leaves']>=0 and value['alias_count']>=0
+            aliases+=value['alias_count'];pruned+=value['pruned_leaves']
+        else:assert value==a['ledger']
+        runs+=value['runs'];assert b['runs']==runs
+    result=other[-1]
+    assert result['calls']==len(other)-2 and result['runs']==runs
+    if not partial:
+        for k in ['mix','adversary','bounds','calls','active','converged']:assert reference[-1][k]==result[k]
+    else:
+        assert not result['converged'] and result['seconds']*1000>=other[0]['budget_ms']
+        if result['calls']:
+            for k in ['mix','adversary','bounds','runs','calls']:assert result[k]==other[-2][k]
+        else:assert result['bounds']==[0.,1.] and result['mix']==[0.,1.]
+    return dict(header=other[0],result=result,aliases=aliases,pruned_leaves=pruned,
+        stable_sha256=hashlib.sha256(json.dumps([{k:v for k,v in r.items() if k not in ['seconds','cell_seconds']}
+            for r in other[1:-1]],separators=(',',':')).encode()).hexdigest())
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',nargs=6,type=Path);args=parser.parse_args()
+    paths=[Path(__file__).resolve(),root/'crates/bot/examples/cutting_opening_mix.rs',root/'crates/bot/examples/stopped_witness.rs',
+        root/'crates/bot/examples/policy_witness.rs',root/'crates/bot/examples/threshold_witness/mod.rs',root/'crates/bot/examples/aliased_witness/mod.rs',
+        root/'tools/adaptive-opening-mix-probe',root/'tools/policy-witness-probe',root/'tools/hidden-move-witness-probe',
+        root/'findings/item-move-product-v1/records.json.gz',root/'findings/policy-gap-v1/corpus.jsonl.gz',root/'data/gen2stadium2.json']
+    for directory in ['crates/bot/src','crates/engine/src']:paths+=list((root/directory).rglob('*.rs'))
+    hashes={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists();raw=args.record[0].read_bytes()
+        repeats=[[json.loads(l) for l in p.read_bytes().splitlines()] for p in args.record[1:]]
+    else:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()));assert bundle['hashes']==hashes
+        raw=gzip.decompress((archive/'proofs.jsonl.gz').read_bytes());assert hashlib.sha256(raw).hexdigest()==bundle['proof_sha256']
+        repeats=bundle['repeats']
+    rows=[json.loads(l) for l in raw.splitlines()];summary=verify(rows)
+    identities=[]
+    for i,data in enumerate(repeats):
+        if data is None:
+            assert i==0 and not args.record
+            previous=bundle['ledger_repeat_identity']
+            stable=[{k:v for k,v in r.items() if k not in ['seconds','cell_seconds']} for r in rows[1:-1]]
+            assert hashlib.sha256(json.dumps(stable,separators=(',',':')).encode()).hexdigest()==previous['stable_sha256']
+            for k in ['mix','adversary','bounds','calls','active','converged','runs']:
+                assert previous['result'][k]==rows[-1][k]
+            identities.append(previous)
+        else:identities.append(identity(rows,data,numeric=i!=0,partial=i>=3))
+    for a,b in zip(repeats[1][1:-1],repeats[2][1:-1]):
+        assert {k:v for k,v in a.items() if k not in ['seconds','cell_seconds']}=={
+            k:v for k,v in b.items() if k not in ['seconds','cell_seconds']}
+    summary.update(proof_seconds=[rows[-1]['seconds'],identities[0]['result']['seconds']],
+        numeric_seconds=[identities[i]['result']['seconds'] for i in [1,2]],
+        numeric_runs=identities[1]['result']['runs'],alias_count=identities[1]['aliases'],
+        pruned_leaves=identities[1]['pruned_leaves'],zero_budget=identities[3],half_second=identities[4],
+        production_changed=False,strength_demonstrated=False,
+        scope='Constraint generation over the same supplied 2200-model family and prescribed policy templates. '
+              'Begin with the first model, compute both own policy lower bounds and the opponent-policy upper '
+              'bounds, and derive a candidate mixture from active models. Verify remaining models against '
+              'the current dual ceiling minus the predeclared 2e-5 tolerance. Stop root continuations only '
+              'after their accumulated lower mass suffices; unvisited mass remains [0,1]. Add models that '
+              'fail verification and recompute the mixture. The reported lower bound always covers all '
+              '2200 models, including unseen models with lower zero. All unmerged proof ledgers and the '
+              'controller schedule, thresholds, candidate optima, and mixture bounds are independently '
+              'checked. Every numeric calculation matches the unmerged reference exactly in root values '
+              'and policy decisions; engine counts differ through previously implemented sleep aliases. '
+              'Two timing runs per backend, plus zero/500ms controls. Times exclude input loading and '
+              'model replay, and deadlines are checked between cells. This does not cover all hidden '
+              'stats or strategies, integrate a production bot, or prove deployed-bot superiority.')
+    if args.record:
+        archive.mkdir()
+        repeats[0]=None
+        bundle=dict(hashes=hashes,proof_sha256=hashlib.sha256(raw).hexdigest(),repeats=repeats,
+                    ledger_repeat_identity=identities[0])
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'proofs.jsonl.gz').write_bytes(gzip.compress(raw,mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    else:assert summary==json.loads((archive/'summary.json').read_bytes())
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['scope','zero_budget','half_second']},indent=2))
+
+
+if __name__=='__main__':main()
