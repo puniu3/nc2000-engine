@@ -1,0 +1,192 @@
+{
+  "schema": "nc2000-native-waking-loss-v1",
+  "arms": {
+    "control": {
+      "roots": 1,
+      "games": 1,
+      "runs": 250000,
+      "stops": {
+        "WorkExhausted": 1
+      },
+      "value_width_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_above_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_strictly_dominated": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "unresolved_selected_pure_loss": {
+        "roots": 1,
+        "games": 1,
+        "keys": [
+          [
+            62,
+            92
+          ]
+        ]
+      },
+      "max_nodes_plus_closed": 682,
+      "max_runs": 250000,
+      "records_sha256": "7b26cf6df5e4804250517ce030ccaac7b33e7cbff7edd0bcc0d287d9c04c1078",
+      "protocol_sha256": "0594d7173384e38ca964fd595c236ac73b1ca443b64ea2657f5234cb9f46a886",
+      "targets": [
+        {
+          "game": 62,
+          "frame": 92,
+          "threshold_loss": [
+            0.0,
+            1.0
+          ],
+          "pure_action_values": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.0
+            ]
+          ],
+          "stop": "WorkExhausted",
+          "runs": 250000,
+          "nodes": 682,
+          "elapsed_ms": 4244.658292,
+          "stats": {
+            "eager_runs": 233940,
+            "eager_failures": 49,
+            "retained_eager_runs": 0,
+            "retained_eager_leaves": 0,
+            "expansions": 16090,
+            "trials": 16091,
+            "reused_nodes": 48969
+          }
+        }
+      ]
+    },
+    "prefix": {
+      "roots": 1,
+      "games": 1,
+      "runs": 250000,
+      "stops": {
+        "WorkExhausted": 1
+      },
+      "value_width_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_above_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_strictly_dominated": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "unresolved_selected_pure_loss": {
+        "roots": 1,
+        "games": 1,
+        "keys": [
+          [
+            62,
+            92
+          ]
+        ]
+      },
+      "max_nodes_plus_closed": 6677,
+      "max_runs": 250000,
+      "records_sha256": "d12c0357c8cf89a29d7cdfdcc70b99ee7fce60168239922329cfab9ed9681f1e",
+      "protocol_sha256": "a75d43e91d64ce15bf34ed2e1cf60a07d0f2bf1ae999b2a0616e330f08306198",
+      "targets": [
+        {
+          "game": 62,
+          "frame": 92,
+          "threshold_loss": [
+            0.0,
+            1.0
+          ],
+          "pure_action_values": [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.0
+            ]
+          ],
+          "stop": "WorkExhausted",
+          "runs": 250000,
+          "nodes": 6677,
+          "elapsed_ms": 6734.375542000001,
+          "stats": {
+            "eager_runs": 245277,
+            "eager_failures": 54,
+            "retained_eager_runs": 217797,
+            "retained_eager_leaves": 217797,
+            "expansions": 4809,
+            "trials": 4809,
+            "reused_nodes": 243292
+          }
+        }
+      ]
+    }
+  },
+  "rejected_mutations": [
+    "control:missing_root",
+    "control:wrong_target",
+    "control:false_threshold",
+    "control:invalid_cell",
+    "control:wrong_root",
+    "prefix:missing_root",
+    "prefix:wrong_target",
+    "prefix:false_threshold",
+    "prefix:invalid_cell",
+    "prefix:wrong_root"
+  ],
+  "excluded_selection_mismatch": {
+    "game": 62,
+    "frame": 172,
+    "runs": 250000,
+    "records_sha256": "172e2da5c82164ec5780faf73722903e5b4120dca74576869a5bd280aa927b51",
+    "reason": "File-order index117 was used by a solver that sorts roots. Corrected selection is sorted index77, derived from game/frame before rerun."
+  },
+  "ordinary_bot_changed": false,
+  "strength_improvement_proven": false
+}

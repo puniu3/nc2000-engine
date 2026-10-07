@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+import subprocess
+from pathlib import Path
+
+
+def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def rows(path):
+    data=Path(path).read_bytes()
+    if str(path).endswith('.gz'):data=gzip.decompress(data)
+    return [json.loads(line) for line in data.splitlines()]
+
+
+def main():
+    p=Path('findings/native-waking-loss-v1');t=Path('tmp/native-waking-loss-v1')
+    nomination=json.loads(Path('findings/native-waking-choice-census-v1/summary.json').read_text())
+    keys=[(r['game'],r['frame']) for r in nomination['sleep_talk_roots']]
+    roots=rows('tmp/native-endgame-census-v1/roots.jsonl')
+    ordered=sorted(roots,key=lambda r:(r['record']['game'],r['record']['frame']))
+    prior={(r['game'],r['frame']):r for r in rows('findings/native-endgame-bounds-v1/records.jsonl.gz')}
+    check=runpy.run_path('tools/native-first-step-loss-audit')['check']
+    results={};rejected=[]
+    for arm,proto_file,record_file in [('control','corrected-protocol.json','corrected.jsonl'),('prefix','prefix-protocol.json','prefix.jsonl')]:
+        protocol=json.loads((p/proto_file).read_text());actual=rows(t/record_file)
+        assert sha('tmp/native-endgame-census-v1/roots.jsonl')==protocol['roots_sha256']
+        assert sha(protocol['source_helper'])==protocol['helper_sha256']
+        assert sha('tmp/native-loss-threshold-v1/solver')==protocol['solver_binary_sha256']
+        assert hashlib.sha256(subprocess.check_output(['git','show','635bc8c:crates/bot/src/bounds.rs'])).hexdigest()==protocol['parent_bounds_source_sha256']
+        assert sha('crates/bot/src/bounds/loss_threshold.rs')==protocol['solver_source_sha256']
+        assert sha('findings/native-waking-choice-census-v1/summary.json')==protocol['nomination_summary_sha256']
+        assert [(ordered[i]['record']['game'],ordered[i]['record']['frame']) for i in protocol['indices']]==keys
+        assert [(r['game'],r['frame']) for r in actual]==keys
+        result=check(actual,protocol,roots,prior)
+        for r in actual:
+            assert f"retain_eager_prefix: {str(protocol['retain_eager_prefix']).lower()}" in r['config']
+        result.update(records_sha256=sha(t/record_file),protocol_sha256=sha(p/proto_file),targets=[{k:r[k] for k in ['game','frame','threshold_loss','pure_action_values','stop','runs','nodes','elapsed_ms','stats']} for r in actual])
+        results[arm]=result
+        for kind in ['missing_root','wrong_target','false_threshold','invalid_cell','wrong_root']:
+            changed=copy.deepcopy(actual)
+            if kind=='missing_root':changed.pop()
+            elif kind=='wrong_target':changed[0]['target']=0
+            elif kind=='false_threshold':changed[0]['stop']='AboveThreshold';changed[0]['threshold_loss']=[.99,1.]
+            elif kind=='invalid_cell':changed[0]['cells_p0'][0]=[1.,0.]
+            else:changed[0]['frame']=172
+            try:check(changed,protocol,roots,prior)
+            except AssertionError:rejected.append(arm+':'+kind)
+            else:raise AssertionError('accepted '+kind)
+    excluded=rows(t/'main.jsonl')
+    assert [(r['game'],r['frame']) for r in excluded]==[(62,172)]
+    print(json.dumps(dict(schema='nc2000-native-waking-loss-v1',arms=results,rejected_mutations=rejected,
+        excluded_selection_mismatch=dict(game=62,frame=172,runs=excluded[0]['runs'],records_sha256=sha(t/'main.jsonl'),reason='File-order index117 was used by a solver that sorts roots. Corrected selection is sorted index77, derived from game/frame before rerun.'),
+        ordinary_bot_changed=False,strength_improvement_proven=False),indent=2))
+
+
+if __name__=='__main__':main()
