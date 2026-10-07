@@ -39384,6 +39384,427 @@
         "ordinary_bot_changed": false,
         "strength_improvement_proven": false
       }
+    },
+    "findings/native-snorlax-witness-v1/summary.json": {
+      "sha256": "4dfe1a1152a3b021fe86de03106203f10c6bfb8e6344b7d7c019eea89bece4df",
+      "data": {
+        "results": [
+          {
+            "id": "doubleedge-guarantee",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.856483983027443,
+            "target_score_interval": [
+              0.856483983027443,
+              0.9584922661093441
+            ],
+            "stop": "NodeBudget",
+            "runs": 641823,
+            "nodes": 200013,
+            "elapsed_ms": 47681.686583
+          },
+          {
+            "id": "rest-guarantee",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.29620143242332375,
+            "target_score_interval": [
+              0.29620143242332375,
+              1.0
+            ],
+            "stop": "NodeBudget",
+            "runs": 921554,
+            "nodes": 200068,
+            "elapsed_ms": 40379.336083
+          },
+          {
+            "id": "doubleedge-upper-icebeam",
+            "transfer_direction": "upper",
+            "transfer_bound": 0.9999935262337244,
+            "target_score_interval": [
+              0.7288161164110438,
+              0.9999935262337244
+            ],
+            "stop": "WorkExhausted",
+            "runs": 2000000,
+            "nodes": 103180,
+            "elapsed_ms": 53241.713333
+          },
+          {
+            "id": "rest-upper-icebeam",
+            "transfer_direction": "upper",
+            "transfer_bound": 1.0,
+            "target_score_interval": [
+              0.3501114303997276,
+              1.0
+            ],
+            "stop": "NodeBudget",
+            "runs": 1271100,
+            "nodes": 200033,
+            "elapsed_ms": 30227.536208
+          }
+        ],
+        "combined_first_action_guarantees": {
+          "move doubleedge": [
+            0.856483983027443,
+            0.9999906503889959
+          ],
+          "move curse": [
+            0.0,
+            0.9999906503889959
+          ],
+          "move rest": [
+            0.29620143242332375,
+            0.9999906503889959
+          ],
+          "move sleeptalk": [
+            0.0,
+            0.9999906503889959
+          ]
+        },
+        "actual_rest_pure_loss_lower": 0.0,
+        "actual_rest_error_proven": false,
+        "rest_over_doubleedge_security_advantage_lower": 0.0,
+        "rest_better_than_doubleedge_proven": false,
+        "schema": "nc2000-native-snorlax-witness-v1",
+        "protocol_sha256": "2e9347539cb847fa9ceb80d91a30f03c000c951d81bf973300133374c5725cf3",
+        "records_sha256": "83c46f2128b7d5029f48426dd0a06df8a911a70a04ddb8a99d4dfd2bec424003",
+        "rejected_mutations": [
+          "missing_job",
+          "wrong_fixed_side",
+          "wrong_bound_direction",
+          "false_bound",
+          "restricted_free_actions"
+        ],
+        "blind_policy_error_proven": false,
+        "strength_improvement_proven": false,
+        "ordinary_bot_changed": false
+      }
+    },
+    "findings/native-frontier-step-v1/summary.json": {
+      "sha256": "651e0a9dc776c1d4b0fdbc778232b7d2d116fb2d8db1a8c09ce0bb338abdc837",
+      "data": {
+        "eligible_unexpanded_states": 197737,
+        "samples": 64,
+        "additional_probe_runs": 30048,
+        "positive_lower_bounds": 49,
+        "lower_bounds_above_01": 7,
+        "upper_bounds_below_one": 0,
+        "complete_cells": 207,
+        "total_cells": 256,
+        "bounds_with_outward_padding": [
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.9023437499,
+            1.0
+          ],
+          [
+            0.8076923074859667,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0020477206970056405,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.9023437499,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.8076923074859667,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0020477206970056405,
+            1.0
+          ],
+          [
+            0.8076923074859667,
+            1.0
+          ],
+          [
+            0.8076923074859667,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0020477206970056405,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.8076923074859667,
+            1.0
+          ],
+          [
+            0.0020477206970056405,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0020477206970056405,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.008656585480083466,
+            1.0
+          ],
+          [
+            0.01110502754932142,
+            1.0
+          ],
+          [
+            0.0020477206970056405,
+            1.0
+          ]
+        ],
+        "numerical_padding": 1e-10,
+        "groups": [
+          {
+            "status": "Frz",
+            "action": "move doubleedge",
+            "bound_class": "zero",
+            "count": 4
+          },
+          {
+            "status": "None",
+            "action": "move doubleedge",
+            "bound_class": "strong",
+            "count": 7
+          },
+          {
+            "status": "None",
+            "action": "move doubleedge",
+            "bound_class": "weak",
+            "count": 1
+          },
+          {
+            "status": "Slp",
+            "action": "move sleeptalk",
+            "bound_class": "weak",
+            "count": 41
+          },
+          {
+            "status": "Slp",
+            "action": "move sleeptalk",
+            "bound_class": "zero",
+            "count": 11
+          }
+        ],
+        "original_search_outputs_match": true,
+        "search_bounds_changed": false,
+        "performance_improvement_proven": false,
+        "schema": "nc2000-native-frontier-step-v1",
+        "protocol_sha256": "c54d7f4fb14c399b903ab0675781ddc7c54f36d95a0c6e6fb21163bbe4a98bdc",
+        "records_sha256": "8669ff98ac8aa12adcc8f212aa4b479d33af18131815d76fcc2bfacdec0dae50",
+        "replay_verification": {
+          "cells_checked": 256,
+          "extra_engine_runs": 30048,
+          "policy_validation_runs": 64,
+          "max_probability_error": 0.0,
+          "records_sha256": "8669ff98ac8aa12adcc8f212aa4b479d33af18131815d76fcc2bfacdec0dae50",
+          "performance_sample": false
+        },
+        "rejected_mutations": [
+          "changed_parent_search",
+          "wrong_sample_index",
+          "changed_state",
+          "hidden_pending",
+          "false_bound"
+        ],
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false
+      }
     }
   },
   "foresight_fix": {
@@ -45508,7 +45929,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-07T22:20:39.863036+09:00",
+    "checked_at": "2026-10-07T22:53:01.173065+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -45552,7 +45973,10 @@
     "followup_club_time": "native-club-time-v1",
     "followup_fixed_reply": "native-fixed-reply-refine-v1",
     "followup_marowak_witness": "native-marowak-witness-v1",
-    "followup_first_step": "native-first-step-loss-v1"
+    "followup_first_step": "native-first-step-loss-v1",
+    "followup_snorlax_witness": "native-snorlax-witness-v1",
+    "followup_frontier_step": "native-frontier-step-v1",
+    "followup_result_commit": "090ef3024b3b3f0fbaa96171449ed153cb549238"
   },
   "native_endgame_census": {
     "status": "complete",
