@@ -31679,6 +31679,2558 @@
         "blind_policy_error_proven": false,
         "strength_improvement_proven": false
       }
+    },
+    "findings/native-endgame-structure-v1/summary.json": {
+      "sha256": "f9096bf0ce1b941b4219f02cce999dd5499244fdf2cf8764ae0881808b1d910c",
+      "data": {
+        "roots": 6,
+        "games": 6,
+        "runs": 1179488,
+        "stops": {
+          "NodeBudget": 2,
+          "WorkExhausted": 4
+        },
+        "value_width_at_most_002": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "selected_pure_loss_at_most_002": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "selected_pure_loss_above_002": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "selected_strictly_dominated": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "unresolved_selected_pure_loss": {
+          "roots": 6,
+          "games": 6,
+          "keys": [
+            [
+              0,
+              18
+            ],
+            [
+              1,
+              37
+            ],
+            [
+              3,
+              97
+            ],
+            [
+              4,
+              60
+            ],
+            [
+              10,
+              32
+            ],
+            [
+              16,
+              18
+            ]
+          ]
+        },
+        "max_nodes_plus_closed": 50417,
+        "max_runs": 250000,
+        "schema": "nc2000-native-endgame-structure-v1",
+        "matches_frozen_six_roots_except_time": true,
+        "stratified_selection_verified": true,
+        "protocol_sha256": "96627dd112dc6fa935be3cd8299bc996bd10bfeab207ffaf432e68ce69e4b83b",
+        "records_sha256": "af9c9281e015f93789042487835564b1898525a2976f75c8541472dfc43170bc",
+        "diagnostics": [
+          {
+            "game": 0,
+            "frame": 18,
+            "nodes": 29882,
+            "graph": {
+              "unexpanded_nodes": 29839,
+              "initialized_nodes": 43,
+              "stored_battles": 29882,
+              "resolved_edges": 40861,
+              "unique_child_edges": 40827,
+              "pending_scripts": 12694,
+              "pending_script_entries": 84834
+            },
+            "retained_claw_projection": {
+              "retained": 29882,
+              "claw_unobservable": 29882,
+              "projected_keys": 15279,
+              "group_size_histogram": {
+                "1": 676,
+                "2": 14603
+              }
+            },
+            "stats": {
+              "trials": 958,
+              "expansions": 957,
+              "eager_runs": 249223,
+              "eager_failures": 38,
+              "reused_nodes": 56892,
+              "reused_backups": 685,
+              "lp_solves": 614,
+              "depth_limit_trials": 0,
+              "trial_depth_counts": [
+                0,
+                328,
+                472,
+                115,
+                43
+              ],
+              "closed_folds": 0,
+              "dominated_rows": 0,
+              "dominated_cols": 0,
+              "avoided_cells": 0,
+              "lazy_edge_merges": 0
+            },
+            "root_pending_mass_sum": 3.8715860412005094,
+            "root_child_uncertainty_sum": 7.471244299317944
+          },
+          {
+            "game": 1,
+            "frame": 37,
+            "nodes": 22913,
+            "graph": {
+              "unexpanded_nodes": 22657,
+              "initialized_nodes": 256,
+              "stored_battles": 22754,
+              "resolved_edges": 30957,
+              "unique_child_edges": 30565,
+              "pending_scripts": 10506,
+              "pending_script_entries": 61916
+            },
+            "retained_claw_projection": {
+              "retained": 22754,
+              "claw_unobservable": 22754,
+              "projected_keys": 11605,
+              "group_size_histogram": {
+                "1": 456,
+                "2": 11149
+              }
+            },
+            "stats": {
+              "trials": 3063,
+              "expansions": 3062,
+              "eager_runs": 248680,
+              "eager_failures": 13,
+              "reused_nodes": 118837,
+              "reused_backups": 1159,
+              "lp_solves": 4504,
+              "depth_limit_trials": 0,
+              "trial_depth_counts": [
+                0,
+                779,
+                1213,
+                689,
+                382
+              ],
+              "closed_folds": 0,
+              "dominated_rows": 502,
+              "dominated_cols": 477,
+              "avoided_cells": 2485,
+              "lazy_edge_merges": 0
+            },
+            "root_pending_mass_sum": 0.476053985704659,
+            "root_child_uncertainty_sum": 5.485828462262891
+          },
+          {
+            "game": 3,
+            "frame": 97,
+            "nodes": 50417,
+            "graph": {
+              "unexpanded_nodes": 50391,
+              "initialized_nodes": 26,
+              "stored_battles": 50417,
+              "resolved_edges": 67804,
+              "unique_child_edges": 67804,
+              "pending_scripts": 581,
+              "pending_script_entries": 936
+            },
+            "retained_claw_projection": {
+              "retained": 50417,
+              "claw_unobservable": 50417,
+              "projected_keys": 25212,
+              "group_size_histogram": {
+                "1": 7,
+                "2": 25205
+              }
+            },
+            "stats": {
+              "trials": 150,
+              "expansions": 150,
+              "eager_runs": 92725,
+              "eager_failures": 3,
+              "reused_nodes": 20400,
+              "reused_backups": 12,
+              "lp_solves": 314,
+              "depth_limit_trials": 0,
+              "trial_depth_counts": [
+                0,
+                13,
+                133,
+                4
+              ],
+              "closed_folds": 0,
+              "dominated_rows": 0,
+              "dominated_cols": 0,
+              "avoided_cells": 0,
+              "lazy_edge_merges": 0
+            },
+            "root_pending_mass_sum": 3.0,
+            "root_child_uncertainty_sum": 12.681188418877055
+          },
+          {
+            "game": 4,
+            "frame": 60,
+            "nodes": 22082,
+            "graph": {
+              "unexpanded_nodes": 22033,
+              "initialized_nodes": 49,
+              "stored_battles": 22077,
+              "resolved_edges": 35977,
+              "unique_child_edges": 35975,
+              "pending_scripts": 2401,
+              "pending_script_entries": 9717
+            },
+            "retained_claw_projection": {
+              "retained": 22077,
+              "claw_unobservable": 22077,
+              "projected_keys": 11049,
+              "group_size_histogram": {
+                "1": 21,
+                "2": 11028
+              }
+            },
+            "stats": {
+              "trials": 337,
+              "expansions": 336,
+              "eager_runs": 249920,
+              "eager_failures": 41,
+              "reused_nodes": 42558,
+              "reused_backups": 31,
+              "lp_solves": 730,
+              "depth_limit_trials": 0,
+              "trial_depth_counts": [
+                0,
+                13,
+                240,
+                84
+              ],
+              "closed_folds": 0,
+              "dominated_rows": 15,
+              "dominated_cols": 15,
+              "avoided_cells": 75,
+              "lazy_edge_merges": 0
+            },
+            "root_pending_mass_sum": 3.0,
+            "root_child_uncertainty_sum": 8.819580230178634
+          },
+          {
+            "game": 10,
+            "frame": 32,
+            "nodes": 50003,
+            "graph": {
+              "unexpanded_nodes": 49925,
+              "initialized_nodes": 78,
+              "stored_battles": 49989,
+              "resolved_edges": 63286,
+              "unique_child_edges": 63286,
+              "pending_scripts": 774,
+              "pending_script_entries": 0
+            },
+            "retained_claw_projection": {
+              "retained": 49989,
+              "claw_unobservable": 49989,
+              "projected_keys": 25001,
+              "group_size_histogram": {
+                "1": 13,
+                "2": 24988
+              }
+            },
+            "stats": {
+              "trials": 474,
+              "expansions": 474,
+              "eager_runs": 86757,
+              "eager_failures": 0,
+              "reused_nodes": 30636,
+              "reused_backups": 0,
+              "lp_solves": 1158,
+              "depth_limit_trials": 0,
+              "trial_depth_counts": [
+                0,
+                14,
+                204,
+                221,
+                35
+              ],
+              "closed_folds": 0,
+              "dominated_rows": 0,
+              "dominated_cols": 0,
+              "avoided_cells": 0,
+              "lazy_edge_merges": 0
+            },
+            "root_pending_mass_sum": 2.0,
+            "root_child_uncertainty_sum": 2.880907002712016
+          },
+          {
+            "game": 16,
+            "frame": 18,
+            "nodes": 24167,
+            "graph": {
+              "unexpanded_nodes": 23866,
+              "initialized_nodes": 301,
+              "stored_battles": 24108,
+              "resolved_edges": 51926,
+              "unique_child_edges": 51926,
+              "pending_scripts": 3542,
+              "pending_script_entries": 0
+            },
+            "retained_claw_projection": {
+              "retained": 24108,
+              "claw_unobservable": 24108,
+              "projected_keys": 12077,
+              "group_size_histogram": {
+                "1": 46,
+                "2": 12031
+              }
+            },
+            "stats": {
+              "trials": 1275,
+              "expansions": 1274,
+              "eager_runs": 250000,
+              "eager_failures": 1,
+              "reused_nodes": 133790,
+              "reused_backups": 212,
+              "lp_solves": 2464,
+              "depth_limit_trials": 0,
+              "trial_depth_counts": [
+                0,
+                13,
+                182,
+                256,
+                319,
+                361,
+                130,
+                14
+              ],
+              "closed_folds": 0,
+              "dominated_rows": 118,
+              "dominated_cols": 0,
+              "avoided_cells": 472,
+              "lazy_edge_merges": 0
+            },
+            "root_pending_mass_sum": 3.0,
+            "root_child_uncertainty_sum": 5.965618414110135
+          }
+        ]
+      }
+    },
+    "findings/native-endgame-scheduling-v1/summary.json": {
+      "sha256": "210d51bdbab56096958bf611af1b922f3344010c2597fa5c3895e47f300f027f",
+      "data": {
+        "schema": "nc2000-native-endgame-scheduling-v1",
+        "protocol_sha256": "dbf5ffa7d7ba1e3c9eb6cc12d78ae655267195d35e41a5ce43ee9d5203292e76",
+        "control_matches_frozen": true,
+        "all_intervals_overlap_frozen": true,
+        "variants": {
+          "control": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1179488,
+            "stops": {
+              "NodeBudget": 2,
+              "WorkExhausted": 4
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 6,
+              "games": 6,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  1,
+                  37
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 50417,
+            "max_runs": 250000,
+            "comparisons": [
+              {
+                "game": 0,
+                "frame": 18,
+                "old_loss": [
+                  0.0,
+                  0.649936378441687
+                ],
+                "new_loss": [
+                  0.0,
+                  0.649936378441687
+                ],
+                "runs": 250000,
+                "nodes": 29882,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 1,
+                "frame": 37,
+                "old_loss": [
+                  0.0,
+                  0.025426207619589414
+                ],
+                "new_loss": [
+                  0.0,
+                  0.025426207619589414
+                ],
+                "runs": 250000,
+                "nodes": 22913,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 3,
+                "frame": 97,
+                "old_loss": [
+                  0.0,
+                  0.9544298366993856
+                ],
+                "new_loss": [
+                  0.0,
+                  0.9544298366993856
+                ],
+                "runs": 92731,
+                "nodes": 50417,
+                "stop": "NodeBudget",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 4,
+                "frame": 60,
+                "old_loss": [
+                  0.0,
+                  0.6673669825160489
+                ],
+                "new_loss": [
+                  0.0,
+                  0.6673669825160489
+                ],
+                "runs": 250000,
+                "nodes": 22082,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 10,
+                "frame": 32,
+                "old_loss": [
+                  0.0,
+                  0.07181399315657466
+                ],
+                "new_loss": [
+                  0.0,
+                  0.07181399315657466
+                ],
+                "runs": 86757,
+                "nodes": 50003,
+                "stop": "NodeBudget",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 16,
+                "frame": 18,
+                "old_loss": [
+                  0.0,
+                  0.17904163231860448
+                ],
+                "new_loss": [
+                  0.0,
+                  0.17904163231860448
+                ],
+                "runs": 250000,
+                "nodes": 24167,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              }
+            ],
+            "records_sha256": "faf0c6f326bd7ef470326c15edf5553f91d2a56d1f4cb09c3b8037afbbfd391f",
+            "upper_improved": 0,
+            "upper_worsened": 0
+          },
+          "quotient": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 5,
+              "games": 5,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 48217,
+            "max_runs": 250000,
+            "comparisons": [
+              {
+                "game": 0,
+                "frame": 18,
+                "old_loss": [
+                  0.0,
+                  0.649936378441687
+                ],
+                "new_loss": [
+                  0.0,
+                  0.6201195269620552
+                ],
+                "runs": 250000,
+                "nodes": 14776,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 1,
+                "frame": 37,
+                "old_loss": [
+                  0.0,
+                  0.025426207619589414
+                ],
+                "new_loss": [
+                  0.0,
+                  0.00965006469544133
+                ],
+                "runs": 250000,
+                "nodes": 14886,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 3,
+                "frame": 97,
+                "old_loss": [
+                  0.0,
+                  0.9544298366993856
+                ],
+                "new_loss": [
+                  0.0,
+                  0.9454578760851918
+                ],
+                "runs": 250000,
+                "nodes": 41828,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 4,
+                "frame": 60,
+                "old_loss": [
+                  0.0,
+                  0.6673669825160489
+                ],
+                "new_loss": [
+                  0.0,
+                  0.6656728795328404
+                ],
+                "runs": 250000,
+                "nodes": 12607,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 10,
+                "frame": 32,
+                "old_loss": [
+                  0.0,
+                  0.07181399315657466
+                ],
+                "new_loss": [
+                  0.0,
+                  0.06924934592262688
+                ],
+                "runs": 250000,
+                "nodes": 48217,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 16,
+                "frame": 18,
+                "old_loss": [
+                  0.0,
+                  0.17904163231860448
+                ],
+                "new_loss": [
+                  0.0,
+                  0.1745038122152558
+                ],
+                "runs": 250000,
+                "nodes": 12633,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              }
+            ],
+            "records_sha256": "147f4f24991317c4c7827a824d2eadbded9c4e8370465ea918fb91ac49cbaba4",
+            "upper_improved": 6,
+            "upper_worsened": 0
+          },
+          "quotient_selected": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1377570,
+            "stops": {
+              "StrategyMet": 1,
+              "WorkExhausted": 5
+            },
+            "value_width_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 5,
+              "games": 5,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 43948,
+            "max_runs": 250000,
+            "comparisons": [
+              {
+                "game": 0,
+                "frame": 18,
+                "old_loss": [
+                  0.0,
+                  0.649936378441687
+                ],
+                "new_loss": [
+                  0.0,
+                  0.9982771196292203
+                ],
+                "runs": 250000,
+                "nodes": 12666,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 1,
+                "frame": 37,
+                "old_loss": [
+                  0.0,
+                  0.025426207619589414
+                ],
+                "new_loss": [
+                  0.0,
+                  0.01954250088813153
+                ],
+                "runs": 127570,
+                "nodes": 8723,
+                "stop": "StrategyMet",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 3,
+                "frame": 97,
+                "old_loss": [
+                  0.0,
+                  0.9544298366993856
+                ],
+                "new_loss": [
+                  0.0,
+                  0.9467418075269319
+                ],
+                "runs": 250000,
+                "nodes": 39771,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 4,
+                "frame": 60,
+                "old_loss": [
+                  0.0,
+                  0.6673669825160489
+                ],
+                "new_loss": [
+                  0.0,
+                  0.4123570370620837
+                ],
+                "runs": 250000,
+                "nodes": 30142,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 10,
+                "frame": 32,
+                "old_loss": [
+                  0.0,
+                  0.07181399315657466
+                ],
+                "new_loss": [
+                  0.0,
+                  0.06537186603547374
+                ],
+                "runs": 250000,
+                "nodes": 43948,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              },
+              {
+                "game": 16,
+                "frame": 18,
+                "old_loss": [
+                  0.0,
+                  0.17904163231860448
+                ],
+                "new_loss": [
+                  0.0,
+                  0.17440569442552267
+                ],
+                "runs": 250000,
+                "nodes": 10605,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 0
+              }
+            ],
+            "records_sha256": "41da14b7b2b647d4612daa068e96401e30908239fcfddfaa96a0c785f75f974f",
+            "upper_improved": 5,
+            "upper_worsened": 1
+          },
+          "quotient_retained": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 5,
+              "games": 5,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 48217,
+            "max_runs": 250000,
+            "comparisons": [
+              {
+                "game": 0,
+                "frame": 18,
+                "old_loss": [
+                  0.0,
+                  0.649936378441687
+                ],
+                "new_loss": [
+                  0.0,
+                  0.6200830697587425
+                ],
+                "runs": 250000,
+                "nodes": 40130,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 171838
+              },
+              {
+                "game": 1,
+                "frame": 37,
+                "old_loss": [
+                  0.0,
+                  0.025426207619589414
+                ],
+                "new_loss": [
+                  0.0,
+                  0.009251510343664837
+                ],
+                "runs": 250000,
+                "nodes": 17300,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 62349
+              },
+              {
+                "game": 3,
+                "frame": 97,
+                "old_loss": [
+                  0.0,
+                  0.9544298366993856
+                ],
+                "new_loss": [
+                  0.0,
+                  0.9419795623210029
+                ],
+                "runs": 250000,
+                "nodes": 43488,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 13269
+              },
+              {
+                "game": 4,
+                "frame": 60,
+                "old_loss": [
+                  0.0,
+                  0.6673669825160489
+                ],
+                "new_loss": [
+                  0.0,
+                  0.6656728795328404
+                ],
+                "runs": 250000,
+                "nodes": 12845,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 168071
+              },
+              {
+                "game": 10,
+                "frame": 32,
+                "old_loss": [
+                  0.0,
+                  0.07181399315657466
+                ],
+                "new_loss": [
+                  0.0,
+                  0.06924934592262688
+                ],
+                "runs": 250000,
+                "nodes": 48217,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 1664
+              },
+              {
+                "game": 16,
+                "frame": 18,
+                "old_loss": [
+                  0.0,
+                  0.17904163231860448
+                ],
+                "new_loss": [
+                  0.0,
+                  0.1745038122152558
+                ],
+                "runs": 250000,
+                "nodes": 12642,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 136
+              }
+            ],
+            "records_sha256": "dafd771b8dfbf8f6bddf30cc0232be1686ed48bb53a83ce379d2814c7d773fc2",
+            "upper_improved": 6,
+            "upper_worsened": 0
+          },
+          "quotient_retained_selected": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1376872,
+            "stops": {
+              "StrategyMet": 1,
+              "WorkExhausted": 5
+            },
+            "value_width_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 5,
+              "games": 5,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 47746,
+            "max_runs": 250000,
+            "comparisons": [
+              {
+                "game": 0,
+                "frame": 18,
+                "old_loss": [
+                  0.0,
+                  0.649936378441687
+                ],
+                "new_loss": [
+                  0.0,
+                  0.9974943710157088
+                ],
+                "runs": 250000,
+                "nodes": 34625,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 168028
+              },
+              {
+                "game": 1,
+                "frame": 37,
+                "old_loss": [
+                  0.0,
+                  0.025426207619589414
+                ],
+                "new_loss": [
+                  0.0,
+                  0.019970924350677544
+                ],
+                "runs": 126872,
+                "nodes": 10556,
+                "stop": "StrategyMet",
+                "retained_eager_runs": 40960
+              },
+              {
+                "game": 3,
+                "frame": 97,
+                "old_loss": [
+                  0.0,
+                  0.9544298366993856
+                ],
+                "new_loss": [
+                  0.0,
+                  0.9467418075269319
+                ],
+                "runs": 250000,
+                "nodes": 39895,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 1007
+              },
+              {
+                "game": 4,
+                "frame": 60,
+                "old_loss": [
+                  0.0,
+                  0.6673669825160489
+                ],
+                "new_loss": [
+                  0.0,
+                  0.6145847221243743
+                ],
+                "runs": 250000,
+                "nodes": 47746,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 94428
+              },
+              {
+                "game": 10,
+                "frame": 32,
+                "old_loss": [
+                  0.0,
+                  0.07181399315657466
+                ],
+                "new_loss": [
+                  0.0,
+                  0.06537186603547374
+                ],
+                "runs": 250000,
+                "nodes": 44066,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 399
+              },
+              {
+                "game": 16,
+                "frame": 18,
+                "old_loss": [
+                  0.0,
+                  0.17904163231860448
+                ],
+                "new_loss": [
+                  0.0,
+                  0.17440569442552267
+                ],
+                "runs": 250000,
+                "nodes": 10609,
+                "stop": "WorkExhausted",
+                "retained_eager_runs": 406
+              }
+            ],
+            "records_sha256": "0ac4c06a59c2735f132d44ab215a034f9d7cb4e08361dc0aef927aabad660843",
+            "upper_improved": 5,
+            "upper_worsened": 1
+          }
+        },
+        "strength_improvement_proven": false
+      }
+    },
+    "findings/native-endgame-quotient-v1/summary.json": {
+      "sha256": "a89940e10c35c706e892f804a1634bb22f65a3e652e9dcab66e34d2187b87026",
+      "data": {
+        "roots": 64,
+        "games": 64,
+        "runs": 14035999,
+        "stops": {
+          "StrategyMet": 2,
+          "NodeBudget": 22,
+          "WorkExhausted": 40
+        },
+        "value_width_at_most_002": {
+          "roots": 2,
+          "games": 2,
+          "keys": [
+            [
+              7,
+              21
+            ],
+            [
+              181,
+              97
+            ]
+          ]
+        },
+        "selected_pure_loss_at_most_002": {
+          "roots": 2,
+          "games": 2,
+          "keys": [
+            [
+              7,
+              21
+            ],
+            [
+              181,
+              97
+            ]
+          ]
+        },
+        "selected_pure_loss_above_002": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "selected_strictly_dominated": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "unresolved_selected_pure_loss": {
+          "roots": 62,
+          "games": 62,
+          "keys": [
+            [
+              13,
+              41
+            ],
+            [
+              19,
+              17
+            ],
+            [
+              22,
+              38
+            ],
+            [
+              26,
+              26
+            ],
+            [
+              27,
+              57
+            ],
+            [
+              28,
+              72
+            ],
+            [
+              29,
+              57
+            ],
+            [
+              32,
+              38
+            ],
+            [
+              33,
+              53
+            ],
+            [
+              34,
+              18
+            ],
+            [
+              37,
+              21
+            ],
+            [
+              39,
+              25
+            ],
+            [
+              51,
+              33
+            ],
+            [
+              52,
+              54
+            ],
+            [
+              53,
+              29
+            ],
+            [
+              56,
+              20
+            ],
+            [
+              57,
+              21
+            ],
+            [
+              59,
+              27
+            ],
+            [
+              62,
+              36
+            ],
+            [
+              73,
+              41
+            ],
+            [
+              75,
+              31
+            ],
+            [
+              76,
+              26
+            ],
+            [
+              77,
+              33
+            ],
+            [
+              80,
+              28
+            ],
+            [
+              81,
+              29
+            ],
+            [
+              83,
+              27
+            ],
+            [
+              84,
+              40
+            ],
+            [
+              85,
+              41
+            ],
+            [
+              87,
+              49
+            ],
+            [
+              92,
+              54
+            ],
+            [
+              94,
+              22
+            ],
+            [
+              101,
+              45
+            ],
+            [
+              104,
+              52
+            ],
+            [
+              105,
+              33
+            ],
+            [
+              110,
+              32
+            ],
+            [
+              113,
+              37
+            ],
+            [
+              115,
+              29
+            ],
+            [
+              117,
+              23
+            ],
+            [
+              118,
+              32
+            ],
+            [
+              119,
+              27
+            ],
+            [
+              122,
+              68
+            ],
+            [
+              128,
+              22
+            ],
+            [
+              131,
+              39
+            ],
+            [
+              136,
+              54
+            ],
+            [
+              141,
+              27
+            ],
+            [
+              143,
+              37
+            ],
+            [
+              144,
+              86
+            ],
+            [
+              147,
+              15
+            ],
+            [
+              149,
+              33
+            ],
+            [
+              151,
+              33
+            ],
+            [
+              153,
+              15
+            ],
+            [
+              158,
+              16
+            ],
+            [
+              161,
+              15
+            ],
+            [
+              162,
+              38
+            ],
+            [
+              165,
+              25
+            ],
+            [
+              166,
+              22
+            ],
+            [
+              169,
+              19
+            ],
+            [
+              170,
+              32
+            ],
+            [
+              173,
+              37
+            ],
+            [
+              176,
+              68
+            ],
+            [
+              179,
+              29
+            ],
+            [
+              191,
+              31
+            ]
+          ]
+        },
+        "max_nodes_plus_closed": 51503,
+        "max_runs": 250000,
+        "schema": "nc2000-native-endgame-quotient-v1",
+        "protocol_sha256": "7116cf7327901d86d85f5f0399bfb70b3b3cb8cad61974649be9c35b5fb312f9",
+        "records_sha256": "3a199d5fe9e1d03775161030f6ebbd657e562f6ffb85fa735bd47a06fcb72455",
+        "repeat_sha256": "f013d8ac1d94c3a637daac0e806d20cc664cd46ebc15a94f542ca8e183dd2699",
+        "unused_selection_verified": true,
+        "all_intervals_overlap_frozen": true,
+        "repeat_three_roots_identical_except_time": true,
+        "binaries_match_protocol": true,
+        "comparisons": [
+          {
+            "game": 7,
+            "frame": 21,
+            "old_loss": [
+              0.0,
+              0.009930603576156716
+            ],
+            "new_loss": [
+              0.0,
+              0.009672881503701602
+            ],
+            "old_runs": 157226,
+            "new_runs": 97160,
+            "old_stop": "StrategyMet",
+            "new_stop": "StrategyMet"
+          },
+          {
+            "game": 13,
+            "frame": 41,
+            "old_loss": [
+              0.0,
+              0.35299666109210637
+            ],
+            "new_loss": [
+              0.0,
+              0.3386032201160559
+            ],
+            "old_runs": 220296,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 19,
+            "frame": 17,
+            "old_loss": [
+              0.0,
+              0.08391391869378806
+            ],
+            "new_loss": [
+              0.0,
+              0.07561912324511577
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 22,
+            "frame": 38,
+            "old_loss": [
+              0.0,
+              0.8996021722630123
+            ],
+            "new_loss": [
+              0.0,
+              0.8675012964537591
+            ],
+            "old_runs": 56471,
+            "new_runs": 144054,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 26,
+            "frame": 26,
+            "old_loss": [
+              0.0,
+              0.9576736860355831
+            ],
+            "new_loss": [
+              0.0,
+              0.952891626627038
+            ],
+            "old_runs": 77701,
+            "new_runs": 182901,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 27,
+            "frame": 57,
+            "old_loss": [
+              0.0,
+              0.9474796130036194
+            ],
+            "new_loss": [
+              0.0,
+              0.9406438695982265
+            ],
+            "old_runs": 91052,
+            "new_runs": 206097,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 28,
+            "frame": 72,
+            "old_loss": [
+              0.0,
+              0.3517009803356137
+            ],
+            "new_loss": [
+              0.0,
+              0.24979197402894004
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 29,
+            "frame": 57,
+            "old_loss": [
+              0.0,
+              0.0675486581424013
+            ],
+            "new_loss": [
+              0.0,
+              0.06114353507350878
+            ],
+            "old_runs": 110816,
+            "new_runs": 181328,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 32,
+            "frame": 38,
+            "old_loss": [
+              0.0,
+              0.6718299881871337
+            ],
+            "new_loss": [
+              0.0,
+              0.4777990937932778
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 33,
+            "frame": 53,
+            "old_loss": [
+              0.0,
+              0.7314495501146403
+            ],
+            "new_loss": [
+              0.0,
+              0.5836261088751269
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 34,
+            "frame": 18,
+            "old_loss": [
+              0.0,
+              0.07642308115249052
+            ],
+            "new_loss": [
+              0.0,
+              0.07026264407518812
+            ],
+            "old_runs": 75466,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 37,
+            "frame": 21,
+            "old_loss": [
+              0.0,
+              0.9988857171600257
+            ],
+            "new_loss": [
+              0.0,
+              0.9988857171600257
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 39,
+            "frame": 25,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 140255,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 51,
+            "frame": 33,
+            "old_loss": [
+              0.0,
+              0.4748904446557588
+            ],
+            "new_loss": [
+              0.0,
+              0.47203491762607963
+            ],
+            "old_runs": 168837,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 52,
+            "frame": 54,
+            "old_loss": [
+              0.0,
+              0.9972491932821197
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 53,
+            "frame": 29,
+            "old_loss": [
+              0.0,
+              0.12693464479816674
+            ],
+            "new_loss": [
+              0.0,
+              0.12692905327303006
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 56,
+            "frame": 20,
+            "old_loss": [
+              0.0,
+              0.14648437501700085
+            ],
+            "new_loss": [
+              0.0,
+              0.09361267091543746
+            ],
+            "old_runs": 73752,
+            "new_runs": 175429,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 57,
+            "frame": 21,
+            "old_loss": [
+              0.0,
+              0.1464843750170009
+            ],
+            "new_loss": [
+              0.0,
+              0.05484207084956688
+            ],
+            "old_runs": 85908,
+            "new_runs": 199612,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 59,
+            "frame": 27,
+            "old_loss": [
+              0.0,
+              0.9628460223808091
+            ],
+            "new_loss": [
+              0.0,
+              0.9501953125
+            ],
+            "old_runs": 207663,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 62,
+            "frame": 36,
+            "old_loss": [
+              0.0,
+              0.5008012820471741
+            ],
+            "new_loss": [
+              0.0,
+              0.5008012820471741
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 73,
+            "frame": 41,
+            "old_loss": [
+              0.0,
+              0.9247537902121332
+            ],
+            "new_loss": [
+              0.0,
+              0.869081086612558
+            ],
+            "old_runs": 145995,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 75,
+            "frame": 31,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 213575,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 76,
+            "frame": 26,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 140731,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 77,
+            "frame": 33,
+            "old_loss": [
+              0.0,
+              0.9263442771735031
+            ],
+            "new_loss": [
+              0.0,
+              0.8200659307356701
+            ],
+            "old_runs": 73927,
+            "new_runs": 154550,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 80,
+            "frame": 28,
+            "old_loss": [
+              0.0,
+              0.9988857171430254
+            ],
+            "new_loss": [
+              0.0,
+              0.996657151439194
+            ],
+            "old_runs": 123550,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 81,
+            "frame": 29,
+            "old_loss": [
+              0.0,
+              0.9988857171600249
+            ],
+            "new_loss": [
+              0.0,
+              0.9565429687669994
+            ],
+            "old_runs": 138026,
+            "new_runs": 241329,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 83,
+            "frame": 27,
+            "old_loss": [
+              0.0,
+              0.9646568466147907
+            ],
+            "new_loss": [
+              0.0,
+              0.8712309599092729
+            ],
+            "old_runs": 230794,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 84,
+            "frame": 40,
+            "old_loss": [
+              0.0,
+              0.9984168366740422
+            ],
+            "new_loss": [
+              0.0,
+              0.9984015623665193
+            ],
+            "old_runs": 165309,
+            "new_runs": 247827,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 85,
+            "frame": 41,
+            "old_loss": [
+              0.0,
+              0.9749524698615792
+            ],
+            "new_loss": [
+              0.0,
+              0.9575607913708652
+            ],
+            "old_runs": 153859,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 87,
+            "frame": 49,
+            "old_loss": [
+              0.0,
+              0.9999550088127543
+            ],
+            "new_loss": [
+              0.0,
+              0.9962577298277216
+            ],
+            "old_runs": 121074,
+            "new_runs": 237539,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 92,
+            "frame": 54,
+            "old_loss": [
+              0.0,
+              0.26014235458796586
+            ],
+            "new_loss": [
+              0.0,
+              0.2524885041630921
+            ],
+            "old_runs": 152519,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 94,
+            "frame": 22,
+            "old_loss": [
+              0.0,
+              0.9989230199590838
+            ],
+            "new_loss": [
+              0.0,
+              0.9986711529019882
+            ],
+            "old_runs": 99107,
+            "new_runs": 191156,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 101,
+            "frame": 45,
+            "old_loss": [
+              0.0,
+              0.21958750486373924
+            ],
+            "new_loss": [
+              0.0,
+              0.21958750486373924
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 104,
+            "frame": 52,
+            "old_loss": [
+              0.0,
+              0.08018242254078417
+            ],
+            "new_loss": [
+              0.0,
+              0.08124596542620566
+            ],
+            "old_runs": 89827,
+            "new_runs": 178303,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 105,
+            "frame": 33,
+            "old_loss": [
+              0.0,
+              0.7521904936578792
+            ],
+            "new_loss": [
+              0.0,
+              0.7513674821797605
+            ],
+            "old_runs": 59515,
+            "new_runs": 128216,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 110,
+            "frame": 32,
+            "old_loss": [
+              0.0,
+              0.9695581934518009
+            ],
+            "new_loss": [
+              0.0,
+              0.9608213737217399
+            ],
+            "old_runs": 107558,
+            "new_runs": 244482,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 113,
+            "frame": 37,
+            "old_loss": [
+              0.0,
+              0.6803545218619076
+            ],
+            "new_loss": [
+              0.0,
+              0.5364524539891726
+            ],
+            "old_runs": 165934,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 115,
+            "frame": 29,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 104987,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 117,
+            "frame": 23,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 118,
+            "frame": 32,
+            "old_loss": [
+              0.0,
+              0.8850860595873162
+            ],
+            "new_loss": [
+              0.0,
+              0.8850860595873125
+            ],
+            "old_runs": 68374,
+            "new_runs": 127544,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 119,
+            "frame": 27,
+            "old_loss": [
+              0.0,
+              0.17712215057816771
+            ],
+            "new_loss": [
+              0.0,
+              0.21861439113384484
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 122,
+            "frame": 68,
+            "old_loss": [
+              0.0,
+              0.8546483341234693
+            ],
+            "new_loss": [
+              0.0,
+              0.8546483341234693
+            ],
+            "old_runs": 66725,
+            "new_runs": 66725,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 128,
+            "frame": 22,
+            "old_loss": [
+              0.0,
+              0.937500000017
+            ],
+            "new_loss": [
+              0.0,
+              0.937500000017
+            ],
+            "old_runs": 163409,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 131,
+            "frame": 39,
+            "old_loss": [
+              0.0,
+              0.9375
+            ],
+            "new_loss": [
+              0.0,
+              0.9281144903786904
+            ],
+            "old_runs": 114418,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 136,
+            "frame": 54,
+            "old_loss": [
+              0.0,
+              0.7437100595219183
+            ],
+            "new_loss": [
+              0.0,
+              0.7418895810817165
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 141,
+            "frame": 27,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 162053,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 143,
+            "frame": 37,
+            "old_loss": [
+              0.0,
+              0.34902323646916167
+            ],
+            "new_loss": [
+              0.0,
+              0.34902323646916167
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 144,
+            "frame": 86,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 154262,
+            "new_runs": 154262,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 147,
+            "frame": 15,
+            "old_loss": [
+              0.0,
+              0.032736054940021964
+            ],
+            "new_loss": [
+              0.0,
+              0.02175086512005131
+            ],
+            "old_runs": 246597,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 149,
+            "frame": 33,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 107147,
+            "new_runs": 107147,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 151,
+            "frame": 33,
+            "old_loss": [
+              0.0,
+              0.8901900454416029
+            ],
+            "new_loss": [
+              0.0,
+              0.8248270386233525
+            ],
+            "old_runs": 89889,
+            "new_runs": 195026,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 153,
+            "frame": 15,
+            "old_loss": [
+              0.0,
+              0.7495995590975317
+            ],
+            "new_loss": [
+              0.0,
+              0.7451711251615906
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 158,
+            "frame": 16,
+            "old_loss": [
+              0.0,
+              0.351461113976897
+            ],
+            "new_loss": [
+              0.0,
+              0.3355220698332892
+            ],
+            "old_runs": 233727,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 161,
+            "frame": 15,
+            "old_loss": [
+              0.0,
+              0.032927295190519734
+            ],
+            "new_loss": [
+              0.0,
+              0.9323162612593834
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 162,
+            "frame": 38,
+            "old_loss": [
+              0.0,
+              0.9985469141681131
+            ],
+            "new_loss": [
+              0.0,
+              0.9969340668596907
+            ],
+            "old_runs": 161626,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 165,
+            "frame": 25,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 142624,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 166,
+            "frame": 22,
+            "old_loss": [
+              0.0,
+              0.40862107631726813
+            ],
+            "new_loss": [
+              0.0,
+              0.30518150909701514
+            ],
+            "old_runs": 106402,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 169,
+            "frame": 19,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 78682,
+            "new_runs": 177811,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 170,
+            "frame": 32,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 173,
+            "frame": 37,
+            "old_loss": [
+              0.0,
+              0.9987111216539749
+            ],
+            "new_loss": [
+              0.0,
+              0.9987111216539749
+            ],
+            "old_runs": 158394,
+            "new_runs": 158394,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 176,
+            "frame": 68,
+            "old_loss": [
+              0.0,
+              0.28125
+            ],
+            "new_loss": [
+              0.0,
+              0.28125
+            ],
+            "old_runs": 81069,
+            "new_runs": 184010,
+            "old_stop": "NodeBudget",
+            "new_stop": "NodeBudget"
+          },
+          {
+            "game": 179,
+            "frame": 29,
+            "old_loss": [
+              0.0,
+              1.0
+            ],
+            "new_loss": [
+              0.0,
+              1.0
+            ],
+            "old_runs": 250000,
+            "new_runs": 250000,
+            "old_stop": "WorkExhausted",
+            "new_stop": "WorkExhausted"
+          },
+          {
+            "game": 181,
+            "frame": 97,
+            "old_loss": [
+              0.0,
+              0.018639168928377622
+            ],
+            "new_loss": [
+              0.0,
+              0.01831065824416482
+            ],
+            "old_runs": 73427,
+            "new_runs": 55097,
+            "old_stop": "StrategyMet",
+            "new_stop": "StrategyMet"
+          },
+          {
+            "game": 191,
+            "frame": 31,
+            "old_loss": [
+              0.0,
+              0.6009615386574296
+            ],
+            "new_loss": [
+              0.0,
+              0.5501233616278189
+            ],
+            "old_runs": 169075,
+            "new_runs": 250000,
+            "old_stop": "NodeBudget",
+            "new_stop": "WorkExhausted"
+          }
+        ],
+        "upper_improved": 39,
+        "upper_worsened": 4,
+        "baseline_stops": {
+          "StrategyMet": 2,
+          "NodeBudget": 45,
+          "WorkExhausted": 17
+        },
+        "baseline_runs": 10379630,
+        "combined_small_loss_roots": 39,
+        "combined_small_loss_games": 38,
+        "combined_unresolved_roots": 321,
+        "strength_improvement_proven": false,
+        "blind_policy_error_proven": false
+      }
     }
   },
   "foresight_fix": {
@@ -37803,7 +40355,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-07T18:50:56.296823+09:00",
+    "checked_at": "2026-10-07T19:10:34.489889+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -37837,7 +40389,8 @@
     "followup_bounds": [
       "native-endgame-bounds-v1",
       "native-endgame-refine-v1"
-    ]
+    ],
+    "followup_quotient": "native-endgame-quotient-v1"
   },
   "native_endgame_census": {
     "status": "complete",
@@ -37851,10 +40404,22 @@
     "status": "complete",
     "roots": 360,
     "refined_roots": 70,
-    "small_fixed_world_pure_loss_roots": 38,
-    "unresolved_roots": 322,
+    "small_fixed_world_pure_loss_roots": 39,
+    "unresolved_roots": 321,
     "new_blind_policy_error_proven": false,
     "strength_improvement_proven": false,
-    "next": "Inspect unresolved graph structure and chance expansion."
+    "next": "Distinguish refinement for certifying near-optimal actions from refinement for proving a positive action-loss lower bound.",
+    "quotient_confirmation_roots": 64
+  },
+  "native_endgame_quotient": {
+    "status": "complete",
+    "confirmation_roots": 64,
+    "upper_improved": 39,
+    "upper_worsened": 4,
+    "upper_unchanged": 21,
+    "new_small_loss_in_confirmation": 0,
+    "new_small_loss_in_diagnostics": 1,
+    "ordinary_bot_changed": false,
+    "strength_improvement_proven": false
   }
 }
