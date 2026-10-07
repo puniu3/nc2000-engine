@@ -1,0 +1,11 @@
+{
+  "decision": "Do not adopt capped conditional-mean damage as the default rollout ranking; do not run the conditional matched-time confirmation.",
+  "basis": "Completed preregistered192 games: candidate88 wins,104 losses,0 ties or turn caps. Score0.4583333333333333, paired95 interval[0.3923584134131126,0.524308253253554]. The lower bound does not exceed0.5.",
+  "scope": "Against the current local ordinary blind bot, not the deployed binary. The result does not prove the candidate weaker, equivalence, or whole-game optimality. Two full-state local greedy-action improvements did not establish ordinary-bot strength.",
+  "replayed_games": 192,
+  "replayed_decisions": 8347,
+  "default_enabled": false,
+  "timing": "Same27000 iterations. Mean observed decision times656.24ms candidate and657.61ms control are descriptive; game paths differ, and this is not an equal-time trial.",
+  "metadata_exception": "Raw null_control field is JSON null due to the frozen Rust json! token; audit binds actual mode to the hashed input protocol. Original output is preserved.",
+  "archive_sha256": "62dca3cc3d8340628725026b005a48b8e8a62ffee34fb85c0ec9e3a50874846d"
+}
