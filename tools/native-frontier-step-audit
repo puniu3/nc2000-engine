@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import math
+from collections import Counter
+from pathlib import Path
+
+
+def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check(record,protocol,parent):
+    assert {k:v for k,v in record.items() if k not in ['frontier_probe','elapsed_ms']}=={k:v for k,v in parent.items() if k!='elapsed_ms'}
+    probe=record['frontier_probe'];samples=probe['samples'];side=record['side']
+    assert probe['performance_sample'] is False
+    assert len(samples)==probe['sample_count']==protocol['sample_count']
+    total=probe['eligible_unexpanded_states'];assert total>=len(samples)>1
+    assert [s['index'] for s in samples]==[i*(total-1)//(len(samples)-1) for i in range(len(samples))]
+    assert [s['state_key128'] for s in samples]==sorted({s['state_key128'] for s in samples})
+    runs=0;positive=0;strong=0;upper=0;complete=0;status=Counter();bounds=[]
+    for sample in samples:
+        raw=sample['battle_json'];assert hashlib.sha256(raw.encode()).hexdigest()==sample['state_sha256']
+        state=json.loads(raw);own=state['sides'][side]['roster'][state['sides'][side]['active']]
+        assert state['sides'][0]['pokemon_left']==state['sides'][1]['pokemon_left']==1
+        assert len(sample['cells'])==4
+        lo=1.;hi=1.
+        for cell in sample['cells']:
+            mass=cell['mass'];pending=cell['pending_mass']
+            assert len(mass)==4 and all(math.isfinite(v) and 0<=v<=1+1e-9 for v in [*mass,pending])
+            assert abs(sum(mass)+pending-1.)<1e-9
+            assert 0<=cell['runs']<=protocol['probe_cell_cap'];runs+=cell['runs']
+            if not cell['exhausted']:assert pending==0.;complete+=1
+            lo=min(lo,mass[side]+.5*mass[2]);hi=min(hi,1-mass[1-side]-.5*mass[2])
+        assert all(abs(x-y)<1e-12 for x,y in zip([lo,hi],sample['one_step_score_bounds']))
+        outward=[max(0.,lo-1e-10),min(1.,hi+1e-10)];bounds.append(outward)
+        positive+=outward[0]>1e-8;strong+=outward[0]>.1;upper+=outward[1]<1-1e-8
+        status[own['status'],sample['fixed_action'],'strong' if outward[0]>.1 else 'weak' if outward[0]>1e-8 else 'zero']+=1
+    assert runs==probe['additional_runs']
+    return dict(eligible_unexpanded_states=total,samples=len(samples),additional_probe_runs=runs,
+                positive_lower_bounds=positive,lower_bounds_above_01=strong,upper_bounds_below_one=upper,
+                complete_cells=complete,total_cells=sum(len(s['cells']) for s in samples),
+                bounds_with_outward_padding=bounds,numerical_padding=1e-10,
+                groups=[dict(status=k[0],action=k[1],bound_class=k[2],count=v) for k,v in sorted(status.items())],
+                original_search_outputs_match=True,search_bounds_changed=False,performance_improvement_proven=False)
+
+
+def main():
+    p=Path('findings/native-frontier-step-v1');t=Path('tmp/native-frontier-step-v1')
+    protocol=json.loads((p/'protocol.json').read_text())
+    assert digest(p/'native_frontier_step.rs')==protocol['helper_sha256']
+    assert digest(t/'solver')==protocol['solver_binary_sha256']
+    raw=gzip.decompress(Path('findings/native-snorlax-witness-v1/records.jsonl.gz').read_bytes())
+    assert hashlib.sha256(raw).hexdigest()==protocol['parent_records_sha256']
+    parent=next(r for r in map(json.loads,raw.splitlines()) if r['id']=='rest-guarantee')
+    record=json.loads((t/'main.jsonl').read_text());result=check(record,protocol,parent)
+    vp=json.loads((p/'verification-protocol.json').read_text());v=json.loads((t/'verification.json').read_text())
+    assert digest(t/'main.jsonl')==vp['records_sha256']==v['records_sha256']
+    assert digest(p/'protocol.json')==vp['protocol_sha256']
+    assert digest(p/'native_frontier_step_verify.rs')==vp['helper_sha256']
+    assert digest(t/'verify-solver')==vp['binary_sha256']
+    assert v['cells_checked']==result['total_cells'] and v['extra_engine_runs']==result['additional_probe_runs']
+    assert v['policy_validation_runs']==result['samples'] and 0<=v['max_probability_error']<1e-10
+    assert v['performance_sample'] is False
+    rejected=[]
+    for kind in ['changed_parent_search','wrong_sample_index','changed_state','hidden_pending','false_bound']:
+        r=copy.deepcopy(record)
+        if kind=='changed_parent_search':r['runs']+=1
+        elif kind=='wrong_sample_index':r['frontier_probe']['samples'][0]['index']+=1
+        elif kind=='changed_state':r['frontier_probe']['samples'][0]['battle_json']+=' '
+        elif kind=='hidden_pending':
+            cell=next(c for s in r['frontier_probe']['samples'] for c in s['cells'] if c['pending_mass']>1e-6);cell['pending_mass']=0.
+        else:r['frontier_probe']['samples'][0]['one_step_score_bounds']=[1.,1.]
+        try:check(r,protocol,parent)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    result.update(schema=protocol['schema'],protocol_sha256=digest(p/'protocol.json'),records_sha256=digest(t/'main.jsonl'),
+                  replay_verification=v,rejected_mutations=rejected,ordinary_bot_changed=False,strength_improvement_proven=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()
