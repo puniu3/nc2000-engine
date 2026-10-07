@@ -1,0 +1,9 @@
+# Reachable alternative-opponent-action census
+
+At the earliest census-eligible root in each of 82 games, all four legal opponent actions were applied with the archived own action and unchanged seeded battle RNG. This creates 328 branches: 82 original-action controls and 246 alternatives. Among alternatives, 81 terminate and 165 retain a non-forced idle decision. The 165 alternatives contain 156 distinct child states within their source game; after excluding states identical to the original continuation, 151 novel eligible states from 57 source games remain.
+
+All 192 games were replayed, preserving 4,498 decision states and 8,534 archived player decisions. Every control transition matches its archived next state or terminal outcome. Four separate belief instances start at original team preview and synchronize at every actual current-side decision until the fork; each branch then receives a clone of the persistent observer and its own synchronized belief. Knowledge is not reset at the fork. The next bot RNG seed is identical across branches and matches the archived continuation in controls.
+
+No new search or action-loss analysis was performed in this census phase. The 45 nonterminal controls carry the archived expected response for later comparison; a null response denotes unmeasured search. Terminal branches are retained, not discarded. Same-state branches agree on recorded observation and belief metadata.
+
+A complete repeated census produced byte-identical snapshots and metadata. Independent checks verify all parent/action coverage, full child-state hashes, control links, legal-action metadata and knowledge summaries. Corrupted opponent action, child HP, missing branch and control response are rejected. These branches are reachable witnessed continuations of existing histories, not a probability-weighted sample, optimal opponent distribution or proof of bot improvement.

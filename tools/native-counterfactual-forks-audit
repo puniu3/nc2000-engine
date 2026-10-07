@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def audit(protocol, source, snapshots, census):
+    assert digest(source)==protocol['games_sha256']
+    games={r['game']:r for r in map(json.loads,source.decode().splitlines()[1:])}
+    assert len(games)==192
+    parents=dict(protocol['parents'])
+    records=census['records']
+    expected={r['fork_id']:r for r in records}
+    assert len(expected)==len(records)==len(snapshots)==census['branches']
+    groups=defaultdict(list);seen=set()
+    for row in snapshots:
+        r,b=row['record'],row['battle']
+        assert r==expected[r['fork_id']] and r['fork_id'] not in seen
+        seen.add(r['fork_id']);g=r['source_game'];f=r['source_frame'];side=r['side']
+        assert f==parents[g] and side==g%2
+        parent=games[g]['frames'][f]
+        opponent=games[g]['frames'][f+(1 if side==0 else -1)]
+        assert parent['agent']==0 and opponent['side']==1-side
+        assert r['parent_sha256']==parent['state_sha256']==opponent['state_sha256']
+        assert r['own_action']==parent['response']['action']
+        assert r['original_opponent_action']==opponent['response']['action']
+        assert r['opponent_actions']==opponent['legal_actions']
+        assert r['opponent_action']==r['opponent_actions'][r['branch']]
+        assert r['is_control']==(r['opponent_action']==r['original_opponent_action'])
+        assert digest(json.dumps(b,ensure_ascii=False,separators=(',',':')).encode())==r['child_sha256']
+        assert (r['outcome'] is not None)==b['ended']
+        assert r['eligible']==(not b['ended'] and len(r['legal_actions'][side])>1 and b['started'] and not b['mid_turn']
+                               and all(s['pokemon_left']==1 for s in b['sides']) and not b['queue'] and not b['faint_queue'])
+        assert r['belief']['candidate_count']==len(r['belief']['candidate_ids'])
+        assert r['belief']['fallback']==(r['belief']['candidate_count']==0)
+        if r['is_control'] and r['legal_actions'][side]:
+            nxt=next(a for a in games[g]['frames'][f+1:] if a['side']==side)
+            assert nxt['state_sha256']==r['child_sha256'] and nxt['response']==r['expected_control_response']
+            assert r['next_bot_seed']==nxt['response']['search_seed']
+        else:
+            assert r['expected_control_response'] is None
+        response=r['response']
+        if protocol['measure_search'] and r['legal_actions'][side]:
+            assert response['iterations']==27000 and response['search_seed']==r['next_bot_seed']
+            assert response['key']==r['child_key'] and response['action'] in r['legal_actions'][side]
+            assert sum(a['visits'] for a in response['actions'])==27000
+            if r['is_control']:
+                assert response==r['expected_control_response']
+        else:
+            assert response is None
+        groups[g].append(r)
+    assert set(groups)==set(parents)
+    for group in groups.values():
+        assert sorted(r['branch'] for r in group)==list(range(len(group[0]['opponent_actions'])))
+        assert sum(r['is_control'] for r in group)==1
+        assert len({r['next_bot_seed'] for r in group})==1
+        by_state=defaultdict(list)
+        for r in group:by_state[r['child_sha256']].append(r)
+        for aliases in by_state.values():
+            for field in ['observation','belief','next_bot_seed','response']:
+                assert all(a[field]==aliases[0][field] for a in aliases)
+    controls={r['source_game']:r['child_sha256'] for r in records if r['is_control']}
+    eligible=[r for r in records if not r['is_control'] and r['eligible']]
+    novel={(r['source_game'],r['child_sha256']) for r in eligible if r['child_sha256']!=controls[r['source_game']]}
+    return {'parents':len(parents),'branches':len(records),'controls':sum(r['is_control'] for r in records),
+            'alternative_branches':sum(not r['is_control'] for r in records),
+            'eligible_alternatives':len(eligible),'eligible_alternative_games':len({r['source_game'] for r in eligible}),
+            'unique_eligible_alternatives':len({(r['source_game'],r['child_sha256']) for r in eligible}),
+            'novel_eligible_states':len(novel),'novel_eligible_games':len({g for g,h in novel}),
+            'terminal_alternatives':sum(not r['is_control'] and r['outcome'] is not None for r in records),
+            'control_searches':sum(r['is_control'] and r['response'] is not None for r in records),
+            'total_searches':sum(r['response'] is not None for r in records),
+            'fallback_branches':sum(r['belief']['fallback'] for r in records),
+            'replayed_states':census['replayed_states'],'replayed_decisions':census['replayed_decisions']}
+
+
+def main():
+    protocol_path, games_path, snapshot_path, census_path=map(Path,sys.argv[1:])
+    protocol=json.loads(protocol_path.read_text())
+    parent_bytes=gzip.decompress(Path('findings/native-endgame-census-v1/census.json.gz').read_bytes())
+    assert digest(parent_bytes)==protocol['parent_census_sha256']
+    first={}
+    for r in json.loads(parent_bytes)['roots']:first.setdefault(r['game'],r['frame'])
+    assert protocol['parents']==[[g,f] for g,f in sorted(first.items())]
+    assert digest(Path('findings/native-counterfactual-forks-v1/native_counterfactual_forks.rs').read_bytes())==protocol['helper_sha256']
+    assert digest(Path('tmp/native-counterfactual-forks-v1/generator').read_bytes())==protocol['binary_sha256']
+    source=games_path.read_bytes()
+    snapshots=[json.loads(l) for l in snapshot_path.read_text().splitlines()]
+    census=json.loads(census_path.read_text())
+    assert census['measure_search']==protocol['measure_search']
+    result=audit(protocol,source,snapshots,census)
+    rejected=[]
+    for kind in ['wrong_opponent_action','changed_child_hp','missing_branch','wrong_control_response']:
+        changed=copy.deepcopy(snapshots); changed_census=copy.deepcopy(census)
+        if kind=='wrong_opponent_action':
+            changed[0]['record']['opponent_action']='move nonexistent'
+        elif kind=='changed_child_hp':
+            changed[0]['battle']['sides'][0]['roster'][0]['hp']+=1
+        elif kind=='missing_branch':
+            changed.pop()
+        else:
+            target=next(r for r in changed if r['record']['expected_control_response'] is not None)
+            target['record']['expected_control_response']['action']='move nonexistent'
+        changed_census['records']=[r['record'] for r in changed]
+        changed_census['branches']=len(changed)
+        try:
+            audit(protocol,source,changed,changed_census)
+        except AssertionError:
+            rejected.append(kind)
+        else:
+            raise AssertionError('accepted mutation: '+kind)
+    result['rejected_mutations']=rejected
+    result.update({'schema':protocol['schema'],'protocol_sha256':digest(protocol_path.read_bytes()),
+                   'snapshots_sha256':digest(snapshot_path.read_bytes()),'census_sha256':digest(census_path.read_bytes()),
+                   'measure_search':protocol['measure_search'],'strength_improvement_proven':False})
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':
+    main()
