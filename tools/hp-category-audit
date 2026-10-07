@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+from pathlib import Path
+
+
+def verify(before, after):
+    assert len(before) == len(after) == 32
+    failures_before = 0
+    controls = 0
+    runs = 0
+    examples = []
+    for i,(old,new) in enumerate(zip(before,after)):
+        assert (old['type'],old['power']) == (new['type'],new['power'])
+        assert old['native'] == new['native']
+        assert old['controls'] == new['controls']
+        assert all(abs(sum(r['native'].values())-1)<1e-10 for r in [new]+[x for pair in new['perturbations'] for x in pair])
+        controls += len(new['controls'])
+        runs += new['runs']
+        if i//2 < 8:
+            assert old == new
+        for op,np in zip(old['perturbations'],new['perturbations']):
+            for o,n in zip(op,np):
+                assert (o['attacker'],o['relevant']) == (n['attacker'],n['relevant'])
+                assert o['native'] == n['native']
+                changed=n['native'] != new['native']
+                assert changed == n['relevant']
+                assert (n['estimate'] != new['estimate']) == n['relevant']
+                failures_before += (o['estimate'] != old['estimate']) != o['relevant']
+                runs += n['runs']
+        if new['type']=='Ice':
+            examples.append({'type':new['type'],'power':new['power'],'before':old['estimate'],'after':new['estimate'],'native_mean_including_crits':new['native_mean']})
+    assert failures_before == 64
+    return {'type_power_cases':32,'native_dependency_comparisons':128,'wrong_dependencies_before':failures_before,'wrong_dependencies_after':0,'physical_cases_unchanged':16,'ordinary_move_estimates_unchanged':controls,'native_runs_per_measurement':runs,'examples':examples}
+
+
+def main():
+    root=Path('findings/hp-category-v1')
+    before=json.loads((root/'before.json').read_text())
+    after=json.loads((root/'after.json').read_text())
+    summary=verify(before,after)
+    for mode in ['native','physical','dependency','ordinary']:
+        bad=copy.deepcopy(after)
+        if mode=='native':bad[16]['native']['0']=1
+        elif mode=='physical':bad[0]['estimate']+=1
+        elif mode=='dependency':bad[16]['perturbations'][0][0]['estimate']+=1
+        else:bad[16]['controls'][0]['estimate']+=1
+        try:
+            verify(before,bad)
+        except AssertionError:
+            continue
+        raise AssertionError(f'{mode} was accepted')
+    summary['negative_controls']=4
+    summary['bot_unit_tests']=230
+    summary['regression_tests']=1
+    summary['runtime_changed']=True
+    summary['strength_vs_deployed']='unproved'
+    summary['scope']='Damage-category correctness: 16 HP types at 35/70 power, artificial stat perturbations, exhaustive native one-turn damage distributions. Estimates remain approximate and exclude critical hits; no claim of exact mean damage, policy optimality or overall strength.'
+    files=['crates/bot/src/eval.rs','crates/bot/tests/support/hidden_power_damage.rs','crates/bot/tests/hidden_power_damage.rs','crates/bot/examples/hp_category_probe.rs','tools/hp-category-audit','data/gen2stadium2.json','crates/engine/src/battle/moveexec.rs']
+    files += [str(root/name) for name in ['before.json','after.json','before-source.json','before-tests.log','after-tests.log']]
+    summary['hashes']={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files}
+    print(json.dumps(summary,indent=2))
+
+
+if __name__=='__main__':
+    main()

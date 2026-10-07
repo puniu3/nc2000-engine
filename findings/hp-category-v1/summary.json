@@ -1,0 +1,45 @@
+{
+  "type_power_cases": 32,
+  "native_dependency_comparisons": 128,
+  "wrong_dependencies_before": 64,
+  "wrong_dependencies_after": 0,
+  "physical_cases_unchanged": 16,
+  "ordinary_move_estimates_unchanged": 160,
+  "native_runs_per_measurement": 4702,
+  "examples": [
+    {
+      "type": "Ice",
+      "power": 35,
+      "before": 10.180392156862746,
+      "after": 18.50980392156863,
+      "native_mean_including_crits": 19.06570512781036
+    },
+    {
+      "type": "Ice",
+      "power": 70,
+      "before": 20.360784313725492,
+      "after": 36.09411764705882,
+      "native_mean_including_crits": 37.754807691439055
+    }
+  ],
+  "negative_controls": 4,
+  "bot_unit_tests": 230,
+  "regression_tests": 1,
+  "runtime_changed": true,
+  "strength_vs_deployed": "unproved",
+  "scope": "Damage-category correctness: 16 HP types at 35/70 power, artificial stat perturbations, exhaustive native one-turn damage distributions. Estimates remain approximate and exclude critical hits; no claim of exact mean damage, policy optimality or overall strength.",
+  "hashes": {
+    "crates/bot/src/eval.rs": "72657b4bd532a298449013b45e17fa49a5cd83c88d236692946301ce96796042",
+    "crates/bot/tests/support/hidden_power_damage.rs": "38b50e8d92c2be3c8af4ca9df87e497bfa547896c56671a13986e73a02d012ef",
+    "crates/bot/tests/hidden_power_damage.rs": "9a5a2d998cfc0aaee365763d34dbcb640dfdd6aa892b5f1ad0a7c1e72cea2d2d",
+    "crates/bot/examples/hp_category_probe.rs": "414f6680cf474278a84bba3b4a20e6d399057cba4a45e9e428b0c6f198cd3976",
+    "tools/hp-category-audit": "8fe8446da59f255a35e3cc65fe9d0c5c76515956ba52baa600711e09dbf61e60",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "crates/engine/src/battle/moveexec.rs": "15495872b5b4eaf096cdb9a7d2e2bb241c3d51b2f89e8b51b6aaeb6e693efd73",
+    "findings/hp-category-v1/before.json": "adf4649129addcf95e7ecd018e9f5dfc5ff4ddf4cf1bce243b632b54ca866cb4",
+    "findings/hp-category-v1/after.json": "7c45663af2950130112d62132e503553011bf5daef91b03914378c6f1c8c930d",
+    "findings/hp-category-v1/before-source.json": "2725769ab8cba0f9f8725226f9ccefbd0507cbae0e3fe6106bf58095b6e45270",
+    "findings/hp-category-v1/before-tests.log": "6c86105c6ac010798c2fa0f7fa7c374e13e00e5cc2eb0076b416d45d23f50790",
+    "findings/hp-category-v1/after-tests.log": "c15bce9612ba72c52c68baa7d4adb5075f19cef78524ceddf07867437f2e913f"
+  }
+}
