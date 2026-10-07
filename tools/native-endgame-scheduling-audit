@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def main():
+    scratch, roots_path = map(Path,sys.argv[1:])
+    directory=Path('findings/native-endgame-scheduling-v1')
+    protocol=json.loads((directory/'protocol.json').read_text())
+    assert digest(roots_path)==protocol['roots_sha256']
+    assert digest(directory/'native_endgame_scheduling.rs')==protocol['helper_sha256']
+    assert digest(scratch/'solver')==protocol['solver_binary_sha256']
+    roots=[json.loads(l) for l in roots_path.read_text().splitlines()]
+    baseline_bytes=gzip.decompress(Path('findings/native-endgame-structure-v1/records.jsonl.gz').read_bytes())
+    assert hashlib.sha256(baseline_bytes).hexdigest()==protocol['control_source_sha256']
+    baseline={(r['game'],r['frame']):r for r in map(json.loads,baseline_bytes.decode().splitlines())}
+    checker=runpy.run_path('tools/native-endgame-bounds-audit')['check']
+    variants={}
+    for name,settings in protocol['variants'].items():
+        arm=json.loads((scratch/(name+'.json')).read_text())
+        assert arm=={**{k:v for k,v in protocol.items() if k!='variants'},**settings,'variant':name}
+        rows=[json.loads(l) for l in (scratch/(name+'.jsonl')).read_text().splitlines()]
+        summary=checker(rows,arm,roots)
+        comparisons=[]
+        for r in sorted(rows,key=lambda r:(r['game'],r['frame'])):
+            previous=baseline[r['game'],r['frame']]
+            if name=='control':
+                assert {k:v for k,v in r.items() if k not in ['elapsed_ms','stats']}=={k:v for k,v in previous.items() if k not in ['elapsed_ms','diagnostics']}
+            for flag in ['dead_quick_claw_quotient','retain_eager_prefix']:
+                assert (flag+': '+str(settings[flag]).lower()) in r['config']
+            for a,b in zip([previous['value_p0'],*previous['cells_p0']], [r['value_p0'],*r['cells_p0']]):
+                assert max(a[0],b[0])<=min(a[1],b[1])+1e-8
+            old=previous['pure_action_losses'][previous['selected']]
+            new=r['pure_action_losses'][r['selected']]
+            comparisons.append({'game':r['game'],'frame':r['frame'],'old_loss':old,'new_loss':new,
+                                'runs':r['runs'],'nodes':r['nodes'],'stop':r['stop'],
+                                'retained_eager_runs':r['stats']['retained_eager_runs']})
+        summary.update({'comparisons':comparisons,'records_sha256':digest(scratch/(name+'.jsonl')),
+                        'upper_improved':sum(c['new_loss'][1]<c['old_loss'][1]-1e-8 for c in comparisons),
+                        'upper_worsened':sum(c['new_loss'][1]>c['old_loss'][1]+1e-8 for c in comparisons)})
+        variants[name]=summary
+    print(json.dumps({'schema':protocol['schema'],'protocol_sha256':digest(directory/'protocol.json'),
+                      'control_matches_frozen':True,'all_intervals_overlap_frozen':True,'variants':variants,
+                      'strength_improvement_proven':False},indent=2))
+
+
+if __name__=='__main__':
+    main()
