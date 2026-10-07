@@ -1,0 +1,116 @@
+{
+  "results": [
+    {
+      "id": "trial-0",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.29620143242332375,
+      "target_score_interval": [
+        0.29620143242332375,
+        1.0
+      ],
+      "stop": "NodeBudget",
+      "runs": 921554,
+      "nodes": 200068,
+      "elapsed_ms": 51423.499625
+    },
+    {
+      "id": "trial-1",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.3012754726891027,
+      "target_score_interval": [
+        0.3012754726891027,
+        1.0
+      ],
+      "stop": "NodeBudget",
+      "runs": 946576,
+      "nodes": 200113,
+      "elapsed_ms": 44465.24475
+    },
+    {
+      "id": "trial-2",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.3012754726891027,
+      "target_score_interval": [
+        0.3012754726891027,
+        1.0
+      ],
+      "stop": "NodeBudget",
+      "runs": 946576,
+      "nodes": 200113,
+      "elapsed_ms": 44427.302375
+    },
+    {
+      "id": "trial-3",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.29620143242332375,
+      "target_score_interval": [
+        0.29620143242332375,
+        1.0
+      ],
+      "stop": "NodeBudget",
+      "runs": 921554,
+      "nodes": 200068,
+      "elapsed_ms": 50832.448542
+    }
+  ],
+  "combined_first_action_guarantees": {
+    "move doubleedge": [
+      0.8420197907628891,
+      0.9999906503889959
+    ],
+    "move curse": [
+      0.0,
+      0.9999906503889959
+    ],
+    "move rest": [
+      0.3012754726891027,
+      0.9999906503889959
+    ],
+    "move sleeptalk": [
+      0.0,
+      0.9999906503889959
+    ]
+  },
+  "actual_rest_pure_loss_lower": 0.0,
+  "actual_rest_error_proven": false,
+  "rest_over_doubleedge_security_advantage_lower": 0.0,
+  "rest_better_than_doubleedge_proven": false,
+  "repeats_match": true,
+  "control_reproduces_parent": true,
+  "candidate_activated": true,
+  "expanded_waking_actions": [
+    {
+      "move sleeptalk": 308
+    },
+    {
+      "move doubleedge": 314
+    },
+    {
+      "move doubleedge": 314
+    },
+    {
+      "move sleeptalk": 308
+    }
+  ],
+  "lower_bound_change": 0.005074040265778956,
+  "interval_width_change": -0.005074040265778956,
+  "deferred_eager_leaves": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "schema": "nc2000-native-wake-witness-v1",
+  "protocol_sha256": "8ac36807079fc2c9f7ddde0b46ad167036b007ce7027d1abd102760fa26194cd",
+  "records_sha256": "941e40ca7b791aeab3dd517cc64c30c62cf1eb0a7d8a0a38cee4506af2bd79ca",
+  "rejected_mutations": [
+    "missing_job",
+    "false_bound",
+    "wrong_mode",
+    "changed_repeat",
+    "restricted_reply"
+  ],
+  "ordinary_bot_changed": false,
+  "strength_improvement_proven": false,
+  "matched_time_comparison": false
+}
