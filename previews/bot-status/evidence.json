@@ -36467,6 +36467,1447 @@
         "total_candidate_eligible_per_pass": 12,
         "total_candidate_hits_per_pass": 0
       }
+    },
+    "findings/native-admission-profile-v1/summary.json": {
+      "sha256": "85753582c46bf6413c237e1178fbba33dcae8e79aff6fe2fc3c47f822517005f",
+      "data": {
+        "roots": 6,
+        "games": 6,
+        "runs": 1500000,
+        "stops": {
+          "WorkExhausted": 6
+        },
+        "value_width_at_most_002": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "selected_pure_loss_at_most_002": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "selected_pure_loss_above_002": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "selected_strictly_dominated": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "unresolved_selected_pure_loss": {
+          "roots": 6,
+          "games": 6,
+          "keys": [
+            [
+              0,
+              18
+            ],
+            [
+              3,
+              97
+            ],
+            [
+              4,
+              60
+            ],
+            [
+              10,
+              32
+            ],
+            [
+              13,
+              41
+            ],
+            [
+              16,
+              18
+            ]
+          ]
+        },
+        "max_nodes_plus_closed": 36127,
+        "max_runs": 250000,
+        "profiles": [
+          {
+            "game": 0,
+            "frame": 18,
+            "by_first_failure": {
+              "side_conditions_or_choice": [
+                231,
+                248594,
+                192,
+                39
+              ]
+            },
+            "newly_admitted_without_club": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "action_pairs": {
+              "move explosion | move bonemerang": [
+                23,
+                220,
+                23,
+                0
+              ],
+              "move explosion | move hiddenpower": [
+                3,
+                64,
+                3,
+                0
+              ],
+              "move explosion | move rockslide": [
+                2,
+                34,
+                2,
+                0
+              ],
+              "move explosion | move swordsdance": [
+                39,
+                404,
+                39,
+                0
+              ],
+              "move leechseed | move bonemerang": [
+                28,
+                30888,
+                28,
+                0
+              ],
+              "move leechseed | move hiddenpower": [
+                3,
+                20,
+                3,
+                0
+              ],
+              "move leechseed | move rockslide": [
+                4,
+                662,
+                4,
+                0
+              ],
+              "move leechseed | move swordsdance": [
+                3,
+                10,
+                3,
+                0
+              ],
+              "move psychic | move bonemerang": [
+                36,
+                123525,
+                7,
+                29
+              ],
+              "move psychic | move hiddenpower": [
+                18,
+                3422,
+                18,
+                0
+              ],
+              "move psychic | move rockslide": [
+                22,
+                61423,
+                12,
+                10
+              ],
+              "move psychic | move swordsdance": [
+                9,
+                1006,
+                9,
+                0
+              ],
+              "move sleeppowder | move bonemerang": [
+                31,
+                26096,
+                31,
+                0
+              ],
+              "move sleeppowder | move hiddenpower": [
+                4,
+                36,
+                4,
+                0
+              ],
+              "move sleeppowder | move rockslide": [
+                4,
+                766,
+                4,
+                0
+              ],
+              "move sleeppowder | move swordsdance": [
+                2,
+                18,
+                2,
+                0
+              ]
+            }
+          },
+          {
+            "game": 3,
+            "frame": 97,
+            "by_first_failure": {
+              "active_item": [
+                866,
+                250000,
+                865,
+                1
+              ]
+            },
+            "newly_admitted_without_club": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "action_pairs": {
+              "move earthquake | move curse": [
+                92,
+                4679,
+                92,
+                0
+              ],
+              "move earthquake | move doubleedge": [
+                171,
+                62599,
+                171,
+                0
+              ],
+              "move earthquake | move earthquake": [
+                104,
+                56798,
+                103,
+                1
+              ],
+              "move earthquake | move rest": [
+                95,
+                25571,
+                95,
+                0
+              ],
+              "move rest | move curse": [
+                1,
+                2,
+                1,
+                0
+              ],
+              "move rest | move doubleedge": [
+                70,
+                3851,
+                70,
+                0
+              ],
+              "move rest | move earthquake": [
+                1,
+                54,
+                1,
+                0
+              ],
+              "move rest | move rest": [
+                1,
+                2,
+                1,
+                0
+              ],
+              "move rockslide | move curse": [
+                2,
+                190,
+                2,
+                0
+              ],
+              "move rockslide | move doubleedge": [
+                75,
+                84233,
+                75,
+                0
+              ],
+              "move rockslide | move earthquake": [
+                3,
+                3337,
+                3,
+                0
+              ],
+              "move rockslide | move rest": [
+                1,
+                478,
+                1,
+                0
+              ],
+              "move sleeptalk | move curse": [
+                3,
+                6,
+                3,
+                0
+              ],
+              "move sleeptalk | move doubleedge": [
+                68,
+                5430,
+                68,
+                0
+              ],
+              "move sleeptalk | move earthquake": [
+                2,
+                108,
+                2,
+                0
+              ],
+              "move sleeptalk | move rest": [
+                177,
+                2662,
+                177,
+                0
+              ]
+            }
+          },
+          {
+            "game": 4,
+            "frame": 60,
+            "by_first_failure": {
+              "admitted": [
+                12,
+                27222,
+                8,
+                4
+              ],
+              "opponent_move": [
+                842,
+                222261,
+                830,
+                12
+              ]
+            },
+            "newly_admitted_without_club": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "action_pairs": {
+              "move icebeam | move icebeam": [
+                12,
+                27222,
+                8,
+                4
+              ],
+              "move curse | move curse": [
+                10,
+                26,
+                10,
+                0
+              ],
+              "move curse | move icebeam": [
+                8,
+                570,
+                8,
+                0
+              ],
+              "move curse | move recover": [
+                3,
+                6,
+                3,
+                0
+              ],
+              "move curse | move return": [
+                25,
+                808,
+                25,
+                0
+              ],
+              "move icebeam | move curse": [
+                10,
+                4808,
+                10,
+                0
+              ],
+              "move icebeam | move recover": [
+                7,
+                1050,
+                7,
+                0
+              ],
+              "move icebeam | move return": [
+                37,
+                70538,
+                26,
+                11
+              ],
+              "move recover | move curse": [
+                21,
+                944,
+                21,
+                0
+              ],
+              "move recover | move icebeam": [
+                7,
+                53,
+                7,
+                0
+              ],
+              "move recover | move recover": [
+                216,
+                6020,
+                216,
+                0
+              ],
+              "move recover | move return": [
+                25,
+                653,
+                25,
+                0
+              ],
+              "move return | move curse": [
+                114,
+                11098,
+                114,
+                0
+              ],
+              "move return | move icebeam": [
+                115,
+                79298,
+                115,
+                0
+              ],
+              "move return | move recover": [
+                94,
+                9062,
+                94,
+                0
+              ],
+              "move return | move return": [
+                150,
+                37327,
+                149,
+                1
+              ]
+            }
+          },
+          {
+            "game": 10,
+            "frame": 32,
+            "by_first_failure": {
+              "active_item": [
+                3710,
+                249996,
+                3705,
+                5
+              ]
+            },
+            "newly_admitted_without_club": [
+              327,
+              103687,
+              327,
+              0
+            ],
+            "action_pairs": {
+              "move earthquake | move icebeam": [
+                327,
+                103687,
+                327,
+                0
+              ],
+              "move earthquake | move curse": [
+                308,
+                7137,
+                308,
+                0
+              ],
+              "move earthquake | move recover": [
+                303,
+                7069,
+                303,
+                0
+              ],
+              "move earthquake | move return": [
+                616,
+                44395,
+                616,
+                0
+              ],
+              "move hiddenpower | move curse": [
+                90,
+                1338,
+                90,
+                0
+              ],
+              "move hiddenpower | move icebeam": [
+                90,
+                10458,
+                89,
+                1
+              ],
+              "move hiddenpower | move recover": [
+                90,
+                1338,
+                90,
+                0
+              ],
+              "move hiddenpower | move return": [
+                327,
+                18725,
+                327,
+                0
+              ],
+              "move rockslide | move curse": [
+                36,
+                1916,
+                36,
+                0
+              ],
+              "move rockslide | move icebeam": [
+                39,
+                21986,
+                36,
+                3
+              ],
+              "move rockslide | move recover": [
+                36,
+                1916,
+                36,
+                0
+              ],
+              "move rockslide | move return": [
+                313,
+                25973,
+                312,
+                1
+              ],
+              "move swordsdance | move curse": [
+                91,
+                182,
+                91,
+                0
+              ],
+              "move swordsdance | move icebeam": [
+                89,
+                712,
+                89,
+                0
+              ],
+              "move swordsdance | move recover": [
+                631,
+                1298,
+                631,
+                0
+              ],
+              "move swordsdance | move return": [
+                324,
+                1866,
+                324,
+                0
+              ]
+            }
+          },
+          {
+            "game": 13,
+            "frame": 41,
+            "by_first_failure": {
+              "active_item": [
+                130,
+                238124,
+                100,
+                30
+              ],
+              "opponent_move": [
+                9,
+                11846,
+                8,
+                1
+              ]
+            },
+            "newly_admitted_without_club": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "action_pairs": {
+              "move crosschop | move crunch": [
+                14,
+                3192,
+                14,
+                0
+              ],
+              "move crosschop | move dynamicpunch": [
+                14,
+                18968,
+                14,
+                0
+              ],
+              "move crosschop | move fireblast": [
+                13,
+                45106,
+                13,
+                0
+              ],
+              "move crosschop | move rockslide": [
+                28,
+                4986,
+                28,
+                0
+              ],
+              "move earthquake | move rockslide": [
+                15,
+                11226,
+                15,
+                0
+              ],
+              "move hiddenpower | move dynamicpunch": [
+                32,
+                127912,
+                1,
+                31
+              ],
+              "move hiddenpower | move rockslide": [
+                8,
+                12128,
+                8,
+                0
+              ],
+              "move rockslide | move rockslide": [
+                15,
+                26452,
+                15,
+                0
+              ]
+            }
+          },
+          {
+            "game": 16,
+            "frame": 18,
+            "by_first_failure": {
+              "active_item": [
+                1603,
+                250000,
+                1602,
+                1
+              ]
+            },
+            "newly_admitted_without_club": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "action_pairs": {
+              "move curse | move hiddenpower": [
+                14,
+                714,
+                14,
+                0
+              ],
+              "move curse | move thunderwave": [
+                33,
+                170,
+                33,
+                0
+              ],
+              "move curse | move thunder": [
+                34,
+                8654,
+                34,
+                0
+              ],
+              "move curse | move whirlwind": [
+                18,
+                52,
+                18,
+                0
+              ],
+              "move doubleedge | move hiddenpower": [
+                176,
+                17510,
+                176,
+                0
+              ],
+              "move doubleedge | move thunderwave": [
+                243,
+                1574,
+                243,
+                0
+              ],
+              "move doubleedge | move thunder": [
+                222,
+                97625,
+                222,
+                0
+              ],
+              "move doubleedge | move whirlwind": [
+                231,
+                1310,
+                231,
+                0
+              ],
+              "move earthquake | move hiddenpower": [
+                30,
+                1360,
+                30,
+                0
+              ],
+              "move earthquake | move thunderwave": [
+                69,
+                334,
+                69,
+                0
+              ],
+              "move earthquake | move thunder": [
+                70,
+                19754,
+                70,
+                0
+              ],
+              "move earthquake | move whirlwind": [
+                32,
+                86,
+                32,
+                0
+              ],
+              "move rest | move hiddenpower": [
+                390,
+                87203,
+                389,
+                1
+              ],
+              "move rest | move thunderwave": [
+                13,
+                128,
+                13,
+                0
+              ],
+              "move rest | move thunder": [
+                18,
+                13424,
+                18,
+                0
+              ],
+              "move rest | move whirlwind": [
+                10,
+                102,
+                10,
+                0
+              ]
+            }
+          }
+        ],
+        "schema": "nc2000-native-admission-profile-v1",
+        "protocol_sha256": "47ce0b65b879d6a93a49a5a5964e061fd7e5b9fca3760df2de8e7b4af8e3577c",
+        "records_sha256": "80e6d1527440474b84fa0e25c36f81fc86323f506e8d590d20ff0fe850533f41",
+        "frozen_outputs_match": true,
+        "rejected_mutations": [
+          "missing_root",
+          "wrong_run_count",
+          "wrong_completion_count",
+          "false_loss"
+        ],
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false
+      }
+    },
+    "findings/native-club-regions-v1/summary.json": {
+      "sha256": "649d67d83b36f62fe9c59dbadc5bfe4d81786ebfdefbd05df7155504eb9559db",
+      "data": {
+        "schema": "nc2000-native-club-regions-v1",
+        "protocol_sha256": "5b47df8466397ed9042c6024c765240888644973a65814f6a12fbe6843f7aa32",
+        "passes": {
+          "control-1": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 6,
+              "games": 6,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  13,
+                  41
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 36127,
+            "max_runs": 250000
+          },
+          "regions-1": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 6,
+              "games": 6,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  13,
+                  41
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 40636,
+            "max_runs": 250000
+          },
+          "regions-2": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 6,
+              "games": 6,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  13,
+                  41
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 40636,
+            "max_runs": 250000
+          },
+          "control-2": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 6,
+              "games": 6,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  13,
+                  41
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 36127,
+            "max_runs": 250000
+          }
+        },
+        "comparisons": [
+          {
+            "game": 0,
+            "frame": 18,
+            "control_loss": [
+              0.0,
+              0.7447208493191223
+            ],
+            "region_loss": [
+              0.0,
+              0.7447208493191223
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                4820.490000000001,
+                4945.226583000001
+              ],
+              "regions": [
+                5053.8321670000005,
+                4996.139
+              ]
+            },
+            "elapsed_ratio": 1.0291073964295487,
+            "kernel": {
+              "calls": 231,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              14435,
+              14435
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          },
+          {
+            "game": 3,
+            "frame": 97,
+            "control_loss": [
+              0.0,
+              0.9496806103462128
+            ],
+            "region_loss": [
+              0.0,
+              0.9496806103462128
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                6123.0995,
+                6390.8714580000005
+              ],
+              "regions": [
+                6371.629833,
+                6324.76
+              ]
+            },
+            "elapsed_ratio": 1.014577217384653,
+            "kernel": {
+              "calls": 866,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              36127,
+              36127
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          },
+          {
+            "game": 4,
+            "frame": 60,
+            "control_loss": [
+              0.0,
+              0.4326923078770051
+            ],
+            "region_loss": [
+              0.0,
+              0.4326923078770051
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                6023.000459000001,
+                5900.084292
+              ],
+              "regions": [
+                6013.7736669999995,
+                5690.503333
+              ]
+            },
+            "elapsed_ratio": 0.9816483942226738,
+            "kernel": {
+              "calls": 854,
+              "eligible": 12,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 10822,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              33114,
+              33114
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          },
+          {
+            "game": 10,
+            "frame": 32,
+            "control_loss": [
+              0.0,
+              0.06826167249688964
+            ],
+            "region_loss": [
+              0.0,
+              0.06816043268501848
+            ],
+            "upper_change": -0.0001012398118711566,
+            "timing_ms": {
+              "control": [
+                5844.605834,
+                6023.760625000001
+              ],
+              "regions": [
+                6460.654791,
+                6356.135
+              ]
+            },
+            "elapsed_ratio": 1.0799118678443562,
+            "kernel": {
+              "calls": 4517,
+              "eligible": 405,
+              "hits": 230,
+              "rejected_hp": 103,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 137,
+              "peak_leaves": 16380,
+              "translated_leaves": 47139
+            },
+            "nodes": [
+              35181,
+              40555
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          },
+          {
+            "game": 13,
+            "frame": 41,
+            "control_loss": [
+              0.0,
+              1.0
+            ],
+            "region_loss": [
+              0.0,
+              1.0
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                5302.429375,
+                5262.687583
+              ],
+              "regions": [
+                5147.083458,
+                5237.919542000001
+              ]
+            },
+            "elapsed_ratio": 0.982952014756106,
+            "kernel": {
+              "calls": 139,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              21118,
+              21118
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          },
+          {
+            "game": 16,
+            "frame": 18,
+            "control_loss": [
+              0.0,
+              0.06723047089976741
+            ],
+            "region_loss": [
+              0.0,
+              0.06723047089976741
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                5630.350874999999,
+                5456.113542
+              ],
+              "regions": [
+                5431.127042,
+                5160.769792
+              ]
+            },
+            "elapsed_ratio": 0.9553899634367086,
+            "kernel": {
+              "calls": 1603,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              14592,
+              14592
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          }
+        ],
+        "total_timing_ms": {
+          "control": [
+            33743.976043,
+            33978.744083
+          ],
+          "regions": [
+            34478.100958,
+            33766.226667
+          ]
+        },
+        "elapsed_ratio": 1.0077021049660961,
+        "repeats_match": true,
+        "control_matches_frozen": true,
+        "rejected_mutations": [
+          "missing_root",
+          "wrong_cache_capacity",
+          "false_loss",
+          "invalid_cell"
+        ],
+        "ordinary_bot_changed": false,
+        "main_solver_changed": false,
+        "strength_improvement_proven": false,
+        "artifacts": {
+          "control-1": "f070816d7c7bf813cd580453af1088dedc28f3aa61cef9fd6d9d954281ceb1a3",
+          "regions-1": "8165e6d36e3fbc2ea9994413d1fef2c1ed8cdeade476cb082f106baa4339330f",
+          "regions-2": "0cc149b660e82e36a2a4ad982154dd8b99d4d6dfe25d62c32bea2755ea062dac",
+          "control-2": "5c9d174fe6d550f2338eccb73b5109580ccdc20a7718ef54c251ee58c4542b45"
+        },
+        "candidate_hits_per_pass": 230,
+        "candidate_eligible_per_pass": 417,
+        "candidate_calls_per_pass": 8210
+      }
+    },
+    "findings/native-club-regions-v1/verification-summary.json": {
+      "sha256": "e3e918df668eda2a170bb2307c5ba9b2fe730fa803f098ced7ce1810538371ef",
+      "data": {
+        "hits": 230,
+        "extra_verification_runs": 52336,
+        "max_probability_error": 0.0,
+        "search_outputs_match": true,
+        "protocol_sha256": "7f23f3067fd126926e721750af1a85c66840159773a462699214066bf1bd3fc3",
+        "records_sha256": "ea12dc8cf355bad9ea5616de05742c1ff9f0933eab95a643f70649b6595159e7",
+        "rejected_mutations": [
+          "missing_root",
+          "wrong_hit_count",
+          "invalid_probability_error"
+        ],
+        "performance_sample": false
+      }
+    },
+    "findings/native-club-time-v1/summary.json": {
+      "sha256": "e65b432fe37aedb876ca03de1df5f00134b7e1d59d7bc088a58558f0d5f2290d",
+      "data": {
+        "schema": "nc2000-native-club-time-v1",
+        "protocol_sha256": "5d6b015ee8ebc8a844a8139d2ed0221fb66d408164591951bd262dde558723b9",
+        "passes": {
+          "control-1": {
+            "elapsed_ms": 6008.810834,
+            "runs": 248526,
+            "nodes": 35089,
+            "stop": "TimeBudget",
+            "loss": [
+              0.0,
+              0.06827917436893671
+            ],
+            "kernel": {
+              "calls": 0,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "timing_gate_passed": true
+          },
+          "regions-1": {
+            "elapsed_ms": 6033.7191250000005,
+            "runs": 232300,
+            "nodes": 39545,
+            "stop": "TimeBudget",
+            "loss": [
+              0.0,
+              0.06820062381209557
+            ],
+            "kernel": {
+              "calls": 4053,
+              "eligible": 360,
+              "hits": 197,
+              "rejected_hp": 94,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 137,
+              "peak_leaves": 16380,
+              "translated_leaves": 46343
+            },
+            "timing_gate_passed": true
+          },
+          "regions-2": {
+            "elapsed_ms": 6000.1084169999995,
+            "runs": 213819,
+            "nodes": 37217,
+            "stop": "TimeBudget",
+            "loss": [
+              0.0,
+              0.06822656631932855
+            ],
+            "kernel": {
+              "calls": 3810,
+              "eligible": 338,
+              "hits": 194,
+              "rejected_hp": 83,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 124,
+              "peak_leaves": 16380,
+              "translated_leaves": 46268
+            },
+            "timing_gate_passed": true
+          },
+          "control-2": {
+            "elapsed_ms": 6054.657917,
+            "runs": 248526,
+            "nodes": 35089,
+            "stop": "TimeBudget",
+            "loss": [
+              0.0,
+              0.06827917436893671
+            ],
+            "kernel": {
+              "calls": 0,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "timing_gate_passed": true
+          }
+        },
+        "artifacts": {
+          "control-1": "63bbf7d8495f6c4c9cfd1a2e11a2b1eca102c479526e8a05ab2e1adc8521d4ba",
+          "regions-1": "02fc6f3bb147a408de14f1e078b8c07f5c417c711371206814d8021357d66bd1",
+          "regions-2": "379088b93dabf876acb8f962942a6c11bf0355b4981e9490534fcedb8b3dd0b9",
+          "control-2": "5d1aa62bbd4e145eb845b07f31f52a1e0839878ebe9dc06f02fedc9098db72ac"
+        },
+        "rejected_mutations": [
+          "time_overshoot",
+          "wrong_stop",
+          "false_loss"
+        ],
+        "timing_gate_passed": true,
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false
+      }
+    },
+    "findings/native-club-time-v1/verification-summary.json": {
+      "sha256": "b937ac0ff0ad8ae983a470ddea21148d9e5836b8e02300d4cd24179506e3a679",
+      "data": {
+        "passes": {
+          "regions-1": {
+            "hits": 197,
+            "extra_verification_runs": 50746,
+            "max_probability_error": 0.0,
+            "search_outputs_match": true,
+            "protocol_sha256": "b4dd1c7e74068a26e69d15c64c0250139f47c1fbb7fc31c7688e7ea82af5f403",
+            "records_sha256": "6787f4aaef80d1d0a2a8a26fba1a217be90919229e5959bed70c83806a3ac780",
+            "rejected_mutations": [
+              "wrong_hit_count",
+              "invalid_probability_error",
+              "changed_payoff",
+              "changed_trial_count"
+            ]
+          },
+          "regions-2": {
+            "hits": 194,
+            "extra_verification_runs": 50596,
+            "max_probability_error": 0.0,
+            "search_outputs_match": true,
+            "protocol_sha256": "4c4efdac79228449b2ffe126b908aa0256e0c6dd1fb973693be8bb45354b6559",
+            "records_sha256": "5ad364c79b7d9fb4fc604eb53b164675e51d208b8ab89726272dda4b45a55386",
+            "rejected_mutations": [
+              "wrong_hit_count",
+              "invalid_probability_error",
+              "changed_payoff",
+              "changed_trial_count"
+            ]
+          }
+        },
+        "performance_sample": false
+      }
     }
   },
   "foresight_fix": {
@@ -42591,7 +44032,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-07T20:53:12.399747+09:00",
+    "checked_at": "2026-10-07T21:31:47.690709+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -42630,7 +44071,9 @@
     "followup_loss_lower": "native-loss-lower-screen-v1",
     "followup_counterfactual": "native-counterfactual-loss-v1",
     "followup_resource_fibers": "native-resource-fibers-v1",
-    "followup_region_solver": "native-region-solver-v1"
+    "followup_region_solver": "native-region-solver-v1",
+    "followup_club_regions": "native-club-regions-v1",
+    "followup_club_time": "native-club-time-v1"
   },
   "native_endgame_census": {
     "status": "complete",
