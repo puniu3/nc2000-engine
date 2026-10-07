@@ -18,7 +18,7 @@ def check(result,protocol,trace):
     scores=result['game_scores'];assert len(scores)==n and all(s in [0.,.5,1.] for s in scores)
     pairs=[sum(scores[i:i+2])/2 for i in range(0,n,2)];assert pairs==result['pair_scores']
     counts=Counter(scores);assert result['wins']==counts[1.] and result['losses']==counts[0.]
-    assert result['ties']+result['caps']==counts[.5]
+    assert result['ties']==counts[.5] and 0<=result['caps']<=result['ties']
     mean=sum(scores)/n;assert result['score']==mean
     ci=1.96*math.sqrt(sum((s-mean)**2 for s in pairs)/(len(pairs)-1)/len(pairs))
     assert abs(result['ci95_halfwidth']-ci)<1e-12
@@ -30,7 +30,20 @@ def check(result,protocol,trace):
             assert [r['ordinal'] for r in rows]==list(range(len(rows)))
             assert all(len(r['key'])==32 and r['action'] for r in rows)
     if protocol['null_control']:assert all(s==.5 for s in pairs)
-    return {'score':mean,'paired95':[mean-ci,mean+ci],'unresolved_caps':result['caps'],'positive_screen':mean-ci>.5 and result['caps']==0}
+    return {'score':mean,'paired95':[mean-ci,mean+ci],'unresolved_caps':result['caps'],'terminal_score_interval':[mean-.5*result['caps']/n,mean+.5*result['caps']/n],'positive_screen':mean-ci>.5 and result['caps']==0}
+
+
+
+def controls():
+    p=dict(games=4,iterations=1,null_control=False)
+    trace=[dict(game=g,side=s,ordinal=0,key='0'*32,action='move tackle') for g in range(4) for s in [0,1]]
+    r=dict(games=4,pairs=2,iterations=1,null_control=None,game_scores=[1.,0.,.5,.5],pair_scores=[.5,.5],wins=1,losses=1,ties=2,caps=1,score=.5,ci95_halfwidth=0.,replayed_games=4,replayed_decisions=8)
+    assert check(r,p,trace)['terminal_score_interval']==[.375,.625]
+    r['caps']=3
+    try:check(r,p,trace)
+    except AssertionError:pass
+    else:raise AssertionError('accepted caps exceeding half-score games')
+    return ['one_terminal_tie_and_one_unresolved_cap','caps_exceeding_half_score_games_rejected']
 
 
 def main():
@@ -44,7 +57,7 @@ def main():
     result=json.loads((t/(name+'.json')).read_text());tracepath=t/(name+'-trace.jsonl')
     trace=[json.loads(l) for l in tracepath.read_text().splitlines()]
     assert result['protocol_sha256']==sha(protocol_path) and result['trace_sha256']==sha(tracepath)
-    summary=check(result,protocol,trace);rejected=[]
+    synthetic_controls=controls();summary=check(result,protocol,trace);rejected=[]
     for mutation in ['missing_game','wrong_pair','false_score','false_replay']:
         r=copy.deepcopy(result)
         if mutation=='missing_game':r['game_scores'].pop()
@@ -54,7 +67,7 @@ def main():
         try:check(r,protocol,trace)
         except AssertionError:rejected.append(mutation)
         else:raise AssertionError('accepted '+mutation)
-    print(json.dumps(dict(schema=protocol['schema'],arm=name,checks=summary,result=result,rejected_mutations=rejected,default_enabled=False,deployed_comparison=False,matched_time_comparison=False,null_control_from_bound_protocol=protocol['null_control'],output_metadata_error='The frozen Rust json! macro interprets the token null as JSON null, so result.null_control is missing its boolean value. The actual agent setting and null assertions read the Rust boolean correctly. Recover mode only from the hash-bound protocol; retain raw output and do not rerun games.'),indent=2))
+    print(json.dumps(dict(schema=protocol['schema'],arm=name,checks=summary,synthetic_controls=synthetic_controls,result=result,rejected_mutations=rejected,default_enabled=False,deployed_comparison=False,matched_time_comparison=False,null_control_from_bound_protocol=protocol['null_control'],output_metadata_error='The frozen Rust json! macro interprets the token null as JSON null, so result.null_control is missing its boolean value. The actual agent setting and null assertions read the Rust boolean correctly. Recover mode only from the hash-bound protocol; retain raw output and do not rerun games.'),indent=2))
 
 
 if __name__=='__main__':main()
