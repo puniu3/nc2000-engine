@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import math
+import runpy
+from fractions import Fraction as F
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/adaptive-opening-mix-v1'
+ledger_check = runpy.run_path(str(root / 'tools/policy-witness-probe'))['verify']
+policy_check = runpy.run_path(str(root / 'tools/hidden-move-witness-probe'))['check_policy']
+screen_path = root / 'findings/item-move-product-v1/records.json.gz'
+screen = json.loads(gzip.decompress(screen_path.read_bytes()))['screen']
+
+
+def normalized(values):
+    assert values and all(math.isfinite(v) and v >= 0 for v in values)
+    values = list(map(F, values))
+    total = sum(values)
+    assert abs(total-1) < F(1, 10**12)
+    return [v/total for v in values]
+
+
+def bound_check(row, lower, upper, actions):
+    p = normalized(row['mix'])
+    guarantee = min(p[0]*F(a)+p[1]*F(b) for a, b in lower)
+    assert row['bounds'][0] >= 0 and F(row['bounds'][0]) <= guarantee
+    assert guarantee-F(row['bounds'][0]) <= F(11, 10**9)
+    if not upper:
+        assert row['adversary'] == [] and row['bounds'][1] == 1
+    else:
+        assert [i for i, _ in row['adversary']] == list(upper)
+        q = normalized([q for _, q in row['adversary']])
+        ceiling = max(sum(qi*F(v[a]) for qi, v in zip(q, upper.values())) for a in range(len(actions)))
+        assert F(row['bounds'][1]) >= ceiling
+        assert F(row['bounds'][1])-ceiling <= F(11, 10**9)
+    assert 0 <= row['bounds'][0] <= row['bounds'][1] <= 1
+
+
+def compact(ledger):
+    node = ledger['nodes'][ledger['root']]
+    return dict(config=ledger['config'], runs=ledger['runs'], bounds=ledger['bounds'], root=0,
+                numeric_only=True, nodes=[dict(state_key=node['state_key'], bounds=node['bounds'],
+                    branches=[dict(choices=b['choices'], bounds=b['bounds']) for b in node['branches']])])
+
+
+def stable(row):
+    return {k:v for k,v in row.items() if k not in ['seconds', 'cell_seconds']}
+
+
+def verify_full(lines):
+    cfg, result = lines[0], lines[-1]
+    assert cfg['backend'] == 'ledger' and cfg['worlds'] == 2200 and cfg['case'] == screen['case']
+    assert cfg['policies'] == ['move rockslide','move swordsdance'] and cfg['continuation'] == ['move rockslide']
+    assert cfg['opponent_opening'] == ['move sleeptalk','move sleeptalk','move hiddenpowerice']
+    assert cfg['gap_tolerance'] == 2e-5 and cfg['budget_ms'] == 180000
+    assert cfg['own_actions'] == screen['case']['actions']
+    lower = [[0.,0.] for _ in range(2200)]
+    rocks, upper = set(), {}
+    swords = runs = calls = 0
+    previous = dict(mix=[0.,1.], adversary=[], bounds=[0.,1.])
+    reports = []
+    last_seconds = 0.
+    for row in lines[1:-1]:
+        assert 0 <= last_seconds <= row['seconds'] and row['cell_seconds'] >= 0
+        last_seconds = row['seconds']
+        if swords < 2200:
+            index, kind = swords, 'swordsdance'
+        else:
+            candidates = [i for i in rocks if i not in upper and max(lower[i]) < previous['bounds'][1]]
+            if candidates:
+                index = min(candidates, key=lambda i:(max(lower[i]),i))
+                kind = 'upper'
+            else:
+                index = min((i for i in range(2200) if i not in rocks),
+                            key=lambda i:(sum(p*v for p,v in zip(previous['mix'],lower[i])),i))
+                kind = 'rockslide'
+        assert (row['index'],row['kind']) == (index,kind)
+        assert row['id'] == screen['rows'][index]['request']['id']
+        ledger = row['ledger']
+        target = 0 if kind == 'upper' else 1
+        expected = dict(game=6, decision=32, target_side=target, policy_side=target,
+            first_choice='move '+('sleeptalk' if kind == 'upper' else kind),
+            priority=['move hiddenpowerice' if kind == 'upper' else 'move rockslide'],
+            rest_at_percent=None, horizon=3 if kind == 'upper' else 2, work_budget=200000,
+            cell_cap=10000, guarded_keys=True, support_certificate=True)
+        if kind == 'upper': expected['opening'] = cfg['opponent_opening']
+        assert ledger['config'] == expected
+        node = ledger['nodes'][ledger['root']]
+        assert node['state_key'] == screen['rows'][index]['root']['key']
+        reports.append(ledger_check(ledger))
+        policy_check(ledger)
+        if kind == 'upper':
+            upper[index] = [1-next(b['bounds'][0] for b in node['branches'] if b['choices'][1] == a)
+                            for a in cfg['own_actions']]
+        else:
+            action = int(kind == 'swordsdance')
+            lower[index][action] = ledger['bounds'][0]
+            if action: swords += 1
+            else: rocks.add(index)
+        runs += ledger['runs']; calls += 1
+        assert row['runs'] == runs and row['calls'] == calls
+        bound_check(row,lower,upper,cfg['own_actions'])
+        previous = row
+    assert result['kind'] == 'result' and result['converged']
+    assert result['bounds'][1]-result['bounds'][0] <= cfg['gap_tolerance']
+    for key in ['mix','adversary','bounds','runs','calls']: assert result[key] == previous[key]
+    assert result['swords'] == swords == 2200 and result['rocks'] == len(rocks) and result['uppers'] == len(upper)
+    assert result['seconds'] >= last_seconds and result['setup_seconds'] == cfg['setup_seconds']
+    for snapshot in result['snapshots']:
+        assert snapshot['seconds'] >= snapshot['checkpoint_seconds']
+        state = lines[snapshot['calls']] if snapshot['calls'] else dict(mix=[0.,1.], bounds=[0.,1.], runs=0)
+        assert snapshot['mix'] == state['mix'] and snapshot['runs'] == state['runs']
+        assert [snapshot['lower'],snapshot['upper']] == state['bounds']
+    for fault in ['invalid_mix','inflated_lower','wrong_adversary']:
+        bad = copy.deepcopy(result)
+        if fault == 'invalid_mix': bad['mix'] = [1.,1.]
+        elif fault == 'inflated_lower': bad['bounds'][0] += .001
+        else: bad['adversary'][0][0] = 100000
+        try: bound_check(bad,lower,upper,cfg['own_actions'])
+        except AssertionError: pass
+        else: raise AssertionError('Accepted corruption: '+fault)
+    return dict(calls=calls, runs=runs, lower_certificates=swords+len(rocks), upper_certificates=len(upper),
+                certificate_nodes=sum(r['nodes'] for r in reports), bounds=result['bounds'], mix=result['mix'],
+                upper_worlds=[screen['rows'][i]['request']['id'] for i in upper],
+                upper_mix=result['adversary'], max_cell_seconds=max(r['cell_seconds'] for r in lines[1:-1]),
+                full_seconds=result['seconds'], setup_seconds=cfg['setup_seconds'], snapshots=result['snapshots'])
+
+
+def identity_check(reference, other, numeric=False, prefix=False):
+    assert other[0]['backend'] == ('numeric' if numeric else 'ledger')
+    assert {k:v for k,v in reference[0].items() if k not in ['setup_seconds','backend','budget_ms']} == {
+        k:v for k,v in other[0].items() if k not in ['setup_seconds','backend','budget_ms']}
+    assert len(other) <= len(reference) if prefix else len(other) == len(reference)
+    for row, repeated in zip(reference[1:-1],other[1:-1]):
+        expected = dict(row,ledger=compact(row['ledger'])) if numeric else row
+        assert stable(expected) == stable(repeated)
+    if not prefix:
+        for k in ['mix','adversary','bounds','calls','runs','swords','rocks','uppers','converged']:
+            assert reference[-1][k] == other[-1][k]
+    else:
+        final = other[-1]
+        if final['calls']:
+            for k in ['mix','adversary','bounds','calls','runs']:
+                assert final[k] == other[-2][k]
+        else:
+            assert final['mix'] == [0.,1.] and final['bounds'] == [0.,1.] and final['runs'] == 0
+        assert not final['converged'] and final['seconds']*1000 >= other[0]['budget_ms']
+    return dict(header=other[0], result=other[-1], matched_updates=len(other)-2,
+                stable_sha256=hashlib.sha256(json.dumps([stable(r) for r in other[1:-1]],separators=(',',':')).encode()).hexdigest())
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', nargs=6, type=Path)
+    args = parser.parse_args()
+    paths = [Path(__file__).resolve(),screen_path,
+        root/'crates/bot/examples/adaptive_opening_mix.rs',root/'crates/bot/examples/numeric_witness.rs',
+        root/'crates/bot/examples/policy_witness.rs',root/'crates/bot/examples/threshold_witness/mod.rs',
+        root/'crates/bot/examples/aliased_witness/mod.rs',root/'tools/policy-witness-probe',
+        root/'tools/hidden-move-witness-probe',root/'data/gen2stadium2.json',
+        root/'findings/policy-gap-v1/corpus.jsonl.gz']
+    for directory in ['crates/bot/src','crates/engine/src']: paths += list((root/directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists()
+        raw = args.record[0].read_bytes()
+    else:
+        bundle = json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+        assert bundle['hashes'] == hashes
+        raw = gzip.decompress((archive/'proofs.jsonl.gz').read_bytes())
+        assert hashlib.sha256(raw).hexdigest() == bundle['proof_sha256']
+    lines = [json.loads(l) for l in raw.splitlines()]
+    summary = verify_full(lines)
+    if args.record:
+        identities = []
+        for i,path in enumerate(args.record[1:]):
+            other = [json.loads(l) for l in path.read_bytes().splitlines()]
+            identities.append(identity_check(lines,other,numeric=i>=1,prefix=i>=3))
+    else:
+        identities = bundle['identities']
+        for i,identity in enumerate(identities):
+            updates = lines[1:1+identity['matched_updates']]
+            if i >= 1: updates = [dict(r,ledger=compact(r['ledger'])) for r in updates]
+            assert hashlib.sha256(json.dumps([stable(r) for r in updates],separators=(',',':')).encode()).hexdigest() == identity['stable_sha256']
+    summary.update(full_repeat_seconds=identities[0]['result']['seconds'],
+        numeric_seconds=[identities[i]['result']['seconds'] for i in [1,2]],
+        numeric_repeat_identities=identities[2]['matched_updates'],
+        zero_budget=identities[3], half_second_budget=identities[4],
+        production_changed=False,strength_demonstrated=False,
+        scope='Fresh game-tree computations over the supplied, replay-validated 2200-model item/move family. '
+              'The two own policy templates and opponent Sleep Talk/Sleep Talk/Hidden Power Ice template '
+              'are prescribed; mixture weights and upper-certificate worlds are discovered online. '
+              'No archived payoff or mixture is loaded. Unknown lower entries remain zero and the '
+              'adversary upper bound is one until an upper policy is proved. All lower and upper '
+              'ledgers are independently checked. The numeric backend agrees exactly in all updates, '
+              'engine-run counts, per-action bounds, schedules, mixtures and final certificates. '
+              'Time includes proof/value calculations, scheduling, matrix solving and output buffering; '
+              'input loading and model replay/setup are excluded and separately reported. Budgets are '
+              'checked between whole cell computations, not hard deadlines. Numeric matches are against '
+              'this certificate corpus, not a general equivalence theorem. Full hidden stats and '
+              'counter uncertainty are not covered. This is not a deployable general bot or strength claim.')
+    if args.record:
+        archive.mkdir()
+        bundle = dict(hashes=hashes,proof_sha256=hashlib.sha256(raw).hexdigest(),identities=identities)
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'proofs.jsonl.gz').write_bytes(gzip.compress(raw,mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    else: assert summary == json.loads((archive/'summary.json').read_bytes())
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['scope','zero_budget','half_second_budget','snapshots']},indent=2))
+
+
+if __name__ == '__main__': main()
