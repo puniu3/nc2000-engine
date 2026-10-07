@@ -1,0 +1,220 @@
+{
+  "roots": 6,
+  "games": 6,
+  "runs": 1500000,
+  "stops": {
+    "WorkExhausted": 6
+  },
+  "value_width_at_most_002": {
+    "roots": 0,
+    "games": 0,
+    "keys": []
+  },
+  "selected_pure_loss_at_most_002": {
+    "roots": 0,
+    "games": 0,
+    "keys": []
+  },
+  "selected_pure_loss_above_002": {
+    "roots": 0,
+    "games": 0,
+    "keys": []
+  },
+  "selected_strictly_dominated": {
+    "roots": 0,
+    "games": 0,
+    "keys": []
+  },
+  "unresolved_selected_pure_loss": {
+    "roots": 6,
+    "games": 6,
+    "keys": [
+      [
+        0,
+        18
+      ],
+      [
+        3,
+        97
+      ],
+      [
+        4,
+        60
+      ],
+      [
+        10,
+        32
+      ],
+      [
+        13,
+        41
+      ],
+      [
+        16,
+        18
+      ]
+    ]
+  },
+  "max_nodes_plus_closed": 36127,
+  "max_runs": 250000,
+  "diagnostics": [
+    {
+      "game": 0,
+      "frame": 18,
+      "retained": 14435,
+      "unexpanded_fraction": 0.9972982334603394,
+      "projected_group_counts": {
+        "0": 14435,
+        "1": 287,
+        "2": 14435,
+        "3": 287,
+        "4": 14435,
+        "5": 287,
+        "6": 14435,
+        "7": 287
+      },
+      "hp_only_count_reduction": 0.9801177693107032,
+      "pp_only_count_reduction": 0.0,
+      "turn_only_count_reduction": 0.0,
+      "all_three_count_reduction": 0.9801177693107032,
+      "depth_limit_trials": 0,
+      "resource_closure_visits": 0,
+      "monotone_roots": 1,
+      "two_sided_roots": 0
+    },
+    {
+      "game": 3,
+      "frame": 97,
+      "retained": 36127,
+      "unexpanded_fraction": 0.9951006172668642,
+      "projected_group_counts": {
+        "0": 36127,
+        "1": 242,
+        "2": 36127,
+        "3": 242,
+        "4": 36127,
+        "5": 242,
+        "6": 36127,
+        "7": 242
+      },
+      "hp_only_count_reduction": 0.9933014089185374,
+      "pp_only_count_reduction": 0.0,
+      "turn_only_count_reduction": 0.0,
+      "all_three_count_reduction": 0.9933014089185374,
+      "depth_limit_trials": 0,
+      "resource_closure_visits": 0,
+      "monotone_roots": 0,
+      "two_sided_roots": 1
+    },
+    {
+      "game": 4,
+      "frame": 60,
+      "retained": 33114,
+      "unexpanded_fraction": 0.9928731050311047,
+      "projected_group_counts": {
+        "0": 33114,
+        "1": 426,
+        "2": 33114,
+        "3": 426,
+        "4": 33114,
+        "5": 426,
+        "6": 33114,
+        "7": 426
+      },
+      "hp_only_count_reduction": 0.987135350606994,
+      "pp_only_count_reduction": 0.0,
+      "turn_only_count_reduction": 0.0,
+      "all_three_count_reduction": 0.987135350606994,
+      "depth_limit_trials": 0,
+      "resource_closure_visits": 0,
+      "monotone_roots": 0,
+      "two_sided_roots": 1
+    },
+    {
+      "game": 10,
+      "frame": 32,
+      "retained": 35099,
+      "unexpanded_fraction": 0.9820641823711662,
+      "projected_group_counts": {
+        "0": 35099,
+        "1": 472,
+        "2": 35099,
+        "3": 472,
+        "4": 35099,
+        "5": 472,
+        "6": 35099,
+        "7": 472
+      },
+      "hp_only_count_reduction": 0.9865523234280179,
+      "pp_only_count_reduction": 0.0,
+      "turn_only_count_reduction": 0.0,
+      "all_three_count_reduction": 0.9865523234280179,
+      "depth_limit_trials": 0,
+      "resource_closure_visits": 0,
+      "monotone_roots": 1,
+      "two_sided_roots": 0
+    },
+    {
+      "game": 13,
+      "frame": 41,
+      "retained": 21118,
+      "unexpanded_fraction": 0.998484704991003,
+      "projected_group_counts": {
+        "0": 21118,
+        "1": 303,
+        "2": 21118,
+        "3": 303,
+        "4": 21118,
+        "5": 303,
+        "6": 21118,
+        "7": 303
+      },
+      "hp_only_count_reduction": 0.9856520503835591,
+      "pp_only_count_reduction": 0.0,
+      "turn_only_count_reduction": 0.0,
+      "all_three_count_reduction": 0.9856520503835591,
+      "depth_limit_trials": 0,
+      "resource_closure_visits": 0,
+      "monotone_roots": 0,
+      "two_sided_roots": 0
+    },
+    {
+      "game": 16,
+      "frame": 18,
+      "retained": 14583,
+      "unexpanded_fraction": 0.9732730263157895,
+      "projected_group_counts": {
+        "0": 14583,
+        "1": 1241,
+        "2": 14583,
+        "3": 1241,
+        "4": 14583,
+        "5": 1241,
+        "6": 14583,
+        "7": 1241
+      },
+      "hp_only_count_reduction": 0.9149009120208462,
+      "pp_only_count_reduction": 0.0,
+      "turn_only_count_reduction": 0.0,
+      "all_three_count_reduction": 0.9149009120208462,
+      "depth_limit_trials": 284,
+      "resource_closure_visits": 0,
+      "monotone_roots": 1,
+      "two_sided_roots": 0
+    }
+  ],
+  "schema": "nc2000-native-resource-fibers-v1",
+  "protocol_sha256": "89d45bacd43dc0d8c2e00244fac7bbb57706d0c48853cc0c69c76792b9da62e0",
+  "records_sha256": "35a22ccc882100c26904cba3fbebb5236bdc832624a25f8ceb10e542417bc18b",
+  "frozen_loss_outputs_match": true,
+  "rejected_mutations": [
+    "wrong_histogram",
+    "wrong_baseline",
+    "wrong_chance_mass",
+    "changed_loss"
+  ],
+  "semantic_quotient_proven": false,
+  "ordinary_bot_changed": false,
+  "strength_improvement_proven": false,
+  "registration_commit": "212cbde"
+}

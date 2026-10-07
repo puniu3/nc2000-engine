@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+import runpy
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check(rows, protocol, roots, prior):
+    result=runpy.run_path('tools/native-loss-threshold-audit')['check_threshold'](rows,protocol,roots)
+    diagnostics=[]
+    for r in sorted(rows,key=lambda r:(r['game'],r['frame'])):
+        old=prior[r['game'],r['frame']]
+        assert {k:v for k,v in r.items() if k not in ['elapsed_ms','diagnostics']}=={k:v for k,v in old.items() if k!='elapsed_ms'}
+        d=r['diagnostics'];g=d['graph'];n=d['retained']
+        assert n==g['stored_battles']
+        assert g['unexpanded_nodes']+g['initialized_nodes']==r['nodes']
+        assert sum(d['trial_depth_counts'])==r['stats']['trials']
+        assert d['depth_limit_trials']<=r['stats']['trials']
+        projections={x['mask']:x for x in d['projections']}
+        assert len(d['projections'])==len(projections)==8
+        assert projections[0]['groups']==n
+        for mask,p in projections.items():
+            assert mask in range(8)
+            assert sum(p['histogram'].values())==p['groups']
+            assert sum(int(k)*v for k,v in p['histogram'].items())==n
+            for other,q in projections.items():
+                if mask & other == mask: assert q['groups']<=p['groups']
+        assert len(d['root_chance'])==len(r['cells_p0'])
+        for c,b in zip(d['root_chance'],r['cells_p0']):
+            assert abs(c['pending_mass']+c['child_uncertainty']-(b[1]-b[0]))<1e-8
+            assert 0<=c['expanded_children']<=c['unique_children']<=c['resolved_edges']
+        diagnostics.append({'game':r['game'],'frame':r['frame'],'retained':n,
+            'unexpanded_fraction':g['unexpanded_nodes']/r['nodes'],
+            'projected_group_counts':{str(m):p['groups'] for m,p in projections.items()},
+            'hp_only_count_reduction':1-projections[1]['groups']/n,
+            'pp_only_count_reduction':1-projections[2]['groups']/n,
+            'turn_only_count_reduction':1-projections[4]['groups']/n,
+            'all_three_count_reduction':1-projections[7]['groups']/n,
+            'depth_limit_trials':d['depth_limit_trials'],
+            'resource_closure_visits':d['resource_closure_visits'],
+            'monotone_roots':d['monotone_roots'],'two_sided_roots':d['two_sided_roots']})
+    result['diagnostics']=diagnostics
+    return result
+
+
+def main():
+    protocol_path,records_path,roots_path,prior_path=map(Path,sys.argv[1:])
+    protocol=json.loads(protocol_path.read_text())
+    assert digest(roots_path)==protocol['roots_sha256']
+    assert digest(prior_path)==protocol['prior_records_sha256']
+    assert digest(protocol_path.parent/'native_resource_fibers.rs')==protocol['helper_sha256']
+    assert digest('tmp/native-resource-fibers-v1/solver')==protocol['solver_binary_sha256']
+    roots=[json.loads(l) for l in roots_path.read_text().splitlines()]
+    prior={(r['game'],r['frame']):r for r in map(json.loads,prior_path.read_text().splitlines())}
+    rows=[json.loads(l) for l in records_path.read_text().splitlines()]
+    result=check(rows,protocol,roots,prior)
+    rejected=[]
+    for kind in ['wrong_histogram','wrong_baseline','wrong_chance_mass','changed_loss']:
+        altered=copy.deepcopy(rows)
+        if kind=='wrong_histogram':
+            h=altered[0]['diagnostics']['projections'][1]['histogram'];h[next(iter(h))]+=1
+        elif kind=='wrong_baseline':altered[0]['diagnostics']['projections'][0]['groups']-=1
+        elif kind=='wrong_chance_mass':altered[0]['diagnostics']['root_chance'][0]['pending_mass']+=.1
+        else:altered[0]['threshold_loss']=[1.,1.]
+        try:check(altered,protocol,roots,prior)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted mutation '+kind)
+    result.update(schema=protocol['schema'],protocol_sha256=digest(protocol_path),records_sha256=digest(records_path),
+        frozen_loss_outputs_match=True,rejected_mutations=rejected,semantic_quotient_proven=False,
+        ordinary_bot_changed=False,strength_improvement_proven=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()
