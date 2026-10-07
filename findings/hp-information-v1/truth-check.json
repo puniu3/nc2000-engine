@@ -1,0 +1,11 @@
+{
+  "games": 104,
+  "observed_decisions": 2397,
+  "constrained_mon_observations": 2398,
+  "games_with_evidence": 96,
+  "actual_types_excluded": 0,
+  "negative_controls": 2,
+  "records_sha256": "ea6b6fee387dc52cb7d157220a3f0621b2828dcaece66c36537bd5447009035d",
+  "checker_sha256": "9f1066b118c3090b1d923518de486fb26aae70aa5a2de858a912db0ae558d5b3",
+  "scope": "Check constructed fixture DVs against public type masks at every recorded observation. HP type index = 4*(Attack DV mod 4)+(Defense DV mod 4), DV=floor(IV/2). This does not assign posterior probabilities."
+}

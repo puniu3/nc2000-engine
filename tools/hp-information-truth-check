@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+
+def check(records):
+    cases = {c['id']:c for c in records['manifest']['protocol']['cases']}
+    constrained = 0
+    decisions = 0
+    games_with_evidence = 0
+    for row in records['games']:
+        roster = cases[row['case']]['teams'][1]
+        exposed = False
+        for decision in row['decisions']:
+            masks = decision['hp_masks']
+            if not masks:
+                continue
+            assert len(masks) == len(roster) == 6
+            decisions += 1
+            for mon, mask in zip(roster, masks):
+                assert isinstance(mask, int) and 0 < mask <= 65535
+                if mask == 65535:
+                    continue
+                assert any(''.join(c for c in move.lower() if c.isalnum()) == 'hiddenpower' for move in mon['moves'])
+                ivs = mon.get('ivs', {})
+                index = 4*((ivs.get('atk',31)//2)%4)+(ivs.get('def',31)//2)%4
+                assert mask & (1 << index), (row['case'], row['trial'], row['arm'], mon['species'], mask, index)
+                constrained += 1
+                exposed = True
+        games_with_evidence += exposed
+    return {'games':len(records['games']), 'observed_decisions':decisions, 'constrained_mon_observations':constrained, 'games_with_evidence':games_with_evidence, 'actual_types_excluded':0}
+
+
+def main():
+    path = Path(sys.argv[1])
+    data = path.read_bytes()
+    records = json.loads(gzip.decompress(data))
+    result = check(records)
+    target = next((r['case'],ri,di,slot) for ri,r in enumerate(records['games']) for di,d in enumerate(r['decisions']) for slot,m in enumerate(d['hp_masks']) if m !=65535)
+    case, ri, di, slot = target
+    roster = next(c for c in records['manifest']['protocol']['cases'] if c['id']==case)['teams'][1]
+    ivs = roster[slot].get('ivs',{})
+    index = 4*((ivs.get('atk',31)//2)%4)+(ivs.get('def',31)//2)%4
+    for mask in (0, 65535 ^ (1 << index)):
+        broken = copy.deepcopy(records)
+        broken['games'][ri]['decisions'][di]['hp_masks'][slot] = mask
+        try:
+            check(broken)
+        except AssertionError:
+            continue
+        raise AssertionError('invalid mask accepted')
+    result.update(negative_controls=2, records_sha256=hashlib.sha256(data).hexdigest(), checker_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), scope='Check constructed fixture DVs against public type masks at every recorded observation. HP type index = 4*(Attack DV mod 4)+(Defense DV mod 4), DV=floor(IV/2). This does not assign posterior probabilities.')
+    print(json.dumps(result,indent=2))
+
+
+if __name__ == '__main__':
+    main()
