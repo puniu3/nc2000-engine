@@ -45,7 +45,15 @@ impl HpTransitionKey {
         Self::new_domain(dex,battle,choices,script,None,Some(switcher))
     }
 
+    pub fn new_with_thick_club(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize])->Option<Self> {
+        Self::new_domain_with_club(dex,battle,choices,script,None,None,true).ok()
+    }
+
     fn new_domain(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize],healer:Option<usize>,switcher:Option<usize>)->Result<Self,&'static str> {
+        Self::new_domain_with_club(dex,battle,choices,script,healer,switcher,false)
+    }
+
+    fn new_domain_with_club(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],script:&[usize],healer:Option<usize>,switcher:Option<usize>,allow_club:bool)->Result<Self,&'static str> {
         if !battle.started || battle.ended || battle.turn==0 || battle.mid_turn
             || battle.request_state!=RequestState::Move || battle.needs_choice()!=[true,true]
             || !battle.queue.is_empty() || !battle.faint_queue.is_empty()
@@ -64,7 +72,8 @@ impl HpTransitionKey {
             if pokemon.hp<=0 || pokemon.hp>pokemon.maxhp || pokemon.fainted || pokemon.transformed
                 || !matches!(pokemon.status,Status::None|Status::Par|Status::Slp|Status::Frz) {return Err("health_status_or_transform");}
             if pokemon.volatiles.iter().any(|(id,_)|dex.conds.key(*id)!="parspeeddrop") {return Err("volatile");}
-            if pokemon.item.is_some_and(|item|!matches!(dex.items.key(item),"mintberry"|"miracleberry"|"brightpowder"|"quickclaw")) {return Err("active_item");}
+            if pokemon.item.is_some_and(|item|!matches!(dex.items.key(item),"mintberry"|"miracleberry"|"brightpowder"|"quickclaw")
+                && !(allow_club && dex.items.key(item)=="thickclub")) {return Err("active_item");}
             if switcher==Some(side) {
                 let Some(SearchChoice::Switch(pos))=choices[side] else {return Err("non_switch_choice");};
                 if pokemon.trapped || pos<=1 {return Err("illegal_switch");}

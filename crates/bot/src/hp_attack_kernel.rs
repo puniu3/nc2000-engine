@@ -118,6 +118,7 @@ pub struct HpAttackKernelCache {
     capacity: usize,
     leaves: usize,
     terminal_regions: bool,
+    allow_thick_club: bool,
     entries: HashMap<HpTransitionKey, VecDeque<Kernel>>,
     order: VecDeque<HpTransitionKey>,
     pub stats: KernelStats,
@@ -129,6 +130,7 @@ impl HpAttackKernelCache {
             capacity: leaf_capacity,
             leaves: 0,
             terminal_regions: false,
+            allow_thick_club: false,
             entries: HashMap::new(),
             order: VecDeque::new(),
             stats: KernelStats::default(),
@@ -142,6 +144,12 @@ impl HpAttackKernelCache {
         self
     }
 
+    pub fn with_thick_club(mut self) -> Self {
+        assert_eq!(self.stats.calls, 0);
+        self.allow_thick_club = true;
+        self
+    }
+
     pub fn enumerate(
         &mut self,
         dex: &Dex,
@@ -151,7 +159,13 @@ impl HpAttackKernelCache {
     ) -> Option<StepEnum> {
         self.stats.calls += 1;
         let key = (self.capacity > 0 && cap > 0)
-            .then(|| HpTransitionKey::new(dex, base, choices, &[]))
+            .then(|| {
+                if self.allow_thick_club {
+                    HpTransitionKey::new_with_thick_club(dex, base, choices, &[])
+                } else {
+                    HpTransitionKey::new(dex, base, choices, &[])
+                }
+            })
             .flatten();
         self.stats.eligible += usize::from(key.is_some());
         if let Some(kernels) = key.as_ref().and_then(|key| self.entries.get(key)) {
@@ -493,5 +507,79 @@ mod tests {
             }
         }
         assert!(cache.stats.hits > 0);
+    }
+    #[test]
+    fn thick_club_regions_preserve_complete_hp_grids_and_item_identity() {
+        let dex = conformance::load_dex();
+        for side in 0..2 {
+            let sets=[("Marowak","Earthquake","Thick Club"),("Porygon2","Ice Beam","Bright Powder")]
+                .map(|(species,mv,item)|serde_json::from_value::<PokemonSet>(serde_json::json!({"name":species,"species":species,"moves":[mv],"item":item,"level":50})).unwrap());
+            let mut base = Battle::from_fixture(
+                &dex,
+                "1,2,3,4",
+                std::slice::from_ref(&sets[side]),
+                std::slice::from_ref(&sets[1 - side]),
+            )
+            .unwrap();
+            let preview = [0, 1].map(|s| base.legal_choices(&dex, s)[0]);
+            base.apply_choices(&dex, preview.map(Some)).unwrap();
+            let choices = [0, 1].map(|s| Some(base.legal_choices(&dex, s)[0]));
+            let club_side = side;
+            let id = base.active_id(club_side).unwrap();
+            assert!(HpTransitionKey::new(&dex, &base, choices, &[]).is_none());
+            let original = HpTransitionKey::new_with_thick_club(&dex, &base, choices, &[]).unwrap();
+            let hp = [0, 1].map(|s| base.poke(base.active_id(s).unwrap()).hp);
+            let mut cache = HpAttackKernelCache::new(16384)
+                .with_terminal_regions()
+                .with_thick_club();
+            for a in [hp[0], hp[0] - 1, 150, 100, 50, 1] {
+                for b in [hp[1], hp[1] - 1, 150, 100, 50, 1] {
+                    let mut target = base.clone();
+                    for (s, hp) in [a, b].into_iter().enumerate() {
+                        let id = target.active_id(s).unwrap();
+                        target.poke_mut(id).hp = hp;
+                    }
+                    let actual = semantic_map(
+                        &dex,
+                        cache.enumerate(&dex, &target, choices, 100_000).unwrap(),
+                    );
+                    let expected = semantic_map(
+                        &dex,
+                        enumerate_step(&dex, &target, choices, 100_000).unwrap(),
+                    );
+                    assert_eq!(actual.len(), expected.len());
+                    for (key, mass) in actual {
+                        assert!((mass - expected[&key]).abs() < 1e-10);
+                    }
+                }
+            }
+            assert!(cache.stats.hits > 5);
+            let mut changed = base.clone();
+            changed.poke_mut(id).item = None;
+            changed.refresh_poke_mask(&dex, id);
+            assert_ne!(
+                HpTransitionKey::new_with_thick_club(&dex, &changed, choices, &[]),
+                Some(original)
+            );
+            let actual = semantic_map(
+                &dex,
+                cache.enumerate(&dex, &changed, choices, 100_000).unwrap(),
+            );
+            let expected = semantic_map(
+                &dex,
+                enumerate_step(&dex, &changed, choices, 100_000).unwrap(),
+            );
+            assert_eq!(actual.len(), expected.len());
+            for (key, mass) in actual {
+                assert!((mass - expected[&key]).abs() < 1e-10);
+            }
+            for item in ["leftovers", "goldberry"] {
+                let mut changed = base.clone();
+                changed.poke_mut(id).item = dex.items.id(item);
+                assert!(
+                    HpTransitionKey::new_with_thick_club(&dex, &changed, choices, &[]).is_none()
+                );
+            }
+        }
     }
 }
