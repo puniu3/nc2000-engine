@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from collections import Counter, defaultdict
+from fractions import Fraction as F
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/legal-family-threshold-v1'
+ledger_check = runpy.run_path(str(root / 'tools/policy-witness-probe'))['verify']
+policy_check = runpy.run_path(str(root / 'tools/hidden-move-witness-probe'))['check_policy']
+names = ['native', 'native_repeat', 'eval', 'eval_repeat', 'control', 'solver_depth2', 'solver_depth24']
+
+
+def key(node):
+    return (*node['cache_key'], node['depth'])
+
+
+def masses(branch, nodes):
+    out = defaultdict(F)
+    for child in branch['children']:
+        out[key(nodes[child['node']])] += F(child['mass'])
+    return out
+
+
+def check_ledger(ledger, reference, threshold):
+    assert ledger['config'] == reference['config']
+    report = ledger_check(ledger)
+    policy_check(ledger)
+    nodes, old_nodes = ledger['nodes'], reference['nodes']
+    assert nodes[-1]['state_key'] == old_nodes[-1]['state_key']
+    old = {key(n): n for n in old_nodes}
+    skipped = F(0)
+    for node in nodes:
+        prior = old[key(node)]
+        assert node['kind'] == prior['kind']
+        if node['depth'] > 0 or threshold == 1:
+            assert node['bounds'] == prior['bounds']
+        if node['kind'] != 'decision':
+            continue
+        for field in ['legal', 'selected', 'maximizing']:
+            assert node[field] == prior[field]
+        assert len(node['branches']) == len(prior['branches'])
+        for branch, before in zip(node['branches'], prior['branches']):
+            assert branch['choices'] == before['choices']
+            assert branch['runs'] == before['runs']
+            current_mass = masses(branch, nodes)
+            old_mass = masses(before, old_nodes)
+            assert set(current_mass) <= set(old_mass)
+            assert all(current_mass[k] <= old_mass[k] for k in current_mass)
+            residual = sum(old_mass.values()) - sum(current_mass.values())
+            assert abs(F(branch['pending']) - F(before['pending']) - residual) < F(1, 10**10)
+            if node['depth'] > 0 or threshold == 1:
+                assert current_mass == old_mass and branch['bounds'] == before['bounds']
+            else:
+                assert abs(F(branch['continuation_pending_mass']) - residual) < F(1, 10**10)
+                assert branch['bounds'][0] > threshold
+                skipped += residual
+    if threshold == 1:
+        assert ledger['runs'] == reference['runs'] and len(nodes) == len(old_nodes)
+    else:
+        assert ledger['bounds'][0] > threshold and skipped > 0
+    return report
+
+
+def verify(data, previous):
+    expected = [r['move'] for r in previous['rows']]
+    reports = {}
+    for label in names:
+        run = data[label]
+        assert run['case'] == previous['case']
+        assert [r['move'] for r in run['rows']] == expected
+        assert 0 <= run['generation_seconds'] <= run['seconds']
+        assert sum(r['seconds'] for r in run['rows']) <= run['seconds']
+        assert all(r['seconds'] >= 0 for r in run['rows'])
+        if label.startswith('solver_'):
+            assert run['cell_cap'] == 256
+            assert run['trial_depth'] == (2 if label.endswith('2') else 24)
+            for row, before in zip(run['rows'], previous['rows']):
+                assert row['lower'] == min(b['bounds'][0] for b in row['branches'])
+                assert row['runs'] == sum(b['runs'] for b in row['branches'])
+                node = before['ledger']['nodes'][-1]
+                assert [b['reply'] for b in row['branches']] == node['legal'][0]
+                for branch in row['branches']:
+                    assert 0 <= branch['bounds'][0] <= branch['bounds'][1] <= 1
+                    assert 0 <= branch['runs'] <= 20000
+                    assert branch['stop'] in ['ProvenBelow', 'ProvenAbove', 'WidthMet',
+                        'TimeBudget', 'WorkExhausted', 'NodeBudget']
+                    if branch['stop'] == 'ProvenBelow':
+                        assert branch['bounds'][0] > .1 - 1e-12
+            reports[label] = dict(seconds=run['seconds'], runs=sum(r['runs'] for r in run['rows']),
+                proven_worlds=sum(r['lower'] > .1 for r in run['rows']),
+                stops=dict(Counter(b['stop'] for r in run['rows'] for b in r['branches'])))
+            continue
+        threshold = 1 if label == 'control' else .1
+        assert run['threshold'] == threshold
+        assert run.get('order', 'native') == ('eval' if label.startswith('eval') else 'native')
+        rows = [check_ledger(row['ledger'], before['ledger'], threshold)
+            for row, before in zip(run['rows'], previous['rows'])]
+        reports[label] = dict(seconds=run['seconds'], runs=sum(r['runs'] for r in rows),
+            lower=min(r['bounds'][0] for r in rows), proven_worlds=sum(r['bounds'][0] > .1 for r in rows))
+    for label in ['native', 'eval']:
+        assert [r['ledger'] for r in data[label]['rows']] == [r['ledger'] for r in data[label + '_repeat']['rows']]
+    return dict(worlds=40, threshold=.1, reports=reports, certificate_ledgers_verified=200,
+        exact_repeat_identities=80, full_control_identities=40,
+        prior_runs=sum(r['ledger']['runs'] for r in previous['rows']),
+        production_changed=False, strength_demonstrated=False,
+        scope='The same restricted 40-world family as legal-family-bounds-v1. Each root opponent '
+              'reply stops continuation evaluation only after its rounded security lower bound '
+              'exceeds 0.1. Omitted chance mass remains [0,1]. The threshold exceeds the previously '
+              'certified Swords Dance security upper bound; that upper certificate is not computed '
+              'inside these timings. All retained subtrees and chance masses are checked against '
+              'the full archived two-step certificates; the disabled-stop control reproduces all '
+              '40 full bounds, backups and work counts. Native and static-evaluation chance orders '
+              'each repeat with identical ledgers. Static eval changes work order only, never leaf '
+              'bounds or the common Rock Slide policy. The separate existing graph-solver diagnostics '
+              'use 100ms and 20000 runs per reply; trial depth is a traversal limit, not a horizon. '
+              'Their reported bounds are not exported as independent certificates. Native timings '
+              'include model generation and proof construction, exclude table loading, replay, final '
+              'JSON output and verification. These are feasibility timings, not a broad or iPad '
+              'benchmark. No complete information-set coverage, production change, human calibration '
+              'or deployed-bot superiority claim.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', nargs=7, type=Path, metavar='RESULT')
+    args = parser.parse_args()
+    previous_path = root / 'findings/legal-family-bounds-v1/records.json.gz'
+    previous = json.loads(gzip.decompress(previous_path.read_bytes()))['result']
+    upper_path = root / 'findings/legal-family-search-v1/summary.json'
+    upper = F(json.loads(upper_path.read_bytes())['swordsdance_security_upper'])
+    assert upper < F(1, 10)
+    paths = [Path(__file__).resolve(), previous_path, upper_path,
+        root / 'crates/bot/examples/legal_family_threshold.rs',
+        root / 'crates/bot/examples/legal_family_threshold_witness.rs',
+        root / 'crates/bot/examples/threshold_witness/mod.rs',
+        root / 'crates/bot/examples/legal_move_models/mod.rs',
+        root / 'crates/bot/examples/hidden_family_search.rs', root / 'crates/bot/examples/policy_witness.rs',
+        root / 'tools/policy-witness-probe', root / 'tools/hidden-move-witness-probe',
+        root / 'data/legal-move-sources-gen2.json', root / 'data/learnsets-gen2.json',
+        root / 'data/gen2stadium2.json', root / 'data/belief-pool-v3/belief-pool.json',
+        root / 'findings/policy-gap-v1/corpus.jsonl.gz']
+    for directory in ['crates/bot/src', 'crates/engine/src']:
+        paths += list((root / directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists()
+        data = {name: json.loads(path.read_bytes()) for name, path in zip(names, args.record)}
+    else:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert bundle['hashes'] == hashes
+        data = bundle['data']
+    summary = verify(data, previous)
+    summary['swordsdance_security_upper'] = float(upper)
+    summary['certified_security_gain_lower'] = float(F(summary['reports']['eval']['lower']) - upper - F(1, 10**8))
+    assert summary['certified_security_gain_lower'] > 0
+    controls = ['bound', 'missing_reply', 'policy', 'omitted_mass', 'invented_mass']
+    for fault in controls:
+        ledger = copy.deepcopy(data['eval']['rows'][0]['ledger'])
+        node = ledger['nodes'][-1]
+        if fault == 'bound':
+            ledger['bounds'][0] += .01
+        elif fault == 'missing_reply':
+            node['branches'].pop()
+        elif fault == 'policy':
+            ledger['config']['first_choice'] = 'move swordsdance'
+        elif fault == 'omitted_mass':
+            next(b for b in node['branches'] if b['pending'] > 0)['pending'] = 0
+        else:
+            node['branches'][0]['children'][0]['mass'] += .01
+        try:
+            check_ledger(ledger, previous['rows'][0]['ledger'], .1)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError(f'Accepted corruption: {fault}')
+    checks = dict(negative_controls=controls, retained_subtrees_match_full_certificates=True,
+        omitted_probability_checked=True, exact_repeat_identities=80, full_control_identities=40,
+        production_changed=False)
+    if args.record:
+        archive.mkdir()
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(dict(data=data, hashes=hashes),
+            separators=(',', ':')).encode(), mtime=0))
+        for name, value in [('summary', summary), ('checks', checks)]:
+            (archive / (name + '.json')).write_text(json.dumps(value, indent=2) + '\n')
+    else:
+        assert summary == json.loads((archive / 'summary.json').read_bytes())
+        assert checks == json.loads((archive / 'checks.json').read_bytes())
+    print(json.dumps({k: v for k, v in summary.items() if k != 'scope'}, indent=2))
+
+
+if __name__ == '__main__':
+    main()

@@ -14995,6 +14995,93 @@
         ],
         "production_changed": false
       }
+    },
+    "findings/legal-family-threshold-v1/records.json.gz": {
+      "sha256": "626dd76d9eb96869c0847713b855fbeaf0c46cfe75d79dd224001e613c7f4fe7"
+    },
+    "findings/legal-family-threshold-v1/summary.json": {
+      "sha256": "655dd679458aa4ffdddd739ecc93032d7bab7aaf5df2401472d98bf37192e924",
+      "data": {
+        "worlds": 40,
+        "threshold": 0.1,
+        "reports": {
+          "native": {
+            "seconds": 1.318586584,
+            "runs": 61925,
+            "lower": 0.10003649731984851,
+            "proven_worlds": 40
+          },
+          "native_repeat": {
+            "seconds": 1.245958292,
+            "runs": 61925,
+            "lower": 0.10003649731984851,
+            "proven_worlds": 40
+          },
+          "eval": {
+            "seconds": 0.928416167,
+            "runs": 47622,
+            "lower": 0.10000919599779297,
+            "proven_worlds": 40
+          },
+          "eval_repeat": {
+            "seconds": 0.974566417,
+            "runs": 47622,
+            "lower": 0.10000919599779297,
+            "proven_worlds": 40
+          },
+          "control": {
+            "seconds": 8.355413416,
+            "runs": 375245,
+            "lower": 0.10264396669785156,
+            "proven_worlds": 40
+          },
+          "solver_depth2": {
+            "seconds": 1.9773290829999999,
+            "runs": 69264,
+            "proven_worlds": 0,
+            "stops": {
+              "WorkExhausted": 153,
+              "TimeBudget": 5,
+              "ProvenBelow": 1
+            }
+          },
+          "solver_depth24": {
+            "seconds": 4.238573542,
+            "runs": 202813,
+            "proven_worlds": 33,
+            "stops": {
+              "ProvenBelow": 150,
+              "TimeBudget": 9
+            }
+          }
+        },
+        "certificate_ledgers_verified": 200,
+        "exact_repeat_identities": 80,
+        "full_control_identities": 40,
+        "prior_runs": 375245,
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "The same restricted 40-world family as legal-family-bounds-v1. Each root opponent reply stops continuation evaluation only after its rounded security lower bound exceeds 0.1. Omitted chance mass remains [0,1]. The threshold exceeds the previously certified Swords Dance security upper bound; that upper certificate is not computed inside these timings. All retained subtrees and chance masses are checked against the full archived two-step certificates; the disabled-stop control reproduces all 40 full bounds, backups and work counts. Native and static-evaluation chance orders each repeat with identical ledgers. Static eval changes work order only, never leaf bounds or the common Rock Slide policy. The separate existing graph-solver diagnostics use 100ms and 20000 runs per reply; trial depth is a traversal limit, not a horizon. Their reported bounds are not exported as independent certificates. Native timings include model generation and proof construction, exclude table loading, replay, final JSON output and verification. These are feasibility timings, not a broad or iPad benchmark. No complete information-set coverage, production change, human calibration or deployed-bot superiority claim.",
+        "swordsdance_security_upper": 0.09939236121505779,
+        "certified_security_gain_lower": 0.0006168247827351788
+      }
+    },
+    "findings/legal-family-threshold-v1/checks.json": {
+      "sha256": "bb7eb983af3a9e023b5adacc435af094c5e87f8c07c98d09438993a668806e53",
+      "data": {
+        "negative_controls": [
+          "bound",
+          "missing_reply",
+          "policy",
+          "omitted_mass",
+          "invented_mass"
+        ],
+        "retained_subtrees_match_full_certificates": true,
+        "omitted_probability_checked": true,
+        "exact_repeat_identities": 80,
+        "full_control_identities": 40,
+        "production_changed": false
+      }
     }
   },
   "foresight_fix": {
