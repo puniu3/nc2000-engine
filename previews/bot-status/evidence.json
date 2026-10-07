@@ -17804,6 +17804,232 @@
         "strength_demonstrated": false,
         "scope": "Final-step damage aggregation has a conservative eligibility guard. It requires a clean move boundary, one remaining Pokemon per side, no weather, no HP-damaging status, no unapproved volatile/side/field effect, and whitelisted moves and item callbacks. Sleep Talk requires all potential called moves to be approved. Approved attacks hit once, have HP-independent power, and cannot cause recoil, drain, confusion or residual damage. Within a damage bucket, subsequent predicates are KO, Focus Band, or healing thresholds already retained by ThresholdLean; the representative is consumed at the horizon and is never used for future strategic decisions. Rejected cells use the previous exact streaming/eager path. All executed cells are audited against the native kernel, comparing four outcome categories only for projected final-step cells. All ledgers and controller decisions are independently verified. Two runs per backend and zero/500ms controls are included. A 720-case HP/item/move grid checks eligible projections; unsafe move/status controls are rejected, and the sandstorm counterexample uses the exact fallback. This is a source-reviewed eligibility argument and finite testing, not a machine-checked proof for every engine state. Runtime excludes audits, loading and model replay. Production integration and deployed-bot superiority are not established."
       }
+    },
+    "findings/item-projection-v1/summary.json": {
+      "sha256": "8b815393e0d741df8991fb90e3f5e599bdd9cf5a34b5c12e132816f78ce3a774",
+      "data": {
+        "calls": 3044,
+        "proof_runs": 685375,
+        "kind_counts": {
+          "swordsdance": 2531,
+          "rockslide": 507,
+          "upper": 6
+        },
+        "root_branches_pruned": 11738,
+        "certificate_nodes": 99792,
+        "active_worlds": [
+          "berry/rest",
+          "berry/bide",
+          "berry/doubleedge",
+          "brightpowder/detect",
+          "brightpowder/doubleedge",
+          "focusband/doubleedge"
+        ],
+        "mix": [
+          0.4442382191836013,
+          0.5557617808163987
+        ],
+        "bounds": [
+          0.08926996926318925,
+          0.08928985574286716
+        ],
+        "negative_controls": [
+          "inflated_lower",
+          "invalid_mix",
+          "wrong_adversary"
+        ],
+        "projection": {
+          "cells": 51729,
+          "maximum_mass_error": 4.440892098500626e-16,
+          "rejected": {
+            "selected_move": 8397,
+            "called_move": 8397,
+            "weather": 1048,
+            "volatile_effect": 510,
+            "side_effect": 204
+          },
+          "rejected_runs": {
+            "selected_move": 47578,
+            "called_move": 145244,
+            "weather": 6679,
+            "volatile_effect": 4136,
+            "side_effect": 13724
+          }
+        },
+        "audit_runs": 1017814,
+        "audit_cells": 83744,
+        "previous_projection": {
+          "cells": 34140,
+          "maximum_mass_error": 4.440892098500626e-16,
+          "rejected": {
+            "selected_move": 4581,
+            "called_move": 4581,
+            "weather": 1048,
+            "item_callback": 25101,
+            "volatile_effect": 468,
+            "side_effect": 204
+          },
+          "rejected_runs": {
+            "selected_move": 26856,
+            "called_move": 80567,
+            "weather": 6679,
+            "item_callback": 240055,
+            "volatile_effect": 3968,
+            "side_effect": 13724
+          }
+        },
+        "unit": {
+          "tests_passed": 4,
+          "hp_item_move_cases": 1440,
+          "active_item_cases": 48
+        },
+        "counterexample": {
+          "native": [
+            0.1914813703374989,
+            0.8085186296625011,
+            0.0,
+            0.0
+          ],
+          "abstract": [
+            0.10546875,
+            0.89453125,
+            0.0,
+            0.0
+          ],
+          "guarded_bounds": [
+            0.8085186296335011,
+            1.0
+          ]
+        },
+        "proof_depth_work": {
+          "1": {
+            "nodes": 14636,
+            "runs": 457635,
+            "branches": 58357,
+            "partial_branches": 28986
+          },
+          "0": {
+            "nodes": 3044,
+            "runs": 200784,
+            "branches": 12115,
+            "partial_branches": 11726
+          },
+          "2": {
+            "nodes": 3318,
+            "runs": 26956,
+            "branches": 13272,
+            "partial_branches": 0
+          }
+        },
+        "streaming_numeric_seconds": [
+          10.698792209,
+          10.711460084
+        ],
+        "streaming_numeric_runs": 915501,
+        "query_work": {
+          "previous": {
+            "first_calls": 2711,
+            "first_runs": 520670,
+            "repeated_calls": 318,
+            "repeated_runs": 28793
+          },
+          "projection": {
+            "first_calls": 2711,
+            "first_runs": 469168,
+            "repeated_calls": 333,
+            "repeated_runs": 27650
+          }
+        },
+        "numeric_seconds": [
+          6.149839583,
+          6.404698917
+        ],
+        "numeric_runs": 496818,
+        "previous_numeric_seconds": [
+          7.062432792,
+          6.8448670830000005
+        ],
+        "previous_numeric_runs": 549463,
+        "zero_budget": {
+          "kind": "result",
+          "seconds": 1.2166e-05,
+          "setup_seconds": 0.303402125,
+          "mix": [
+            0.0,
+            1.0
+          ],
+          "adversary": [],
+          "bounds": [
+            0.0,
+            1.0
+          ],
+          "calls": 0,
+          "runs": 0,
+          "snapshots": [],
+          "active": [
+            0
+          ],
+          "converged": false
+        },
+        "half_second": {
+          "kind": "result",
+          "seconds": 0.558833292,
+          "setup_seconds": 0.292805208,
+          "mix": [
+            1.0,
+            0.0
+          ],
+          "adversary": [
+            [
+              0,
+              0.0
+            ],
+            [
+              2,
+              0.0
+            ],
+            [
+              5,
+              1.0
+            ]
+          ],
+          "bounds": [
+            0.0,
+            0.10264397682567455
+          ],
+          "calls": 14,
+          "runs": 38758,
+          "snapshots": [
+            {
+              "checkpoint_seconds": 0.5,
+              "seconds": 0.558832583,
+              "lower": 0.0,
+              "upper": 0.10264397682567455,
+              "mix": [
+                1.0,
+                0.0
+              ],
+              "calls": 14,
+              "runs": 38758,
+              "active": [
+                0,
+                2,
+                5
+              ]
+            }
+          ],
+          "active": [
+            0,
+            2,
+            5
+          ],
+          "converged": false
+        },
+        "decision": "Keep the expanded item guard as a research candidate; no production integration.",
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "The previous final-step eligibility guard is retained, with additional explicitly reviewed item callbacks. Type boosts and critical-rate changes are evaluated before damage variance and have no dependence on post-hit HP. Status cures and PP restoration depend only on alive/dead status or non-HP state; banned damaging statuses and confusion cannot be introduced by the approved moves. Mail item-taking callbacks are unreachable with these moves. Berserk Gene remains excluded. All rejected cells use the previous exact path. Projected final-step kernels are audited against exact native outcome probabilities; other cells are checked against native raw-state kernels. Every ledger, policy, controller query, mixture and ceiling is independently checked. Two runs per backend and zero/500ms controls are included. The 1440-case HP/item/move grid includes active Rock, Ice and Steel boost items. A further 48 cases cover Farfetchd with Stick, Chansey with Lucky Punch and Mystery Berry PP restoration; the tests require the critical items to change actual outcome probabilities and PP restoration to occur in both enumerators. Existing unsafe-effect and sandstorm fallback controls are retained. This is a source-reviewed argument plus finite testing, not a machine-checked proof over all engine states. Time excludes input loading, model replay and independent audits. No production integration or deployed-strength claim."
+      }
     }
   },
   "foresight_fix": {
