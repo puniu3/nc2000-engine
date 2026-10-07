@@ -57,12 +57,6 @@
 use nc2000_engine::dex::{toid, Dex, ItemId, MoveId, SpeciesId};
 use nc2000_engine::state::{Battle, Gender};
 
-/// Does a revealed move match a set's move slot? Identical ids always; a
-/// PLAIN `hiddenpower` reveal (M15 protocol mode: PS normalizes typed
-/// hidden powers to the plain id, so its `|move|` lines and requests never
-/// carry the type) matches any typed hidden power. M10's own channels only
-/// ever reveal this engine's typed ids, so the lenient arm never fires
-/// there — existing behavior is bit-identical.
 pub fn move_matches(dex: &Dex, slot: MoveId, revealed: MoveId) -> bool {
     slot == revealed
         || (dex.moves.key(revealed) == "hiddenpower"
