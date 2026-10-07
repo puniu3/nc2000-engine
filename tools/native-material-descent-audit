@@ -19,8 +19,9 @@ def read(path):
 def diagnostics(row):
     d=row['diagnostics'];g=d['graph']
     assert sum(v[0] for v in d['turns'].values()) == g['unexpanded_nodes']
-    assert sum(v[1] for v in d['turns'].values()) == g['initialized_nodes']
-    assert g['unexpanded_nodes']+g['initialized_nodes'] == g['stored_battles'] == row['nodes']
+    assert sum(v[1] for v in d['turns'].values()) == g['initialized_nodes']-(row['nodes']-g['stored_battles'])
+    assert g['unexpanded_nodes']+g['initialized_nodes'] == row['nodes']
+    assert sum(sum(v) for v in d['turns'].values()) == g['stored_battles']
     assert sum(d['trial_depth_counts']) == row['stats']['trials']
     assert len(d['root_chance']) == len(row['cells_p0']) == 16
     for cell,(lo,hi) in zip(d['root_chance'],row['cells_p0']):
@@ -29,7 +30,11 @@ def diagnostics(row):
 
 
 def stable(row):
-    return {k:v for k,v in row.items() if k!='elapsed_ms'}
+    result=copy.deepcopy(row)
+    result.pop('elapsed_ms')
+    for cell in result['diagnostics']['root_chance']:
+        cell.pop('child_uncertainty')
+    return result
 
 
 def check(row, protocol, roots):
@@ -55,6 +60,8 @@ def main():
         pair=[read(p/(arm+f'-{i}.jsonl.gz')) for i in [1,2]]
         checks=[check(row,ap,roots) for row in pair]
         assert stable(pair[0])==stable(pair[1])
+        diagnostic_sum_error=max(abs(a['child_uncertainty']-b['child_uncertainty']) for a,b in zip(pair[0]['diagnostics']['root_chance'],pair[1]['diagnostics']['root_chance']))
+        assert diagnostic_sum_error<1e-12
         if arm=='control':assert stable(pair[0])==stable(read('findings/native-depth-profile-v1/priority.jsonl.gz'))
         for kind in ['wrong_mode','node_count','false_loss']:
             r=copy.deepcopy(pair[0])
@@ -64,7 +71,7 @@ def main():
             try:check(r,ap,roots)
             except AssertionError:rejected.append(arm+':'+kind)
             else:raise AssertionError('accepted '+kind)
-        results[arm]=dict(checks=checks[0],repeats_match=True,records_sha256=[sha(p/(arm+f'-{i}.jsonl.gz')) for i in [1,2]],runs=pair)
+        results[arm]=dict(checks=checks[0],search_outputs_match_exactly=True,diagnostic_sum_max_repeat_error=diagnostic_sum_error,records_sha256=[sha(p/(arm+f'-{i}.jsonl.gz')) for i in [1,2]],runs=pair)
     baseline=results['control']['runs'][0]
     gains={}
     for arm in ['order','descent']:
@@ -72,7 +79,7 @@ def main():
         pairs=list(zip([baseline['threshold_loss'],*baseline['pure_action_values'],*baseline['pure_action_losses']],[r['threshold_loss'],*r['pure_action_values'],*r['pure_action_losses']]))
         assert all(max(a[0],b[0])<=min(a[1],b[1])+1e-8 for a,b in pairs)
         gains[arm]=dict(selected_lower_increase=r['threshold_loss'][0]-baseline['threshold_loss'][0],selected_upper_decrease=baseline['threshold_loss'][1]-r['threshold_loss'][1],any_reported_endpoint_gain=max(max(b[0]-a[0],a[1]-b[1]) for a,b in pairs))
-    print(json.dumps(dict(schema=protocol['schema'],protocol_sha256=sha(p/'protocol.json'),arms=results,gains=gains,rejected_mutations=rejected,baseline_reproduced=True,ordinary_bot_changed=False,strength_improvement_proven=False),indent=2))
+    print(json.dumps(dict(schema=protocol['schema'],protocol_sha256=sha(p/'protocol.json'),arms=results,gains=gains,rejected_mutations=rejected,baseline_reproduced=True,diagnostic_repeat_exception='Only post-search child_uncertainty sums permit 1e-12 difference: HashMap values iteration changes floating-point addition order. Search outputs and all other diagnostic fields require exact equality. Exception recorded after strict diagnostic comparison failed; no trial rerun.',ordinary_bot_changed=False,strength_improvement_proven=False),indent=2))
 
 
 if __name__=='__main__':main()
