@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+import subprocess
+from pathlib import Path
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def read(path):
+    return json.loads(gzip.decompress(Path(path).read_bytes()))
+
+
+def diagnostics(row):
+    d=row['diagnostics'];g=d['graph']
+    assert sum(v[0] for v in d['turns'].values()) == g['unexpanded_nodes']
+    assert sum(v[1] for v in d['turns'].values()) == g['initialized_nodes']
+    assert g['unexpanded_nodes']+g['initialized_nodes'] == g['stored_battles'] == row['nodes']
+    assert sum(d['trial_depth_counts']) == row['stats']['trials']
+    assert len(d['root_chance']) == len(row['cells_p0']) == 16
+    for cell,(lo,hi) in zip(d['root_chance'],row['cells_p0']):
+        assert abs(cell['pending_mass']+cell['child_uncertainty']-(hi-lo)) < 1e-10
+        assert 0 <= cell['expanded_children'] <= cell['unique_children'] <= cell['resolved_edges']
+
+
+def stable(row):
+    return {k:v for k,v in row.items() if k!='elapsed_ms'}
+
+
+def check(row, protocol, roots):
+    assert (row['game'],row['frame'])==(62,92) and row['target']==row['selected']
+    for flag in ['chance_material_order','retain_eager_prefix','probability_first_eager']:
+        assert f'{flag}: {str(protocol[flag]).lower()}' in row['config']
+    assert f"material_descent_period: {protocol['material_descent_period']}," in row['config']
+    diagnostics(row)
+    return runpy.run_path('tools/native-loss-threshold-audit')['check_threshold']([row],protocol,roots)
+
+
+def main():
+    p=Path('findings/native-material-descent-v1');protocol=json.loads((p/'protocol.json').read_text())
+    assert sha(p/'native_material_descent.rs')==protocol['helper_sha256']
+    rootpath=Path('tmp/native-endgame-census-v1/roots.jsonl')
+    assert sha(rootpath)==protocol['roots_sha256']
+    for file,key in [('crates/bot/src/bounds.rs','parent_bounds_source_sha256'),('crates/engine/src/battle/enumerate.rs','enumerate_source_sha256'),('crates/bot/src/bounds/loss_threshold.rs','solver_source_sha256')]:
+        assert hashlib.sha256(subprocess.check_output(['git','show',protocol['implementation_commit']+':'+file])).hexdigest()==protocol[key]
+    roots=[json.loads(line) for line in rootpath.read_text().splitlines()];results={};rejected=[]
+    for arm,settings in protocol['arms'].items():
+        ap=json.loads((p/(arm+'-protocol.json')).read_text())
+        assert ap=={**{k:v for k,v in protocol.items() if k not in ['arms','run_order']},**settings}
+        pair=[read(p/(arm+f'-{i}.jsonl.gz')) for i in [1,2]]
+        checks=[check(row,ap,roots) for row in pair]
+        assert stable(pair[0])==stable(pair[1])
+        if arm=='control':assert stable(pair[0])==stable(read('findings/native-depth-profile-v1/priority.jsonl.gz'))
+        for kind in ['wrong_mode','node_count','false_loss']:
+            r=copy.deepcopy(pair[0])
+            if kind=='wrong_mode':r['config']=r['config'].replace('chance_material_order: '+str(settings['chance_material_order']).lower(),'chance_material_order: '+str(not settings['chance_material_order']).lower())
+            elif kind=='node_count':r['diagnostics']['turns']['0'][1]+=1
+            else:r['threshold_loss']=[.5,.5]
+            try:check(r,ap,roots)
+            except AssertionError:rejected.append(arm+':'+kind)
+            else:raise AssertionError('accepted '+kind)
+        results[arm]=dict(checks=checks[0],repeats_match=True,records_sha256=[sha(p/(arm+f'-{i}.jsonl.gz')) for i in [1,2]],runs=pair)
+    baseline=results['control']['runs'][0]
+    gains={}
+    for arm in ['order','descent']:
+        r=results[arm]['runs'][0]
+        pairs=list(zip([baseline['threshold_loss'],*baseline['pure_action_values'],*baseline['pure_action_losses']],[r['threshold_loss'],*r['pure_action_values'],*r['pure_action_losses']]))
+        assert all(max(a[0],b[0])<=min(a[1],b[1])+1e-8 for a,b in pairs)
+        gains[arm]=dict(selected_lower_increase=r['threshold_loss'][0]-baseline['threshold_loss'][0],selected_upper_decrease=baseline['threshold_loss'][1]-r['threshold_loss'][1],any_reported_endpoint_gain=max(max(b[0]-a[0],a[1]-b[1]) for a,b in pairs))
+    print(json.dumps(dict(schema=protocol['schema'],protocol_sha256=sha(p/'protocol.json'),arms=results,gains=gains,rejected_mutations=rejected,baseline_reproduced=True,ordinary_bot_changed=False,strength_improvement_proven=False),indent=2))
+
+
+if __name__=='__main__':main()
