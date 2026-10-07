@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+from pathlib import Path
+
+
+def rows(path):
+    return [json.loads(line) for line in Path(path).read_bytes().splitlines()]
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check(before, after, proofs, direct, plan):
+    assert len(before) == len(after) == 10
+    assert len(proofs) == 2 and len(direct) == 4
+    expected = {(side, seed) for side in plan['budgets']['sides'] for seed in plan['budgets']['search_seeds']}
+    seen = set()
+    keys = {}
+    for old, new in zip(before, after):
+        if old['kind'] == 'fixture':
+            assert old == new
+            assert old['own_hp'] == 129 and old['foe_hp'] == 176
+            assert old['foe_boosts'] == '[6, 0, 0, 0, 0, 0, 0]'
+            assert old['side'] not in keys
+            keys[old['side']] = old['key']
+            continue
+        key = new['side'], new['seed']
+        assert key in expected and key not in seen
+        seen.add(key)
+        for field in ['kind', 'side', 'seed', 'actions', 'visits', 'means', 'nodes']:
+            assert old[field] == new[field]
+        assert new['actions'] == ['move substitute', 'move thunderbolt', 'move agility']
+        assert old['mask'] == [True, False, False] and new['mask'] == [False, False, False]
+        assert old['after_choice'] == new['before_choice'] == 'move agility'
+        assert new['after_choice'] == 'move substitute'
+        assert sum(new['visits']) == plan['budgets']['search_iterations']
+        assert new['visits'][0] > 26000
+        assert new['visits'][0] > max(new['visits'][1:])
+    assert seen == expected and set(keys) == {0, 1}
+    proof_sides = set()
+    gains = []
+    for proof in proofs:
+        side = proof['side']
+        assert side not in proof_sides
+        proof_sides.add(side)
+        assert proof['key'] == keys[side]
+        assert proof['stop'] == 'StrategyMet'
+        assert proof['runs'] <= plan['budgets']['proof_engine_runs']
+        assert proof['nodes'] + proof['closed'] <= plan['budgets']['proof_nodes']
+        assert proof['actions'][side] == ['move substitute', 'move thunderbolt', 'move agility']
+        assert proof['actions'][1 - side] == ['move quickattack']
+        own_cells = proof['cells_p0'] if side == 0 else [[1 - hi, 1 - lo] for lo, hi in proof['cells_p0']]
+        game = proof['value_p0'] if side == 0 else [1 - proof['value_p0'][1], 1 - proof['value_p0'][0]]
+        for cell, value, loss in zip(own_cells, proof['pure_values'], proof['pure_losses']):
+            assert 0 <= cell[0] <= cell[1] <= 1
+            assert all(abs(x - y) < 1e-9 for x, y in zip(cell, value))
+            expected_loss = [max(0, game[0] - value[1]), min(1, game[1] - value[0])]
+            assert all(abs(x - y) < 1e-9 for x, y in zip(loss, expected_loss))
+        assert abs(game[0] - max(c[0] for c in own_cells)) < 1e-9
+        assert abs(game[1] - max(c[1] for c in own_cells)) < 1e-9
+        assert own_cells[2] == [0, 0]
+        assert proof['pure_values'][0][0] > .999
+        gains.append(proof['pure_values'][0][0] - proof['pure_values'][2][1])
+    assert proof_sides == {0, 1}
+    direct_keys = set()
+    direct_lowers = []
+    for row in direct:
+        key = row['side'], row['first']
+        assert key not in direct_keys and row['side'] in keys
+        direct_keys.add(key)
+        assert 0 <= row['value'][0] <= row['value'][1] <= 1
+        assert 0 < row['runs'] <= 500000 and row['cells'] > 0 and row['leaves'] > 0
+        if row['first'] == 'move agility':
+            assert row['value'] == [0, 0]
+            assert row['continuation'] == 'all legal own actions'
+        else:
+            assert row['first'] == 'move substitute'
+            assert row['continuation'] == 'Thunderbolt at each later turn'
+            assert row['value'][0] > .99
+            direct_lowers.append(row['value'][0])
+    assert len(direct_keys) == 4
+    return dict(searches=len(seen), repaired_choices=len(seen), identical_search_statistics=True,
+                minimum_certified_choice_gain=min(gains),
+                independent_fixed_policy_lower=min(direct_lowers),
+                generic_engine_runs=sum(r['runs'] for r in proofs),
+                direct_engine_runs=sum(r['runs'] for r in direct))
+
+
+def main():
+    p = Path('findings/priority-substitute-choice-v1')
+    t = Path('tmp/priority-substitute-choice-v1')
+    plan = json.loads((p / 'plan.json').read_text())
+    binding = json.loads((p / 'direct-binding.json').read_text())
+    direct_protocol = json.loads((p / 'direct-protocol.json').read_text())
+    assert binding['root_helper_sha256'] == sha(p / 'priority_substitute_choice.rs')
+    assert direct_protocol['source_sha256'] == sha(p / 'priority_substitute_direct.rs')
+    before, after = rows(t / 'final-before.jsonl'), rows(t / 'final-search.jsonl')
+    proofs, direct = rows(t / 'final-proof.jsonl'), rows(t / 'final-direct.jsonl')
+    assert (t / 'final-proof.jsonl').read_bytes() == (t / 'final-repeat-proof.jsonl').read_bytes()
+    result = check(before, after, proofs, direct, plan)
+    rejected = []
+    for kind in ['missing_seed', 'changed_search_reward', 'wrong_old_choice', 'false_loss', 'wrong_orientation', 'false_direct_win']:
+        b, a, pr, dr = copy.deepcopy((before, after, proofs, direct))
+        if kind == 'missing_seed':
+            a.pop()
+        elif kind == 'changed_search_reward':
+            next(r for r in a if r['kind'] == 'search')['means'][0] -= .1
+        elif kind == 'wrong_old_choice':
+            next(r for r in b if r['kind'] == 'search')['after_choice'] = 'move substitute'
+        elif kind == 'false_loss':
+            pr[0]['pure_losses'][2][0] = 0
+        elif kind == 'wrong_orientation':
+            pr[1]['cells_p0'] = pr[0]['cells_p0']
+        else:
+            next(r for r in dr if r['first'] == 'move agility')['value'] = [1, 1]
+        try:
+            check(b, a, pr, dr, plan)
+        except AssertionError:
+            rejected.append(kind)
+        else:
+            raise AssertionError('accepted ' + kind)
+    result.update(schema='nc2000-priority-substitute-choice-v1', rejected_mutations=rejected,
+                  hashes={str(f): sha(f) for f in [p / 'plan.json', p / 'direct-protocol.json',
+                      p / 'direct-binding.json', p / 'priority_substitute_choice.rs',
+                      p / 'priority_substitute_proof.rs', p / 'priority_substitute_direct.rs',
+                      t / 'final-before.jsonl', t / 'final-search.jsonl', t / 'final-proof.jsonl',
+                      t / 'final-direct.jsonl', t / 'final-before', t / 'final-search',
+                      t / 'final-proof', t / 'final-direct', t / 'final-test.txt']},
+                  generic_proof_repeat_identical=True, known_loadouts_only=True,
+                  blind_information_set_certificate=False, full_game_strength_improvement_proven=False)
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()
