@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from pathlib import Path
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/stream-opening-mix-v1'
+checker=runpy.run_path(str(root/'tools/cutting-opening-mix-probe'))
+
+
+def stable(rows):
+    return [{k:v for k,v in r.items() if k not in ['seconds','cell_seconds']} for r in rows[1:-1]]
+
+
+def fingerprint(rows):
+    return hashlib.sha256(json.dumps(stable(rows),separators=(',',':')).encode()).hexdigest()
+
+
+def verify_reference(rows):
+    assert rows[0]['backend']=='audit' and rows[0]['budget_ms']==900000
+    before=rows[0].copy();rows[0]=dict(before,backend='ledger',budget_ms=180000)
+    audit_runs=audit_cells=0
+    for row in rows[1:-1]:
+        ledger=row['ledger']
+        assert ledger['streamed'] and ledger['ordered'] and ledger['threshold']==row['threshold']
+        assert ledger['audit_runs']>0 and ledger['audit_cells']>0
+        audit_runs+=ledger['audit_runs'];audit_cells+=ledger['audit_cells']
+        for branch in ledger['nodes'][ledger['root']]['branches']:
+            branch['continuation_pending_mass']=branch['pending']
+    summary=checker['verify'](rows)
+    rows[0]=before
+    for row in rows[1:-1]:
+        for branch in row['ledger']['nodes'][row['ledger']['root']]['branches']:
+            del branch['continuation_pending_mass']
+    return dict(summary,audit_runs=audit_runs,audit_cells=audit_cells)
+
+
+def numerical_match(reference,rows,partial=False):
+    assert rows[0]['backend']=='ordered'
+    assert {k:v for k,v in rows[0].items() if k not in ['backend','budget_ms','setup_seconds']}=={
+        k:v for k,v in reference[0].items() if k not in ['backend','budget_ms','setup_seconds']}
+    assert len(rows)<=len(reference) if partial else len(rows)==len(reference)
+    runs=0
+    for expected,row in zip(reference[1:-1],rows[1:-1]):
+        assert {k:v for k,v in expected.items() if k not in ['ledger','seconds','cell_seconds','runs']}=={
+            k:v for k,v in row.items() if k not in ['ledger','seconds','cell_seconds','runs']}
+        ledger=row['ledger']
+        assert ledger['streamed'] and ledger['ordered'] and ledger['threshold']==row['threshold']
+        assert ledger['audit_runs']==ledger['audit_cells']==0
+        assert 0<ledger['runs']<=expected['ledger']['runs']
+        assert checker['compact'](ledger)==checker['compact'](expected['ledger'])
+        runs+=ledger['runs'];assert row['runs']==runs
+    result=rows[-1]
+    assert result['runs']==runs and result['calls']==len(rows)-2
+    if not partial:
+        for k in ['mix','adversary','bounds','calls','active','converged']:assert result[k]==reference[-1][k]
+    else:
+        assert not result['converged'] and result['seconds']*1000>=rows[0]['budget_ms']
+        if result['calls']:
+            for k in ['mix','adversary','bounds','calls','runs']:assert result[k]==rows[-2][k]
+        else:assert result['bounds']==[0.,1.] and result['mix']==[0.,1.] and runs==0
+    return result
+
+
+def work_by_query(rows):
+    seen=set();result=dict(first_calls=0,first_runs=0,repeated_calls=0,repeated_runs=0)
+    for row in rows[1:-1]:
+        key=(row['index'],row['kind']);label='repeated' if key in seen else 'first';seen.add(key)
+        result[label+'_calls']+=1;result[label+'_runs']+=row['ledger']['runs']
+    return result,seen
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',nargs=7,type=Path);args=parser.parse_args()
+    paths=[Path(__file__).resolve(),root/'crates/bot/examples/stream_opening_mix.rs',root/'crates/bot/examples/stream_witness.rs',
+        root/'crates/bot/examples/stream_step/mod.rs',root/'crates/bot/examples/policy_witness.rs',
+        root/'crates/bot/examples/aliased_witness/mod.rs',root/'crates/bot/examples/threshold_witness/mod.rs',
+        root/'tools/cutting-opening-mix-probe',root/'tools/adaptive-opening-mix-probe',root/'tools/policy-witness-probe',
+        root/'tools/hidden-move-witness-probe',root/'data/gen2stadium2.json',root/'findings/item-move-product-v1/records.json.gz',
+        root/'findings/policy-gap-v1/corpus.jsonl.gz',root/'findings/cutting-opening-mix-v1/summary.json',root/'findings/cutting-opening-mix-v1/records.json.gz']
+    for directory in ['crates/bot/src','crates/engine/src']:paths+=list((root/directory).rglob('*.rs'))
+    hashes={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists();raw=args.record[0].read_bytes()
+        proof_repeat=[json.loads(l) for l in args.record[1].read_bytes().splitlines()]
+        others=[[json.loads(l) for l in p.read_bytes().splitlines()] for p in args.record[2:6]]
+        log=args.record[6].read_text()
+        assert 'stopped_streams_partition_native_kernels_without_exceeding_caps ... ok' in log
+        assert '1 passed; 0 failed' in log
+        unit=dict(passed=1,failed=0,parameter_cases=324,complete_kernel_comparisons=12)
+    else:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()));assert bundle['hashes']==hashes
+        raw=gzip.decompress((archive/'proofs.jsonl.gz').read_bytes());assert hashlib.sha256(raw).hexdigest()==bundle['proof_sha256']
+        others=bundle['others'];unit=bundle['unit']
+    rows=[json.loads(l) for l in raw.splitlines()]
+    summary=verify_reference(rows)
+    if args.record:
+        assert stable(rows)==stable(proof_repeat)
+        repeated=dict(stable_sha256=fingerprint(proof_repeat),result=proof_repeat[-1])
+    else:repeated=bundle['repeated']
+    assert fingerprint(rows)==repeated['stable_sha256']
+    for k in ['mix','adversary','bounds','calls','runs','active','converged']:assert rows[-1][k]==repeated['result'][k]
+    results=[numerical_match(rows,data,partial=i>=2) for i,data in enumerate(others)]
+    assert stable(others[0])==stable(others[1])
+    for fault in ['wrong_root','inflated_value','inflated_runs']:
+        bad=copy.deepcopy(others[0]);ledger=bad[1]['ledger']
+        if fault=='wrong_root':ledger['nodes'][0]['state_key']='0'
+        elif fault=='inflated_value':ledger['bounds'][0]+=.01
+        else:ledger['runs']+=1000000
+        try:numerical_match(rows,bad)
+        except AssertionError:pass
+        else:raise AssertionError('Accepted corruption: '+fault)
+    old=json.loads((root/'findings/cutting-opening-mix-v1/summary.json').read_bytes())
+    old_records=json.loads(gzip.decompress((root/'findings/cutting-opening-mix-v1/records.json.gz').read_bytes()))
+    old_work,old_keys=work_by_query(old_records['repeats'][1]);new_work,new_keys=work_by_query(others[0]);assert old_keys==new_keys
+    summary.update(query_work=dict(previous=old_work,streaming=new_work),numeric_seconds=[r['seconds'] for r in results[:2]],numeric_runs=results[0]['runs'],
+        previous_numeric_seconds=old['numeric_seconds'],previous_numeric_runs=old['numeric_runs'],
+        zero_budget=results[2],half_second=results[3],unit=unit,decision='Do not replace the existing cutting solver.',
+        production_changed=False,strength_demonstrated=False,
+        scope='An experimental streaming exact chance enumerator traverses non-damage prefixes and uses the '
+              'native endpoint-merging algorithm on conditioned damage suffixes. Prefix mass restores conditional '
+              'probabilities. Completed disjoint mass is retained on early stop or cap exhaustion, while all '
+              'unvisited mass remains [0,1]. The witness propagates required lower values into descendants. '
+              'Static evaluation affects only child order. The full proof run audits every executed chance cell '
+              'against complete native enumeration: committed raw-state mass must be a subset of the full kernel '
+              'and committed plus pending mass must be one. Original rational backup, policy, controller, mixture '
+              'and ceiling checks are reused through a schema adapter. Numeric root values and schedules match '
+              'the unmerged proof exactly, with two repetitions per backend. Unit checks exercise 324 combinations '
+              'of move pairs, ordering, caps and stopping points; 12 complete streams equal native kernels. '
+              'Tests do not establish arbitrary-state equivalence. The same 2200-model finite family and prescribed '
+              'policy templates are used, not all hidden stats or strategies. Runtime excludes input loading, '
+              'model replay and the separate chance audits. The experiment has not shown a useful overall speed '
+              'gain and increases engine executions; retain the previous solver. No deployed-strength claim.')
+    if args.record:
+        archive.mkdir()
+        bundle=dict(hashes=hashes,proof_sha256=hashlib.sha256(raw).hexdigest(),others=others,repeated=repeated,unit=unit)
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'proofs.jsonl.gz').write_bytes(gzip.compress(raw,mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    else:assert summary==json.loads((archive/'summary.json').read_bytes())
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['scope','zero_budget','half_second']},indent=2))
+
+
+if __name__=='__main__':main()
