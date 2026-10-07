@@ -33,6 +33,13 @@ if selection.exists():
         confirmation = f'<p>独立した確認対戦：{labels[selected]}、{completed}/384対戦。</p>'
     else:
         confirmation = '<p>全候補が選定条件を満たさず、今回の公開対象はありません。</p>'
+decision_path = study / 'decision.json'
+decision = json.loads(decision_path.read_text()) if decision_path.exists() else None
+if decision:
+    result = decision['confirmation']
+    probability = result['posterior']['1']['probability_above_half'] * 100
+    confirmation = f"<p><strong>確認結果：{result['wins']}勝{result['losses']}敗、得点率{result['score'] * 100:.2f}%。優位確率{probability:.2f}%で基準90%に未達。今回はデプロイしません。</strong></p>"
+    progress['decision'] = decision['decision']
 table = '<div id="release-strength-progress"><table class="comparison"><thead><tr><th>候補選びの比較</th><th>結果・進行</th></tr></thead><tbody>' + ''.join(rows) + '</tbody></table>' + confirmation + '</div>'
 page = root / 'previews/bot-status/index.html'
 html = page.read_text()
@@ -48,6 +55,6 @@ page.write_text(html)
 path = root / 'previews/bot-status/evidence.json'
 data = json.loads(path.read_text())
 data['latest_report']['release_strength']['progress'] = progress
-data['latest_report']['release_strength']['status'] = 'confirmation' if progress.get('selected') else 'screening'
+data['latest_report']['release_strength']['status'] = 'complete' if decision else ('confirmation' if progress.get('selected') else 'screening')
 path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
 print(json.dumps(progress, ensure_ascii=False))

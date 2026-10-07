@@ -51776,6 +51776,1113 @@
         "direct_helper_sha256": "00c78c264185761e3b189f9af97a69ead37b8bfb0932e16b1a5080209235d3d0",
         "scope": "Same independent traversal and budgets as priority-substitute-choice-v1: Substitute then Thunderbolt, depth 3; Agility then all own legal actions, depth 2; every opponent action enumerated, singleton asserted. Added Thunderbolt old selections are covered by the generic solver only."
       }
+    },
+    "findings/release-strength-v1/plan.json": {
+      "sha256": "7ce84ea8ccbd9fd07b437a484e8c183f54f198d7e66e09f954543aad1bf5eb98",
+      "data": {
+        "baseline": "c7b11e882d75e552fd62c530012eb7c2d82b9e64",
+        "authorization": "User requested evaluating existing improvements under regulation and deploying those with reasonable evidence of superiority. This authorizes a passing candidate deployment.",
+        "arms": {
+          "corrections": [
+            "27a0226",
+            "fcaa4b8",
+            "2354463",
+            "01b5493",
+            "28f3b48"
+          ],
+          "legal_picks": [
+            "96b641d"
+          ],
+          "combined": [
+            "27a0226",
+            "fcaa4b8",
+            "2354463",
+            "01b5493",
+            "28f3b48",
+            "96b641d"
+          ]
+        },
+        "construction": "Apply only listed production source patches onto deployed baseline. No research tooling/default-off features or unrelated local changes in the release.",
+        "format": "NC2000 engine rules, six registered/three picked, level 50-55, picked level sum <=155, shared current corrected referee, blind native observation matching Web lifecycle, exact native HP retained, 27000 iterations, c=0.4, hp_buckets=16, no pondering. Same 24-team catalog and 103-team weighted belief prior as deployed. Uniform catalog matchup draws; pair swaps agent side while preserving teams and battle/search seeds.",
+        "screen": {
+          "games_per_arm": 96,
+          "seed": 2026100811,
+          "threads": 8,
+          "selection": "Highest mean score above 0.5. Ties prefer corrections, then legal_picks, then combined. No superiority or deployment from screening alone."
+        },
+        "confirmation": {
+          "games": 384,
+          "seed": 2026100812,
+          "threads": 8,
+          "selection": "One frozen selected arm only. No changing candidates or expanding sample after outcomes. Screen results are excluded from confirmation estimate."
+        },
+        "decision": "Deploy only if confirmation posterior P(mean pair score>0.5)>=0.90 under symmetric Dirichlet prior total mass 1 across pair scores {0,.25,.5,.75,1}, and >=0.85 under total mass 4; observed score>0.5, no truncated/failed matches, legal replay and regression/build/browser checks pass. Report posterior conditional on pool, rule, model, and budget. No claim of global optimality or human calibration.",
+        "posterior": {
+          "draws": 200000,
+          "seed": 2026100813,
+          "prior_masses": [
+            1,
+            4,
+            16
+          ],
+          "pair_score_values": [
+            0,
+            0.25,
+            0.5,
+            0.75,
+            1
+          ]
+        },
+        "controls": "Frozen arena/checker replay used previously. New workers: identity swapped pair control, deterministic repeat, full team validation. Existing record mutation controls retained. Test posterior on symmetric/positive/negative controls before measurement.",
+        "excluded": "Already deployed waiting/healing/EarlyPerish fixes are baseline, not candidate gains. Rejected capped rollout damage, EarlyRest, root revisits, learned solver, expensive certified-endgame integration and other default-off mechanisms have no qualifying regulation evidence; do not revive or tune them on this cohort.",
+        "old_data": "Previous 192-game combined comparison (99/93) remains inconclusive and is not pooled or extended. This is a newly authorized component comparison and independent confirmation with decision rule fixed before results."
+      }
+    },
+    "findings/release-strength-v1/selection.json": {
+      "sha256": "2f8182e544d4836bf8d2679f587493639a8ff3304165e552e06afdcdfe8f1275",
+      "data": {
+        "screen_scores": {
+          "corrections": 0.5104166666666666,
+          "legal_picks": 0.5208333333333334,
+          "combined": 0.5208333333333334
+        },
+        "selected": "combined",
+        "eligible": [
+          "corrections",
+          "combined"
+        ],
+        "basis": "Highest mean among candidates satisfying release rule conformance; separate confirmation required."
+      }
+    },
+    "findings/release-strength-v1/release-eligibility.json": {
+      "sha256": "066bf8203431c7fad6a52e7d88684fa93560cefe70d68162839cac8fcfa529f2",
+      "data": {
+        "reason": "Release runtime must include the corrected Hidden Power canonicalization used by the regulation referee. The legal-picks-only worker intentionally retains the deployed engine and is useful for component diagnosis, but its standalone host cannot pass the mandatory Hidden Power rule tests. Shipping it would not reproduce the tested rule environment.",
+        "eligible_release_arms": [
+          "corrections",
+          "combined"
+        ],
+        "diagnostic_only": [
+          "legal_picks"
+        ],
+        "selection": "Highest completed screening mean above 0.5 among eligible arms; original order breaks ties. Independent 384-game confirmation and probability thresholds unchanged.",
+        "timing": "After corrections screening (49/47), before inspecting the legal-picks or combined screening outcomes and before any confirmation. Changes eligibility on rule conformance, not win rate.",
+        "paused_runner_pid": 22667,
+        "finishing_arena_pid": 28444
+      }
+    },
+    "findings/release-strength-v1/decision.json": {
+      "sha256": "f5097ac34fc8a5b6cf80faa39d3a63cbcb9f0a85cdc1e08e64267535ee0d1d95",
+      "data": {
+        "status": "complete",
+        "decision": "no_deployment",
+        "baseline": "c7b11e882d75e552fd62c530012eb7c2d82b9e64",
+        "selected_candidate": "combined",
+        "candidate_release_commit": "f3751eae953ab45a62751bc42a4d9614a44972dd",
+        "screening": {
+          "screen_scores": {
+            "corrections": 0.5104166666666666,
+            "legal_picks": 0.5208333333333334,
+            "combined": 0.5208333333333334
+          },
+          "selected": "combined",
+          "eligible": [
+            "corrections",
+            "combined"
+          ],
+          "basis": "Highest mean among candidates satisfying release rule conformance; separate confirmation required."
+        },
+        "confirmation": {
+          "games": 384,
+          "wins": 196,
+          "losses": 188,
+          "ties": 0,
+          "score": 0.5104166666666666,
+          "posterior": {
+            "1": {
+              "probability_above_half": 0.679765,
+              "mean": 0.5103626943005182,
+              "credible95": [
+                0.4673466926904817,
+                0.5535932579661819
+              ],
+              "probability_below_49_percent": 0.17818
+            },
+            "4": {
+              "probability_above_half": 0.68093,
+              "mean": 0.5102040816326531,
+              "credible95": [
+                0.46740436857669965,
+                0.5532494984173594
+              ],
+              "probability_below_49_percent": 0.1782
+            },
+            "16": {
+              "probability_above_half": 0.6718,
+              "mean": 0.5096153846153846,
+              "credible95": [
+                0.4675838554614121,
+                0.5517017770089356
+              ],
+              "probability_below_49_percent": 0.180615
+            }
+          },
+          "replay": {
+            "games": 384,
+            "replayed_decisions": 18411,
+            "replayed_states": 9659,
+            "games_with_hidden_power": 161,
+            "hidden_power_uses": 370
+          },
+          "records_sha256": "ddbbcf94c82b0e82dc9a2a910b3053f9db83a985549605afc95924ff3f582c28"
+        },
+        "threshold_met": false,
+        "reason": "Independent confirmation probability of superiority is 0.679765, below the prespecified 0.90 primary threshold. No candidate has qualified release evidence. Do not add games or lower the threshold after results. This is inconclusive about true superiority, not proof of equivalence or optimality.",
+        "data_scope": "Current 24-team catalog, NC2000 rules, blind native observation, 27000 iterations per decision, paired side assignments, no human calibration. Screening outcomes excluded from confirmation.",
+        "public_deployment_performed": false,
+        "all_frozen_hashes_match": true,
+        "completed_at": "2026-10-08T06:15:56.413776+09:00"
+      }
+    },
+    "findings/release-strength-v1/validation.json": {
+      "sha256": "04e9683f034a365a050d29a916a6817075900ead250abd2b1d3ac2c0e3bf13f7",
+      "data": {
+        "isolated_regressions": {
+          "corrections": 150,
+          "legal_picks": 139,
+          "combined": 153
+        },
+        "legal_picks_only_regulation_negative_control": "All three Hidden Power canonicalization tests fail on the isolated uncorrected engine, confirming standalone release ineligibility.",
+        "worker_rebuilds": [
+          {
+            "arm": "combined",
+            "exact_replay_equivalence": true,
+            "games": 4,
+            "decisions": 123,
+            "frozen_binary_sha256": "a562f35b73d03a47959ea3d22a495773c7ffebcc09bf5de0d2a3eac47c86f9f9",
+            "isolated_binary_sha256": "a91b33892cccf6aa3545edba3cff8b1238b4c3c88748cfeda5792c61a4257ee9"
+          },
+          {
+            "arm": "corrections",
+            "exact_replay_equivalence": true,
+            "games": 4,
+            "decisions": 153,
+            "frozen_binary_sha256": "afec630e928078d019b5fd0fc786b64332df58d3870357cd632d583e8f4090e5",
+            "isolated_binary_sha256": "9fcac7f16e4b40ec0244c51ac7ee1b3d70210a19a2c6047fef277e34bd9a52a2"
+          },
+          {
+            "arm": "legal_picks",
+            "exact_replay_equivalence": true,
+            "games": 4,
+            "decisions": 123,
+            "frozen_binary_sha256": "72c21d0d2119687141b0332c12d558610a4c148d7144cc274269e1c3df11518c",
+            "isolated_binary_sha256": "6d16ee18f7ac18636cb22a28f8c011bd863a02e2dfac820d2450ac271e47bd15"
+          }
+        ],
+        "shared_target_test_outputs": "Retained but superseded by isolated target results. The shared target reused an engine test binary across checkouts. No production source or frozen matchup binary changed; every worker was independently rebuilt and matched the original complete smoke trajectories except timing.",
+        "scope": "Selected candidate must additionally pass Web/wasm validation. No deployment from these controls or screening alone."
+      }
+    },
+    "findings/release-strength-v1/release-heads.json": {
+      "sha256": "75956548cdd7b042a9098c21d3e7cc44c6aa55056b1feb8387520e3b7f1542c4",
+      "data": {
+        "corrections": {
+          "release_commit": "32242f0ac91bfb4672cd639d9c5c8495f665db3c",
+          "frozen_runtime_commit": "19e0afb8c4ac3f4c510c6b6294d7b611ba3378d5",
+          "runtime_unchanged": true,
+          "tests_passed": 150,
+          "tests_sha256": {
+            "findings/release-strength-v1/corrections-isolated-tests.txt": "df86c4ef4f5967a774669dc27ba0de77c78ce9e1975a172355e0d1b8457a6873",
+            "findings/release-strength-v1/corrections-isolated-engine-tests.txt": "9a83de15d0452e7ae4d0b8dcb59826b53ae40cb28184d864b9c5769ea3529567"
+          },
+          "display_compatibility_patch": "752ad3c:crates/wasm/src/lib.rs only",
+          "separate_target_directory": true
+        },
+        "legal_picks": {
+          "release_commit": "c0c528f7031f261f7c64abb8a2468ab034c03b41",
+          "frozen_runtime_commit": "68742c332174f75f20a9cb9cda8ed60cd26f9317",
+          "runtime_unchanged": true,
+          "tests_passed": 139,
+          "tests_sha256": {
+            "findings/release-strength-v1/legal_picks-isolated-tests.txt": "8064db474c4a36cb3b9e932ace7b3b1490cabe34e4f9315132ac560328c04d49"
+          },
+          "separate_target_directory": true
+        },
+        "combined": {
+          "release_commit": "f3751eae953ab45a62751bc42a4d9614a44972dd",
+          "frozen_runtime_commit": "2b708e1933ef4cd79df1129595fa2dd076846ed0",
+          "runtime_unchanged": true,
+          "tests_passed": 153,
+          "tests_sha256": {
+            "findings/release-strength-v1/combined-isolated-tests.txt": "0d4341edd8cafd7f8f24e93d790297633bbbd545a4e49c0623d32c72fe3afa54",
+            "findings/release-strength-v1/combined-isolated-engine-tests.txt": "cc22af89827bd3d7919f1c434345c01a5ff659ea65b7f2edf9240b73a464e3eb"
+          },
+          "display_compatibility_patch": "752ad3c:crates/wasm/src/lib.rs only",
+          "separate_target_directory": true
+        }
+      }
+    },
+    "findings/release-strength-v1/browser-smoke.json": {
+      "sha256": "09bcf21549d9b2aa4ea4de0405c3abe1b3f688cce2dc552d3c64bb1d4a6a2094",
+      "data": {
+        "headless": true,
+        "devicePerformanceClaim": false,
+        "baseIterations": 27000,
+        "results": [
+          {
+            "width": 834,
+            "status": 200,
+            "turn": "Turn 4",
+            "moves": 4
+          },
+          {
+            "width": 390,
+            "startScreen": true
+          }
+        ],
+        "errors": [],
+        "failed": []
+      }
+    },
+    "findings/release-strength-v1/screen-corrections/summary.json": {
+      "sha256": "80fded92943a649adf82de70c4bd4515b2c6a5d39141c49e3597a59a8e1c9268",
+      "data": {
+        "games": 96,
+        "decisions": [
+          1976,
+          1976
+        ],
+        "wins": 49,
+        "losses": 47,
+        "ties": 0,
+        "pair_scores": [
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          1.0,
+          0.5,
+          0.5,
+          0.0,
+          0.0,
+          0.5,
+          0.5,
+          0.0,
+          1.0,
+          0.0,
+          0.5,
+          0.0,
+          0.5,
+          1.0,
+          0.0
+        ],
+        "replay": {
+          "games": 96,
+          "replayed_decisions": 3952,
+          "replayed_states": 2094,
+          "games_with_hidden_power": 34,
+          "hidden_power_uses": 95
+        },
+        "score": 0.5104166666666666,
+        "posterior": {
+          "1": {
+            "probability_above_half": 0.594335,
+            "mean": 0.5102040816326531,
+            "credible95": [
+              0.4266181365035184,
+              0.5932428956517062
+            ],
+            "probability_below_49_percent": 0.316545
+          },
+          "4": {
+            "probability_above_half": 0.59387,
+            "mean": 0.5096153846153846,
+            "credible95": [
+              0.4279554391924188,
+              0.5912632109668533
+            ],
+            "probability_below_49_percent": 0.31596
+          },
+          "16": {
+            "probability_above_half": 0.578215,
+            "mean": 0.5078125,
+            "credible95": [
+              0.43144415288157906,
+              0.5841046249747073
+            ],
+            "probability_below_49_percent": 0.324755
+          }
+        },
+        "confirmation_threshold_met": false,
+        "records_sha256": "7747b58cf66acaad063adc2bafbab62675321590ce7cc5e2a4c32f2920082ce7",
+        "manifest": {
+          "type": "manifest",
+          "config": {
+            "schema": "nc2000-native-deployed-duel-v1",
+            "seed": 2026100811,
+            "games": 96,
+            "threads": 8,
+            "pool": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ce55d34048b2ece4-team-pool.json",
+            "dex": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+            "agents": [
+              {
+                "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/afec630e928078d0-corrections-worker",
+                "args": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                  "27000"
+                ],
+                "artifacts": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+                ]
+              },
+              {
+                "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/8c973d54ce32f0d3-8c973d54ce32f0d3-deployed-worker",
+                "args": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                  "27000"
+                ],
+                "artifacts": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+                ]
+              }
+            ],
+            "record": true,
+            "crn_agent_seeds": true
+          },
+          "hashes": {
+            "arena": "sha256:55e1aa4497b61773edb030a60086023e72abffaf0dfe607c904b4140abc0a0c3",
+            "pool": "sha256:ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+            "dex": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+            "agents": [
+              {
+                "program": "sha256:afec630e928078d019b5fd0fc786b64332df58d3870357cd632d583e8f4090e5",
+                "artifacts": [
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                  },
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                  }
+                ]
+              },
+              {
+                "program": "sha256:8c973d54ce32f0d3420e9439ef4fe1349d50a51e6c8c0d4cd556216c2040178f",
+                "artifacts": [
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                  },
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "findings/release-strength-v1/screen-legal_picks/summary.json": {
+      "sha256": "2c97204b30d956da8e20e2f22d8fae926b7a27e309f591cf7540a16a41f14004",
+      "data": {
+        "games": 96,
+        "decisions": [
+          2097,
+          2100
+        ],
+        "wins": 50,
+        "losses": 46,
+        "ties": 0,
+        "pair_scores": [
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          1.0,
+          0.5,
+          0.5,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.5,
+          0.0,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.0,
+          0.5,
+          0.0,
+          0.5,
+          0.0,
+          0.0,
+          1.0,
+          0.5,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          0.5
+        ],
+        "replay": {
+          "games": 96,
+          "replayed_decisions": 4197,
+          "replayed_states": 2205,
+          "games_with_hidden_power": 42,
+          "hidden_power_uses": 124
+        },
+        "score": 0.5208333333333334,
+        "posterior": {
+          "1": {
+            "probability_above_half": 0.664865,
+            "mean": 0.5204081632653061,
+            "credible95": [
+              0.4264529906747683,
+              0.6141358366423323
+            ],
+            "probability_below_49_percent": 0.26352
+          },
+          "4": {
+            "probability_above_half": 0.66165,
+            "mean": 0.5192307692307693,
+            "credible95": [
+              0.4275146698857595,
+              0.6104753636268606
+            ],
+            "probability_below_49_percent": 0.264445
+          },
+          "16": {
+            "probability_above_half": 0.642775,
+            "mean": 0.515625,
+            "credible95": [
+              0.43208590932217983,
+              0.5986604610766927
+            ],
+            "probability_below_49_percent": 0.27515
+          }
+        },
+        "confirmation_threshold_met": false,
+        "records_sha256": "67e4d643620159e5702cd4ce1a493a2be4bd20f8eef31396f90771f6e6a2d278",
+        "manifest": {
+          "type": "manifest",
+          "config": {
+            "schema": "nc2000-native-deployed-duel-v1",
+            "seed": 2026100811,
+            "games": 96,
+            "threads": 8,
+            "pool": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ce55d34048b2ece4-team-pool.json",
+            "dex": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+            "agents": [
+              {
+                "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/72c21d0d21196871-legal_picks-worker",
+                "args": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                  "27000"
+                ],
+                "artifacts": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+                ]
+              },
+              {
+                "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/8c973d54ce32f0d3-8c973d54ce32f0d3-deployed-worker",
+                "args": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                  "27000"
+                ],
+                "artifacts": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+                ]
+              }
+            ],
+            "record": true,
+            "crn_agent_seeds": true
+          },
+          "hashes": {
+            "arena": "sha256:55e1aa4497b61773edb030a60086023e72abffaf0dfe607c904b4140abc0a0c3",
+            "pool": "sha256:ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+            "dex": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+            "agents": [
+              {
+                "program": "sha256:72c21d0d2119687141b0332c12d558610a4c148d7144cc274269e1c3df11518c",
+                "artifacts": [
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                  },
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                  }
+                ]
+              },
+              {
+                "program": "sha256:8c973d54ce32f0d3420e9439ef4fe1349d50a51e6c8c0d4cd556216c2040178f",
+                "artifacts": [
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                  },
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "findings/release-strength-v1/screen-combined/summary.json": {
+      "sha256": "2f6b018281afe630e855428474797e478717ffa3fbf4bcf602f155b74c9a72d1",
+      "data": {
+        "games": 96,
+        "decisions": [
+          2128,
+          2121
+        ],
+        "wins": 50,
+        "losses": 46,
+        "ties": 0,
+        "pair_scores": [
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          1.0,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.0,
+          1.0,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          0.0,
+          0.5,
+          0.0,
+          1.0,
+          0.0,
+          0.5,
+          1.0,
+          0.5,
+          0.0,
+          0.5,
+          0.0,
+          0.5,
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "replay": {
+          "games": 96,
+          "replayed_decisions": 4249,
+          "replayed_states": 2233,
+          "games_with_hidden_power": 40,
+          "hidden_power_uses": 90
+        },
+        "score": 0.5208333333333334,
+        "posterior": {
+          "1": {
+            "probability_above_half": 0.664865,
+            "mean": 0.5204081632653061,
+            "credible95": [
+              0.4264529906747683,
+              0.6141358366423323
+            ],
+            "probability_below_49_percent": 0.26352
+          },
+          "4": {
+            "probability_above_half": 0.66165,
+            "mean": 0.5192307692307693,
+            "credible95": [
+              0.4275146698857595,
+              0.6104753636268606
+            ],
+            "probability_below_49_percent": 0.264445
+          },
+          "16": {
+            "probability_above_half": 0.642775,
+            "mean": 0.515625,
+            "credible95": [
+              0.43208590932217983,
+              0.5986604610766927
+            ],
+            "probability_below_49_percent": 0.27515
+          }
+        },
+        "confirmation_threshold_met": false,
+        "records_sha256": "3a21d9ee3582c12a57dcf831190c687763fea90c2f9c61df5bd06b1defce6070",
+        "manifest": {
+          "type": "manifest",
+          "config": {
+            "schema": "nc2000-native-deployed-duel-v1",
+            "seed": 2026100811,
+            "games": 96,
+            "threads": 8,
+            "pool": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ce55d34048b2ece4-team-pool.json",
+            "dex": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+            "agents": [
+              {
+                "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/a562f35b73d03a47-combined-worker",
+                "args": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                  "27000"
+                ],
+                "artifacts": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+                ]
+              },
+              {
+                "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/8c973d54ce32f0d3-8c973d54ce32f0d3-deployed-worker",
+                "args": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                  "27000"
+                ],
+                "artifacts": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+                ]
+              }
+            ],
+            "record": true,
+            "crn_agent_seeds": true
+          },
+          "hashes": {
+            "arena": "sha256:55e1aa4497b61773edb030a60086023e72abffaf0dfe607c904b4140abc0a0c3",
+            "pool": "sha256:ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+            "dex": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+            "agents": [
+              {
+                "program": "sha256:a562f35b73d03a47959ea3d22a495773c7ffebcc09bf5de0d2a3eac47c86f9f9",
+                "artifacts": [
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                  },
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                  }
+                ]
+              },
+              {
+                "program": "sha256:8c973d54ce32f0d3420e9439ef4fe1349d50a51e6c8c0d4cd556216c2040178f",
+                "artifacts": [
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                  },
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "findings/release-strength-v1/confirm-combined/summary.json": {
+      "sha256": "787c9c6807cd7944740632812d34dd211498533c8a8fd12ef0892fa02022c557",
+      "data": {
+        "games": 384,
+        "decisions": [
+          9198,
+          9213
+        ],
+        "wins": 196,
+        "losses": 188,
+        "ties": 0,
+        "pair_scores": [
+          0.5,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.0,
+          1.0,
+          1.0,
+          0.0,
+          0.0,
+          0.5,
+          1.0,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          1.0,
+          0.0,
+          0.5,
+          0.0,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          1.0,
+          0.0,
+          0.0,
+          0.5,
+          1.0,
+          0.5,
+          0.0,
+          0.0,
+          0.0,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.0,
+          0.5,
+          1.0,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          1.0,
+          0.0,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.0,
+          1.0,
+          1.0,
+          0.5,
+          0.5,
+          0.0,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.0,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.0,
+          0.5,
+          0.5,
+          1.0,
+          0.0,
+          0.5,
+          1.0,
+          0.5,
+          0.0,
+          0.5
+        ],
+        "replay": {
+          "games": 384,
+          "replayed_decisions": 18411,
+          "replayed_states": 9659,
+          "games_with_hidden_power": 161,
+          "hidden_power_uses": 370
+        },
+        "score": 0.5104166666666666,
+        "posterior": {
+          "1": {
+            "probability_above_half": 0.679765,
+            "mean": 0.5103626943005182,
+            "credible95": [
+              0.4673466926904817,
+              0.5535932579661819
+            ],
+            "probability_below_49_percent": 0.17818
+          },
+          "4": {
+            "probability_above_half": 0.68093,
+            "mean": 0.5102040816326531,
+            "credible95": [
+              0.46740436857669965,
+              0.5532494984173594
+            ],
+            "probability_below_49_percent": 0.1782
+          },
+          "16": {
+            "probability_above_half": 0.6718,
+            "mean": 0.5096153846153846,
+            "credible95": [
+              0.4675838554614121,
+              0.5517017770089356
+            ],
+            "probability_below_49_percent": 0.180615
+          }
+        },
+        "confirmation_threshold_met": false,
+        "records_sha256": "ddbbcf94c82b0e82dc9a2a910b3053f9db83a985549605afc95924ff3f582c28",
+        "manifest": {
+          "type": "manifest",
+          "config": {
+            "schema": "nc2000-native-deployed-duel-v1",
+            "seed": 2026100812,
+            "games": 384,
+            "threads": 8,
+            "pool": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ce55d34048b2ece4-team-pool.json",
+            "dex": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+            "agents": [
+              {
+                "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/a562f35b73d03a47-combined-worker",
+                "args": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                  "27000"
+                ],
+                "artifacts": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+                ]
+              },
+              {
+                "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/8c973d54ce32f0d3-8c973d54ce32f0d3-deployed-worker",
+                "args": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                  "27000"
+                ],
+                "artifacts": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+                ]
+              }
+            ],
+            "record": true,
+            "crn_agent_seeds": true
+          },
+          "hashes": {
+            "arena": "sha256:55e1aa4497b61773edb030a60086023e72abffaf0dfe607c904b4140abc0a0c3",
+            "pool": "sha256:ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+            "dex": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+            "agents": [
+              {
+                "program": "sha256:a562f35b73d03a47959ea3d22a495773c7ffebcc09bf5de0d2a3eac47c86f9f9",
+                "artifacts": [
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                  },
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                  }
+                ]
+              },
+              {
+                "program": "sha256:8c973d54ce32f0d3420e9439ef4fe1349d50a51e6c8c0d4cd556216c2040178f",
+                "artifacts": [
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                  },
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
     }
   },
   "foresight_fix": {
@@ -57900,6 +59007,180 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
+    "checked_at": "2026-10-08T06:15:56.413776+09:00",
+    "study": "release-strength-v1",
+    "status": "complete",
+    "strength_vs_deployed": "not_established",
+    "deployed": false,
+    "release_strength": {
+      "study": "release-strength-v1",
+      "status": "complete",
+      "baseline": "c7b11e8",
+      "screen_games_per_arm": 96,
+      "confirmation_games": 384,
+      "deployed": false,
+      "progress": {
+        "corrections": {
+          "completed": 96,
+          "planned": 96,
+          "wins": 49,
+          "losses": 47,
+          "ties": 0,
+          "score": 0.5104166666666666
+        },
+        "legal_picks": {
+          "completed": 96,
+          "planned": 96,
+          "wins": 50,
+          "losses": 46,
+          "ties": 0,
+          "score": 0.5208333333333334
+        },
+        "combined": {
+          "completed": 96,
+          "planned": 96,
+          "wins": 50,
+          "losses": 46,
+          "ties": 0,
+          "score": 0.5208333333333334
+        },
+        "selected": "combined",
+        "confirmation": {
+          "arm": "combined",
+          "completed": 384,
+          "planned": 384
+        },
+        "decision": "no_deployment"
+      },
+      "decision": "no_deployment",
+      "result": {
+        "games": 384,
+        "wins": 196,
+        "losses": 188,
+        "ties": 0,
+        "score": 0.5104166666666666,
+        "posterior": {
+          "1": {
+            "probability_above_half": 0.679765,
+            "mean": 0.5103626943005182,
+            "credible95": [
+              0.4673466926904817,
+              0.5535932579661819
+            ],
+            "probability_below_49_percent": 0.17818
+          },
+          "4": {
+            "probability_above_half": 0.68093,
+            "mean": 0.5102040816326531,
+            "credible95": [
+              0.46740436857669965,
+              0.5532494984173594
+            ],
+            "probability_below_49_percent": 0.1782
+          },
+          "16": {
+            "probability_above_half": 0.6718,
+            "mean": 0.5096153846153846,
+            "credible95": [
+              0.4675838554614121,
+              0.5517017770089356
+            ],
+            "probability_below_49_percent": 0.180615
+          }
+        },
+        "replay": {
+          "games": 384,
+          "replayed_decisions": 18411,
+          "replayed_states": 9659,
+          "games_with_hidden_power": 161,
+          "hidden_power_uses": 370
+        },
+        "records_sha256": "ddbbcf94c82b0e82dc9a2a910b3053f9db83a985549605afc95924ff3f582c28"
+      }
+    },
+    "previous_native_comparison": {
+      "wins": 99,
+      "losses": 93,
+      "study": "native-deployed-duel-v1",
+      "not_pooled": true
+    }
+  },
+  "native_endgame_census": {
+    "status": "complete",
+    "selected_roots": 360,
+    "selected_games": 82,
+    "new_policy_error_proven": false,
+    "strength_improvement_proven": false,
+    "next": "Bound action losses while accounting for remaining hidden information."
+  },
+  "native_endgame_bounds": {
+    "status": "complete",
+    "roots": 360,
+    "refined_roots": 70,
+    "small_fixed_world_pure_loss_roots": 41,
+    "unresolved_roots": 319,
+    "new_blind_policy_error_proven": false,
+    "strength_improvement_proven": false,
+    "next": "Branch replay-verified histories through alternative legal opponent actions while preserving the observer/belief lifecycle.",
+    "quotient_confirmation_roots": 64,
+    "loss_lower_screen_roots": 70
+  },
+  "native_endgame_quotient": {
+    "status": "complete",
+    "confirmation_roots": 64,
+    "upper_improved": 39,
+    "upper_worsened": 4,
+    "upper_unchanged": 21,
+    "new_small_loss_in_confirmation": 0,
+    "new_small_loss_in_diagnostics": 1,
+    "ordinary_bot_changed": false,
+    "strength_improvement_proven": false
+  },
+  "native_loss_lower": {
+    "status": "complete",
+    "roots": 70,
+    "above_threshold": 0,
+    "at_most_threshold": 4,
+    "new_small_loss_roots": 2,
+    "ordinary_bot_changed": false,
+    "strength_improvement_proven": false
+  },
+  "native_counterfactual": {
+    "status": "complete",
+    "parents": 82,
+    "branches": 328,
+    "searches": 210,
+    "exact_search_controls": 45,
+    "novel_eligible_states": 151,
+    "novel_source_games": 57,
+    "above_threshold": 0,
+    "at_most_threshold": 29,
+    "unresolved": 122,
+    "ordinary_bot_changed": false,
+    "strength_improvement_proven": false
+  },
+  "native_resource_fibers": {
+    "status": "complete",
+    "roots": 6,
+    "hp_only_count_reduction_min": 0.9149009120208462,
+    "hp_only_count_reduction_max": 0.9933014089185374,
+    "semantic_quotient_proven": false,
+    "ordinary_bot_changed": false,
+    "strength_improvement_proven": false
+  },
+  "native_region_solver": {
+    "status": "complete",
+    "decision": "do_not_integrate",
+    "roots": 6,
+    "calls_per_candidate_pass": 7403,
+    "eligible_per_candidate_pass": 12,
+    "hits_per_candidate_pass": 0,
+    "changed_root_bounds": 0,
+    "ordinary_bot_changed": false,
+    "main_solver_changed": false,
+    "strength_improvement_proven": false
+  },
+  "previous_report_before_release_strength": {
     "checked_at": "2026-10-08T05:03:49.423433+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
@@ -57993,7 +59274,7 @@
     "followup_priority_substitute_format": "priority-substitute-format-v1",
     "release_strength": {
       "study": "release-strength-v1",
-      "status": "confirmation",
+      "status": "complete",
       "baseline": "c7b11e8",
       "screen_games_per_arm": 96,
       "confirmation_games": 384,
@@ -58026,85 +59307,56 @@
         "selected": "combined",
         "confirmation": {
           "arm": "combined",
-          "completed": 39,
+          "completed": 384,
           "planned": 384
-        }
+        },
+        "decision": "no_deployment"
+      },
+      "decision": "no_deployment",
+      "result": {
+        "games": 384,
+        "wins": 196,
+        "losses": 188,
+        "ties": 0,
+        "score": 0.5104166666666666,
+        "posterior": {
+          "1": {
+            "probability_above_half": 0.679765,
+            "mean": 0.5103626943005182,
+            "credible95": [
+              0.4673466926904817,
+              0.5535932579661819
+            ],
+            "probability_below_49_percent": 0.17818
+          },
+          "4": {
+            "probability_above_half": 0.68093,
+            "mean": 0.5102040816326531,
+            "credible95": [
+              0.46740436857669965,
+              0.5532494984173594
+            ],
+            "probability_below_49_percent": 0.1782
+          },
+          "16": {
+            "probability_above_half": 0.6718,
+            "mean": 0.5096153846153846,
+            "credible95": [
+              0.4675838554614121,
+              0.5517017770089356
+            ],
+            "probability_below_49_percent": 0.180615
+          }
+        },
+        "replay": {
+          "games": 384,
+          "replayed_decisions": 18411,
+          "replayed_states": 9659,
+          "games_with_hidden_power": 161,
+          "hidden_power_uses": 370
+        },
+        "records_sha256": "ddbbcf94c82b0e82dc9a2a910b3053f9db83a985549605afc95924ff3f582c28"
       }
     }
-  },
-  "native_endgame_census": {
-    "status": "complete",
-    "selected_roots": 360,
-    "selected_games": 82,
-    "new_policy_error_proven": false,
-    "strength_improvement_proven": false,
-    "next": "Bound action losses while accounting for remaining hidden information."
-  },
-  "native_endgame_bounds": {
-    "status": "complete",
-    "roots": 360,
-    "refined_roots": 70,
-    "small_fixed_world_pure_loss_roots": 41,
-    "unresolved_roots": 319,
-    "new_blind_policy_error_proven": false,
-    "strength_improvement_proven": false,
-    "next": "Branch replay-verified histories through alternative legal opponent actions while preserving the observer/belief lifecycle.",
-    "quotient_confirmation_roots": 64,
-    "loss_lower_screen_roots": 70
-  },
-  "native_endgame_quotient": {
-    "status": "complete",
-    "confirmation_roots": 64,
-    "upper_improved": 39,
-    "upper_worsened": 4,
-    "upper_unchanged": 21,
-    "new_small_loss_in_confirmation": 0,
-    "new_small_loss_in_diagnostics": 1,
-    "ordinary_bot_changed": false,
-    "strength_improvement_proven": false
-  },
-  "native_loss_lower": {
-    "status": "complete",
-    "roots": 70,
-    "above_threshold": 0,
-    "at_most_threshold": 4,
-    "new_small_loss_roots": 2,
-    "ordinary_bot_changed": false,
-    "strength_improvement_proven": false
-  },
-  "native_counterfactual": {
-    "status": "complete",
-    "parents": 82,
-    "branches": 328,
-    "searches": 210,
-    "exact_search_controls": 45,
-    "novel_eligible_states": 151,
-    "novel_source_games": 57,
-    "above_threshold": 0,
-    "at_most_threshold": 29,
-    "unresolved": 122,
-    "ordinary_bot_changed": false,
-    "strength_improvement_proven": false
-  },
-  "native_resource_fibers": {
-    "status": "complete",
-    "roots": 6,
-    "hp_only_count_reduction_min": 0.9149009120208462,
-    "hp_only_count_reduction_max": 0.9933014089185374,
-    "semantic_quotient_proven": false,
-    "ordinary_bot_changed": false,
-    "strength_improvement_proven": false
-  },
-  "native_region_solver": {
-    "status": "complete",
-    "decision": "do_not_integrate",
-    "roots": 6,
-    "calls_per_candidate_pass": 7403,
-    "eligible_per_candidate_pass": 12,
-    "hits_per_candidate_pass": 0,
-    "changed_root_bounds": 0,
-    "ordinary_bot_changed": false,
-    "main_solver_changed": false,
-    "strength_improvement_proven": false
   }
 }
