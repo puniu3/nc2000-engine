@@ -1,0 +1,46 @@
+{
+  "schema": "nc2000-native-fixed-reply-refine-v1",
+  "protocol_sha256": "512bf0194130a584106a2858af473a9b7757ad3742e62ad805eb888dd8b64ec9",
+  "records_sha256": "988b8abb611a4ba5d788e9846395c430bda0e571be698a385c4f551b666d64b8",
+  "repeat_sha256": "793102353e6b4bdf362a36cec18365f13651153125cf09ada2f0dfba6d1a0f8b",
+  "results": [
+    {
+      "id": "actual-crosschop",
+      "classification": "actual",
+      "target": "move rest",
+      "unrestricted_target_upper": 0.09572707038387768,
+      "alternative": "move drillpeck",
+      "alternative_lower": 0.045156087695040474,
+      "selected_loss_lower": 0.0,
+      "positive_loss_proven": false,
+      "stop": "NodeBudget",
+      "runs": 1459618,
+      "nodes": 179424,
+      "elapsed_ms": 37109.836917
+    },
+    {
+      "id": "actual-rockslide",
+      "classification": "actual",
+      "target": "move rest",
+      "unrestricted_target_upper": 0.10546875,
+      "alternative": "move drillpeck",
+      "alternative_lower": 0.045156087695040474,
+      "selected_loss_lower": 0.0,
+      "positive_loss_proven": false,
+      "stop": "NodeBudget",
+      "runs": 547698,
+      "nodes": 200031,
+      "elapsed_ms": 15523.537624999999
+    }
+  ],
+  "repeats_match": true,
+  "rejected_mutations": [
+    "missing_job",
+    "wrong_first_reply",
+    "changed_continuation",
+    "false_upper"
+  ],
+  "actual_positive_loss_certificates": 0,
+  "ordinary_bot_changed": false,
+  "strength_improvement_proven": false
+}

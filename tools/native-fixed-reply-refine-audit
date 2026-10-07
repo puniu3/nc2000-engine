@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+import subprocess
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def rows(path):
+    data = Path(path).read_bytes()
+    if str(path).endswith('.gz'):
+        data = gzip.decompress(data)
+    return [json.loads(line) for line in data.splitlines()]
+
+
+def check(records, protocol, roots, prior):
+    normalized = copy.deepcopy(records)
+    assert len(records) == len(protocol['jobs'])
+    for record, r, job in zip(records, normalized, protocol['jobs']):
+        assert record['opponent_first'] == job['opponent_first'] == 'rockslide'
+        assert record['restricted_actions'][1-record['side']] == ['move '+job['opponent_first']]
+        assert 'move '+job['opponent_first'] in record['actions'][1-record['side']]
+        r['restricted_actions'][1-r['side']] = ['move '+job['opponent_priority'][0]]
+    return runpy.run_path('tools/native-fixed-reply-audit')['check'](normalized, protocol, roots, prior)
+
+
+def main():
+    p = Path('findings/native-fixed-reply-refine-v1')
+    t = Path('tmp/native-fixed-reply-refine-v1')
+    protocol = json.loads((p/'protocol.json').read_text())
+    assert digest(t/'solver') == protocol['solver_binary_sha256']
+    assert digest(p/'native_fixed_reply_refine.rs') == protocol['helper_sha256']
+    assert digest('findings/native-fixed-reply-v1/summary.json') == protocol['prior_summary_sha256']
+    assert digest(protocol['reference_archive']) == protocol['reference_archive_sha256']
+    roots_path = 'tmp/native-endgame-census-v1/roots.jsonl'
+    assert digest(roots_path) == protocol['roots_sha256']
+    source = subprocess.check_output(['git', 'show', protocol['implementation_commit']+':crates/bot/src/bounds.rs'])
+    assert hashlib.sha256(source).hexdigest() == protocol['bounds_sha256']
+    roots = {(r['record']['game'], r['record']['frame']):r for r in rows(roots_path)}
+    prior = {(r['game'], r['frame']):r for r in rows(protocol['reference_archive'])}
+    records = rows(t/'main.jsonl')
+    results = check(records, protocol, roots, prior)
+    repeat = rows(t/'repeat.jsonl')
+    assert [{k:v for k,v in r.items() if k!='elapsed_ms'} for r in records] == [{k:v for k,v in r.items() if k!='elapsed_ms'} for r in repeat]
+    runpy.run_path('tools/native-endgame-bounds-audit')['derived'](prior[104,52])
+    rejected = []
+    for kind in ['missing_job','wrong_first_reply','changed_continuation','false_upper']:
+        changed = copy.deepcopy(records)
+        if kind == 'missing_job':
+            changed.pop()
+        elif kind == 'wrong_first_reply':
+            changed[0]['opponent_first'] = 'crosschop'
+        elif kind == 'changed_continuation':
+            changed[0]['opponent_priority'].reverse()
+        else:
+            changed[0]['unrestricted_target_upper'] = -1
+        try:
+            check(changed, protocol, roots, prior)
+        except AssertionError:
+            rejected.append(kind)
+        else:
+            raise AssertionError('accepted '+kind)
+    print(json.dumps(dict(schema=protocol['schema'], protocol_sha256=digest(p/'protocol.json'),
+                          records_sha256=digest(t/'main.jsonl'), repeat_sha256=digest(t/'repeat.jsonl'),
+                          results=results, repeats_match=True, rejected_mutations=rejected,
+                          actual_positive_loss_certificates=sum(r['positive_loss_proven'] for r in results),
+                          ordinary_bot_changed=False, strength_improvement_proven=False), indent=2))
+
+
+if __name__ == '__main__':
+    main()
