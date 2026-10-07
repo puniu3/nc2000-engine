@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+import gzip
+import hashlib
+import json
+import runpy
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def main():
+    record_path, roots_path = map(Path,sys.argv[1:])
+    directory = Path('findings/native-endgame-structure-v1')
+    protocol = json.loads((directory/'protocol.json').read_text())
+    roots = sorted((json.loads(l) for l in roots_path.read_text().splitlines()), key=lambda r:(r['record']['game'],r['record']['frame']))
+    assert digest(roots_path) == protocol['roots_sha256']
+    assert digest(directory/'native_endgame_structure.rs') == protocol['helper_sha256']
+    assert digest('tmp/native-endgame-structure-v1/solver') == protocol['solver_binary_sha256']
+    base_rows = [json.loads(l) for l in gzip.decompress(Path('findings/native-endgame-refine-v1/records.jsonl.gz').read_bytes()).decode().splitlines()]
+    base = {(r['game'],r['frame']):r for r in base_rows}
+    strata = {0:[],1:[],2:[]}
+    for i,root in enumerate(roots):
+        r=root['record']; key=r['game'],r['frame']
+        if key not in base or base[key]['pure_action_losses'][base[key]['selected']][1] <= .02:
+            continue
+        healing = sum(any(m['id'] in protocol['healing_moves'] and m['pp'] > 0 for m in r['diagnostic_truth'][s]['moves']) for s in ['own','opponent'])
+        if len(strata[healing]) < 2:
+            strata[healing].append(i)
+    assert protocol['indices'] == sorted(i for group in strata.values() for i in group)
+    records = [json.loads(l) for l in record_path.read_text().splitlines()]
+    result = runpy.run_path('tools/native-endgame-bounds-audit')['check'](records,protocol,roots)
+    diagnostics = []
+    for r in sorted(records,key=lambda r:(r['game'],r['frame'])):
+        original = base[r['game'],r['frame']]
+        assert {k:v for k,v in r.items() if k not in ['elapsed_ms','diagnostics']} == {k:v for k,v in original.items() if k!='elapsed_ms'}
+        d=r['diagnostics']; g=d['graph']; q=d['retained_claw_projection']
+        assert g['unexpanded_nodes']+g['initialized_nodes']==r['nodes']
+        assert g['stored_battles']==q['retained']
+        assert sum(int(k)*v for k,v in q['group_size_histogram'].items())==q['retained']
+        assert sum(q['group_size_histogram'].values())==q['projected_keys']
+        for bounds,c in zip(r['cells_p0'],d['root_chance']):
+            assert abs(bounds[1]-bounds[0]-c['pending_mass']-c['child_uncertainty']) < 1e-7
+        diagnostics.append({'game':r['game'],'frame':r['frame'],'nodes':r['nodes'],
+                            'graph':g,'retained_claw_projection':q,'stats':d['stats'],
+                            'root_pending_mass_sum':sum(c['pending_mass'] for c in d['root_chance']),
+                            'root_child_uncertainty_sum':sum(c['child_uncertainty'] for c in d['root_chance'])})
+    result.update({'schema':protocol['schema'],'matches_frozen_six_roots_except_time':True,
+                   'stratified_selection_verified':True,'protocol_sha256':digest(directory/'protocol.json'),
+                   'records_sha256':digest(record_path),'diagnostics':diagnostics})
+    print(json.dumps(result,indent=2))
+
+
+if __name__ == '__main__':
+    main()
