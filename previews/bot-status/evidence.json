@@ -17254,6 +17254,165 @@
     },
     "findings/stream-opening-mix-v1/proofs.jsonl.gz": {
       "sha256": "79f3917a7447a04d8ec7a2b0a175d081d52882ed03cea7ae4cd0e93cf5ed70d9"
+    },
+    "findings/hybrid-opening-mix-v1/summary.json": {
+      "sha256": "1547cd34bca265a83b6f7539844970ada1233edac0566d1ca8f9922383249ff1",
+      "data": {
+        "calls": 3021,
+        "proof_runs": 851628,
+        "kind_counts": {
+          "swordsdance": 2508,
+          "rockslide": 507,
+          "upper": 6
+        },
+        "root_branches_pruned": 11640,
+        "certificate_nodes": 119002,
+        "active_worlds": [
+          "berry/rest",
+          "berry/bide",
+          "berry/doubleedge",
+          "brightpowder/detect",
+          "brightpowder/doubleedge",
+          "focusband/doubleedge"
+        ],
+        "mix": [
+          0.44423821918360906,
+          0.5557617808163908
+        ],
+        "bounds": [
+          0.08926996926318884,
+          0.08928985574286716
+        ],
+        "negative_controls": [
+          "inflated_lower",
+          "invalid_mix",
+          "wrong_adversary"
+        ],
+        "audit_runs": 1011316,
+        "audit_cells": 83394,
+        "proof_depth_work": {
+          "1": {
+            "nodes": 14576,
+            "runs": 595233,
+            "branches": 58105,
+            "partial_branches": 28748
+          },
+          "0": {
+            "nodes": 3021,
+            "runs": 200200,
+            "branches": 12017,
+            "partial_branches": 11628
+          },
+          "2": {
+            "nodes": 3318,
+            "runs": 56195,
+            "branches": 13272,
+            "partial_branches": 0
+          }
+        },
+        "streaming_numeric_seconds": [
+          10.698792209,
+          10.711460084
+        ],
+        "streaming_numeric_runs": 915501,
+        "query_work": {
+          "previous": {
+            "first_calls": 2711,
+            "first_runs": 723878,
+            "repeated_calls": 262,
+            "repeated_runs": 41788
+          },
+          "hybrid": {
+            "first_calls": 2711,
+            "first_runs": 608181,
+            "repeated_calls": 310,
+            "repeated_runs": 31633
+          }
+        },
+        "numeric_seconds": [
+          7.843884625,
+          7.939238042
+        ],
+        "numeric_runs": 639814,
+        "previous_numeric_seconds": [
+          10.547082,
+          10.804043083
+        ],
+        "previous_numeric_runs": 765666,
+        "zero_budget": {
+          "kind": "result",
+          "seconds": 4.917e-06,
+          "setup_seconds": 0.291839375,
+          "mix": [
+            0.0,
+            1.0
+          ],
+          "adversary": [],
+          "bounds": [
+            0.0,
+            1.0
+          ],
+          "calls": 0,
+          "runs": 0,
+          "snapshots": [],
+          "active": [
+            0
+          ],
+          "converged": false
+        },
+        "half_second": {
+          "kind": "result",
+          "seconds": 0.607333958,
+          "setup_seconds": 0.292129042,
+          "mix": [
+            0.0,
+            1.0
+          ],
+          "adversary": [
+            [
+              0,
+              0.0
+            ],
+            [
+              2,
+              1.0
+            ]
+          ],
+          "bounds": [
+            0.0,
+            0.22363282251010547
+          ],
+          "calls": 8,
+          "runs": 45406,
+          "snapshots": [
+            {
+              "checkpoint_seconds": 0.5,
+              "seconds": 0.607333125,
+              "lower": 0.0,
+              "upper": 0.22363282251010547,
+              "mix": [
+                0.0,
+                1.0
+              ],
+              "calls": 8,
+              "runs": 45406,
+              "active": [
+                0,
+                2
+              ]
+            }
+          ],
+          "active": [
+            0,
+            2
+          ],
+          "converged": false
+        },
+        "decision": "Retain the hybrid solver as the faster research candidate; no production integration.",
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "The root chance kernel is enumerated eagerly and sorted by probability times static evaluation, as in the previous cutting solver. Only descendants use streaming chance enumeration and propagated lower thresholds. Unvisited mass remains [0,1]. Every executed proof chance cell is independently checked against the full native kernel, including the eagerly enumerated root. All rational backups, fixed policies, controller queries, mixture optima and lower/upper bounds are checked. Numeric root values and schedules equal the proof backend exactly, with two repeated runs of each backend and zero/500ms controls. The chance streamer and its previously archived unit tests are unchanged. The experiment covers the same supplied 2200-world family and prescribed policy templates, not all hidden stats or strategies. Runtime excludes input loading, model replay and the separate chance audits. The root ordering change reduces work relative to streaming every level. The implementation also uses padding based on visited children, so this is not an isolated sort-only ablation. Neither production integration nor deployed-bot superiority is established."
+      }
     }
   },
   "foresight_fix": {
