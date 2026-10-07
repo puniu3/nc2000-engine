@@ -1,0 +1,20 @@
+{
+  "completed_at": "2026-10-07T09:16:08.052095+00:00",
+  "archive_sha256": "64db5992cd75bea93396fc00573586fc30e38fc1e2be922dd56eaee26e4b864b",
+  "uncompressed_sha256": "adbfca023b3f7ddf9282fee9df6bb73ac8a27bff0be8378cbbd243e640d325d8",
+  "engine_turn_limit_ties": [
+    {
+      "game": 54,
+      "turns": 1001,
+      "outcome": "tie"
+    },
+    {
+      "game": 55,
+      "turns": 1001,
+      "outcome": "tie"
+    }
+  ],
+  "decision": "No evidence of superiority over the pre-category local baseline. Keep hp-type-evidence disabled by default. This does not isolate its effect from the category correction, prove equivalence, or answer the native deployed-bot comparison.",
+  "runtime_changed": false,
+  "deployed": false
+}
