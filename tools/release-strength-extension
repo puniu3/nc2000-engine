@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+import gzip
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import subprocess
+from pathlib import Path
+
+
+def load(path):
+    return json.loads(path.read_text())
+
+
+def save(path, value):
+    path.write_text(json.dumps(value, indent=2) + '\n')
+
+
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main():
+    root = Path(__file__).resolve().parent.parent
+    os.chdir(root)
+    study = Path('findings/release-strength-extension-v1')
+    previous = Path('findings/release-strength-v1')
+    directory = Path('tmp/release-strength-extension-v1')
+    plan = load(study / 'plan.json')
+    assert digest(previous / 'runtime.json') == plan['runtime_sha256']
+    runtime = load(previous / 'runtime.json')
+    for path, expected in runtime['sha256'].items():
+        assert digest(Path(path)) == expected, path
+    for name, key in [('release-strength-audit', 'audit_sha256'), ('native-deployed-audit', 'native_audit_sha256')]:
+        assert digest(Path('tools') / name) == runtime[key], name
+    loader = importlib.machinery.SourceFileLoader('release_audit', 'tools/release-strength-audit')
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(module)
+    audit = module.load_tool('native-deployed-audit')
+    expected = audit.manifest(directory)
+    old_expected = audit.manifest(Path('tmp/release-strength-v1/confirm-combined'))
+    cfg = dict(old_expected['config'])
+    cfg.update(plan['new_batch'])
+    assert expected['config'] == cfg
+    assert expected['hashes'] == old_expected['hashes']
+    binding = {'plan_sha256': digest(study / 'plan.json'), 'runner_sha256': digest(Path(__file__)), 'manifest': expected}
+    binding_path = study / 'binding.json'
+    if binding_path.exists():
+        assert load(binding_path) == binding
+    else:
+        save(binding_path, binding)
+    records = directory / 'games.jsonl'
+    command = [runtime['arena'], str(directory / 'config.json'), str(records)]
+    if records.exists():
+        command.append('--resume')
+    with (directory / 'progress.txt').open('a') as progress:
+        subprocess.run(command, stderr=progress, check=True)
+    data = audit.read_rows(records)
+    result = audit.audit(data, expected, 27000)
+    result['replay'] = json.loads(subprocess.check_output([runtime['replay'], str(records)], text=True))
+    raw = records.read_bytes()
+    result['records_sha256'] = hashlib.sha256(raw).hexdigest()
+    result['manifest'] = expected
+    old_raw = gzip.decompress((previous / 'confirm-combined/records.jsonl.gz').read_bytes())
+    assert hashlib.sha256(old_raw).hexdigest() == plan['analysis']['previous_records_sha256']
+    old_data = [json.loads(line) for line in old_raw.splitlines()]
+    old_result = audit.audit(old_data, old_expected, 27000)
+    old_seeds = {tuple(g['agent_seeds']) for g in old_data[1:]}
+    assert not old_seeds.intersection(tuple(g['agent_seeds']) for g in data[1:]), 'reused search seeds'
+    old_matchups = {(tuple(g['team_ids']), str(g['battle_seed'])) for g in old_data[1:]}
+    assert not old_matchups.intersection((tuple(g['team_ids']), str(g['battle_seed'])) for g in data[1:]), 'reused matchups'
+    result['score'] = sum(result['pair_scores']) / len(result['pair_scores'])
+    model = plan['posterior']
+    def posterior(scores):
+        return {str(m): module.posterior(scores, m, model['draws'], model['seed']) for m in model['prior_masses']}
+    result['posterior'] = posterior(result['pair_scores'])
+    combined = {key: old_result[key] + result[key] for key in ['games', 'wins', 'losses', 'ties', 'pair_scores']}
+    assert combined['games'] == plan['analysis']['total_games']
+    combined['score'] = sum(combined['pair_scores']) / len(combined['pair_scores'])
+    combined['posterior'] = posterior(combined['pair_scores'])
+    gate = plan['gate']
+    passes = (result['score'] > gate['new_batch_score_above'] and combined['score'] > gate['pooled_score_above']
+              and all(p['probability_above_half'] >= gate['all_prior_probability_above_half_min']
+                      and p['probability_below_49_percent'] < gate['all_prior_probability_below_49_percent_max_exclusive']
+                      for p in combined['posterior'].values()))
+    (study / 'records.jsonl.gz').write_bytes(gzip.compress(raw, mtime=0))
+    save(study / 'new-batch.json', result)
+    save(study / 'pooled.json', combined)
+    save(study / 'decision.json', {'statistical_gate_met': passes, 'publication': 'pending_validation' if passes else 'no_deployment', 'plan_sha256': binding['plan_sha256'], 'pooled': {k: v for k, v in combined.items() if k != 'pair_scores'}})
+    print(json.dumps({'new_wins': result['wins'], 'new_losses': result['losses'], 'pooled_score': combined['score'], 'posterior': combined['posterior'], 'statistical_gate_met': passes}), flush=True)
+
+
+if __name__ == '__main__':
+    main()

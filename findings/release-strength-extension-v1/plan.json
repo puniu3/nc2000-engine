@@ -1,0 +1,44 @@
+{
+  "authorization": "User explicitly requested increasing verification or relaxing the threshold after the completed 384-game result. Prior study and its failed gate remain unchanged.",
+  "candidate": "f3751eae953ab45a62751bc42a4d9614a44972dd",
+  "frozen_runtime_candidate": "2b708e1933ef4cd79df1129595fa2dd076846ed0",
+  "baseline": "c7b11e882d75e552fd62c530012eb7c2d82b9e64",
+  "format": "NC2000 engine rules, six registered/three picked, level 50-55, picked level sum <=155, shared current corrected referee, blind native observation matching Web lifecycle, exact native HP retained, 27000 iterations, c=0.4, hp_buckets=16, no pondering. Same 24-team catalog and 103-team weighted belief prior as deployed. Uniform catalog matchup draws; pair swaps agent side while preserving teams and battle/search seeds.",
+  "new_batch": {
+    "games": 1152,
+    "seed": 2026100821,
+    "threads": 8
+  },
+  "analysis": {
+    "total_games": 1536,
+    "previous_games": 384,
+    "previous_records_sha256": "ddbbcf94c82b0e82dc9a2a910b3053f9db83a985549605afc95924ff3f582c28",
+    "pooling": "Only the unchanged selected candidate confirmation and this new batch; all screening and older comparisons excluded. New batch separately reported. This is an explicitly outcome-informed follow-up, not an untouched original confirmatory study."
+  },
+  "posterior": {
+    "prior_masses": [
+      1,
+      4,
+      16
+    ],
+    "draws": 200000,
+    "seed": 2026100822,
+    "model": "Same symmetric Dirichlet pair-score categorical model as prior study; conditional Bayesian decision probabilities, not frequentist significance or global strength guarantees."
+  },
+  "gate": {
+    "all_prior_probability_above_half_min": 0.8,
+    "all_prior_probability_below_49_percent_max_exclusive": 0.1,
+    "new_batch_score_above": 0.5,
+    "pooled_score_above": 0.5,
+    "validation": "All games terminal, full legal replay, frozen hashes, existing isolated regression/build/browser tests and source equivalence; recheck deployed baseline before publication."
+  },
+  "stopping": "One fixed additional batch. No decisions from interim scores, sample extension, candidate tuning, or further threshold change within this follow-up.",
+  "rationale": "User accepts a less conservative deployment decision. 80% corresponds to at least 4:1 posterior odds of improvement, with a separate guard on regressions exceeding one percentage point. This is a practical release criterion rather than proof of superiority. Current 68% does not qualify.",
+  "planning_estimate": {
+    "observed_pair_variance": 0.09413176265270506,
+    "same_observed_effect_probability_at_1536_normal_approx": 0.8266207319587778,
+    "estimated_minutes": 86,
+    "note": "Plug-in precision estimate, not predictive power or promised probability. Based on prior 384-game wall time of about29 minutes."
+  },
+  "runtime_sha256": "e8dfe89d8ff00097b0b1471ec04e905fcf7006aa736231d464b24baabbe94733"
+}
