@@ -1,0 +1,58 @@
+{
+  "schema": "nc2000-native-waking-loss-v1",
+  "source_roots": 360,
+  "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
+  "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "work_budget": 250000,
+  "node_budget": 50000,
+  "cell_cap": 4096,
+  "tolerance": 0.02,
+  "threads": 1,
+  "indices": [
+    77
+  ],
+  "registered_at": "2026-10-07T14:37:11.014688+00:00",
+  "source_census_commit": "d31e427",
+  "helper_sha256": "5084e11124236aa05f62f5e054cecdd2127f1c34ac3096c1222415f49a1365f8",
+  "scope": "First deeper selected-action loss test for the waking Sleep Talk root. Retain all legal future actions, true hidden state fixed, independent chance classes. Missing mass unknown. Failure of Sleep Talk at this step alone does not prove regret because other moves consume different PP. No human calibration or ordinary-bot change.",
+  "classification": {
+    "tight_value_width": 0.02,
+    "pure_loss_proven_lower_gt": 0.02,
+    "pure_loss_small_upper_le": 0.02,
+    "strict_domination_gap_lower_gt": 1e-06,
+    "unresolved_retained": true,
+    "aggregate_by_game": true
+  },
+  "selection": "The sole ordinary-bot Sleep Talk selection among the24 waking-state roots in the frozen360-root census: game62/frame92. Selection uses the current stored state and action, not follow-up regret.",
+  "screen_summary_sha256": "500b007af7583debda194db9a4fe6fc9558b141923380d38ca1cb771dac75b1d",
+  "screen_commit": "dea5166",
+  "healing_moves": [
+    "rest",
+    "recover",
+    "softboiled",
+    "milkdrink",
+    "synthesis",
+    "moonlight",
+    "morningsun"
+  ],
+  "dead_quick_claw_quotient": true,
+  "retain_eager_prefix": false,
+  "selected_only": false,
+  "mode": "loss_lower",
+  "action_overrides": {},
+  "solver_source_sha256": "737b82a959ea7895dc6c68f5c32275ffea4839b823c99abcc6cb92a8a55251e3",
+  "parent_bounds_source_sha256": "efe33f1f70fae6b9ebd73ede353b3d9a4115749378fbb81366eed6f8d8e4c8c6",
+  "solver_binary_sha256": "5d9112f6ded9a5a25c2be421562fe839820c42afbd7653fcd608f3f19fdb5c33",
+  "implementation_commit": "2a63a63",
+  "pilot_summary_sha256": "90dc3eaea9eb66d8364afba4c143e04c867c0e35ca411eb81b0535abc970890e",
+  "nominated_keys": [
+    [
+      62,
+      92
+    ]
+  ],
+  "nomination_summary_sha256": "ba802be3b8108233cb10dc174bac8622cffd464048b2aacf98d778554edd3e1b",
+  "old_screen_archive_sha256": "0a6519922d4b6a675d6f243669f7a1edf42ac0524f596aaed892af6175238d55",
+  "source_helper": "findings/native-loss-threshold-v1/native_loss_threshold.rs",
+  "selection_correction": "The nomination root_index117 is file order, whereas this frozen solver sorts by game/frame. The initial record game62/frame172 is excluded. Corrected indices are derived by the nominated game/frame pair before this run."
+}
