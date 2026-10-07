@@ -29440,6 +29440,160 @@
         "runtime_changed": false,
         "deployed": false
       }
+    },
+    "findings/native-deployed-duel-v1/summary.json": {
+      "sha256": "e62ad114857149ee75e08c55b21d943fd70fd7d59c0a9de18a79a5ccf2c5fa84",
+      "data": {
+        "games": 192,
+        "decisions": [
+          4266,
+          4268
+        ],
+        "wins": 99,
+        "losses": 93,
+        "ties": 0,
+        "pair_scores": [
+          0.0,
+          0.5,
+          0.0,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          1.0,
+          1.0,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          1.0,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          0.0,
+          0.5,
+          0.0,
+          0.5,
+          1.0,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.0,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          0.5,
+          0.0,
+          0.5,
+          1.0,
+          0.5,
+          1.0,
+          0.5,
+          0.0,
+          0.5,
+          0.0,
+          0.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.0,
+          1.0,
+          0.5,
+          1.0,
+          0.5,
+          1.0,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          1.0,
+          0.0,
+          0.5,
+          0.0,
+          0.5,
+          1.0,
+          1.0,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          1.0,
+          0.5,
+          0.5,
+          1.0,
+          1.0
+        ],
+        "replay": {
+          "games": 192,
+          "replayed_decisions": 8534,
+          "replayed_states": 4498,
+          "games_with_hidden_power": 76,
+          "hidden_power_uses": 231
+        },
+        "complete_pairs": 96,
+        "score": 0.515625,
+        "normal95": [
+          0.44840771671439444,
+          0.5828422832856056
+        ],
+        "hoeffding95": [
+          0.37701434448062776,
+          0.6542356555193722
+        ],
+        "empirical_bernstein95": [
+          0.30646838368341517,
+          0.7247816163165848
+        ],
+        "betting95": [
+          0.4083498178502824,
+          0.6222688366757245
+        ],
+        "strength_test": "fixed-fraction-mixture-v1",
+        "log_evalue_at_half": -0.7054817554760143,
+        "positive_strength_evidence": false,
+        "records_sha256": "bffa990fd1f36e828cf4ce16c97ef8c09c7b3e13bd83b67d2999211c534a49de",
+        "protocol_sha256": "72ddfae55ea9e96a9e89a35dbee1736f5c5081abbb0563cc8d8a97397ea9b315",
+        "scope": "Preregistered 192 games, 96 swaps. Current default native bot at runtime base 6c2bd9e versus deployed c7b11e8 bot, both without hp-type-evidence. Fixed 27000 iterations, UCB c=0.4, HP buckets 16. Same current corrected native referee for both, retaining each worker version own search and internal simulation engine. Native observation, including exact HP, matches the ordinary Web BlindSearcher lifecycle; no protocol importer, pinned sets, baked tables, community fallback prior or pondering. Uniform draws from the current 24-team catalog, same shipped weighted 103-team belief prior, common 32-bit bot seeds and battle seed within each swapped pair. Complete terminal games only; failures are not ties. Positive strength evidence requires pair-based betting95 lower bound above 0.5 after all 192 games. No optional stopping or adding seeds for significance. An interval containing 0.5 is inconclusive, not equivalence. Results are conditional on these rules, pool and equal iterations; not browser timing, human strength or full-game optimality evidence."
+      }
+    },
+    "findings/native-deployed-duel-v1/completion.json": {
+      "sha256": "e6dfb0ed2819e508638f6c6b68a179f1c224942617095348a5c86724178119eb",
+      "data": {
+        "completed_at": "2026-10-07T09:27:10.149747+00:00",
+        "archive_sha256": "78618e81d5d266874d667df7f2d407babe8ebce80f3de509b6c52345fc7e26b6",
+        "uncompressed_sha256": "bffa990fd1f36e828cf4ce16c97ef8c09c7b3e13bd83b67d2999211c534a49de",
+        "decision": "Current default scores 99 wins and 93 losses, but the prespecified pair-based betting95 interval contains 0.5. Superiority over the deployed bot is not established; equivalence is not established either. No sample extension and no runtime or deployment change.",
+        "runtime_changed": false,
+        "deployed": false,
+        "all_binary_and_data_hashes_match_registration": true
+      }
     }
   },
   "foresight_fix": {
@@ -35564,14 +35718,14 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-07T18:17:39.218110+09:00",
+    "checked_at": "2026-10-07T18:28:48.425129+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
-    "status": "running",
+    "status": "complete",
     "planned_games": 192,
     "parallel_study": "hp-combined-v1",
     "deployment_rechecked": true,
-    "strength_vs_deployed": "unproved",
+    "strength_vs_deployed": "not_established_by_completed_native_comparison",
     "parallel_study_status": "complete",
     "parallel_study_result": {
       "wins": 94,
@@ -35580,6 +35734,19 @@
       "score": 0.4947916666666667,
       "positive_strength_evidence": false,
       "default_type_inference_enabled": false
-    }
+    },
+    "result_commit": "2f15e96",
+    "result": {
+      "wins": 99,
+      "losses": 93,
+      "ties": 0,
+      "score": 0.515625,
+      "betting95": [
+        0.4083498178502824,
+        0.6222688366757245
+      ],
+      "positive_strength_evidence": false
+    },
+    "goal_complete": false
   }
 }
