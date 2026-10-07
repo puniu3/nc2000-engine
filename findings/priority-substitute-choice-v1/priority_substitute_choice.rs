@@ -18,7 +18,7 @@ fn step(b: &mut Battle, dex: &Dex, side: usize, own: &str, foe: &str) {
     b.apply_choices(dex, joint).unwrap();
 }
 
-fn pp(b: &Battle, dex: &Dex, side: usize, key: &str) -> u8 {
+fn pp(b: &Battle, dex: &Dex, side: usize, key: &str) -> i32 {
     b.poke(b.active_id(side).unwrap()).move_slots.iter().find(|m| dex.moves.key(m.id)==key).unwrap().pp
 }
 
