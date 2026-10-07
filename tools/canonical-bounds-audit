@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+import subprocess
+from fractions import Fraction as F
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+ARCHIVE = ROOT / 'findings/canonical-bounds-v1'
+CHECK_ROW = runpy.run_path(str(ROOT/'tools/item-move-product-probe'))['check_row']
+CHECK_LEDGER = runpy.run_path(str(ROOT/'tools/policy-witness-probe'))['verify']
+CHECK_POLICY = runpy.run_path(str(ROOT/'tools/hidden-move-witness-probe'))['check_policy']
+UPPER_IDS = ['product/brightpowder/doubleedge', 'product/focusband/doubleedge']
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def verify(proofs, boundary):
+    previous = json.loads((ROOT/'findings/hidden-parameter-family-v1/summary.json').read_bytes())['finite_family']
+    screen = json.loads(gzip.decompress((ROOT/'findings/canonical-history-v1/records.json.gz').read_bytes()))['screen']
+    references = [r for r in screen['rows'] if 'root' in r]
+    iterator = iter(proofs)
+    config = json.loads(next(iterator))
+    assert config == dict(kind='config', case=screen['case'], p=previous['rockslide_probability'],
+                         target=previous['lower']-1e-6, first=0, count=len(references))
+    lower = F(1)
+    worst = []
+    upper = {}
+    certificates = runs = nodes = rows = 0
+    boundary_records = [json.loads(l) for l in boundary]
+    repeated = {r['id']: r for r in boundary_records[1:]}
+    assert len(repeated) == 17
+    repeated_seen = set()
+    exemplar = None
+    for index, line in enumerate(iterator):
+        row = json.loads(line)
+        assert row['index'] == index
+        ref = references[index]
+        value, reports = CHECK_ROW(row, ref, config)
+        rows += 1
+        certificates += len(reports)
+        runs += sum(r['runs'] for r in reports.values())
+        nodes += sum(r['nodes'] for r in reports.values())
+        if value < lower-F(1, 10**10):
+            lower, worst = value, [row['id']]
+        elif abs(value-lower) <= F(1, 10**10):
+            lower = min(lower, value)
+            worst.append(row['id'])
+        if row['id'] in repeated:
+            ignored = ['index', 'seconds']
+            assert {k:v for k,v in row.items() if k not in ignored} == {k:v for k,v in repeated[row['id']].items() if k not in ignored}
+            repeated_seen.add(row['id'])
+        if row['id'] not in UPPER_IDS:
+            assert row['upper'] is None
+        else:
+            ledger = row['upper']
+            expected = dict(game=6, decision=32, target_side=0, policy_side=0, first_choice='move sleeptalk',
+                priority=['move hiddenpower'], opening=['move sleeptalk','move sleeptalk','move hiddenpower'],
+                rest_at_percent=None, horizon=3, work_budget=200000, cell_cap=10000, guarded_keys=True, support_certificate=True)
+            assert ledger['config'] == expected
+            assert ledger['nodes'][-1]['state_key'] == ref['root']['key']
+            CHECK_LEDGER(ledger)
+            CHECK_POLICY(ledger)
+            upper[row['id']] = {b['choices'][1]:1-F(b['bounds'][0]) for b in ledger['nodes'][-1]['branches']}
+            certificates += 1
+            runs += ledger['runs']
+            nodes += len(ledger['nodes'])
+            exemplar = (row, ref)
+    assert rows == len(references) == 3648
+    assert repeated_seen == set(repeated)
+    assert set(upper) == set(UPPER_IDS)
+    a,b = [upper[k] for k in UPPER_IDS]
+    assert set(a) == set(b) == set(screen['tape'][-1]['frame']['legal_actions'])
+    q = F(previous['adversary_probability_exact'])
+    hi = max(q*v+(1-q)*b[k] for k,v in a.items())+F(1,10**8)
+    lo = lower-F(1,10**8)
+    pure = max(min(a[k],b[k]) for k in a)
+    assert 0 <= lo <= hi <= 1
+    assert lo > pure
+    for fault in ['missing_rock', 'inflated_lower', 'wrong_root']:
+        row, ref = copy.deepcopy(exemplar)
+        if fault == 'missing_rock':
+            row['rockslide'] = None
+        elif fault == 'inflated_lower':
+            row['swordsdance']['bounds'][0] += .01
+        else:
+            row['swordsdance']['nodes'][-1]['state_key'] = '0'
+        try:
+            CHECK_ROW(row,ref,config)
+        except AssertionError:
+            continue
+        raise AssertionError('accepted corruption: '+fault)
+    return dict(worlds=rows, lower_certificates=certificates-2, upper_certificates=2, native_runs=runs,
+                certificate_nodes=nodes, repeated_worlds=len(repeated_seen), bounds=[float(lo),float(hi)],
+                width=float(hi-lo), rockslide_probability=config['p'], target=config['target'],
+                best_pure_security_upper=float(pure), mixed_gain_over_every_pure_lower=float(lo-pure),
+                smallest_lower_worlds=worst, negative_controls=3)
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--record',nargs=2,type=Path,metavar=('PROOFS','BOUNDARIES'))
+    args=parser.parse_args()
+    if args.record:
+        with args.record[0].open() as proofs, args.record[1].open() as boundary:
+            report=verify(proofs,boundary)
+    else:
+        with gzip.open(ARCHIVE/'proofs.jsonl.gz','rt') as proofs, gzip.open(ARCHIVE/'boundaries.jsonl.gz','rt') as boundary:
+            report=verify(proofs,boundary)
+    if args.record:
+        assert not ARCHIVE.exists()
+        ARCHIVE.mkdir()
+        for name,path in zip(['proofs','boundaries'],args.record):
+            (ARCHIVE/(name+'.jsonl.gz')).write_bytes(gzip.compress(path.read_bytes(),mtime=0))
+        sources=['crates/bot/examples/canonical_bounds.rs','crates/bot/examples/threshold_witness/mod.rs',
+                 'crates/bot/examples/policy_witness.rs','crates/bot/examples/hidden_terminal.rs',
+                 'tools/canonical-bounds-audit','tools/item-move-product-probe','tools/policy-witness-probe',
+                 'tools/hidden-move-witness-probe','findings/canonical-history-v1/records.json.gz',
+                 'findings/hidden-parameter-family-v1/summary.json','data/gen2stadium2.json']
+        candidate=ROOT/'tmp/hp-canonical'
+        summary=dict(report,date='2026-10-07',candidate_commit=subprocess.check_output(['git','-C',str(candidate),'rev-parse','HEAD'],text=True).strip(),
+            source_hashes={p:sha(ROOT/p) for p in sources},
+            candidate_engine_hashes={str(p.relative_to(candidate)):sha(p) for p in sorted((candidate/'crates/engine/src').rglob('*.rs'))},
+            artifact_hashes={p.name:sha(p) for p in ARCHIVE.iterdir()},
+            scope='Restricted robust game over 3648 witnessed candidate entries at one decision, not a complete information set. The initial mix and common Rock Slide continuation were fixed before this study. All opponent replies are enumerated; unresolved mass remains [0,1]. Upper certificates use an opponent mixture fixed before this study. Engine transitions and guarded state identity are trusted. No human calibration, online integration, or deployed-bot superiority is claimed.',
+            integrated=False,strength_vs_deployed='unproved')
+        (ARCHIVE/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
+    else:
+        summary=json.loads((ARCHIVE/'summary.json').read_bytes())
+        assert all(summary[k]==v for k,v in report.items())
+        assert all(sha(ROOT/p)==expected for p,expected in summary['source_hashes'].items())
+        assert all(sha(ARCHIVE/p)==expected for p,expected in summary['artifact_hashes'].items())
+    print(json.dumps({k:v for k,v in report.items() if k!='smallest_lower_worlds'},ensure_ascii=False))
+
+
+if __name__=='__main__':
+    main()
