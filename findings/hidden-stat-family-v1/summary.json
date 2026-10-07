@@ -1,0 +1,78 @@
+{
+  "requested": 2400,
+  "same_history": 2144,
+  "rejected": 256,
+  "accepted_kinds": {
+    "baseline": 4,
+    "ev": 792,
+    "dv": 68,
+    "dv-product": 512,
+    "corners": 768
+  },
+  "distinct_root_keys": 2020,
+  "distinct_stat_vectors": 301,
+  "stat_ranges": {
+    "hp": [
+      196,
+      196
+    ],
+    "atk": [
+      98,
+      141
+    ],
+    "def": [
+      91,
+      134
+    ],
+    "spa": [
+      175,
+      176
+    ],
+    "spd": [
+      140,
+      141
+    ],
+    "spe": [
+      120,
+      151
+    ],
+    "hp_power": [
+      35,
+      70
+    ]
+  },
+  "bounds": [
+    0.089275404711831,
+    0.08928985574286721
+  ],
+  "union_with_item_move_product_bounds": [
+    0.089275404711831,
+    0.08928985574286721
+  ],
+  "mixed_probability": 0.44423821918360845,
+  "total_engine_runs": 3818212,
+  "certificates": 3926,
+  "certificate_nodes": 397794,
+  "partial_branches": 5684,
+  "worst_lower_id": "focusband/doubleedge/ev/def/40",
+  "repeated_worlds": 13,
+  "repeated_certificates": 22,
+  "repeat_indices": [
+    0,
+    216,
+    376,
+    536,
+    752,
+    912,
+    1072,
+    1149,
+    1288,
+    1448,
+    1608,
+    1824,
+    1984
+  ],
+  "production_changed": false,
+  "strength_demonstrated": false,
+  "scope": "Constructive hidden-stat stress test of four previously limiting item/move pairs. Includes all previously accepted independent EV/DV changes, the 128-way product of accepted independent DVs, and 256 combined DV/EV corners per pair. Each accepted model passes native team validation and reproduces every public-history boundary with the original random seed. Failed seeded replays do not prove impossibility. Counts include stat-equivalent configurations; this is not exhaustive over legal stats or the full information set. The prior mixed policy is unchanged. All lower certificates and two immutable adversary upper certificates are independently checked. Adding these models to the prior 2200-model family retains the reported union bounds, not a Cartesian product guarantee. No stat monotonicity is assumed. No online bot integration or deployed-strength claim."
+}

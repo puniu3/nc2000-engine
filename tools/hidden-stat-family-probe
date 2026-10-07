@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import itertools
+import json
+import runpy
+from collections import Counter
+from fractions import Fraction as F
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/hidden-stat-family-v1'
+product = runpy.run_path(str(root / 'tools/item-move-product-probe'))
+prior_path = root / 'findings/hidden-parameter-family-v1/records.json.gz'
+prior = json.loads(gzip.decompress(prior_path.read_bytes()))
+previous = json.loads((root / 'findings/hidden-parameter-family-v1/summary.json').read_bytes())
+corpus_path = root / 'findings/policy-gap-v1/corpus.jsonl.gz'
+game = next(json.loads(line) for line in gzip.decompress(corpus_path.read_bytes()).splitlines()
+            if json.loads(line)['game'] == 6)
+
+
+def plan():
+    variants = [dict(id='baseline', kind='baseline', patch={})]
+    variants += [r['request'] for r in prior['data'][0]['rows']
+                 if r['request']['kind'] in ['ev', 'dv'] and 'root' in r]
+    for attack, defense, speed in itertools.product([3, 7, 11, 15], [1, 5, 9, 13], range(1, 16, 2)):
+        ivs = dict(hp=30, atk=attack*2, **{'def': defense*2}, spa=30, spd=30, spe=speed*2)
+        variants.append(dict(id=f'dv-product/{attack}/{defense}/{speed}', kind='dv-product', patch=dict(ivs=ivs)))
+    for attack, defense, speed in itertools.product([3, 15], [1, 13], [1, 15]):
+        for hp, atk, defense_ev, special, speed_ev in itertools.product([248, 255], [0, 255], [0, 255], [240, 255], [0, 255]):
+            ivs = dict(hp=30, atk=attack*2, **{'def': defense*2}, spa=30, spd=30, spe=speed*2)
+            evs = dict(hp=hp, atk=atk, **{'def': defense_ev}, spa=special, spd=special, spe=speed_ev)
+            variants.append(dict(id=f'corners/{attack}/{defense}/{speed}/{hp}/{atk}/{defense_ev}/{special}/{speed_ev}',
+                                 kind='corners', patch=dict(ivs=ivs, evs=evs)))
+    rows = []
+    for item, move in itertools.product(['brightpowder', 'focusband'], ['doubleedge', 'drillpeck']):
+        for variant in variants:
+            patch = dict(variant['patch'], item=item, moves=['thunderbolt', 'hiddenpowerice', move, 'sleeptalk'])
+            rows.append(dict(id=f'{item}/{move}/'+variant['id'], kind=variant['kind'], patch=patch))
+    assert len(rows) == 2400
+    return dict(case=prior['data'][0]['case'], rows=rows)
+
+
+def accepted(screen):
+    return dict(screen, rows=[r for r in screen['rows'] if 'root' in r])
+
+
+def screen_check(screen, repeat):
+    assert screen == repeat
+    expected = plan()
+    assert screen['case'] == expected['case']
+    assert [r['request'] for r in screen['rows']] == expected['rows']
+    assert screen['observation'] == prior['data'][0]['observation']
+    assert screen['original_log'] == prior['data'][0]['original_log']
+    assert len({r['request']['id'] for r in screen['rows']}) == 2400
+    dex = json.loads((root / 'data/gen2stadium2.json').read_bytes())
+    keys = ['hp', 'atk', 'def', 'spa', 'spd', 'spe']
+    stats_seen = set()
+    for row in screen['rows']:
+        assert row['validity']['ok']
+        if 'root' not in row:
+            assert row['mismatch']['reason'] == 'log'
+            assert row['mismatch']['original'] != row['mismatch']['alternate']
+            continue
+        assert row['prefix_checks'] == 33 and 'mismatch' not in row
+        state = row['root']
+        for key in ['log_hash', 'observer_hash']:
+            assert state[key] == screen['case'][key]
+        set_ = dict(game['teams'][0][5], **row['request']['patch'])
+        ivs = [set_['ivs'][k] & 30 for k in keys]
+        evs = [set_['evs'][k] for k in keys]
+        stats = [(2*dex['species']['zapdos']['baseStats'][k]+ivs[i]+evs[i]//4)*50//100+(60 if i == 0 else 5)
+                 for i, k in enumerate(keys)]
+        assert state['ivs'] == ivs and state['evs'] == evs
+        assert state['stats'] == stats[1:] and state['hp'] == state['maxhp'] == stats[0]
+        attack, defense, speed, special = [ivs[i]//2 for i in [1, 2, 5, 3]]
+        assert 4*(attack%4)+defense%4 == 13 and state['hp_type'] == 'Ice'
+        power = (5*((special>>3)+2*(speed>>3)+4*(defense>>3)+8*(attack>>3))+(special%4))//2+31
+        assert state['hp_power'] == power
+        assert state['item'] == set_['item']
+        active = next(p for p in state['state']['sides'][0]['pokemon'] if p['active'])
+        assert [m['id'] for m in active['moves']] == set_['moves']
+        stats_seen.add(tuple(stats)+tuple([power]))
+    return stats_seen
+
+
+def verify(screen, repeat, config, rows, replays):
+    stats_seen = screen_check(screen, repeat)
+    selected = accepted(screen)['rows']
+    assert config == dict(kind='config', case=screen['case'], p=previous['finite_family']['rockslide_probability'],
+                         target=previous['finite_family']['lower']-1e-6, first=0, count=len(selected))
+    assert len(rows) == len(selected) == 2144
+    values, reports, work = [], [], []
+    for index, (row, reference) in enumerate(zip(rows, selected)):
+        assert row['index'] == index
+        lower, checked = product['check_row'](row, reference, config)
+        values.append(lower)
+        reports.extend(checked.values())
+        work.append(sum(r['runs'] for r in checked.values()))
+    expected_indices = sorted(set([min(range(len(rows)), key=lambda i: values[i]),
+                                   max(range(len(rows)), key=lambda i: work[i])]
+                                  + [next(i for i, r in enumerate(selected) if r['request']['id'] == item+'/'+move+'/'+suffix)
+                                     for item, move, suffix in itertools.product(
+                                         ['brightpowder', 'focusband'], ['doubleedge', 'drillpeck'],
+                                         ['baseline', 'dv-product/3/1/1', 'corners/3/1/15/255/0/0/240/0'])]))
+    assert [r[1]['index'] for r in replays] == expected_indices
+    for header, row in replays:
+        index = row['index']
+        assert header == dict(config, first=index, count=1)
+        assert {k: v for k, v in row.items() if k != 'seconds'} == {k: v for k, v in rows[index].items() if k != 'seconds'}
+    action_bounds = []
+    for item in ['brightpowder', 'focusband']:
+        original = next(r for r in prior['data'][2]['rows'] if r['request']['id'] == 'item/doubleedge/'+item)
+        baseline = next(r for r in selected if r['request']['id'] == item+'/doubleedge/baseline')
+        assert baseline['root']['key'] == original['root']['key']
+        ledger = next(r['ledger'] for r in original['ledgers'] if r['first'] == 'sleeptalk')
+        product['ledger_check'](ledger)
+        product['policy_check'](ledger)
+        action_bounds.append({b['choices'][1]: F(1-b['bounds'][0]) for b in ledger['nodes'][-1]['branches']})
+    q = F(previous['finite_family']['adversary_probability_exact'])
+    upper = max(q*v+(1-q)*action_bounds[1][a] for a, v in action_bounds[0].items())+F(1, 10**8)
+    lower = min(values)-F(1, 10**8)
+    old_lower = F(json.loads((root / 'findings/item-move-product-v1/summary.json').read_bytes())['bounds'][0])
+    union_lower = min(old_lower, lower)
+    assert 0 <= upper-union_lower < F(16, 10**6)
+    return dict(requested=2400, same_history=len(selected), rejected=2400-len(selected),
+                accepted_kinds=dict(Counter(r['request']['kind'] for r in selected)),
+                distinct_root_keys=len({r['root']['key'] for r in selected}), distinct_stat_vectors=len(stats_seen),
+                stat_ranges={k:[min(s[i] for s in stats_seen), max(s[i] for s in stats_seen)]
+                             for i, k in enumerate(['hp', 'atk', 'def', 'spa', 'spd', 'spe', 'hp_power'])},
+                bounds=[float(lower), float(upper)], union_with_item_move_product_bounds=[float(union_lower), float(upper)],
+                mixed_probability=config['p'], total_engine_runs=sum(work),
+                certificates=len(reports), certificate_nodes=sum(r['nodes'] for r in reports),
+                partial_branches=sum(r['partial_branches'] for r in reports),
+                worst_lower_id=rows[min(range(len(rows)), key=lambda i: values[i])]['id'],
+                repeated_worlds=len(replays), repeated_certificates=sum(1+(r[1]['rockslide'] is not None) for r in replays),
+                repeat_indices=expected_indices, production_changed=False, strength_demonstrated=False,
+                scope='Constructive hidden-stat stress test of four previously limiting item/move pairs. '
+                      'Includes all previously accepted independent EV/DV changes, the 128-way product of '
+                      'accepted independent DVs, and 256 combined DV/EV corners per pair. Each accepted '
+                      'model passes native team validation and reproduces every public-history boundary '
+                      'with the original random seed. Failed seeded replays do not prove impossibility. '
+                      'Counts include stat-equivalent configurations; this is not exhaustive over legal '
+                      'stats or the full information set. The prior mixed policy is unchanged. All lower '
+                      'certificates and two immutable adversary upper certificates are independently '
+                      'checked. Adding these models to the prior 2200-model family retains the reported '
+                      'union bounds, not a Cartesian product guarantee. No stat monotonicity is assumed. '
+                      'No online bot integration or deployed-strength claim.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--plan', type=Path)
+    parser.add_argument('--accept', nargs=2, type=Path)
+    parser.add_argument('--record', nargs=4, type=Path)
+    args = parser.parse_args()
+    if args.plan:
+        args.plan.write_text(json.dumps(plan()))
+        return
+    if args.accept:
+        args.accept[1].write_text(json.dumps(accepted(json.loads(args.accept[0].read_bytes()))))
+        return
+    paths = [Path(__file__).resolve(), prior_path, corpus_path,
+             root / 'findings/hidden-parameter-family-v1/summary.json',
+             root / 'findings/item-move-product-v1/summary.json',
+             root / 'tools/item-move-product-probe', root / 'tools/policy-witness-probe',
+             root / 'tools/hidden-move-witness-probe', root / 'data/gen2stadium2.json', root / 'data/learnsets-gen2.json',
+             root / 'crates/bot/examples/hidden_parameter_family.rs', root / 'crates/bot/examples/item_move_product.rs',
+             root / 'crates/bot/examples/threshold_witness/mod.rs', root / 'crates/bot/examples/policy_witness.rs',
+             root / 'crates/bot/examples/hidden_terminal.rs']
+    for directory in ['crates/bot/src', 'crates/engine/src']:
+        paths += list((root / directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists()
+        screen, repeat = [json.loads(p.read_bytes()) for p in args.record[:2]]
+        proof_bytes = args.record[2].read_bytes()
+        replays = [[json.loads(line) for line in p.read_bytes().splitlines()]
+                   for p in sorted(args.record[3].glob('*.jsonl'), key=lambda p: int(p.stem))]
+    else:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert bundle['hashes'] == hashes
+        screen, repeat, replays = bundle['screen'], bundle['repeat'], bundle['replays']
+        proof_bytes = gzip.decompress((archive / 'proofs.jsonl.gz').read_bytes())
+        assert hashlib.sha256(proof_bytes).hexdigest() == bundle['proof_sha256']
+    decoded = [json.loads(line) for line in proof_bytes.splitlines()]
+    config, rows = decoded[0], decoded[1:]
+    summary = verify(screen, repeat, config, rows, replays)
+    for fault in ['inflated_value', 'wrong_root', 'missing_rock']:
+        row = copy.deepcopy(next(r for r in rows if r['rockslide'] is not None))
+        if fault == 'inflated_value':
+            row['swordsdance']['bounds'][0] += .01
+        elif fault == 'wrong_root':
+            row['swordsdance']['nodes'][-1]['state_key'] = '0'
+        else:
+            row['rockslide'] = None
+        try:
+            product['check_row'](row, accepted(screen)['rows'][row['index']], config)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError(f'Accepted corruption: {fault}')
+    checks = dict(lower_certificates=summary['certificates'], upper_certificates=2,
+                  screening_repeat_identities=2400, repeated_worlds=summary['repeated_worlds'],
+                  negative_controls=['inflated_value', 'wrong_root', 'missing_rock'])
+    if args.record:
+        archive.mkdir()
+        bundle = dict(screen=screen, repeat=repeat, replays=replays, hashes=hashes,
+                      proof_sha256=hashlib.sha256(proof_bytes).hexdigest())
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+        (archive / 'proofs.jsonl.gz').write_bytes(gzip.compress(proof_bytes, mtime=0))
+        for name, value in [('summary', summary), ('checks', checks)]:
+            (archive / (name+'.json')).write_text(json.dumps(value, indent=2)+'\n')
+    else:
+        assert summary == json.loads((archive / 'summary.json').read_bytes())
+        assert checks == json.loads((archive / 'checks.json').read_bytes())
+    print(json.dumps({k:v for k,v in summary.items() if k != 'scope'}, indent=2))
+
+
+if __name__ == '__main__':
+    main()

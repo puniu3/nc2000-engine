@@ -16226,6 +16226,107 @@
         ],
         "production_changed": false
       }
+    },
+    "findings/hidden-stat-family-v1/summary.json": {
+      "sha256": "971cb3596c14895b3be1d9412a57b57fc62af68d930e5d89da4a667c30f94937",
+      "data": {
+        "requested": 2400,
+        "same_history": 2144,
+        "rejected": 256,
+        "accepted_kinds": {
+          "baseline": 4,
+          "ev": 792,
+          "dv": 68,
+          "dv-product": 512,
+          "corners": 768
+        },
+        "distinct_root_keys": 2020,
+        "distinct_stat_vectors": 301,
+        "stat_ranges": {
+          "hp": [
+            196,
+            196
+          ],
+          "atk": [
+            98,
+            141
+          ],
+          "def": [
+            91,
+            134
+          ],
+          "spa": [
+            175,
+            176
+          ],
+          "spd": [
+            140,
+            141
+          ],
+          "spe": [
+            120,
+            151
+          ],
+          "hp_power": [
+            35,
+            70
+          ]
+        },
+        "bounds": [
+          0.089275404711831,
+          0.08928985574286721
+        ],
+        "union_with_item_move_product_bounds": [
+          0.089275404711831,
+          0.08928985574286721
+        ],
+        "mixed_probability": 0.44423821918360845,
+        "total_engine_runs": 3818212,
+        "certificates": 3926,
+        "certificate_nodes": 397794,
+        "partial_branches": 5684,
+        "worst_lower_id": "focusband/doubleedge/ev/def/40",
+        "repeated_worlds": 13,
+        "repeated_certificates": 22,
+        "repeat_indices": [
+          0,
+          216,
+          376,
+          536,
+          752,
+          912,
+          1072,
+          1149,
+          1288,
+          1448,
+          1608,
+          1824,
+          1984
+        ],
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "Constructive hidden-stat stress test of four previously limiting item/move pairs. Includes all previously accepted independent EV/DV changes, the 128-way product of accepted independent DVs, and 256 combined DV/EV corners per pair. Each accepted model passes native team validation and reproduces every public-history boundary with the original random seed. Failed seeded replays do not prove impossibility. Counts include stat-equivalent configurations; this is not exhaustive over legal stats or the full information set. The prior mixed policy is unchanged. All lower certificates and two immutable adversary upper certificates are independently checked. Adding these models to the prior 2200-model family retains the reported union bounds, not a Cartesian product guarantee. No stat monotonicity is assumed. No online bot integration or deployed-strength claim."
+      }
+    },
+    "findings/hidden-stat-family-v1/checks.json": {
+      "sha256": "938218e6f31dfb45faa3da8a7c64a4cba701add02f94708aa3e101f166c07aee",
+      "data": {
+        "lower_certificates": 3926,
+        "upper_certificates": 2,
+        "screening_repeat_identities": 2400,
+        "repeated_worlds": 13,
+        "negative_controls": [
+          "inflated_value",
+          "wrong_root",
+          "missing_rock"
+        ]
+      }
+    },
+    "findings/hidden-stat-family-v1/records.json.gz": {
+      "sha256": "2877b9147793ef4b27a18680a9f53185423394e9e4062f71b74506a48be3c2ec"
+    },
+    "findings/hidden-stat-family-v1/proofs.jsonl.gz": {
+      "sha256": "ec11bf95166a259266fd29ab25727f00d08e5a87483421237e3b1f6c0dac6326"
     }
   },
   "foresight_fix": {
