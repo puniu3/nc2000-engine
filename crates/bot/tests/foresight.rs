@@ -1,5 +1,8 @@
 use conformance::load_dex;
 use nc2000_bot::{
+    eval::expected_hit_fraction,
+    mcts::{playout_pick, Playout, RolloutRules},
+    rng::SplitMix64,
     preview::{MetaPool, MetaTeam},
     smmcts::dominated_actions,
     Belief, BlindSearch, Observer, RmConfig,
@@ -237,4 +240,59 @@ fn blind_search_keeps_the_winning_priority_attack() {
     assert!(all_choices
         .iter()
         .all(|&a| a == SearchChoice::Move(dex.moves.id("quickattack").unwrap())));
+}
+
+#[test]
+fn damage_estimate_respects_public_immunity_removal() {
+    let dex = load_dex();
+    for side in 0..2 {
+        for (attacker, defender, key, restored) in [
+            ("Machamp", "Gengar", "return", true),
+            ("Machamp", "Gengar", "crosschop", true),
+            ("Machamp", "Gengar", "seismictoss", true),
+            ("Machamp", "Pidgeot", "earthquake", false),
+            ("Raichu", "Marowak", "thunderbolt", false),
+            ("Gengar", "Snorlax", "shadowball", false),
+        ] {
+            let mut b = position(&dex, side, &set(attacker, &[key], 255), &set(defender, &["splash"], 255));
+            let att = b.active_id(side).unwrap();
+            let def = b.active_id(1-side).unwrap();
+            let mid = dex.moves.id(key).unwrap();
+            assert_eq!(expected_hit_fraction(&b, &dex, att, def, mid, true), 0.0);
+            foresight(&mut b, &dex, side);
+            let choices = if side == 0 {
+                [SearchChoice::Move(mid), SearchChoice::Move(dex.moves.id("splash").unwrap())]
+            } else {
+                [SearchChoice::Move(dex.moves.id("splash").unwrap()), SearchChoice::Move(mid)]
+            };
+            let outcomes = enumerate_step_partial(&dex, &b, choices.map(Some), 100_000);
+            assert!(outcomes.pending.is_empty());
+            let native_damage: f64 = outcomes.leaves.iter().map(|leaf| leaf.prob * f64::from(b.poke(def).hp-leaf.battle.poke(def).hp)).sum();
+            assert_eq!(native_damage > 0.0, restored);
+            let estimate = expected_hit_fraction(&b, &dex, att, def, mid, true);
+            assert_eq!(estimate > 0.0, restored, "{key}, side {side}, native {native_damage}, estimate {estimate}");
+            if key == "seismictoss" {
+                assert!((estimate * f64::from(b.poke(def).hp) - native_damage).abs() < 1e-8);
+            }
+            b.remove_volatile(&dex, def, "foresight");
+            assert_eq!(expected_hit_fraction(&b, &dex, att, def, mid, true), 0.0);
+        }
+    }
+}
+
+#[test]
+fn greedy_rollout_uses_foresight_enabled_winning_attack() {
+    let dex = load_dex();
+    let playout = Playout::Heavy { eps: 0.0, turns: 8, weights: Default::default() };
+    let attack = SearchChoice::Move(dex.moves.id("quickattack").unwrap());
+    for side in 0..2 {
+        for ev in [0, 255] {
+            let mut b = tactical_position(&dex, side, ev);
+            let actions = b.legal_choices(&dex, side);
+            for seed in 0..32 {
+                let picked = playout_pick(&b, &dex, &playout, side, &actions, &mut SplitMix64(seed), RolloutRules::default());
+                assert_eq!(picked, attack, "side {side}, ev {ev}, seed {seed}");
+            }
+        }
+    }
 }

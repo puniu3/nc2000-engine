@@ -1,0 +1,58 @@
+{
+  "baseline_commit": "ff85bacebc518cf5cedc89f6d1fa75dffde4da57",
+  "change": "Share the existing public Foresight-aware type-immunity predicate between root masking and expected_hit_fraction. Root mask behavior is unchanged; rollout rankings and eval threat/race estimates now admit the enabled attacks.",
+  "baseline_failures": [
+    "damage_estimate_respects_public_immunity_removal",
+    "greedy_rollout_uses_foresight_enabled_winning_attack"
+  ],
+  "baseline_example": {
+    "move": "return",
+    "side": 0,
+    "native_mean_damage": 73.16987179320131,
+    "estimated_damage": 0
+  },
+  "validation": {
+    "release_tests_passed": 266,
+    "suite_counts": {
+      "bots": 11,
+      "evasion": 5,
+      "foresight": 6,
+      "hidden_power_damage": 1,
+      "lib": 239,
+      "mask_sleep_talk": 4
+    },
+    "final_foresight_tests_passed": 6,
+    "final_addition": "Seismic Toss expected damage agrees with complete engine enumeration within 1e-8.",
+    "mechanical_cases": 12,
+    "greedy_choice_cases": 128,
+    "greedy_choice_rule": "epsilon=0, default RolloutRules, two sides, two foe EV choices, 32 seeds; all choose Quick Attack after the fix.",
+    "existing_blind_cases": 32,
+    "existing_terminal_support_runs": 256,
+    "controls": "Without Foresight, after its removal, and unrelated Ground/Flying, Electric/Ground, Ghost/Normal immunities."
+  },
+  "native_root_exposure": {
+    "roots": 360,
+    "active_loadouts_with_foresight": 0,
+    "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c"
+  },
+  "limitations": [
+    "Constructed tactical and synthetic mechanical controls, not an independent game population.",
+    "Approximate damage magnitude remains approximate; this repairs zero-vs-nonzero immunity handling.",
+    "Existing blind search already chose Quick Attack before this fix; the demonstrated change is in the greedy continuation policy, not these root choices.",
+    "The historical 99-93 deployment comparison predates this patch; no whole-game improvement is established.",
+    "No deployment or rebuilt playable WASM preview in this study."
+  ],
+  "ordinary_native_bot_changed": true,
+  "strength_vs_deployed_proven": false,
+  "source_sha256": {
+    "crates/bot/src/eval.rs": "ae1bb7aa40bbdc55b833e9ff764c3bfa95a103afc28137d3e8d486cee14a5c55",
+    "crates/bot/src/smmcts.rs": "37de094bab39513ba5947373d710bbb608d8ac04d217d40ef0bafba1f2f2cb7e",
+    "crates/bot/tests/foresight.rs": "3a4f239d544fb6131fd991a71eaf81cb7c1978244f5053225df97edef99e5c4a"
+  },
+  "logs_sha256": {
+    "before.txt": "b4f39e9429683f9243e465a66a1b6553160c53a97c2b67eae46f10c444b37f36",
+    "after.txt": "cffc6a335d655494213b244948abb79a3bc46cf1efba6243a490f84180809bea",
+    "regression.txt": "5b5f0f0ceb77f11f7ce0db11e92f2739294a9c067e10366d216fdb9d5dde5b92",
+    "final-foresight.txt": "80e7a410af73b77f7c6d0da3822c1a2e4fac6217a9c40d1208c55469ea1e97e5"
+  }
+}

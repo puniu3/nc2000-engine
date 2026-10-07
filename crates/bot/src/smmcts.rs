@@ -63,11 +63,12 @@
 //! max-damage rollouts, truncation, weighted static eval).
 
 use nc2000_engine::battle::SearchChoice;
-use nc2000_engine::dex::{Dex, TypeId};
+use nc2000_engine::dex::Dex;
 use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::{Battle, PokeId};
 
 use crate::agent::Agent;
+use crate::eval::type_immune_to;
 use crate::mcts::{outcome_reward, playout_value, Playout, RolloutRules};
 use crate::rng::SplitMix64;
 
@@ -969,21 +970,6 @@ fn foe_may_preempt_heal(b: &Battle, dex: &Dex, side: usize, priority: i8) -> boo
             ms.priority > priority && ms.category != nc2000_engine::dex::Category::Status
         })
     })
-}
-
-fn type_immune_to(b: &Battle, dex: &Dex, move_type: TypeId, def: PokeId) -> bool {
-    let d = b.poke(def);
-    if (move_type == dex.known_types.normal || move_type == dex.known_types.fighting)
-        && d.has_type(dex.known_types.ghost)
-        && dex.conds_id("foresight").is_some_and(|id| d.has_volatile(id))
-    {
-        return false;
-    }
-    if move_type == dex.known_types.ground {
-        d.has_type(dex.known_types.flying)
-    } else {
-        d.types.iter().any(|t| dex.type_immune(move_type, t))
-    }
 }
 
 /// Every foe mon that could be standing there when our move resolves, other

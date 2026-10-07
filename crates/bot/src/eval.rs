@@ -15,7 +15,7 @@
 
 use std::sync::OnceLock;
 
-use nc2000_engine::dex::{Accuracy, Category, Dex, FixedDamage, MoveId, Multihit};
+use nc2000_engine::dex::{Accuracy, Category, Dex, FixedDamage, MoveId, Multihit, TypeId};
 use nc2000_engine::state::{Battle, PokeId, Status};
 
 /// Tunable weights. All features are from the owning side's perspective
@@ -784,6 +784,21 @@ fn residualdmg_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
     *ID.get_or_init(|| dex.conds_id("residualdmg"))
 }
 
+pub(crate) fn type_immune_to(b: &Battle, dex: &Dex, move_type: TypeId, def: PokeId) -> bool {
+    let d = b.poke(def);
+    if (move_type == dex.known_types.normal || move_type == dex.known_types.fighting)
+        && d.has_type(dex.known_types.ghost)
+        && dex.conds_id("foresight").is_some_and(|id| d.has_volatile(id))
+    {
+        return false;
+    }
+    if move_type == dex.known_types.ground {
+        d.has_type(dex.known_types.flying)
+    } else {
+        d.types.iter().any(|t| dex.type_immune(move_type, t))
+    }
+}
+
 /// Expected fraction of the defender's *current* HP removed by one use of
 /// `move_id`: gen-2 damage core on effective stats x STAB x effectiveness x
 /// mean roll x mean hits x accuracy. 0 for status moves and unknowable
@@ -842,11 +857,11 @@ pub fn expected_hit_fraction(
         }
     };
 
+    if type_immune_to(b, dex, move_type, def) {
+        return 0.0;
+    }
     let mut eff = 1.0f64;
     for dt in d.types.iter() {
-        if dex.type_immune(move_type, dt) {
-            return 0.0;
-        }
         match dex.eff(move_type, dt) {
             1 => eff *= 2.0,
             -1 => eff *= 0.5,
