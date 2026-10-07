@@ -1,0 +1,31 @@
+{
+  "parents": 82,
+  "branches": 328,
+  "controls": 82,
+  "alternative_branches": 246,
+  "eligible_alternatives": 165,
+  "eligible_alternative_games": 61,
+  "unique_eligible_alternatives": 156,
+  "novel_eligible_states": 151,
+  "novel_eligible_games": 57,
+  "terminal_alternatives": 81,
+  "control_searches": 45,
+  "total_searches": 210,
+  "fallback_branches": 0,
+  "replayed_states": 4498,
+  "replayed_decisions": 8534,
+  "rejected_mutations": [
+    "wrong_opponent_action",
+    "changed_child_hp",
+    "missing_branch",
+    "wrong_control_response"
+  ],
+  "schema": "nc2000-native-counterfactual-search-v1",
+  "protocol_sha256": "a55b333a4db4be57bc1fcbf07d9cd16f419e13369788d48aabf3a43f13da54eb",
+  "snapshots_sha256": "7da524ec7ad24e595389d1b8d8bd9780df5f91bd8237380051289a9b13ccd6ef",
+  "census_sha256": "5ee6056d2d23b3310601b64dd937a3957e0a0159e43070d17badef2c78c5c05f",
+  "measure_search": true,
+  "strength_improvement_proven": false,
+  "phase1_all_states_and_metadata_match": true,
+  "registration_commit": "614635d"
+}
