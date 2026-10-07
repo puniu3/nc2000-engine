@@ -13,7 +13,8 @@ def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def check(result,protocol,trace):
     n=protocol['games'];assert n%2==0 and result['games']==n and result['pairs']==n//2
-    assert result['iterations']==protocol['iterations'] and result['null_control']==protocol['null_control']
+    assert result['iterations']==protocol['iterations']
+    assert result['null_control'] is None
     scores=result['game_scores'];assert len(scores)==n and all(s in [0.,.5,1.] for s in scores)
     pairs=[sum(scores[i:i+2])/2 for i in range(0,n,2)];assert pairs==result['pair_scores']
     counts=Counter(scores);assert result['wins']==counts[1.] and result['losses']==counts[0.]
@@ -36,6 +37,7 @@ def main():
     name=sys.argv[1] if len(sys.argv)>1 else 'main';assert name in ['main','null']
     p=Path('findings/native-overkill-duel-v1');t=Path('tmp/native-overkill-duel-v1')
     protocol_path=p/('protocol.json' if name=='main' else 'null-protocol.json');protocol=json.loads(protocol_path.read_text())
+    assert protocol['null_control']==(name=='null')
     assert sha(p/'native_overkill_duel.rs')==protocol['helper_sha256']
     assert sha(t/'solver')==protocol['binary_sha256']
     for path,expected in {**protocol['inputs'],**protocol['source_sha256']}.items():assert sha(path)==expected
@@ -52,7 +54,7 @@ def main():
         try:check(r,protocol,trace)
         except AssertionError:rejected.append(mutation)
         else:raise AssertionError('accepted '+mutation)
-    print(json.dumps(dict(schema=protocol['schema'],arm=name,checks=summary,result=result,rejected_mutations=rejected,default_enabled=False,deployed_comparison=False,matched_time_comparison=False),indent=2))
+    print(json.dumps(dict(schema=protocol['schema'],arm=name,checks=summary,result=result,rejected_mutations=rejected,default_enabled=False,deployed_comparison=False,matched_time_comparison=False,null_control_from_bound_protocol=protocol['null_control'],output_metadata_error='The frozen Rust json! macro interprets the token null as JSON null, so result.null_control is missing its boolean value. The actual agent setting and null assertions read the Rust boolean correctly. Recover mode only from the hash-bound protocol; retain raw output and do not rerun games.'),indent=2))
 
 
 if __name__=='__main__':main()
