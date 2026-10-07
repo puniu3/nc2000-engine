@@ -1,0 +1,322 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import itertools
+import json
+import runpy
+from collections import Counter
+from fractions import Fraction as F
+from pathlib import Path
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/passive-item-models-v1'
+checks=runpy.run_path(str(root/'tools/adaptive-opening-mix-probe'))
+screen=checks['screen']
+
+
+def compact(ledger):
+    result=checks['compact'](ledger)
+    return {k:v for k,v in result.items() if k != 'runs'}
+
+
+def active_value(lower,active):
+    lines=[tuple(map(F,lower[i])) for i in active]
+    candidates={F(0),F(1)}
+    for (a,b),(c,d) in itertools.combinations(lines,2):
+        if a-b-c+d:
+            p=(d-b)/(a-b-c+d)
+            if 0<=p<=1:candidates.add(p)
+    return max(min(p*a+(1-p)*b for a,b in lines) for p in candidates)
+
+
+def verify(rows):
+    cfg,result=rows[0],rows[-1]
+    assert cfg['backend']=='ledger' and cfg['budget_ms']==180000 and cfg['gap_tolerance']==2e-5
+    assert cfg['worlds']==len(screen['rows']) and cfg['case']==screen['case']
+    assert cfg['policies']==['move rockslide','move swordsdance'] and cfg['continuation']==['move rockslide']
+    assert cfg['opponent_opening']==['move sleeptalk','move sleeptalk','move hiddenpowerice']
+    assert cfg['own_actions']==screen['case']['actions']
+    lower=[[0.,0.] for _ in range(cfg['worlds'])]
+    full=[[False,False] for _ in range(cfg['worlds'])]
+    attempted=[[0,0] for _ in range(cfg['worlds'])]
+    active=[0];upper={};mix=[0.,1.];hi=1.;runs=0;last_seconds=0.;reports=[]
+    root_cuts=0;kind_counts=Counter()
+    for call,row in enumerate(rows[1:-1],1):
+        assert row['seconds']>=last_seconds and row['cell_seconds']>=0
+        last_seconds=row['seconds']
+        while True:
+            target=max(0.,hi-2e-5+2e-8)
+            preparation=next(((i,'swordsdance',1.) if not full[i][1] else (i,'rockslide',1.) if not full[i][0]
+                              else (i,'upper',1.) for i in active if not all(full[i]) or i not in upper),None)
+            if preparation:
+                index,kind,threshold=preparation;break
+            index=next(i for i in range(cfg['worlds']) if i not in active and mix[0]*lower[i][0]+mix[1]*lower[i][1]<target)
+            if mix[1]>0 and not full[index][1] and attempted[index][1]!=len(active):
+                kind='swordsdance';threshold=min(1.,max(0.,(target+1e-9-mix[0]*lower[index][0])/mix[1]));break
+            if mix[0]>0 and not full[index][0] and attempted[index][0]!=len(active):
+                kind='rockslide';threshold=min(1.,max(0.,(target+1e-9-mix[1]*lower[index][1])/mix[0]));break
+            active.append(index)
+        assert (row['index'],row['kind'],row['threshold'])==(index,kind,threshold)
+        assert row['active']==active and row['id']==screen['rows'][index]['request']['id']
+        ledger=row['ledger'];side=0 if kind=='upper' else 1
+        expected=dict(game=6,decision=32,target_side=side,policy_side=side,
+            first_choice='move '+('sleeptalk' if kind=='upper' else kind),
+            priority=['move hiddenpowerice' if kind=='upper' else 'move rockslide'],rest_at_percent=None,
+            horizon=3 if kind=='upper' else 2,work_budget=200000,cell_cap=10000,guarded_keys=True,support_certificate=True)
+        if kind=='upper':expected['opening']=cfg['opponent_opening']
+        assert ledger['config']==expected
+        node=ledger['nodes'][ledger['root']]
+        assert node['state_key']==screen['rows'][index]['root']['key']
+        reports.append(checks['ledger_check'](ledger));checks['policy_check'](ledger)
+        if kind=='upper':
+            upper[index]=[1-next(b['bounds'][0] for b in node['branches'] if b['choices'][1]==a) for a in cfg['own_actions']]
+        else:
+            action=int(kind=='swordsdance')
+            lower[index][action]=max(lower[index][action],ledger['bounds'][0])
+            full[index][action] |= threshold==1.
+            attempted[index][action]=len(active)
+            root_cuts+=sum(b['continuation_pending_mass']>0 for b in node['branches'])
+        if all(all(full[i]) and i in upper for i in active):
+            p=checks['normalized'](row['mix'])
+            value=min(p[0]*F(lower[i][0])+p[1]*F(lower[i][1]) for i in active)
+            assert active_value(lower,active)-value<F(1,10**10)
+        else:assert row['mix']==mix
+        checks['bound_check'](row,lower,upper,cfg['own_actions'])
+        mix=row['mix'];hi=row['bounds'][1];runs+=ledger['runs'];kind_counts[kind]+=1
+        assert row['calls']==call and row['runs']==runs
+    assert result['converged'] and result['bounds'][1]-result['bounds'][0]<=2e-5
+    assert result['active']==active and result['setup_seconds']==cfg['setup_seconds']
+    assert result['seconds']>=last_seconds
+    for k in ['mix','adversary','bounds','calls','runs']:assert result[k]==rows[-2][k]
+    for snapshot in result['snapshots']:
+        assert snapshot['seconds']>=snapshot['checkpoint_seconds']
+        state=rows[snapshot['calls']] if snapshot['calls'] else dict(mix=[0.,1.],bounds=[0.,1.],runs=0)
+        assert snapshot['mix']==state['mix'] and snapshot['runs']==state['runs']
+        assert [snapshot['lower'],snapshot['upper']]==state['bounds']
+    for fault in ['inflated_lower','invalid_mix','wrong_adversary']:
+        bad=copy.deepcopy(result)
+        if fault=='inflated_lower':bad['bounds'][0]+=.001
+        elif fault=='invalid_mix':bad['mix']=[1.,1.]
+        else:bad['adversary'][0][0]=100000
+        try:checks['bound_check'](bad,lower,upper,cfg['own_actions'])
+        except AssertionError:pass
+        else:raise AssertionError('Accepted corruption: '+fault)
+    return dict(calls=result['calls'],proof_runs=runs,kind_counts=kind_counts,
+        root_branches_pruned=root_cuts,certificate_nodes=sum(r['nodes'] for r in reports),
+        active_worlds=[screen['rows'][i]['request']['id'] for i in active],mix=mix,bounds=result['bounds'],
+        negative_controls=['inflated_lower','invalid_mix','wrong_adversary'])
+
+
+item_checks = runpy.run_path(str(root / 'tools/item-projection-probe'))
+original_screen = screen
+items = json.loads((root / 'data/gen2stadium2.json').read_bytes())['items']
+
+
+def passive(name):
+    return bool(name) and not items[name].get('callbacks') and name not in ['thickclub', 'lightball', 'metalpowder', 'quickclaw']
+
+
+def normalized_view(row):
+    view = copy.deepcopy(row['root']['state'])
+    for side in view['sides']:
+        assert side['pokemonLeft'] == 1
+        for mon in side['pokemon']:
+            if not mon['active']:
+                assert mon['fainted'] and mon['hp'] == 0
+                mon.update(item='', lastItem='', itemState={'id': ''})
+            else:
+                if passive(mon['item']):
+                    mon['item'] = 'pokeball'
+                    assert passive(mon['itemState']['id'])
+                    mon['itemState']['id'] = 'pokeball'
+                if passive(mon['lastItem']):
+                    mon['lastItem'] = 'pokeball'
+    return view
+
+
+def validate_groups(cfg):
+    groups = cfg['groups']
+    roots = cfg['model_audit']['roots']
+    rows = original_screen['rows']
+    assert cfg['original_worlds'] == len(roots) == len(rows) == 2200
+    assert cfg['worlds'] == len(groups)
+    assert sorted(i for group in groups for i in group) == list(range(len(rows)))
+    assert all(group == sorted(group) and group for group in groups)
+    assert [group[0] for group in groups] == sorted(group[0] for group in groups)
+    by_key = {}
+    for i, root_key in enumerate(roots):
+        assert root_key['raw'] == rows[i]['root']['key']
+        assert root_key['eligible']
+        assert 0 <= int(root_key['key']) < 2**128
+        by_key.setdefault(root_key['key'], []).append(i)
+    assert list(by_key.values()) == groups
+    paired = 0
+    for group in groups:
+        first = normalized_view(rows[group[0]])
+        for index in group[1:]:
+            assert normalized_view(rows[index]) == first
+            assert passive(rows[index]['root']['item']) and passive(rows[group[0]]['root']['item'])
+        if len(group) > 1:
+            choices = []
+            for side in first['sides']:
+                mon = next(mon for mon in side['pokemon'] if mon['active'])
+                assert all(move['pp'] > 0 and not move['disabled'] for move in mon['moves'])
+                choices.append(len(mon['moves']))
+            paired += (len(group) - 1) * choices[0] * choices[1]
+    audit = cfg['model_audit']
+    assert audit['maximum_error'] == 0
+    if cfg['backend'] == 'audit':
+        assert audit['audit_cells'] == paired and audit['audit_runs'] > 0
+    else:
+        assert audit['audit_cells'] == audit['audit_runs'] == 0
+    return dict(worlds=len(rows), groups=len(groups), shared_worlds=len(rows)-len(groups),
+                group_sizes={str(k):v for k,v in Counter(map(len, groups)).items()}, paired_root_cells=paired,
+                passive_items=sorted({rows[i]['root']['item'] for group in groups if len(group)>1 for i in group}))
+
+
+def audit_proof(rows):
+    global screen
+    before = rows[0].copy()
+    validate_groups(before)
+    assert before['backend'] == 'audit' and before['budget_ms'] == 900000
+    screen = dict(original_screen, rows=[original_screen['rows'][group[0]] for group in before['groups']])
+    rows[0] = dict(before, backend='ledger', budget_ms=180000)
+    audit_runs = audit_cells = 0
+    for row in rows[1:-1]:
+        ledger = row['ledger']
+        assert ledger['streamed'] and ledger['eager_root'] and ledger['projection_guarded'] and ledger['item_guard_expanded']
+        assert ledger['audit_runs'] > 0 and ledger['audit_cells'] > 0
+        audit_runs += ledger['audit_runs']
+        audit_cells += ledger['audit_cells']
+        for branch in ledger['nodes'][ledger['root']]['branches']:
+            branch['continuation_pending_mass'] = branch['pending']
+    projection = item_checks['projection_check'](rows)
+    result = verify(rows)
+    rows[0] = before
+    for row in rows[1:-1]:
+        for branch in row['ledger']['nodes'][row['ledger']['root']]['branches']:
+            del branch['continuation_pending_mass']
+    return dict(result, projection=projection, audit_runs=audit_runs, audit_cells=audit_cells)
+
+
+def numeric_match(proof, rows, partial=False):
+    validate_groups(rows[0])
+    reference_header, actual_header = proof[0], rows[0]
+    assert reference_header['groups'] == actual_header['groups']
+    assert reference_header['model_audit']['roots'] == actual_header['model_audit']['roots']
+    proof[0] = {k: v for k, v in reference_header.items() if k not in ['model_audit', 'grouping_seconds']}
+    rows[0] = {k: v for k, v in actual_header.items() if k not in ['model_audit', 'grouping_seconds']}
+    result = item_checks['numerical_match'](proof, rows, partial)
+    proof[0], rows[0] = reference_header, actual_header
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', nargs=9, type=Path)
+    args = parser.parse_args()
+    paths = [Path(__file__).resolve(), root / 'data/gen2stadium2.json',
+             root / 'findings/item-move-product-v1/records.json.gz', root / 'findings/item-projection-v1/records.json.gz',
+             root / 'tools/item-projection-probe', root / 'tools/cutting-opening-mix-probe',
+             root / 'tools/adaptive-opening-mix-probe', root / 'tools/hidden-move-witness-probe', root / 'tools/policy-witness-probe']
+    paths += [root / 'crates/bot/examples' / name for name in ['passive_item_mix.rs', 'passive_item_models/mod.rs',
+              'item_projection_witness.rs', 'item_projection_guard.rs', 'policy_witness.rs', 'stream_step/mod.rs',
+              'aliased_witness/mod.rs', 'threshold_witness/mod.rs']]
+    for directory in ['crates/bot/src', 'crates/engine/src']:
+        paths += list((root / directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists()
+        proof, repeated, numeric, numeric_repeat, zero, half = [[json.loads(line) for line in p.read_bytes().splitlines()] for p in args.record[:6]]
+        unit = args.record[6].read_text()
+        assert '3 passed; 0 failed' in unit
+        baselines = [[json.loads(line) for line in p.read_bytes().splitlines()] for p in args.record[7:9]]
+        assert item_checks['stable'](proof) == item_checks['stable'](repeated)
+        assert proof[0]['groups'] == repeated[0]['groups'] and proof[0]['model_audit'] == repeated[0]['model_audit']
+        raw = b''.join(json.dumps(row, separators=(',', ':')).encode() + b'\n' for row in proof)
+        bundle = dict(hashes=hashes, others=[numeric, numeric_repeat, zero, half], baselines=baselines,
+                      proof_sha256=hashlib.sha256(raw).hexdigest(), proof_repeat_sha256=item_checks['fingerprint'](repeated), unit_tests=3)
+    else:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert bundle['hashes'] == hashes
+        raw = gzip.decompress((archive / 'proofs.jsonl.gz').read_bytes())
+        assert hashlib.sha256(raw).hexdigest() == bundle['proof_sha256']
+        proof = [json.loads(line) for line in raw.splitlines()]
+        numeric, numeric_repeat, zero, half = bundle['others']
+    assert item_checks['fingerprint'](proof) == bundle['proof_repeat_sha256']
+    grouping = validate_groups(proof[0])
+    certified = audit_proof(proof)
+    for rows in [numeric, numeric_repeat]:
+        numeric_match(proof, rows)
+    for rows in [zero, half]:
+        numeric_match(proof, rows, True)
+    assert item_checks['stable'](numeric) == item_checks['stable'](numeric_repeat)
+    bad = copy.deepcopy(proof[0])
+    group = next(group for group in bad['groups'] if len(group) > 1)
+    group.pop()
+    try:
+        validate_groups(bad)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError('Accepted missing model')
+    bad = copy.deepcopy(proof[0])
+    groups = bad['groups']
+    target = next(i for i, group in enumerate(groups) if len(group) > 1)
+    source = next(i for i, group in enumerate(groups) if original_screen['rows'][group[0]]['root']['item'] == 'focusband')
+    merged = sorted(groups[target] + groups[source])
+    key = bad['model_audit']['roots'][merged[0]]['key']
+    for index in merged:
+        bad['model_audit']['roots'][index]['key'] = key
+    bad['groups'] = sorted([g for i, g in enumerate(groups) if i not in [source, target]] + [merged], key=lambda g:g[0])
+    bad['worlds'] -= 1
+    try:
+        validate_groups(bad)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError('Accepted effectful item merge')
+    reference = json.loads(gzip.decompress((root / 'findings/item-projection-v1/records.json.gz').read_bytes()))['others'][:2]
+    baselines = bundle['baselines']
+    for baseline in baselines:
+        assert item_checks['stable'](baseline) == item_checks['stable'](reference[0])
+        for key in ['bounds', 'mix', 'calls', 'runs', 'active', 'converged']:
+            assert baseline[-1][key] == reference[0][-1][key]
+    assert numeric[-1]['bounds'] == reference[0][-1]['bounds'] and numeric[-1]['mix'] == reference[0][-1]['mix']
+    summary = dict(grouping=grouping, proof=certified, model_audit={k:v for k,v in proof[0]['model_audit'].items() if k!='roots'},
+                   numeric_runs=numeric[-1]['runs'], previous_numeric_runs=reference[0][-1]['runs'],
+                   run_reduction=1-numeric[-1]['runs']/reference[0][-1]['runs'], numeric_seconds=[r[-1]['seconds'] for r in [numeric, numeric_repeat]],
+                   setup_seconds=[r[0]['setup_seconds'] for r in [numeric, numeric_repeat]],
+                   grouping_seconds=[r[0]['grouping_seconds'] for r in [numeric, numeric_repeat]],
+                   previous_numeric_seconds=[r[-1]['seconds'] for r in baselines],
+                   previous_setup_seconds=[r[0]['setup_seconds'] for r in baselines],
+                   historical_numeric_seconds=[r[-1]['seconds'] for r in reference],
+                   zero_budget=zero[-1], half_second=half[-1], unit_tests=bundle['unit_tests'],
+                   negative_controls=['missing_model', 'effectful_item_merge']+certified['negative_controls'],
+                   production_changed=False, strength_demonstrated=False,
+                   scope='Research controller shares whole models by passive held-item identity. Presence is preserved using Poke Ball; '
+                   'items with callbacks and the four direct identity readers remain distinct. Nonactive item metadata is removed '
+                   'only at idle move boundaries with one remaining Pokemon per side. Every original model is retained in a group; '
+                   'root identity and independently normalized exported states are checked. All first joint choices for every folded '
+                   'member are native-enumerated and compared by normalized full successor state, repeated twice. Representative '
+                   'policy proofs and controller thresholds are independently checked, and the final mixture and bounds equal the '
+                   'unshared reference. Tests cover actual theft, transformation and their next transitions plus rejection of live '
+                   'benches and pending turns. Fresh unshared/grouped/grouped/unshared timing runs are sequential, with setup '
+                   'reported separately; audits are excluded. This is source-reviewed state equivalence with finite checks, '
+                   'not a machine-checked '
+                   'theorem for arbitrary engine states or an imperfect-information observation quotient. Fixed continuation lower '
+                   'policies do not condition on item labels; upper witnesses use actual representative worlds. No deployed-strength claim.')
+    if args.record:
+        archive.mkdir()
+        (archive / 'proofs.jsonl.gz').write_bytes(gzip.compress(raw, mtime=0))
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+        (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    else:
+        assert summary == json.loads((archive / 'summary.json').read_bytes())
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == '__main__':
+    main()
