@@ -39805,6 +39805,550 @@
         "ordinary_bot_changed": false,
         "strength_improvement_proven": false
       }
+    },
+    "findings/native-frontier-refine-v1/summary.json": {
+      "sha256": "4bc271bde58408ad7ec4b83febfeb1fd909c49c61e4974dbf480300e5821bbb5",
+      "data": {
+        "eligible_unexpanded_states": 197737,
+        "samples": 64,
+        "additional_probe_runs": 39270,
+        "positive_lower_bounds": 49,
+        "lower_bounds_above_01": 49,
+        "upper_bounds_below_one": 0,
+        "complete_cells": 256,
+        "total_cells": 256,
+        "bounds_with_outward_padding": [
+          [
+            0.33333333338855375,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.33333333338855375,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.33333333338855375,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.33333333338855375,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.9023437499,
+            1.0
+          ],
+          [
+            0.8076923074859667,
+            1.0
+          ],
+          [
+            0.33333333338855375,
+            1.0
+          ],
+          [
+            0.26923076922069256,
+            1.0
+          ],
+          [
+            0.33333333338855375,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.9023437499,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.33333333338855375,
+            1.0
+          ],
+          [
+            0.33333333338855375,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.8076923074859667,
+            1.0
+          ],
+          [
+            0.33333333338855375,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.26923076922069256,
+            1.0
+          ],
+          [
+            0.8076923074859667,
+            1.0
+          ],
+          [
+            0.8076923074859667,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.26923076922069256,
+            1.0
+          ],
+          [
+            0.33333333338855375,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.8076923074859667,
+            1.0
+          ],
+          [
+            0.26923076922069256,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.26923076922069256,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.2692307692206926,
+            1.0
+          ],
+          [
+            0.7288161055732747,
+            1.0
+          ],
+          [
+            0.26923076922069256,
+            1.0
+          ]
+        ],
+        "numerical_padding": 1e-10,
+        "groups": [
+          {
+            "status": "Frz",
+            "action": "move doubleedge",
+            "bound_class": "zero",
+            "count": 4
+          },
+          {
+            "status": "None",
+            "action": "move doubleedge",
+            "bound_class": "strong",
+            "count": 8
+          },
+          {
+            "status": "Slp",
+            "action": "move sleeptalk",
+            "bound_class": "strong",
+            "count": 41
+          },
+          {
+            "status": "Slp",
+            "action": "move sleeptalk",
+            "bound_class": "zero",
+            "count": 11
+          }
+        ],
+        "original_search_outputs_match": true,
+        "search_bounds_changed": false,
+        "performance_improvement_proven": false,
+        "old_complete_cells_unchanged": 207,
+        "event_interval_checks": 1024,
+        "schema": "nc2000-native-frontier-refine-v1",
+        "protocol_sha256": "664778b0f23a98048b50ca265bf2a133d7ae9322ca5ab23a9b40dc1ef333f3c0",
+        "records_sha256": "7f4ec1cc7f19e41b9c182a3256b293cc92157dcc7bde7909371212e27c167579",
+        "replay_verification": {
+          "cells_checked": 256,
+          "extra_engine_runs": 39270,
+          "policy_validation_runs": 64,
+          "max_probability_error": 0.0,
+          "records_sha256": "7f4ec1cc7f19e41b9c182a3256b293cc92157dcc7bde7909371212e27c167579",
+          "performance_sample": false
+        },
+        "verifier_binary_sha256": "bad110977b98ac8749973219a2ca63d571f0a078e68ecd7e5485697f8e751aa7",
+        "rejected_mutations": [
+          "changed_state",
+          "wrong_reply",
+          "false_bound",
+          "hidden_live_mass"
+        ],
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false
+      }
+    },
+    "findings/native-frontier-defer-v1/summary.json": {
+      "sha256": "118e7cb2d84e40808c3905f72b4892c771a57b25a4e05dc6358f1ee9cb4bb78a",
+      "data": {
+        "results": [
+          {
+            "id": "trial-0",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.29620143242332375,
+            "target_score_interval": [
+              0.29620143242332375,
+              1.0
+            ],
+            "stop": "NodeBudget",
+            "runs": 921554,
+            "nodes": 200068,
+            "elapsed_ms": 39703.589416
+          },
+          {
+            "id": "trial-1",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.29620143242332375,
+            "target_score_interval": [
+              0.29620143242332375,
+              1.0
+            ],
+            "stop": "NodeBudget",
+            "runs": 921554,
+            "nodes": 200068,
+            "elapsed_ms": 42930.176334
+          },
+          {
+            "id": "trial-2",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.29620143242332375,
+            "target_score_interval": [
+              0.29620143242332375,
+              1.0
+            ],
+            "stop": "NodeBudget",
+            "runs": 921554,
+            "nodes": 200068,
+            "elapsed_ms": 42807.14775
+          },
+          {
+            "id": "trial-3",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.29620143242332375,
+            "target_score_interval": [
+              0.29620143242332375,
+              1.0
+            ],
+            "stop": "NodeBudget",
+            "runs": 921554,
+            "nodes": 200068,
+            "elapsed_ms": 39602.298959
+          }
+        ],
+        "combined_first_action_guarantees": {
+          "move doubleedge": [
+            0.8420197907628891,
+            0.9999906503889959
+          ],
+          "move curse": [
+            0.0,
+            0.9999906503889959
+          ],
+          "move rest": [
+            0.29620143242332375,
+            0.9999906503889959
+          ],
+          "move sleeptalk": [
+            0.0,
+            0.9999906503889959
+          ]
+        },
+        "actual_rest_pure_loss_lower": 0.0,
+        "actual_rest_error_proven": false,
+        "rest_over_doubleedge_security_advantage_lower": 0.0,
+        "rest_better_than_doubleedge_proven": false,
+        "repeats_match": true,
+        "control_reproduces_parent": true,
+        "candidate_activated": false,
+        "lower_bound_change": 0.0,
+        "interval_width_change": 0.0,
+        "deferred_eager_leaves": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "schema": "nc2000-native-frontier-defer-v1",
+        "protocol_sha256": "8f8c1dba3ab9cf67cc139e1dcb391df429e1cbe2892112cc5c7e208d544df044",
+        "records_sha256": "e4d86aa9bc4da3d1a0c8e59191be6ed367cf06db695412605103f4ff3b674ad9",
+        "rejected_mutations": [
+          "missing_job",
+          "false_bound",
+          "wrong_mode",
+          "changed_repeat",
+          "restricted_reply"
+        ],
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false,
+        "matched_time_comparison": false
+      }
+    },
+    "findings/native-frontier-defer-complete-v1/summary.json": {
+      "sha256": "d45cf73cb340567a2e196f705fbff00281f9e24594cecb7f619ff91fd014254f",
+      "data": {
+        "results": [
+          {
+            "id": "trial-0",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.29620143242332375,
+            "target_score_interval": [
+              0.29620143242332375,
+              1.0
+            ],
+            "stop": "NodeBudget",
+            "runs": 921554,
+            "nodes": 200068,
+            "elapsed_ms": 39791.319542
+          },
+          {
+            "id": "trial-1",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.30619502368918616,
+            "target_score_interval": [
+              0.30619502368918616,
+              1.0
+            ],
+            "stop": "WorkExhausted",
+            "runs": 2000000,
+            "nodes": 50677,
+            "elapsed_ms": 63989.555625
+          },
+          {
+            "id": "trial-2",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.30619502368918616,
+            "target_score_interval": [
+              0.30619502368918616,
+              1.0
+            ],
+            "stop": "WorkExhausted",
+            "runs": 2000000,
+            "nodes": 50677,
+            "elapsed_ms": 65265.73095800001
+          },
+          {
+            "id": "trial-3",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.29620143242332375,
+            "target_score_interval": [
+              0.29620143242332375,
+              1.0
+            ],
+            "stop": "NodeBudget",
+            "runs": 921554,
+            "nodes": 200068,
+            "elapsed_ms": 39790.58175
+          }
+        ],
+        "combined_first_action_guarantees": {
+          "move doubleedge": [
+            0.8420197907628891,
+            0.9999906503889959
+          ],
+          "move curse": [
+            0.0,
+            0.9999906503889959
+          ],
+          "move rest": [
+            0.30619502368918616,
+            0.9999906503889959
+          ],
+          "move sleeptalk": [
+            0.0,
+            0.9999906503889959
+          ]
+        },
+        "actual_rest_pure_loss_lower": 0.0,
+        "actual_rest_error_proven": false,
+        "rest_over_doubleedge_security_advantage_lower": 0.0,
+        "rest_better_than_doubleedge_proven": false,
+        "repeats_match": true,
+        "control_reproduces_parent": true,
+        "candidate_activated": true,
+        "lower_bound_change": 0.009993591265862412,
+        "interval_width_change": -0.009993591265862412,
+        "deferred_eager_leaves": [
+          0,
+          1127524,
+          1127524,
+          0
+        ],
+        "schema": "nc2000-native-frontier-defer-complete-v1",
+        "protocol_sha256": "8f5c984f625c110d43380f7c727ecc19b56459524b77e2841dc7526e24b19fa6",
+        "records_sha256": "79921358bce7db2df1ea200561d5e9a41b5e88781c5d6a7619e7b40aacad715e",
+        "rejected_mutations": [
+          "missing_job",
+          "false_bound",
+          "wrong_mode",
+          "changed_repeat",
+          "restricted_reply"
+        ],
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false,
+        "matched_time_comparison": false,
+        "representative_verification": {
+          "leaf_replays": 31560,
+          "merged_leaves": 13144,
+          "cells_checked": 256,
+          "extra_engine_runs": 39270,
+          "policy_validation_runs": 64,
+          "max_probability_error": 0.0,
+          "records_sha256": "7f4ec1cc7f19e41b9c182a3256b293cc92157dcc7bde7909371212e27c167579",
+          "performance_sample": false
+        },
+        "total_verification_engine_runs": 70894
+      }
     }
   },
   "foresight_fix": {
@@ -45929,7 +46473,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-07T22:53:01.173065+09:00",
+    "checked_at": "2026-10-07T23:14:32.658962+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -45976,7 +46520,10 @@
     "followup_first_step": "native-first-step-loss-v1",
     "followup_snorlax_witness": "native-snorlax-witness-v1",
     "followup_frontier_step": "native-frontier-step-v1",
-    "followup_result_commit": "090ef3024b3b3f0fbaa96171449ed153cb549238"
+    "followup_result_commit": "6a3a64bef28ae28aa15c72b142e5ff58cd488aa8",
+    "followup_frontier_refine": "native-frontier-refine-v1",
+    "followup_frontier_defer": "native-frontier-defer-v1",
+    "followup_frontier_defer_complete": "native-frontier-defer-complete-v1"
   },
   "native_endgame_census": {
     "status": "complete",
