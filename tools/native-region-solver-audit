@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+import re
+import runpy
+import statistics
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def rows(path):
+    return [json.loads(l) for l in Path(path).read_text().splitlines()]
+
+
+def check(record,protocol,roots,prior,capacity):
+    result=runpy.run_path('tools/native-loss-threshold-audit')['check_threshold'](record,protocol,roots)
+    for r in record:
+        assert f'hp_attack_region_capacity: {capacity},' in r['config']
+        assert r['kernel']['peak_leaves']<=capacity
+        old=prior[r['game'],r['frame']]
+        for a,b in zip([old['value_p0'],*old['cells_p0']],[r['value_p0'],*r['cells_p0']]):
+            assert max(a[0],b[0])<=min(a[1],b[1])+1e-8
+        if capacity==0:
+            normalized={k:v for k,v in r.items() if k not in ['elapsed_ms','kernel']}
+            normalized['config']=normalized['config'].replace('hp_attack_region_capacity: 0, ','')
+            assert normalized=={k:v for k,v in old.items() if k!='elapsed_ms'}
+            assert all(x==0 for x in r['kernel'].values())
+    return result
+
+
+def main():
+    directory=Path('findings/native-region-solver-v1');scratch=Path(sys.argv[1])
+    protocol=json.loads((directory/'protocol.json').read_text())
+    assert digest(scratch/'solver')==protocol['solver_binary_sha256']
+    assert digest(directory/'native_region_solver.rs')==protocol['helper_sha256']
+    assert digest(directory/'bounds.patch')==protocol['patch_sha256']
+    roots=rows('tmp/native-endgame-census-v1/roots.jsonl')
+    assert digest('tmp/native-endgame-census-v1/roots.jsonl')==protocol['roots_sha256']
+    prior={(r['game'],r['frame']):r for r in rows('tmp/native-loss-lower-screen-v1/main.jsonl')}
+    passes={};records={}
+    for name in protocol['run_order']:
+        arm='regions' if name.startswith('regions') else 'control'
+        p=json.loads((scratch/(name+'.json')).read_text())
+        assert p=={**protocol,'hp_attack_region_capacity':protocol['arms'][arm],'arm':arm,'pass':name}
+        rr=rows(scratch/(name+'.jsonl'));rr.sort(key=lambda r:(r['game'],r['frame']))
+        passes[name]=check(rr,p,roots,prior,protocol['arms'][arm]);records[name]=rr
+    for arm in ['control','regions']:
+        a=records[arm+'-1'];b=records[arm+'-2']
+        assert [{k:v for k,v in r.items() if k!='elapsed_ms'} for r in a]==[{k:v for k,v in r.items() if k!='elapsed_ms'} for r in b]
+    comparisons=[]
+    for i,a in enumerate(records['control-1']):
+        b=records['regions-1'][i]
+        assert (a['game'],a['frame'])==(b['game'],b['frame'])
+        timing={arm:[records[arm+'-'+str(n)][i]['elapsed_ms'] for n in [1,2]] for arm in ['control','regions']}
+        comparisons.append({'game':a['game'],'frame':a['frame'],'control_loss':a['threshold_loss'],'region_loss':b['threshold_loss'],
+            'upper_change':b['threshold_loss'][1]-a['threshold_loss'][1],'timing_ms':timing,
+            'elapsed_ratio':statistics.mean(timing['regions'])/statistics.mean(timing['control']),
+            'kernel':b['kernel'],'nodes':[a['nodes'],b['nodes']],'runs':[a['runs'],b['runs']]})
+    rejected=[]
+    p=json.loads((scratch/'regions-1.json').read_text())
+    for kind in ['missing_root','wrong_cache_capacity','false_loss','invalid_cell']:
+        rr=copy.deepcopy(records['regions-1'])
+        if kind=='missing_root':rr.pop()
+        elif kind=='wrong_cache_capacity':rr[0]['kernel']['peak_leaves']=p['hp_attack_region_capacity']+1
+        elif kind=='false_loss':rr[0]['threshold_loss']=[2.,2.]
+        else:rr[0]['cells_p0'][0]=[1.,0.]
+        try:check(rr,p,roots,prior,p['hp_attack_region_capacity'])
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted mutation '+kind)
+    times={arm:[sum(r['elapsed_ms'] for r in records[arm+'-'+str(n)]) for n in [1,2]] for arm in ['control','regions']}
+    result=dict(schema=protocol['schema'],protocol_sha256=digest(directory/'protocol.json'),passes=passes,
+        comparisons=comparisons,total_timing_ms=times,elapsed_ratio=statistics.mean(times['regions'])/statistics.mean(times['control']),
+        repeats_match=True,control_matches_frozen=True,rejected_mutations=rejected,
+        ordinary_bot_changed=False,main_solver_changed=False,strength_improvement_proven=False,
+        artifacts={name:digest(scratch/(name+'.jsonl')) for name in protocol['run_order']})
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()

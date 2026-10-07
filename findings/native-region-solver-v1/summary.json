@@ -1,0 +1,539 @@
+{
+  "schema": "nc2000-native-region-solver-v1",
+  "protocol_sha256": "ebfc412b8ad8b15b889de419dc383e8cec806ab8108098e4584df7f60fc75a89",
+  "passes": {
+    "control-1": {
+      "roots": 6,
+      "games": 6,
+      "runs": 1500000,
+      "stops": {
+        "WorkExhausted": 6
+      },
+      "value_width_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_above_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_strictly_dominated": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "unresolved_selected_pure_loss": {
+        "roots": 6,
+        "games": 6,
+        "keys": [
+          [
+            0,
+            18
+          ],
+          [
+            3,
+            97
+          ],
+          [
+            4,
+            60
+          ],
+          [
+            10,
+            32
+          ],
+          [
+            13,
+            41
+          ],
+          [
+            16,
+            18
+          ]
+        ]
+      },
+      "max_nodes_plus_closed": 36127,
+      "max_runs": 250000
+    },
+    "regions-1": {
+      "roots": 6,
+      "games": 6,
+      "runs": 1500000,
+      "stops": {
+        "WorkExhausted": 6
+      },
+      "value_width_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_above_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_strictly_dominated": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "unresolved_selected_pure_loss": {
+        "roots": 6,
+        "games": 6,
+        "keys": [
+          [
+            0,
+            18
+          ],
+          [
+            3,
+            97
+          ],
+          [
+            4,
+            60
+          ],
+          [
+            10,
+            32
+          ],
+          [
+            13,
+            41
+          ],
+          [
+            16,
+            18
+          ]
+        ]
+      },
+      "max_nodes_plus_closed": 36127,
+      "max_runs": 250000
+    },
+    "regions-2": {
+      "roots": 6,
+      "games": 6,
+      "runs": 1500000,
+      "stops": {
+        "WorkExhausted": 6
+      },
+      "value_width_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_above_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_strictly_dominated": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "unresolved_selected_pure_loss": {
+        "roots": 6,
+        "games": 6,
+        "keys": [
+          [
+            0,
+            18
+          ],
+          [
+            3,
+            97
+          ],
+          [
+            4,
+            60
+          ],
+          [
+            10,
+            32
+          ],
+          [
+            13,
+            41
+          ],
+          [
+            16,
+            18
+          ]
+        ]
+      },
+      "max_nodes_plus_closed": 36127,
+      "max_runs": 250000
+    },
+    "control-2": {
+      "roots": 6,
+      "games": 6,
+      "runs": 1500000,
+      "stops": {
+        "WorkExhausted": 6
+      },
+      "value_width_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_at_most_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_pure_loss_above_002": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "selected_strictly_dominated": {
+        "roots": 0,
+        "games": 0,
+        "keys": []
+      },
+      "unresolved_selected_pure_loss": {
+        "roots": 6,
+        "games": 6,
+        "keys": [
+          [
+            0,
+            18
+          ],
+          [
+            3,
+            97
+          ],
+          [
+            4,
+            60
+          ],
+          [
+            10,
+            32
+          ],
+          [
+            13,
+            41
+          ],
+          [
+            16,
+            18
+          ]
+        ]
+      },
+      "max_nodes_plus_closed": 36127,
+      "max_runs": 250000
+    }
+  },
+  "comparisons": [
+    {
+      "game": 0,
+      "frame": 18,
+      "control_loss": [
+        0.0,
+        0.7447208493191223
+      ],
+      "region_loss": [
+        0.0,
+        0.7447208493191223
+      ],
+      "upper_change": 0.0,
+      "timing_ms": {
+        "control": [
+          4980.655875,
+          4951.919583999999
+        ],
+        "regions": [
+          5037.316374999999,
+          5048.06625
+        ]
+      },
+      "elapsed_ratio": 1.0153844455177572,
+      "kernel": {
+        "calls": 231,
+        "eligible": 0,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0
+      },
+      "nodes": [
+        14435,
+        14435
+      ],
+      "runs": [
+        250000,
+        250000
+      ]
+    },
+    {
+      "game": 3,
+      "frame": 97,
+      "control_loss": [
+        0.0,
+        0.9496806103462128
+      ],
+      "region_loss": [
+        0.0,
+        0.9496806103462128
+      ],
+      "upper_change": 0.0,
+      "timing_ms": {
+        "control": [
+          6700.284167,
+          6094.040916
+        ],
+        "regions": [
+          5970.03825,
+          6353.323833
+        ]
+      },
+      "elapsed_ratio": 0.9631896956701707,
+      "kernel": {
+        "calls": 866,
+        "eligible": 0,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0
+      },
+      "nodes": [
+        36127,
+        36127
+      ],
+      "runs": [
+        250000,
+        250000
+      ]
+    },
+    {
+      "game": 4,
+      "frame": 60,
+      "control_loss": [
+        0.0,
+        0.4326923078770051
+      ],
+      "region_loss": [
+        0.0,
+        0.4326923078770051
+      ],
+      "upper_change": 0.0,
+      "timing_ms": {
+        "control": [
+          6056.954125,
+          5827.271542
+        ],
+        "regions": [
+          6066.1605420000005,
+          5962.800875
+        ]
+      },
+      "elapsed_ratio": 1.012178811986203,
+      "kernel": {
+        "calls": 854,
+        "eligible": 12,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 10822,
+        "translated_leaves": 0
+      },
+      "nodes": [
+        33114,
+        33114
+      ],
+      "runs": [
+        250000,
+        250000
+      ]
+    },
+    {
+      "game": 10,
+      "frame": 32,
+      "control_loss": [
+        0.0,
+        0.06826167249688964
+      ],
+      "region_loss": [
+        0.0,
+        0.06826167249688964
+      ],
+      "upper_change": 0.0,
+      "timing_ms": {
+        "control": [
+          6100.295499999999,
+          5974.386708
+        ],
+        "regions": [
+          6102.334958,
+          5700.8994170000005
+        ]
+      },
+      "elapsed_ratio": 0.9775192565465489,
+      "kernel": {
+        "calls": 3710,
+        "eligible": 0,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0
+      },
+      "nodes": [
+        35181,
+        35181
+      ],
+      "runs": [
+        250000,
+        250000
+      ]
+    },
+    {
+      "game": 13,
+      "frame": 41,
+      "control_loss": [
+        0.0,
+        1.0
+      ],
+      "region_loss": [
+        0.0,
+        1.0
+      ],
+      "upper_change": 0.0,
+      "timing_ms": {
+        "control": [
+          5293.444333,
+          5341.812583
+        ],
+        "regions": [
+          5285.337458,
+          5327.080292
+        ]
+      },
+      "elapsed_ratio": 0.9978525045346446,
+      "kernel": {
+        "calls": 139,
+        "eligible": 0,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0
+      },
+      "nodes": [
+        21118,
+        21118
+      ],
+      "runs": [
+        250000,
+        250000
+      ]
+    },
+    {
+      "game": 16,
+      "frame": 18,
+      "control_loss": [
+        0.0,
+        0.06723047089976741
+      ],
+      "region_loss": [
+        0.0,
+        0.06723047089976741
+      ],
+      "upper_change": 0.0,
+      "timing_ms": {
+        "control": [
+          5477.329334,
+          5423.916625000001
+        ],
+        "regions": [
+          5319.837584,
+          5452.63875
+        ]
+      },
+      "elapsed_ratio": 0.9881876231868991,
+      "kernel": {
+        "calls": 1603,
+        "eligible": 0,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0
+      },
+      "nodes": [
+        14592,
+        14592
+      ],
+      "runs": [
+        250000,
+        250000
+      ]
+    }
+  ],
+  "total_timing_ms": {
+    "control": [
+      34608.963334,
+      33613.347958
+    ],
+    "regions": [
+      33781.025167,
+      33844.809417
+    ]
+  },
+  "elapsed_ratio": 0.991256867486547,
+  "repeats_match": true,
+  "control_matches_frozen": true,
+  "rejected_mutations": [
+    "missing_root",
+    "wrong_cache_capacity",
+    "false_loss",
+    "invalid_cell"
+  ],
+  "ordinary_bot_changed": false,
+  "main_solver_changed": false,
+  "strength_improvement_proven": false,
+  "artifacts": {
+    "control-1": "a879be3b7ace9b4f4cd74fd2079f7e6ecc894f13494a3be9b85b16cdba3a4557",
+    "regions-1": "b430a255fb02ca0b851bea0a96500b6c0beb6a757e914263aab244ba073f1c7a",
+    "regions-2": "2aff8d0312fca491864b08e933bccab6e505c515e94a1b841402915f15929557",
+    "control-2": "212970917583b712057065ea28d99d814cc65d5c58f9dc3361e7b2c6cf32108c"
+  },
+  "registration_commit": "98386a8",
+  "decision": "do_not_integrate",
+  "total_candidate_calls_per_pass": 7403,
+  "total_candidate_eligible_per_pass": 12,
+  "total_candidate_hits_per_pass": 0
+}
