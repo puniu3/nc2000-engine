@@ -1,0 +1,17 @@
+{
+  "all_6_control_ledgers_reproduced_with_optional_schedule_disabled": true,
+  "unchanged_policy_identities": 4,
+  "certificate_ledgers_verified": 12,
+  "scheduled_actions_checked_at_every_node": true,
+  "normal_search_identity_pairs": 16,
+  "searches": 64,
+  "negative_controls": [
+    "policy",
+    "mass",
+    "bound",
+    "choice",
+    "seed"
+  ],
+  "examples_compile": true,
+  "production_changed": false
+}

@@ -1,0 +1,309 @@
+{
+  "case": {
+    "game": 6,
+    "decision": 32,
+    "side": 1,
+    "key": "339473314819185432203498695073713293243",
+    "alternate_key": "257730558650447766820063562543351080986",
+    "foe_slot": 5,
+    "species": "zapdos",
+    "move_slot": 2,
+    "original_move": "rest",
+    "replacement": "hyperbeam",
+    "sources": [
+      "2M",
+      "1M"
+    ],
+    "prefix_checks": 33,
+    "log_hash": "b71b5f694e82251c565ad15143e138c2690c48c8d5f74c312b626a8b6eafbf33",
+    "observer_hash": "7bad93794ab4538b683132611c1e46ad8ddd39837e2caba810a4681077e691b4",
+    "turn": 28,
+    "actions": [
+      "move earthquake",
+      "move rockslide",
+      "move swordsdance",
+      "move hiddenpowerflying"
+    ],
+    "original_replies": [
+      "move thunderbolt",
+      "move hiddenpowerice",
+      "move rest",
+      "move sleeptalk"
+    ],
+    "alternate_replies": [
+      "move thunderbolt",
+      "move hiddenpowerice",
+      "move hyperbeam",
+      "move sleeptalk"
+    ],
+    "hp": [
+      196,
+      33
+    ]
+  },
+  "game_bounds": [
+    [
+      0.39756944452101084,
+      0.3975694445531983
+    ],
+    [
+      0.1232643806710551,
+      0.12326438091251546
+    ]
+  ],
+  "robust_two_world_bounds": [
+    0.1232643806710551,
+    0.12326438091251546
+  ],
+  "swordsdance_security_upper": 0.12146354395107395,
+  "swordsdance_security_loss_lower": 0.0018008267199811443,
+  "loss_percentage_points": 0.18008267199811442,
+  "normal_search_identity_pairs": 16,
+  "choices": [
+    {
+      "pinned": false,
+      "variant": 0,
+      "choices": {
+        "move swordsdance": 16
+      },
+      "provably_inferior_choices": 0,
+      "mean_first_choice_loss_lower": 0.0
+    },
+    {
+      "pinned": false,
+      "variant": 1,
+      "choices": {
+        "move swordsdance": 16
+      },
+      "provably_inferior_choices": 16,
+      "mean_first_choice_loss_lower": 0.0018008267199811443
+    },
+    {
+      "pinned": true,
+      "variant": 0,
+      "choices": {
+        "move swordsdance": 16
+      },
+      "provably_inferior_choices": 0,
+      "mean_first_choice_loss_lower": 0.0
+    },
+    {
+      "pinned": true,
+      "variant": 1,
+      "choices": {
+        "move rockslide": 14,
+        "move swordsdance": 2
+      },
+      "provably_inferior_choices": 2,
+      "mean_first_choice_loss_lower": 0.00022510333999764304
+    }
+  ],
+  "reports": [
+    {
+      "stage": "control",
+      "variant": 0,
+      "first": "rockslide",
+      "runs": 116106,
+      "nodes": 1681,
+      "bounds": [
+        0.26726353851557677,
+        0.3343117637100974
+      ],
+      "node_kinds": {
+        "terminal": 248,
+        "horizon": 995,
+        "decision": 438
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "control",
+      "variant": 0,
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 39,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "control",
+      "variant": 0,
+      "first": "sleeptalk",
+      "runs": 17002,
+      "nodes": 1124,
+      "bounds": [
+        0.40364583325162734,
+        0.4036458332759086
+      ],
+      "node_kinds": {
+        "terminal": 257,
+        "decision": 867
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "control",
+      "variant": 1,
+      "first": "rockslide",
+      "runs": 15302,
+      "nodes": 1460,
+      "bounds": [
+        0.1232643806710551,
+        0.12326438091251542
+      ],
+      "node_kinds": {
+        "terminal": 340,
+        "horizon": 684,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "control",
+      "variant": 1,
+      "first": "swordsdance",
+      "runs": 314,
+      "nodes": 46,
+      "bounds": [
+        0.1214635439206989,
+        0.12146354395107395
+      ],
+      "node_kinds": {
+        "terminal": 26,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "control",
+      "variant": 1,
+      "first": "sleeptalk",
+      "runs": 17018,
+      "nodes": 1125,
+      "bounds": [
+        0.6703745522649605,
+        0.6703745522895377
+      ],
+      "node_kinds": {
+        "terminal": 258,
+        "decision": 867
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "scheduled",
+      "variant": 0,
+      "first": "rockslide",
+      "runs": 116106,
+      "nodes": 1681,
+      "bounds": [
+        0.26726353851557677,
+        0.3343117637100974
+      ],
+      "node_kinds": {
+        "terminal": 248,
+        "horizon": 995,
+        "decision": 438
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "scheduled",
+      "variant": 0,
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 39,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "scheduled",
+      "variant": 0,
+      "first": "sleeptalk",
+      "runs": 27876,
+      "nodes": 1784,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 317,
+        "decision": 707,
+        "horizon": 760
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "scheduled",
+      "variant": 1,
+      "first": "rockslide",
+      "runs": 15302,
+      "nodes": 1460,
+      "bounds": [
+        0.1232643806710551,
+        0.12326438091251542
+      ],
+      "node_kinds": {
+        "terminal": 340,
+        "horizon": 684,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "scheduled",
+      "variant": 1,
+      "first": "swordsdance",
+      "runs": 314,
+      "nodes": 46,
+      "bounds": [
+        0.1214635439206989,
+        0.12146354395107395
+      ],
+      "node_kinds": {
+        "terminal": 26,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "stage": "scheduled",
+      "variant": 1,
+      "first": "sleeptalk",
+      "runs": 24468,
+      "nodes": 1219,
+      "bounds": [
+        0.8767356190874845,
+        0.8767356193289447
+      ],
+      "node_kinds": {
+        "terminal": 352,
+        "decision": 867
+      },
+      "partial_branches": 0
+    }
+  ],
+  "engine_runs": 350348,
+  "unchanged_policy_certificate_identities": 4,
+  "production_changed": false,
+  "strength_demonstrated": false,
+  "scope": "The least-overlapping unresolved one-step candidate among the 89 candidates whose lower-optimal policy beats the normal chosen action on lower payoffs. Same public history, both one-survivor teams; replace unseen Zapdos Rest with format-legal Generation 2 TM Hyper Beam. Root sleep duration is held at the native replay value in both worlds; other unseen legal rosters and sleep durations are not covered. Fixed own Rock Slide and Swords Dance then Rock Slide policies provide attainable lower bounds. A fixed opponent sequence of Sleep Talk, Sleep Talk, Hidden Power Ice provides upper bounds against all own actions and later replies. That sequence depends only on decision count and own legal actions, not the observed own random choice or future hidden state. Counterpolicy ledgers and all chosen policy actions are independently checked; unexpanded/horizon mass remains [0,1]. The two-world robust optimum is bracketed by a single shared Rock Slide policy and the Hyper Beam world counterpolicy. These conditional security scores are not a Bayesian-prior optimum or average match win rate. Normal belief remains unchanged; pinned true-roster searches are oracle diagnostics, not deployable information. Sixteen search seeds are repetitions at one decision, not sixteen games. Native engine semantics and guarded-state equivalence remain trusted. No human calibration or production change."
+}

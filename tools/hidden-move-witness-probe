@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+from fractions import Fraction as F
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import runpy
+import subprocess
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/hidden-move-witness-v1'
+previous='findings/hidden-move-v1/records.json.gz'
+verify_ledger=runpy.run_path(str(root/'tools/policy-witness-probe'))['verify']
+
+
+def check_policy(l):
+    cfg=l['config'];side=cfg['policy_side']
+    for n in l['nodes']:
+        if n['kind']!='decision':continue
+        legal=n['legal'][side]
+        if legal==[None]:expected=None
+        elif n['depth']==0:expected=cfg['first_choice']
+        else:
+            opening=cfg.get('opening',[])
+            preferred=([opening[n['depth']]] if n['depth']<len(opening) else [])+cfg['priority']
+            expected=next((a for a in preferred if a in legal),legal[0])
+        assert n['selected'][side]==[expected]
+
+
+def verify(control,scheduled,search,prior):
+    ranks=[]
+    for r in prior['screen']['rows']:
+        b=prior['screen']['roots'][r['root_id']];a=b['search']['chosen'];lo=r['solution']['lower']['value']
+        plo=min(b['table']['lower'][a]+r['table']['lower'][a]);pu=min(b['table']['upper'][a]+r['table']['upper'][a])
+        if lo>plo+1e-6:ranks.append((pu-lo,lo-plo,r['census_id']))
+    case=prior['census']['rows'][min(ranks)[2]]
+    assert (case['game'],case['decision'],case['side'],case['replacement'])==(6,32,1,'hyperbeam')
+    for out in [control,scheduled,search]:
+        assert out['case']==case and out['prefix_checks']==case['prefix_checks']
+    assert control['states']==scheduled['states']
+    records={};reports=[]
+    for label,out in [('control',control),('scheduled',scheduled)]:
+        assert [(r['variant'],r['first']) for r in out['ledgers']]==[(v,a) for v in range(2) for a in ['rockslide','swordsdance','sleeptalk']]
+        for r in out['ledgers']:
+            l=r['ledger'];cfg=l['config'];v=r['variant'];a=r['first'];side=0 if a=='sleeptalk' else 1
+            assert cfg['game']==6 and cfg['decision']==32 and cfg['target_side']==cfg['policy_side']==side
+            assert cfg['first_choice']=='move '+a
+            assert cfg['priority']==['move hiddenpowerice' if a=='sleeptalk' else 'move rockslide']
+            assert cfg['horizon']==3 and cfg['work_budget']==200000 and cfg['cell_cap']==10000
+            assert cfg['guarded_keys'] and cfg['support_certificate'] and cfg['rest_at_percent'] is None
+            assert cfg.get('opening',[])==(['move sleeptalk','move sleeptalk','move hiddenpowerice'] if label=='scheduled' and a=='sleeptalk' else [])
+            assert l['nodes'][l['root']]['state_key']==case['key' if v==0 else 'alternate_key']
+            reports.append(dict(stage=label,variant=v,first=a,**verify_ledger(l)))
+            check_policy(l);records[label,v,a]=l
+    for v in range(2):
+        for a in ['rockslide','swordsdance']:assert records['control',v,a]==records['scheduled',v,a]
+    lower={};upper={};game_bounds=[]
+    for v in range(2):
+        lower[v]={a:F(records['scheduled',v,a]['bounds'][0]) for a in ['rockslide','swordsdance']}
+        counter=records['scheduled',v,'sleeptalk']
+        upper[v]={b['choices'][1].removeprefix('move '):1-F(b['bounds'][0]) for b in counter['nodes'][counter['root']]['branches']}
+        optimal='swordsdance' if v==0 else 'rockslide'
+        lo=lower[v][optimal];hi=1-F(counter['bounds'][0])
+        assert F(0)<=hi-lo<F(1,10**8)
+        assert all(upper[v][a]<lo for a in upper[v] if a!=optimal)
+        game_bounds.append([float(lo),float(hi)])
+    robust_lower=min(lower[v]['rockslide'] for v in range(2));robust_upper=F(game_bounds[1][1])
+    assert 0<=robust_upper-robust_lower<F(1,10**8)
+    selected_upper=min(upper[v]['swordsdance'] for v in range(2))
+    loss=robust_lower-selected_upper-F(1,10**8);assert loss>0
+    ss=search['searches'];assert len(ss)==64
+    indexed={(s['pinned'],s['seed'],s['variant']):s for s in ss}
+    assert len(indexed)==64 and set(indexed)=={(p,0x2026110301+i,v) for p in [False,True] for i in range(16) for v in range(2)}
+    for s in ss:
+        assert sum(s['visits'])==27000 and len(s['visits'])==len(s['means'])==4
+        assert s['best'].removeprefix('move ') in upper[s['variant']]
+    for seed in range(0x2026110301,0x2026110301+16):
+        a=indexed[False,seed,0];b=indexed[False,seed,1]
+        assert all(a[k]==b[k] for k in ['best','visits','means','rng','nodes'])
+    baseline=next(r['search'] for r in prior['screen']['roots'] if (r['game'],r['decision'],r['side'])==(6,32,1))
+    assert all(indexed[False,0x2026110301,0][k]==baseline[k] for k in ['best','visits','means','rng','seed'])
+    choices=[]
+    for p in [False,True]:
+        for v in range(2):
+            subset=[s for s in ss if s['pinned']==p and s['variant']==v]
+            losses=[max(F(0),F(game_bounds[v][0])-upper[v][s['best'].removeprefix('move ')]-F(1,10**8)) for s in subset]
+            choices.append(dict(pinned=p,variant=v,choices=dict(collections.Counter(s['best'] for s in subset)),
+                provably_inferior_choices=sum(x>0 for x in losses),mean_first_choice_loss_lower=float(sum(losses)/len(losses))))
+    return dict(case=case,game_bounds=game_bounds,robust_two_world_bounds=[float(robust_lower),float(robust_upper)],
+        swordsdance_security_upper=float(selected_upper),swordsdance_security_loss_lower=float(loss),
+        loss_percentage_points=float(loss*100),normal_search_identity_pairs=16,choices=choices,reports=reports,
+        engine_runs=sum(r['runs'] for r in reports),unchanged_policy_certificate_identities=4,
+        production_changed=False,strength_demonstrated=False,
+        scope='The least-overlapping unresolved one-step candidate among the 89 candidates whose lower-optimal policy beats '
+              'the normal chosen action on lower payoffs. Same public history, both one-survivor teams; replace unseen Zapdos '
+              'Rest with format-legal Generation 2 TM Hyper Beam. Root sleep duration is held at the native replay value in '
+              'both worlds; other unseen legal rosters and sleep durations are not covered. Fixed own Rock Slide and Swords '
+              'Dance then Rock Slide policies provide attainable lower bounds. A fixed opponent sequence of Sleep Talk, '
+              'Sleep Talk, Hidden Power Ice provides upper bounds against all own actions and later replies. That sequence '
+              'depends only on decision count and own legal actions, not the observed own random choice or future hidden '
+              'state. Counterpolicy ledgers and all chosen policy actions are independently checked; unexpanded/horizon '
+              'mass remains [0,1]. The two-world robust optimum is bracketed by a single shared Rock Slide policy and the '
+              'Hyper Beam world counterpolicy. These conditional security scores are not a Bayesian-prior optimum or '
+              'average match win rate. Normal belief remains unchanged; pinned true-roster searches are oracle diagnostics, '
+              'not deployable information. Sixteen search seeds are repetitions at one decision, not sixteen games. '
+              'Native engine semantics and guarded-state equivalence remain trusted. No human calibration or production change.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',nargs=3,type=Path);args=parser.parse_args()
+    prior=json.loads(gzip.decompress((root/previous).read_bytes()))
+    if args.record:
+        assert not archive.exists()
+        control,scheduled,search=[json.loads(p.read_bytes()) for p in args.record];summary=verify(control,scheduled,search,prior)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','crates/conformance/src','Cargo.toml','Cargo.lock'],cwd=root,text=True).splitlines()
+        paths+=['crates/bot/examples/policy_witness.rs','crates/bot/examples/hidden_terminal.rs','crates/bot/examples/hidden_move_witness.rs','tools/hidden-move-witness-probe','tools/policy-witness-probe',previous,'findings/policy-gap-v1/corpus.jsonl.gz','data/gen2stadium2.json','data/belief-pool-v3/belief-pool.json']
+        bundle=dict(control=control,scheduled=scheduled,search=search,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        archive.mkdir();(archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    b=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in b['hashes'].items())
+    summary=verify(b['control'],b['scheduled'],b['search'],prior);assert summary==json.loads((archive/'summary.json').read_bytes())
+    for fault in ['policy','mass','bound','choice','seed']:
+        s=copy.deepcopy(b['scheduled']);search=copy.deepcopy(b['search'])
+        if fault=='choice':search['searches'][1]['best']='invalid'
+        elif fault=='seed':search['searches'][0]['seed']+=1
+        else:
+            l=s['ledgers'][2]['ledger'];n=next(n for n in l['nodes'] if n['kind']=='decision' and n['depth']==1)
+            if fault=='policy':n['selected'][0]=['move hiddenpowerice']
+            elif fault=='mass':n['branches'][0]['children'][0]['mass']+=.01
+            else:n['bounds'][0]=0.01
+        try:verify(b['control'],s,search,prior)
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {fault}')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['case','reports','scope']},indent=2))
+
+
+if __name__=='__main__':main()

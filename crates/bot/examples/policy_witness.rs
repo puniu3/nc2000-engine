@@ -19,6 +19,8 @@ struct Game { game: usize, seed: String, teams: [Vec<PokemonSet>; 2], decisions:
 struct Config {
     game: usize, decision: usize, target_side: usize, first_choice: String,
     policy_side: usize, priority: Vec<String>, rest_at_percent: Option<i64>,
+    #[serde(default, skip_serializing_if="Vec::is_empty")]
+    opening: Vec<String>,
     horizon: usize, work_budget: usize, cell_cap: usize,
     #[serde(default)]
     guarded_keys: bool,
@@ -72,6 +74,11 @@ impl Witness<'_> {
             let mut choices=legal.to_vec();
             if self.cfg.reverse_replies { choices.reverse(); }
             return choices;
+        }
+        if let Some(name)=self.cfg.opening.get(depth) {
+            if let Some(&choice)=legal.iter().find(|a|a.is_some_and(|a|a.to_input(self.dex)==*name)) {
+                return vec![choice];
+            }
         }
         let names: Vec<_> = legal.iter().map(|a|a.map(|a|a.to_input(self.dex))).collect();
         if self.cfg.rest_at_percent.is_some_and(|pct|b.active_id(side).is_some_and(|id| {

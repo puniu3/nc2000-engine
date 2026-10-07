@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+from fractions import Fraction as F
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import re
+import subprocess
+import zipfile
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/hidden-move-v1'
+corpus='findings/policy-gap-v1/corpus.jsonl.gz'
+
+
+def plan():
+    flat=json.loads((root/'data/learnsets-gen2.json').read_bytes())['species']
+    with zipfile.ZipFile(root/'pokemon-showdown.zip') as z:source=z.read('pokemon-showdown/data/mods/gen2/learnsets.ts').decode()
+    result={}
+    for species,block in re.findall(r'^\t(\w+): \{\n(.*?)^\t\},',source,re.M|re.S):
+        if species not in flat:continue
+        moves={}
+        for move,raw in re.findall(r'^\t\t\t(\w+): (\[[^\n]+\])',block,re.M):
+            sources=json.loads(raw)
+            if '2M' in sources and move in flat[species]['moves'] and move!='hiddenpower':moves[move]=sources
+        if moves:result[species]=moves
+    return result
+
+
+def close(a,b):
+    assert abs(float(a)-float(b))<1e-8,(a,b)
+
+
+def table(t):
+    n=len(t['actions']);m=len(t['replies']);assert n>1 and m>0
+    assert len(set(t['actions']))==n and len(set(t['replies']))==m
+    assert len(t['cells'])==2*n*m
+    assert {(c['coin'],c['own'],c['reply']) for c in t['cells']}=={(coin,i,j) for coin in [False,True] for i in range(n) for j in range(m)}
+    out=[[[F(0) for _ in range(m)] for _ in range(n)] for _ in range(2)]
+    for c in t['cells']:
+        mass=list(map(F,c['mass']));pending=F(c['pending'])
+        assert len(mass)==4 and all(0<=v<=1+F(1,10**8) for v in mass+[pending]) and c['runs']>0
+        close(sum(mass)+pending,1)
+        lo=mass[0]+mass[1]/2;hi=lo+mass[3]+pending
+        for k,v in enumerate([lo,hi]):out[k][c['own']][c['reply']]+=F(60 if c['coin'] else 196,256)*v
+    for name,matrix in zip(['lower','upper'],out):
+        assert len(t[name])==n and all(len(r)==m for r in t[name])
+        for a,b in zip(sum(matrix,[]),sum(t[name],[])):close(a,b)
+    return out
+
+
+def solve_check(m,s):
+    x=list(map(F,s['own']));y=list(map(F,s['opponent']))
+    assert len(x)==len(m) and len(y)==len(m[0])
+    assert all(v>=0 for v in x+y);close(sum(x),1);close(sum(y),1)
+    x=[v/sum(x) for v in x];y=[v/sum(y) for v in y]
+    lo=min(sum(x[i]*m[i][j] for i in range(len(x))) for j in range(len(y)))
+    hi=max(sum(y[j]*m[i][j] for j in range(len(y))) for i in range(len(x)))
+    assert -F(1,10**8)<=hi-lo<F(1,10**7)
+    close(s['value'],(lo+hi)/2);close(s['gap'],max(F(0),hi-lo))
+    return lo,hi
+
+
+def verify(census,screen):
+    allowed=plan();games={g['game']:g for g in map(json.loads,gzip.decompress((root/corpus).read_bytes()).splitlines())}
+    assert census['attempted']==len(census['rows'])+sum(census['rejected'].values())
+    assert all(k in ['validation','log','observer','own_actions','recorded_action'] and v>=0 for k,v in census['rejected'].items())
+    identity=lambda r:(r['game'],r['decision'],r['side'])
+    groups=collections.defaultdict(list);unique=set()
+    for i,r in enumerate(census['rows']):
+        k=identity(r);groups[k].append(i)
+        sig=(*k,r['foe_slot'],r['move_slot'],r['replacement']);assert sig not in unique;unique.add(sig)
+        g=games[r['game']];mon=g['teams'][1-r['side']][r['foe_slot']]
+        norm=lambda s:re.sub('[^a-z0-9]','',s.lower())
+        assert r['species']==norm(mon['species']) and r['original_move']==norm(mon['moves'][r['move_slot']])
+        assert r['replacement'] not in list(map(norm,mon['moves']))
+        assert r['sources']==allowed[r['species']][r['replacement']] and '2M' in r['sources']
+        assert r['key']==g['decisions'][r['decision']]['key'] and r['alternate_key']!=r['key']
+        assert r['prefix_checks']==r['decision']+1 and r['side'] in [0,1]
+        assert all(re.fullmatch('[0-9a-f]{64}',r[n]) for n in ['log_hash','observer_hash'])
+    assert screen['cap']==128 and screen['threshold']==0.01 and screen['iterations']==27000
+    assert [identity(r) for r in screen['roots']]==sorted(groups)
+    original=[];expected_ids=set();selected_roots=0
+    for r in screen['roots']:
+        ids=groups[identity(r)];c=census['rows'][ids[0]]
+        assert r['key']==c['key'] and r['variants']==len(ids)
+        assert r['table']['actions']==c['actions'] and r['table']['replies']==c['original_replies']
+        t=table(r['table']);original.append(t)
+        for k,name in enumerate(['lower','upper']):solve_check(t[k],r['solution'][name])
+        potential=r['solution']['lower']['value']-r['solution']['lower']['gap'];close(potential,r['potential'])
+        assert r['screened']==(potential>0.01)
+        if r['screened']:expected_ids.update(ids);selected_roots+=1
+        s=r['search'];n=len(c['actions']);assert s['seed']==0x2026110301
+        assert len(s['visits'])==len(s['means'])==n and sum(s['visits'])==27000
+        assert all(v>=0 for v in s['visits']) and all(0<=v<=1 for v in s['means'])
+        assert 0<=s['chosen']<n and s['best']==c['actions'][s['chosen']]
+    assert len(screen['rows'])==len(expected_ids) and {r['census_id'] for r in screen['rows']}==expected_ids
+    changes=0;gaps=[];dead_lower=0
+    for r in screen['rows']:
+        b=screen['roots'][r['root_id']];c=census['rows'][r['census_id']];assert identity(b)==identity(c)
+        assert r['table']['actions']==c['actions'] and r['table']['replies']==c['alternate_replies']
+        t=table(r['table']);bt=original[r['root_id']]
+        changes+=t!=bt
+        paired=[[a+v for a,v in zip(bt[k],t[k])] for k in range(2)]
+        bounds=[solve_check(paired[k],r['solution'][name]) for k,name in enumerate(['lower','upper'])]
+        lower=r['solution']['lower']['value']-r['solution']['lower']['gap']
+        regret=max(0.,lower-float(min(paired[1][b['search']['chosen']]))-1e-8);close(regret,r['regret_lower'])
+        dead_lower+=lower<=1e-8
+        if regret>0:gaps.append(dict(census_id=r['census_id'],game=c['game'],decision=c['decision'],side=c['side'],replacement=c['replacement'],regret_lower=regret))
+    tables=[r['table'] for r in screen['roots']]+[r['table'] for r in screen['rows']]
+    cells=[c for t in tables for c in t['cells']]
+    return dict(eligible_own_decisions=census['eligible'],attempted=census['attempted'],accepted=len(census['rows']),rejected=census['rejected'],
+        roots_with_alternatives=len(groups),screened_roots=selected_roots,screened_pairs=len(screen['rows']),
+        pairs_with_different_payoff_bounds=changes,pairs_without_positive_lower=dead_lower,
+        positive_selected_action_losses=len(gaps),gaps=gaps,engine_runs=sum(c['runs'] for c in cells),
+        matrix_games_checked=2*len(tables),cells=len(cells),partially_enumerated_cells=sum(c['pending']>0 for c in cells),
+        species_counts=dict(collections.Counter(r['species'] for r in census['rows'])),
+        production_changed=False,strength_demonstrated=False,
+        scope='Single unrevealed-move substitutions by moves with an explicit Generation 2 machine source and native format '
+              'acceptance. Other slots, items, stats and roster entries are unchanged. Each alternate team passes the native '
+              'flat validator; adding a Generation 2 machine move introduces no new egg or event combination constraint. '
+              'Every prefix is replayed from the initial teams with full logs, own observations and legal actions equal. '
+              'If the original unseen move was silently selected, the alternate selects its replacement. The census is '
+              'restricted to both sides having one survivor in a fixed 24-game corpus. The follow-up screens every accepted '
+              'variant at roots whose original one-step guaranteed score lower exceeds 0.01; omitted roots can still hide '
+              'large losses because partial enumeration and future play are unresolved. Each two-world game uses a common '
+              'own mixed action and lets the opponent choose its world and reply before seeing the own random choice. '
+              'The hidden Quick Claw coin is averaged before that response. All nonterminal and unexpanded chance mass stays '
+              '[0,1], with 128 engine-run enumeration caps. Matrix bounds are independently checked with rational arithmetic '
+              'on recorded floating-point probability masses. These are finite two-world security diagnostics, not average '
+              'win rates, the whole legal roster universe, or a claim that zero detected loss proves optimality. Current '
+              'normal search uses its unchanged catalog belief and one 27000-iteration seed per root. No human calibration.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--plan',type=Path);parser.add_argument('--record',nargs=2,type=Path);args=parser.parse_args()
+    if args.plan:args.plan.write_text(json.dumps(plan(),sort_keys=True)+'\n');return
+    if args.record:
+        assert not archive.exists()
+        census,screen=[json.loads(p.read_bytes()) for p in args.record];summary=verify(census,screen)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','crates/conformance/src','Cargo.toml','Cargo.lock'],cwd=root,text=True).splitlines()
+        paths+=['crates/bot/examples/hidden_move_census.rs','crates/bot/examples/hidden_move_screen.rs','tools/hidden-move-probe',corpus,'data/learnsets-gen2.json','data/gen2stadium2.json','data/belief-pool-v3/belief-pool.json','pokemon-showdown.zip']
+        bundle=dict(census=census,screen=screen,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        archive.mkdir();(archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    b=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in b['hashes'].items())
+    summary=verify(b['census'],b['screen']);assert summary==json.loads((archive/'summary.json').read_bytes())
+    for fault in ['source','history','mass','coin','solution','selection','coverage']:
+        c=copy.deepcopy(b['census']);s=copy.deepcopy(b['screen'])
+        if fault=='source':c['rows'][0]['sources']=['2E']
+        elif fault=='history':c['rows'][0]['prefix_checks']+=1
+        elif fault=='mass':s['roots'][0]['table']['cells'][0]['mass'][0]+=.01
+        elif fault=='coin':s['roots'][0]['table']['cells'][0]['coin']=not s['roots'][0]['table']['cells'][0]['coin']
+        elif fault=='solution':s['rows'][0]['solution']['lower']['own'][0]+=.01
+        elif fault=='selection':s['roots'][0]['search']['best']='invalid'
+        else:s['rows'].pop()
+        try:verify(c,s)
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {fault}')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['scope','gaps']},indent=2))
+
+
+if __name__=='__main__':main()

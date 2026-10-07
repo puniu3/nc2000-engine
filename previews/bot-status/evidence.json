@@ -2853,6 +2853,394 @@
         "decision": "Deprioritize this witness for large strength gains; its security ceiling is below 0.11 percentage points.",
         "scope": "Reuse the validated, same-observation Fire Blast/Growl Marowak counterexample. The lower certificate mixes Double Edge and Earthquake before the simultaneous choice and follows the archived Double Edge priority; it is valid against every response in those two roster worlds only. The upper certificate uses the legal Growl roster and randomizes two fixed opponent policies, Earthquake priority and Growl then Earthquake. Their full reply certificates cover all four own first actions and arbitrary later replies. The opponent chooses its policy before seeing the own random action. Thus the upper bound also limits security against any larger unseen-roster set containing this verified Growl world. It is not a Bayesian bound for a prior assigning this world negligible or zero probability. Linear envelopes are optimized and checked with exact rational arithmetic on archived conservative floating-point bounds, then padded by 1e-8. Historical engine certificates and public-history replay are reverified without rewriting their source hashes. This bounds one adverse decision, not average match improvement, occurrence frequency, or global distance to optimality."
       }
+    },
+    "findings/hidden-move-v1/summary.json": {
+      "sha256": "7b355fdb2932237ebf4f4d87069e91148d29452d1cf21714c657fd385e14d989",
+      "data": {
+        "eligible_own_decisions": 62,
+        "attempted": 3408,
+        "accepted": 3394,
+        "rejected": {
+          "log": 14
+        },
+        "roots_with_alternatives": 52,
+        "screened_roots": 11,
+        "screened_pairs": 688,
+        "pairs_with_different_payoff_bounds": 541,
+        "pairs_without_positive_lower": 42,
+        "positive_selected_action_losses": 0,
+        "gaps": [],
+        "engine_runs": 1149478,
+        "matrix_games_checked": 1480,
+        "cells": 23680,
+        "partially_enumerated_cells": 5090,
+        "species_counts": {
+          "zapdos": 302,
+          "snorlax": 1769,
+          "starmie": 52,
+          "heracross": 76,
+          "marowak": 397,
+          "tyranitar": 124,
+          "poliwrath": 174,
+          "porygon2": 150,
+          "vaporeon": 350
+        },
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "Single unrevealed-move substitutions by moves with an explicit Generation 2 machine source and native format acceptance. Other slots, items, stats and roster entries are unchanged. Each alternate team passes the native flat validator; adding a Generation 2 machine move introduces no new egg or event combination constraint. Every prefix is replayed from the initial teams with full logs, own observations and legal actions equal. If the original unseen move was silently selected, the alternate selects its replacement. The census is restricted to both sides having one survivor in a fixed 24-game corpus. The follow-up screens every accepted variant at roots whose original one-step guaranteed score lower exceeds 0.01; omitted roots can still hide large losses because partial enumeration and future play are unresolved. Each two-world game uses a common own mixed action and lets the opponent choose its world and reply before seeing the own random choice. The hidden Quick Claw coin is averaged before that response. All nonterminal and unexpanded chance mass stays [0,1], with 128 engine-run enumeration caps. Matrix bounds are independently checked with rational arithmetic on recorded floating-point probability masses. These are finite two-world security diagnostics, not average win rates, the whole legal roster universe, or a claim that zero detected loss proves optimality. Current normal search uses its unchanged catalog belief and one 27000-iteration seed per root. No human calibration."
+      }
+    },
+    "findings/hidden-move-v1/checks.json": {
+      "sha256": "6f1922b05566f7c5b8fb6450cc29b3dfdb933e5b9f25ef8e6dba6e2e67bbe91f",
+      "data": {
+        "all_3408_replays_reproduced_exactly": true,
+        "accepted": 3394,
+        "rejected_public_history": 14,
+        "independent_matrix_checks": 1480,
+        "negative_controls": [
+          "source",
+          "history",
+          "mass",
+          "coin",
+          "solution",
+          "selection",
+          "coverage"
+        ],
+        "examples_compile": true,
+        "production_changed": false
+      }
+    },
+    "findings/hidden-move-witness-v1/summary.json": {
+      "sha256": "93185f151fa643c1854b8ef3b296590a3d73cefd500f747dc02a54010e755529",
+      "data": {
+        "case": {
+          "game": 6,
+          "decision": 32,
+          "side": 1,
+          "key": "339473314819185432203498695073713293243",
+          "alternate_key": "257730558650447766820063562543351080986",
+          "foe_slot": 5,
+          "species": "zapdos",
+          "move_slot": 2,
+          "original_move": "rest",
+          "replacement": "hyperbeam",
+          "sources": [
+            "2M",
+            "1M"
+          ],
+          "prefix_checks": 33,
+          "log_hash": "b71b5f694e82251c565ad15143e138c2690c48c8d5f74c312b626a8b6eafbf33",
+          "observer_hash": "7bad93794ab4538b683132611c1e46ad8ddd39837e2caba810a4681077e691b4",
+          "turn": 28,
+          "actions": [
+            "move earthquake",
+            "move rockslide",
+            "move swordsdance",
+            "move hiddenpowerflying"
+          ],
+          "original_replies": [
+            "move thunderbolt",
+            "move hiddenpowerice",
+            "move rest",
+            "move sleeptalk"
+          ],
+          "alternate_replies": [
+            "move thunderbolt",
+            "move hiddenpowerice",
+            "move hyperbeam",
+            "move sleeptalk"
+          ],
+          "hp": [
+            196,
+            33
+          ]
+        },
+        "game_bounds": [
+          [
+            0.39756944452101084,
+            0.3975694445531983
+          ],
+          [
+            0.1232643806710551,
+            0.12326438091251546
+          ]
+        ],
+        "robust_two_world_bounds": [
+          0.1232643806710551,
+          0.12326438091251546
+        ],
+        "swordsdance_security_upper": 0.12146354395107395,
+        "swordsdance_security_loss_lower": 0.0018008267199811443,
+        "loss_percentage_points": 0.18008267199811442,
+        "normal_search_identity_pairs": 16,
+        "choices": [
+          {
+            "pinned": false,
+            "variant": 0,
+            "choices": {
+              "move swordsdance": 16
+            },
+            "provably_inferior_choices": 0,
+            "mean_first_choice_loss_lower": 0.0
+          },
+          {
+            "pinned": false,
+            "variant": 1,
+            "choices": {
+              "move swordsdance": 16
+            },
+            "provably_inferior_choices": 16,
+            "mean_first_choice_loss_lower": 0.0018008267199811443
+          },
+          {
+            "pinned": true,
+            "variant": 0,
+            "choices": {
+              "move swordsdance": 16
+            },
+            "provably_inferior_choices": 0,
+            "mean_first_choice_loss_lower": 0.0
+          },
+          {
+            "pinned": true,
+            "variant": 1,
+            "choices": {
+              "move rockslide": 14,
+              "move swordsdance": 2
+            },
+            "provably_inferior_choices": 2,
+            "mean_first_choice_loss_lower": 0.00022510333999764304
+          }
+        ],
+        "reports": [
+          {
+            "stage": "control",
+            "variant": 0,
+            "first": "rockslide",
+            "runs": 116106,
+            "nodes": 1681,
+            "bounds": [
+              0.26726353851557677,
+              0.3343117637100974
+            ],
+            "node_kinds": {
+              "terminal": 248,
+              "horizon": 995,
+              "decision": 438
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "control",
+            "variant": 0,
+            "first": "swordsdance",
+            "runs": 270,
+            "nodes": 39,
+            "bounds": [
+              0.39756944452101084,
+              0.39756944455319826
+            ],
+            "node_kinds": {
+              "terminal": 19,
+              "horizon": 9,
+              "decision": 11
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "control",
+            "variant": 0,
+            "first": "sleeptalk",
+            "runs": 17002,
+            "nodes": 1124,
+            "bounds": [
+              0.40364583325162734,
+              0.4036458332759086
+            ],
+            "node_kinds": {
+              "terminal": 257,
+              "decision": 867
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "control",
+            "variant": 1,
+            "first": "rockslide",
+            "runs": 15302,
+            "nodes": 1460,
+            "bounds": [
+              0.1232643806710551,
+              0.12326438091251542
+            ],
+            "node_kinds": {
+              "terminal": 340,
+              "horizon": 684,
+              "decision": 436
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "control",
+            "variant": 1,
+            "first": "swordsdance",
+            "runs": 314,
+            "nodes": 46,
+            "bounds": [
+              0.1214635439206989,
+              0.12146354395107395
+            ],
+            "node_kinds": {
+              "terminal": 26,
+              "horizon": 9,
+              "decision": 11
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "control",
+            "variant": 1,
+            "first": "sleeptalk",
+            "runs": 17018,
+            "nodes": 1125,
+            "bounds": [
+              0.6703745522649605,
+              0.6703745522895377
+            ],
+            "node_kinds": {
+              "terminal": 258,
+              "decision": 867
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "scheduled",
+            "variant": 0,
+            "first": "rockslide",
+            "runs": 116106,
+            "nodes": 1681,
+            "bounds": [
+              0.26726353851557677,
+              0.3343117637100974
+            ],
+            "node_kinds": {
+              "terminal": 248,
+              "horizon": 995,
+              "decision": 438
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "scheduled",
+            "variant": 0,
+            "first": "swordsdance",
+            "runs": 270,
+            "nodes": 39,
+            "bounds": [
+              0.39756944452101084,
+              0.39756944455319826
+            ],
+            "node_kinds": {
+              "terminal": 19,
+              "horizon": 9,
+              "decision": 11
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "scheduled",
+            "variant": 0,
+            "first": "sleeptalk",
+            "runs": 27876,
+            "nodes": 1784,
+            "bounds": [
+              0.6024305554468017,
+              0.6024305554789893
+            ],
+            "node_kinds": {
+              "terminal": 317,
+              "decision": 707,
+              "horizon": 760
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "scheduled",
+            "variant": 1,
+            "first": "rockslide",
+            "runs": 15302,
+            "nodes": 1460,
+            "bounds": [
+              0.1232643806710551,
+              0.12326438091251542
+            ],
+            "node_kinds": {
+              "terminal": 340,
+              "horizon": 684,
+              "decision": 436
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "scheduled",
+            "variant": 1,
+            "first": "swordsdance",
+            "runs": 314,
+            "nodes": 46,
+            "bounds": [
+              0.1214635439206989,
+              0.12146354395107395
+            ],
+            "node_kinds": {
+              "terminal": 26,
+              "horizon": 9,
+              "decision": 11
+            },
+            "partial_branches": 0
+          },
+          {
+            "stage": "scheduled",
+            "variant": 1,
+            "first": "sleeptalk",
+            "runs": 24468,
+            "nodes": 1219,
+            "bounds": [
+              0.8767356190874845,
+              0.8767356193289447
+            ],
+            "node_kinds": {
+              "terminal": 352,
+              "decision": 867
+            },
+            "partial_branches": 0
+          }
+        ],
+        "engine_runs": 350348,
+        "unchanged_policy_certificate_identities": 4,
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "The least-overlapping unresolved one-step candidate among the 89 candidates whose lower-optimal policy beats the normal chosen action on lower payoffs. Same public history, both one-survivor teams; replace unseen Zapdos Rest with format-legal Generation 2 TM Hyper Beam. Root sleep duration is held at the native replay value in both worlds; other unseen legal rosters and sleep durations are not covered. Fixed own Rock Slide and Swords Dance then Rock Slide policies provide attainable lower bounds. A fixed opponent sequence of Sleep Talk, Sleep Talk, Hidden Power Ice provides upper bounds against all own actions and later replies. That sequence depends only on decision count and own legal actions, not the observed own random choice or future hidden state. Counterpolicy ledgers and all chosen policy actions are independently checked; unexpanded/horizon mass remains [0,1]. The two-world robust optimum is bracketed by a single shared Rock Slide policy and the Hyper Beam world counterpolicy. These conditional security scores are not a Bayesian-prior optimum or average match win rate. Normal belief remains unchanged; pinned true-roster searches are oracle diagnostics, not deployable information. Sixteen search seeds are repetitions at one decision, not sixteen games. Native engine semantics and guarded-state equivalence remain trusted. No human calibration or production change."
+      }
+    },
+    "findings/hidden-move-witness-v1/checks.json": {
+      "sha256": "41f9710bf64b574d0ad25f88d93bb3dad63287c24e4400701481f39d2807ecfb",
+      "data": {
+        "all_6_control_ledgers_reproduced_with_optional_schedule_disabled": true,
+        "unchanged_policy_identities": 4,
+        "certificate_ledgers_verified": 12,
+        "scheduled_actions_checked_at_every_node": true,
+        "normal_search_identity_pairs": 16,
+        "searches": 64,
+        "negative_controls": [
+          "policy",
+          "mass",
+          "bound",
+          "choice",
+          "seed"
+        ],
+        "examples_compile": true,
+        "production_changed": false
+      }
     }
   },
   "foresight_fix": {
@@ -5910,6 +6298,358 @@
       "strength_demonstrated": false,
       "decision": "Deprioritize this witness for large strength gains; its security ceiling is below 0.11 percentage points.",
       "scope": "Reuse the validated, same-observation Fire Blast/Growl Marowak counterexample. The lower certificate mixes Double Edge and Earthquake before the simultaneous choice and follows the archived Double Edge priority; it is valid against every response in those two roster worlds only. The upper certificate uses the legal Growl roster and randomizes two fixed opponent policies, Earthquake priority and Growl then Earthquake. Their full reply certificates cover all four own first actions and arbitrary later replies. The opponent chooses its policy before seeing the own random action. Thus the upper bound also limits security against any larger unseen-roster set containing this verified Growl world. It is not a Bayesian bound for a prior assigning this world negligible or zero probability. Linear envelopes are optimized and checked with exact rational arithmetic on archived conservative floating-point bounds, then padded by 1e-8. Historical engine certificates and public-history replay are reverified without rewriting their source hashes. This bounds one adverse decision, not average match improvement, occurrence frequency, or global distance to optimality."
+    },
+    "deployed": false
+  },
+  "hidden_move_v1": {
+    "status": "analysis_complete",
+    "checked_at": "2026-10-07T09:04:25.735448+09:00",
+    "summary": {
+      "eligible_own_decisions": 62,
+      "attempted": 3408,
+      "accepted": 3394,
+      "rejected": {
+        "log": 14
+      },
+      "roots_with_alternatives": 52,
+      "screened_roots": 11,
+      "screened_pairs": 688,
+      "pairs_with_different_payoff_bounds": 541,
+      "pairs_without_positive_lower": 42,
+      "positive_selected_action_losses": 0,
+      "gaps": [],
+      "engine_runs": 1149478,
+      "matrix_games_checked": 1480,
+      "cells": 23680,
+      "partially_enumerated_cells": 5090,
+      "species_counts": {
+        "zapdos": 302,
+        "snorlax": 1769,
+        "starmie": 52,
+        "heracross": 76,
+        "marowak": 397,
+        "tyranitar": 124,
+        "poliwrath": 174,
+        "porygon2": 150,
+        "vaporeon": 350
+      },
+      "production_changed": false,
+      "strength_demonstrated": false,
+      "scope": "Single unrevealed-move substitutions by moves with an explicit Generation 2 machine source and native format acceptance. Other slots, items, stats and roster entries are unchanged. Each alternate team passes the native flat validator; adding a Generation 2 machine move introduces no new egg or event combination constraint. Every prefix is replayed from the initial teams with full logs, own observations and legal actions equal. If the original unseen move was silently selected, the alternate selects its replacement. The census is restricted to both sides having one survivor in a fixed 24-game corpus. The follow-up screens every accepted variant at roots whose original one-step guaranteed score lower exceeds 0.01; omitted roots can still hide large losses because partial enumeration and future play are unresolved. Each two-world game uses a common own mixed action and lets the opponent choose its world and reply before seeing the own random choice. The hidden Quick Claw coin is averaged before that response. All nonterminal and unexpanded chance mass stays [0,1], with 128 engine-run enumeration caps. Matrix bounds are independently checked with rational arithmetic on recorded floating-point probability masses. These are finite two-world security diagnostics, not average win rates, the whole legal roster universe, or a claim that zero detected loss proves optimality. Current normal search uses its unchanged catalog belief and one 27000-iteration seed per root. No human calibration."
+    },
+    "deployed": false
+  },
+  "hidden_move_witness_v1": {
+    "status": "analysis_complete",
+    "checked_at": "2026-10-07T09:04:25.735804+09:00",
+    "summary": {
+      "case": {
+        "game": 6,
+        "decision": 32,
+        "side": 1,
+        "key": "339473314819185432203498695073713293243",
+        "alternate_key": "257730558650447766820063562543351080986",
+        "foe_slot": 5,
+        "species": "zapdos",
+        "move_slot": 2,
+        "original_move": "rest",
+        "replacement": "hyperbeam",
+        "sources": [
+          "2M",
+          "1M"
+        ],
+        "prefix_checks": 33,
+        "log_hash": "b71b5f694e82251c565ad15143e138c2690c48c8d5f74c312b626a8b6eafbf33",
+        "observer_hash": "7bad93794ab4538b683132611c1e46ad8ddd39837e2caba810a4681077e691b4",
+        "turn": 28,
+        "actions": [
+          "move earthquake",
+          "move rockslide",
+          "move swordsdance",
+          "move hiddenpowerflying"
+        ],
+        "original_replies": [
+          "move thunderbolt",
+          "move hiddenpowerice",
+          "move rest",
+          "move sleeptalk"
+        ],
+        "alternate_replies": [
+          "move thunderbolt",
+          "move hiddenpowerice",
+          "move hyperbeam",
+          "move sleeptalk"
+        ],
+        "hp": [
+          196,
+          33
+        ]
+      },
+      "game_bounds": [
+        [
+          0.39756944452101084,
+          0.3975694445531983
+        ],
+        [
+          0.1232643806710551,
+          0.12326438091251546
+        ]
+      ],
+      "robust_two_world_bounds": [
+        0.1232643806710551,
+        0.12326438091251546
+      ],
+      "swordsdance_security_upper": 0.12146354395107395,
+      "swordsdance_security_loss_lower": 0.0018008267199811443,
+      "loss_percentage_points": 0.18008267199811442,
+      "normal_search_identity_pairs": 16,
+      "choices": [
+        {
+          "pinned": false,
+          "variant": 0,
+          "choices": {
+            "move swordsdance": 16
+          },
+          "provably_inferior_choices": 0,
+          "mean_first_choice_loss_lower": 0.0
+        },
+        {
+          "pinned": false,
+          "variant": 1,
+          "choices": {
+            "move swordsdance": 16
+          },
+          "provably_inferior_choices": 16,
+          "mean_first_choice_loss_lower": 0.0018008267199811443
+        },
+        {
+          "pinned": true,
+          "variant": 0,
+          "choices": {
+            "move swordsdance": 16
+          },
+          "provably_inferior_choices": 0,
+          "mean_first_choice_loss_lower": 0.0
+        },
+        {
+          "pinned": true,
+          "variant": 1,
+          "choices": {
+            "move rockslide": 14,
+            "move swordsdance": 2
+          },
+          "provably_inferior_choices": 2,
+          "mean_first_choice_loss_lower": 0.00022510333999764304
+        }
+      ],
+      "reports": [
+        {
+          "stage": "control",
+          "variant": 0,
+          "first": "rockslide",
+          "runs": 116106,
+          "nodes": 1681,
+          "bounds": [
+            0.26726353851557677,
+            0.3343117637100974
+          ],
+          "node_kinds": {
+            "terminal": 248,
+            "horizon": 995,
+            "decision": 438
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "control",
+          "variant": 0,
+          "first": "swordsdance",
+          "runs": 270,
+          "nodes": 39,
+          "bounds": [
+            0.39756944452101084,
+            0.39756944455319826
+          ],
+          "node_kinds": {
+            "terminal": 19,
+            "horizon": 9,
+            "decision": 11
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "control",
+          "variant": 0,
+          "first": "sleeptalk",
+          "runs": 17002,
+          "nodes": 1124,
+          "bounds": [
+            0.40364583325162734,
+            0.4036458332759086
+          ],
+          "node_kinds": {
+            "terminal": 257,
+            "decision": 867
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "control",
+          "variant": 1,
+          "first": "rockslide",
+          "runs": 15302,
+          "nodes": 1460,
+          "bounds": [
+            0.1232643806710551,
+            0.12326438091251542
+          ],
+          "node_kinds": {
+            "terminal": 340,
+            "horizon": 684,
+            "decision": 436
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "control",
+          "variant": 1,
+          "first": "swordsdance",
+          "runs": 314,
+          "nodes": 46,
+          "bounds": [
+            0.1214635439206989,
+            0.12146354395107395
+          ],
+          "node_kinds": {
+            "terminal": 26,
+            "horizon": 9,
+            "decision": 11
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "control",
+          "variant": 1,
+          "first": "sleeptalk",
+          "runs": 17018,
+          "nodes": 1125,
+          "bounds": [
+            0.6703745522649605,
+            0.6703745522895377
+          ],
+          "node_kinds": {
+            "terminal": 258,
+            "decision": 867
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "scheduled",
+          "variant": 0,
+          "first": "rockslide",
+          "runs": 116106,
+          "nodes": 1681,
+          "bounds": [
+            0.26726353851557677,
+            0.3343117637100974
+          ],
+          "node_kinds": {
+            "terminal": 248,
+            "horizon": 995,
+            "decision": 438
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "scheduled",
+          "variant": 0,
+          "first": "swordsdance",
+          "runs": 270,
+          "nodes": 39,
+          "bounds": [
+            0.39756944452101084,
+            0.39756944455319826
+          ],
+          "node_kinds": {
+            "terminal": 19,
+            "horizon": 9,
+            "decision": 11
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "scheduled",
+          "variant": 0,
+          "first": "sleeptalk",
+          "runs": 27876,
+          "nodes": 1784,
+          "bounds": [
+            0.6024305554468017,
+            0.6024305554789893
+          ],
+          "node_kinds": {
+            "terminal": 317,
+            "decision": 707,
+            "horizon": 760
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "scheduled",
+          "variant": 1,
+          "first": "rockslide",
+          "runs": 15302,
+          "nodes": 1460,
+          "bounds": [
+            0.1232643806710551,
+            0.12326438091251542
+          ],
+          "node_kinds": {
+            "terminal": 340,
+            "horizon": 684,
+            "decision": 436
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "scheduled",
+          "variant": 1,
+          "first": "swordsdance",
+          "runs": 314,
+          "nodes": 46,
+          "bounds": [
+            0.1214635439206989,
+            0.12146354395107395
+          ],
+          "node_kinds": {
+            "terminal": 26,
+            "horizon": 9,
+            "decision": 11
+          },
+          "partial_branches": 0
+        },
+        {
+          "stage": "scheduled",
+          "variant": 1,
+          "first": "sleeptalk",
+          "runs": 24468,
+          "nodes": 1219,
+          "bounds": [
+            0.8767356190874845,
+            0.8767356193289447
+          ],
+          "node_kinds": {
+            "terminal": 352,
+            "decision": 867
+          },
+          "partial_branches": 0
+        }
+      ],
+      "engine_runs": 350348,
+      "unchanged_policy_certificate_identities": 4,
+      "production_changed": false,
+      "strength_demonstrated": false,
+      "scope": "The least-overlapping unresolved one-step candidate among the 89 candidates whose lower-optimal policy beats the normal chosen action on lower payoffs. Same public history, both one-survivor teams; replace unseen Zapdos Rest with format-legal Generation 2 TM Hyper Beam. Root sleep duration is held at the native replay value in both worlds; other unseen legal rosters and sleep durations are not covered. Fixed own Rock Slide and Swords Dance then Rock Slide policies provide attainable lower bounds. A fixed opponent sequence of Sleep Talk, Sleep Talk, Hidden Power Ice provides upper bounds against all own actions and later replies. That sequence depends only on decision count and own legal actions, not the observed own random choice or future hidden state. Counterpolicy ledgers and all chosen policy actions are independently checked; unexpanded/horizon mass remains [0,1]. The two-world robust optimum is bracketed by a single shared Rock Slide policy and the Hyper Beam world counterpolicy. These conditional security scores are not a Bayesian-prior optimum or average match win rate. Normal belief remains unchanged; pinned true-roster searches are oracle diagnostics, not deployable information. Sixteen search seeds are repetitions at one decision, not sixteen games. Native engine semantics and guarded-state equivalence remain trusted. No human calibration or production change."
     },
     "deployed": false
   }

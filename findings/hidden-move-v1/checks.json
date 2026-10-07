@@ -1,0 +1,17 @@
+{
+  "all_3408_replays_reproduced_exactly": true,
+  "accepted": 3394,
+  "rejected_public_history": 14,
+  "independent_matrix_checks": 1480,
+  "negative_controls": [
+    "source",
+    "history",
+    "mass",
+    "coin",
+    "solution",
+    "selection",
+    "coverage"
+  ],
+  "examples_compile": true,
+  "production_changed": false
+}

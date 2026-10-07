@@ -1,0 +1,33 @@
+{
+  "eligible_own_decisions": 62,
+  "attempted": 3408,
+  "accepted": 3394,
+  "rejected": {
+    "log": 14
+  },
+  "roots_with_alternatives": 52,
+  "screened_roots": 11,
+  "screened_pairs": 688,
+  "pairs_with_different_payoff_bounds": 541,
+  "pairs_without_positive_lower": 42,
+  "positive_selected_action_losses": 0,
+  "gaps": [],
+  "engine_runs": 1149478,
+  "matrix_games_checked": 1480,
+  "cells": 23680,
+  "partially_enumerated_cells": 5090,
+  "species_counts": {
+    "zapdos": 302,
+    "snorlax": 1769,
+    "starmie": 52,
+    "heracross": 76,
+    "marowak": 397,
+    "tyranitar": 124,
+    "poliwrath": 174,
+    "porygon2": 150,
+    "vaporeon": 350
+  },
+  "production_changed": false,
+  "strength_demonstrated": false,
+  "scope": "Single unrevealed-move substitutions by moves with an explicit Generation 2 machine source and native format acceptance. Other slots, items, stats and roster entries are unchanged. Each alternate team passes the native flat validator; adding a Generation 2 machine move introduces no new egg or event combination constraint. Every prefix is replayed from the initial teams with full logs, own observations and legal actions equal. If the original unseen move was silently selected, the alternate selects its replacement. The census is restricted to both sides having one survivor in a fixed 24-game corpus. The follow-up screens every accepted variant at roots whose original one-step guaranteed score lower exceeds 0.01; omitted roots can still hide large losses because partial enumeration and future play are unresolved. Each two-world game uses a common own mixed action and lets the opponent choose its world and reply before seeing the own random choice. The hidden Quick Claw coin is averaged before that response. All nonterminal and unexpanded chance mass stays [0,1], with 128 engine-run enumeration caps. Matrix bounds are independently checked with rational arithmetic on recorded floating-point probability masses. These are finite two-world security diagnostics, not average win rates, the whole legal roster universe, or a claim that zero detected loss proves optimality. Current normal search uses its unchanged catalog belief and one 27000-iteration seed per root. No human calibration."
+}
