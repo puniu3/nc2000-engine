@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import math
+import runpy
+import subprocess
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def rows(path):
+    data = Path(path).read_bytes()
+    if str(path).endswith('.gz'):
+        data = gzip.decompress(data)
+    return [json.loads(line) for line in data.splitlines()]
+
+
+def check(records, protocol, root, prior):
+    assert len(records) == len(protocol['jobs'])
+    matrix_value = runpy.run_path('tools/native-endgame-bounds-audit')['matrix_value']
+    values = []
+    side = root['side']
+    for r, job in zip(records, protocol['jobs']):
+        assert r['job'] == job and r['id'] == job['id']
+        assert (r['game'],r['frame'],r['side'],r['state_sha256']) == (10,32,side,root['state_sha256'])
+        assert r['actual_action'] == root['current_response']['action'] == 'move hiddenpower'
+        assert r['actions'] == prior['actions']
+        assert r['actions'][side] == root['legal_actions']
+        assert r['actions'][1-side] == root['opponent_legal_actions']
+        lower = job['direction'] == 'lower'
+        fixed = side if lower else 1-side
+        assert r['fixed_side'] == fixed
+        assert set('move '+m for m in job['priority']) == set(r['actions'][fixed])
+        assert r['restricted_actions'][fixed] == ['move '+job['first']]
+        assert r['restricted_actions'][1-fixed] == r['actions'][1-fixed]
+        n, m = map(len,r['restricted_actions'])
+        cells = r['restricted_cells_p0']
+        assert len(cells) == n*m
+        for lo,hi in [*cells,r['restricted_value_p0'],r['target_score_interval']]:
+            assert math.isfinite(lo) and math.isfinite(hi) and -1e-9 <= lo <= hi+1e-9 <= 1+1e-8
+        independent = [matrix_value(tuple(tuple(cells[i*m+j][k] for j in range(m)) for i in range(n))) for k in [0,1]]
+        assert all(abs(x-y)<1e-8 for x,y in zip(independent,r['restricted_value_p0']))
+        if lower:
+            assert job['target'] == job['first'] == 'earthquake'
+            p0 = r['restricted_value_p0']
+        else:
+            assert job['target'] == 'hiddenpower'
+            target = r['restricted_actions'][side].index('move '+job['target'])
+            p0 = cells[target]
+        score = p0 if side==0 else [1-p0[1],1-p0[0]]
+        assert all(abs(x-y)<1e-8 for x,y in zip(score,r['target_score_interval']))
+        assert r['transfer_direction'] == job['direction']
+        assert r['transfer_bound'] == r['target_score_interval'][int(not lower)]
+        i = prior['actions'][side].index('move '+job['target'])
+        if lower:
+            assert r['transfer_bound'] <= prior['pure_action_values'][i][1]+1e-8
+        else:
+            assert r['transfer_bound']+1e-8 >= prior['pure_action_values'][i][0]
+        assert 0 <= r['runs'] == r['total_runs'] <= protocol['work_budget']
+        assert r['stop'] in ['WidthMet','WorkExhausted','NodeBudget']
+        assert f"work_budget: {protocol['work_budget']}" in r['config']
+        assert f"node_budget: {protocol['node_budget']}" in r['config']
+        assert 'dead_quick_claw_quotient: true' in r['config'] and 'time_budget: None' in r['config']
+        values.append({k:r[k] for k in ['id','transfer_direction','transfer_bound','target_score_interval','stop','runs','nodes','elapsed_ms']})
+    lo=max(values[0]['transfer_bound'],prior['pure_action_values'][prior['actions'][side].index('move earthquake')][0])
+    hi=min([v['transfer_bound'] for v in values[1:]]+[prior['pure_action_values'][prior['selected']][1]])
+    gap=max(0.,lo-hi-1e-10)
+    return dict(results=values,earthquake_security_lower=lo,hiddenpower_security_upper=hi,
+                selected_pure_loss_lower=gap,positive_pure_loss_proven=gap>1e-8)
+
+
+def main():
+    p=Path('findings/native-marowak-witness-v1');t=Path('tmp/native-marowak-witness-v1')
+    protocol=json.loads((p/'protocol.json').read_text())
+    assert digest(p/'native_marowak_witness.rs')==protocol['helper_sha256']
+    assert digest(t/'solver')==protocol['solver_binary_sha256']
+    source=subprocess.check_output(['git','show',protocol['implementation_commit']+':crates/bot/src/bounds.rs'])
+    assert hashlib.sha256(source).hexdigest()==protocol['bounds_sha256']
+    roots_path='tmp/native-endgame-census-v1/roots.jsonl'
+    assert digest(roots_path)==protocol['roots_sha256']
+    assert digest(protocol['reference_archive'])==protocol['reference_archive_sha256']
+    root=next(r['record'] for r in rows(roots_path) if (r['record']['game'],r['record']['frame'])==(10,32))
+    prior=next(r for r in rows(protocol['reference_archive']) if (r['game'],r['frame'])==(10,32))
+    runpy.run_path('tools/native-endgame-bounds-audit')['derived'](prior)
+    actual=rows(t/'main.jsonl');result=check(actual,protocol,root,prior)
+    repeat=rows(t/'repeat.jsonl')
+    assert [{k:v for k,v in r.items() if k!='elapsed_ms'} for r in actual]==[{k:v for k,v in r.items() if k!='elapsed_ms'} for r in repeat]
+    rejected=[]
+    for kind in ['missing_job','wrong_fixed_side','wrong_bound_direction','false_bound','restricted_free_actions']:
+        changed=copy.deepcopy(actual)
+        if kind=='missing_job':changed.pop()
+        elif kind=='wrong_fixed_side':changed[0]['fixed_side']=1-changed[0]['fixed_side']
+        elif kind=='wrong_bound_direction':changed[0]['transfer_direction']='upper'
+        elif kind=='false_bound':changed[0]['transfer_bound']=2
+        else:changed[0]['restricted_actions'][1-changed[0]['fixed_side']].pop()
+        try:check(changed,protocol,root,prior)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    result.update(schema=protocol['schema'],protocol_sha256=digest(p/'protocol.json'),
+                  records_sha256=digest(t/'main.jsonl'),repeat_sha256=digest(t/'repeat.jsonl'),repeats_match=True,rejected_mutations=rejected,
+                  blind_policy_error_proven=False,strength_improvement_proven=False,ordinary_bot_changed=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()

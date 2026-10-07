@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+import math
+import runpy
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check_step(data):
+    assert (data['game'],data['frame'],data['side']) == (10,32,0)
+    assert data['speeds'] == [105,61]
+    assert len(data['records']) == 8
+    pairs=[]
+    for a,b,reply in zip(data['records'][:4],data['records'][4:],['return','icebeam','curse','recover']):
+        assert (a['own'],b['own']) == ('earthquake','hiddenpower')
+        assert a['reply'] == b['reply'] == 'move '+reply
+        for r in [a,b]:
+            masses=r['outcome_mass_p0win_p1win_tie_live']
+            assert len(masses)==4 and all(math.isfinite(x) and 0<=x<=1 for x in masses)
+            assert abs(sum(masses)-1)<1e-10
+            assert abs(sum(r['live_hp_status_boost_item_projection'].values())-masses[3])<1e-10
+            assert r['runs']>0 and r['leaves']>0
+        assert a['outcome_mass_p0win_p1win_tie_live'] == b['outcome_mass_p0win_p1win_tie_live']
+        assert a['live_hp_status_boost_item_projection'] == b['live_hp_status_boost_item_projection']
+        pairs.append(dict(reply=reply,outcome_masses=a['outcome_mass_p0win_p1win_tie_live'],projection_equal=True))
+    return pairs
+
+
+def check_guarantee(r,p):
+    job=p['jobs'][0]
+    assert r['job']==job and r['id']==job['id']
+    assert (r['game'],r['frame'],r['side'],r['fixed_side']) == (10,32,0,0)
+    assert r['actual_action']=='move hiddenpower'
+    assert r['restricted_actions'][0]==['move hiddenpower']
+    assert r['restricted_actions'][1]==['move return','move icebeam','move curse','move recover']
+    assert r['actions']==[['move earthquake','move rockslide','move hiddenpower','move swordsdance'],r['restricted_actions'][1]]
+    assert r['transfer_direction']=='lower'
+    assert len(r['restricted_cells_p0'])==4
+    for lo,hi in [*r['restricted_cells_p0'],r['restricted_value_p0'],r['target_score_interval']]:
+        assert math.isfinite(lo) and math.isfinite(hi) and -1e-9<=lo<=hi+1e-9<=1+1e-8
+    independent=[min(c[k] for c in r['restricted_cells_p0']) for k in [0,1]]
+    assert all(abs(x-y)<1e-8 for x,y in zip(independent,r['restricted_value_p0']))
+    assert r['target_score_interval']==r['restricted_value_p0']
+    assert r['transfer_bound']==r['target_score_interval'][0]
+    assert r['stop']=='WidthMet' and r['target_score_interval'][1]-r['target_score_interval'][0]<=1e-6
+    assert 0<=r['runs']==r['total_runs']<=p['work_budget']
+    for value in [f"work_budget: {p['work_budget']}",f"node_budget: {p['node_budget']}",'dead_quick_claw_quotient: true','time_budget: None']:
+        assert value in r['config']
+
+
+def main():
+    p=Path('findings/native-marowak-witness-v1');t=Path('tmp/native-marowak-witness-v1')
+    step_p=json.loads((p/'first-step-protocol.json').read_text())
+    guarantee_p=json.loads((p/'selected-guarantee-protocol.json').read_text())
+    assert digest(p/'native_marowak_first_step.rs')==step_p['helper_sha256']
+    assert digest(t/'first-step-solver')==step_p['solver_binary_sha256']
+    assert digest(p/'native_marowak_witness.rs')==guarantee_p['helper_sha256']
+    assert digest(t/'solver')==guarantee_p['solver_binary_sha256']
+    roots_path='tmp/native-endgame-census-v1/roots.jsonl'
+    assert digest(roots_path)==guarantee_p['roots_sha256']==step_p['roots_sha256']
+    root=next(r for r in map(json.loads,Path(roots_path).read_text().splitlines()) if (r['record']['game'],r['record']['frame'])==(10,32))
+    step=json.loads((t/'first-step.json').read_text())
+    guarantee=json.loads((t/'selected-guarantee.jsonl').read_text())
+    assert step['state_sha256']==guarantee['state_sha256']==root['record']['state_sha256']
+    pairs=check_step(step);check_guarantee(guarantee,guarantee_p)
+    repeat=json.loads((t/'selected-guarantee-repeat.jsonl').read_text())
+    assert {k:v for k,v in guarantee.items() if k!='elapsed_ms'}=={k:v for k,v in repeat.items() if k!='elapsed_ms'}
+    prior=json.loads((t/'summary.json').read_text())
+    assert prior['records_sha256']==digest(t/'main.jsonl')
+    rejected=[]
+    for kind in ['missing_pair','changed_outcome','wrong_first_action','wrong_transfer_direction','inflated_guarantee']:
+        a=copy.deepcopy(step);b=copy.deepcopy(guarantee)
+        if kind=='missing_pair':a['records'].pop()
+        elif kind=='changed_outcome':a['records'][0]['outcome_mass_p0win_p1win_tie_live'][0]=0
+        elif kind=='wrong_first_action':b['restricted_actions'][0]=['move earthquake']
+        elif kind=='wrong_transfer_direction':b['transfer_direction']='upper'
+        else:b['transfer_bound']=1
+        try:check_step(a);check_guarantee(b,guarantee_p)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    result=dict(first_step=pairs,selected_policy_guarantee=guarantee['target_score_interval'],
+                alternative_policy_guarantee=prior['results'][0]['target_score_interval'],
+                selected_guarantee_runs=guarantee['runs'],repeats_match=True,
+                fixed_policy_value_difference_upper=max(abs(guarantee['target_score_interval'][0]-prior['results'][0]['target_score_interval'][1]),abs(guarantee['target_score_interval'][1]-prior['results'][0]['target_score_interval'][0])),
+                outcome_and_projection_equal=True,full_successor_equivalence_proven=False,
+                actual_action_mistake_proven=False,strength_improvement_proven=False,
+                records_sha256={f:digest(t/f) for f in ['first-step.json','selected-guarantee.jsonl','selected-guarantee-repeat.jsonl']},
+                protocols_sha256={f:digest(p/f) for f in ['first-step-protocol.json','selected-guarantee-protocol.json']},
+                rejected_mutations=rejected)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()

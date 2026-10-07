@@ -1,0 +1,88 @@
+{
+  "results": [
+    {
+      "id": "earthquake-guarantee",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.9306855194487832,
+      "target_score_interval": [
+        0.9306855194487832,
+        0.9306864968633306
+      ],
+      "stop": "WidthMet",
+      "runs": 967722,
+      "nodes": 55266,
+      "elapsed_ms": 20756.735084
+    },
+    {
+      "id": "hiddenpower-upper-return",
+      "transfer_direction": "upper",
+      "transfer_bound": 0.9885644912719727,
+      "target_score_interval": [
+        0.9885644912719727,
+        0.9885644912719727
+      ],
+      "stop": "WidthMet",
+      "runs": 606,
+      "nodes": 21,
+      "elapsed_ms": 7.393333999999999
+    },
+    {
+      "id": "hiddenpower-upper-icebeam",
+      "transfer_direction": "upper",
+      "transfer_bound": 0.9823436293663694,
+      "target_score_interval": [
+        0.9823436293663694,
+        0.9823436293663694
+      ],
+      "stop": "WidthMet",
+      "runs": 1482,
+      "nodes": 55,
+      "elapsed_ms": 19.571084
+    },
+    {
+      "id": "hiddenpower-upper-curse",
+      "transfer_direction": "upper",
+      "transfer_bound": 0.9985525116609576,
+      "target_score_interval": [
+        0.99855162584646,
+        0.9985525116609576
+      ],
+      "stop": "WidthMet",
+      "runs": 3530,
+      "nodes": 218,
+      "elapsed_ms": 49.771708
+    },
+    {
+      "id": "hiddenpower-upper-recover",
+      "transfer_direction": "upper",
+      "transfer_bound": 0.9676788507621585,
+      "target_score_interval": [
+        0.967677858780402,
+        0.9676788507621585
+      ],
+      "stop": "WidthMet",
+      "runs": 242944,
+      "nodes": 11115,
+      "elapsed_ms": 4444.194708
+    }
+  ],
+  "earthquake_security_lower": 0.9306855194487832,
+  "hiddenpower_security_upper": 0.9676788507621585,
+  "selected_pure_loss_lower": 0.0,
+  "positive_pure_loss_proven": false,
+  "schema": "nc2000-native-marowak-witness-v1",
+  "protocol_sha256": "9b4e8494e14aa2fe0995df720b23d61c42ac360eceabf13e24315e3dfa88b473",
+  "records_sha256": "70b5fbdb6eef05481a6985b37a1c1a5edd1e8da793c5dd6194ad94e2467a9ebc",
+  "repeat_sha256": "02fa5d4891b51b55bb31e59c37a38f6f281ab338d18310e39c476f2d777cb74c",
+  "repeats_match": true,
+  "rejected_mutations": [
+    "missing_job",
+    "wrong_fixed_side",
+    "wrong_bound_direction",
+    "false_bound",
+    "restricted_free_actions"
+  ],
+  "blind_policy_error_proven": false,
+  "strength_improvement_proven": false,
+  "ordinary_bot_changed": false
+}

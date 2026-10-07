@@ -1,0 +1,75 @@
+{
+  "first_step": [
+    {
+      "reply": "return",
+      "outcome_masses": [
+        0.91796875,
+        0.005126953125,
+        0.0,
+        0.076904296875
+      ],
+      "projection_equal": true
+    },
+    {
+      "reply": "icebeam",
+      "outcome_masses": [
+        0.91796875,
+        0.005126953125,
+        0.0,
+        0.076904296875
+      ],
+      "projection_equal": true
+    },
+    {
+      "reply": "curse",
+      "outcome_masses": [
+        0.91796875,
+        0.0,
+        0.0,
+        0.08203125
+      ],
+      "projection_equal": true
+    },
+    {
+      "reply": "recover",
+      "outcome_masses": [
+        0.91796875,
+        0.0,
+        0.0,
+        0.08203125
+      ],
+      "projection_equal": true
+    }
+  ],
+  "selected_policy_guarantee": [
+    0.930685499324752,
+    0.9306864968633307
+  ],
+  "alternative_policy_guarantee": [
+    0.9306855194487832,
+    0.9306864968633306
+  ],
+  "selected_guarantee_runs": 946978,
+  "repeats_match": true,
+  "fixed_policy_value_difference_upper": 9.975385786287205e-07,
+  "outcome_and_projection_equal": true,
+  "full_successor_equivalence_proven": false,
+  "actual_action_mistake_proven": false,
+  "strength_improvement_proven": false,
+  "records_sha256": {
+    "first-step.json": "4a20b92407ad416a2587a05e0350405fec3c6cc736ad8b1af42be77d79c7ebfe",
+    "selected-guarantee.jsonl": "40ca31408f63c25a8fb792c5efb5e03d86695fa525885d949af71ce60034d04a",
+    "selected-guarantee-repeat.jsonl": "88cee70b8fada28641c86ffb0d653b324dbb0ded7f40bba3486e2b0a891c80fb"
+  },
+  "protocols_sha256": {
+    "first-step-protocol.json": "6e3fbe20d0365523d51454e8ab004cb4630974f8792960026ed35a5677aedfe7",
+    "selected-guarantee-protocol.json": "6024c8fd7075217db74ee642c0ebea81906a628ee0bd4784c8151fff271aee5a"
+  },
+  "rejected_mutations": [
+    "missing_pair",
+    "changed_outcome",
+    "wrong_first_action",
+    "wrong_transfer_direction",
+    "inflated_guarantee"
+  ]
+}
