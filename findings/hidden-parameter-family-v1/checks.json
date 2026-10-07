@@ -1,0 +1,15 @@
+{
+  "screening_repeat_identities": 492,
+  "certificate_repeat_identities": 15,
+  "native_validated_cases": 492,
+  "same_history_items": 55,
+  "rational_ledgers_and_policy_checked": true,
+  "derived_stats_and_hidden_power_checked": true,
+  "complementary_matrix_control": true,
+  "negative_controls": [
+    "observation",
+    "power",
+    "missing_case"
+  ],
+  "production_changed": false
+}

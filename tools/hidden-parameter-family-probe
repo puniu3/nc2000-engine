@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import itertools
+import json
+import runpy
+from collections import Counter
+from fractions import Fraction as F
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/hidden-parameter-family-v1'
+ledger_check = runpy.run_path(str(root / 'tools/policy-witness-probe'))['verify']
+policy_check = runpy.run_path(str(root / 'tools/hidden-move-witness-probe'))['check_policy']
+selected = ['przcureberry', 'goldberry', 'brightpowder', 'focusband']
+
+
+def ident(text):
+    return ''.join(c.lower() for c in text if c.isalnum())
+
+
+def requests(game, dex):
+    team, base = game['teams'][0], game['teams'][0][5]
+    rows = []
+    for move in ['rest', 'doubleedge']:
+        for item in [''] + sorted(dex['items']):
+            patch = dict(moves=[base['moves'][0], base['moves'][1], move, base['moves'][3]], item=item)
+            swap = next((i for i, m in enumerate(team) if i != 5 and item and ident(m['item']) == item), None)
+            rows.append(dict(id=f'item/{move}/{item or "empty"}', kind='item', patch=patch, swapped_slot=swap))
+    for stat in ['hp', 'atk', 'def', 'spa', 'spe']:
+        for ev in range(0, 253, 4):
+            values = dict(base['evs'], **{stat: ev})
+            if stat == 'spa':
+                values['spd'] = ev
+            rows.append(dict(id=f'ev/{stat}/{ev}', kind='ev', patch=dict(evs=values)))
+    for stat in ['atk', 'def', 'spe', 'spa']:
+        for dv in range(16):
+            values = {k: v//2*2 for k, v in base['ivs'].items()}
+            values[stat] = dv*2
+            if stat == 'spa':
+                values['spd'] = dv*2
+            values['hp'] = 2*(8*(values['atk']//2%2)+4*(values['def']//2%2)+2*(values['spe']//2%2)+values['spa']//2%2)
+            if 4*(values['atk']//2%4)+values['def']//2%4 != 13:
+                continue
+            rows.append(dict(id=f'dv/{stat}/{dv}', kind='dv', patch=dict(ivs=values)))
+    rows += [dict(id=f'happiness/{h}', kind='happiness', patch=dict(happiness=h)) for h in [0, 1, 127, 128, 254, 255]]
+    return rows
+
+
+def intersections(lines):
+    candidates = {F(0), F(1)}
+    for (a, b), (c, d) in itertools.combinations(lines, 2):
+        if a-b-c+d:
+            x = (d-b)/(a-b-c+d)
+            if 0 <= x <= 1:
+                candidates.add(x)
+    return candidates
+
+
+def matrix_bounds(worlds):
+    lines = [(F(w['lower']['move rockslide']), F(w['lower']['move swordsdance'])) for w in worlds]
+    lower, p = max((min(p*a+(1-p)*b for a, b in lines), p) for p in intersections(lines))
+    actions = list(worlds[0]['upper'])
+    candidates = []
+    for i, j in itertools.combinations(range(len(worlds)), 2):
+        upper_lines = [(F(worlds[i]['upper'][a]), F(worlds[j]['upper'][a])) for a in actions]
+        bound, q = min((max(q*a+(1-q)*b for a, b in upper_lines), q) for q in intersections(upper_lines))
+        candidates.append((bound, q, i, j))
+    upper, q, i, j = min(candidates)
+    pure_upper = max(min(F(w['upper'][a]) for w in worlds) for a in actions)
+    return dict(lower=float(lower-F(1, 10**8)), upper=float(upper+F(1, 10**8)),
+        width=float(upper-lower+F(2, 10**8)), rockslide_probability=float(p),
+        rockslide_probability_exact=str(p), adversary_probability=float(q),
+        adversary_probability_exact=str(q), adversary_worlds=[worlds[i]['id'], worlds[j]['id']],
+        best_pure_security_upper=float(pure_upper), mixed_gain_over_every_pure_lower=float(lower-pure_upper-F(1, 10**8)))
+
+
+def verify(screen, repeat, proofs, proof_repeat, game, dex, family):
+    assert screen == repeat and proofs == proof_repeat
+    assert screen['case'] == proofs['case']
+    case = screen['case']
+    assert (case['game'], case['decision'], case['side'], case['foe_slot']) == (6, 32, 1, 5)
+    expected = requests(game, dex)
+    assert len(expected) == 492 and [r['request'] for r in screen['rows']] == expected
+    assert screen['observation'] == proofs['observation']
+    assert screen['observation']['item'] == 'ItemObs { original: None, current: None, gained: false }'
+    assert screen['observation']['preview_has_item']
+    assert screen['observation']['moves'] == ['thunderbolt', 'hiddenpowerice', 'sleeptalk']
+    accepted = {}
+    base = game['teams'][0][5]
+    keys = ['hp', 'atk', 'def', 'spa', 'spd', 'spe']
+    for row in screen['rows'] + proofs['rows']:
+        assert row['validity']['ok']
+        if 'root' not in row:
+            assert row['mismatch']['reason'] == 'log' and row['mismatch']['decision'] <= 32
+            assert row['mismatch']['original'] != row['mismatch']['alternate']
+            continue
+        assert row['prefix_checks'] == 33 and 'mismatch' not in row
+        result = row['root']
+        assert result['log_hash'] == case['log_hash'] and result['observer_hash'] == case['observer_hash']
+        set_ = dict(base, **row['request']['patch'])
+        ivs = [set_['ivs'][k] & 30 for k in keys]
+        evs = [set_['evs'][k] for k in keys]
+        stats = [(2*dex['species']['zapdos']['baseStats'][k]+ivs[i]+evs[i]//4)*50//100+(60 if i == 0 else 5)
+            for i, k in enumerate(keys)]
+        assert result['ivs'] == ivs and result['evs'] == evs
+        assert result['stats'] == stats[1:] and result['hp'] == result['maxhp'] == stats[0]
+        atk, defense, speed, special = [ivs[i]//2 for i in [1, 2, 5, 3]]
+        assert 4*(atk%4)+defense%4 == 13 and result['hp_type'] == 'Ice'
+        assert result['hp_power'] == (5*((special>>3)+2*(speed>>3)+4*(defense>>3)+8*(atk>>3))+(special%4))//2+31
+        assert result['item'] == ident(set_['item'])
+        accepted[row['request']['id']] = row
+    requested = [dict(next(r for r in expected if r['id'] == 'item/doubleedge/'+item), prove=True) for item in selected]
+    requested += [dict(id='empty-slot', kind='empty', patch=dict(moves=['thunderbolt', 'hiddenpowerice', 'sleeptalk']), prove=True)]
+    assert [r['request'] for r in proofs['rows']] == requested
+    worlds = [dict(id=r['move'], lower=r['lower'], upper=r['upper']) for r in family['rows']]
+    proof_reports = []
+    for row in proofs['rows']:
+        assert [l['first'] for l in row['ledgers']] == ['rockslide', 'swordsdance', 'sleeptalk']
+        lower, upper = {}, {}
+        for record in row['ledgers']:
+            ledger, first = record['ledger'], record['first']
+            side = 0 if first == 'sleeptalk' else 1
+            cfg = dict(game=6, decision=32, target_side=side, policy_side=side, first_choice='move '+first,
+                priority=['move hiddenpowerice' if side == 0 else 'move rockslide'], rest_at_percent=None,
+                horizon=3, work_budget=200000, cell_cap=10000, guarded_keys=True, support_certificate=True)
+            if side == 0:
+                cfg['opening'] = ['move sleeptalk', 'move sleeptalk', 'move hiddenpowerice']
+            assert ledger['config'] == cfg and ledger['nodes'][-1]['state_key'] == row['root']['key']
+            report = ledger_check(ledger)
+            policy_check(ledger)
+            proof_reports.append(dict(id=row['request']['id'], first=first, **report))
+            if side == 1:
+                lower['move '+first] = ledger['bounds'][0]
+            else:
+                upper = {b['choices'][1]: 1-b['bounds'][0] for b in ledger['nodes'][-1]['branches']}
+        world = dict(id=row['request']['id'], lower=lower, upper=upper)
+        if row['request']['id'] == 'item/doubleedge/przcureberry':
+            control = next(w for w in worlds if w['id'] == 'doubleedge')
+            assert lower == control['lower'] and upper == control['upper']
+        else:
+            worlds.append(world)
+    assert len(worlds) == 43
+    bright = next(w for w in worlds if w['id'] == 'item/doubleedge/brightpowder')
+    reversal = F(bright['lower']['move swordsdance'])-F(bright['upper']['move rockslide'])-F(1, 10**8)
+    assert reversal > 0
+    matrix = matrix_bounds(worlds)
+    assert matrix['mixed_gain_over_every_pure_lower'] > .0015 and matrix['width'] < .000015
+    assert set(matrix['adversary_worlds']) == {'item/doubleedge/brightpowder', 'item/doubleedge/focusband'}
+    census = {}
+    for kind in ['item', 'ev', 'dv', 'happiness']:
+        rows = [r for r in screen['rows'] if r['request']['kind'] == kind]
+        passing = [r for r in rows if 'root' in r]
+        census[kind] = dict(attempted=len(rows), same_history=len(passing), rejected=dict(Counter(r['mismatch']['reason'] for r in rows if 'root' not in r)))
+    item_sets = [{r['request']['patch']['item'] for r in screen['rows'] if 'root' in r and r['request']['id'].startswith('item/'+move+'/')} for move in ['rest', 'doubleedge']]
+    assert item_sets[0] == item_sets[1] and len(item_sets[0]) == 55
+    return dict(census=census, same_history_items=sorted(item_sets[0]), screening_repeat_identities=492,
+        certificate_repeat_identities=15, proof_engine_runs=sum(r['runs'] for r in proof_reports),
+        proof_reports=proof_reports, brightpowder_first_action_reversal_lower=float(reversal),
+        worlds=worlds, finite_family=matrix, production_changed=False, strength_demonstrated=False,
+        scope='A constructive replay screen at one decision, using the original PRNG seed and recorded '
+              'semantic actions. Accepted cases preserve all 33 public logs, observers and own legal-action '
+              'boundaries and pass native team validation. A failed seeded replay does not exclude a '
+              'different chance history with the same observations. Item conflicts are tested by swapping '
+              'the previous holder to the original berry. EV and DV sweeps vary one independent stat at '
+              'a time; happiness uses six values. These are not a complete hidden-state information set '
+              'or a population sample. The solved comparison family contains the prior 39 moves, an '
+              'empty fourth slot, and only three additional Double Edge worlds with Gold Berry, Bright '
+              'Powder or Focus Band. It is not the full product of 55 items and 40 move candidates; '
+              'alternative stats are not included in its value matrix. The lower strategy mixes the '
+              'two first moves before observing the simultaneous opposing move, then uses one common '
+              'Rock Slide priority. Lower bounds allow an even stronger adversary to react to the first '
+              'draw. The dual upper certificate randomizes the two hidden item worlds before the player '
+              'acts and uses a fixed Sleep Talk/Sleep Talk/Hidden Power Ice schedule independent of the '
+              'player draw. Future own play is granted full-state optimality for that upper bound. '
+              'Existing engine transitions and guarded-key contracts remain trusted. Rational matrix '
+              'calculations use the outward-padded ledgers, with an additional 1e-8 margin. No claim of '
+              'deployed-bot improvement, online runtime, human calibration or full-game optimum.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', nargs=4, type=Path)
+    args = parser.parse_args()
+    corpus_path = root / 'findings/policy-gap-v1/corpus.jsonl.gz'
+    game = next(json.loads(line) for line in gzip.decompress(corpus_path.read_bytes()).decode().splitlines() if json.loads(line)['game'] == 6)
+    dex = json.loads((root / 'data/gen2stadium2.json').read_bytes())
+    family_path = root / 'findings/hidden-move-family-v1/summary.json'
+    family = json.loads(family_path.read_bytes())
+    paths = [Path(__file__).resolve(), corpus_path, family_path,
+        root / 'crates/bot/examples/hidden_parameter_family.rs', root / 'crates/bot/examples/hidden_terminal.rs',
+        root / 'crates/bot/examples/policy_witness.rs', root / 'tools/policy-witness-probe',
+        root / 'tools/hidden-move-witness-probe', root / 'data/gen2stadium2.json', root / 'data/learnsets-gen2.json']
+    for directory in ['crates/bot/src', 'crates/engine/src']:
+        paths += list((root / directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists()
+        data = [json.loads(p.read_bytes()) for p in args.record]
+    else:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert bundle['hashes'] == hashes
+        data = bundle['data']
+    summary = verify(*data, game, dex, family)
+    toy = [dict(id=str(i), lower=dict(zip(['move rockslide', 'move swordsdance'], values)),
+        upper=dict(zip(['move rockslide', 'move swordsdance'], values))) for i, values in enumerate([[1, 0], [0, 1]])]
+    control = matrix_bounds(toy)
+    assert control['rockslide_probability'] == .5 and control['lower'] < .5 < control['upper']
+    assert matrix_bounds(list(reversed(toy)))['lower'] == control['lower']
+    for fault in ['observation', 'power', 'missing_case']:
+        altered = copy.deepcopy(data)
+        if fault == 'observation':
+            altered[0]['observation']['item'] = 'known'
+            altered[1] = copy.deepcopy(altered[0])
+        elif fault == 'power':
+            next(r for r in altered[0]['rows'] if 'root' in r)['root']['hp_power'] += 1
+            altered[1] = copy.deepcopy(altered[0])
+        else:
+            altered[2]['rows'].pop()
+            altered[3] = copy.deepcopy(altered[2])
+        try:
+            verify(*altered, game, dex, family)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError(f'Accepted corruption: {fault}')
+    report = dict(screening_repeat_identities=492, certificate_repeat_identities=15,
+        native_validated_cases=492, same_history_items=55, rational_ledgers_and_policy_checked=True,
+        derived_stats_and_hidden_power_checked=True, complementary_matrix_control=True,
+        negative_controls=['observation', 'power', 'missing_case'], production_changed=False)
+    if args.record:
+        archive.mkdir()
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(dict(data=data, hashes=hashes), separators=(',', ':')).encode(), mtime=0))
+        for name, value in [('summary', summary), ('checks', report)]:
+            (archive / (name + '.json')).write_text(json.dumps(value, indent=2) + '\n')
+    else:
+        assert summary == json.loads((archive / 'summary.json').read_bytes())
+        assert report == json.loads((archive / 'checks.json').read_bytes())
+    print(json.dumps({k: v for k, v in summary.items() if k not in ['scope', 'worlds', 'proof_reports', 'same_history_items']}, indent=2))
+
+
+if __name__ == '__main__':
+    main()
