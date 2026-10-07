@@ -25,7 +25,7 @@ pub use loss_threshold::{PolicyLossThresholdReport, PolicyLossThresholdStop};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use nc2000_engine::battle::enumerate::{enumerate_step, enumerate_step_partial, run_scripted};
+use nc2000_engine::battle::enumerate::{enumerate_step, enumerate_step_partial, enumerate_step_partial_with_leaf_scripts, run_scripted};
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
@@ -1749,7 +1749,11 @@ impl<'d> BoundSolver<'d> {
         };
         let (leaves, mut pending, runs, scripts) = if self.cfg.retain_eager_prefix {
             assert!(!self.cfg.hp_transition_eager);
-            let partial = enumerate_step_partial(self.dex, &battle, choices, cap);
+            let partial = if self.cfg.defer_eager_frontier {
+                enumerate_step_partial_with_leaf_scripts(self.dex, &battle, choices, cap)
+            } else {
+                enumerate_step_partial(self.dex, &battle, choices, cap)
+            };
             if partial.exhausted {
                 self.stats.eager_failures += 1;
                 self.stats.retained_eager_runs += partial.runs;
@@ -1896,7 +1900,9 @@ impl<'d> BoundSolver<'d> {
             }
             prefix *= d.prob();
         }
-        let leaf_mass = prefix;
+        // Complete scripts can represent merged chance mass.
+        let leaf_mass = if self.cfg.retain_eager_prefix && self.cfg.defer_eager_frontier
+            && trace.len() == pending.script.len() { pending.mass } else { prefix };
         debug_assert!(
             ((leaf_mass + siblings.iter().map(|s| s.mass).sum::<f64>()) - pending.mass).abs()
                 < 1e-9,
@@ -3536,11 +3542,12 @@ mod tests {
             let id = root.active_id(side).unwrap();
             root.poke_mut(id).hp = if side == 0 { 40 } else { 60 };
         }
-        for (side, aggregate) in [(0, false), (1, false), (0, true), (1, true)] {
+        for (side, aggregate, defer) in [(0, false, false), (1, false, false), (0, true, false), (1, true, false), (0, false, true), (1, false, true)] {
             let value = exhaustive(&dex, &root, side);
             let score = if side == 0 { value } else { 1.0 - value };
             let mut solver = super::FixedPolicySolver::new(&dex, BoundConfig {
-                work_budget: 1, cell_cap: 0, eps: 1e-8,
+                work_budget: if defer {100_000} else {1}, cell_cap: if defer {4096} else {0}, eps: 1e-8,
+                retain_eager_prefix: defer, defer_eager_frontier: defer,
                 aggregate_lazy_children: aggregate, chance_fair_period: if aggregate { 2 } else { 0 },
                 ..BoundConfig::default()
             }, side, vec![SearchChoice::Move(dex.moves.id("seismictoss").unwrap())]);
@@ -3552,6 +3559,34 @@ mod tests {
                 if report.stop == super::Stop::WidthMet { closed = true; break; }
             }
             assert!(closed);
+            if defer { assert!(solver.stats().deferred_eager_leaves>0); }
+        }
+    }
+
+    #[test]
+    fn complete_leaf_scripts_replay_merged_damage_successors() {
+        use nc2000_engine::battle::enumerate::{enumerate_step_partial_with_leaf_scripts, run_scripted};
+        let dex = conformance::load_dex();
+        let mut base = battle(&dex, &["Body Slam"], &["Ice Beam"]);
+        let preview = [0,1].map(|side|base.legal_choices(&dex,side)[0]);
+        base.apply_choices(&dex,preview.map(Some)).unwrap();
+        let choices = [0,1].map(|side|Some(base.legal_choices(&dex,side)[0]));
+        for hp in [[1,100],[100,1]] {
+            let mut root = base.clone();
+            for side in 0..2 { let id=root.active_id(side).unwrap(); root.poke_mut(id).hp=hp[side]; }
+            let exact = enumerate_step(&dex,&root,choices,100_000).unwrap();
+            let scripted = enumerate_step_partial_with_leaf_scripts(&dex,&root,choices,100_000);
+            assert!(!scripted.exhausted && scripted.pending.is_empty());
+            assert_eq!(scripted.runs,exact.runs);
+            let scripts = scripted.leaf_scripts.unwrap();
+            assert_eq!(scripts.len(),exact.leaves.len());
+            for ((leaf,expected),script) in scripted.leaves.iter().zip(&exact.leaves).zip(scripts) {
+                assert_eq!(leaf.battle.state_key128(),expected.battle.state_key128());
+                assert_eq!(leaf.prob,expected.prob);
+                let (replayed,trace) = run_scripted(&dex,&root,choices,&script);
+                assert_eq!(replayed.state_key128(),leaf.battle.state_key128());
+                assert_eq!(trace.len(),script.len());
+            }
         }
     }
 
@@ -3563,18 +3598,18 @@ mod tests {
         root.apply_choices(&dex,preview).unwrap();
         let choices = [0,1].map(|s|Some(root.legal_choices(&dex,s)[0]));
         let exact = enumerate_step(&dex,&root,choices,100_000).unwrap();
-        for (cap,defer_eager_frontier) in [(1,false),(7,false),(1,true),(7,true)] {
+        for (cap,defer_eager_frontier) in [(1,false),(7,false),(1,true),(7,true),(100_000,false),(100_000,true)] {
             let mut solver = BoundSolver::new(&dex,BoundConfig {
-                retain_eager_prefix:true,defer_eager_frontier,fold_terminal_nodes:false,..Default::default()
+                cell_cap:cap,retain_eager_prefix:true,defer_eager_frontier,fold_terminal_nodes:false,..Default::default()
             });
             let key = solver.intern(root.clone());
             solver.init_cells(key);
             assert!(solver.try_eager(key,0,cap));
-            assert_eq!(solver.stats.runs,cap);
-            assert_eq!(solver.stats.retained_eager_runs,cap);
-            assert!(solver.stats.retained_eager_leaves>0);
+            assert_eq!(solver.stats.runs,cap.min(exact.runs));
+            assert_eq!(solver.stats.retained_eager_runs,if cap<exact.runs {cap} else {0});
+            assert_eq!(solver.stats.retained_eager_leaves>0,cap<exact.runs);
             if defer_eager_frontier { assert!(solver.stats.deferred_eager_leaves>0); }
-            assert!(!solver.nodes[&key].cells[0].pending.is_empty());
+            assert_eq!(!solver.nodes[&key].cells[0].pending.is_empty(),cap<exact.runs || defer_eager_frontier);
             while !solver.nodes[&key].cells[0].pending.is_empty() {
                 solver.expand(key,0);
                 assert!(solver.stats.runs<100_000);

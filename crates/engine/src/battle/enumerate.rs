@@ -56,7 +56,7 @@ pub struct ChancePrefix {
 
 pub struct PartialStepEnum {
     pub leaves: Vec<ChanceLeaf>,
-    /// Full draw scripts aligned with leaves after an exhausted enumeration.
+    /// Full representative scripts aligned with leaves; a leaf may carry merged mass.
     pub leaf_scripts: Option<Vec<Vec<usize>>>,
     pub pending: Vec<ChancePrefix>,
     pub runs: usize,
@@ -103,6 +103,19 @@ impl TracePartition {
 pub fn enumerate_step_partial(
     dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], cap: usize,
 ) -> PartialStepEnum {
+    enumerate_partial(dex, base, choices, cap, false)
+}
+
+pub fn enumerate_step_partial_with_leaf_scripts(
+    dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], cap: usize,
+) -> PartialStepEnum {
+    enumerate_partial(dex, base, choices, cap, true)
+}
+
+fn enumerate_partial(
+    dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], cap: usize,
+    retain_complete_scripts: bool,
+) -> PartialStepEnum {
     let mut observed = HashMap::new();
     let mut runs = 0;
     let complete = {
@@ -117,7 +130,17 @@ pub fn enumerate_step_partial(
     };
     if let Some(step) = complete {
         assert_eq!(step.runs, runs);
-        return PartialStepEnum { leaves: step.leaves, leaf_scripts: None, pending: Vec::new(), runs, exhausted: false };
+        let leaf_scripts = retain_complete_scripts.then(|| {
+            let mut representatives: HashMap<u128, Vec<usize>> = HashMap::new();
+            for (script, (battle, _)) in observed {
+                representatives.entry(battle.state_key128())
+                    .and_modify(|old| { if script < *old { *old = script.clone(); } })
+                    .or_insert(script);
+            }
+            step.leaves.iter().map(|leaf| representatives.get(&leaf.battle.state_key128())
+                .expect("complete leaf has an observed representative").clone()).collect()
+        });
+        return PartialStepEnum { leaves: step.leaves, leaf_scripts, pending: Vec::new(), runs, exhausted: false };
     }
     let mut observed: Vec<_> = observed.into_iter().collect();
     observed.sort_by(|a,b| a.0.cmp(&b.0));
