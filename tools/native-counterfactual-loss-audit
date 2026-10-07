@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+import runpy
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check(rows, protocol, branches):
+    source = {r['record']['fork_id']: r for r in branches}
+    ids = protocol['fork_ids']
+    assert len(ids) == len(set(ids)) == 151
+    assert len(rows) == len(ids)
+    assert {r['fork_id'] for r in rows} == set(ids)
+    controls = {r['record']['source_game']: r['record']['child_sha256'] for r in branches if r['record']['is_control']}
+    seen = set()
+    expected_ids = []
+    for r in sorted((r['record'] for r in branches), key=lambda r: (r['source_game'], r['branch'])):
+        key = r['source_game'], r['child_sha256']
+        if r['eligible'] and not r['is_control'] and r['child_sha256'] != controls[r['source_game']] and key not in seen:
+            seen.add(key)
+            expected_ids.append(r['fork_id'])
+    assert ids == expected_ids
+    roots = []
+    for fork_id in ids:
+        s = source[fork_id]['record']
+        side = s['side']
+        roots.append({'record': {'game': s['source_game'], 'frame': s['branch'], 'side': side,
+            'state_sha256': s['child_sha256'], 'legal_actions': s['legal_actions'][side],
+            'opponent_legal_actions': s['legal_actions'][1-side], 'current_response': s['response']}})
+    normalized = []
+    for r in rows:
+        s = source[r['fork_id']]['record']
+        for key in ['source_game', 'source_frame', 'branch']:
+            assert r[key] == s[key]
+        assert r['turn'] == s['child_turn']
+        assert r['target'] == r['selected']
+        normalized.append({**r, 'game': r['source_game'], 'frame': r['branch']})
+    result = runpy.run_path('tools/native-loss-threshold-audit')['check_threshold'](
+        normalized, {**protocol, 'indices': list(range(len(roots)))}, roots)
+    lookup = {(r['source_game'], r['branch']): r['fork_id'] for r in rows}
+    for group in result.values():
+        if isinstance(group, dict) and 'keys' in group:
+            group['fork_ids'] = [lookup[tuple(key)] for key in group.pop('keys')]
+    return result
+
+
+def main():
+    protocol_path, branches_path, results_path = map(Path, sys.argv[1:])
+    protocol = json.loads(protocol_path.read_text())
+    assert digest(branches_path) == protocol['branches_sha256']
+    assert digest(protocol_path.parent/'native_counterfactual_loss.rs') == protocol['helper_sha256']
+    assert digest('tmp/native-counterfactual-loss-v1/solver') == protocol['solver_binary_sha256']
+    assert digest('crates/bot/src/bounds/loss_threshold.rs') == protocol['solver_source_sha256']
+    assert digest('crates/bot/src/bounds.rs') == protocol['parent_bounds_source_sha256']
+    branches = [json.loads(l) for l in branches_path.read_text().splitlines()]
+    rows = [json.loads(l) for l in results_path.read_text().splitlines()]
+    result = check(rows, protocol, branches)
+    rejected = []
+    for kind in ['missing_fork', 'wrong_source_frame', 'wrong_selected', 'invalid_cell', 'false_threshold_stop']:
+        altered = copy.deepcopy(rows)
+        if kind == 'missing_fork':
+            altered.pop()
+        elif kind == 'wrong_source_frame':
+            altered[0]['source_frame'] += 1
+        elif kind == 'wrong_selected':
+            altered[0]['selected'] = (altered[0]['selected']+1) % len(altered[0]['actions'][altered[0]['side']])
+        elif kind == 'invalid_cell':
+            altered[0]['cells_p0'][0] = [1., 0.]
+        else:
+            altered[0]['stop'] = 'AboveThreshold' if altered[0]['threshold_loss'][0] <= protocol['tolerance'] else 'AtMostThreshold'
+        try:
+            check(altered, protocol, branches)
+        except AssertionError:
+            rejected.append(kind)
+        else:
+            raise AssertionError('accepted mutation: '+kind)
+    result.update({'schema': protocol['schema'], 'protocol_sha256': digest(protocol_path),
+        'records_sha256': digest(results_path), 'branches_sha256': digest(branches_path),
+        'rejected_mutations': rejected, 'matrix_check': 'independent rational LP vertex enumeration',
+        'ordinary_bot_changed': False, 'blind_policy_error_proven': False, 'strength_improvement_proven': False})
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()
