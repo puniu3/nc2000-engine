@@ -1,0 +1,79 @@
+{
+  "schema": "nc2000-native-frontier-time-v1",
+  "registered_at": "2026-10-07T14:16:49.555865+00:00",
+  "implementation_commit": "b06adbc5c17a351eca4aa65b3399c6ccce41dd46",
+  "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
+  "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "helper_sha256": "a0d893b95b60f80ce51d69c2212353208f04b84b59f1f5907d71eaf23008f729",
+  "bounds_sha256": "5715026343693c264a2443d302a22fd6ec0868d69d7c5c5b94a4236062803adb",
+  "work_budget": 10000000,
+  "node_budget": 200000,
+  "jobs": [
+    {
+      "id": "trial-0",
+      "direction": "lower",
+      "target": "rest",
+      "first": "rest",
+      "priority": [
+        "doubleedge",
+        "curse",
+        "rest",
+        "sleeptalk"
+      ],
+      "sleep_talk": true,
+      "defer": false
+    },
+    {
+      "id": "trial-1",
+      "direction": "lower",
+      "target": "rest",
+      "first": "rest",
+      "priority": [
+        "doubleedge",
+        "curse",
+        "rest",
+        "sleeptalk"
+      ],
+      "sleep_talk": true,
+      "defer": true
+    },
+    {
+      "id": "trial-2",
+      "direction": "lower",
+      "target": "rest",
+      "first": "rest",
+      "priority": [
+        "doubleedge",
+        "curse",
+        "rest",
+        "sleeptalk"
+      ],
+      "sleep_talk": true,
+      "defer": true
+    },
+    {
+      "id": "trial-3",
+      "direction": "lower",
+      "target": "rest",
+      "first": "rest",
+      "priority": [
+        "doubleedge",
+        "curse",
+        "rest",
+        "sleeptalk"
+      ],
+      "sleep_talk": true,
+      "defer": false
+    }
+  ],
+  "reference_archive": "findings/native-loss-lower-screen-v1/records.jsonl.gz",
+  "reference_archive_sha256": "0a6519922d4b6a675d6f243669f7a1edf42ac0524f596aaed892af6175238d55",
+  "selection_summary_sha256": "4f14cf2b73134c26a7633e15597bcd4993896a3b2e9a6909673079972b6ed424",
+  "selection": "The first-ranked root in the completed cap4096 one-step census: game87/frame49, actual Rest versus Double Edge. Immediate-win difference is a hypothesis, not an error certificate.",
+  "scope": "Serial ABBA comparison at equal 40-second time ceilings and 200k state ceilings on game87/frame49 fixed Rest-first/Sleep-Talk policy. 40 seconds matches the approximately40s previous default search. Work ceiling10m must not bind. NodeBudget before time is permitted and must be reported, so actual time need not be equal. Require every timed run within40800ms, nonzero candidate deferral, independent bound checks. Report both candidate lower bounds versus both controls; improvement at these ceilings only, not broad speedup or bot strength. No parameter changes or sample extension in response to outcomes. Research time on this Mac, not product/iPad latency.",
+  "ordinary_bot_changed": false,
+  "enumerate_sha256": "b2b5120d27c14ff8b73dd5c5ca98c29f4b75fd519384bd46ec14eb95d1879b58",
+  "time_budget_ms": 40000,
+  "allowed_time_overshoot_ms": 800,
+  "solver_binary_sha256": "916c4d1cb1cda7d73a2494711beb75cba5e2bf296aeb8f99f5d5c5f49095b4b6"
+}
