@@ -1293,6 +1293,12 @@ impl Dex {
         &self.moves_static[id.0 as usize]
     }
 
+    pub fn canonical_move_id(&self, id: MoveId) -> MoveId {
+        self.moves.get(id).extra.get("placeholderFor").and_then(Value::as_str)
+            .map(|name| self.moves.id(&toid(name)).expect("move placeholder must resolve"))
+            .unwrap_or(id)
+    }
+
     pub fn conds_id(&self, key: &str) -> Option<CondId> {
         self.conds.id(key)
     }

@@ -242,6 +242,7 @@ impl Battle {
 
         let move_id = resolved.or_else(|| dex.moves.id(move_id_str))
             .ok_or_else(|| EngineError::InvalidChoice(format!("unknown move {move_id_str}")))?;
+        let move_id = dex.canonical_move_id(move_id);
         let mut move_slot = None;
         let mut enabled = false;
         for (i, slot) in moves.iter().enumerate() {

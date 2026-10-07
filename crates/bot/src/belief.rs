@@ -1505,9 +1505,6 @@ fn build_refs(dex: &Dex, sets: &[PokemonSet], mons: &[MonObs]) -> Option<Vec<Pok
     Some(out)
 }
 
-/// In-battle consistency: every observation must fit the candidate.
-/// (`move_matches`: a plain-hiddenpower reveal — M15 protocol mode —
-/// matches any typed hidden power; M10 reveals are typed, bit-identical.)
 fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
     refs.iter().zip(mons).all(|(r, mo)| {
         crate::hp_evidence::consistent(dex, r, mo.hp_type_mask) && mo.revealed_moves
