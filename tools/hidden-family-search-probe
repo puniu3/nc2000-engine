@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+from collections import Counter
+from fractions import Fraction as F
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/hidden-family-search-v1'
+family_dir = root / 'findings/hidden-move-family-v1'
+snapshot_fields = ['best', 'visits', 'means', 'rng', 'nodes', 'iterations',
+                   'world_counts', 'arm_counts', 'own_rng', 'world_rng', 'reward_sum']
+
+
+def verify(out, family, prior, cases):
+    assert out['cases'] == cases
+    worlds = [cases[0]['original_move']] + [c['replacement'] for c in cases]
+    actions = cases[0]['actions']
+    assert out['worlds'] == worlds and len(set(worlds)) == 39
+    assert out['actions'] == actions and len(actions) == 4
+    arms = [{'world': w, 'reply': a} for w, replies in
+            [(worlds[0], cases[0]['original_replies'])] +
+            [(c['replacement'], c['alternate_replies']) for c in cases] for a in replies]
+    assert out['arms'] == arms and len(arms) == 156
+    assert out['checks'] == dict(active_model_checks=624, forced_joint_checks=624)
+    reflect = worlds.index('reflect')
+    keys = {(m, s, t, timed) for m in ['catalog', 'uniform', 'robust']
+            for s in range(0x2026110301, 0x2026110301 + 16) for timed in [False, True]
+            for t in ([0] if timed else [0, reflect])}
+    rows = {(r['mode'], r['seed'], r['template'], r['timed']): r for r in out['rows']}
+    assert len(rows) == len(out['rows']) == 144 and set(rows) == keys
+    previous = {(r['seed'], r['variant']): r for r in prior if not r['pinned']}
+    identity_pairs = 0
+    archive_identities = 0
+    for k, r in rows.items():
+        mode, seed, template, timed = k
+        n = r['iterations']
+        assert n > 0 and sum(r['visits']) == n and len(r['visits']) == len(r['means']) == 4
+        assert all(type(v) is int and v >= 0 for v in r['visits'])
+        assert all(0 <= v <= 1 for v in r['means']) and r['best'] in actions
+        assert abs(sum(v * m for v, m in zip(r['visits'], r['means'])) - r['reward_sum']) < 1e-6
+        assert 0 <= r['setup_seconds'] < r['seconds']
+        if timed:
+            assert .5 <= r['seconds'] <= .55
+        else:
+            assert n == 27000
+            if template != 0:
+                assert all(r[f] == rows[mode, seed, 0, False][f] for f in snapshot_fields)
+                identity_pairs += 1
+            if mode == 'catalog':
+                old = previous[seed, int(template != 0)]
+                assert all(r[f] == old[f] for f in ['best', 'visits', 'means', 'rng', 'nodes'])
+                archive_identities += 1
+        assert len(r['world_counts']) == 39 and len(r['arm_counts']) == 156
+        assert all(type(v) is int and v >= 0 for v in r['world_counts'] + r['arm_counts'])
+        assert sum(r['world_counts']) == (0 if mode == 'catalog' else n)
+        assert sum(r['arm_counts']) == (n if mode == 'robust' else 0)
+        if mode == 'robust':
+            assert r['world_counts'] == [sum(c for c, arm in zip(r['arm_counts'], arms) if arm['world'] == w) for w in worlds]
+            best = max(range(4), key=lambda a: (r['visits'][a], a))
+            assert r['best'] == actions[best]
+    bounds = {r['move']: r for r in family['rows']}
+    assert set(bounds) == set(worlds)
+    optimum_lower = F(family['robust_rockslide_bounds'][0])
+    def evaluate(weights):
+        lower = min(sum(p * F(bounds[w]['lower'].get(a, 0)) for a, p in zip(actions, weights)) for w in worlds)
+        upper = min(sum(p * F(bounds[w]['upper'][a]) for a, p in zip(actions, weights)) for w in worlds)
+        return {'fixed_continuation_lower': float(lower), 'optimal_continuation_upper': float(upper),
+                'certified_first_action_loss_lower': float(max(F(0), optimum_lower - upper - F(1, 10**8)))}
+    controls = {a: evaluate([F(int(a == b)) for b in actions]) for a in actions}
+    assert controls['move rockslide']['certified_first_action_loss_lower'] == 0
+    assert controls['move earthquake']['certified_first_action_loss_lower'] > .09
+    assert controls['move swordsdance']['certified_first_action_loss_lower'] > .003
+    groups = []
+    for timed in [False, True]:
+        for mode in ['catalog', 'uniform', 'robust']:
+            group = [r for r in out['rows'] if r['timed'] == timed and r['mode'] == mode and r['template'] == 0]
+            counts = dict(Counter(r['best'] for r in group))
+            mixed = [evaluate([F(v, r['iterations']) for v in r['visits']]) for r in group]
+            seconds = [r['seconds'] for r in group]
+            totals = [sum(r['world_counts'][i] for r in group) for i in range(39)]
+            groups.append(dict(mode=mode, timed=timed, searches=16, choices=counts,
+                pure_first_action_bounds={a: controls[a] for a in counts},
+                empirical_mix_mean={k: sum(r[k] for r in mixed) / 16 for k in mixed[0]},
+                empirical_mix_provably_inferior=sum(r['certified_first_action_loss_lower'] > 0 for r in mixed),
+                iterations=dict(min=min(r['iterations'] for r in group), max=max(r['iterations'] for r in group),
+                                mean=sum(r['iterations'] for r in group)/16),
+                seconds=dict(min=min(seconds), max=max(seconds), mean=sum(seconds)/16),
+                setup_seconds_mean=sum(r['setup_seconds'] for r in group)/16,
+                world_counts=dict(zip(worlds, totals))))
+    return dict(searches=144, same_model_hidden_template_identity_pairs=identity_pairs,
+        baseline_archive_identities=archive_identities, checks=out['checks'], groups=groups,
+        control_bounds=controls, production_changed=False,
+        scope='A single decision with a supplied 39-world finite model. Stats, items, sleep time and remaining roster '
+              'are fixed to the replay; this is not the full legal information set. Uniform is a model control, not '
+              'an estimated real-world prior. Robust uses independent simultaneous Exp3-IX draws for our first '
+              'action and the adversary world/reply, with shared own continuation histories and the existing '
+              'search/evaluator afterwards. No convergence guarantee is claimed for the nonstationary continuation '
+              'search. best is a most-visited pure choice, not the empirical mixed policy. Certificate bounds '
+              'score only the recorded first choice/distribution: the lower uses the archived shared Rock Slide '
+              'continuation (zero bound for other openings); the upper allows optimal later play. Neither '
+              'certifies the prototype continuation or repeated replanning. The 500ms native Mac budget includes '
+              'belief construction, search initialization and all iterations; file loading and the supplied-world '
+              'replay/verification are outside that budget. No iPad performance or whole-battle improvement claim.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', type=Path)
+    args = parser.parse_args()
+    family = json.loads((family_dir / 'summary.json').read_bytes())
+    old = json.loads(gzip.decompress((family_dir / 'reflect-search.json.gz').read_bytes()))['result']['searches']
+    proof = json.loads(gzip.decompress((family_dir / 'records.json.gz').read_bytes()))
+    cases = [r['case'] for r in proof['result']['rows']]
+    paths = [root / 'Cargo.lock', Path(__file__).resolve(), root / 'crates/bot/examples/hidden_family_search.rs',
+             root / 'data/belief-pool-v3/belief-pool.json']
+    paths += list((family_dir).glob('*.json*'))
+    for directory in ['crates/bot/src', 'crates/engine/src', 'crates/conformance/src']:
+        paths += list((root / directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(paths))}
+    if args.record:
+        assert not (archive / 'records.json.gz').exists()
+        out = json.loads(args.record.read_bytes())
+        summary = verify(out, family, old, cases)
+        archive.mkdir(exist_ok=True)
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(dict(result=out, hashes=hashes), separators=(',', ':')).encode(), mtime=0))
+        (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+    assert bundle['hashes'] == hashes
+    summary = verify(bundle['result'], family, old, cases)
+    assert summary == json.loads((archive / 'summary.json').read_bytes())
+    faults = ['missing_seed', 'world', 'snapshot', 'budget', 'draws', 'best', 'reward']
+    for fault in faults:
+        bad = copy.deepcopy(bundle['result'])
+        if fault == 'missing_seed': bad['rows'].pop()
+        elif fault == 'world': bad['worlds'][1] = 'rest'
+        elif fault == 'snapshot': bad['rows'][1]['rng'] += 1
+        elif fault == 'budget': bad['rows'][-1]['seconds'] = .49
+        elif fault == 'draws': next(r for r in bad['rows'] if r['mode'] == 'robust')['arm_counts'][0] += 1
+        elif fault == 'best': next(r for r in bad['rows'] if r['mode'] == 'robust')['best'] = 'move earthquake'
+        elif fault == 'reward': bad['rows'][0]['reward_sum'] += 1
+        try: verify(bad, family, old, cases)
+        except AssertionError: pass
+        else: raise AssertionError(f'Accepted corruption: {fault}')
+    print(json.dumps(dict(searches=summary['searches'], identities=summary['same_model_hidden_template_identity_pairs'],
+        archive_identities=summary['baseline_archive_identities'], checks=summary['checks'],
+        groups=[{k:g[k] for k in ['mode','timed','choices','empirical_mix_mean','empirical_mix_provably_inferior','iterations','seconds']} for g in summary['groups']],
+        corruption_controls=faults), indent=2))
+
+
+if __name__ == '__main__':
+    main()

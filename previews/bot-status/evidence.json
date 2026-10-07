@@ -5952,6 +5952,488 @@
         "example_compile": true,
         "production_changed": false
       }
+    },
+    "findings/hidden-family-search-v1/summary.json": {
+      "sha256": "d9380b732d44e9b87151745142effeba00038a64a9cc7130e2ee3d9b0d276ea2",
+      "data": {
+        "searches": 144,
+        "same_model_hidden_template_identity_pairs": 48,
+        "baseline_archive_identities": 32,
+        "checks": {
+          "active_model_checks": 624,
+          "forced_joint_checks": 624
+        },
+        "groups": [
+          {
+            "mode": "catalog",
+            "timed": false,
+            "searches": 16,
+            "choices": {
+              "move swordsdance": 16
+            },
+            "pure_first_action_bounds": {
+              "move swordsdance": {
+                "fixed_continuation_lower": 0.09939236119101078,
+                "optimal_continuation_upper": 0.09939236121505779,
+                "certified_first_action_loss_lower": 0.003251595482793768
+              }
+            },
+            "empirical_mix_mean": {
+              "fixed_continuation_lower": 0.09956949168042686,
+              "optimal_continuation_upper": 0.09958382988394793,
+              "certified_first_action_loss_lower": 0.0030601268139036357
+            },
+            "empirical_mix_provably_inferior": 16,
+            "iterations": {
+              "min": 27000,
+              "max": 27000,
+              "mean": 27000.0
+            },
+            "seconds": {
+              "min": 0.31583125,
+              "max": 0.362262542,
+              "mean": 0.3453522110625
+            },
+            "setup_seconds_mean": 0.0018534375,
+            "world_counts": {
+              "rest": 0,
+              "agility": 0,
+              "bide": 0,
+              "curse": 0,
+              "detect": 0,
+              "doubleedge": 0,
+              "doubleteam": 0,
+              "drillpeck": 0,
+              "endure": 0,
+              "flash": 0,
+              "fly": 0,
+              "frustration": 0,
+              "hyperbeam": 0,
+              "mimic": 0,
+              "mudslap": 0,
+              "peck": 0,
+              "protect": 0,
+              "rage": 0,
+              "raindance": 0,
+              "razorwind": 0,
+              "reflect": 0,
+              "return": 0,
+              "roar": 0,
+              "rocksmash": 0,
+              "sandstorm": 0,
+              "skyattack": 0,
+              "snore": 0,
+              "steelwing": 0,
+              "substitute": 0,
+              "sunnyday": 0,
+              "swagger": 0,
+              "swift": 0,
+              "takedown": 0,
+              "thunder": 0,
+              "thundershock": 0,
+              "thunderwave": 0,
+              "toxic": 0,
+              "whirlwind": 0,
+              "zapcannon": 0
+            }
+          },
+          {
+            "mode": "uniform",
+            "timed": false,
+            "searches": 16,
+            "choices": {
+              "move swordsdance": 16
+            },
+            "pure_first_action_bounds": {
+              "move swordsdance": {
+                "fixed_continuation_lower": 0.09939236119101078,
+                "optimal_continuation_upper": 0.09939236121505779,
+                "certified_first_action_loss_lower": 0.003251595482793768
+              }
+            },
+            "empirical_mix_mean": {
+              "fixed_continuation_lower": 0.09978717624330369,
+              "optimal_continuation_upper": 0.09980383092354334,
+              "certified_first_action_loss_lower": 0.0028401257743082167
+            },
+            "empirical_mix_provably_inferior": 16,
+            "iterations": {
+              "min": 27000,
+              "max": 27000,
+              "mean": 27000.0
+            },
+            "seconds": {
+              "min": 0.378669667,
+              "max": 0.43175975,
+              "mean": 0.418786034
+            },
+            "setup_seconds_mean": 0.0002557423125,
+            "world_counts": {
+              "rest": 11057,
+              "agility": 11166,
+              "bide": 11076,
+              "curse": 11004,
+              "detect": 11047,
+              "doubleedge": 11200,
+              "doubleteam": 11043,
+              "drillpeck": 11117,
+              "endure": 11068,
+              "flash": 10988,
+              "fly": 10977,
+              "frustration": 10951,
+              "hyperbeam": 11079,
+              "mimic": 11023,
+              "mudslap": 11120,
+              "peck": 10989,
+              "protect": 11114,
+              "rage": 11124,
+              "raindance": 10847,
+              "razorwind": 11222,
+              "reflect": 11066,
+              "return": 11146,
+              "roar": 11065,
+              "rocksmash": 11317,
+              "sandstorm": 10926,
+              "skyattack": 10911,
+              "snore": 10966,
+              "steelwing": 11071,
+              "substitute": 11193,
+              "sunnyday": 11021,
+              "swagger": 11231,
+              "swift": 11328,
+              "takedown": 11120,
+              "thunder": 10997,
+              "thundershock": 11193,
+              "thunderwave": 10987,
+              "toxic": 11111,
+              "whirlwind": 11062,
+              "zapcannon": 11077
+            }
+          },
+          {
+            "mode": "robust",
+            "timed": false,
+            "searches": 16,
+            "choices": {
+              "move rockslide": 15,
+              "move swordsdance": 1
+            },
+            "pure_first_action_bounds": {
+              "move rockslide": {
+                "fixed_continuation_lower": 0.10264396669785156,
+                "optimal_continuation_upper": 0.10264396682567456,
+                "certified_first_action_loss_lower": 0.0
+              },
+              "move swordsdance": {
+                "fixed_continuation_lower": 0.09939236119101078,
+                "optimal_continuation_upper": 0.09939236121505779,
+                "certified_first_action_loss_lower": 0.003251595482793768
+              }
+            },
+            "empirical_mix_mean": {
+              "fixed_continuation_lower": 0.09715793058490134,
+              "optimal_continuation_upper": 0.09754087445975634,
+              "certified_first_action_loss_lower": 0.005103082238095213
+            },
+            "empirical_mix_provably_inferior": 16,
+            "iterations": {
+              "min": 27000,
+              "max": 27000,
+              "mean": 27000.0
+            },
+            "seconds": {
+              "min": 0.315075375,
+              "max": 0.438772083,
+              "mean": 0.4117945050625
+            },
+            "setup_seconds_mean": 0.000245171875,
+            "world_counts": {
+              "rest": 3983,
+              "agility": 4287,
+              "bide": 7722,
+              "curse": 3702,
+              "detect": 10394,
+              "doubleedge": 71243,
+              "doubleteam": 5172,
+              "drillpeck": 74511,
+              "endure": 6521,
+              "flash": 5472,
+              "fly": 9087,
+              "frustration": 4332,
+              "hyperbeam": 36622,
+              "mimic": 4043,
+              "mudslap": 5425,
+              "peck": 5372,
+              "protect": 8827,
+              "rage": 4198,
+              "raindance": 4132,
+              "razorwind": 8528,
+              "reflect": 11946,
+              "return": 40690,
+              "roar": 4768,
+              "rocksmash": 3935,
+              "sandstorm": 3604,
+              "skyattack": 8596,
+              "snore": 8103,
+              "steelwing": 4708,
+              "substitute": 16030,
+              "sunnyday": 4313,
+              "swagger": 6199,
+              "swift": 5465,
+              "takedown": 5548,
+              "thunder": 3981,
+              "thundershock": 4126,
+              "thunderwave": 4031,
+              "toxic": 3784,
+              "whirlwind": 4471,
+              "zapcannon": 4129
+            }
+          },
+          {
+            "mode": "catalog",
+            "timed": true,
+            "searches": 16,
+            "choices": {
+              "move swordsdance": 16
+            },
+            "pure_first_action_bounds": {
+              "move swordsdance": {
+                "fixed_continuation_lower": 0.09939236119101078,
+                "optimal_continuation_upper": 0.09939236121505779,
+                "certified_first_action_loss_lower": 0.003251595482793768
+              }
+            },
+            "empirical_mix_mean": {
+              "fixed_continuation_lower": 0.09951481057294925,
+              "optimal_continuation_upper": 0.0995255017806297,
+              "certified_first_action_loss_lower": 0.003118454917221848
+            },
+            "empirical_mix_provably_inferior": 16,
+            "iterations": {
+              "min": 38547,
+              "max": 44992,
+              "mean": 39799.0
+            },
+            "seconds": {
+              "min": 0.500000958,
+              "max": 0.500019792,
+              "mean": 0.5000077553125
+            },
+            "setup_seconds_mean": 0.0018597943125,
+            "world_counts": {
+              "rest": 0,
+              "agility": 0,
+              "bide": 0,
+              "curse": 0,
+              "detect": 0,
+              "doubleedge": 0,
+              "doubleteam": 0,
+              "drillpeck": 0,
+              "endure": 0,
+              "flash": 0,
+              "fly": 0,
+              "frustration": 0,
+              "hyperbeam": 0,
+              "mimic": 0,
+              "mudslap": 0,
+              "peck": 0,
+              "protect": 0,
+              "rage": 0,
+              "raindance": 0,
+              "razorwind": 0,
+              "reflect": 0,
+              "return": 0,
+              "roar": 0,
+              "rocksmash": 0,
+              "sandstorm": 0,
+              "skyattack": 0,
+              "snore": 0,
+              "steelwing": 0,
+              "substitute": 0,
+              "sunnyday": 0,
+              "swagger": 0,
+              "swift": 0,
+              "takedown": 0,
+              "thunder": 0,
+              "thundershock": 0,
+              "thunderwave": 0,
+              "toxic": 0,
+              "whirlwind": 0,
+              "zapcannon": 0
+            }
+          },
+          {
+            "mode": "uniform",
+            "timed": true,
+            "searches": 16,
+            "choices": {
+              "move swordsdance": 16
+            },
+            "pure_first_action_bounds": {
+              "move swordsdance": {
+                "fixed_continuation_lower": 0.09939236119101078,
+                "optimal_continuation_upper": 0.09939236121505779,
+                "certified_first_action_loss_lower": 0.003251595482793768
+              }
+            },
+            "empirical_mix_mean": {
+              "fixed_continuation_lower": 0.09986690372921453,
+              "optimal_continuation_upper": 0.09988166255236017,
+              "certified_first_action_loss_lower": 0.0027622941454913856
+            },
+            "empirical_mix_provably_inferior": 16,
+            "iterations": {
+              "min": 32087,
+              "max": 41010,
+              "mean": 33078.5
+            },
+            "seconds": {
+              "min": 0.500000917,
+              "max": 0.500040333,
+              "mean": 0.500009729125
+            },
+            "setup_seconds_mean": 0.0002612005,
+            "world_counts": {
+              "rest": 13501,
+              "agility": 13625,
+              "bide": 13503,
+              "curse": 13490,
+              "detect": 13553,
+              "doubleedge": 13765,
+              "doubleteam": 13544,
+              "drillpeck": 13600,
+              "endure": 13550,
+              "flash": 13452,
+              "fly": 13428,
+              "frustration": 13399,
+              "hyperbeam": 13593,
+              "mimic": 13548,
+              "mudslap": 13552,
+              "peck": 13550,
+              "protect": 13584,
+              "rage": 13688,
+              "raindance": 13384,
+              "razorwind": 13816,
+              "reflect": 13544,
+              "return": 13709,
+              "roar": 13516,
+              "rocksmash": 13790,
+              "sandstorm": 13437,
+              "skyattack": 13353,
+              "snore": 13466,
+              "steelwing": 13500,
+              "substitute": 13708,
+              "sunnyday": 13527,
+              "swagger": 13698,
+              "swift": 13743,
+              "takedown": 13722,
+              "thunder": 13423,
+              "thundershock": 13696,
+              "thunderwave": 13510,
+              "toxic": 13552,
+              "whirlwind": 13624,
+              "zapcannon": 13613
+            }
+          },
+          {
+            "mode": "robust",
+            "timed": true,
+            "searches": 16,
+            "choices": {
+              "move rockslide": 16
+            },
+            "pure_first_action_bounds": {
+              "move rockslide": {
+                "fixed_continuation_lower": 0.10264396669785156,
+                "optimal_continuation_upper": 0.10264396682567456,
+                "certified_first_action_loss_lower": 0.0
+              }
+            },
+            "empirical_mix_mean": {
+              "fixed_continuation_lower": 0.097099670006273,
+              "optimal_continuation_upper": 0.09749067241890265,
+              "certified_first_action_loss_lower": 0.0051532842789489145
+            },
+            "empirical_mix_provably_inferior": 16,
+            "iterations": {
+              "min": 31676,
+              "max": 43053,
+              "mean": 33614.0625
+            },
+            "seconds": {
+              "min": 0.500002084,
+              "max": 0.500059709,
+              "mean": 0.5000175651250001
+            },
+            "setup_seconds_mean": 0.000253012875,
+            "world_counts": {
+              "rest": 4208,
+              "agility": 4547,
+              "bide": 8246,
+              "curse": 3943,
+              "detect": 11509,
+              "doubleedge": 101128,
+              "doubleteam": 5492,
+              "drillpeck": 108794,
+              "endure": 7136,
+              "flash": 5801,
+              "fly": 9968,
+              "frustration": 4575,
+              "hyperbeam": 48598,
+              "mimic": 4282,
+              "mudslap": 5788,
+              "peck": 5803,
+              "protect": 9867,
+              "rage": 4490,
+              "raindance": 4400,
+              "razorwind": 9375,
+              "reflect": 13035,
+              "return": 53446,
+              "roar": 5075,
+              "rocksmash": 4222,
+              "sandstorm": 3813,
+              "skyattack": 9408,
+              "snore": 8838,
+              "steelwing": 5008,
+              "substitute": 17815,
+              "sunnyday": 4561,
+              "swagger": 6663,
+              "swift": 5912,
+              "takedown": 5943,
+              "thunder": 4274,
+              "thundershock": 4340,
+              "thunderwave": 4328,
+              "toxic": 4045,
+              "whirlwind": 4744,
+              "zapcannon": 4405
+            }
+          }
+        ],
+        "control_bounds": {
+          "move earthquake": {
+            "fixed_continuation_lower": 0.0,
+            "optimal_continuation_upper": 0.006212022603316214,
+            "certified_first_action_loss_lower": 0.09643193409453535
+          },
+          "move rockslide": {
+            "fixed_continuation_lower": 0.10264396669785156,
+            "optimal_continuation_upper": 0.10264396682567456,
+            "certified_first_action_loss_lower": 0.0
+          },
+          "move swordsdance": {
+            "fixed_continuation_lower": 0.09939236119101078,
+            "optimal_continuation_upper": 0.09939236121505779,
+            "certified_first_action_loss_lower": 0.003251595482793768
+          },
+          "move hiddenpowerflying": {
+            "fixed_continuation_lower": 0.0,
+            "optimal_continuation_upper": 0.011932413249184814,
+            "certified_first_action_loss_lower": 0.09071154344866675
+          }
+        },
+        "production_changed": false,
+        "scope": "A single decision with a supplied 39-world finite model. Stats, items, sleep time and remaining roster are fixed to the replay; this is not the full legal information set. Uniform is a model control, not an estimated real-world prior. Robust uses independent simultaneous Exp3-IX draws for our first action and the adversary world/reply, with shared own continuation histories and the existing search/evaluator afterwards. No convergence guarantee is claimed for the nonstationary continuation search. best is a most-visited pure choice, not the empirical mixed policy. Certificate bounds score only the recorded first choice/distribution: the lower uses the archived shared Rock Slide continuation (zero bound for other openings); the upper allows optimal later play. Neither certifies the prototype continuation or repeated replanning. The 500ms native Mac budget includes belief construction, search initialization and all iterations; file loading and the supplied-world replay/verification are outside that budget. No iPad performance or whole-battle improvement claim."
+      }
     }
   },
   "foresight_fix": {
