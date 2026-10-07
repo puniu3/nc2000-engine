@@ -25,7 +25,7 @@ pub use loss_threshold::{PolicyLossThresholdReport, PolicyLossThresholdStop};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use nc2000_engine::battle::enumerate::{enumerate_step, enumerate_step_partial, enumerate_step_partial_with_leaf_scripts, run_scripted};
+use nc2000_engine::battle::enumerate::{enumerate_step, enumerate_step_partial, enumerate_step_partial_with_leaf_scripts, enumerate_step_probability_first, run_scripted};
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
@@ -49,13 +49,10 @@ pub struct BoundConfig {
     pub time_budget: Option<Duration>,
     /// Engine executions per `solve` call.
     pub work_budget: usize,
-    /// On a cell's first visit, try the EAGER enumerator (which keeps the
-    /// damage-roll range merge) up to this many runs; only fans that
-    /// overflow it fall back to lazy pending expansion. Measured: without
-    /// this, lazy expansion re-pays merged overkill fans one run per roll
-    /// class (b60: 411k runs vs the eager solver's 11.7k).
+    /// Engine-execution cap for a cell's initial eager pass.
     pub cell_cap: usize,
     pub retain_eager_prefix: bool,
+    pub probability_first_eager: bool,
     pub defer_eager_frontier: bool,
     pub profile_pending_selection: bool,
     /// Max live nodes (memory guard; Battles are dropped from resolved
@@ -122,6 +119,7 @@ impl Default for BoundConfig {
             node_budget: 120_000,
             cell_cap: 4096,
             retain_eager_prefix: false,
+            probability_first_eager: false,
             defer_eager_frontier: false,
             profile_pending_selection: false,
             eps: 0.02,
@@ -1762,9 +1760,11 @@ impl<'d> BoundSolver<'d> {
                 [node.acts0[i], node.acts1[j]],
             )
         };
-        let (leaves, mut pending, runs, scripts) = if self.cfg.retain_eager_prefix {
+        let (leaves, mut pending, runs, scripts) = if self.cfg.retain_eager_prefix || self.cfg.probability_first_eager {
             assert!(!self.cfg.hp_transition_eager);
-            let partial = if self.cfg.defer_eager_frontier {
+            let partial = if self.cfg.probability_first_eager {
+                enumerate_step_probability_first(self.dex, &battle, choices, cap)
+            } else if self.cfg.defer_eager_frontier {
                 enumerate_step_partial_with_leaf_scripts(self.dex, &battle, choices, cap)
             } else {
                 enumerate_step_partial(self.dex, &battle, choices, cap)
@@ -3565,11 +3565,12 @@ mod tests {
             let id = root.active_id(side).unwrap();
             root.poke_mut(id).hp = if side == 0 { 40 } else { 60 };
         }
-        for (side, aggregate, defer) in [(0, false, false), (1, false, false), (0, true, false), (1, true, false), (0, false, true), (1, false, true)] {
+        for (side, aggregate, defer, probability_first_eager) in [(0,false,false,false), (1,false,false,false), (0,true,false,false), (1,true,false,false), (0,false,true,false), (1,false,true,false), (0,false,false,true), (1,false,false,true)] {
             let value = exhaustive(&dex, &root, side);
             let score = if side == 0 { value } else { 1.0 - value };
             let mut solver = super::FixedPolicySolver::new(&dex, BoundConfig {
-                work_budget: if defer {100_000} else {1}, cell_cap: if defer {4096} else {0}, eps: 1e-8,
+                work_budget: if defer {100_000} else {1}, cell_cap: if defer || probability_first_eager {4096} else {0}, eps: 1e-8,
+                probability_first_eager,
                 retain_eager_prefix: defer, defer_eager_frontier: defer,
                 aggregate_lazy_children: aggregate, chance_fair_period: if aggregate { 2 } else { 0 },
                 ..BoundConfig::default()
@@ -3621,14 +3622,16 @@ mod tests {
         root.apply_choices(&dex,preview).unwrap();
         let choices = [0,1].map(|s|Some(root.legal_choices(&dex,s)[0]));
         let exact = enumerate_step(&dex,&root,choices,100_000).unwrap();
-        for (cap,defer_eager_frontier) in [(1,false),(7,false),(1,true),(7,true),(100_000,false),(100_000,true)] {
+        for (cap,defer_eager_frontier,probability_first_eager) in [(1,false),(7,false),(1,true),(7,true),(100_000,false),(100_000,true)]
+            .into_iter().flat_map(|(cap,defer)| [false,true].map(|order|(cap,defer,order))) {
             let mut solver = BoundSolver::new(&dex,BoundConfig {
-                cell_cap:cap,retain_eager_prefix:true,defer_eager_frontier,fold_terminal_nodes:false,..Default::default()
+                cell_cap:cap,retain_eager_prefix:true,probability_first_eager,defer_eager_frontier,fold_terminal_nodes:false,..Default::default()
             });
             let key = solver.intern(root.clone());
             solver.init_cells(key);
             assert!(solver.try_eager(key,0,cap));
-            assert_eq!(solver.stats.runs,cap.min(exact.runs));
+            if probability_first_eager { assert!(solver.stats.runs<=cap); }
+            else { assert_eq!(solver.stats.runs,cap.min(exact.runs)); }
             assert_eq!(solver.stats.retained_eager_runs,if cap<exact.runs {cap} else {0});
             assert_eq!(solver.stats.retained_eager_leaves>0,cap<exact.runs);
             if defer_eager_frontier { assert!(solver.stats.deferred_eager_leaves>0); }

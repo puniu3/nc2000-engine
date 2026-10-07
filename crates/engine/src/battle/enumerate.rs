@@ -19,7 +19,8 @@
 //! Leaf probabilities are products of per-draw exact rationals
 //! (class-count / 2^32) accumulated in f64 — deterministic, no seed noise.
 
-use std::collections::{BTreeMap, HashMap};
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BinaryHeap, HashMap};
 use std::rc::Rc;
 
 use crate::dex::Dex;
@@ -61,6 +62,63 @@ pub struct PartialStepEnum {
     pub pending: Vec<ChancePrefix>,
     pub runs: usize,
     pub exhausted: bool,
+}
+
+struct RankedPrefix(ChancePrefix);
+
+impl PartialEq for RankedPrefix {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.mass == other.0.mass && self.0.script == other.0.script
+    }
+}
+
+impl Eq for RankedPrefix {}
+
+impl PartialOrd for RankedPrefix {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+}
+
+impl Ord for RankedPrefix {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.mass.total_cmp(&other.0.mass)
+            .then_with(|| other.0.script.cmp(&self.0.script))
+    }
+}
+
+pub fn enumerate_step_probability_first(
+    dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], cap: usize,
+) -> PartialStepEnum {
+    let mut pending = BinaryHeap::from([RankedPrefix(ChancePrefix { script: vec![], mass: 1.0 })]);
+    let mut leaves = Vec::new();
+    let mut scripts = Vec::new();
+    while leaves.len() < cap && !pending.is_empty() {
+        let prefix = pending.pop().unwrap().0;
+        let (battle, trace) = run_scripted(dex, base, choices, &prefix.script);
+        debug_assert!(trace.len() >= prefix.script.len());
+        let mut mass = 1.0;
+        let mut sibling_mass = 0.0;
+        for (index, draw) in trace.iter().enumerate() {
+            if index >= prefix.script.len() {
+                for (class, &count) in draw.counts.iter().enumerate() {
+                    if class != draw.chosen && count > 0 {
+                        let prob = mass * count as f64 / Draw::TOTAL as f64;
+                        let mut script: Vec<_> = trace[..index].iter().map(|d| d.chosen).collect();
+                        script.push(class);
+                        pending.push(RankedPrefix(ChancePrefix { script, mass: prob }));
+                        sibling_mass += prob;
+                    }
+                }
+            }
+            mass *= draw.prob();
+        }
+        debug_assert!((mass + sibling_mass - prefix.mass).abs() < 1e-9);
+        scripts.push(trace.iter().map(|d| d.chosen).collect());
+        leaves.push(ChanceLeaf { battle, prob: mass, draws: trace.len() });
+    }
+    let mut pending: Vec<_> = pending.into_vec().into_iter().map(|p| p.0).collect();
+    pending.sort_by(|a,b| a.script.cmp(&b.script));
+    assert!((leaves.iter().map(|l|l.prob).sum::<f64>() + pending.iter().map(|p|p.mass).sum::<f64>() - 1.0).abs() < 1e-9);
+    PartialStepEnum { runs: leaves.len(), leaves, leaf_scripts: Some(scripts), exhausted: !pending.is_empty(), pending }
 }
 
 #[derive(Default)]
