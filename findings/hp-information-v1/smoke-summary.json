@@ -1,0 +1,914 @@
+{
+  "schema": "nc2000-hp-information-summary-v1",
+  "games": 32,
+  "decisions": 1001,
+  "protocol_sha256": "dbe1b01a43cac1a89b1933cb7be2c48e1190265c6fa0abc095664a34e8c338dc",
+  "source_sha256": "7c968826fd3fc62399c3a43ce6f7685cce7d0a393dbe2aa99681057dcd4a83a0",
+  "cases": [
+    {
+      "case": "articuno-fighting",
+      "blocks": 2,
+      "wins": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "ties": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "caps": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "dragonair-fighting",
+      "blocks": 2,
+      "wins": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "ties": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "caps": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "exeggutor-bug",
+      "blocks": 2,
+      "wins": [
+        1,
+        2,
+        1,
+        2
+      ],
+      "ties": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "caps": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "onpool-control",
+      "blocks": 2,
+      "wins": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "ties": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "caps": [
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "stress_effects": [
+    {
+      "contrast": "HP evidence with usual moves",
+      "blocks": 6,
+      "improved": 1,
+      "worsened": 1,
+      "tied": 4,
+      "mean_score_difference": 0.0
+    },
+    {
+      "contrast": "HP evidence with oracle moves",
+      "blocks": 6,
+      "improved": 2,
+      "worsened": 0,
+      "tied": 4,
+      "mean_score_difference": 0.3333333333333333
+    },
+    {
+      "contrast": "oracle moves without HP evidence",
+      "blocks": 6,
+      "improved": 0,
+      "worsened": 1,
+      "tied": 5,
+      "mean_score_difference": -0.16666666666666666
+    },
+    {
+      "contrast": "oracle moves with HP evidence",
+      "blocks": 6,
+      "improved": 1,
+      "worsened": 0,
+      "tied": 5,
+      "mean_score_difference": 0.16666666666666666
+    }
+  ],
+  "stress_interaction": 0.3333333333333333,
+  "model_audit": [
+    {
+      "arm": 0,
+      "decisions": 220,
+      "samples": 14080,
+      "decisions_with_missing_active_moves": 72,
+      "samples_with_missing_active_moves": 4608,
+      "roster_mismatches": 54336,
+      "public_type_contradictions": 6592
+    },
+    {
+      "arm": 1,
+      "decisions": 192,
+      "samples": 12288,
+      "decisions_with_missing_active_moves": 76,
+      "samples_with_missing_active_moves": 4864,
+      "roster_mismatches": 46016,
+      "public_type_contradictions": 0
+    },
+    {
+      "arm": 2,
+      "decisions": 270,
+      "samples": 17280,
+      "decisions_with_missing_active_moves": 0,
+      "samples_with_missing_active_moves": 0,
+      "roster_mismatches": 0,
+      "public_type_contradictions": 8256
+    },
+    {
+      "arm": 3,
+      "decisions": 193,
+      "samples": 12352,
+      "decisions_with_missing_active_moves": 0,
+      "samples_with_missing_active_moves": 0,
+      "roster_mismatches": 0,
+      "public_type_contradictions": 0
+    }
+  ],
+  "paired": [
+    {
+      "case": "articuno-fighting",
+      "trial": 0,
+      "scores": [
+        1.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "effects": [
+        -1.0,
+        1.0,
+        -1.0,
+        1.0
+      ]
+    },
+    {
+      "case": "articuno-fighting",
+      "trial": 1,
+      "scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "effects": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 0,
+      "scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "effects": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 1,
+      "scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "effects": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 0,
+      "scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "effects": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 1,
+      "scores": [
+        0.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "effects": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "case": "onpool-control",
+      "trial": 0,
+      "scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "effects": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "case": "onpool-control",
+      "trial": 1,
+      "scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "effects": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "first_divergence": [
+    {
+      "case": "articuno-fighting",
+      "trial": 0,
+      "arms": [
+        0,
+        1
+      ],
+      "first": 3,
+      "models": [
+        {
+          "case": "articuno-fighting",
+          "trial": 0,
+          "arm": 0,
+          "step": 3,
+          "turn": 3,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "articuno-fighting",
+          "trial": 0,
+          "arm": 1,
+          "step": 3,
+          "turn": 3,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 0,
+          "active_types": {
+            "Fighting": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "articuno-fighting",
+      "trial": 0,
+      "arms": [
+        2,
+        3
+      ],
+      "first": 3,
+      "models": [
+        {
+          "case": "articuno-fighting",
+          "trial": 0,
+          "arm": 2,
+          "step": 3,
+          "turn": 3,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "articuno-fighting",
+          "trial": 0,
+          "arm": 3,
+          "step": 3,
+          "turn": 3,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 0,
+          "active_types": {
+            "Fighting": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "articuno-fighting",
+      "trial": 1,
+      "arms": [
+        0,
+        1
+      ],
+      "first": 2,
+      "models": [
+        {
+          "case": "articuno-fighting",
+          "trial": 1,
+          "arm": 0,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "articuno-fighting",
+          "trial": 1,
+          "arm": 1,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 0,
+          "active_types": {
+            "Fighting": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "articuno-fighting",
+      "trial": 1,
+      "arms": [
+        2,
+        3
+      ],
+      "first": 2,
+      "models": [
+        {
+          "case": "articuno-fighting",
+          "trial": 1,
+          "arm": 2,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "articuno-fighting",
+          "trial": 1,
+          "arm": 3,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 0,
+          "active_types": {
+            "Fighting": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 0,
+      "arms": [
+        0,
+        1
+      ],
+      "first": 2,
+      "models": [
+        {
+          "case": "dragonair-fighting",
+          "trial": 0,
+          "arm": 0,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "dragonair-fighting",
+          "trial": 0,
+          "arm": 1,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 0,
+          "active_types": {
+            "Fighting": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 0,
+      "arms": [
+        2,
+        3
+      ],
+      "first": 2,
+      "models": [
+        {
+          "case": "dragonair-fighting",
+          "trial": 0,
+          "arm": 2,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "dragonair-fighting",
+          "trial": 0,
+          "arm": 3,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 0,
+          "active_types": {
+            "Fighting": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 1,
+      "arms": [
+        0,
+        1
+      ],
+      "first": 2,
+      "models": [
+        {
+          "case": "dragonair-fighting",
+          "trial": 1,
+          "arm": 0,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "dragonair-fighting",
+          "trial": 1,
+          "arm": 1,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 0,
+          "active_types": {
+            "Fighting": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 1,
+      "arms": [
+        2,
+        3
+      ],
+      "first": 2,
+      "models": [
+        {
+          "case": "dragonair-fighting",
+          "trial": 1,
+          "arm": 2,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "dragonair-fighting",
+          "trial": 1,
+          "arm": 3,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 0,
+          "active_types": {
+            "Fighting": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 0,
+      "arms": [
+        0,
+        1
+      ],
+      "first": 2,
+      "models": [
+        {
+          "case": "exeggutor-bug",
+          "trial": 0,
+          "arm": 0,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "exeggutor-bug",
+          "trial": 0,
+          "arm": 1,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 0,
+          "active_types": {
+            "Bug": 29,
+            "Fighting": 35
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 0,
+      "arms": [
+        2,
+        3
+      ],
+      "first": 2,
+      "models": [
+        {
+          "case": "exeggutor-bug",
+          "trial": 0,
+          "arm": 2,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "exeggutor-bug",
+          "trial": 0,
+          "arm": 3,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 0,
+          "active_types": {
+            "Bug": 29,
+            "Fighting": 35
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 1,
+      "arms": [
+        0,
+        1
+      ],
+      "first": 2,
+      "models": [
+        {
+          "case": "exeggutor-bug",
+          "trial": 1,
+          "arm": 0,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 64,
+          "active_types": {
+            "Dark": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "exeggutor-bug",
+          "trial": 1,
+          "arm": 1,
+          "step": 2,
+          "turn": 2,
+          "samples": 64,
+          "roster_mismatches": 320,
+          "active_missing": 64,
+          "type_contradictions": 0,
+          "active_types": {
+            "Bug": 29,
+            "Fighting": 35
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 1,
+      "arms": [
+        2,
+        3
+      ],
+      "first": 4,
+      "models": [
+        {
+          "case": "exeggutor-bug",
+          "trial": 1,
+          "arm": 2,
+          "step": 4,
+          "turn": 3,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 0,
+          "active_types": {
+            "Ice": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        },
+        {
+          "case": "exeggutor-bug",
+          "trial": 1,
+          "arm": 3,
+          "step": 4,
+          "turn": 3,
+          "samples": 64,
+          "roster_mismatches": 0,
+          "active_missing": 0,
+          "type_contradictions": 0,
+          "active_types": {
+            "Ice": 64
+          },
+          "active_powers": {
+            "70": 64
+          },
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "case": "onpool-control",
+      "trial": 0,
+      "arms": [
+        0,
+        1
+      ],
+      "first": null,
+      "models": null
+    },
+    {
+      "case": "onpool-control",
+      "trial": 0,
+      "arms": [
+        2,
+        3
+      ],
+      "first": null,
+      "models": null
+    },
+    {
+      "case": "onpool-control",
+      "trial": 1,
+      "arms": [
+        0,
+        1
+      ],
+      "first": null,
+      "models": null
+    },
+    {
+      "case": "onpool-control",
+      "trial": 1,
+      "arms": [
+        2,
+        3
+      ],
+      "first": null,
+      "models": null
+    }
+  ],
+  "scope": "Preregistered exploratory factorial diagnosis, not an adoption gate: 24 stress seed blocks and two on-pool control blocks, each with four arms. Arm 0: usual moves, no HP evidence. Arm 1: usual moves, public HP evidence. Arm 2: exact opponent base move identities for all six roster slots, no HP evidence. Arm 3: exact opponent base move identities, public HP evidence. The move oracle observes a research-only clone with base-slot usage flags set; the true battle and search root are unchanged. HP identity is generic; no true HP type, power, stats or item is explicitly supplied. Full moves can indirectly constrain prior genotypes and preserve live PP; this is a loadout-information intervention, not a type-only causal mechanism. All four arms share initial battle/search seeds and fixed exposure prefixes. The opponent always uses usual moves with public HP evidence. 27000 iterations, c=0.4, default search settings. No outcome-dependent stopping or sample selection. Caps remain unknown; do not convert to ties. Compare paired HP effects separately by move-information condition and their difference; retain all cases and failures to expose. Wins against this bot are regression diagnostics, not a game-theoretic ceiling or human calibration. Current corrected engine is shared by all arms. Fresh seeds are distinct from the frozen prior pilot; teams are reused constructed fixtures. Audit 64 independent determinization samples at every evaluated non-forced multi-action decision; assert all oracle model loadouts equal actual canonical move sets, and record public type contradictions. No adoption or superiority claim from this sample alone.",
+  "runtime_changed": false,
+  "strength_vs_deployed": "unproved",
+  "records_sha256": "48f77ff5d7059a3fd2dca359052901d453f3acd26833af1288f713eda4b18588",
+  "checker_sha256": "d87818df4df46d9ba5b66599263c10a60095f73723b2290bbd3598d58af752b2"
+}

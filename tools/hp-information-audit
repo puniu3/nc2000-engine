@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def main():
+    protocol_path, results_path, output_path = map(Path, sys.argv[1:])
+    p = json.loads(protocol_path.read_text())
+    manifest = json.loads((results_path / 'manifest.json').read_text())
+    assert manifest['protocol_sha256'] == sha(protocol_path)
+    for path, expected in manifest['sources'].items():
+        assert sha(path) == expected, path
+    binary = Path('target/release/examples/hp_information_duel')
+    assert sha(binary) == manifest['binary_sha256']
+    replay = subprocess.run([str(binary), str(protocol_path), str(results_path), '--audit'], check=True, text=True, capture_output=True)
+    audit = json.loads(replay.stdout)
+    rows = []
+    expected_files = set()
+    by_case = []
+    paired = []
+    divergence = []
+    diag = {(d['case'], d['trial'], d['arm'], d['step']): d for d in audit['diagnostics']}
+    for case in p['cases']:
+        games = []
+        for trial in range(case['pairs']):
+            block = []
+            for arm in range(4):
+                filename = f"{case['id']}-t{trial:03}-a{arm}.json"
+                expected_files.add(filename)
+                row = json.loads((results_path / filename).read_text())
+                assert (row['case'], row['trial'], row['arm'], row['side']) == (case['id'], trial, arm, trial % 2)
+                assert row['score'] in (0, .5, 1, None)
+                assert row['terminal'] == (row['score'] is not None)
+                rows.append(row)
+                games.append(row)
+                block.append(row)
+            assert len({r['battle_seed'] for r in block}) == 1
+            assert len({tuple(r['agent_seeds']) for r in block}) == 1
+            scores = [r['score'] for r in block]
+            effects = None if None in scores else [scores[1]-scores[0], scores[3]-scores[2], scores[2]-scores[0], scores[3]-scores[1]]
+            paired.append({'case':case['id'], 'trial':trial, 'scores':scores, 'effects':effects})
+            for a, b in ((0,1), (2,3)):
+                first = None
+                for i, (x, y) in enumerate(zip(block[a]['decisions'], block[b]['decisions'])):
+                    assert x['key'] == y['key']
+                    assert x['search_seeds'] == y['search_seeds']
+                    assert x['hp_masks'] == y['hp_masks']
+                    if x['choices'] != y['choices']:
+                        assert x['choices'][1-trial%2] == y['choices'][1-trial%2]
+                        assert any(m != 65535 for m in x['hp_masks'])
+                        assert i >= len(case['prefix'])
+                        first = i
+                        break
+                if first is None:
+                    assert block[a]['decisions'] == block[b]['decisions'] or [d['choices'] for d in block[a]['decisions']] == [d['choices'] for d in block[b]['decisions']]
+                    assert block[a]['score'] == block[b]['score']
+                divergence.append({'case':case['id'], 'trial':trial, 'arms':[a,b], 'first':first,
+                                   'models':None if first is None else [diag[(case['id'],trial,arm,first)] for arm in (a,b)]})
+        by_case.append({'case':case['id'], 'blocks':case['pairs'],
+                        'wins':[sum(r['score']==1 for r in games if r['arm']==a) for a in range(4)],
+                        'ties':[sum(r['score']==.5 for r in games if r['arm']==a) for a in range(4)],
+                        'caps':[sum(r['score'] is None for r in games if r['arm']==a) for a in range(4)]})
+    assert {x.name for x in results_path.glob('*-t*-a*.json')} == expected_files
+    assert audit['games'] == len(rows)
+    assert audit['decisions'] == sum(len(r['decisions']) for r in rows)
+    stress = [b for b in paired if b['case'] != 'onpool-control']
+    complete = all(b['effects'] is not None for b in stress)
+    effects = []
+    if complete:
+        for i, label in enumerate(['HP evidence with usual moves','HP evidence with oracle moves','oracle moves without HP evidence','oracle moves with HP evidence']):
+            values = [b['effects'][i] for b in stress]
+            effects.append({'contrast':label, 'blocks':len(values), 'improved':sum(v>0 for v in values), 'worsened':sum(v<0 for v in values), 'tied':sum(v==0 for v in values), 'mean_score_difference':sum(values)/len(values)})
+    summaries = []
+    for arm in range(4):
+        ds = [d for d in audit['diagnostics'] if d['arm']==arm]
+        summaries.append({'arm':arm, 'decisions':len(ds), 'samples':sum(d['samples'] for d in ds),
+                          'decisions_with_missing_active_moves':sum(d['active_missing']>0 for d in ds),
+                          'samples_with_missing_active_moves':sum(d['active_missing'] for d in ds),
+                          'roster_mismatches':sum(d['roster_mismatches'] for d in ds),
+                          'public_type_contradictions':sum(d['type_contradictions'] for d in ds)})
+    summary = {'schema':'nc2000-hp-information-summary-v1', 'games':len(rows), 'decisions':audit['decisions'],
+               'protocol_sha256':sha(protocol_path), 'source_sha256':sha('crates/bot/examples/hp_information_duel.rs'),
+               'cases':by_case, 'stress_effects':effects,
+               'stress_interaction':sum(b['effects'][1]-b['effects'][0] for b in stress)/len(stress) if complete else None,
+               'model_audit':summaries, 'paired':paired, 'first_divergence':divergence,
+               'scope':p['interpretation'], 'runtime_changed':False, 'strength_vs_deployed':'unproved'}
+    output_path.mkdir(exist_ok=True)
+    assert not (output_path/'summary.json').exists()
+    packed = {'manifest':manifest,'games':rows,'audit':audit}
+    raw = json.dumps(packed, separators=(',',':')).encode()
+    (output_path/'records.json.gz').write_bytes(gzip.compress(raw, mtime=0))
+    summary['records_sha256'] = sha(output_path/'records.json.gz')
+    summary['checker_sha256'] = sha(__file__)
+    (output_path/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ('paired','first_divergence','scope')},indent=2))
+
+
+if __name__ == '__main__':
+    main()
