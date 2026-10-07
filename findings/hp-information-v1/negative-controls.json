@@ -1,0 +1,18 @@
+[
+  {
+    "mutation": "score",
+    "rejected": true
+  },
+  {
+    "mutation": "seed",
+    "rejected": true
+  },
+  {
+    "mutation": "oracle-view",
+    "rejected": true
+  },
+  {
+    "mutation": "missing-arm",
+    "rejected": true
+  }
+]
