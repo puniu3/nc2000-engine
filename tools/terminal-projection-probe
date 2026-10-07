@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from fractions import Fraction as F
+from pathlib import Path
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/terminal-projection-v1'
+checker=runpy.run_path(str(root/'tools/cutting-opening-mix-probe'))
+
+
+def stable(rows):
+    return [{k:v for k,v in r.items() if k not in ['seconds','cell_seconds']} for r in rows[1:-1]]
+
+
+def fingerprint(rows):
+    return hashlib.sha256(json.dumps(stable(rows),separators=(',',':')).encode()).hexdigest()
+
+
+def projection_check(rows):
+    cells=0;maximum_error=0.;outcomes=[F(0)]*4
+    for row in rows[1:-1]:
+        ledger=row['ledger'];horizon=ledger['config']['horizon'];side=ledger['config']['target_side']
+        for node in ledger['nodes']:
+            for branch in node.get('branches',[]):
+                audit=branch['outcome_audit']
+                if node['depth']+1!=horizon:
+                    assert audit is None
+                    continue
+                assert audit is not None
+                native=list(map(F,audit['native']));abstract=list(map(F,audit['abstract']))
+                assert len(native)==len(abstract)==4
+                assert all(0<=x<=1+F(1,10**12) for x in native+abstract)
+                assert abs(sum(native)-1)<F(1,10**12)
+                assert abs(sum(abstract)-1)<F(1,10**12)
+                error=max(abs(a-b) for a,b in zip(native,abstract))
+                assert error<F(1,10**12);maximum_error=max(maximum_error,float(error))
+                observed=[F(0)]*4
+                for child in branch['children']:
+                    leaf=ledger['nodes'][child['node']]
+                    if leaf['kind']=='horizon':key=0
+                    else:
+                        assert leaf['kind']=='terminal' and leaf['bounds'][0]==leaf['bounds'][1]
+                        value=leaf['bounds'][0]
+                        if value==.5:key=3
+                        elif value==1:key=side+1
+                        else:
+                            assert value==0;key=2-side
+                    observed[key]+=F(child['mass'])
+                for key in range(4):assert observed[key]<=native[key]+F(1,10**12)
+                assert abs(sum(observed)+F(branch['pending'])-1)<F(1,10**10)
+                cells+=1
+                for k in range(4):outcomes[k]+=native[k]
+    assert cells>0
+    return dict(cells=cells,maximum_mass_error=maximum_error)
+
+
+def verify_reference(rows):
+    assert rows[0]['backend']=='audit' and rows[0]['budget_ms']==900000
+    before=rows[0].copy();rows[0]=dict(before,backend='ledger',budget_ms=180000)
+    audit_runs=audit_cells=0
+    for row in rows[1:-1]:
+        ledger=row['ledger']
+        assert ledger['streamed'] and ledger['eager_root'] and ledger['terminal_projection'] and ledger['ordered'] and ledger['threshold']==row['threshold']
+        assert ledger['audit_runs']>0 and ledger['audit_cells']>0
+        audit_runs+=ledger['audit_runs'];audit_cells+=ledger['audit_cells']
+        for branch in ledger['nodes'][ledger['root']]['branches']:
+            branch['continuation_pending_mass']=branch['pending']
+    projection=projection_check(rows)
+    summary=checker['verify'](rows)
+    summary['projection']=projection
+    rows[0]=before
+    for row in rows[1:-1]:
+        for branch in row['ledger']['nodes'][row['ledger']['root']]['branches']:
+            del branch['continuation_pending_mass']
+    return dict(summary,audit_runs=audit_runs,audit_cells=audit_cells)
+
+
+def numerical_match(reference,rows,partial=False):
+    assert rows[0]['backend']=='ordered'
+    assert {k:v for k,v in rows[0].items() if k not in ['backend','budget_ms','setup_seconds']}=={
+        k:v for k,v in reference[0].items() if k not in ['backend','budget_ms','setup_seconds']}
+    assert len(rows)<=len(reference) if partial else len(rows)==len(reference)
+    runs=0
+    for expected,row in zip(reference[1:-1],rows[1:-1]):
+        assert {k:v for k,v in expected.items() if k not in ['ledger','seconds','cell_seconds','runs']}=={
+            k:v for k,v in row.items() if k not in ['ledger','seconds','cell_seconds','runs']}
+        ledger=row['ledger']
+        assert ledger['streamed'] and ledger['eager_root'] and ledger['terminal_projection'] and ledger['ordered'] and ledger['threshold']==row['threshold']
+        assert ledger['audit_runs']==ledger['audit_cells']==0
+        assert 0<ledger['runs']<=expected['ledger']['runs']
+        assert checker['compact'](ledger)==checker['compact'](expected['ledger'])
+        runs+=ledger['runs'];assert row['runs']==runs
+    result=rows[-1]
+    assert result['runs']==runs and result['calls']==len(rows)-2
+    if not partial:
+        for k in ['mix','adversary','bounds','calls','active','converged']:assert result[k]==reference[-1][k]
+    else:
+        assert not result['converged'] and result['seconds']*1000>=rows[0]['budget_ms']
+        if result['calls']:
+            for k in ['mix','adversary','bounds','calls','runs']:assert result[k]==rows[-2][k]
+        else:assert result['bounds']==[0.,1.] and result['mix']==[0.,1.] and runs==0
+    return result
+
+
+def work_by_query(rows):
+    seen=set();result=dict(first_calls=0,first_runs=0,repeated_calls=0,repeated_runs=0)
+    for row in rows[1:-1]:
+        key=(row['index'],row['kind']);label='repeated' if key in seen else 'first';seen.add(key)
+        result[label+'_calls']+=1;result[label+'_runs']+=row['ledger']['runs']
+    return result,seen
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',nargs=7,type=Path);args=parser.parse_args()
+    paths=[Path(__file__).resolve(),root/'crates/bot/examples/terminal_projection_mix.rs',root/'crates/bot/examples/terminal_projection_witness.rs',
+        root/'crates/bot/examples/stream_step/mod.rs',root/'crates/bot/examples/policy_witness.rs',
+        root/'crates/bot/examples/aliased_witness/mod.rs',root/'crates/bot/examples/threshold_witness/mod.rs',
+        root/'tools/cutting-opening-mix-probe',root/'tools/adaptive-opening-mix-probe',root/'tools/policy-witness-probe',
+        root/'tools/hidden-move-witness-probe',root/'data/gen2stadium2.json',root/'findings/item-move-product-v1/records.json.gz',
+        root/'findings/policy-gap-v1/corpus.jsonl.gz',root/'findings/cutting-opening-mix-v1/summary.json',root/'findings/hybrid-opening-mix-v1/records.json.gz',root/'findings/stream-opening-mix-v1/summary.json',root/'findings/hybrid-opening-mix-v1/summary.json']
+    for directory in ['crates/bot/src','crates/engine/src']:paths+=list((root/directory).rglob('*.rs'))
+    hashes={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists();raw=args.record[0].read_bytes()
+        proof_repeat=[json.loads(l) for l in args.record[1].read_bytes().splitlines()]
+        others=[[json.loads(l) for l in p.read_bytes().splitlines()] for p in args.record[2:6]]
+        log=args.record[6].read_text();assert '1 passed; 0 failed' in log
+        assert 'sandstorm_counterexample_rejects_unconditional_terminal_projection ... ok' in log
+        counterexample=json.loads(next(line[len('counterexample '):] for line in log.splitlines() if line.startswith('counterexample ')))
+    else:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()));assert bundle['hashes']==hashes
+        raw=gzip.decompress((archive/'proofs.jsonl.gz').read_bytes());assert hashlib.sha256(raw).hexdigest()==bundle['proof_sha256']
+        others=bundle['others'];counterexample=bundle['counterexample']
+    rows=[json.loads(l) for l in raw.splitlines()]
+    summary=verify_reference(rows)
+    bad=copy.deepcopy(rows)
+    branch=next(b for r in bad[1:-1] for n in r['ledger']['nodes'] for b in n.get('branches',[]) if b['outcome_audit'] is not None)
+    branch['outcome_audit']['native'][0]+=.01
+    try:projection_check(bad)
+    except AssertionError:pass
+    else:raise AssertionError('Accepted corrupted outcome audit')
+    del bad
+    if args.record:
+        assert stable(rows)==stable(proof_repeat)
+        repeated=dict(stable_sha256=fingerprint(proof_repeat),result=proof_repeat[-1])
+    else:repeated=bundle['repeated']
+    assert fingerprint(rows)==repeated['stable_sha256']
+    for k in ['mix','adversary','bounds','calls','runs','active','converged']:assert rows[-1][k]==repeated['result'][k]
+    assert max(abs(a-b) for a,b in zip(counterexample['native'],counterexample['abstract']))>1e-6
+    results=[numerical_match(rows,data,partial=i>=2) for i,data in enumerate(others)]
+    assert stable(others[0])==stable(others[1])
+    for fault in ['wrong_root','inflated_value','inflated_runs']:
+        bad=copy.deepcopy(others[0]);ledger=bad[1]['ledger']
+        if fault=='wrong_root':ledger['nodes'][0]['state_key']='0'
+        elif fault=='inflated_value':ledger['bounds'][0]+=.01
+        else:ledger['runs']+=1000000
+        try:numerical_match(rows,bad)
+        except AssertionError:pass
+        else:raise AssertionError('Accepted corruption: '+fault)
+    old=json.loads((root/'findings/hybrid-opening-mix-v1/summary.json').read_bytes())
+    old_records=json.loads(gzip.decompress((root/'findings/hybrid-opening-mix-v1/records.json.gz').read_bytes()))
+    old_work,old_keys=work_by_query(old_records['others'][0]);new_work,new_keys=work_by_query(others[0]);assert old_keys==new_keys
+    depth_work={}
+    for row in rows[1:-1]:
+        for node in row['ledger']['nodes']:
+            if node['kind']!='decision':continue
+            entry=depth_work.setdefault(str(node['depth']),dict(nodes=0,runs=0,branches=0,partial_branches=0))
+            entry['nodes']+=1
+            for branch in node['branches']:
+                entry['runs']+=branch['runs'];entry['branches']+=1
+                entry['partial_branches']+=branch['pending']>1e-9
+    assert sum(v['runs'] for v in depth_work.values())==summary['proof_runs']
+    stream=json.loads((root/'findings/stream-opening-mix-v1/summary.json').read_bytes())
+    summary.update(counterexample=counterexample,proof_depth_work=depth_work,streaming_numeric_seconds=stream['numeric_seconds'],streaming_numeric_runs=stream['numeric_runs'],query_work=dict(previous=old_work,projection=new_work),numeric_seconds=[r['seconds'] for r in results[:2]],numeric_runs=results[0]['runs'],
+        previous_numeric_seconds=old['numeric_seconds'],previous_numeric_runs=old['numeric_runs'],
+        zero_budget=results[2],half_second=results[3],decision='Keep the hybrid solver as the general research baseline. Projection is exact only for the audited cells; a sandstorm counterexample rejects unconditional use.',
+        production_changed=False,strength_demonstrated=False,
+        scope='Experimental ThresholdLean damage aggregation is applied only to the final step of each '
+              'finite-horizon witness. Every such proof cell is separately enumerated with the native exact '
+              'kernel and compared in four outcome categories: undecided, P1 win, P2 win, and tie. '
+              'The archived tables, retained child mass, rational backups, fixed policies, controller '
+              'queries, mixture and ceiling are independently checked. Numeric values and schedules '
+              'equal those of the audited proof, with two runs per backend and zero/500ms controls. '
+              'The equivalence is established only for the executed finite cells. A separate sandstorm '
+              'counterexample proves that using this aggregation unconditionally at the horizon is '
+              'unsound. Unchecked numeric results are therefore not general certificates. Timing '
+              'excludes the native audit, loading and model replay. A sound runtime eligibility guard '
+              'or exact outcome quotient is still required before adopting this beyond the audited '
+              'experiment. No production integration or deployed-strength claim.')
+    if args.record:
+        archive.mkdir()
+        bundle=dict(hashes=hashes,proof_sha256=hashlib.sha256(raw).hexdigest(),others=others,repeated=repeated,counterexample=counterexample)
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'proofs.jsonl.gz').write_bytes(gzip.compress(raw,mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    else:assert summary==json.loads((archive/'summary.json').read_bytes())
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['scope','zero_budget','half_second']},indent=2))
+
+
+if __name__=='__main__':main()

@@ -17413,6 +17413,190 @@
         "strength_demonstrated": false,
         "scope": "The root chance kernel is enumerated eagerly and sorted by probability times static evaluation, as in the previous cutting solver. Only descendants use streaming chance enumeration and propagated lower thresholds. Unvisited mass remains [0,1]. Every executed proof chance cell is independently checked against the full native kernel, including the eagerly enumerated root. All rational backups, fixed policies, controller queries, mixture optima and lower/upper bounds are checked. Numeric root values and schedules equal the proof backend exactly, with two repeated runs of each backend and zero/500ms controls. The chance streamer and its previously archived unit tests are unchanged. The experiment covers the same supplied 2200-world family and prescribed policy templates, not all hidden stats or strategies. Runtime excludes input loading, model replay and the separate chance audits. The root ordering change reduces work relative to streaming every level. The implementation also uses padding based on visited children, so this is not an isolated sort-only ablation. Neither production integration nor deployed-bot superiority is established."
       }
+    },
+    "findings/terminal-projection-v1/summary.json": {
+      "sha256": "6e9a3830f0057f897f14c07fd2b035cfd61ccfd22180b4270f6b79552747f130",
+      "data": {
+        "calls": 3025,
+        "proof_runs": 614431,
+        "kind_counts": {
+          "swordsdance": 2512,
+          "rockslide": 507,
+          "upper": 6
+        },
+        "root_branches_pruned": 11662,
+        "certificate_nodes": 84088,
+        "active_worlds": [
+          "berry/rest",
+          "berry/bide",
+          "berry/doubleedge",
+          "brightpowder/detect",
+          "brightpowder/doubleedge",
+          "focusband/doubleedge"
+        ],
+        "mix": [
+          0.44423821915452116,
+          0.5557617808454788
+        ],
+        "bounds": [
+          0.0892699692650682,
+          0.08928985574286716
+        ],
+        "negative_controls": [
+          "inflated_lower",
+          "invalid_mix",
+          "wrong_adversary"
+        ],
+        "projection": {
+          "cells": 70133,
+          "maximum_mass_error": 1.1102230246251565e-15
+        },
+        "audit_runs": 1016932,
+        "audit_cells": 83516,
+        "counterexample": {
+          "hp": 77,
+          "native": [
+            0.1914813703374989,
+            0.8085186296625011,
+            0.0,
+            0.0
+          ],
+          "abstract": [
+            0.10546875,
+            0.89453125,
+            0.0,
+            0.0
+          ]
+        },
+        "proof_depth_work": {
+          "1": {
+            "nodes": 14598,
+            "runs": 386849,
+            "branches": 58205,
+            "partial_branches": 28834
+          },
+          "0": {
+            "nodes": 3025,
+            "runs": 200626,
+            "branches": 12039,
+            "partial_branches": 11650
+          },
+          "2": {
+            "nodes": 3318,
+            "runs": 26956,
+            "branches": 13272,
+            "partial_branches": 0
+          }
+        },
+        "streaming_numeric_seconds": [
+          10.698792209,
+          10.711460084
+        ],
+        "streaming_numeric_runs": 915501,
+        "query_work": {
+          "previous": {
+            "first_calls": 2711,
+            "first_runs": 608181,
+            "repeated_calls": 310,
+            "repeated_runs": 31633
+          },
+          "projection": {
+            "first_calls": 2711,
+            "first_runs": 419067,
+            "repeated_calls": 314,
+            "repeated_runs": 22953
+          }
+        },
+        "numeric_seconds": [
+          5.951767459,
+          5.936322792
+        ],
+        "numeric_runs": 442020,
+        "previous_numeric_seconds": [
+          7.843884625,
+          7.939238042
+        ],
+        "previous_numeric_runs": 639814,
+        "zero_budget": {
+          "kind": "result",
+          "seconds": 6.875e-06,
+          "setup_seconds": 0.300337791,
+          "mix": [
+            0.0,
+            1.0
+          ],
+          "adversary": [],
+          "bounds": [
+            0.0,
+            1.0
+          ],
+          "calls": 0,
+          "runs": 0,
+          "snapshots": [],
+          "active": [
+            0
+          ],
+          "converged": false
+        },
+        "half_second": {
+          "kind": "result",
+          "seconds": 0.534093875,
+          "setup_seconds": 0.298592459,
+          "mix": [
+            1.0,
+            0.0
+          ],
+          "adversary": [
+            [
+              0,
+              0.0
+            ],
+            [
+              2,
+              0.0
+            ],
+            [
+              5,
+              1.0
+            ]
+          ],
+          "bounds": [
+            0.0,
+            0.10264397682567455
+          ],
+          "calls": 14,
+          "runs": 38096,
+          "snapshots": [
+            {
+              "checkpoint_seconds": 0.5,
+              "seconds": 0.534093041,
+              "lower": 0.0,
+              "upper": 0.10264397682567455,
+              "mix": [
+                1.0,
+                0.0
+              ],
+              "calls": 14,
+              "runs": 38096,
+              "active": [
+                0,
+                2,
+                5
+              ]
+            }
+          ],
+          "active": [
+            0,
+            2,
+            5
+          ],
+          "converged": false
+        },
+        "decision": "Keep the hybrid solver as the general research baseline. Projection is exact only for the audited cells; a sandstorm counterexample rejects unconditional use.",
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "Experimental ThresholdLean damage aggregation is applied only to the final step of each finite-horizon witness. Every such proof cell is separately enumerated with the native exact kernel and compared in four outcome categories: undecided, P1 win, P2 win, and tie. The archived tables, retained child mass, rational backups, fixed policies, controller queries, mixture and ceiling are independently checked. Numeric values and schedules equal those of the audited proof, with two runs per backend and zero/500ms controls. The equivalence is established only for the executed finite cells. A separate sandstorm counterexample proves that using this aggregation unconditionally at the horizon is unsound. Unchecked numeric results are therefore not general certificates. Timing excludes the native audit, loading and model replay. A sound runtime eligibility guard or exact outcome quotient is still required before adopting this beyond the audited experiment. No production integration or deployed-strength claim."
+      }
     }
   },
   "foresight_fix": {
