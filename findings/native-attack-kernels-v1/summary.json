@@ -1,0 +1,133 @@
+{
+  "coverage": [
+    {
+      "game": 0,
+      "frame": 18,
+      "families": 8,
+      "states": 64,
+      "legal_pairs": 128,
+      "admitted_pairs": 0
+    },
+    {
+      "game": 3,
+      "frame": 97,
+      "families": 8,
+      "states": 64,
+      "legal_pairs": 128,
+      "admitted_pairs": 0
+    },
+    {
+      "game": 4,
+      "frame": 60,
+      "families": 8,
+      "states": 64,
+      "legal_pairs": 128,
+      "admitted_pairs": 8
+    },
+    {
+      "game": 10,
+      "frame": 32,
+      "families": 8,
+      "states": 64,
+      "legal_pairs": 128,
+      "admitted_pairs": 0
+    },
+    {
+      "game": 13,
+      "frame": 41,
+      "families": 8,
+      "states": 64,
+      "legal_pairs": 128,
+      "admitted_pairs": 4
+    },
+    {
+      "game": 16,
+      "frame": 18,
+      "families": 8,
+      "states": 64,
+      "legal_pairs": 128,
+      "admitted_pairs": 0
+    }
+  ],
+  "cases": 12,
+  "calls_per_pass": 96,
+  "total_compared_distributions": 576,
+  "all_semantic_probability_hashes_match": true,
+  "arms": {
+    "control": {
+      "runs": 35815,
+      "calls": 96,
+      "milliseconds": [
+        501.99462300000005,
+        494.08933300000007
+      ],
+      "mean_ms": 498.0419780000001,
+      "kernel_stats": {
+        "calls": 0,
+        "eligible": 0,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0
+      },
+      "elapsed_ratio_to_control": 1.0
+    },
+    "scripts": {
+      "runs": 28675,
+      "calls": 96,
+      "milliseconds": [
+        539.2308300000001,
+        546.0819520000001
+      ],
+      "mean_ms": 542.6563910000001,
+      "kernel_stats": {
+        "calls": 0,
+        "eligible": 0,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 0,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0
+      },
+      "elapsed_ratio_to_control": 1.089579623748101
+    },
+    "kernel": {
+      "runs": 35815,
+      "calls": 96,
+      "milliseconds": [
+        490.15703800000006,
+        497.9459620000001
+      ],
+      "mean_ms": 494.0515000000001,
+      "kernel_stats": {
+        "calls": 96,
+        "eligible": 96,
+        "hits": 0,
+        "rejected_hp": 0,
+        "rejected_source": 96,
+        "rejected_capacity": 0,
+        "evictions": 0,
+        "peak_leaves": 0,
+        "translated_leaves": 0
+      },
+      "elapsed_ratio_to_control": 0.991987667352811
+    }
+  },
+  "ordinary_bot_changed": false,
+  "strength_improvement_proven": false,
+  "schema": "nc2000-native-attack-kernels-v1",
+  "protocol_sha256": "46aaf460cf59ee03180769ae923e77f23138c04abe6ff60f69b2bc42fedf51b8",
+  "records_sha256": "488505cf8ec6a7e0883e9625ba2e38c69698b3a66120f6b2ed3a6675f1be1b45",
+  "frozen_loss_outputs_match": true,
+  "rejected_mutations": [
+    "wrong_probability_hash",
+    "missing_pass",
+    "false_coverage",
+    "wrong_calls"
+  ]
+}

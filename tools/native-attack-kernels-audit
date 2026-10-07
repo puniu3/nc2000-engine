@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+import hashlib
+import json
+import statistics
+import subprocess
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check(protocol,census,result):
+    expected_coverage=[];calls=0;cases=0
+    for r in sorted(census,key=lambda r:(r['game'],r['frame'])):
+        families=r['diagnostics']['families']
+        assert len(families)==8
+        pairs=sum(f['legal_pairs'] for f in families)
+        admitted=sum(len(f['admitted_choices']) for f in families)
+        states=sum(len(f['states']) for f in families)
+        expected_coverage.append(dict(game=r['game'],frame=r['frame'],families=len(families),states=states,legal_pairs=pairs,admitted_pairs=admitted))
+        cases+=admitted
+        calls+=sum(len(f['states'])*len(f['admitted_choices']) for f in families)
+    assert result['coverage']==expected_coverage
+    assert result['cases']==cases==12
+    assert calls==96
+    records=result['records']
+    assert [r['arm'] for r in records]==protocol['benchmark_order']
+    assert [r['pass'] for r in records]==list(range(len(records)))
+    reference=records[0]['map_hashes']
+    assert len(reference)==calls
+    for r in records:
+        assert r['calls']==calls
+        assert r['runs']>=0 and r['elapsed_ms']>0
+        assert r['map_hashes']==reference
+        assert r['kernel_stats']['peak_leaves']<=protocol['kernel_leaf_capacity']
+    arms={}
+    for arm in dict.fromkeys(protocol['benchmark_order']):
+        rr=[r for r in records if r['arm']==arm]
+        assert len(rr)==2
+        for key in ['calls','runs','kernel_stats','script_stats','map_hashes']:
+            assert rr[0][key]==rr[1][key]
+        arms[arm]={'runs':rr[0]['runs'],'calls':calls,'milliseconds':[r['elapsed_ms'] for r in rr],
+                   'mean_ms':statistics.mean(r['elapsed_ms'] for r in rr),'kernel_stats':rr[0]['kernel_stats']}
+    for arm,a in arms.items():a['elapsed_ratio_to_control']=a['mean_ms']/arms['control']['mean_ms']
+    return dict(coverage=expected_coverage,cases=cases,calls_per_pass=calls,
+        total_compared_distributions=len(records)*calls,all_semantic_probability_hashes_match=True,
+        arms=arms,ordinary_bot_changed=False,strength_improvement_proven=False)
+
+
+def main():
+    protocol_path,census_path,result_path,binary_path=map(Path,sys.argv[1:])
+    protocol=json.loads(protocol_path.read_text())
+    assert digest(census_path)==protocol['census_sha256']
+    assert digest(binary_path)==protocol['benchmark_binary_sha256']
+    assert any(digest(p)==protocol['benchmark_helper_sha256'] for p in protocol_path.parent.glob('*.rs'))
+    source=json.loads((protocol_path.parent/'source-provenance.json').read_text())
+    actual=subprocess.check_output(['git','show',source['commit']+':crates/bot/src/hp_attack_kernel.rs'])
+    assert hashlib.sha256(actual).hexdigest()==protocol['kernel_source_sha256']==source['sha256']
+    census=[json.loads(l) for l in census_path.read_text().splitlines()]
+    prior={(r['game'],r['frame']):r for r in map(json.loads,Path('tmp/native-loss-lower-screen-v1/main.jsonl').read_text().splitlines())}
+    assert len(census)==6
+    for r in census:
+        old=prior[r['game'],r['frame']]
+        assert {k:v for k,v in r.items() if k not in ['elapsed_ms','diagnostics']}=={k:v for k,v in old.items() if k!='elapsed_ms'}
+    result=json.loads(result_path.read_text())
+    summary=check(protocol,census,result)
+    rejected=[]
+    for kind in ['wrong_probability_hash','missing_pass','false_coverage','wrong_calls']:
+        import copy
+        altered=copy.deepcopy(result)
+        if kind=='wrong_probability_hash':altered['records'][1]['map_hashes'][0]='wrong'
+        elif kind=='missing_pass':altered['records'].pop()
+        elif kind=='false_coverage':altered['coverage'][0]['admitted_pairs']+=1
+        else:altered['records'][0]['calls']-=1
+        try:check(protocol,census,altered)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted mutation '+kind)
+    summary.update(schema=protocol['schema'],protocol_sha256=digest(protocol_path),records_sha256=digest(result_path),
+        frozen_loss_outputs_match=True,rejected_mutations=rejected)
+    print(json.dumps(summary,indent=2))
+
+
+if __name__=='__main__':main()
