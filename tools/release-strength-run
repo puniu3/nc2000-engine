@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+import hashlib
+import json
+import os
+import signal
+import subprocess
+import time
+from pathlib import Path
+
+
+root = Path(__file__).resolve().parent.parent
+os.chdir(root)
+study = root / 'findings/release-strength-v1'
+scratch = root / 'tmp/release-strength-v1'
+plan = json.loads((study / 'plan.json').read_text())
+runtime = json.loads((study / 'runtime.json').read_text())
+eligibility = json.loads((study / 'release-eligibility.json').read_text())
+for path, expected in runtime['sha256'].items():
+    assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == expected
+for file, key in [('tools/release-strength-audit', 'audit_sha256'), ('tools/native-deployed-audit', 'native_audit_sha256')]:
+    assert hashlib.sha256(Path(file).read_bytes()).hexdigest() == runtime[key]
+parent = eligibility['paused_runner_pid']
+arena = eligibility['finishing_arena_pid']
+while True:
+    status = subprocess.run(['ps', '-p', str(arena), '-o', 'stat='], capture_output=True, text=True)
+    if status.returncode or status.stdout.strip().startswith('Z'):
+        break
+    time.sleep(5)
+parent_command = subprocess.run(['ps', '-p', str(parent), '-o', 'command='], capture_output=True, text=True)
+if parent_command.returncode == 0 and parent_command.stdout.strip() == 'python3 -':
+    os.kill(parent, signal.SIGKILL)
+results = {}
+for arm in plan['arms']:
+    directory = scratch / ('screen-' + arm)
+    records = directory / 'games.jsonl'
+    completed = len(records.read_bytes().splitlines()) - 1 if records.exists() else 0
+    if completed != plan['screen']['games_per_arm']:
+        command = [runtime['arena'], str(directory / 'config.json'), str(records)]
+        if records.exists():
+            command.append('--resume')
+        with (directory / 'progress.txt').open('a') as progress:
+            subprocess.run(command, stderr=progress, check=True)
+    summary = study / directory.name / 'summary.json'
+    if not summary.exists():
+        with (directory / 'audit.txt').open('w') as output:
+            subprocess.run(['python3', 'tools/release-strength-audit', 'run', str(directory)], stdout=output, check=True)
+    results[arm] = json.loads(summary.read_text())
+    print(arm, results[arm]['wins'], results[arm]['losses'], flush=True)
+best = max(eligibility['eligible_release_arms'], key=lambda arm: results[arm]['score'])
+selection = {
+    'screen_scores': {arm: value['score'] for arm, value in results.items()},
+    'selected': best if results[best]['score'] > .5 else None,
+    'eligible': eligibility['eligible_release_arms'],
+    'basis': 'Highest mean among candidates satisfying release rule conformance; separate confirmation required.',
+}
+(study / 'selection.json').write_text(json.dumps(selection, indent=2) + '\n')
+print(selection, flush=True)
+if selection['selected']:
+    source = scratch / ('screen-' + best)
+    directory = scratch / ('confirm-' + best)
+    directory.mkdir(exist_ok=True)
+    config = json.loads((source / 'config.json').read_text())
+    config.update({key: plan['confirmation'][key] for key in ['games', 'seed', 'threads']})
+    (directory / 'config.json').write_text(json.dumps(config, indent=2) + '\n')
+    (directory / 'launcher.json').write_bytes((source / 'launcher.json').read_bytes())
+    binding = {
+        'arm': best, 'config': config,
+        'candidate_commit': json.loads((study / (best + '-source.json')).read_text())['commit'],
+        'plan_sha256': hashlib.sha256((study / 'plan.json').read_bytes()).hexdigest(),
+        'eligibility_sha256': hashlib.sha256((study / 'release-eligibility.json').read_bytes()).hexdigest(),
+    }
+    (study / 'confirmation-binding.json').write_text(json.dumps(binding, indent=2) + '\n')
+    records = directory / 'games.jsonl'
+    command = [runtime['arena'], str(directory / 'config.json'), str(records)]
+    if records.exists():
+        command.append('--resume')
+    with (directory / 'progress.txt').open('a') as progress:
+        subprocess.run(command, stderr=progress, check=True)
+    with (directory / 'audit.txt').open('w') as output:
+        subprocess.run(['python3', 'tools/release-strength-audit', 'run', str(directory)], stdout=output, check=True)
+    result = json.loads((study / directory.name / 'summary.json').read_text())
+    print('confirmation', result['wins'], result['losses'], result['confirmation_threshold_met'], flush=True)
