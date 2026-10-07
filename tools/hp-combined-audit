@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def rows(path):
+    return [json.loads(line) for line in Path(path).read_text().splitlines()]
+
+
+def manifest(directory):
+    directory = Path(directory)
+    config = json.loads((directory / 'config.json').read_text())
+    arena = json.loads((directory / 'launcher.json').read_text())['arena']
+    hashes = {key: 'sha256:' + digest(config[key]) for key in ['pool', 'dex']}
+    hashes['arena'] = 'sha256:' + digest(arena)
+    hashes['agents'] = [
+        {'program': 'sha256:' + digest(a['program']),
+         'artifacts': [{'path': p, 'hash': 'sha256:' + digest(p)} for p in a['artifacts']]}
+        for a in config['agents']
+    ]
+    return {'type': 'manifest', 'config': config, 'hashes': hashes}
+
+
+def scrub(value):
+    if isinstance(value, dict):
+        return {k: scrub(v) for k, v in value.items()
+                if k not in ['elapsed_ns', 'decision_ns', 'worker_ns']}
+    if isinstance(value, list):
+        return [scrub(v) for v in value]
+    return value
+
+
+def audit(data, expected, enabled, iterations):
+    assert data[0] == expected, 'manifest'
+    games = sorted(data[1:], key=lambda r: r['game'])
+    assert [r['game'] for r in games] == list(range(expected['config']['games'])), 'coverage'
+    counts = [0, 0]
+    constraints = [0, 0]
+    exposed_games = set()
+    for row in games:
+        g = row['game']
+        assert row['type'] == 'game' and row['capped'] is False, 'terminal'
+        assert row['pair'] == g // 2 and row['swap'] == g % 2, 'orientation'
+        p1 = {'p1': 1, 'p2': 0, 'tie': .5}[row['outcome']]
+        assert row['score'] == (p1 if g % 2 == 0 else 1-p1), 'score'
+        assert 0 <= row['turns'] <= 1001, 'turn limit'
+        assert row['agent_seeds'][0] == row['agent_seeds'][1], 'common agent seed'
+        if g % 2:
+            for key in ['team_ids', 'battle_seed', 'agent_seeds']:
+                assert row[key] == games[g-1][key], key
+        assert row['frames'], 'frames'
+        per_agent = [0, 0]
+        for f in row['frames']:
+            a = f['agent']
+            assert a == f['side'] ^ row['swap'], 'frame orientation'
+            r = f['response']
+            assert r['hp_evidence_enabled'] is enabled[a], 'feature flag'
+            assert r['action'] in f['frame']['legal_actions'], 'legal action'
+            assert r['legality_drift'] == 0 and r['projections'] == 0, 'protocol drift'
+            assert r['iterations'] in [0, iterations], 'iterations'
+            if r['iterations'] == 0:
+                assert r['root_policy']['forced'] == r['action'], 'forced action'
+            masks = r['hp_type_masks'] or []
+            assert all(type(m) is int and 0 < m <= 65535 for m in masks), 'mask'
+            if not enabled[a]:
+                assert all(m == 65535 for m in masks), 'disabled mask'
+            if any(m != 65535 for m in masks):
+                constraints[a] += 1
+                exposed_games.add(g)
+            counts[a] += 1
+            per_agent[a] += 1
+        for key in ['decision_ns', 'worker_ns']:
+            assert [len(v) for v in row[key]] == per_agent, 'timing coverage'
+    return {'games': len(games), 'decisions': counts, 'constrained_decisions': constraints,
+            'games_with_constraints': len(exposed_games)}
+
+
+def smoke(root):
+    results = {}
+    for name in ['smoke-aa', 'smoke-ab', 'smoke-ab-repeat', 'smoke-exposure']:
+        directory = root / name
+        data = rows(directory / 'games.jsonl')
+        results[name] = audit(data, manifest(directory), [True, name == 'smoke-aa'], 128)
+    a = sorted(rows(root / 'smoke-ab/games.jsonl')[1:], key=lambda r: r['game'])
+    b = sorted(rows(root / 'smoke-ab-repeat/games.jsonl')[1:], key=lambda r: r['game'])
+    assert scrub(a) == scrub(b), 'repeat'
+    aa = sorted(rows(root / 'smoke-aa/games.jsonl')[1:], key=lambda r: r['game'])
+    for first, second in zip(aa[::2], aa[1::2]):
+        assert first['score'] + second['score'] == 1, 'identity score'
+        assert first['outcome'] == second['outcome'] and first['turns'] == second['turns']
+        frames = [scrub(r['frames']) for r in [first, second]]
+        for group in frames:
+            for f in group:
+                del f['agent']
+        assert frames[0] == frames[1], 'identity decisions'
+    assert results['smoke-exposure']['constrained_decisions'][0] > 0, 'exposure'
+    data = rows(root / 'smoke-ab/games.jsonl')
+    expected = manifest(root / 'smoke-ab')
+    mutations = [
+        lambda d: d.pop(),
+        lambda d: d.append(copy.deepcopy(d[-1])),
+        lambda d: d[1].update(score=.5),
+        lambda d: d[1]['agent_seeds'].__setitem__(0, 0),
+        lambda d: d[1]['frames'][0]['response'].update(hp_evidence_enabled=False),
+        lambda d: d[1]['frames'][0]['response'].update(action='invalid'),
+        lambda d: d[1]['frames'][0]['response'].update(iterations=127),
+    ]
+    for mutation in mutations:
+        broken = copy.deepcopy(data)
+        mutation(broken)
+        try:
+            audit(broken, expected, [True, False], 128)
+        except AssertionError:
+            continue
+        raise AssertionError('mutation accepted')
+    return {'runs': results, 'repeat_games': 4, 'identity_pairs': 2,
+            'negative_controls': len(mutations)}
+
+
+def main():
+    mode, path = sys.argv[1:3]
+    if mode == 'smoke':
+        result = smoke(Path(path))
+    else:
+        protocol = json.loads(Path(path).read_text())
+        assert digest(__file__) == protocol['checker_sha256'], 'checker changed'
+        evaluator = Path(__file__).with_name('evaluate-learning.py')
+        assert digest(evaluator) == protocol['evaluator_sha256'], 'evaluator changed'
+        source = Path(protocol['directory']) / 'games.jsonl'
+        result = audit(rows(source), protocol['manifest'], [True, False], 27000)
+        spec = importlib.util.spec_from_file_location('evaluation', evaluator)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        result['outcomes'] = module.summarize(source)
+        result['protocol_sha256'] = digest(path)
+        result['records_sha256'] = digest(source)
+        result['scope'] = protocol['scope']
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()

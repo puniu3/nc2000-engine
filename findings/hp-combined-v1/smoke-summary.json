@@ -1,0 +1,55 @@
+{
+  "runs": {
+    "smoke-aa": {
+      "games": 4,
+      "decisions": [
+        325,
+        325
+      ],
+      "constrained_decisions": [
+        0,
+        0
+      ],
+      "games_with_constraints": 0
+    },
+    "smoke-ab": {
+      "games": 4,
+      "decisions": [
+        100,
+        99
+      ],
+      "constrained_decisions": [
+        0,
+        0
+      ],
+      "games_with_constraints": 0
+    },
+    "smoke-ab-repeat": {
+      "games": 4,
+      "decisions": [
+        100,
+        99
+      ],
+      "constrained_decisions": [
+        0,
+        0
+      ],
+      "games_with_constraints": 0
+    },
+    "smoke-exposure": {
+      "games": 16,
+      "decisions": [
+        310,
+        312
+      ],
+      "constrained_decisions": [
+        13,
+        0
+      ],
+      "games_with_constraints": 1
+    }
+  },
+  "repeat_games": 4,
+  "identity_pairs": 2,
+  "negative_controls": 7
+}
