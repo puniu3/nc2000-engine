@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+import subprocess
+from pathlib import Path
+
+
+def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def rows(path):
+    raw=Path(path).read_bytes()
+    if str(path).endswith('.gz'):raw=gzip.decompress(raw)
+    return [json.loads(line) for line in raw.splitlines()]
+
+
+def check(actual,protocol,roots):
+    result=runpy.run_path('tools/native-loss-threshold-audit')['check_threshold'](actual,protocol,roots)
+    for r in actual:
+        assert (r['game'],r['frame'])==(62,92) and r['target']==r['selected']
+        for flag in ['retain_eager_prefix','probability_first_eager']:
+            assert f'{flag}: {str(protocol[flag]).lower()}' in r['config']
+    return result
+
+
+def main():
+    p=Path('findings/native-chance-solver-v1');t=Path('tmp/native-chance-solver-v1')
+    protocol=json.loads((p/'protocol.json').read_text())
+    assert sha(p/'native_chance_solver.rs')==protocol['helper_sha256']
+    assert sha(t/'solver')==protocol['solver_binary_sha256']
+    assert sha('tmp/native-endgame-census-v1/roots.jsonl')==protocol['roots_sha256']
+    for file,key in [('crates/bot/src/bounds.rs','parent_bounds_source_sha256'),('crates/engine/src/battle/enumerate.rs','enumerate_source_sha256'),('crates/bot/src/bounds/loss_threshold.rs','solver_source_sha256')]:
+        assert hashlib.sha256(subprocess.check_output(['git','show',protocol['implementation_commit']+':'+file])).hexdigest()==protocol[key]
+    roots=rows('tmp/native-endgame-census-v1/roots.jsonl');results={};rejected=[]
+    for arm,settings in protocol['arms'].items():
+        arm_protocol=json.loads((p/(arm+'-protocol.json')).read_text())
+        assert arm_protocol=={**{k:v for k,v in protocol.items() if k not in ['arms','run_order']},**settings}
+        pair=[rows(t/(arm+f'-{i}.jsonl')) for i in [1,2]]
+        summaries=[check(r,arm_protocol,roots) for r in pair]
+        assert [{k:v for k,v in r.items() if k!='elapsed_ms'} for r in pair[0]]==[{k:v for k,v in r.items() if k!='elapsed_ms'} for r in pair[1]]
+        if arm in ['control','prefix']:
+            original=rows(Path('findings/native-waking-loss-v1')/(arm+'.jsonl.gz'))
+            normalized=copy.deepcopy(pair[0])
+            for r in normalized:r['config']=r['config'].replace('probability_first_eager: false, ','')
+            assert [{k:v for k,v in r.items() if k!='elapsed_ms'} for r in normalized]==[{k:v for k,v in r.items() if k!='elapsed_ms'} for r in original]
+        results[arm]=dict(checks=summaries[0],records_sha256=[sha(t/(arm+f'-{i}.jsonl')) for i in [1,2]],repeats_match=True,prior_reproduced=arm in ['control','prefix'],runs=[{k:r[k] for k in ['threshold_loss','value_p0','pure_action_values','stop','runs','nodes','elapsed_ms','stats']} for rs in pair for r in rs])
+        for kind in ['missing_root','wrong_target','false_threshold','wrong_mode']:
+            changed=copy.deepcopy(pair[0])
+            if kind=='missing_root':changed.pop()
+            elif kind=='wrong_target':changed[0]['target']=0
+            elif kind=='false_threshold':changed[0]['stop']='AboveThreshold';changed[0]['threshold_loss']=[.99,1.]
+            else:changed[0]['config']=changed[0]['config'].replace(f"probability_first_eager: {str(settings['probability_first_eager']).lower()}",f"probability_first_eager: {str(not settings['probability_first_eager']).lower()}")
+            try:check(changed,arm_protocol,roots)
+            except AssertionError:rejected.append(arm+':'+kind)
+            else:raise AssertionError('accepted '+kind)
+    vp=json.loads((p/'verification-protocol.json').read_text());v=json.loads((t/'verification.json').read_text())
+    assert sha(p/'native_chance_library_verify.rs')==vp['helper_sha256']
+    assert sha(t/'verify-solver')==vp['binary_sha256']
+    assert v['records_sha256']==vp['records_sha256']==sha('tmp/native-chance-coverage-v1/main.jsonl')
+    assert v['cells_checked']==16 and v['enumeration_runs']==v['leaf_state_replays']==47872
+    assert v['pending_prefixes_matched']==66680 and v['total_extra_runs']==95744
+    assert v['all_outputs_match'] is True and v['performance_sample'] is False
+    old=results['control']['runs'][0];new=results['priority']['runs'][0]
+    print(json.dumps(dict(schema=protocol['schema'],protocol_sha256=sha(p/'protocol.json'),arms=results,library_verification=v,rejected_mutations=rejected,selected_loss_upper_improvement=old['threshold_loss'][1]-new['threshold_loss'][1],selected_loss_lower_increase=new['threshold_loss'][0]-old['threshold_loss'][0],ordinary_bot_changed=False,default_enabled=False,strength_improvement_proven=False),indent=2))
+
+
+if __name__=='__main__':main()
