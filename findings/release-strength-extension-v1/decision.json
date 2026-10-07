@@ -1,0 +1,55 @@
+{
+  "statistical_gate_met": false,
+  "publication": "no_deployment",
+  "plan_sha256": "5446ad32e39a9046f84160fc6c729cd7955aab4c4842091f7b3b68edd8387d14",
+  "pooled": {
+    "games": 1536,
+    "wins": 763,
+    "losses": 773,
+    "ties": 0,
+    "score": 0.4967447916666667,
+    "posterior": {
+      "1": {
+        "probability_above_half": 0.39036,
+        "mean": 0.4967490247074122,
+        "credible95": [
+          0.47352212186784465,
+          0.5198425036974947
+        ],
+        "probability_below_49_percent": 0.28743
+      },
+      "4": {
+        "probability_above_half": 0.391315,
+        "mean": 0.49676165803108807,
+        "credible95": [
+          0.4737786036722965,
+          0.5200409374864768
+        ],
+        "probability_below_49_percent": 0.28459
+      },
+      "16": {
+        "probability_above_half": 0.392865,
+        "mean": 0.4968112244897959,
+        "credible95": [
+          0.4736716214073093,
+          0.5197600313089679
+        ],
+        "probability_below_49_percent": 0.281705
+      }
+    }
+  },
+  "reason": "New batch lost 567-585; pooled 763-773. All three priors fail both the 80% superiority threshold and the less-than-10% probability of a regression exceeding one percentage point. New-batch score also fails its greater-than-half guard.",
+  "validation": {
+    "all_games_terminal": true,
+    "all_new_games_replayed": true,
+    "new_decisions": 54328,
+    "pooled_replayed_decisions": 72739,
+    "pooled_replayed_states": 38217,
+    "frozen_hashes_rechecked": true,
+    "prior_confirmation_preserved": true
+  },
+  "interpretation": "No evidence supporting release as a strengthening. The interval includes parity, so this does not establish inferiority, equivalence, or proximity to the game optimum.",
+  "public_baseline": "c7b11e882d75e552fd62c530012eb7c2d82b9e64",
+  "public_deployment_id": 6867231409,
+  "push_or_deploy_attempted": false
+}

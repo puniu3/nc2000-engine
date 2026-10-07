@@ -35,6 +35,11 @@ if decision:
     for mass, result in pooled['posterior'].items():
         body += f"<tr><td>{mass}</td><td>{result['probability_above_half'] * 100:.2f}%</td><td>{result['probability_below_49_percent'] * 100:.2f}%</td></tr>"
     body += '</tbody></table>'
+    low, high = primary['credible95']
+    body += f'<p>合計得点率の95%信用区間は{low * 100:.2f}〜{high * 100:.2f}%。差の方向は確定していませんが、強化として公開する根拠は得られませんでした。</p>' if not passed else ''
+    if 'validation' in decision:
+        validation = decision['validation']
+        body += f"<p>全1,536対戦が決着まで完走。新旧合わせて{validation['pooled_replayed_decisions']:,}判断・{validation['pooled_replayed_states']:,}局面の履歴照合を通過しました。</p>"
     body += '<p>統計基準を通過しました。公開反映は別途確認中です。</p>' if passed else '<p><strong>緩和した採用基準も満たさず、公開版を維持します。</strong>同等性や最適の天井への近さを示す結果ではありません。</p>'
 section = '<section class="section" id="release-strength-extension"><h2>追加検証と採用基準の見直し</h2>' + body + '<p>同じ候補・公開版・規定・27,000回探索・24構成を固定し、別乱数で追加。以前の独立確認384対戦のみ合算し、候補選びの対戦や過去の別比較は加えません。追加分単独でも得点率50%超を要求します。</p><p>採用基準を90%から80%へ緩和しました。3種類の事前分布すべてで優位確率80%以上、1ポイント以上の悪化確率10%未満が必要です。これは公開判断の基準で、統計的有意性やゲーム全体の強さの証明ではありません。前回の結果を受けた追加検証であることも明記して残します。</p><p class="note">最初の検証と不採用結果は下に保存。今回の追加1,152対戦の終了までは勝敗で打ち切らず、この追試内で基準を再変更しません。資料：release-strength-extension-v1。</p></section>'
 page = root / 'previews/bot-status/index.html'
