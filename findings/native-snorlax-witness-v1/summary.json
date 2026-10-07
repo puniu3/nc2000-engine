@@ -1,0 +1,91 @@
+{
+  "results": [
+    {
+      "id": "doubleedge-guarantee",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.856483983027443,
+      "target_score_interval": [
+        0.856483983027443,
+        0.9584922661093441
+      ],
+      "stop": "NodeBudget",
+      "runs": 641823,
+      "nodes": 200013,
+      "elapsed_ms": 47681.686583
+    },
+    {
+      "id": "rest-guarantee",
+      "transfer_direction": "lower",
+      "transfer_bound": 0.29620143242332375,
+      "target_score_interval": [
+        0.29620143242332375,
+        1.0
+      ],
+      "stop": "NodeBudget",
+      "runs": 921554,
+      "nodes": 200068,
+      "elapsed_ms": 40379.336083
+    },
+    {
+      "id": "doubleedge-upper-icebeam",
+      "transfer_direction": "upper",
+      "transfer_bound": 0.9999935262337244,
+      "target_score_interval": [
+        0.7288161164110438,
+        0.9999935262337244
+      ],
+      "stop": "WorkExhausted",
+      "runs": 2000000,
+      "nodes": 103180,
+      "elapsed_ms": 53241.713333
+    },
+    {
+      "id": "rest-upper-icebeam",
+      "transfer_direction": "upper",
+      "transfer_bound": 1.0,
+      "target_score_interval": [
+        0.3501114303997276,
+        1.0
+      ],
+      "stop": "NodeBudget",
+      "runs": 1271100,
+      "nodes": 200033,
+      "elapsed_ms": 30227.536208
+    }
+  ],
+  "combined_first_action_guarantees": {
+    "move doubleedge": [
+      0.856483983027443,
+      0.9999906503889959
+    ],
+    "move curse": [
+      0.0,
+      0.9999906503889959
+    ],
+    "move rest": [
+      0.29620143242332375,
+      0.9999906503889959
+    ],
+    "move sleeptalk": [
+      0.0,
+      0.9999906503889959
+    ]
+  },
+  "actual_rest_pure_loss_lower": 0.0,
+  "actual_rest_error_proven": false,
+  "rest_over_doubleedge_security_advantage_lower": 0.0,
+  "rest_better_than_doubleedge_proven": false,
+  "schema": "nc2000-native-snorlax-witness-v1",
+  "protocol_sha256": "2e9347539cb847fa9ceb80d91a30f03c000c951d81bf973300133374c5725cf3",
+  "records_sha256": "83c46f2128b7d5029f48426dd0a06df8a911a70a04ddb8a99d4dfd2bec424003",
+  "rejected_mutations": [
+    "missing_job",
+    "wrong_fixed_side",
+    "wrong_bound_direction",
+    "false_bound",
+    "restricted_free_actions"
+  ],
+  "blind_policy_error_proven": false,
+  "strength_improvement_proven": false,
+  "ordinary_bot_changed": false
+}
