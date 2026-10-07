@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import re
+import runpy
+import zipfile
+from collections import Counter
+from fractions import Fraction as F
+from pathlib import Path
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/legal-family-search-v1'
+ledger_check=runpy.run_path(str(root/'tools/policy-witness-probe'))['verify']
+policy_check=runpy.run_path(str(root/'tools/hidden-move-witness-probe'))['check_policy']
+
+
+def routes():
+    data=json.loads((root/'data/legal-move-sources-gen2.json').read_bytes())
+    with zipfile.ZipFile(root/'pokemon-showdown.zip') as z: raw=z.read(data['source'])
+    assert hashlib.sha256(raw).hexdigest()==data['source_sha256']
+    species={}
+    for match in re.finditer(r'^\t(\w+): \{\n(.*?)^\t\},',raw.decode(),re.M|re.S):
+        moves={m:json.loads(a) for m,a in re.findall(r'^\t\t\t(\w+): (\[[^\n]+\])',match.group(2),re.M)}
+        if moves: species[match.group(1)]=moves
+    assert species==data['species']
+    return data['species']
+
+
+def verify(result,census,family,source,format):
+    def regular(species,move,level,generation):
+        return any(s in [generation+'M',generation+'T'] or
+            s.startswith(generation+'L') and int(s[2:])<=level for s in source.get(species,{}).get(move,[]))
+    def allowed(species,known,level):
+        known={'hiddenpower' if m.startswith('hiddenpower') else m for m in known}
+        post=all(regular(species,m,level,'2') for m in known)
+        candidates=set(format[species]['moves'])-known
+        safe={m for m in candidates if format[species].get('moveMinLevel',{}).get(m,0)<=level and
+              (regular(species,m,level,'2') or post and regular(species,m,level,'1'))}
+        return safe,candidates-safe
+    expected=['rest']+sorted({r['move'] for r in family['rows']}-{'rest'})+['<empty>']
+    assert result['names']==expected and len(expected)==40
+    safe,excluded=allowed('zapdos',['thunderbolt','hiddenpowerice','sleeptalk'],50)
+    assert not excluded and safe==set(expected)-{'<empty>'}
+    generations=result['generation_checks'];assert len(generations)==40
+    assert [g['actual'] for g in generations]==expected
+    assert all(g['keys']==generations[0]['keys'] for g in generations)
+    assert len(generations[0]['keys'])==len(set(generations[0]['keys']))==40
+    active=next(p for p in result['empty_state']['sides'][0]['pokemon'] if p['active'])
+    assert [m['id'] for m in active['moves']]==['thunderbolt','hiddenpowerice','sleeptalk']
+    certificate=result['empty_certificate'];cfg=certificate['config']
+    assert cfg['target_side']==cfg['policy_side']==1 and cfg['first_choice']=='move rockslide'
+    assert cfg['priority']==['move rockslide'] and cfg['horizon']==3 and cfg['work_budget']==200000 and cfg['cell_cap']==10000
+    assert cfg['guarded_keys'] and cfg['support_certificate'] and cfg['rest_at_percent'] is None
+    assert not cfg.get('opening',[])
+    report=ledger_check(certificate);policy_check(certificate)
+    lower=min(F(family['robust_rockslide_bounds'][0]),F(certificate['bounds'][0]))
+    upper=F(family['robust_rockslide_bounds'][1])
+    assert 0<=upper-lower<F(1,10**8)
+    swords_upper=F(family['robust_swordsdance_bounds'][1])
+    actions=['move earthquake','move rockslide','move swordsdance','move hiddenpowerflying']
+    pure_upper={a:min(F(w['upper'][a]) for w in family['rows']) for a in actions}
+    assert census['boundaries']==557
+    for r in census['rows']:
+        safe,excluded=allowed(r['species'],r['known'],r['level'])
+        assert len(r['known'])==3 and len(r['candidates'])==len(set(r['candidates']))
+        assert set(r['candidates'])==safe|{'<empty>'} and set(r['excluded'])==excluded
+    modes=['catalog','uniform','robust','robust-merged'];reflect=expected.index('reflect')
+    rows={(r['mode'],r['seed'],r['timed'],r['template']):r for r in result['rows']}
+    assert len(rows)==len(result['rows'])==192
+    assert set(rows)=={(m,0x2026110501+i,t,v) for m in modes for i in range(16) for t in [False,True] for v in ([0] if t else [0,reflect])}
+    fields=['best','visits','means','rng','nodes','iterations','own_rng','world_rng','world_counts','arm_counts','reward_sum','arms']
+    identities=0;arm_tables={}
+    for (mode,seed,timed,template),r in rows.items():
+        n=r['iterations'];assert n>0 and sum(r['visits'])==n and len(r['visits'])==len(r['means'])==4
+        assert r['best'] in actions and all(0<=v<=1 for v in r['means'])
+        assert abs(sum(v*m for v,m in zip(r['visits'],r['means']))-r['reward_sum'])<1e-6
+        assert 0<=r['generation_seconds']<=r['setup_seconds']<r['seconds']
+        if timed:assert .5<=r['seconds']<=.55
+        else:
+            assert n==27000
+            if template:
+                assert all(r[k]==rows[mode,seed,timed,0][k] for k in fields);identities+=1
+        assert r['arms']==arm_tables.setdefault(mode,r['arms'])
+        assert len(r['arms'])==len(r['arm_counts'])
+        assert sum(r['arm_counts'])==(n if mode.startswith('robust') else 0)
+        assert len(r['world_counts'])==(0 if mode=='catalog' else 40)
+        assert sum(r['world_counts'])==(0 if mode=='catalog' else n)
+        if mode.startswith('robust'):
+            assert r['world_counts']==[sum(c for c,a in zip(r['arm_counts'],r['arms']) if a['world']==w) for w in range(40)]
+            assert r['best']==actions[max(range(4),key=lambda a:(r['visits'][a],a))]
+    full={(a['world'],a['reply']) for a in arm_tables['robust']}
+    merged={(a['world'],a['reply']) for a in arm_tables['robust-merged']}
+    assert len(full)==159 and len(merged)<len(full) and merged<full
+    assert arm_tables['uniform']==arm_tables['robust']
+    aliases=result['aliases'];seen=set()
+    for row in aliases:
+        world=expected.index(row['world']);key=(world,row['removed'],row['own'])
+        assert key not in seen;seen.add(key)
+        assert (world,row['representative']) in merged
+        assert row['runs']>0 and row['runs']%2==0 and row['leaves']>0 and abs(row['mass']-1)<1e-10
+    assert seen=={(w,a,own) for w,a in full-merged for own in actions}
+    groups=[]
+    for timed in [False,True]:
+        for mode in modes:
+            group=[r for r in result['rows'] if r['mode']==mode and r['timed']==timed and r['template']==0]
+            losses=[max(F(0),lower-pure_upper[r['best']]-F(1,10**8)) for r in group]
+            groups.append(dict(mode=mode,timed=timed,searches=16,choices=dict(Counter(r['best'] for r in group)),
+                provably_inferior_choices=sum(v>0 for v in losses),mean_first_action_loss_lower=float(sum(losses)/16),
+                generation_seconds_mean=sum(r['generation_seconds'] for r in group)/16,
+                iterations_mean=sum(r['iterations'] for r in group)/16,
+                seconds_range=[min(r['seconds'] for r in group),max(r['seconds'] for r in group)]))
+    return dict(worlds=40,generation_template_checks=40,generated_model_identities=1600,
+        searches=192,same_model_search_identity_pairs=identities,empty_slot_certificate=report,
+        forty_world_game_bounds=[float(lower),float(upper)],swordsdance_security_upper=float(swords_upper),
+        certified_first_action_gain_lower=float(lower-swords_upper-F(1,10**8)),
+        opponent_arms=dict(full=len(full),merged=len(merged)),alias_comparisons=len(aliases),
+        alias_engine_runs=sum(r['runs'] for r in aliases),groups=groups,
+        census=dict(boundaries=557,applicable_decisions=len(census['rows']),species=dict(Counter(r['species'] for r in census['rows'])),
+                    candidate_counts=sorted({len(r['candidates']) for r in census['rows']})),
+        production_changed=False,
+        scope='Research-only generation from the existing belief imputation, public observations and game-source '
+              'learnsets. Three revealed moves and one surviving monster per side are required. Add safe level/machine/tutor '
+              'moves and an empty fourth slot; return no model expansion if it would drop the inherited filler. '
+              'Gen1 sources require all retained moves to be learnable through regular Gen2 sources after transfer. '
+              'Compatibility of arbitrary egg/event additions is not assumed. Stats, items and all other template '
+              'fields come from one standard belief determinization at seed zero, with the existing hidden-counter '
+              'contract; this does not cover the full legal information set. In the certified example, every '
+              'generated battle matches a separately replayed reference under the unobservable Quick Claw key, '
+              'for all 40 actual templates. A fresh empty-slot lower certificate extends the existing 39-world '
+              'ceiling. Only opening choices are scored; subsequent replanning and match strength are not certified. '
+              'Merged arms use the existing sleep equivalence rule only for adversary root draws; full engine states, '
+              'logs and chance traces are checked pairwise over complete chance trees. Native 500ms includes model '
+              'generation and search setup. Dex, pool and learnset loading, validation and certificate computation '
+              'are outside the clock. Seeds differ from the earlier 39-world experiment; its 16/16 rate is not '
+              'a matched comparison. No human calibration, production change or iPad timing claim.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',nargs=2,type=Path);args=parser.parse_args()
+    family=json.loads((root/'findings/hidden-move-family-v1/summary.json').read_bytes())
+    source=routes();format=json.loads((root/'data/learnsets-gen2.json').read_bytes())['species']
+    paths=[Path(__file__).resolve(),root/'crates/bot/examples/legal_family_search.rs',root/'crates/bot/examples/legal_move_model_census.rs',
+        root/'crates/bot/examples/legal_move_models/mod.rs',root/'crates/bot/examples/hidden_family_search.rs',root/'crates/bot/examples/hidden_terminal.rs',
+        root/'crates/bot/examples/policy_witness.rs',root/'tools/policy-witness-probe',root/'tools/hidden-move-witness-probe',
+        root/'data/legal-move-sources-gen2.json',root/'data/learnsets-gen2.json',root/'data/gen2stadium2.json',root/'data/belief-pool-v3/belief-pool.json',
+        root/'pokemon-showdown.zip',root/'findings/hidden-move-family-v1/summary.json',root/'findings/policy-gap-v1/corpus.jsonl.gz']
+    for directory in ['crates/bot/src','crates/engine/src']:paths+=list((root/directory).rglob('*.rs'))
+    hashes={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists();result,census=[json.loads(p.read_bytes()) for p in args.record]
+        summary=verify(result,census,family,source,format);archive.mkdir()
+        (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(dict(result=result,census=census,hashes=hashes),separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()));assert bundle['hashes']==hashes
+    summary=verify(bundle['result'],bundle['census'],family,source,format)
+    assert summary==json.loads((archive/'summary.json').read_bytes())
+    for fault in ['hidden_leak','missing_seed','budget','model_count','alias','bound','candidate']:
+        result,census=copy.deepcopy(bundle['result']),copy.deepcopy(bundle['census'])
+        if fault=='hidden_leak':result['generation_checks'][1]['keys'][0]='0'
+        elif fault=='missing_seed':result['rows'].pop()
+        elif fault=='budget':result['rows'][-1]['seconds']=.49
+        elif fault=='model_count':result['names'].pop()
+        elif fault=='alias':result['aliases'].pop()
+        elif fault=='bound':result['empty_certificate']['bounds'][0]+=.01
+        elif fault=='candidate':census['rows'][0]['candidates'].append('invalid')
+        try:verify(result,census,family,source,format)
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {fault}')
+    print(json.dumps({k:v for k,v in summary.items() if k!='scope'},indent=2))
+
+
+if __name__=='__main__':main()
