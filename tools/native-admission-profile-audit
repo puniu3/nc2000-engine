@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+import runpy
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+
+def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def rows(path):return [json.loads(l) for l in Path(path).read_text().splitlines()]
+
+
+def check(rr,protocol,roots,prior):
+    result=runpy.run_path('tools/native-loss-threshold-audit')['check_threshold'](rr,protocol,roots)
+    profiles=[]
+    for r in sorted(rr,key=lambda r:(r['game'],r['frame'])):
+        old=prior[r['game'],r['frame']]
+        assert {k:v for k,v in r.items() if k not in ['elapsed_ms','admission_profile']}=={k:v for k,v in old.items() if k!='elapsed_ms'}
+        reasons=defaultdict(lambda:[0,0,0,0]);clubs=[0,0,0,0];pairs=defaultdict(lambda:[0,0,0,0])
+        for key,counts in r['admission_profile'].items():
+            fields=key.split('|');assert len(fields)==10
+            reason,without_club,a,b,item0,item1,*_=fields
+            assert len(counts)==4 and all(isinstance(n,int) and n>=0 for n in counts)
+            assert counts[0]==counts[2]+counts[3]
+            assert counts[1]>=counts[3]*protocol['cell_cap'] or r['runs']==protocol['work_budget']
+            if reason=='admitted':assert without_club=='admitted'
+            if reason!=without_club:assert 'thickclub' in [item0,item1]
+            for i,n in enumerate(counts):reasons[reason][i]+=n;pairs[a+' | '+b][i]+=n
+            if reason!='admitted' and without_club=='admitted':
+                for i,n in enumerate(counts):clubs[i]+=n
+        assert sum(c[1] for c in reasons.values())==r['stats']['eager_runs']
+        assert sum(c[3] for c in reasons.values())==r['stats']['eager_failures']
+        profiles.append(dict(game=r['game'],frame=r['frame'],by_first_failure=dict(reasons),
+            newly_admitted_without_club=clubs,action_pairs=dict(pairs)))
+    result['profiles']=profiles
+    return result
+
+
+def main():
+    directory=Path('findings/native-admission-profile-v1');scratch=Path(sys.argv[1])
+    protocol=json.loads((directory/'protocol.json').read_text())
+    assert digest(scratch/'solver')==protocol['solver_binary_sha256']
+    assert digest(directory/'native_admission_profile.rs')==protocol['helper_sha256']
+    assert digest(directory/'bounds.patch')==protocol['bounds_patch_sha256']
+    assert digest(directory/'hp-transition.patch')==protocol['admission_patch_sha256']
+    roots=rows('tmp/native-endgame-census-v1/roots.jsonl')
+    assert digest('tmp/native-endgame-census-v1/roots.jsonl')==protocol['roots_sha256']
+    prior={(r['game'],r['frame']):r for r in rows('tmp/native-loss-lower-screen-v1/main.jsonl')}
+    rr=rows(scratch/'main.jsonl');result=check(rr,protocol,roots,prior)
+    rejected=[]
+    for kind in ['missing_root','wrong_run_count','wrong_completion_count','false_loss']:
+        altered=copy.deepcopy(rr)
+        if kind=='missing_root':altered.pop()
+        elif kind=='false_loss':altered[0]['threshold_loss']=[2.,2.]
+        else:
+            c=next(iter(altered[0]['admission_profile'].values()));c[1 if kind=='wrong_run_count' else 2]+=1
+        try:check(altered,protocol,roots,prior)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    result.update(schema=protocol['schema'],protocol_sha256=digest(directory/'protocol.json'),
+        records_sha256=digest(scratch/'main.jsonl'),frozen_outputs_match=True,rejected_mutations=rejected,
+        ordinary_bot_changed=False,strength_improvement_proven=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()
