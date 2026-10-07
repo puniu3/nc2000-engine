@@ -1,0 +1,64 @@
+{
+  "schema": "nc2000-native-fixed-reply-refine-v1",
+  "registered_at": "2026-10-07T12:42:20.633728+00:00",
+  "source_roots": 360,
+  "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
+  "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "work_budget": 2000000,
+  "node_budget": 200000,
+  "cell_cap": 4096,
+  "eps": 1e-06,
+  "jobs": [
+    {
+      "id": "actual-crosschop",
+      "game": 104,
+      "frame": 52,
+      "target": "move rest",
+      "opponent_priority": [
+        "crosschop",
+        "earthquake",
+        "rockslide",
+        "hiddenpower"
+      ],
+      "classification": "actual",
+      "opponent_first": "rockslide"
+    },
+    {
+      "id": "actual-rockslide",
+      "game": 104,
+      "frame": 52,
+      "target": "move rest",
+      "opponent_priority": [
+        "rockslide",
+        "crosschop",
+        "earthquake",
+        "hiddenpower"
+      ],
+      "classification": "actual",
+      "opponent_first": "rockslide"
+    }
+  ],
+  "threads": 1,
+  "helper_sha256": "291e9d53ff597cce60c88cfb150ff4ab0a5283777cc00bee762a4d20d7d5cc64",
+  "bounds_sha256": "efe33f1f70fae6b9ebd73ede353b3d9a4115749378fbb81366eed6f8d8e4c8c6",
+  "loss_source_sha256": "737b82a959ea7895dc6c68f5c32275ffea4839b823c99abcc6cb92a8a55251e3",
+  "reference_archive": "findings/native-loss-lower-screen-v1/records.jsonl.gz",
+  "reference_archive_sha256": "0a6519922d4b6a675d6f243669f7a1edf42ac0524f596aaed892af6175238d55",
+  "selection": "Follow-up on the chosen game104/frame52 only. Hold the initial opponent reply at Rock Slide, the lowest recorded selected-cell upper. Compare repeated Rock Slide and subsequent Cross Chop priorities at the same larger engine-work and node budgets. This is exploratory; retain both outcomes.",
+  "scope": "Fixed true hidden state and independent chance classes. Fix the opponent to its first legal priority move, then engine-first fallback; keep all target-side continuation actions. Restricted target upper bounds transfer to unrestricted target security upper bounds; restricted lower bounds do not. A certificate needs an independently established alternative security lower bound greater than the target upper by more than 1e-8. Not a blind-policy or bot-strength certificate.",
+  "ordinary_bot_changed": false,
+  "selection_sources": {
+    "findings/native-endgame-bounds-v1/records.jsonl.gz": "dd8dbf377b3860d69ea09a09456e91a18b803adb29c9e07fa281b8eaff560c71",
+    "findings/native-endgame-refine-v1/records.jsonl.gz": "6d11a523e5edba810fdd3e473f253827453302e114b18f85a54c56032739161e",
+    "findings/native-endgame-quotient-v1/records.jsonl.gz": "78f056975632b3eaa1b808e7418dfe23d5df4e6b3dd5e3164b0ba1471343c61f",
+    "findings/native-loss-lower-screen-v1/records.jsonl.gz": "0a6519922d4b6a675d6f243669f7a1edf42ac0524f596aaed892af6175238d55",
+    "findings/native-endgame-scheduling-v1/control.jsonl.gz": "40ab7045a02472f27b8f7a5ce710b5a931f5aa443a4b8a2c252af17e0a209847",
+    "findings/native-endgame-scheduling-v1/quotient.jsonl.gz": "1cbf65034e298e0f35608ee3ea78f97009e7c9f172e0b4a724d9f26125465cee",
+    "findings/native-endgame-scheduling-v1/quotient_retained.jsonl.gz": "ae701e6e40ebdb75bb080236eefc48d0b96717243480774b851e4d5955cf5dab",
+    "findings/native-endgame-scheduling-v1/quotient_retained_selected.jsonl.gz": "3fbaf2073a2c6e0302ac9ec16ea6f3857fa9a20b5cba2f9bb91351ccbaf474eb",
+    "findings/native-endgame-scheduling-v1/quotient_selected.jsonl.gz": "8ad5f06fc28f8cfed1dbc18272efc70ecdba7a52d9dee1623a00eac09c3ecd4a"
+  },
+  "implementation_commit": "45df17df78b796185ae118c36bec5922294a57a1",
+  "prior_summary_sha256": "170b5fc058b17d8e1ed069b215afaa869978eeb2afffead4eb063a34513a865b",
+  "solver_binary_sha256": "5dcca83f83b535a68d9b4a096b5e58ce9bef0c625f377606068cf0452f808ade"
+}
