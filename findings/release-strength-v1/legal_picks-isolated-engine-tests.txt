@@ -1,0 +1,49 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling libc v0.2.186
+   Compiling memchr v2.8.3
+   Compiling serde_json v1.0.150
+   Compiling cpufeatures v0.2.17
+   Compiling sha2 v0.10.9
+   Compiling syn v2.0.119
+   Compiling serde_derive v1.0.228
+   Compiling serde v1.0.228
+   Compiling nc2000-engine v0.1.0 (/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/legal_picks/crates/engine)
+    Finished `release` profile [optimized] target(s) in 27.12s
+     Running tests/hidden_power_aliases.rs (tmp/release-strength-v1/test-target-legal_picks/release/deps/hidden_power_aliases-74bf73d5ed87d0b5)
+
+running 3 tests
+test lower_power_changes_damage_and_input_aliases_share_public_logs ... FAILED
+test kings_rock_applies_to_typed_input ... FAILED
+test all_types_use_the_canonical_slot_and_keep_dv_properties ... FAILED
+
+failures:
+
+---- lower_power_changes_damage_and_input_aliases_share_public_logs stdout ----
+
+thread 'lower_power_changes_damage_and_input_aliases_share_public_logs' (22873453) panicked at crates/engine/tests/hidden_power_aliases.rs:67:5:
+assertion failed: mean(damage(&dex, &low, "hiddenpowerice")) <
+    0.6 * mean(damage(&dex, &high, "hiddenpowerice"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- kings_rock_applies_to_typed_input stdout ----
+
+thread 'kings_rock_applies_to_typed_input' (22873452) panicked at crates/engine/tests/hidden_power_aliases.rs:87:5:
+assertion failed: step.leaves.iter().any(|leaf| leaf.battle.poke(target).move_slots[0].pp == pp)
+
+---- all_types_use_the_canonical_slot_and_keep_dv_properties stdout ----
+
+thread 'all_types_use_the_canonical_slot_and_keep_dv_properties' (22873451) panicked at crates/engine/tests/hidden_power_aliases.rs:54:13:
+assertion `left == right` failed
+  left: "hiddenpowerfighting"
+ right: "hiddenpower"
+
+
+failures:
+    all_types_use_the_canonical_slot_and_keep_dv_properties
+    kings_rock_applies_to_typed_input
+    lower_power_changes_damage_and_input_aliases_share_public_logs
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p nc2000-engine --test hidden_power_aliases`

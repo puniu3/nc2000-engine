@@ -1,0 +1,10 @@
+    Finished `release` profile [optimized] target(s) in 0.06s
+     Running tests/hidden_power_aliases.rs (tmp/release-strength-v1/test-target/release/deps/hidden_power_aliases-74bf73d5ed87d0b5)
+
+running 3 tests
+test lower_power_changes_damage_and_input_aliases_share_public_logs ... ok
+test kings_rock_applies_to_typed_input ... ok
+test all_types_use_the_canonical_slot_and_keep_dv_properties ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

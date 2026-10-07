@@ -1,0 +1,171 @@
+{
+  "games": 96,
+  "decisions": [
+    2128,
+    2121
+  ],
+  "wins": 50,
+  "losses": 46,
+  "ties": 0,
+  "pair_scores": [
+    0.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+    1.0,
+    0.5,
+    1.0,
+    0.5,
+    0.5,
+    1.0,
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+    0.5,
+    0.5,
+    0.0,
+    1.0,
+    1.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.0,
+    0.0,
+    0.5,
+    0.0,
+    1.0,
+    0.0,
+    0.5,
+    1.0,
+    0.5,
+    0.0,
+    0.5,
+    0.0,
+    0.5,
+    0.0,
+    0.0,
+    1.0,
+    1.0
+  ],
+  "replay": {
+    "games": 96,
+    "replayed_decisions": 4249,
+    "replayed_states": 2233,
+    "games_with_hidden_power": 40,
+    "hidden_power_uses": 90
+  },
+  "score": 0.5208333333333334,
+  "posterior": {
+    "1": {
+      "probability_above_half": 0.664865,
+      "mean": 0.5204081632653061,
+      "credible95": [
+        0.4264529906747683,
+        0.6141358366423323
+      ],
+      "probability_below_49_percent": 0.26352
+    },
+    "4": {
+      "probability_above_half": 0.66165,
+      "mean": 0.5192307692307693,
+      "credible95": [
+        0.4275146698857595,
+        0.6104753636268606
+      ],
+      "probability_below_49_percent": 0.264445
+    },
+    "16": {
+      "probability_above_half": 0.642775,
+      "mean": 0.515625,
+      "credible95": [
+        0.43208590932217983,
+        0.5986604610766927
+      ],
+      "probability_below_49_percent": 0.27515
+    }
+  },
+  "confirmation_threshold_met": false,
+  "records_sha256": "3a21d9ee3582c12a57dcf831190c687763fea90c2f9c61df5bd06b1defce6070",
+  "manifest": {
+    "type": "manifest",
+    "config": {
+      "schema": "nc2000-native-deployed-duel-v1",
+      "seed": 2026100811,
+      "games": 96,
+      "threads": 8,
+      "pool": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ce55d34048b2ece4-team-pool.json",
+      "dex": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+      "agents": [
+        {
+          "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/a562f35b73d03a47-combined-worker",
+          "args": [
+            "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+            "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+            "27000"
+          ],
+          "artifacts": [
+            "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+            "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+          ]
+        },
+        {
+          "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/8c973d54ce32f0d3-8c973d54ce32f0d3-deployed-worker",
+          "args": [
+            "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+            "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+            "27000"
+          ],
+          "artifacts": [
+            "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+            "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+          ]
+        }
+      ],
+      "record": true,
+      "crn_agent_seeds": true
+    },
+    "hashes": {
+      "arena": "sha256:55e1aa4497b61773edb030a60086023e72abffaf0dfe607c904b4140abc0a0c3",
+      "pool": "sha256:ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+      "dex": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+      "agents": [
+        {
+          "program": "sha256:a562f35b73d03a47959ea3d22a495773c7ffebcc09bf5de0d2a3eac47c86f9f9",
+          "artifacts": [
+            {
+              "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+              "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+            },
+            {
+              "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+              "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+            }
+          ]
+        },
+        {
+          "program": "sha256:8c973d54ce32f0d3420e9439ef4fe1349d50a51e6c8c0d4cd556216c2040178f",
+          "artifacts": [
+            {
+              "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+              "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+            },
+            {
+              "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+              "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

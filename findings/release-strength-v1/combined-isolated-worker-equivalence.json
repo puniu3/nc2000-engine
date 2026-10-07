@@ -1,0 +1,8 @@
+{
+  "arm": "combined",
+  "exact_replay_equivalence": true,
+  "games": 4,
+  "decisions": 123,
+  "frozen_binary_sha256": "a562f35b73d03a47959ea3d22a495773c7ffebcc09bf5de0d2a3eac47c86f9f9",
+  "isolated_binary_sha256": "a91b33892cccf6aa3545edba3cff8b1238b4c3c88748cfeda5792c61a4257ee9"
+}

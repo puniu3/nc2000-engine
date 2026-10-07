@@ -2,9 +2,7 @@
 import hashlib
 import json
 import os
-import signal
 import subprocess
-import time
 from pathlib import Path
 
 
@@ -19,16 +17,6 @@ for path, expected in runtime['sha256'].items():
     assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == expected
 for file, key in [('tools/release-strength-audit', 'audit_sha256'), ('tools/native-deployed-audit', 'native_audit_sha256')]:
     assert hashlib.sha256(Path(file).read_bytes()).hexdigest() == runtime[key]
-parent = eligibility['paused_runner_pid']
-arena = eligibility['finishing_arena_pid']
-while True:
-    status = subprocess.run(['ps', '-p', str(arena), '-o', 'stat='], capture_output=True, text=True)
-    if status.returncode or status.stdout.strip().startswith('Z'):
-        break
-    time.sleep(5)
-parent_command = subprocess.run(['ps', '-p', str(parent), '-o', 'command='], capture_output=True, text=True)
-if parent_command.returncode == 0 and parent_command.stdout.strip() == 'python3 -':
-    os.kill(parent, signal.SIGKILL)
 results = {}
 for arm in plan['arms']:
     directory = scratch / ('screen-' + arm)

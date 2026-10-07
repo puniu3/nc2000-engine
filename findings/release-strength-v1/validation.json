@@ -1,0 +1,36 @@
+{
+  "isolated_regressions": {
+    "corrections": 150,
+    "legal_picks": 139,
+    "combined": 153
+  },
+  "legal_picks_only_regulation_negative_control": "All three Hidden Power canonicalization tests fail on the isolated uncorrected engine, confirming standalone release ineligibility.",
+  "worker_rebuilds": [
+    {
+      "arm": "combined",
+      "exact_replay_equivalence": true,
+      "games": 4,
+      "decisions": 123,
+      "frozen_binary_sha256": "a562f35b73d03a47959ea3d22a495773c7ffebcc09bf5de0d2a3eac47c86f9f9",
+      "isolated_binary_sha256": "a91b33892cccf6aa3545edba3cff8b1238b4c3c88748cfeda5792c61a4257ee9"
+    },
+    {
+      "arm": "corrections",
+      "exact_replay_equivalence": true,
+      "games": 4,
+      "decisions": 153,
+      "frozen_binary_sha256": "afec630e928078d019b5fd0fc786b64332df58d3870357cd632d583e8f4090e5",
+      "isolated_binary_sha256": "9fcac7f16e4b40ec0244c51ac7ee1b3d70210a19a2c6047fef277e34bd9a52a2"
+    },
+    {
+      "arm": "legal_picks",
+      "exact_replay_equivalence": true,
+      "games": 4,
+      "decisions": 123,
+      "frozen_binary_sha256": "72c21d0d2119687141b0332c12d558610a4c148d7144cc274269e1c3df11518c",
+      "isolated_binary_sha256": "6d16ee18f7ac18636cb22a28f8c011bd863a02e2dfac820d2450ac271e47bd15"
+    }
+  ],
+  "shared_target_test_outputs": "Retained but superseded by isolated target results. The shared target reused an engine test binary across checkouts. No production source or frozen matchup binary changed; every worker was independently rebuilt and matched the original complete smoke trajectories except timing.",
+  "scope": "Selected candidate must additionally pass Web/wasm validation. No deployment from these controls or screening alone."
+}

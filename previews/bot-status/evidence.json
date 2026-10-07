@@ -57993,11 +57993,43 @@
     "followup_priority_substitute_format": "priority-substitute-format-v1",
     "release_strength": {
       "study": "release-strength-v1",
-      "status": "screening",
+      "status": "confirmation",
       "baseline": "c7b11e8",
       "screen_games_per_arm": 96,
       "confirmation_games": 384,
-      "deployed": false
+      "deployed": false,
+      "progress": {
+        "corrections": {
+          "completed": 96,
+          "planned": 96,
+          "wins": 49,
+          "losses": 47,
+          "ties": 0,
+          "score": 0.5104166666666666
+        },
+        "legal_picks": {
+          "completed": 96,
+          "planned": 96,
+          "wins": 50,
+          "losses": 46,
+          "ties": 0,
+          "score": 0.5208333333333334
+        },
+        "combined": {
+          "completed": 96,
+          "planned": 96,
+          "wins": 50,
+          "losses": 46,
+          "ties": 0,
+          "score": 0.5208333333333334
+        },
+        "selected": "combined",
+        "confirmation": {
+          "arm": "combined",
+          "completed": 39,
+          "planned": 384
+        }
+      }
     }
   },
   "native_endgame_census": {

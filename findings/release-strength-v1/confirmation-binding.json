@@ -1,0 +1,42 @@
+{
+  "arm": "combined",
+  "config": {
+    "schema": "nc2000-native-deployed-duel-v1",
+    "seed": 2026100812,
+    "games": 384,
+    "threads": 8,
+    "pool": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ce55d34048b2ece4-team-pool.json",
+    "dex": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+    "agents": [
+      {
+        "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/a562f35b73d03a47-combined-worker",
+        "args": [
+          "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+          "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+          "27000"
+        ],
+        "artifacts": [
+          "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+          "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+        ]
+      },
+      {
+        "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/8c973d54ce32f0d3-8c973d54ce32f0d3-deployed-worker",
+        "args": [
+          "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+          "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+          "27000"
+        ],
+        "artifacts": [
+          "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+          "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+        ]
+      }
+    ],
+    "record": true,
+    "crn_agent_seeds": true
+  },
+  "candidate_commit": "2b708e1933ef4cd79df1129595fa2dd076846ed0",
+  "plan_sha256": "7ce84ea8ccbd9fd07b437a484e8c183f54f198d7e66e09f954543aad1bf5eb98",
+  "eligibility_sha256": "066bf8203431c7fad6a52e7d88684fa93560cefe70d68162839cac8fcfa529f2"
+}

@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+import json
+from pathlib import Path
+
+
+root = Path(__file__).resolve().parent.parent
+study = root / 'findings/release-strength-v1'
+scratch = root / 'tmp/release-strength-v1'
+labels = {'corrections': '技処理の修正', 'legal_picks': '合法選出の推定', 'combined': '両方'}
+rows = []
+progress = {}
+for arm, label in labels.items():
+    records = scratch / ('screen-' + arm) / 'games.jsonl'
+    completed = max(0, len(records.read_bytes().splitlines()) - 1) if records.exists() else 0
+    summary = study / ('screen-' + arm) / 'summary.json'
+    result = json.loads(summary.read_text()) if summary.exists() else None
+    progress[arm] = {'completed': completed, 'planned': 96}
+    if result:
+        progress[arm].update({k: result[k] for k in ['wins', 'losses', 'ties', 'score']})
+        text = f"{result['wins']}勝{result['losses']}敗・{result['ties']}分"
+    else:
+        text = f'{completed}/96対戦'
+    rows.append(f'<tr><td>{label}</td><td>{text}</td></tr>')
+selection = study / 'selection.json'
+confirmation = ''
+if selection.exists():
+    selected = json.loads(selection.read_text())['selected']
+    progress['selected'] = selected
+    if selected:
+        records = scratch / ('confirm-' + selected) / 'games.jsonl'
+        completed = max(0, len(records.read_bytes().splitlines()) - 1) if records.exists() else 0
+        progress['confirmation'] = {'arm': selected, 'completed': completed, 'planned': 384}
+        confirmation = f'<p>独立した確認対戦：{labels[selected]}、{completed}/384対戦。</p>'
+    else:
+        confirmation = '<p>全候補が選定条件を満たさず、今回の公開対象はありません。</p>'
+table = '<div id="release-strength-progress"><table class="comparison"><thead><tr><th>候補選びの比較</th><th>結果・進行</th></tr></thead><tbody>' + ''.join(rows) + '</tbody></table>' + confirmation + '</div>'
+page = root / 'previews/bot-status/index.html'
+html = page.read_text()
+start = html.find('<div id="release-strength-progress">')
+if start >= 0:
+    end = html.index('</div>', start) + len('</div>')
+    html = html[:start] + table + html[end:]
+else:
+    start = html.index('<section class="section" id="release-strength">')
+    end = html.index('</h2>', start) + len('</h2>')
+    html = html[:end] + table + html[end:]
+page.write_text(html)
+path = root / 'previews/bot-status/evidence.json'
+data = json.loads(path.read_text())
+data['latest_report']['release_strength']['progress'] = progress
+data['latest_report']['release_strength']['status'] = 'confirmation' if progress.get('selected') else 'screening'
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+print(json.dumps(progress, ensure_ascii=False))

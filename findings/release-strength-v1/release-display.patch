@@ -1,0 +1,72 @@
+diff --git a/crates/wasm/src/lib.rs b/crates/wasm/src/lib.rs
+index e262f22..1aeb098 100644
+--- a/crates/wasm/src/lib.rs
++++ b/crates/wasm/src/lib.rs
+@@ -1204,14 +1204,23 @@ fn choice_json(battle: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> serd
+                         .map(|s| (s.pp, s.maxpp))
+                 })
+                 .unwrap_or((-1, -1));
++            let (move_type, category, base_power) = battle.active_id(side)
++                .filter(|_| dex.moves.key(id) == "hiddenpower")
++                .map(|aid| {
++                    let p = battle.poke(aid);
++                    let special = matches!(dex.type_name(p.hp_type),
++                        "Fire" | "Water" | "Grass" | "Ice" | "Electric" | "Dark" | "Psychic" | "Dragon");
++                    (p.hp_type, if special { Category::Special } else { Category::Physical }, p.hp_power)
++                })
++                .unwrap_or((ms.move_type, ms.category, ms.base_power));
+             serde_json::json!({
+                 "kind": "move",
+                 "input": input,
+                 "id": dex.moves.key(id),
+                 "name": ms.name,
+-                "type": dex.type_name(ms.move_type),
+-                "category": category_str(ms.category),
+-                "basePower": ms.base_power,
++                "type": dex.type_name(move_type),
++                "category": category_str(category),
++                "basePower": base_power,
+                 "pp": pp,
+                 "maxpp": maxpp,
+                 "target": ms.target,
+@@ -1495,8 +1504,6 @@ pub fn probe_belief_prior(json: &str) -> String {
+ mod tests {
+     use super::*;
+ 
+-    /// Raw team JSON straight from a fixture file (PokemonSet is
+-    /// deserialize-only; the wasm API consumes team JSON as text anyway).
+     fn fixture_teams() -> (String, String) {
+         let path = conformance::fixture::repo_root()
+             .join("fixtures/corpus-v1/full/battle-001.json");
+@@ -1505,6 +1512,31 @@ mod tests {
+         (v["p1team"].to_string(), v["p2team"].to_string())
+     }
+ 
++    #[test]
++    fn hidden_power_choice_uses_the_active_pokemon_type_category_and_power() {
++        let dex = conformance::load_dex();
++        for (name, ivs, expected_type, expected_category, expected_power) in [
++            ("Hidden Power Ice", [30, 6, 2, 30, 30, 2], "Ice", "Special", 35),
++            ("Hidden Power Flying", [14, 24, 26, 30, 30, 30], "Flying", "Physical", 70),
++        ] {
++            let set: PokemonSet = serde_json::from_value(serde_json::json!({
++                "name":"Zapdos", "species":"Zapdos", "level":50, "moves":[name],
++                "ivs":{"hp":ivs[0], "atk":ivs[1], "def":ivs[2], "spa":ivs[3], "spd":ivs[4], "spe":ivs[5]}
++            })).unwrap();
++            let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &[set.clone()], &[set]).unwrap();
++            let choices = [0,1].map(|side| Some(battle.legal_choices(&dex,side)[0]));
++            battle.apply_choices(&dex, choices).unwrap();
++            let choice = battle.legal_choices(&dex,0)[0];
++            let value = choice_json(&battle,&dex,0,choice);
++            assert_eq!(value["input"], "move hiddenpower");
++            assert_eq!(value["name"], "Hidden Power");
++            assert_eq!(value["type"], expected_type);
++            assert_eq!(value["category"], expected_category);
++            assert_eq!(value["basePower"], expected_power);
++            assert_eq!(value["pp"], value["maxpp"]);
++        }
++    }
++
+     #[test]
+     fn embedded_dex_loads() {
+         let _ = WasmDex::new().map_err(|_| "dex").unwrap();

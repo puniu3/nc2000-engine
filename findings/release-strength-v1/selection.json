@@ -1,0 +1,13 @@
+{
+  "screen_scores": {
+    "corrections": 0.5104166666666666,
+    "legal_picks": 0.5208333333333334,
+    "combined": 0.5208333333333334
+  },
+  "selected": "combined",
+  "eligible": [
+    "corrections",
+    "combined"
+  ],
+  "basis": "Highest mean among candidates satisfying release rule conformance; separate confirmation required."
+}
