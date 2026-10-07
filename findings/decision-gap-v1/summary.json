@@ -1,0 +1,130 @@
+{
+  "variants": [
+    {
+      "gap": 2e-05,
+      "seconds": [
+        6.295528292,
+        7.391699666
+      ],
+      "setup_seconds": [
+        0.295315875,
+        0.349383791
+      ],
+      "calls": 3044,
+      "runs": 496818,
+      "bounds": [
+        0.08926996926318925,
+        0.08928985574286716
+      ],
+      "mix": [
+        0.4442382191836013,
+        0.5557617808163987
+      ],
+      "gain_over_pure_upper": 0.0015251503753074824,
+      "proof_checked": true
+    },
+    {
+      "gap": 0.0015,
+      "seconds": [
+        6.405114666,
+        6.898808666
+      ],
+      "setup_seconds": [
+        0.301961792,
+        0.345157166
+      ],
+      "calls": 3051,
+      "runs": 486560,
+      "bounds": [
+        0.08779092441307831,
+        0.08928985574286716
+      ],
+      "mix": [
+        0.4442382191836013,
+        0.5557617808163987
+      ],
+      "gain_over_pure_upper": 4.610552519654365e-05,
+      "proof_checked": true
+    },
+    {
+      "gap": 0.02,
+      "seconds": [
+        16.900521542,
+        20.01661325
+      ],
+      "setup_seconds": [
+        0.301268958,
+        0.340019375
+      ],
+      "calls": 2211,
+      "runs": 1262028,
+      "bounds": [
+        0.08264494622512755,
+        0.10264397682567455
+      ],
+      "mix": [
+        1.0,
+        0.0
+      ],
+      "gain_over_pure_upper": -0.005099872662754218,
+      "proof_checked": false
+    }
+  ],
+  "decision_proof": {
+    "calls": 3051,
+    "proof_runs": 670101,
+    "kind_counts": {
+      "swordsdance": 2538,
+      "rockslide": 507,
+      "upper": 6
+    },
+    "root_branches_pruned": 11767,
+    "certificate_nodes": 96753,
+    "active_worlds": [
+      "berry/rest",
+      "berry/bide",
+      "berry/doubleedge",
+      "brightpowder/detect",
+      "brightpowder/doubleedge",
+      "focusband/doubleedge"
+    ],
+    "mix": [
+      0.4442382191836013,
+      0.5557617808163987
+    ],
+    "bounds": [
+      0.08779092441307831,
+      0.08928985574286716
+    ],
+    "negative_controls": [
+      "inflated_lower",
+      "invalid_mix",
+      "wrong_adversary"
+    ],
+    "projection": {
+      "cells": 50210,
+      "maximum_mass_error": 4.440892098500626e-16,
+      "rejected": {
+        "selected_move": 8054,
+        "called_move": 8054,
+        "weather": 1068,
+        "volatile_effect": 508,
+        "side_effect": 204
+      },
+      "rejected_runs": {
+        "selected_move": 45572,
+        "called_move": 139501,
+        "weather": 6759,
+        "volatile_effect": 4116,
+        "side_effect": 13724
+      }
+    },
+    "audit_runs": 993860,
+    "audit_cells": 81585
+  },
+  "pure_security_upper": 0.08774481888788177,
+  "production_changed": false,
+  "strength_demonstrated": false,
+  "decision": "Do not adopt looser precision as a speed improvement.",
+  "scope": "One fixed finite family of 2200 hidden models. Numeric runs repeat exactly excluding times. The tight schedule equals the frozen item-projection reference. The 0.0015 run has a fresh native-audited proof and independent checks of controller thresholds, policies, matrix bounds and each ledger; the 0.02 run is a timing diagnostic with repeated numeric output only. The pure-security upper bound is from the prior restricted-family certificate and is not the deployed bot value. Timings exclude model preparation and independent audit. Relaxing tolerance changes active worlds and policies, so it need not lower work monotonically. No claim of full-information-set coverage, deployed improvement or device runtime."
+}
