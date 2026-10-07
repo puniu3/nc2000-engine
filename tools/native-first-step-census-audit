@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import math
+import subprocess
+import sys
+from collections import Counter
+from pathlib import Path
+
+
+def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def rows(path):
+    data=Path(path).read_bytes()
+    if str(path).endswith('.gz'):data=gzip.decompress(data)
+    return [json.loads(line) for line in data.splitlines()]
+
+
+def candidates(r):
+    side,selected=r['side'],r['selected'];m=len(r['actions'][1])
+    def cell(a,j):return r['cells'][a*m+j if side==0 else j*m+a]
+    result=[]
+    for a,action in enumerate(r['actions'][side]):
+        if a==selected:continue
+        gaps=[];floors=[];pending=[]
+        for j in range(len(r['actions'][1-side])):
+            alt,chosen=cell(a,j),cell(selected,j)
+            lower=alt['outcome_mass_p0win_p1win_tie_live'][side]
+            upper=min(1.,chosen['outcome_mass_p0win_p1win_tie_live'][side]+chosen['pending_mass'])
+            gaps.append(lower-upper);floors.append(lower);pending.append(alt['pending_mass']+chosen['pending_mass'])
+        if min(gaps)>1e-8:
+            result.append(dict(game=r['game'],frame=r['frame'],side=side,selected=r['actions'][side][selected],
+                               alternative=action,alternative_index=a,minimum_immediate_win_gap_lower=min(gaps),
+                               immediate_win_floor_lower=min(floors),reply_gaps=gaps,pair_pending_mass=pending))
+    return result
+
+
+def controls():
+    cell=lambda win,pending:dict(outcome_mass_p0win_p1win_tie_live=[win,1-win-pending,0.,0.],pending_mass=pending)
+    r=dict(game=-1,frame=0,side=0,selected=0,actions=[['bad','good'],['reply']],cells=[cell(0.,0.),cell(1.,0.)])
+    assert candidates(r)[0]['minimum_immediate_win_gap_lower']==1.
+    r['cells'][0]=cell(1.,0.);assert not candidates(r)
+    r['cells'][0]=cell(0.,1.);assert not candidates(r)
+    r.update(side=1,actions=[['reply'],['bad','good']],cells=[cell(1.,0.),cell(0.,0.)])
+    assert candidates(r)[0]['alternative']=='good' and candidates(r)[0]['minimum_immediate_win_gap_lower']==1.
+    return ['known_winning_alternative','equal_outcomes','unknown_selected_mass','side_one_orientation']
+
+
+def check(actual,protocol,roots,prior):
+    assert len(actual)==len(roots)==360
+    seen=set();nominees=[];small=[];complete=0;calls=0;total_runs=0;exhausted=0
+    for r in actual:
+        key=r['game'],r['frame'];assert key not in seen;seen.add(key)
+        source=roots[key]['record'];side=r['side'];assert side==source['side']
+        assert r['state_sha256']==source['state_sha256']
+        assert r['actions'][side]==source['legal_actions'] and r['actions'][1-side]==source['opponent_legal_actions']
+        assert r['actions'][side][r['selected']]==source['current_response']['action']
+        assert len(r['cells'])==len(r['actions'][0])*len(r['actions'][1])
+        for c in r['cells']:
+            masses=c['outcome_mass_p0win_p1win_tie_live'];pending=c['pending_mass']
+            assert len(masses)==4 and all(math.isfinite(x) and 0<=x<=1+1e-9 for x in [*masses,pending])
+            assert abs(sum(masses)+pending-1)<1e-9
+            assert 0<=c['runs']<=protocol['cell_cap'] and c['leaves']>=0 and c['pending_scripts']>=0
+            if not c['exhausted']:assert pending==0. and c['pending_scripts']==0
+            calls+=1;complete+=not c['exhausted'];exhausted+=bool(c['exhausted'])
+        assert r['runs']==sum(c['runs'] for c in r['cells']);total_runs+=r['runs']
+        old=prior[key]
+        assert old['actions']==r['actions'] and old['selected']==r['selected'] and old['state_sha256']==r['state_sha256']
+        if old['loss_upper']<=.02:small.append(key)
+        else:nominees+=candidates(r)
+    nominees.sort(key=lambda r:(-r['minimum_immediate_win_gap_lower'],-r['immediate_win_floor_lower'],r['game'],r['frame'],r['alternative_index']))
+    return dict(roots=len(seen),games=len({g for g,f in seen}),joint_actions=calls,complete_joint_actions=complete,
+                incomplete_joint_actions=exhausted,total_runs=total_runs,prior_small_loss_roots=len(small),
+                eligible_roots=len(seen)-len(small),nominated_alternatives=len(nominees),
+                nominated_roots=len({(r['game'],r['frame']) for r in nominees}),nominees=nominees)
+
+
+def main():
+    name=sys.argv[1] if len(sys.argv)>1 else 'native-first-step-census-v1'
+    p=Path('findings')/name;t=Path('tmp')/name
+    protocol=json.loads((p/'protocol.json').read_text())
+    assert digest(protocol.get('source_helper',str(p/'native_first_step_census.rs')))==protocol['helper_sha256']
+    assert digest(t/'solver')==protocol['solver_binary_sha256']
+    src=subprocess.check_output(['git','show',protocol['implementation_commit']+':crates/engine/src/battle/enumerate.rs'])
+    assert hashlib.sha256(src).hexdigest()==protocol['enumerator_source_sha256']
+    roots_path='tmp/native-endgame-census-v1/roots.jsonl';assert digest(roots_path)==protocol['roots_sha256']
+    roots={(r['record']['game'],r['record']['frame']):r for r in rows(roots_path)}
+    prior={}
+    for path,sha in protocol['prior_sources'].items():
+        assert digest(path)==sha
+        for r in rows(path):
+            key=r['game'],r['frame'];loss=r['pure_action_losses'][r['selected']][1]
+            if key not in prior:prior[key]={**r,'loss_upper':loss}
+            else:
+                assert all(prior[key][k]==r[k] for k in ['state_sha256','actions','selected','side'])
+                prior[key]['loss_upper']=min(prior[key]['loss_upper'],loss)
+    actual=rows(t/'main.jsonl');result=check(actual,protocol,roots,prior)
+    old=json.loads(gzip.decompress(Path('findings/native-marowak-witness-v1/first-step.json.gz').read_bytes()))
+    current=next(r for r in actual if (r['game'],r['frame'])==(10,32))
+    for r in old['records']:
+        i=current['actions'][0].index('move '+r['own']);j=current['actions'][1].index(r['reply'])
+        c=current['cells'][i*len(current['actions'][1])+j]
+        assert not c['exhausted'] and c['outcome_mass_p0win_p1win_tie_live']==r['outcome_mass_p0win_p1win_tie_live']
+    rejected=[]
+    for kind in ['missing_root','wrong_selected','invalid_mass','hidden_pending_mass']:
+        changed=copy.deepcopy(actual)
+        if kind=='missing_root':changed.pop()
+        elif kind=='wrong_selected':changed[0]['selected']=(changed[0]['selected']+1)%len(changed[0]['actions'][changed[0]['side']])
+        elif kind=='invalid_mass':changed[0]['cells'][0]['outcome_mass_p0win_p1win_tie_live'][0]=2.
+        else:
+            c=next(c for r in changed for c in r['cells'] if c['pending_mass']>1e-6);c['pending_mass']=0.
+        try:check(changed,protocol,roots,prior)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    result.update(schema=protocol['schema'],protocol_sha256=digest(p/'protocol.json'),records_sha256=digest(t/'main.jsonl'),
+                  synthetic_controls=controls(),marowak_reference_cells_match=8,rejected_mutations=rejected,
+                  action_error_proven=False,strength_improvement_proven=False,ordinary_bot_changed=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()
