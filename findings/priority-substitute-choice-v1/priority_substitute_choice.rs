@@ -13,7 +13,7 @@ fn set(species: &str, moves: &[&str], defense: u8, special_defense: u8) -> Pokem
 fn step(b: &mut Battle, dex: &Dex, side: usize, own: &str, foe: &str) {
     let mut joint = [None; 2];
     for (s, input) in [(side, own), (1-side, foe)] {
-        joint[s] = Some(*b.legal_choices(dex, s).iter().find(|a| a.to_input(dex)==input).unwrap());
+        joint[s] = Some(*b.legal_choices(dex, s).iter().find(|a| a.to_input(dex)==input).unwrap_or_else(|| panic!("illegal prefix action {input} at turn {}",b.turn)));
     }
     b.apply_choices(dex, joint).unwrap();
 }
@@ -35,10 +35,11 @@ fn position(dex: &Dex, side: usize) -> (Battle, Battle) {
         let own = if pp(&b,dex,side,"haze")>0 {"move haze"} else {"move dreameater"};
         step(&mut b,dex,side,own,"move quickattack");
     }
-    while pp(&b,dex,1-side,"swordsdance")>1 {
-        let own = if pp(&b,dex,side,"dreameater")>0 {"move dreameater"} else {"move nightmare"};
-        step(&mut b,dex,side,own,"move swordsdance");
+    step(&mut b,dex,side,"switch 2","move swordsdance");
+    while pp(&b,dex,1-side,"swordsdance")>2 {
+        step(&mut b,dex,side,"move agility","move swordsdance");
     }
+    step(&mut b,dex,side,"switch 2","move swordsdance");
     step(&mut b,dex,side,"move explosion","move protect");
     let cs = b.legal_choices(dex,side);assert_eq!(cs.len(),1);
     assert!(b.legal_choices(dex,1-side).is_empty());
