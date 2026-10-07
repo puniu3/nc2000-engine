@@ -34231,6 +34231,873 @@
         "strength_improvement_proven": false,
         "blind_policy_error_proven": false
       }
+    },
+    "findings/native-loss-threshold-v1/summary.json": {
+      "sha256": "90dc3eaea9eb66d8364afba4c143e04c867c0e35ca411eb81b0535abc970890e",
+      "data": {
+        "schema": "nc2000-native-loss-threshold-v1",
+        "protocol_sha256": "2a33cb69a166a3f0be964a73d5ffd7c9939c6fff0e2b6d73a3b08cb661291be5",
+        "legacy_matches_frozen": true,
+        "known_action_controls_passed": true,
+        "release_bounds_tests_passed": 66,
+        "exhaustive_threshold_conditions": 24,
+        "rejected_mutations": [
+          "false_above_threshold"
+        ],
+        "arms": {
+          "legacy": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 5,
+              "games": 5,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 48217,
+            "max_runs": 250000,
+            "targets": [
+              {
+                "game": 0,
+                "frame": 18,
+                "target_action": "move sleeppowder",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.6201195269620552
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              },
+              {
+                "game": 1,
+                "frame": 37,
+                "target_action": "move hiddenpower",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.00965006469544133
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              },
+              {
+                "game": 3,
+                "frame": 97,
+                "target_action": "move doubleedge",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.9454578760851918
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              },
+              {
+                "game": 4,
+                "frame": 60,
+                "target_action": "move recover",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.6656728795328404
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              },
+              {
+                "game": 10,
+                "frame": 32,
+                "target_action": "move hiddenpower",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.06924934592262688
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              },
+              {
+                "game": 16,
+                "frame": 18,
+                "target_action": "move doubleedge",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.1745038122152558
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              }
+            ],
+            "records_sha256": "fc3897a253b98aeb58b4410d50793fbc3bf6a1cd6880c1c0b8c963887a26df1e"
+          },
+          "positive_controls": {
+            "roots": 3,
+            "games": 3,
+            "runs": 44348,
+            "stops": {
+              "AboveThreshold": 3
+            },
+            "value_width_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  14,
+                  180
+                ]
+              ]
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  14,
+                  180
+                ]
+              ]
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 2,
+              "games": 2,
+              "keys": [
+                [
+                  7,
+                  21
+                ],
+                [
+                  37,
+                  23
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 31425,
+            "max_runs": 43326,
+            "targets": [
+              {
+                "game": 7,
+                "frame": 21,
+                "target_action": "move selfdestruct",
+                "target_is_actual": false,
+                "loss": [
+                  0.73443603513925,
+                  1.0
+                ],
+                "stop": "AboveThreshold",
+                "runs": 946
+              },
+              {
+                "game": 14,
+                "frame": 180,
+                "target_action": "move explosion",
+                "target_is_actual": false,
+                "loss": [
+                  0.999999999983,
+                  1.0
+                ],
+                "stop": "AboveThreshold",
+                "runs": 76
+              },
+              {
+                "game": 37,
+                "frame": 23,
+                "target_action": "move hiddenpower",
+                "target_is_actual": false,
+                "loss": [
+                  0.44479429554397215,
+                  1.0
+                ],
+                "stop": "AboveThreshold",
+                "runs": 43326
+              }
+            ],
+            "records_sha256": "572d6f2f83ec48018c28d8da907bccc2b9346c63188f00e6f7c4a9a31eff4373"
+          },
+          "negative_controls": {
+            "roots": 3,
+            "games": 3,
+            "runs": 2323,
+            "stops": {
+              "AtMostThreshold": 3
+            },
+            "value_width_at_most_002": {
+              "roots": 3,
+              "games": 3,
+              "keys": [
+                [
+                  14,
+                  180
+                ],
+                [
+                  22,
+                  40
+                ],
+                [
+                  1,
+                  41
+                ]
+              ]
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 3,
+              "games": 3,
+              "keys": [
+                [
+                  14,
+                  180
+                ],
+                [
+                  22,
+                  40
+                ],
+                [
+                  1,
+                  41
+                ]
+              ]
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "max_nodes_plus_closed": 84,
+            "max_runs": 2205,
+            "targets": [
+              {
+                "game": 1,
+                "frame": 41,
+                "target_action": "move hiddenpower",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.0
+                ],
+                "stop": "AtMostThreshold",
+                "runs": 2205
+              },
+              {
+                "game": 14,
+                "frame": 180,
+                "target_action": "move earthquake",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  1.6999956997665322e-11
+                ],
+                "stop": "AtMostThreshold",
+                "runs": 64
+              },
+              {
+                "game": 22,
+                "frame": 40,
+                "target_action": "move surf",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  1.6999956997665322e-11
+                ],
+                "stop": "AtMostThreshold",
+                "runs": 54
+              }
+            ],
+            "records_sha256": "dee36a793a8490c9c6f9ce89bf3f95b891f493ab9240c84ce10a629a9896c7b9"
+          },
+          "actual_decisions": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1303759,
+            "stops": {
+              "AtMostThreshold": 1,
+              "WorkExhausted": 5
+            },
+            "value_width_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  1,
+                  37
+                ]
+              ]
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 5,
+              "games": 5,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 36127,
+            "max_runs": 250000,
+            "targets": [
+              {
+                "game": 0,
+                "frame": 18,
+                "target_action": "move sleeppowder",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.7447208493191223
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              },
+              {
+                "game": 1,
+                "frame": 37,
+                "target_action": "move hiddenpower",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.01913683636983826
+                ],
+                "stop": "AtMostThreshold",
+                "runs": 53759
+              },
+              {
+                "game": 3,
+                "frame": 97,
+                "target_action": "move doubleedge",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.9496806103462128
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              },
+              {
+                "game": 4,
+                "frame": 60,
+                "target_action": "move recover",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.4326923078770051
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              },
+              {
+                "game": 10,
+                "frame": 32,
+                "target_action": "move hiddenpower",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.06826167249688964
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              },
+              {
+                "game": 16,
+                "frame": 18,
+                "target_action": "move doubleedge",
+                "target_is_actual": true,
+                "loss": [
+                  0.0,
+                  0.06723047089976741
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000
+              }
+            ],
+            "records_sha256": "8a711cc5aa28645cd1248ecf44e0745d04db6e4761b110790f2cf03245557e52"
+          }
+        },
+        "strength_improvement_proven": false
+      }
+    },
+    "findings/native-loss-lower-screen-v1/summary.json": {
+      "sha256": "ced4cd4c1ea7e2ad0c334af92a7f17598a0916913b77b6e155b146b6ac508358",
+      "data": {
+        "roots": 70,
+        "games": 70,
+        "runs": 15614228,
+        "stops": {
+          "AtMostThreshold": 4,
+          "WorkExhausted": 47,
+          "NodeBudget": 19
+        },
+        "value_width_at_most_002": {
+          "roots": 4,
+          "games": 4,
+          "keys": [
+            [
+              1,
+              37
+            ],
+            [
+              7,
+              21
+            ],
+            [
+              32,
+              38
+            ],
+            [
+              161,
+              15
+            ]
+          ]
+        },
+        "selected_pure_loss_at_most_002": {
+          "roots": 4,
+          "games": 4,
+          "keys": [
+            [
+              1,
+              37
+            ],
+            [
+              7,
+              21
+            ],
+            [
+              32,
+              38
+            ],
+            [
+              161,
+              15
+            ]
+          ]
+        },
+        "selected_pure_loss_above_002": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "selected_strictly_dominated": {
+          "roots": 0,
+          "games": 0,
+          "keys": []
+        },
+        "unresolved_selected_pure_loss": {
+          "roots": 66,
+          "games": 66,
+          "keys": [
+            [
+              0,
+              18
+            ],
+            [
+              3,
+              97
+            ],
+            [
+              4,
+              60
+            ],
+            [
+              10,
+              32
+            ],
+            [
+              13,
+              41
+            ],
+            [
+              16,
+              18
+            ],
+            [
+              19,
+              17
+            ],
+            [
+              22,
+              38
+            ],
+            [
+              26,
+              26
+            ],
+            [
+              27,
+              57
+            ],
+            [
+              28,
+              72
+            ],
+            [
+              29,
+              57
+            ],
+            [
+              33,
+              53
+            ],
+            [
+              34,
+              18
+            ],
+            [
+              37,
+              21
+            ],
+            [
+              39,
+              25
+            ],
+            [
+              51,
+              33
+            ],
+            [
+              52,
+              54
+            ],
+            [
+              53,
+              29
+            ],
+            [
+              56,
+              20
+            ],
+            [
+              57,
+              21
+            ],
+            [
+              59,
+              27
+            ],
+            [
+              62,
+              36
+            ],
+            [
+              73,
+              41
+            ],
+            [
+              75,
+              31
+            ],
+            [
+              76,
+              26
+            ],
+            [
+              77,
+              33
+            ],
+            [
+              80,
+              28
+            ],
+            [
+              81,
+              29
+            ],
+            [
+              83,
+              27
+            ],
+            [
+              84,
+              40
+            ],
+            [
+              85,
+              41
+            ],
+            [
+              87,
+              49
+            ],
+            [
+              92,
+              54
+            ],
+            [
+              94,
+              22
+            ],
+            [
+              101,
+              45
+            ],
+            [
+              104,
+              52
+            ],
+            [
+              105,
+              33
+            ],
+            [
+              110,
+              32
+            ],
+            [
+              113,
+              37
+            ],
+            [
+              115,
+              29
+            ],
+            [
+              117,
+              23
+            ],
+            [
+              118,
+              32
+            ],
+            [
+              119,
+              27
+            ],
+            [
+              122,
+              68
+            ],
+            [
+              128,
+              22
+            ],
+            [
+              131,
+              39
+            ],
+            [
+              136,
+              54
+            ],
+            [
+              141,
+              27
+            ],
+            [
+              143,
+              37
+            ],
+            [
+              144,
+              86
+            ],
+            [
+              147,
+              15
+            ],
+            [
+              149,
+              33
+            ],
+            [
+              151,
+              33
+            ],
+            [
+              153,
+              15
+            ],
+            [
+              158,
+              16
+            ],
+            [
+              162,
+              38
+            ],
+            [
+              165,
+              25
+            ],
+            [
+              166,
+              22
+            ],
+            [
+              169,
+              19
+            ],
+            [
+              170,
+              32
+            ],
+            [
+              173,
+              37
+            ],
+            [
+              176,
+              68
+            ],
+            [
+              179,
+              29
+            ],
+            [
+              181,
+              97
+            ],
+            [
+              191,
+              31
+            ]
+          ]
+        },
+        "max_nodes_plus_closed": 51632,
+        "max_runs": 250000,
+        "schema": "nc2000-native-loss-lower-screen-v1",
+        "protocol_sha256": "5a277a40e8688181d2433f68c4b0a2cae4a731dcab0936d4b653dff460304e77",
+        "records_sha256": "3b69a8ffa4f27a9d002d34bf137474b8614b84eaacbf388791ef1ebbfe6019ea",
+        "six_pilot_repeats_identical_except_time": true,
+        "all_intervals_overlap_prior": true,
+        "rejected_mutations": [
+          "missing_root",
+          "wrong_target",
+          "false_above_threshold",
+          "inflated_loss"
+        ],
+        "new_small_loss_keys": [
+          [
+            32,
+            38
+          ],
+          [
+            161,
+            15
+          ]
+        ],
+        "combined_small_loss_roots": 41,
+        "combined_small_loss_games": 39,
+        "combined_unresolved_roots": 319,
+        "nonzero_actual_loss_lower_roots": 0,
+        "slowest_root": {
+          "game": 117,
+          "frame": 23,
+          "elapsed_ms": 138619.783667,
+          "runs": 250000,
+          "nodes": 3023
+        },
+        "ordinary_bot_changed": false,
+        "blind_policy_error_proven": false,
+        "strength_improvement_proven": false
+      }
     }
   },
   "foresight_fix": {
@@ -40355,7 +41222,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-07T19:10:34.489889+09:00",
+    "checked_at": "2026-10-07T19:36:45.990844+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -40390,7 +41257,8 @@
       "native-endgame-bounds-v1",
       "native-endgame-refine-v1"
     ],
-    "followup_quotient": "native-endgame-quotient-v1"
+    "followup_quotient": "native-endgame-quotient-v1",
+    "followup_loss_lower": "native-loss-lower-screen-v1"
   },
   "native_endgame_census": {
     "status": "complete",
@@ -40404,12 +41272,13 @@
     "status": "complete",
     "roots": 360,
     "refined_roots": 70,
-    "small_fixed_world_pure_loss_roots": 39,
-    "unresolved_roots": 321,
+    "small_fixed_world_pure_loss_roots": 41,
+    "unresolved_roots": 319,
     "new_blind_policy_error_proven": false,
     "strength_improvement_proven": false,
-    "next": "Distinguish refinement for certifying near-optimal actions from refinement for proving a positive action-loss lower bound.",
-    "quotient_confirmation_roots": 64
+    "next": "Branch replay-verified histories through alternative legal opponent actions while preserving the observer/belief lifecycle.",
+    "quotient_confirmation_roots": 64,
+    "loss_lower_screen_roots": 70
   },
   "native_endgame_quotient": {
     "status": "complete",
@@ -40419,6 +41288,15 @@
     "upper_unchanged": 21,
     "new_small_loss_in_confirmation": 0,
     "new_small_loss_in_diagnostics": 1,
+    "ordinary_bot_changed": false,
+    "strength_improvement_proven": false
+  },
+  "native_loss_lower": {
+    "status": "complete",
+    "roots": 70,
+    "above_threshold": 0,
+    "at_most_threshold": 4,
+    "new_small_loss_roots": 2,
     "ordinary_bot_changed": false,
     "strength_improvement_proven": false
   }
