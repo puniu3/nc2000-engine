@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+from fractions import Fraction as F
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import re
+import runpy
+import subprocess
+import zipfile
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/hidden-move-family-v1'
+previous='findings/hidden-move-witness-v1/records.json.gz'
+corpus='findings/policy-gap-v1/corpus.jsonl.gz'
+ledger_check=runpy.run_path(str(root/'tools/policy-witness-probe'))['verify']
+policy_check=runpy.run_path(str(root/'tools/hidden-move-witness-probe'))['check_policy']
+
+
+def plan():
+    flat=json.loads((root/'data/learnsets-gen2.json').read_bytes())['species']['zapdos']['moves']
+    with zipfile.ZipFile(root/'pokemon-showdown.zip') as z:
+        s=z.read('pokemon-showdown/data/mods/gen2/learnsets.ts').decode();i=s.index('\n\tzapdos:');block=s[i:s.index('\n\t},',i)]
+    sources={m:json.loads(a) for m,a in re.findall(r'^\t\t\t(\w+): (\[[^\n]+\])',block,re.M)}
+    allowed={m:sources[m] for m in flat if m not in ['hiddenpower','thunderbolt','sleeptalk']}
+    assert len(allowed)==39
+    assert all(any(x in ['1M','2M','2T'] or (x.startswith('2L') and int(x[2:])<=50) for x in ss) for ss in allowed.values())
+    return {'zapdos':allowed}
+
+
+def verify(census,result,old):
+    allowed=plan()['zapdos']
+    cases=[r for r in census['rows'] if (r['game'],r['decision'],r['side'],r['move_slot'])==(6,32,1,2)]
+    assert len(cases)==38 and {r['replacement'] for r in cases}==set(allowed)-{'rest'}
+    assert len(result['rows'])==38 and [r['case'] for r in result['rows']]==cases
+    base=old['scheduled'];reports=[];worlds=[];raw={}
+    for out in [dict(case=None,ledgers=[r for r in base['ledgers'] if r['variant']==0])]+result['rows']:
+        case=out['case'];name=case['replacement'] if case else 'rest'
+        if case:
+            assert all(case[k]==base['case'][k] for k in ['game','decision','side','key','foe_slot','species','move_slot','original_move','prefix_checks','log_hash','observer_hash','turn','actions','original_replies','hp'])
+            assert case['sources']==allowed[name]
+            assert out['prefix_checks']==33 and out['states'][0]==base['states'][0]
+            assert case['alternate_key']!=case['key']
+        assert [r['first'] for r in out['ledgers']]==['rockslide','swordsdance','sleeptalk']
+        ledgers={r['first']:r['ledger'] for r in out['ledgers']};raw[name]=ledgers
+        for first,l in ledgers.items():
+            cfg=l['config'];side=0 if first=='sleeptalk' else 1
+            assert cfg['game']==6 and cfg['decision']==32 and cfg['policy_side']==cfg['target_side']==side
+            assert cfg['first_choice']=='move '+first and cfg['priority']==['move hiddenpowerice' if first=='sleeptalk' else 'move rockslide']
+            assert cfg['horizon']==3 and cfg['work_budget']==200000 and cfg['cell_cap']==10000
+            assert cfg['guarded_keys'] and cfg['support_certificate'] and cfg['rest_at_percent'] is None
+            assert cfg.get('opening',[])==(['move sleeptalk','move sleeptalk','move hiddenpowerice'] if first=='sleeptalk' else [])
+            key=case['alternate_key'] if case else base['case']['key']
+            assert l['nodes'][l['root']]['state_key']==key
+            reports.append(dict(move=name,first=first,**ledger_check(l)));policy_check(l)
+        counter=ledgers['sleeptalk'];upper={b['choices'][1]:1-F(b['bounds'][0]) for b in counter['nodes'][counter['root']]['branches']}
+        lower={'move '+a:F(ledgers[a]['bounds'][0]) for a in ['rockslide','swordsdance']}
+        lo=max(lower.values());hi=1-F(counter['bounds'][0]);assert lo<=hi
+        best=max(lower,key=lower.get)
+        selected_loss=max(F(0),lo-upper['move swordsdance']-F(1,10**8))
+        switch_loss=max(F(0),lo-upper['move rockslide']-F(1,10**8))
+        worlds.append(dict(move=name,lower={k:float(v) for k,v in lower.items()},upper={k:float(v) for k,v in upper.items()},
+            game_bounds=[float(lo),float(hi)],certified_best=best if lower[best]>max(v for k,v in upper.items() if k!=best)+F(1,10**8) else None,
+            normal_choice_loss_lower=float(selected_loss),rockslide_choice_loss_lower=float(switch_loss)))
+    assert raw['hyperbeam']=={r['first']:r['ledger'] for r in base['ledgers'] if r['variant']==1}
+    lower=min(F(w['lower']['move rockslide']) for w in worlds)
+    upper=min(F(w['game_bounds'][1]) for w in worlds)
+    assert 0<=upper-lower<F(1,10**8)
+    old_lower=min(F(w['lower']['move swordsdance']) for w in worlds)
+    old_upper=min(F(w['upper']['move swordsdance']) for w in worlds)
+    assert 0<=old_upper-old_lower<F(1,10**8)
+    reflect=next(w for w in worlds if w['move']=='reflect');rest=next(w for w in worlds if w['move']=='rest')
+    assert reflect['normal_choice_loss_lower']>.09 and rest['rockslide_choice_loss_lower']>0
+    return dict(worlds=39,new_same_history_replays=38,certificates=len(reports),new_engine_runs=sum(r['runs'] for r in reports if r['move']!='rest'),
+        archived_rest_certificates=3,hyperbeam_certificate_identities=3,
+        robust_rockslide_bounds=[float(lower),float(upper)],robust_swordsdance_bounds=[float(old_lower),float(old_upper)],
+        robust_first_choice_gain_lower=float(lower-old_upper-F(1,10**8)),
+        solved_worlds=sum(w['game_bounds'][1]-w['game_bounds'][0]<1e-8 for w in worlds),
+        normal_choice_inferior_worlds=sum(w['normal_choice_loss_lower']>0 for w in worlds),
+        rockslide_choice_inferior_worlds=sum(w['rockslide_choice_loss_lower']>0 for w in worlds),
+        reflect_normal_choice_loss_lower=reflect['normal_choice_loss_lower'],rest_switch_loss_lower=rest['rockslide_choice_loss_lower'],
+        rows=worlds,reports=reports,production_changed=False,strength_demonstrated=False,
+        scope='A fixed replayed Zapdos/Marowak endgame with three revealed Zapdos moves and one occupied unknown slot. '
+              'Enumerate all 39 remaining move names from the native format learnset at level 50, excluding duplicate '
+              'Thunderbolt, Sleep Talk and Hidden Power. Sources include Generation 1/2 machines and level moves; the '
+              'three retained moves are machine/tutor moves and introduce no egg/event compatibility dependency. Native '
+              'team validation and every public-prefix/own-action check are performed by the unchanged census harness; '
+              'the certificate harness separately replays all 38 alternatives and checks logs and observers. Stats, '
+              'items, occupied move count, current sleep duration and all other state are fixed; the full game information '
+              'set is not covered. One common Rock Slide priority supplies the family lower bound. A fixed precommitted '
+              'Sleep Talk/Sleep Talk/Hidden Power Ice opponent sequence in the limiting world supplies an upper bound '
+              'against all own first actions and adaptive later replies. Fixed policies depend only on decision count '
+              'and legal actions. Partial enumeration and horizon leaves keep [0,1] bounds. Ledger arithmetic and every '
+              'policy action are checked independently. Rest certificates are reused without rewriting their historical '
+              'hashes; Hyper Beam certificates reproduce exactly. These are conditional security values, not a prior-weighted '
+              'win rate. Positive per-world losses are initial-action certificates assuming optimal subsequent play. '
+              'Changing the initial action is not a uniform improvement: it provably sacrifices value in some worlds. '
+              'No production change, human calibration, wall-time speed claim or deployed-bot superiority claim.')
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--plan',type=Path);parser.add_argument('--record',nargs=2,type=Path);args=parser.parse_args()
+    if args.plan:args.plan.write_text(json.dumps(plan(),sort_keys=True)+'\n');return
+    old=json.loads(gzip.decompress((root/previous).read_bytes()))
+    if args.record:
+        assert not archive.exists()
+        census,result=[json.loads(p.read_bytes()) for p in args.record];summary=verify(census,result,old)
+        paths=subprocess.check_output(['git','ls-files','crates/engine','crates/bot/src','crates/conformance/src','Cargo.toml','Cargo.lock'],cwd=root,text=True).splitlines()
+        paths+=['crates/bot/examples/policy_witness.rs','crates/bot/examples/hidden_terminal.rs','crates/bot/examples/hidden_move_family.rs','crates/bot/examples/hidden_move_census.rs','tools/hidden-move-family-probe','tools/policy-witness-probe','tools/hidden-move-witness-probe',previous,corpus,'data/gen2stadium2.json','data/learnsets-gen2.json','pokemon-showdown.zip']
+        bundle=dict(census=census,result=result,hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
+        archive.mkdir();(archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    b=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()))
+    assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==h for p,h in b['hashes'].items())
+    summary=verify(b['census'],b['result'],old);assert summary==json.loads((archive/'summary.json').read_bytes())
+    for fault in ['missing_world','source','policy','bound']:
+        c=copy.deepcopy(b['census']);r=copy.deepcopy(b['result'])
+        if fault=='missing_world':r['rows'].pop()
+        elif fault=='source':r['rows'][0]['case']['sources']=['2E']
+        else:
+            l=r['rows'][0]['ledgers'][2]['ledger'];n=next(n for n in l['nodes'] if n['kind']=='decision' and n['depth']==1)
+            if fault=='policy':n['selected'][0]=['move hiddenpowerice']
+            else:n['bounds'][0]=.01
+        try:verify(c,r,old)
+        except AssertionError:pass
+        else:raise AssertionError(f'Accepted corruption: {fault}')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['scope','rows','reports']},indent=2))
+
+
+if __name__=='__main__':main()

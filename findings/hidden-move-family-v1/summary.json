@@ -1,0 +1,2652 @@
+{
+  "worlds": 39,
+  "new_same_history_replays": 38,
+  "certificates": 117,
+  "new_engine_runs": 4189538,
+  "archived_rest_certificates": 3,
+  "hyperbeam_certificate_identities": 3,
+  "robust_rockslide_bounds": [
+    0.10264396669785156,
+    0.10264396682567456
+  ],
+  "robust_swordsdance_bounds": [
+    0.09939236119101078,
+    0.09939236121505779
+  ],
+  "robust_first_choice_gain_lower": 0.003251595482793768,
+  "solved_worlds": 31,
+  "normal_choice_inferior_worlds": 7,
+  "rockslide_choice_inferior_worlds": 28,
+  "reflect_normal_choice_loss_lower": 0.09898893346180529,
+  "rest_switch_loss_lower": 0.00461047534494235,
+  "rows": [
+    {
+      "move": "rest",
+      "lower": {
+        "move rockslide": 0.26726353851557677,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3929589591760685,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.24608704871238707
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.00461047534494235
+    },
+    {
+      "move": "agility",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    },
+    {
+      "move": "bide",
+      "lower": {
+        "move rockslide": 0.21697187417370034,
+        "move swordsdance": 0.22363281249
+      },
+      "upper": {
+        "move earthquake": 0.013977050816693981,
+        "move rockslide": 0.21697187430060882,
+        "move swordsdance": 0.22363281251010547,
+        "move hiddenpowerflying": 0.0268479297136478
+      },
+      "game_bounds": [
+        0.22363281249,
+        0.22363281251010547
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.006660928189391175
+    },
+    {
+      "move": "curse",
+      "lower": {
+        "move rockslide": 0.40580605444234247,
+        "move swordsdance": 0.41640523762956166
+      },
+      "upper": {
+        "move earthquake": 0.09273503944444739,
+        "move rockslide": 0.4195109494235345,
+        "move swordsdance": 0.4375724060410646,
+        "move hiddenpowerflying": 0.23024567695001563
+      },
+      "game_bounds": [
+        0.41640523762956166,
+        0.4375724060410646
+      ],
+      "certified_best": null,
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "detect",
+      "lower": {
+        "move rockslide": 0.11197418094706789,
+        "move swordsdance": 0.2486757898218747
+      },
+      "upper": {
+        "move earthquake": 0.015542236935124354,
+        "move rockslide": 0.11197418115742075,
+        "move swordsdance": 0.24867578986132444,
+        "move hiddenpowerflying": 0.021262627580992954
+      },
+      "game_bounds": [
+        0.2486757898218747,
+        0.24867578986132444
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.13670159866445394
+    },
+    {
+      "move": "doubleedge",
+      "lower": {
+        "move rockslide": 0.10264396669785156,
+        "move swordsdance": 0.09939236119234413
+      },
+      "upper": {
+        "move earthquake": 0.006212022603316214,
+        "move rockslide": 0.10264396682567456,
+        "move swordsdance": 0.09939236121505779,
+        "move hiddenpowerflying": 0.011932413249184814
+      },
+      "game_bounds": [
+        0.10264396669785156,
+        0.10264396682567456
+      ],
+      "certified_best": "move rockslide",
+      "normal_choice_loss_lower": 0.003251595482793768,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "doubleteam",
+      "lower": {
+        "move rockslide": 0.2657784355607755,
+        "move swordsdance": 0.3072916667501048
+      },
+      "upper": {
+        "move earthquake": 0.019205729255915793,
+        "move rockslide": 0.26577843582533456,
+        "move swordsdance": 0.3072916667826533,
+        "move hiddenpowerflying": 0.034937974429033014
+      },
+      "game_bounds": [
+        0.3072916667501048,
+        0.3072916667826533
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.041513220924770215
+    },
+    {
+      "move": "drillpeck",
+      "lower": {
+        "move rockslide": 0.10264396669785156,
+        "move swordsdance": 0.09939236119234413
+      },
+      "upper": {
+        "move earthquake": 0.006212022603316214,
+        "move rockslide": 0.10264396682567456,
+        "move swordsdance": 0.09939236121505779,
+        "move hiddenpowerflying": 0.011932413249184814
+      },
+      "game_bounds": [
+        0.10264396669785156,
+        0.10264396682567456
+      ],
+      "certified_best": "move rockslide",
+      "normal_choice_loss_lower": 0.003251595482793768,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "endure",
+      "lower": {
+        "move rockslide": 0.23716670463230743,
+        "move swordsdance": 0.24867578981654137
+      },
+      "upper": {
+        "move earthquake": 0.015542237004458004,
+        "move rockslide": 0.23815075105381311,
+        "move swordsdance": 0.24867578986665761,
+        "move hiddenpowerflying": 0.029854430076290628
+      },
+      "game_bounds": [
+        0.24867578981654137,
+        0.24867578986665761
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.010525028762728256
+    },
+    {
+      "move": "flash",
+      "lower": {
+        "move rockslide": 0.29605506169319773,
+        "move swordsdance": 0.3325913747928746
+      },
+      "upper": {
+        "move earthquake": 0.02078696104620692,
+        "move rockslide": 0.29605506207619225,
+        "move swordsdance": 0.3325913748346552,
+        "move hiddenpowerflying": 0.03852481902751548
+      },
+      "game_bounds": [
+        0.3325913747928746,
+        0.3325913748346552
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.03653630271668234
+    },
+    {
+      "move": "fly",
+      "lower": {
+        "move rockslide": 0.21697187417370034,
+        "move swordsdance": 0.22363281249
+      },
+      "upper": {
+        "move earthquake": 0.013977050816693981,
+        "move rockslide": 0.21697187430060882,
+        "move swordsdance": 0.22363281251010547,
+        "move hiddenpowerflying": 0.0268479297136478
+      },
+      "game_bounds": [
+        0.22363281249,
+        0.22363281251010547
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.006660928189391175
+    },
+    {
+      "move": "frustration",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    },
+    {
+      "move": "hyperbeam",
+      "lower": {
+        "move rockslide": 0.1232643806710551,
+        "move swordsdance": 0.1214635439206989
+      },
+      "upper": {
+        "move earthquake": 0.007591471547775175,
+        "move rockslide": 0.12326438091251546,
+        "move swordsdance": 0.12146354395107395,
+        "move hiddenpowerflying": 0.014582138786355614
+      },
+      "game_bounds": [
+        0.1232643806710551,
+        0.12326438091251546
+      ],
+      "certified_best": "move rockslide",
+      "normal_choice_loss_lower": 0.0018008267199811443,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "mimic",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    },
+    {
+      "move": "mudslap",
+      "lower": {
+        "move rockslide": 0.17939232215122775,
+        "move swordsdance": 0.3076037831004273
+      },
+      "upper": {
+        "move earthquake": 0.01922523701693646,
+        "move rockslide": 0.49618702969271833,
+        "move swordsdance": 1.0,
+        "move hiddenpowerflying": 1.0
+      },
+      "game_bounds": [
+        0.3076037831004273,
+        1.0
+      ],
+      "certified_best": null,
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "peck",
+      "lower": {
+        "move rockslide": 0.2776300904859966,
+        "move swordsdance": 0.28575303830060966
+      },
+      "upper": {
+        "move earthquake": 0.017859565039960335,
+        "move rockslide": 0.27763009118029314,
+        "move swordsdance": 0.2857530383603275,
+        "move hiddenpowerflying": 0.03430568824785196
+      },
+      "game_bounds": [
+        0.28575303830060966,
+        0.2857530383603275
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.008122937120316526
+    },
+    {
+      "move": "protect",
+      "lower": {
+        "move rockslide": 0.11197418094706789,
+        "move swordsdance": 0.2486757898218747
+      },
+      "upper": {
+        "move earthquake": 0.015542236935124354,
+        "move rockslide": 0.11197418115742075,
+        "move swordsdance": 0.24867578986132444,
+        "move hiddenpowerflying": 0.021262627580992954
+      },
+      "game_bounds": [
+        0.2486757898218747,
+        0.24867578986132444
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.13670159866445394
+    },
+    {
+      "move": "rage",
+      "lower": {
+        "move rockslide": 0.37301431170319305,
+        "move swordsdance": 0.3975694444930109
+      },
+      "upper": {
+        "move earthquake": 0.024848090590573912,
+        "move rockslide": 0.37301431266168317,
+        "move swordsdance": 0.39756944458119814,
+        "move hiddenpowerflying": 0.6580506177496945
+      },
+      "game_bounds": [
+        0.3975694444930109,
+        0.6580506177496945
+      ],
+      "certified_best": null,
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.024555121831327735
+    },
+    {
+      "move": "raindance",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    },
+    {
+      "move": "razorwind",
+      "lower": {
+        "move rockslide": 0.21697187417370034,
+        "move swordsdance": 0.22363281249
+      },
+      "upper": {
+        "move earthquake": 0.013977050816693981,
+        "move rockslide": 0.21697187430060882,
+        "move swordsdance": 0.22363281251010547,
+        "move hiddenpowerflying": 0.0268479297136478
+      },
+      "game_bounds": [
+        0.22363281249,
+        0.22363281251010547
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.006660928189391175
+    },
+    {
+      "move": "reflect",
+      "lower": {
+        "move rockslide": 0.21701737243812178,
+        "move swordsdance": 0.11802842884901078
+      },
+      "upper": {
+        "move earthquake": 0.024848090342574736,
+        "move rockslide": 0.21701737266285914,
+        "move swordsdance": 0.11802842897631649,
+        "move hiddenpowerflying": 0.030568481018443228
+      },
+      "game_bounds": [
+        0.21701737243812178,
+        0.21701737266285914
+      ],
+      "certified_best": "move rockslide",
+      "normal_choice_loss_lower": 0.09898893346180529,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "return",
+      "lower": {
+        "move rockslide": 0.12507808511664795,
+        "move swordsdance": 0.12328475569715766
+      },
+      "upper": {
+        "move earthquake": 0.0077052972850648604,
+        "move rockslide": 0.12507808536288345,
+        "move swordsdance": 0.1232847557326836,
+        "move hiddenpowerflying": 0.014800781862160717
+      },
+      "game_bounds": [
+        0.12507808511664795,
+        0.12507808536288345
+      ],
+      "certified_best": "move rockslide",
+      "normal_choice_loss_lower": 0.0017933193839643428,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "roar",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    },
+    {
+      "move": "rocksmash",
+      "lower": {
+        "move rockslide": 0.20528793260676603,
+        "move swordsdance": 0.3973982363721399
+      },
+      "upper": {
+        "move earthquake": 0.024837390359369826,
+        "move rockslide": 0.5185130771719222,
+        "move swordsdance": 1.0,
+        "move hiddenpowerflying": 1.0
+      },
+      "game_bounds": [
+        0.3973982363721399,
+        1.0
+      ],
+      "certified_best": null,
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "sandstorm",
+      "lower": {
+        "move rockslide": 0.3874151767319637,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.09174679490759607,
+        "move rockslide": 0.4000146818934346,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.285700199358106
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.4000146818934346
+      ],
+      "certified_best": null,
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "skyattack",
+      "lower": {
+        "move rockslide": 0.21697187417370034,
+        "move swordsdance": 0.22363281249
+      },
+      "upper": {
+        "move earthquake": 0.013977050816693981,
+        "move rockslide": 0.21697187430060882,
+        "move swordsdance": 0.22363281251010547,
+        "move hiddenpowerflying": 0.0268479297136478
+      },
+      "game_bounds": [
+        0.22363281249,
+        0.22363281251010547
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.006660928189391175
+    },
+    {
+      "move": "snore",
+      "lower": {
+        "move rockslide": 0.17369966156024014,
+        "move swordsdance": 0.28085140560761146
+      },
+      "upper": {
+        "move earthquake": 0.020630785505134863,
+        "move rockslide": 0.2733703640988421,
+        "move swordsdance": 0.2853344963198261,
+        "move hiddenpowerflying": 0.35166552554095143
+      },
+      "game_bounds": [
+        0.28085140560761146,
+        0.35166552554095143
+      ],
+      "certified_best": null,
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.007481031508769382
+    },
+    {
+      "move": "steelwing",
+      "lower": {
+        "move rockslide": 0.2555049697852781,
+        "move swordsdance": 0.29363794939635657
+      },
+      "upper": {
+        "move earthquake": 0.01910945081478821,
+        "move rockslide": 0.28957645792766906,
+        "move swordsdance": 0.29363794967975876,
+        "move hiddenpowerflying": 0.6404986047500658
+      },
+      "game_bounds": [
+        0.29363794939635657,
+        0.6404986047500658
+      ],
+      "certified_best": null,
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.004061481468687506
+    },
+    {
+      "move": "substitute",
+      "lower": {
+        "move rockslide": 0.1723182955384733,
+        "move swordsdance": 0.09939236119101078
+      },
+      "upper": {
+        "move earthquake": 0.006212022617982815,
+        "move rockslide": 0.17231829570611157,
+        "move swordsdance": 0.09939236122305783,
+        "move hiddenpowerflying": 0.014560576666550529
+      },
+      "game_bounds": [
+        0.1723182955384733,
+        0.17231829570611157
+      ],
+      "certified_best": "move rockslide",
+      "normal_choice_loss_lower": 0.07292592431541547,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "sunnyday",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    },
+    {
+      "move": "swagger",
+      "lower": {
+        "move rockslide": 0.30507440839167926,
+        "move swordsdance": 0.226175404321363
+      },
+      "upper": {
+        "move earthquake": 0.11230333198719566,
+        "move rockslide": 0.3088853382655786,
+        "move swordsdance": 0.22617540439049466,
+        "move hiddenpowerflying": 0.11946579656647338
+      },
+      "game_bounds": [
+        0.30507440839167926,
+        0.3088853382655786
+      ],
+      "certified_best": "move rockslide",
+      "normal_choice_loss_lower": 0.07889899400118461,
+      "rockslide_choice_loss_lower": 0.0
+    },
+    {
+      "move": "swift",
+      "lower": {
+        "move rockslide": 0.277630090485996,
+        "move swordsdance": 0.28575303830060955
+      },
+      "upper": {
+        "move earthquake": 0.017859565039960446,
+        "move rockslide": 0.2776300911802926,
+        "move swordsdance": 0.2857530383603275,
+        "move hiddenpowerflying": 0.03430568824785174
+      },
+      "game_bounds": [
+        0.28575303830060955,
+        0.2857530383603275
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.00812293712031697
+    },
+    {
+      "move": "takedown",
+      "lower": {
+        "move rockslide": 0.2677241740117906,
+        "move swordsdance": 0.2773953667064522
+      },
+      "upper": {
+        "move earthquake": 0.01733721061282456,
+        "move rockslide": 0.2677241748312512,
+        "move swordsdance": 0.2773953667814305,
+        "move hiddenpowerflying": 0.03875945973211403
+      },
+      "game_bounds": [
+        0.2773953667064522,
+        0.2773953667814305
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.00967118187520099
+    },
+    {
+      "move": "thunder",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    },
+    {
+      "move": "thundershock",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    },
+    {
+      "move": "thunderwave",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    },
+    {
+      "move": "toxic",
+      "lower": {
+        "move rockslide": 0.3733037311252766,
+        "move swordsdance": 0.39756944451280246
+      },
+      "upper": {
+        "move earthquake": 0.024848090426334846,
+        "move rockslide": 0.3733037316053177,
+        "move swordsdance": 0.3975694445614064,
+        "move hiddenpowerflying": 0.04772965299072773
+      },
+      "game_bounds": [
+        0.39756944451280246,
+        0.3975694445614064
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.024265702907484747
+    },
+    {
+      "move": "whirlwind",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    },
+    {
+      "move": "zapcannon",
+      "lower": {
+        "move rockslide": 0.3733037312406866,
+        "move swordsdance": 0.39756944452101084
+      },
+      "upper": {
+        "move earthquake": 0.02484809036657476,
+        "move rockslide": 0.3733037314899078,
+        "move swordsdance": 0.3975694445531983,
+        "move hiddenpowerflying": 0.047729652862067096
+      },
+      "game_bounds": [
+        0.39756944452101084,
+        0.3975694445531983
+      ],
+      "certified_best": "move swordsdance",
+      "normal_choice_loss_lower": 0.0,
+      "rockslide_choice_loss_lower": 0.02426570303110303
+    }
+  ],
+  "reports": [
+    {
+      "move": "rest",
+      "first": "rockslide",
+      "runs": 116106,
+      "nodes": 1681,
+      "bounds": [
+        0.26726353851557677,
+        0.3343117637100974
+      ],
+      "node_kinds": {
+        "terminal": 248,
+        "horizon": 995,
+        "decision": 438
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "rest",
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 39,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "rest",
+      "first": "sleeptalk",
+      "runs": 27876,
+      "nodes": 1784,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 317,
+        "decision": 707,
+        "horizon": 760
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "agility",
+      "first": "rockslide",
+      "runs": 16390,
+      "nodes": 2245,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 339,
+        "horizon": 1368,
+        "decision": 538
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "agility",
+      "first": "swordsdance",
+      "runs": 314,
+      "nodes": 56,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 25,
+        "horizon": 18,
+        "decision": 13
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "agility",
+      "first": "sleeptalk",
+      "runs": 35300,
+      "nodes": 2737,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 1098,
+        "decision": 1639
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "bide",
+      "first": "rockslide",
+      "runs": 9740,
+      "nodes": 1352,
+      "bounds": [
+        0.21697187417370034,
+        0.21697187430060882
+      ],
+      "node_kinds": {
+        "terminal": 183,
+        "horizon": 912,
+        "decision": 257
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "bide",
+      "first": "swordsdance",
+      "runs": 180,
+      "nodes": 38,
+      "bounds": [
+        0.22363281249,
+        0.22363281251010544
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 12,
+        "decision": 7
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "bide",
+      "first": "sleeptalk",
+      "runs": 9261,
+      "nodes": 738,
+      "bounds": [
+        0.7763671874898945,
+        0.77636718751
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 434
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "curse",
+      "first": "rockslide",
+      "runs": 35128,
+      "nodes": 2504,
+      "bounds": [
+        0.40580605444234247,
+        0.40580605469874165
+      ],
+      "node_kinds": {
+        "terminal": 502,
+        "horizon": 1476,
+        "decision": 526
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "curse",
+      "first": "swordsdance",
+      "runs": 5280,
+      "nodes": 893,
+      "bounds": [
+        0.41640523762956166,
+        0.41640523779041005
+      ],
+      "node_kinds": {
+        "terminal": 192,
+        "horizon": 573,
+        "decision": 128
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "curse",
+      "first": "sleeptalk",
+      "runs": 134586,
+      "nodes": 5658,
+      "bounds": [
+        0.5624275939589354,
+        0.5624275941181781
+      ],
+      "node_kinds": {
+        "terminal": 3999,
+        "decision": 1659
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "detect",
+      "first": "rockslide",
+      "runs": 12272,
+      "nodes": 1860,
+      "bounds": [
+        0.11197418094706789,
+        0.11197418115742061
+      ],
+      "node_kinds": {
+        "terminal": 298,
+        "horizon": 1173,
+        "decision": 389
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "detect",
+      "first": "swordsdance",
+      "runs": 336,
+      "nodes": 70,
+      "bounds": [
+        0.2486757898218747,
+        0.2486757898613245
+      ],
+      "node_kinds": {
+        "terminal": 33,
+        "horizon": 23,
+        "decision": 14
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "detect",
+      "first": "sleeptalk",
+      "runs": 19885,
+      "nodes": 1683,
+      "bounds": [
+        0.7513242101386756,
+        0.7513242101781252
+      ],
+      "node_kinds": {
+        "terminal": 683,
+        "decision": 1000
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "doubleedge",
+      "first": "rockslide",
+      "runs": 7136,
+      "nodes": 1047,
+      "bounds": [
+        0.10264396669785156,
+        0.1026439668256744
+      ],
+      "node_kinds": {
+        "terminal": 334,
+        "horizon": 456,
+        "decision": 257
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "doubleedge",
+      "first": "swordsdance",
+      "runs": 160,
+      "nodes": 36,
+      "bounds": [
+        0.09939236119234413,
+        0.09939236121505768
+      ],
+      "node_kinds": {
+        "terminal": 23,
+        "horizon": 6,
+        "decision": 7
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "doubleedge",
+      "first": "sleeptalk",
+      "runs": 10029,
+      "nodes": 786,
+      "bounds": [
+        0.8973560331743254,
+        0.8973560333021483
+      ],
+      "node_kinds": {
+        "terminal": 352,
+        "decision": 434
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "doubleteam",
+      "first": "rockslide",
+      "runs": 16390,
+      "nodes": 2245,
+      "bounds": [
+        0.2657784355607755,
+        0.2657784358253358
+      ],
+      "node_kinds": {
+        "terminal": 339,
+        "horizon": 1368,
+        "decision": 538
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "doubleteam",
+      "first": "swordsdance",
+      "runs": 314,
+      "nodes": 56,
+      "bounds": [
+        0.3072916667501048,
+        0.30729166678265335
+      ],
+      "node_kinds": {
+        "terminal": 25,
+        "horizon": 18,
+        "decision": 13
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "doubleteam",
+      "first": "sleeptalk",
+      "runs": 39204,
+      "nodes": 3060,
+      "bounds": [
+        0.6927083332173467,
+        0.6927083332498953
+      ],
+      "node_kinds": {
+        "terminal": 1207,
+        "decision": 1853
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "drillpeck",
+      "first": "rockslide",
+      "runs": 7136,
+      "nodes": 1047,
+      "bounds": [
+        0.10264396669785156,
+        0.1026439668256744
+      ],
+      "node_kinds": {
+        "terminal": 334,
+        "horizon": 456,
+        "decision": 257
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "drillpeck",
+      "first": "swordsdance",
+      "runs": 160,
+      "nodes": 36,
+      "bounds": [
+        0.09939236119234413,
+        0.09939236121505768
+      ],
+      "node_kinds": {
+        "terminal": 23,
+        "horizon": 6,
+        "decision": 7
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "drillpeck",
+      "first": "sleeptalk",
+      "runs": 10029,
+      "nodes": 786,
+      "bounds": [
+        0.8973560331743254,
+        0.8973560333021483
+      ],
+      "node_kinds": {
+        "terminal": 352,
+        "decision": 434
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "endure",
+      "first": "rockslide",
+      "runs": 55940,
+      "nodes": 2661,
+      "bounds": [
+        0.23716670463230743,
+        0.2371667050155849
+      ],
+      "node_kinds": {
+        "terminal": 361,
+        "horizon": 1703,
+        "decision": 597
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "endure",
+      "first": "swordsdance",
+      "runs": 1294,
+      "nodes": 113,
+      "bounds": [
+        0.24867578981654137,
+        0.2486757898666578
+      ],
+      "node_kinds": {
+        "terminal": 45,
+        "horizon": 51,
+        "decision": 17
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "endure",
+      "first": "sleeptalk",
+      "runs": 49451,
+      "nodes": 3155,
+      "bounds": [
+        0.7513242101333424,
+        0.7513242101834586
+      ],
+      "node_kinds": {
+        "terminal": 1114,
+        "decision": 2041
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "flash",
+      "first": "rockslide",
+      "runs": 29300,
+      "nodes": 2884,
+      "bounds": [
+        0.29605506169319773,
+        0.2960550620761923
+      ],
+      "node_kinds": {
+        "terminal": 292,
+        "horizon": 1824,
+        "decision": 768
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "flash",
+      "first": "swordsdance",
+      "runs": 540,
+      "nodes": 79,
+      "bounds": [
+        0.3325913747928746,
+        0.33259137483465534
+      ],
+      "node_kinds": {
+        "terminal": 37,
+        "horizon": 24,
+        "decision": 18
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "flash",
+      "first": "sleeptalk",
+      "runs": 65123,
+      "nodes": 3443,
+      "bounds": [
+        0.6674086251653448,
+        0.6674086252071254
+      ],
+      "node_kinds": {
+        "terminal": 688,
+        "decision": 2755
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "fly",
+      "first": "rockslide",
+      "runs": 6924,
+      "nodes": 968,
+      "bounds": [
+        0.21697187417370034,
+        0.21697187430060882
+      ],
+      "node_kinds": {
+        "terminal": 177,
+        "horizon": 534,
+        "decision": 257
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "fly",
+      "first": "swordsdance",
+      "runs": 148,
+      "nodes": 32,
+      "bounds": [
+        0.22363281249,
+        0.22363281251010544
+      ],
+      "node_kinds": {
+        "terminal": 16,
+        "horizon": 9,
+        "decision": 7
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "fly",
+      "first": "sleeptalk",
+      "runs": 9261,
+      "nodes": 738,
+      "bounds": [
+        0.7763671874898945,
+        0.77636718751
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 434
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "frustration",
+      "first": "rockslide",
+      "runs": 13558,
+      "nodes": 1303,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 183,
+        "horizon": 684,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "frustration",
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 39,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "frustration",
+      "first": "sleeptalk",
+      "runs": 22948,
+      "nodes": 1171,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 867
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "hyperbeam",
+      "first": "rockslide",
+      "runs": 15302,
+      "nodes": 1460,
+      "bounds": [
+        0.1232643806710551,
+        0.12326438091251542
+      ],
+      "node_kinds": {
+        "terminal": 340,
+        "horizon": 684,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "hyperbeam",
+      "first": "swordsdance",
+      "runs": 314,
+      "nodes": 46,
+      "bounds": [
+        0.1214635439206989,
+        0.12146354395107395
+      ],
+      "node_kinds": {
+        "terminal": 26,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "hyperbeam",
+      "first": "sleeptalk",
+      "runs": 24468,
+      "nodes": 1219,
+      "bounds": [
+        0.8767356190874845,
+        0.8767356193289447
+      ],
+      "node_kinds": {
+        "terminal": 352,
+        "decision": 867
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "mimic",
+      "first": "rockslide",
+      "runs": 23678,
+      "nodes": 3895,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 279,
+        "horizon": 3180,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "mimic",
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 47,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 21,
+        "horizon": 15,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "mimic",
+      "first": "sleeptalk",
+      "runs": 22948,
+      "nodes": 1532,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 665,
+        "decision": 867
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "mudslap",
+      "first": "rockslide",
+      "runs": 200000,
+      "nodes": 16900,
+      "bounds": [
+        0.17939232215122775,
+        0.4963736089755614
+      ],
+      "node_kinds": {
+        "terminal": 671,
+        "horizon": 14180,
+        "decision": 1555,
+        "budget": 494
+      },
+      "partial_branches": 2
+    },
+    {
+      "move": "mudslap",
+      "first": "swordsdance",
+      "runs": 9926,
+      "nodes": 831,
+      "bounds": [
+        0.3076037831004273,
+        0.3076037832543081
+      ],
+      "node_kinds": {
+        "terminal": 398,
+        "horizon": 308,
+        "decision": 125
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "mudslap",
+      "first": "sleeptalk",
+      "runs": 200000,
+      "nodes": 10262,
+      "bounds": [
+        0.0,
+        0.8196385452986061
+      ],
+      "node_kinds": {
+        "terminal": 592,
+        "decision": 9339,
+        "budget": 331
+      },
+      "partial_branches": 4
+    },
+    {
+      "move": "peck",
+      "first": "rockslide",
+      "runs": 46452,
+      "nodes": 5108,
+      "bounds": [
+        0.2776300904859966,
+        0.27763009118029175
+      ],
+      "node_kinds": {
+        "terminal": 585,
+        "horizon": 3116,
+        "decision": 1407
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "peck",
+      "first": "swordsdance",
+      "runs": 896,
+      "nodes": 147,
+      "bounds": [
+        0.28575303830060966,
+        0.2857530383603277
+      ],
+      "node_kinds": {
+        "terminal": 74,
+        "horizon": 41,
+        "decision": 32
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "peck",
+      "first": "sleeptalk",
+      "runs": 101615,
+      "nodes": 5259,
+      "bounds": [
+        0.7142469616396725,
+        0.7142469616993903
+      ],
+      "node_kinds": {
+        "terminal": 730,
+        "decision": 4529
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "protect",
+      "first": "rockslide",
+      "runs": 12272,
+      "nodes": 1860,
+      "bounds": [
+        0.11197418094706789,
+        0.11197418115742061
+      ],
+      "node_kinds": {
+        "terminal": 298,
+        "horizon": 1173,
+        "decision": 389
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "protect",
+      "first": "swordsdance",
+      "runs": 336,
+      "nodes": 70,
+      "bounds": [
+        0.2486757898218747,
+        0.2486757898613245
+      ],
+      "node_kinds": {
+        "terminal": 33,
+        "horizon": 23,
+        "decision": 14
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "protect",
+      "first": "sleeptalk",
+      "runs": 19885,
+      "nodes": 1683,
+      "bounds": [
+        0.7513242101386756,
+        0.7513242101781252
+      ],
+      "node_kinds": {
+        "terminal": 683,
+        "decision": 1000
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "rage",
+      "first": "rockslide",
+      "runs": 168635,
+      "nodes": 15470,
+      "bounds": [
+        0.37301431170319305,
+        0.3730143126616847
+      ],
+      "node_kinds": {
+        "terminal": 921,
+        "horizon": 11839,
+        "decision": 2710
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "rage",
+      "first": "swordsdance",
+      "runs": 3128,
+      "nodes": 387,
+      "bounds": [
+        0.3975694444930109,
+        0.3975694445811983
+      ],
+      "node_kinds": {
+        "terminal": 188,
+        "horizon": 139,
+        "decision": 60
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "rage",
+      "first": "sleeptalk",
+      "runs": 200000,
+      "nodes": 10066,
+      "bounds": [
+        0.3419493822503054,
+        0.6024305555069892
+      ],
+      "node_kinds": {
+        "terminal": 1207,
+        "decision": 8701,
+        "budget": 158
+      },
+      "partial_branches": 6
+    },
+    {
+      "move": "raindance",
+      "first": "rockslide",
+      "runs": 16390,
+      "nodes": 2586,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 376,
+        "horizon": 1672,
+        "decision": 538
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "raindance",
+      "first": "swordsdance",
+      "runs": 314,
+      "nodes": 78,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 43,
+        "horizon": 22,
+        "decision": 13
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "raindance",
+      "first": "sleeptalk",
+      "runs": 35300,
+      "nodes": 2756,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 1117,
+        "decision": 1639
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "razorwind",
+      "first": "rockslide",
+      "runs": 7924,
+      "nodes": 1124,
+      "bounds": [
+        0.21697187417370034,
+        0.21697187430060882
+      ],
+      "node_kinds": {
+        "terminal": 183,
+        "horizon": 684,
+        "decision": 257
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "razorwind",
+      "first": "swordsdance",
+      "runs": 156,
+      "nodes": 35,
+      "bounds": [
+        0.22363281249,
+        0.22363281251010544
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 9,
+        "decision": 7
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "razorwind",
+      "first": "sleeptalk",
+      "runs": 9261,
+      "nodes": 738,
+      "bounds": [
+        0.7763671874898945,
+        0.77636718751
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 434
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "reflect",
+      "first": "rockslide",
+      "runs": 31576,
+      "nodes": 2883,
+      "bounds": [
+        0.21701737243812178,
+        0.21701737266285917
+      ],
+      "node_kinds": {
+        "terminal": 386,
+        "horizon": 1992,
+        "decision": 505
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "reflect",
+      "first": "swordsdance",
+      "runs": 5062,
+      "nodes": 1310,
+      "bounds": [
+        0.11802842884901078,
+        0.11802842897631642
+      ],
+      "node_kinds": {
+        "terminal": 148,
+        "horizon": 1029,
+        "decision": 133
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "reflect",
+      "first": "sleeptalk",
+      "runs": 33336,
+      "nodes": 2435,
+      "bounds": [
+        0.7829826273371409,
+        0.7829826275618789
+      ],
+      "node_kinds": {
+        "terminal": 893,
+        "decision": 1542
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "return",
+      "first": "rockslide",
+      "runs": 15873,
+      "nodes": 1984,
+      "bounds": [
+        0.12507808511664795,
+        0.12507808536288312
+      ],
+      "node_kinds": {
+        "terminal": 509,
+        "horizon": 988,
+        "decision": 487
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "return",
+      "first": "swordsdance",
+      "runs": 331,
+      "nodes": 63,
+      "bounds": [
+        0.12328475569715766,
+        0.12328475573268376
+      ],
+      "node_kinds": {
+        "terminal": 38,
+        "horizon": 13,
+        "decision": 12
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "return",
+      "first": "sleeptalk",
+      "runs": 28999,
+      "nodes": 1955,
+      "bounds": [
+        0.8749219146371165,
+        0.8749219148833521
+      ],
+      "node_kinds": {
+        "terminal": 702,
+        "decision": 1253
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "roar",
+      "first": "rockslide",
+      "runs": 13208,
+      "nodes": 1233,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 188,
+        "horizon": 609,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "roar",
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 41,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 21,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "roar",
+      "first": "sleeptalk",
+      "runs": 22948,
+      "nodes": 1171,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 867
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "rocksmash",
+      "first": "rockslide",
+      "runs": 200000,
+      "nodes": 17367,
+      "bounds": [
+        0.20528793260676603,
+        0.5201640042966198
+      ],
+      "node_kinds": {
+        "terminal": 728,
+        "horizon": 14590,
+        "decision": 1651,
+        "budget": 398
+      },
+      "partial_branches": 2
+    },
+    {
+      "move": "rocksmash",
+      "first": "swordsdance",
+      "runs": 8748,
+      "nodes": 797,
+      "bounds": [
+        0.3973982363721399,
+        0.39739823652764833
+      ],
+      "node_kinds": {
+        "terminal": 383,
+        "horizon": 291,
+        "decision": 123
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "rocksmash",
+      "first": "sleeptalk",
+      "runs": 200000,
+      "nodes": 10202,
+      "bounds": [
+        0.0,
+        0.7928526633392474
+      ],
+      "node_kinds": {
+        "terminal": 565,
+        "decision": 9320,
+        "budget": 317
+      },
+      "partial_branches": 9
+    },
+    {
+      "move": "sandstorm",
+      "first": "rockslide",
+      "runs": 14032,
+      "nodes": 1848,
+      "bounds": [
+        0.3874151767319637,
+        0.38741517697946104
+      ],
+      "node_kinds": {
+        "terminal": 380,
+        "horizon": 984,
+        "decision": 484
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "sandstorm",
+      "first": "swordsdance",
+      "runs": 314,
+      "nodes": 74,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 40,
+        "horizon": 21,
+        "decision": 13
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "sandstorm",
+      "first": "sleeptalk",
+      "runs": 29422,
+      "nodes": 2151,
+      "bounds": [
+        0.5999853181065654,
+        0.5999853183544137
+      ],
+      "node_kinds": {
+        "terminal": 786,
+        "decision": 1365
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "skyattack",
+      "first": "rockslide",
+      "runs": 7924,
+      "nodes": 1124,
+      "bounds": [
+        0.21697187417370034,
+        0.21697187430060882
+      ],
+      "node_kinds": {
+        "terminal": 183,
+        "horizon": 684,
+        "decision": 257
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "skyattack",
+      "first": "swordsdance",
+      "runs": 156,
+      "nodes": 35,
+      "bounds": [
+        0.22363281249,
+        0.22363281251010544
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 9,
+        "decision": 7
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "skyattack",
+      "first": "sleeptalk",
+      "runs": 9261,
+      "nodes": 738,
+      "bounds": [
+        0.7763671874898945,
+        0.77636718751
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 434
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "snore",
+      "first": "rockslide",
+      "runs": 200000,
+      "nodes": 29920,
+      "bounds": [
+        0.17369966156024014,
+        0.3235539822377975
+      ],
+      "node_kinds": {
+        "terminal": 1386,
+        "horizon": 21957,
+        "decision": 6049,
+        "budget": 528
+      },
+      "partial_branches": 2
+    },
+    {
+      "move": "snore",
+      "first": "swordsdance",
+      "runs": 79822,
+      "nodes": 18160,
+      "bounds": [
+        0.28085140560761146,
+        0.2808514058116848
+      ],
+      "node_kinds": {
+        "terminal": 1005,
+        "horizon": 15156,
+        "decision": 1999
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "snore",
+      "first": "sleeptalk",
+      "runs": 200000,
+      "nodes": 9650,
+      "bounds": [
+        0.6483344744590486,
+        0.7146655038851971
+      ],
+      "node_kinds": {
+        "terminal": 786,
+        "decision": 8665,
+        "budget": 199
+      },
+      "partial_branches": 1
+    },
+    {
+      "move": "steelwing",
+      "first": "rockslide",
+      "runs": 200000,
+      "nodes": 12616,
+      "bounds": [
+        0.2555049697852781,
+        0.34653090262994896
+      ],
+      "node_kinds": {
+        "terminal": 951,
+        "horizon": 8994,
+        "decision": 2578,
+        "budget": 93
+      },
+      "partial_branches": 3
+    },
+    {
+      "move": "steelwing",
+      "first": "swordsdance",
+      "runs": 29652,
+      "nodes": 3806,
+      "bounds": [
+        0.29363794939635657,
+        0.29363794967975787
+      ],
+      "node_kinds": {
+        "terminal": 301,
+        "horizon": 2859,
+        "decision": 646
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "steelwing",
+      "first": "sleeptalk",
+      "runs": 200000,
+      "nodes": 10275,
+      "bounds": [
+        0.35950139524993424,
+        0.706362050603643
+      ],
+      "node_kinds": {
+        "terminal": 1144,
+        "decision": 8914,
+        "budget": 217
+      },
+      "partial_branches": 3
+    },
+    {
+      "move": "substitute",
+      "first": "rockslide",
+      "runs": 12576,
+      "nodes": 1624,
+      "bounds": [
+        0.1723182955384733,
+        0.1723182957051739
+      ],
+      "node_kinds": {
+        "terminal": 299,
+        "horizon": 942,
+        "decision": 383
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "substitute",
+      "first": "swordsdance",
+      "runs": 548,
+      "nodes": 79,
+      "bounds": [
+        0.09939236119101078,
+        0.09939236122083549
+      ],
+      "node_kinds": {
+        "terminal": 29,
+        "horizon": 32,
+        "decision": 18
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "substitute",
+      "first": "sleeptalk",
+      "runs": 22585,
+      "nodes": 2008,
+      "bounds": [
+        0.8276817042938884,
+        0.8276817044615266
+      ],
+      "node_kinds": {
+        "terminal": 877,
+        "decision": 1131
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "sunnyday",
+      "first": "rockslide",
+      "runs": 16390,
+      "nodes": 2586,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 376,
+        "horizon": 1672,
+        "decision": 538
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "sunnyday",
+      "first": "swordsdance",
+      "runs": 314,
+      "nodes": 78,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 43,
+        "horizon": 22,
+        "decision": 13
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "sunnyday",
+      "first": "sleeptalk",
+      "runs": 35300,
+      "nodes": 2756,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 1117,
+        "decision": 1639
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "swagger",
+      "first": "rockslide",
+      "runs": 32960,
+      "nodes": 3229,
+      "bounds": [
+        0.30507440839167926,
+        0.30507440867652286
+      ],
+      "node_kinds": {
+        "terminal": 713,
+        "horizon": 1852,
+        "decision": 664
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "swagger",
+      "first": "swordsdance",
+      "runs": 1534,
+      "nodes": 226,
+      "bounds": [
+        0.226175404321363,
+        0.22617540439049488
+      ],
+      "node_kinds": {
+        "terminal": 117,
+        "horizon": 70,
+        "decision": 39
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "swagger",
+      "first": "sleeptalk",
+      "runs": 126756,
+      "nodes": 6401,
+      "bounds": [
+        0.6911146617344214,
+        0.6911146620250053
+      ],
+      "node_kinds": {
+        "terminal": 1154,
+        "decision": 5247
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "swift",
+      "first": "rockslide",
+      "runs": 46452,
+      "nodes": 5108,
+      "bounds": [
+        0.277630090485996,
+        0.2776300911802919
+      ],
+      "node_kinds": {
+        "terminal": 585,
+        "horizon": 3116,
+        "decision": 1407
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "swift",
+      "first": "swordsdance",
+      "runs": 896,
+      "nodes": 147,
+      "bounds": [
+        0.28575303830060955,
+        0.28575303836032767
+      ],
+      "node_kinds": {
+        "terminal": 74,
+        "horizon": 41,
+        "decision": 32
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "swift",
+      "first": "sleeptalk",
+      "runs": 101615,
+      "nodes": 5259,
+      "bounds": [
+        0.7142469616396725,
+        0.7142469616993906
+      ],
+      "node_kinds": {
+        "terminal": 730,
+        "decision": 4529
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "takedown",
+      "first": "rockslide",
+      "runs": 79412,
+      "nodes": 6588,
+      "bounds": [
+        0.2677241740117906,
+        0.2677241748312528
+      ],
+      "node_kinds": {
+        "terminal": 643,
+        "horizon": 4104,
+        "decision": 1841
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "takedown",
+      "first": "swordsdance",
+      "runs": 1464,
+      "nodes": 186,
+      "bounds": [
+        0.2773953667064522,
+        0.27739536678143045
+      ],
+      "node_kinds": {
+        "terminal": 91,
+        "horizon": 54,
+        "decision": 41
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "takedown",
+      "first": "sleeptalk",
+      "runs": 164524,
+      "nodes": 7546,
+      "bounds": [
+        0.7226046332185695,
+        0.722604633293548
+      ],
+      "node_kinds": {
+        "terminal": 870,
+        "decision": 6676
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "thunder",
+      "first": "rockslide",
+      "runs": 13558,
+      "nodes": 1303,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 183,
+        "horizon": 684,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "thunder",
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 39,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "thunder",
+      "first": "sleeptalk",
+      "runs": 22948,
+      "nodes": 1171,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 867
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "thundershock",
+      "first": "rockslide",
+      "runs": 13558,
+      "nodes": 1303,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 183,
+        "horizon": 684,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "thundershock",
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 39,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "thundershock",
+      "first": "sleeptalk",
+      "runs": 22948,
+      "nodes": 1171,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 867
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "thunderwave",
+      "first": "rockslide",
+      "runs": 13558,
+      "nodes": 1303,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 183,
+        "horizon": 684,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "thunderwave",
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 39,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "thunderwave",
+      "first": "sleeptalk",
+      "runs": 22948,
+      "nodes": 1171,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 867
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "toxic",
+      "first": "rockslide",
+      "runs": 29762,
+      "nodes": 2743,
+      "bounds": [
+        0.3733037311252766,
+        0.3733037316053172
+      ],
+      "node_kinds": {
+        "terminal": 658,
+        "horizon": 1368,
+        "decision": 717
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "toxic",
+      "first": "swordsdance",
+      "runs": 562,
+      "nodes": 84,
+      "bounds": [
+        0.39756944451280246,
+        0.3975694445614067
+      ],
+      "node_kinds": {
+        "terminal": 49,
+        "horizon": 18,
+        "decision": 17
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "toxic",
+      "first": "sleeptalk",
+      "runs": 57967,
+      "nodes": 2934,
+      "bounds": [
+        0.6024305554385936,
+        0.6024305554871976
+      ],
+      "node_kinds": {
+        "terminal": 862,
+        "decision": 2072
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "whirlwind",
+      "first": "rockslide",
+      "runs": 13208,
+      "nodes": 1233,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 188,
+        "horizon": 609,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "whirlwind",
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 41,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 21,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "whirlwind",
+      "first": "sleeptalk",
+      "runs": 22948,
+      "nodes": 1171,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 867
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "zapcannon",
+      "first": "rockslide",
+      "runs": 13558,
+      "nodes": 1303,
+      "bounds": [
+        0.3733037312406866,
+        0.373303731489907
+      ],
+      "node_kinds": {
+        "terminal": 183,
+        "horizon": 684,
+        "decision": 436
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "zapcannon",
+      "first": "swordsdance",
+      "runs": 270,
+      "nodes": 39,
+      "bounds": [
+        0.39756944452101084,
+        0.39756944455319826
+      ],
+      "node_kinds": {
+        "terminal": 19,
+        "horizon": 9,
+        "decision": 11
+      },
+      "partial_branches": 0
+    },
+    {
+      "move": "zapcannon",
+      "first": "sleeptalk",
+      "runs": 22948,
+      "nodes": 1171,
+      "bounds": [
+        0.6024305554468017,
+        0.6024305554789893
+      ],
+      "node_kinds": {
+        "terminal": 304,
+        "decision": 867
+      },
+      "partial_branches": 0
+    }
+  ],
+  "production_changed": false,
+  "strength_demonstrated": false,
+  "scope": "A fixed replayed Zapdos/Marowak endgame with three revealed Zapdos moves and one occupied unknown slot. Enumerate all 39 remaining move names from the native format learnset at level 50, excluding duplicate Thunderbolt, Sleep Talk and Hidden Power. Sources include Generation 1/2 machines and level moves; the three retained moves are machine/tutor moves and introduce no egg/event compatibility dependency. Native team validation and every public-prefix/own-action check are performed by the unchanged census harness; the certificate harness separately replays all 38 alternatives and checks logs and observers. Stats, items, occupied move count, current sleep duration and all other state are fixed; the full game information set is not covered. One common Rock Slide priority supplies the family lower bound. A fixed precommitted Sleep Talk/Sleep Talk/Hidden Power Ice opponent sequence in the limiting world supplies an upper bound against all own first actions and adaptive later replies. Fixed policies depend only on decision count and legal actions. Partial enumeration and horizon leaves keep [0,1] bounds. Ledger arithmetic and every policy action are checked independently. Rest certificates are reused without rewriting their historical hashes; Hyper Beam certificates reproduce exactly. These are conditional security values, not a prior-weighted win rate. Positive per-world losses are initial-action certificates assuming optimal subsequent play. Changing the initial action is not a uniform improvement: it provably sacrifices value in some worlds. No production change, human calibration, wall-time speed claim or deployed-bot superiority claim."
+}
