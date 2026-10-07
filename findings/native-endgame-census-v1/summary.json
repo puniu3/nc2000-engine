@@ -1,0 +1,88 @@
+{
+  "strata": {
+    "all_current_moves_revealed": {
+      "roots": 106,
+      "games": 6,
+      "per_game": {
+        "26": 1,
+        "62": 87,
+        "66": 1,
+        "76": 5,
+        "136": 1,
+        "144": 11
+      }
+    },
+    "all_current_moves_revealed_and_item_known": {
+      "roots": 95,
+      "games": 5,
+      "per_game": {
+        "26": 1,
+        "62": 87,
+        "66": 1,
+        "76": 5,
+        "136": 1
+      }
+    },
+    "both_have_rest_pp": {
+      "roots": 185,
+      "games": 14,
+      "per_game": {
+        "3": 2,
+        "26": 5,
+        "27": 2,
+        "31": 1,
+        "62": 81,
+        "66": 1,
+        "75": 10,
+        "87": 4,
+        "99": 1,
+        "128": 12,
+        "141": 16,
+        "164": 1,
+        "170": 5,
+        "179": 44
+      }
+    },
+    "fallback": {
+      "roots": 0,
+      "games": 0,
+      "per_game": {}
+    },
+    "either_transformed": {
+      "roots": 0,
+      "games": 0,
+      "per_game": {}
+    }
+  },
+  "candidate_counts": {
+    "1": 242,
+    "2": 95,
+    "3": 23
+  },
+  "games": 192,
+  "replayed_decisions": 8534,
+  "replayed_states": 4498,
+  "games_with_hidden_power": 76,
+  "hidden_power_uses": 231,
+  "counts": {
+    "current_decisions": 4266,
+    "idle_current_decisions": 3754,
+    "one_each_current_decisions": 422,
+    "one_each_idle_decisions": 365
+  },
+  "selected_games": 82,
+  "selected_roots": 360,
+  "schema": "nc2000-native-endgame-census-v1",
+  "repeat_identical": true,
+  "rejected_mutations": [
+    "snapshot_hp",
+    "response",
+    "missing_snapshot"
+  ],
+  "source_games_sha256": "bffa990fd1f36e828cf4ce16c97ef8c09c7b3e13bd83b67d2999211c534a49de",
+  "snapshot_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
+  "census_sha256": "a43abb043027a53588e888f52c028c2aa058361347d187d03171f61f2324b45c",
+  "helper_sha256": "80a369daa19da7e6da2b33b07930e7c2833fe8321fcc1aadb12c4a7a6e184af7",
+  "binary_sha256": "80f5aa99b575ad2068857499e1867121ccb09ea5beb08643089ee8664d0e91a8",
+  "optimality_or_strength_claim": false
+}

@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+import sys
+from collections import Counter
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def audit(census, snapshots, games):
+    expected = {(r['game'], r['frame']): r for r in census['roots']}
+    assert len(expected) == len(snapshots) == census['selected_roots']
+    seen = set()
+    for row in snapshots:
+        r, b = row['record'], row['battle']
+        key = r['game'], r['frame']
+        assert key not in seen
+        seen.add(key)
+        assert r == expected[key]
+        raw = json.dumps(b, ensure_ascii=False, separators=(',', ':')).encode()
+        assert hashlib.sha256(raw).hexdigest() == r['state_sha256']
+        frame = games[r['game']]['frames'][r['frame']]
+        assert frame['agent'] == 0 and frame['side'] == r['side'] == r['game'] % 2
+        assert frame['state_sha256'] == r['state_sha256']
+        assert frame['response'] == r['current_response']
+        assert frame['legal_actions'] == r['legal_actions'] and len(r['legal_actions']) > 1
+        assert all(s['pokemon_left'] == 1 for s in b['sides'])
+        assert b['started'] and not b['ended'] and not b['mid_turn']
+        assert not any(b[k] for k in ['queue', 'faint_queue', 'event_stack', 'effect_stack'])
+        truth = r['diagnostic_truth']
+        revealed = r['observation']['revealed_moves']
+        missing = [m['id'] for m in truth['opponent']['moves'] if not any(
+            m['id'] == v or v == 'hiddenpower' and m['id'].startswith('hiddenpower') for v in revealed)]
+        assert missing == truth['unrevealed_current_moves']
+        assert truth['all_current_moves_revealed'] == (not missing)
+        assert r['belief']['candidate_count'] == len(r['belief']['candidate_ids'])
+        assert r['belief']['fallback'] == (r['belief']['candidate_count'] == 0)
+    assert seen == set(expected)
+    assert len({g for g, _ in seen}) == census['selected_games']
+    roots = census['roots']
+    strata = {}
+    for name, predicate in {
+        'all_current_moves_revealed': lambda r: r['diagnostic_truth']['all_current_moves_revealed'],
+        'all_current_moves_revealed_and_item_known': lambda r: r['diagnostic_truth']['all_current_moves_revealed'] and r['observation']['item_known'],
+        'both_have_rest_pp': lambda r: all(any(m['id'] == 'rest' and m['pp'] > 0 for m in r['diagnostic_truth'][s]['moves']) for s in ['own', 'opponent']),
+        'fallback': lambda r: r['belief']['fallback'],
+        'either_transformed': lambda r: r['diagnostic_truth']['either_transformed'],
+    }.items():
+        selected = [r for r in roots if predicate(r)]
+        strata[name] = {'roots': len(selected), 'games': len({r['game'] for r in selected}),
+                        'per_game': dict(sorted(Counter(r['game'] for r in selected).items()))}
+    return {'strata': strata, 'candidate_counts': dict(sorted(Counter(r['belief']['candidate_count'] for r in roots).items()))}
+
+
+def main():
+    scratch, source = map(Path, sys.argv[1:])
+    assert digest(source) == 'bffa990fd1f36e828cf4ce16c97ef8c09c7b3e13bd83b67d2999211c534a49de'
+    for name in ['census.json', 'roots.jsonl']:
+        assert (scratch / name).read_bytes() == (scratch / ('repeat-' + name)).read_bytes()
+    census = json.loads((scratch / 'census.json').read_text())
+    snapshots = [json.loads(l) for l in (scratch / 'roots.jsonl').read_text().splitlines()]
+    game_rows = [json.loads(l) for l in source.read_text().splitlines()]
+    games = {g['game']: g for g in game_rows[1:]}
+    result = audit(census, snapshots, games)
+    mutations = []
+    for field in ['snapshot_hp', 'response', 'missing_snapshot']:
+        changed = copy.deepcopy(snapshots)
+        if field == 'snapshot_hp':
+            changed[0]['battle']['sides'][0]['roster'][0]['hp'] += 1
+        elif field == 'response':
+            changed[0]['record']['current_response']['action'] = 'move nonexistent'
+        else:
+            changed.pop()
+        try:
+            audit(census, changed, games)
+        except AssertionError:
+            mutations.append(field)
+        else:
+            raise AssertionError('accepted mutation: ' + field)
+    result.update({k: v for k, v in census.items() if k != 'roots'})
+    result.update({'schema': 'nc2000-native-endgame-census-v1', 'repeat_identical': True,
+                   'rejected_mutations': mutations, 'source_games_sha256': digest(source),
+                   'snapshot_sha256': digest(scratch / 'roots.jsonl'),
+                   'census_sha256': digest(scratch / 'census.json'),
+                   'helper_sha256': digest('findings/native-endgame-census-v1/native_endgame_census.rs'),
+                   'binary_sha256': digest(scratch / 'census'),
+                   'optimality_or_strength_claim': False})
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()
