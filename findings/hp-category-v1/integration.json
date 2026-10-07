@@ -1,0 +1,38 @@
+{
+  "source_commit": "fcaa4b8",
+  "eval_sha256": "72657b4bd532a298449013b45e17fa49a5cd83c88d236692946301ce96796042",
+  "wasm_sha256": "b717f2b0e6892ef8fc9711a1dea1a46222178a339bc54173ad4fbb15cc5fdc79",
+  "preview_wasm_matches": true,
+  "browser_loaded_wasm_matches": true,
+  "browser": {
+    "wasmHashes": [
+      "b717f2b0e6892ef8fc9711a1dea1a46222178a339bc54173ad4fbb15cc5fdc79",
+      "b717f2b0e6892ef8fc9711a1dea1a46222178a339bc54173ad4fbb15cc5fdc79"
+    ],
+    "seed_input": 7,
+    "status": 200,
+    "button": "Hidden Power\nICE\nSpecial\n35 BP\nPP 24/24\nType and power are fixed by the user's DVs (shown values are the actual ones).",
+    "public_move_present": true,
+    "errors": [],
+    "overflow": false,
+    "privacy": [
+      {
+        "status": 403,
+        "type": null
+      },
+      {
+        "status": 200,
+        "type": "text/html"
+      }
+    ]
+  },
+  "preview": "https://mini-usb.local:18080/nc2000-hp/",
+  "deployed": false,
+  "strength_vs_deployed": "unproved",
+  "artifact_hashes": {
+    "browser-check.mjs": "ad666631cbf4a42c5519d09a8473bd26161ebc793dbddc653e8fdfd44d970e75",
+    "browser-check.json": "690fce332016f208b6319ab858c2e2434e3b8025b074fb532df32bcb3106b1c1",
+    "wasm-build.log": "cb72af2969109c3cb3f9833a912ad3e3825eca2545cea4f84c9341a5810669a9",
+    "web-build.log": "2f7e3144167b387169e71e814dbf9d7854a4a0ccf200b161df727482e0a09546"
+  }
+}

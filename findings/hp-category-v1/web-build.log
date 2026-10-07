@@ -1,0 +1,18 @@
+
+> nc2000-web@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v6.4.3 building for production...
+transforming...
+✓ 55 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                0.81 kB │ gzip:   0.48 kB
+dist/assets/fork-arena-worker-Brj16Pck.js      5.58 kB
+dist/assets/solver-worker-CRYP7aaP.js         10.95 kB
+dist/assets/evaluate-worker-B-C_x2_6.js       11.53 kB
+dist/assets/bot-worker-BUdvfYsI.js            17.92 kB
+dist/assets/nc2000_wasm_bg-CJMariBm.wasm   2,755.44 kB │ gzip: 808.03 kB
+dist/assets/index-DXGscvNi.css                37.20 kB │ gzip:   8.01 kB
+dist/assets/index-C2qmnjoI.js                236.07 kB │ gzip:  79.28 kB
+✓ built in 391ms
