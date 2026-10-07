@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import copy
+import gzip
+import hashlib
+import json
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+ARCHIVE = ROOT / 'findings/canonical-history-v1'
+
+
+def visible(lines, side):
+    result = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.startswith('|split|'):
+            assert line in ['|split|p1', '|split|p2']
+            assert index + 2 < len(lines)
+            result.append(lines[index + (1 if line == f'|split|p{side + 1}' else 2)])
+            index += 3
+        else:
+            result.append(line)
+            index += 1
+    return result
+
+
+def check(bundle):
+    baseline, screen, repeat, plan = [bundle[k] for k in ['baseline', 'screen', 'repeat', 'plan']]
+    assert screen == repeat
+    assert [r['request'] for r in screen['rows']] == plan['rows']
+    assert len({r['request']['id'] for r in screen['rows']}) == len(plan['rows'])
+    side = plan['case']['side']
+    assert len(baseline['tape']) == len(screen['tape']) == plan['case']['decision'] + 1
+    for old, new in zip(baseline['tape'], screen['tape']):
+        assert old['chosen'] == new['chosen']
+        assert old['legal'] == new['legal']
+        assert visible(old['full_log'], side) == old['frame']['lines']
+        assert visible(new['full_log'], side) == new['frame']['lines']
+    base = screen['tape'][-1]
+    accepted = [r for r in screen['rows'] if 'root' in r]
+    for row in accepted:
+        assert row['valid'] and 'mismatch' not in row
+        assert row['checks'] == len(screen['tape'])
+        state = row['root']
+        assert visible(state['full_log'], side) == base['frame']['lines']
+        assert ('first_private_difference' in row) == (state['full_log'] != base['full_log'])
+        ivs, evs = state['ivs'], state['evs']
+        stats = [(2*b+i+e//4)*50//100+(60 if n == 0 else 5)
+                 for n, (b, i, e) in enumerate(zip([90, 90, 85, 125, 90, 100], ivs, evs))]
+        assert state['maxhp'] == stats[0] and state['stats'] == stats[1:]
+        a, d, s, sp = [ivs[i]//2 for i in [1, 2, 5, 3]]
+        types = ['Fighting', 'Flying', 'Poison', 'Ground', 'Rock', 'Bug', 'Ghost', 'Steel',
+                 'Fire', 'Water', 'Grass', 'Electric', 'Psychic', 'Ice', 'Dragon', 'Dark']
+        assert state['hp_type'] == types[4*(a%4)+d%4]
+        assert state['hp_power'] == (5*((sp>>3)+2*(s>>3)+4*(d>>3)+8*(a>>3))+(sp%4))//2+31
+    groups = {}
+    for name in ['previous', 'all-types', 'hp-ev', 'product']:
+        rows = [r for r in screen['rows'] if r['request']['id'].startswith(name+'/')]
+        accepted_group = [r for r in rows if 'root' in r]
+        groups[name] = dict(requested=len(rows), accepted=len(accepted_group),
+                            private_difference=sum('first_private_difference' in r for r in accepted_group))
+    return dict(requested=len(screen['rows']), accepted=len(accepted), groups=groups,
+                accepted_hp_range=[min(r['root']['hp'] for r in accepted), max(r['root']['hp'] for r in accepted)],
+                hp_powers=dict(collections.Counter(r['root']['hp_power'] for r in accepted)),
+                hp_types=dict(collections.Counter(r['root']['hp_type'] for r in accepted)),
+                private_difference=sum('first_private_difference' in r for r in accepted),
+                observer_difference=sum('first_observer_difference' in r for r in accepted),
+                rejected_reasons=dict(collections.Counter(r.get('mismatch', {}).get('reason', 'invalid') for r in screen['rows'] if 'root' not in r)))
+
+
+def negative_controls(bundle):
+    for kind in ['visible_log', 'coverage', 'hp_power']:
+        altered = copy.deepcopy(bundle)
+        if kind == 'coverage':
+            altered['screen']['rows'].pop()
+        else:
+            row = next(r for r in altered['screen']['rows'] if 'root' in r)
+            if kind == 'visible_log':
+                row['root']['full_log'].append('|turn|999')
+            else:
+                row['root']['hp_power'] += 1
+        altered['repeat'] = copy.deepcopy(altered['screen'])
+        try:
+            check(altered)
+        except AssertionError:
+            continue
+        raise AssertionError(f'accepted corrupted {kind}')
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', nargs=4, type=Path, metavar=('BASELINE', 'SCREEN', 'REPEAT', 'PLAN'))
+    args = parser.parse_args()
+    if args.record:
+        bundle = dict(zip(['baseline', 'screen', 'repeat', 'plan'], [json.loads(p.read_bytes()) for p in args.record]))
+    else:
+        bundle = json.loads(gzip.decompress((ARCHIVE/'records.json.gz').read_bytes()))
+    report = check(bundle)
+    negative_controls(bundle)
+    if args.record:
+        ARCHIVE.mkdir(exist_ok=True)
+        (ARCHIVE/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+        sources = ['crates/bot/examples/canonical_history.rs', 'crates/bot/src/player.rs', 'tools/canonical-history-audit',
+                   'findings/policy-gap-v1/corpus.jsonl.gz', 'findings/hidden-stat-family-v1/records.json.gz', 'findings/item-move-product-v1/records.json.gz']
+        summary = dict(report, date='2026-10-07', candidate_commit=subprocess.check_output(['git', '-C', str(ROOT/'tmp/hp-canonical'), 'rev-parse', 'HEAD'], text=True).strip(),
+                       source_hashes={p: sha(ROOT/p) for p in sources}, records_sha256=sha(ARCHIVE/'records.json.gz'),
+                       tests=dict(filter_controls=2, negative_controls=3, deterministic_repeat=True),
+                       scope='Finite candidates and one fixed seed only. Rejection does not prove incompatibility under every chance path. No full information-set coverage or corrected policy value is claimed.',
+                       strength_vs_deployed='unproved', integrated=False)
+        (ARCHIVE/'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2)+'\n')
+    else:
+        summary = json.loads((ARCHIVE/'summary.json').read_bytes())
+        assert summary['records_sha256'] == sha(ARCHIVE/'records.json.gz')
+        assert all(summary[k] == json.loads(json.dumps(v)) for k, v in report.items())
+        assert all(sha(ROOT/p) == expected for p, expected in summary['source_hashes'].items())
+    print(json.dumps(report, ensure_ascii=False))
+
+
+if __name__ == '__main__':
+    main()

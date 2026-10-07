@@ -18824,6 +18824,70 @@
           "records.json": "df97c1cd38547b531f509c30827c3585e205cee643e353d79ea0efe9467d1ef4"
         }
       }
+    },
+    "findings/canonical-history-v1/summary.json": {
+      "sha256": "1921ac5b41e5a81fe62eb968a094deb8fb1faab38b0b12faed52738357f766ea",
+      "data": {
+        "requested": 8952,
+        "accepted": 3648,
+        "groups": {
+          "previous": {
+            "requested": 2400,
+            "accepted": 1168,
+            "private_difference": 0
+          },
+          "all-types": {
+            "requested": 4096,
+            "accepted": 64,
+            "private_difference": 32
+          },
+          "hp-ev": {
+            "requested": 256,
+            "accepted": 256,
+            "private_difference": 248
+          },
+          "product": {
+            "requested": 2200,
+            "accepted": 2160,
+            "private_difference": 0
+          }
+        },
+        "accepted_hp_range": [
+          165,
+          196
+        ],
+        "hp_powers": {
+          "70": 3472,
+          "65": 176
+        },
+        "hp_types": {
+          "Ice": 3648
+        },
+        "private_difference": 280,
+        "observer_difference": 0,
+        "rejected_reasons": {
+          "visible_log": 5304
+        },
+        "date": "2026-10-07",
+        "candidate_commit": "01fc8a9c32d33b7c6fefa6f921122d5f6267f2ff",
+        "source_hashes": {
+          "crates/bot/examples/canonical_history.rs": "c54fb16da5474d3da9285d0d29ce83773b2b19abe7ee32611d9050df0ebe6703",
+          "crates/bot/src/player.rs": "9ac63d10430ab6514e6b6a5ee957ecc141a2dddb62a8fcf3477a4ede20bc370d",
+          "tools/canonical-history-audit": "dcc0390f645ef43bb8b633934d79aaac8c28923ce2b22e14b8985cf2ef8337ae",
+          "findings/policy-gap-v1/corpus.jsonl.gz": "e5d4080ed10778b203688691246dba44c4440f0742f02245d6ace2d32af08892",
+          "findings/hidden-stat-family-v1/records.json.gz": "2877b9147793ef4b27a18680a9f53185423394e9e4062f71b74506a48be3c2ec",
+          "findings/item-move-product-v1/records.json.gz": "9692a3300a69b9b28c6f4d19e3885b782afa7b2745070dfe6b7208bf94f18bf0"
+        },
+        "records_sha256": "a93fa661d6c0d5421c7b558ee1b89838f1dfb901c9e0d0e2ad8a97d35c25ae1e",
+        "tests": {
+          "filter_controls": 2,
+          "negative_controls": 3,
+          "deterministic_repeat": true
+        },
+        "scope": "Finite candidates and one fixed seed only. Rejection does not prove incompatibility under every chance path. No full information-set coverage or corrected policy value is claimed.",
+        "strength_vs_deployed": "unproved",
+        "integrated": false
+      }
     }
   },
   "foresight_fix": {
