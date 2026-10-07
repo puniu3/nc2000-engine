@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+from collections import Counter,defaultdict
+from pathlib import Path
+
+
+def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def rows(path):
+    raw=Path(path).read_bytes()
+    if str(path).endswith('.gz'):raw=gzip.decompress(raw)
+    return [json.loads(l) for l in raw.splitlines()]
+
+
+def check(actual,trace,result):
+    assert len(actual)==len(result['pair_scores'])==96
+    grouped=defaultdict(list)
+    for r in trace:grouped[r['game'],r['side']].append(r)
+    seen=set();summary=defaultdict(list);alive=Counter();previews=Counter();details=[]
+    for row in actual:
+        p=row['pair'];assert p not in seen;seen.add(p);assert row['pair_score']==result['pair_scores'][p]
+        differences=[]
+        for side in [0,1]:
+            for a,b in zip(grouped[p*2,side],grouped[p*2+1,side]):
+                if a['key']!=b['key']:break
+                if a['action']!=b['action']:
+                    choices=[a['action'],b['action']]
+                    differences.append(dict(side=side,candidate=choices[side],control=choices[1-side],key=a['key'],ordinal=a['ordinal']))
+                    break
+        if not differences:
+            assert row['phase']=='identical' and row['pair_score']==.5
+            for side in [0,1]:
+                a=grouped[p*2,side];b=grouped[p*2+1,side]
+                assert [{k:v for k,v in r.items() if k!='game'} for r in a]==[{k:v for k,v in r.items() if k!='game'} for r in b]
+        else:
+            assert hashlib.sha256(row['battle_json'].encode()).hexdigest()==row['battle_sha256']
+            state=json.loads(row['battle_json']);assert state['turn']==row['turn']
+            assert [s['pokemon_left'] for s in state['sides']]==row['alive']
+            differences=[d for d in differences if d['key']==row['state_key128']]
+            assert differences
+            assert row['changed']==[{k:v for k,v in d.items() if k not in ['key','ordinal']} for d in differences]
+            preview=all(d['ordinal']==0 for d in differences)
+            assert row['phase']==('preview' if preview else 'battle')
+            if preview:
+                for d in differences:
+                    assert d['candidate'].startswith('team ') and d['control'].startswith('team ')
+                    a,b=[list(map(int,d[k][5:].split(','))) for k in ['candidate','control']]
+                    kind='selection' if set(a)!=set(b) else 'lead' if a[0]!=b[0] else 'bench_order_only'
+                    previews[kind]+=1
+            else:alive[str(row['alive'])]+=1
+        summary[row['phase']].append(row['pair_score'])
+        details.append({k:v for k,v in row.items() if k!='battle_json'})
+    assert seen==set(range(96))
+    groups={k:dict(pairs=len(v),score=sum(v)/len(v),pair_scores=dict(Counter(v))) for k,v in summary.items()}
+    return dict(groups=groups,battle_alive=dict(alive),preview_changed_side_categories=dict(previews),details=details)
+
+
+def main():
+    p=Path('findings/native-overkill-divergence-v1');protocol=json.loads((p/'protocol.json').read_text())
+    assert sha(p/'native_overkill_divergence.rs')==protocol['helper_sha256']
+    trace_path='tmp/native-overkill-duel-v1/main-trace.jsonl';assert sha(trace_path)==protocol['trace_sha256']
+    result_path='findings/native-overkill-duel-v1/main.json';assert sha(result_path)==protocol['result_sha256']
+    actual=rows(p/'records.jsonl.gz');trace=rows(trace_path);result=json.loads(Path(result_path).read_text())
+    summary=check(actual,trace,result);rejected=[]
+    for kind in ['missing_pair','wrong_phase','wrong_side_mapping','wrong_snapshot']:
+        changed=copy.deepcopy(actual)
+        if kind=='missing_pair':changed.pop()
+        elif kind=='wrong_phase':changed[0]['phase']='preview'
+        elif kind=='wrong_side_mapping':changed[0]['changed'][0]['candidate']='move impossible'
+        else:changed[0]['battle_json']+=' '
+        try:check(changed,trace,result)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    print(json.dumps(dict(schema=protocol['schema'],protocol_sha256=sha(p/'protocol.json'),records_sha256=sha(p/'records.jsonl.gz'),summary=summary,rejected_mutations=rejected,scope=protocol['scope'],causal_attribution=False,new_games=0,ordinary_bot_changed=False),indent=2))
+
+
+if __name__=='__main__':main()

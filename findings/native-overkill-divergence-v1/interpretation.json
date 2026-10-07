@@ -1,0 +1,8 @@
+{
+  "repeated_native_extraction_identical": true,
+  "output_sha256": "0b5243fc230fdc2697219ba57cf206e02f0853eece41075a6b3a971e2c69c84f",
+  "first_action_divergence_is_not_first_physical_state_divergence": true,
+  "reason": "Pairs38 and92 have a later first action difference on the other side while matching state keys remain in that side trace. The native extractor stops at the first joint-action difference; the audit compares side records at that exact key rather than combining later side-specific differences. Same state keys do not establish identical public histories or all-chance action equivalence.",
+  "interpretation": "66 pairs differ at preview,26 first differ in battle,4 have identical recorded choices. All26 battle divergences have at least2 living members on each side. Preview subgroup mean0.4394 and battle subgroup0.5 are post-treatment descriptions, not causal effects. Do not infer that disabling the candidate only for preview would fix its strength.",
+  "decision": "Keep capped rollout ranking disabled; do not retune it or conditionally adopt it using these same games."
+}
