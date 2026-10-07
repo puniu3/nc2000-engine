@@ -1,0 +1,7 @@
+# Public HP evidence after the category correction
+
+This follows all 26 roots and three paired search seeds from hp-category-roots-v1. It is a diagnostic reuse of those inputs, not an independent strength sample. Both arms use the corrected HP damage category and the same feature-enabled executable. One observation retains public HP type constraints; the other erases them before belief synchronization and search. No true opponent set is supplied.
+
+The no-evidence arm must reproduce the frozen corrected-default records, including every action, visit, mean and sampled model attribute, except timing and added audit metadata. The evidence arm is repeated. Common histories, state keys, raw observations, actual diagnostic sets and search seeds must match. The checker verifies that observed constraints preserve the fixture's true DV type, that all enabled model types obey every roster constraint, and that unconstrained controls remain identical. Model sampling uses 64 fixed seeds separately from search; repeated search seeds do not multiply the number of independent model probes.
+
+A 64-iteration smoke over eight roots passes default parity, enabled repeat equality and five mutation controls. Seed/type/choice mutations are also applied to the repeat copy, so repeating the same wrong result is insufficient. The full protocol fixes 27,000 iterations, c=0.4 and all cases before measurement. Choice changes and agreement with constructed truth are diagnostics, not certificates of better play. Default feature settings and deployed code remain unchanged.

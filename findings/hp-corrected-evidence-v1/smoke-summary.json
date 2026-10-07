@@ -1,0 +1,363 @@
+{
+  "search_pairs": 8,
+  "roots": 8,
+  "choices_changed": 3,
+  "default_reproduced": true,
+  "enabled_repeat_searches": 8,
+  "negative_controls": 5,
+  "cases": [
+    {
+      "case": "articuno-fighting",
+      "pairs": 2,
+      "changed_choices": 2,
+      "changed_roots": 2
+    },
+    {
+      "case": "dragonair-fighting",
+      "pairs": 2,
+      "changed_choices": 1,
+      "changed_roots": 1
+    },
+    {
+      "case": "exeggutor-bug",
+      "pairs": 2,
+      "changed_choices": 0,
+      "changed_roots": 0
+    },
+    {
+      "case": "onpool-control",
+      "pairs": 2,
+      "changed_choices": 0,
+      "changed_roots": 0
+    }
+  ],
+  "models": [
+    {
+      "case": "articuno-fighting",
+      "trial": 0,
+      "evidence": false,
+      "samples": 64,
+      "contradictory_mon_samples": 64,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Dark"
+      ],
+      "hp_damage_range": [
+        29.615686274509805,
+        29.615686274509805
+      ],
+      "same_estimator_on_actual_hp": 74.03921568627452
+    },
+    {
+      "case": "articuno-fighting",
+      "trial": 0,
+      "evidence": true,
+      "samples": 64,
+      "contradictory_mon_samples": 0,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Fighting"
+      ],
+      "hp_damage_range": [
+        74.03921568627452,
+        74.03921568627452
+      ],
+      "same_estimator_on_actual_hp": 74.03921568627452
+    },
+    {
+      "case": "articuno-fighting",
+      "trial": 1,
+      "evidence": false,
+      "samples": 64,
+      "contradictory_mon_samples": 64,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Dark"
+      ],
+      "hp_damage_range": [
+        29.615686274509805,
+        29.615686274509805
+      ],
+      "same_estimator_on_actual_hp": 74.03921568627452
+    },
+    {
+      "case": "articuno-fighting",
+      "trial": 1,
+      "evidence": true,
+      "samples": 64,
+      "contradictory_mon_samples": 0,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Fighting"
+      ],
+      "hp_damage_range": [
+        74.03921568627452,
+        74.03921568627452
+      ],
+      "same_estimator_on_actual_hp": 74.03921568627452
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 0,
+      "evidence": false,
+      "samples": 64,
+      "contradictory_mon_samples": 64,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Dark"
+      ],
+      "hp_damage_range": [
+        24.062745098039215,
+        24.062745098039215
+      ],
+      "same_estimator_on_actual_hp": 149.9294117647059
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 0,
+      "evidence": true,
+      "samples": 64,
+      "contradictory_mon_samples": 0,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Fighting"
+      ],
+      "hp_damage_range": [
+        149.9294117647059,
+        149.9294117647059
+      ],
+      "same_estimator_on_actual_hp": 149.9294117647059
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 1,
+      "evidence": false,
+      "samples": 64,
+      "contradictory_mon_samples": 64,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Dark"
+      ],
+      "hp_damage_range": [
+        24.062745098039215,
+        24.062745098039215
+      ],
+      "same_estimator_on_actual_hp": 149.9294117647059
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 1,
+      "evidence": true,
+      "samples": 64,
+      "contradictory_mon_samples": 0,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Fighting"
+      ],
+      "hp_damage_range": [
+        149.9294117647059,
+        149.9294117647059
+      ],
+      "same_estimator_on_actual_hp": 149.9294117647059
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 0,
+      "evidence": false,
+      "samples": 64,
+      "contradictory_mon_samples": 64,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Dark"
+      ],
+      "hp_damage_range": [
+        14.345098039215689,
+        14.345098039215689
+      ],
+      "same_estimator_on_actual_hp": 53.67843137254902
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 0,
+      "evidence": true,
+      "samples": 64,
+      "contradictory_mon_samples": 0,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Bug",
+        "Fighting"
+      ],
+      "hp_damage_range": [
+        53.67843137254902,
+        53.67843137254902
+      ],
+      "same_estimator_on_actual_hp": 53.67843137254902
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 1,
+      "evidence": false,
+      "samples": 64,
+      "contradictory_mon_samples": 64,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Dark"
+      ],
+      "hp_damage_range": [
+        14.345098039215687,
+        14.345098039215687
+      ],
+      "same_estimator_on_actual_hp": 53.67843137254902
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 1,
+      "evidence": true,
+      "samples": 64,
+      "contradictory_mon_samples": 0,
+      "samples_missing_actual_moves": 64,
+      "modeled_hp_types": [
+        "Bug",
+        "Fighting"
+      ],
+      "hp_damage_range": [
+        53.67843137254902,
+        53.67843137254902
+      ],
+      "same_estimator_on_actual_hp": 53.67843137254902
+    },
+    {
+      "case": "onpool-control",
+      "trial": 0,
+      "evidence": false,
+      "samples": 64,
+      "contradictory_mon_samples": 0,
+      "samples_missing_actual_moves": 0,
+      "modeled_hp_types": [
+        "Dark"
+      ],
+      "hp_damage_range": null,
+      "same_estimator_on_actual_hp": null
+    },
+    {
+      "case": "onpool-control",
+      "trial": 0,
+      "evidence": true,
+      "samples": 64,
+      "contradictory_mon_samples": 0,
+      "samples_missing_actual_moves": 0,
+      "modeled_hp_types": [
+        "Dark"
+      ],
+      "hp_damage_range": null,
+      "same_estimator_on_actual_hp": null
+    },
+    {
+      "case": "onpool-control",
+      "trial": 1,
+      "evidence": false,
+      "samples": 64,
+      "contradictory_mon_samples": 0,
+      "samples_missing_actual_moves": 0,
+      "modeled_hp_types": [
+        "Dark"
+      ],
+      "hp_damage_range": null,
+      "same_estimator_on_actual_hp": null
+    },
+    {
+      "case": "onpool-control",
+      "trial": 1,
+      "evidence": true,
+      "samples": 64,
+      "contradictory_mon_samples": 0,
+      "samples_missing_actual_moves": 0,
+      "modeled_hp_types": [
+        "Dark"
+      ],
+      "hp_damage_range": null,
+      "same_estimator_on_actual_hp": null
+    }
+  ],
+  "changes": [
+    {
+      "case": "articuno-fighting",
+      "trial": 0,
+      "rep": 0,
+      "off": "switch 2",
+      "on": "move doubleedge",
+      "choice_changed": true,
+      "statistics_changed": true
+    },
+    {
+      "case": "articuno-fighting",
+      "trial": 1,
+      "rep": 0,
+      "off": "move rest",
+      "on": "move sleeptalk",
+      "choice_changed": true,
+      "statistics_changed": true
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 0,
+      "rep": 0,
+      "off": "switch 2",
+      "on": "switch 2",
+      "choice_changed": false,
+      "statistics_changed": true
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 1,
+      "rep": 0,
+      "off": "switch 3",
+      "on": "move counter",
+      "choice_changed": true,
+      "statistics_changed": true
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 0,
+      "rep": 0,
+      "off": "move charm",
+      "on": "move charm",
+      "choice_changed": false,
+      "statistics_changed": true
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 1,
+      "rep": 0,
+      "off": "move charm",
+      "on": "move charm",
+      "choice_changed": false,
+      "statistics_changed": true
+    },
+    {
+      "case": "onpool-control",
+      "trial": 0,
+      "rep": 0,
+      "off": "move earthquake",
+      "on": "move earthquake",
+      "choice_changed": false,
+      "statistics_changed": false
+    },
+    {
+      "case": "onpool-control",
+      "trial": 1,
+      "rep": 0,
+      "off": "move bodyslam",
+      "on": "move bodyslam",
+      "choice_changed": false,
+      "statistics_changed": false
+    }
+  ],
+  "scope": "Follow-up diagnosis on all the same 26 common roots and three paired search seeds after the HP category correction. This is not a new held-out strength sample. One feature-enabled binary, public HP constraints removed/retained on the evaluated observation only; no truth loadout is given. Both arms use 27000 iterations, c=0.4, usual move uncertainty. Off arm must reproduce the frozen corrected default root records exactly except elapsed time and added audit metadata. Enabled arm is repeated. Check native root/history/seed/true diagnostic attributes equal, and public constraints preserve the true type. Audit 64 independent model draws per root for all roster HP type constraints, remaining move omissions and damage estimate ranges. Action changes and better agreement with these constructed truths are not optimality or overall strength evidence. Default feature setting remains off.",
+  "runtime_changed": false,
+  "strength_vs_deployed": "unproved",
+  "protocol_sha256": "79a05428c1cc0f970ac0b0217d801ecb99ff201c4af27179895b2bef2c217850",
+  "reference_sha256": "bb63d4e27ebdbae69603b02352072dde55c1aa9688ada8c97bd7ffcab60ba0a1",
+  "checker_sha256": "2e3d7cce306ffb711c0de328d83f360521f721ae8849d585d30cb084a7036a7d",
+  "records_sha256": "a5570abd5d6e7098adf9a331aa5a2708238ed48d8903878e3527abcb2df39ffa"
+}

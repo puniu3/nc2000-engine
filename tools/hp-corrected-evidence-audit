@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import re
+import sys
+
+TYPES=['Fighting','Flying','Poison','Ground','Rock','Bug','Ghost','Steel','Fire','Water','Grass','Electric','Psychic','Ice','Dragon','Dark']
+
+
+def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def key(r):return r['case'],r['trial'],r['rep']
+def load(path):
+    rows=[json.loads(l) for l in Path(path).read_text().splitlines()]
+    return rows[0],rows[1:]
+def strip(r):return {k:v for k,v in r.items() if k not in ('seconds','raw_observation','active_slot')}
+
+
+def verify(p,off,on,repeat,reference):
+    expected={(c['id'],t,r) for c in p['fixture']['cases'] for t in range(c['pairs']) for r in range(p['repeats'])}
+    cases={c['id']:c for c in p['fixture']['cases']}
+    maps=[]
+    for rows in [off,on,repeat,reference]:
+        m={key(r):r for r in rows};assert len(m)==len(rows) and set(m)==expected
+        maps.append(m)
+    changes=[];models=[]
+    for k in sorted(expected):
+        a,b,r,old=[m[k] for m in maps]
+        assert strip(a)==strip(old)
+        x=copy.deepcopy(b);y=copy.deepcopy(r);x.pop('seconds');y.pop('seconds');assert x==y
+        for field in ['side','battle_seed','search_seed','history','key','raw_observation','active_slot','truth','iterations']:
+            assert a[field]==b[field],(k,field)
+        assert [(x['action'],x['dominated']) for x in a['actions']]==[(x['action'],x['dominated']) for x in b['actions']]
+        for enabled,row in [(False,a),(True,b)]:
+            assert row['iterations']==p['fixture']['iterations']
+            assert sum(x['visits'] for x in row['actions'])==row['iterations']
+            eligible=[(i,x) for i,x in enumerate(row['actions']) if not x['dominated']] or list(enumerate(row['actions']))
+            assert max(eligible,key=lambda z:(z[1]['visits'],z[0]))[1]['action']==row['best']
+            assert all(0<=x['mean']<=1 for x in row['actions'])
+            for pub,used,actual in zip(row['raw_observation'],row['observation'],cases[k[0]]['teams'][1]):
+                wanted=copy.deepcopy(pub)
+                if not enabled:
+                    wanted['hp_mask']=65535
+                    wanted['other']=re.sub(r'hp_type_mask: \d+','hp_type_mask: 65535',wanted['other'])
+                assert used==wanted
+                ivs=actual.get('ivs',{})
+                index=4*((ivs.get('atk',31)//2)%4)+(ivs.get('def',31)//2)%4
+                assert pub['hp_mask'] & (1<<index)
+            total=contradictions=missing=0;damages=[];types=set()
+            for encoded,count in row['models'].items():
+                m=json.loads(encoded);total+=count
+                for model,public in zip(m['roster'],row['raw_observation']):
+                    mask=public['hp_mask']
+                    if mask!=65535:
+                        valid='hiddenpower' in model['moves'] and mask & (1<<TYPES.index(model['hp_type']))
+                        contradictions+=count*int(not valid)
+                active=m['active']['foe'];types.add(active['hp_type'])
+                missing+=count*int(not set(row['truth']['foe']['moves']).issubset(active['moves']))
+                damages += [x['damage'] for x in m['active']['foe_damage'] if x['move']=='hiddenpower']
+            assert total==p['samples']
+            if enabled:assert contradictions==0
+            if k[2]==0:models.append({'case':k[0],'trial':k[1],'evidence':enabled,'samples':total,'contradictory_mon_samples':contradictions,'samples_missing_actual_moves':missing,'modeled_hp_types':sorted(types),'hp_damage_range':[min(damages),max(damages)] if damages else None,'same_estimator_on_actual_hp':next((d['damage'] for d in row['truth']['foe_damage'] if d['move']=='hiddenpower'),None)})
+        if all(m['hp_mask']==65535 for m in b['raw_observation']):assert strip(a)==strip(b)
+        changes.append({'case':k[0],'trial':k[1],'rep':k[2],'off':a['best'],'on':b['best'],'choice_changed':a['best']!=b['best'],'statistics_changed':a['actions']!=b['actions']})
+    return changes,models
+
+
+def main():
+    protocol,off_path,on_path,repeat_path,reference_path,outdir=map(Path,sys.argv[1:])
+    p=json.loads(protocol.read_text());om,off=load(off_path);nm,on=load(on_path);rm,repeat=load(repeat_path)
+    ref=json.loads(gzip.decompress(reference_path.read_bytes()))
+    assert not om['evidence'] and nm['evidence'] and rm==nm
+    assert {k:v for k,v in om.items() if k!='evidence'}=={k:v for k,v in nm.items() if k!='evidence'}
+    assert nm['protocol_sha256']==sha(protocol)
+    assert nm['sources']==ref['after_manifest']['sources']
+    changes,models=verify(p,off,on,repeat,ref['after'])
+    for mode in ['missing','seed','false_type','selected','repeat']:
+        bad=copy.deepcopy(on);rep=copy.deepcopy(repeat)
+        target=next(i for i,r in enumerate(bad) if any(m['hp_mask']!=65535 for m in r['raw_observation']))
+        if mode=='missing':bad.pop()
+        elif mode=='seed':bad[target]['search_seed']+=1
+        elif mode=='false_type':
+            row=bad[target];encoded=next(iter(row['models']));m=json.loads(encoded);n=row['models'].pop(encoded)
+            slot=next(i for i,o in enumerate(row['raw_observation']) if o['hp_mask']!=65535)
+            mask=row['raw_observation'][slot]['hp_mask'];m['roster'][slot]['hp_type']=next(t for i,t in enumerate(TYPES) if not mask & (1<<i));row['models'][json.dumps(m)]=n
+        elif mode=='selected':bad[target]['best']='move invalid'
+        else:rep[0]['actions'][0]['mean']+=.001
+        if mode in ('seed','false_type','selected'):
+            index=next(i for i,r in enumerate(rep) if key(r)==key(bad[target]));rep[index]=copy.deepcopy(bad[target])
+        try:verify(p,off,bad,rep,ref['after'])
+        except AssertionError:continue
+        raise AssertionError(mode+' accepted')
+    cases=[]
+    for c in p['fixture']['cases']:
+        rs=[r for r in changes if r['case']==c['id']]
+        cases.append({'case':c['id'],'pairs':len(rs),'changed_choices':sum(r['choice_changed'] for r in rs),'changed_roots':len({r['trial'] for r in rs if r['choice_changed']})})
+    summary={'search_pairs':len(changes),'roots':len(models)//2,'choices_changed':sum(r['choice_changed'] for r in changes),'default_reproduced':True,'enabled_repeat_searches':len(repeat),'negative_controls':5,'cases':cases,'models':models,'changes':changes,'scope':p['interpretation'],'runtime_changed':False,'strength_vs_deployed':'unproved','protocol_sha256':sha(protocol),'reference_sha256':sha(reference_path),'checker_sha256':sha(__file__)}
+    outdir.mkdir(exist_ok=True);assert not (outdir/'summary.json').exists()
+    (outdir/'records.json.gz').write_bytes(gzip.compress(json.dumps({'off_manifest':om,'on_manifest':nm,'off':off,'on':on,'repeat':repeat},separators=(',',':')).encode(),mtime=0))
+    summary['records_sha256']=sha(outdir/'records.json.gz');(outdir/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ('models','changes','scope')},indent=2))
+
+
+if __name__=='__main__':main()
