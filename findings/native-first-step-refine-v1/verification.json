@@ -1,0 +1,236 @@
+{
+  "prior_complete_cells_exact": 3570,
+  "newly_completed_cells": 1147,
+  "overlapping_probability_intervals": 21408,
+  "additional_nominees": [
+    {
+      "game": 87,
+      "frame": 49,
+      "side": 1,
+      "selected": "move rest",
+      "alternative": "move doubleedge",
+      "alternative_index": 0,
+      "minimum_immediate_win_gap_lower": 0.7288161056732747,
+      "immediate_win_floor_lower": 0.7288161056732747,
+      "reply_gaps": [
+        0.8076923075859666,
+        0.7288161056732747,
+        0.8076923075859668,
+        0.8076923075859668
+      ],
+      "pair_pending_mass": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "game": 113,
+      "frame": 37,
+      "side": 1,
+      "selected": "move icebeam",
+      "alternative": "move hydropump",
+      "alternative_index": 0,
+      "minimum_immediate_win_gap_lower": 0.08892822265625078,
+      "immediate_win_floor_lower": 0.796875,
+      "reply_gaps": [
+        0.08892822265625078,
+        0.734375,
+        0.734375,
+        0.18359375
+      ],
+      "pair_pending_mass": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "game": 115,
+      "frame": 31,
+      "side": 1,
+      "selected": "move rest",
+      "alternative": "move thunderbolt",
+      "alternative_index": 0,
+      "minimum_immediate_win_gap_lower": 0.0625,
+      "immediate_win_floor_lower": 0.0625,
+      "reply_gaps": [
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "pair_pending_mass": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "game": 141,
+      "frame": 35,
+      "side": 1,
+      "selected": "move rest",
+      "alternative": "move doubleedge",
+      "alternative_index": 0,
+      "minimum_immediate_win_gap_lower": 0.0625,
+      "immediate_win_floor_lower": 0.0625,
+      "reply_gaps": [
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "pair_pending_mass": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "game": 149,
+      "frame": 37,
+      "side": 1,
+      "selected": "move rest",
+      "alternative": "move thunderbolt",
+      "alternative_index": 0,
+      "minimum_immediate_win_gap_lower": 0.0625,
+      "immediate_win_floor_lower": 0.0625,
+      "reply_gaps": [
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "pair_pending_mass": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "game": 141,
+      "frame": 41,
+      "side": 1,
+      "selected": "move rest",
+      "alternative": "move doubleedge",
+      "alternative_index": 0,
+      "minimum_immediate_win_gap_lower": 0.05859375,
+      "immediate_win_floor_lower": 0.05859375,
+      "reply_gaps": [
+        0.05859375,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "pair_pending_mass": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "game": 76,
+      "frame": 52,
+      "side": 0,
+      "selected": "move curse",
+      "alternative": "move return",
+      "alternative_index": 0,
+      "minimum_immediate_win_gap_lower": 0.01762820512522012,
+      "immediate_win_floor_lower": 0.01762820512522012,
+      "reply_gaps": [
+        0.054487179484567605,
+        0.01762820512522012,
+        0.054487179484567605,
+        0.054487179484567605
+      ],
+      "pair_pending_mass": [
+        -0.0,
+        0.30112795853495944,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "game": 83,
+      "frame": 27,
+      "side": 1,
+      "selected": "move swagger",
+      "alternative": "move thunder",
+      "alternative_index": 0,
+      "minimum_immediate_win_gap_lower": 0.005643735499058275,
+      "immediate_win_floor_lower": 0.005643735499058275,
+      "reply_gaps": [
+        0.005643735499058275,
+        0.04345703125,
+        0.04345703125,
+        0.04345703125
+      ],
+      "pair_pending_mass": [
+        0.4274901276816114,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "game": 76,
+      "frame": 52,
+      "side": 0,
+      "selected": "move curse",
+      "alternative": "move dynamicpunch",
+      "alternative_index": 2,
+      "minimum_immediate_win_gap_lower": 0.0023850661079904967,
+      "immediate_win_floor_lower": 0.0023850661079904967,
+      "reply_gaps": [
+        0.031005859375,
+        0.0023850661079904967,
+        0.031005859375,
+        0.031005859375
+      ],
+      "pair_pending_mass": [
+        -0.0,
+        0.7471799319078729,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "game": 191,
+      "frame": 33,
+      "side": 1,
+      "selected": "move recover",
+      "alternative": "move return",
+      "alternative_index": 0,
+      "minimum_immediate_win_gap_lower": 0.0016025640943553299,
+      "immediate_win_floor_lower": 0.0016025640943553299,
+      "reply_gaps": [
+        0.07808743979273912,
+        0.08442570600968224,
+        0.03921274032882138,
+        0.0016025640943553299
+      ],
+      "pair_pending_mass": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    }
+  ],
+  "prior_nominees_retained": true,
+  "records_sha256": "b46af2ecdc046cdc463a7a735d985406b60e47054c852909d40b451d2ad370c0",
+  "rejected_mutations": [
+    "wrong_root",
+    "changed_complete_cell",
+    "disjoint_interval"
+  ],
+  "action_error_proven": false,
+  "strength_improvement_proven": false
+}

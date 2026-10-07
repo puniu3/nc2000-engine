@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+import gzip
+import hashlib
+import json
+import copy
+from pathlib import Path
+
+
+def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def rows(path):
+    data=Path(path).read_bytes()
+    if str(path).endswith('.gz'):data=gzip.decompress(data)
+    return [json.loads(line) for line in data.splitlines()]
+
+
+def check(old,new):
+    assert len(old)==len(new)==360
+    complete=0;newly_complete=0;overlaps=0
+    for a,b in zip(old,new):
+        for k in ['game','frame','state_sha256','side','selected','actions']:assert a[k]==b[k]
+        assert len(a['cells'])==len(b['cells'])
+        for x,y in zip(a['cells'],b['cells']):
+            if not x['exhausted']:
+                assert x==y;complete+=1
+            elif not y['exhausted']:newly_complete+=1
+            for u,v in zip(x['outcome_mass_p0win_p1win_tie_live'],y['outcome_mass_p0win_p1win_tie_live']):
+                assert max(u,v)<=min(u+x['pending_mass'],v+y['pending_mass'])+1e-9
+                overlaps+=1
+    return dict(prior_complete_cells_exact=complete,newly_completed_cells=newly_complete,overlapping_probability_intervals=overlaps)
+
+
+def main():
+    p=Path('findings/native-first-step-refine-v1');t=Path('tmp/native-first-step-refine-v1')
+    protocol=json.loads((p/'protocol.json').read_text())
+    assert digest('findings/native-first-step-census-v1/summary.json')==protocol['parent_summary_sha256']
+    summary=json.loads((t/'summary.json').read_text())
+    assert summary['records_sha256']==digest(t/'main.jsonl') and summary['protocol_sha256']==digest(p/'protocol.json')
+    old=rows('findings/native-first-step-census-v1/records.jsonl.gz');new=rows(t/'main.jsonl');result=check(old,new)
+    old_summary=json.loads(Path('findings/native-first-step-census-v1/summary.json').read_text())
+    key=lambda r:(r['game'],r['frame'],r['alternative'])
+    old_keys={key(r) for r in old_summary['nominees']}
+    result['additional_nominees']=[r for r in summary['nominees'] if key(r) not in old_keys]
+    result['prior_nominees_retained']=old_keys<={key(r) for r in summary['nominees']}
+    rejected=[]
+    for kind in ['wrong_root','changed_complete_cell','disjoint_interval']:
+        altered=copy.deepcopy(new)
+        if kind=='wrong_root':altered[0]['frame']+=1
+        elif kind=='changed_complete_cell':
+            i,j=next((i,j) for i,r in enumerate(old) for j,c in enumerate(r['cells']) if not c['exhausted'])
+            altered[i]['cells'][j]['runs']+=1
+        else:
+            i,j=next((i,j) for i,r in enumerate(old) for j,c in enumerate(r['cells']) if c['exhausted'])
+            altered[i]['cells'][j]['outcome_mass_p0win_p1win_tie_live']=[2.,0.,0.,0.]
+            altered[i]['cells'][j]['pending_mass']=0.
+        try:check(old,altered)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    result.update(records_sha256=digest(t/'main.jsonl'),rejected_mutations=rejected,action_error_proven=False,strength_improvement_proven=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()
