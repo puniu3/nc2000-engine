@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/hidden_power_aliases.rs (target/debug/deps/hidden_power_aliases-c092d96b962d0e99)
+
+running 3 tests
+test lower_power_changes_damage_and_input_aliases_share_public_logs ... ok
+test kings_rock_applies_to_typed_input ... ok
+test all_types_use_the_canonical_slot_and_keep_dv_properties ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+

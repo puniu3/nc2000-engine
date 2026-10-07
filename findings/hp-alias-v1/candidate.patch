@@ -1,0 +1,137 @@
+diff --git a/crates/engine/src/battle/choices.rs b/crates/engine/src/battle/choices.rs
+index ab58eca..e049674 100644
+--- a/crates/engine/src/battle/choices.rs
++++ b/crates/engine/src/battle/choices.rs
+@@ -242,6 +242,7 @@ impl Battle {
+ 
+         let move_id = resolved.or_else(|| dex.moves.id(move_id_str))
+             .ok_or_else(|| EngineError::InvalidChoice(format!("unknown move {move_id_str}")))?;
++        let move_id = dex.canonical_move_id(move_id);
+         let mut move_slot = None;
+         let mut enabled = false;
+         for (i, slot) in moves.iter().enumerate() {
+diff --git a/crates/engine/src/battle/mod.rs b/crates/engine/src/battle/mod.rs
+index bb0a514..7996729 100644
+--- a/crates/engine/src/battle/mod.rs
++++ b/crates/engine/src/battle/mod.rs
+@@ -564,6 +564,7 @@ impl Battle {
+                 .moves
+                 .id(&toid(mv))
+                 .ok_or_else(|| EngineError::InvalidChoice(format!("unknown move {mv}")))?;
++            let move_id = dex.canonical_move_id(move_id);
+             let ms = dex.move_static(move_id);
+             let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
+             // calculatePP: pp * (5 + ppUps) / 5; gen<=2 && pp==40 → -= ppUps
+diff --git a/crates/engine/src/dex.rs b/crates/engine/src/dex.rs
+index 31a20fe..39be190 100644
+--- a/crates/engine/src/dex.rs
++++ b/crates/engine/src/dex.rs
+@@ -1293,6 +1293,12 @@ impl Dex {
+         &self.moves_static[id.0 as usize]
+     }
+ 
++    pub fn canonical_move_id(&self, id: MoveId) -> MoveId {
++        self.moves.get(id).extra.get("placeholderFor").and_then(Value::as_str)
++            .map(|name| self.moves.id(&toid(name)).expect("move placeholder must resolve"))
++            .unwrap_or(id)
++    }
++
+     pub fn conds_id(&self, key: &str) -> Option<CondId> {
+         self.conds.id(key)
+     }
+diff --git a/crates/engine/tests/hidden_power_aliases.rs b/crates/engine/tests/hidden_power_aliases.rs
+new file mode 100644
+index 0000000..c5d5949
+--- /dev/null
++++ b/crates/engine/tests/hidden_power_aliases.rs
+@@ -0,0 +1,90 @@
++use nc2000_engine::battle::{enumerate::enumerate_step, PokemonSet, SearchChoice};
++use nc2000_engine::dex::Dex;
++use nc2000_engine::state::Battle;
++use serde_json::json;
++use std::collections::BTreeMap;
++
++fn battle(dex: &Dex, name: &str, ivs: [i32; 6], item: &str) -> Battle {
++    let mon = |species: &str, moves: Vec<&str>| {
++        serde_json::from_value::<PokemonSet>(json!({"species":species,"name":species,"level":50,"moves":moves,
++            "ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},
++            "evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255}})).unwrap()
++    };
++    let mut own = vec![mon("Zapdos", vec![name]), mon("Snorlax", vec!["Tackle"]), mon("Tauros", vec!["Tackle"])];
++    own[0].ivs = Some(["hp", "atk", "def", "spa", "spd", "spe"].into_iter().zip(ivs).map(|(k,v)|(k.to_owned(),v as u8)).collect());
++    own[0].item = item.to_owned();
++    let foe = vec![mon("Lapras", vec!["Growl"]), mon("Miltank", vec!["Tackle"]), mon("Starmie", vec!["Tackle"])];
++    let mut b = Battle::from_fixture(dex, "1,2,3,4", &own, &foe).unwrap();
++    b.set_log_enabled(true);
++    let choices = [0, 1].map(|s| Some(b.legal_choices(dex, s)[0]));
++    b.apply_choices(dex, choices).unwrap();
++    b
++}
++
++fn damage(dex: &Dex, b: &Battle, name: &str) -> BTreeMap<i32, f64> {
++    let target = b.active_id(1).unwrap();
++    let hp = b.poke(target).hp;
++    let choices = [Some(SearchChoice::Move(dex.moves.id(name).unwrap())), Some(SearchChoice::Move(dex.moves.id("growl").unwrap()))];
++    let step = enumerate_step(dex, b, choices, 200_000).unwrap();
++    let mut histogram = BTreeMap::<i32, f64>::new();
++    for leaf in step.leaves {
++        *histogram.entry(hp-leaf.battle.poke(target).hp).or_default() += leaf.prob;
++    }
++    histogram
++}
++
++#[test]
++fn all_types_use_the_canonical_slot_and_keep_dv_properties() {
++    let dex = Dex::from_json(include_str!("../../../data/gen2stadium2.json")).unwrap();
++    let types = ["Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost", "Steel", "Fire", "Water", "Grass", "Electric", "Psychic", "Ice", "Dragon", "Dark"];
++    for (index, expected) in types.iter().enumerate() {
++        for high in [false, true] {
++            let offset = if high { 12 } else { 0 };
++            let atk = offset + index as i32 / 4;
++            let def = offset + index as i32 % 4;
++            let speed = if high { 15 } else { 1 };
++            let hp = (atk & 1)*8 + (def & 1)*4 + (speed & 1)*2 + 1;
++            let ivs = [hp*2, atk*2, def*2, 30, 30, speed*2];
++            let name = format!("hiddenpower{}", expected.to_lowercase());
++            let typed = battle(&dex, &name, ivs, "");
++            let plain = battle(&dex, "hiddenpower", ivs, "");
++            let mon = typed.poke(typed.active_id(0).unwrap());
++            assert_eq!(dex.type_name(mon.hp_type), *expected);
++            assert_eq!(mon.hp_power, if high { 70 } else { 35 });
++            assert_eq!(dex.moves.key(mon.move_slots[0].id), "hiddenpower");
++            assert_eq!(typed.state_key128(), plain.state_key128());
++            assert_eq!(damage(&dex, &typed, &name), damage(&dex, &plain, "hiddenpower"));
++        }
++    }
++}
++
++#[test]
++fn lower_power_changes_damage_and_input_aliases_share_public_logs() {
++    let dex = Dex::from_json(include_str!("../../../data/gen2stadium2.json")).unwrap();
++    let mut low = battle(&dex, "Hidden Power Ice", [30,6,2,30,30,2], "");
++    let high = battle(&dex, "Hidden Power Ice", [30,30,26,30,30,30], "");
++    let mean = |histogram: BTreeMap<i32,f64>| histogram.iter().map(|(&damage,&p)| f64::from(damage)*p).sum::<f64>();
++    assert!(mean(damage(&dex, &low, "hiddenpowerice")) < 0.6*mean(damage(&dex, &high, "hiddenpowerice")));
++    let mut generic = low.clone();
++    low.choose(&dex, 0, "move hiddenpowerice").unwrap();
++    generic.choose(&dex, 0, "move hiddenpower").unwrap();
++    low.choose(&dex, 1, "move growl").unwrap();
++    generic.choose(&dex, 1, "move growl").unwrap();
++    assert_eq!(low.state_key128(), generic.state_key128());
++    assert_eq!(low.log, generic.log);
++    assert!(low.log.iter().any(|l| l.contains("|Hidden Power|")));
++    assert!(!low.log.iter().any(|l| l.contains("|Hidden Power Ice|")));
++}
++
++#[test]
++fn kings_rock_applies_to_typed_input() {
++    let dex = Dex::from_json(include_str!("../../../data/gen2stadium2.json")).unwrap();
++    let b = battle(&dex, "Hidden Power Ice", [30,6,2,30,30,2], "King's Rock");
++    let choices = [Some(SearchChoice::Move(dex.moves.id("hiddenpowerice").unwrap())), Some(SearchChoice::Move(dex.moves.id("growl").unwrap()))];
++    let target = b.active_id(1).unwrap();
++    let pp = b.poke(target).move_slots[0].pp;
++    let step = enumerate_step(&dex, &b, choices, 200_000).unwrap();
++    assert!(step.leaves.iter().any(|leaf| leaf.battle.poke(target).move_slots[0].pp == pp));
++    let plain = battle(&dex, "Hidden Power", [30,6,2,30,30,2], "King's Rock");
++    assert_eq!(damage(&dex, &b, "hiddenpowerice"), damage(&dex, &plain, "hiddenpower"));
++}

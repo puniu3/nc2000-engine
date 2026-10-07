@@ -18765,6 +18765,65 @@
         "strength_demonstrated": false,
         "scope": "Research controller shares whole models by passive held-item identity. Presence is preserved using Poke Ball; items with callbacks and the four direct identity readers remain distinct. Nonactive item metadata is removed only at idle move boundaries with one remaining Pokemon per side. Every original model is retained in a group; root identity and independently normalized exported states are checked. All first joint choices for every folded member are native-enumerated and compared by normalized full successor state, repeated twice. Representative policy proofs and controller thresholds are independently checked, and the final mixture and bounds equal the unshared reference. Tests cover actual theft, transformation and their next transitions plus rejection of live benches and pending turns. Fresh unshared/grouped/grouped/unshared timing runs are sequential, with setup reported separately; audits are excluded. This is source-reviewed state equivalence with finite checks, not a machine-checked theorem for arbitrary engine states or an imperfect-information observation quotient. Fixed continuation lower policies do not condition on item labels; upper witnesses use actual representative worlds. No deployed-strength claim."
       }
+    },
+    "findings/hp-alias-v1/summary.json": {
+      "sha256": "47d0683514891219fc998809aa8b189d67347db5740dcd11b00ac0c4cebb17da",
+      "data": {
+        "date": "2026-10-07",
+        "baseline_commit": "b823719a8ebe022ef1d860ebc18d05f7f08507f2",
+        "candidate_commit": "27a0226e02fdceba1e34060cdd264e9a1e114196",
+        "candidate_branch": "fix/hidden-power-canonical",
+        "integrated": false,
+        "deployed": false,
+        "strength_vs_deployed": "unproved",
+        "diagnosis": "Typed Hidden Power aliases bypass dynamic DV power callbacks; canonical move slots correct damage, public move labels, and Kings Rock handling.",
+        "low_power_example": {
+          "power": 35,
+          "mean_damage_before": 8.350961538235424,
+          "mean_damage_after": 4.2596153844788205
+        },
+        "previous_stat_study": {
+          "requested": 2400,
+          "accepted": 2144,
+          "low_power_affected": 1120,
+          "archive_sha256": "2877b9147793ef4b27a18680a9f53185423394e9e4062f71b74506a48be3c2ec",
+          "correction": "Recorded hp_power 35-65 was executed as static 70 by typed aliases. Prior low-power coverage claim is withdrawn; old results remain engine-specific historical records.",
+          "history_filter": "Compared full Battle.log including private split lines, a sufficient but incomplete filter for viewer-visible history."
+        },
+        "tests": {
+          "focused_passed": 3,
+          "bot_lib_passed": 230,
+          "full_engine_conformance": "stopped at frozen_compact_replay_remains_compatible failure; remaining tests not claimed passed",
+          "baseline_replay": "same incompatible replay version failure reproduced on baseline"
+        },
+        "next": "Rebuild candidate worlds from canonical Hidden Power and viewer-visible histories; revalidate bounds before integrating into ordinary bot.",
+        "upstream_sources": [
+          "https://raw.githubusercontent.com/smogon/pokemon-showdown/79c04dcc4c055d190a7aba724ec83733ee3f7b38/sim/pokemon.ts",
+          "https://raw.githubusercontent.com/smogon/pokemon-showdown/79c04dcc4c055d190a7aba724ec83733ee3f7b38/sim/dex-moves.ts"
+        ],
+        "baseline_sources": {
+          "crates/bot/examples/hp_alias_probe.rs": "d878fabdb406598a80d34cb924850c8c90911556b59c8d0badf5ecb8c3c686d9",
+          "crates/engine/src/dex.rs": "743644d62c0e7c40503ea0975a49231df5f46ecd74fb61f4dc33d7fbc0344602",
+          "crates/engine/src/battle/mod.rs": "2529689bd5574ab252351a422d83201eb043747ec25161f649ed6e90089bd42c",
+          "crates/engine/src/battle/choices.rs": "960db284bfb6f49ea5b0732bbbfeeb2ec0ce3d57ae463dc43d645826d0ed36ee",
+          "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+        },
+        "candidate_sources": {
+          "crates/bot/examples/hp_alias_probe.rs": "d878fabdb406598a80d34cb924850c8c90911556b59c8d0badf5ecb8c3c686d9",
+          "crates/engine/src/dex.rs": "01ed292c69b2906e263641281e5736f9568b54908c4827a9def4c8eb6c6954c1",
+          "crates/engine/src/battle/mod.rs": "0769921956f1ce181b9f7267519826761e52a7ff1f22d6d671bec2499599af3d",
+          "crates/engine/src/battle/choices.rs": "d85f199ebc17262f84ad9931720911494f9a18809c6d2197b70f08b76ba8f304",
+          "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+        },
+        "artifact_hashes": {
+          "baseline-replay-test.log": "3bb72349e2a8c5ce9fbbd4bf63a5ec406832b7ffecba50d82cf55aa045ab45c7",
+          "bot-tests.log": "4ff1bbadbc29a365d0fee997e9eac7c21bf127da58a0ccaf491ffd9b4fcaa47c",
+          "candidate.patch": "1b1ce6c6f97602199639e3e54adff7734eec041f3cf34aef140f9c89f30a5262",
+          "engine-conformance-tests.log": "21ced8e459c8c896b6f631be8487c3c9a3f7916544513de9d3eb4a093c04e8ab",
+          "focused-tests.log": "a3909fed751065bddbf19855a0557e55b9d4364f460e69e6e8955931a0679daf",
+          "records.json": "df97c1cd38547b531f509c30827c3585e205cee643e353d79ea0efe9467d1ef4"
+        }
+      }
     }
   },
   "foresight_fix": {
