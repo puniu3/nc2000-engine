@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from pathlib import Path
+
+
+def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def rows(path):
+    data=Path(path).read_bytes()
+    if str(path).endswith('.gz'):data=gzip.decompress(data)
+    return [json.loads(line) for line in data.splitlines()]
+
+
+def check(actual,p,roots,prior):
+    result=runpy.run_path('tools/native-loss-threshold-audit')['check_threshold'](actual,p,roots)
+    assert not p['action_overrides']
+    for r in actual:
+        assert r['target']==r['selected']
+        old=prior[r['game'],r['frame']]
+        for a,b in zip([old['value_p0'],*old['cells_p0']],[r['value_p0'],*r['cells_p0']]):
+            assert max(a[0],b[0])<=min(a[1],b[1])+1e-8
+        assert 'dead_quick_claw_quotient: true' in r['config']
+    return result
+
+
+def main():
+    folder=Path('findings/native-first-step-loss-v1');t=Path('tmp/native-first-step-loss-v1')
+    p=json.loads((folder/'protocol.json').read_text())
+    assert digest(p['source_helper'])==p['helper_sha256']
+    assert digest('tmp/native-loss-threshold-v1/solver')==p['solver_binary_sha256']
+    assert digest('crates/bot/src/bounds/loss_threshold.rs')==p['solver_source_sha256']
+    assert digest('crates/bot/src/bounds.rs')==p['parent_bounds_source_sha256']
+    assert digest('findings/native-first-step-refine-v1/summary.json')==p['nomination_summary_sha256']
+    assert digest('findings/native-loss-lower-screen-v1/records.jsonl.gz')==p['old_screen_archive_sha256']
+    roots_path='tmp/native-endgame-census-v1/roots.jsonl';assert digest(roots_path)==p['roots_sha256']
+    roots=rows(roots_path);ordered=sorted(roots,key=lambda r:(r['record']['game'],r['record']['frame']))
+    nomination=json.loads(Path('findings/native-first-step-refine-v1/summary.json').read_text())
+    old=rows('findings/native-loss-lower-screen-v1/records.jsonl.gz');old_keys={(r['game'],r['frame']) for r in old}
+    expected=sorted({(r['game'],r['frame']) for r in nomination['nominees']}-old_keys)
+    assert p['nominated_keys']==[list(k) for k in expected]
+    assert [(ordered[i]['record']['game'],ordered[i]['record']['frame']) for i in p['indices']]==expected
+    prior={(r['game'],r['frame']):r for r in rows('findings/native-endgame-bounds-v1/records.jsonl.gz')}
+    actual=rows(t/'main.jsonl');result=check(actual,p,roots,prior)
+    rejected=[]
+    for kind in ['missing_root','wrong_target','false_threshold','invalid_cell']:
+        altered=copy.deepcopy(actual)
+        if kind=='missing_root':altered.pop()
+        elif kind=='wrong_target':altered[0]['target']=(altered[0]['target']+1)%len(altered[0]['actions'][altered[0]['side']])
+        elif kind=='false_threshold':altered[0]['stop']='AboveThreshold';altered[0]['threshold_loss']=[.99,1.]
+        else:altered[0]['cells_p0'][0]=[1.,0.]
+        try:check(altered,p,roots,prior)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    earlier_p=json.loads(Path('findings/native-first-step-refine-v1/protocol.json').read_text())
+    loss_by_root={}
+    for path in earlier_p['prior_sources']:
+        assert digest(path)==earlier_p['prior_sources'][path]
+        for r in rows(path):
+            key=r['game'],r['frame'];loss_by_root[key]=min(loss_by_root.get(key,1.),r['pure_action_losses'][r['selected']][1])
+    before={k for k,v in loss_by_root.items() if v<=.02}
+    for r in actual:
+        key=r['game'],r['frame'];loss_by_root[key]=min(loss_by_root[key],r['threshold_loss'][1])
+    after={k for k,v in loss_by_root.items() if v<=.02}
+    result.update(schema=p['schema'],protocol_sha256=digest(folder/'protocol.json'),records_sha256=digest(t/'main.jsonl'),
+                  targets=[dict(game=r['game'],frame=r['frame'],action=r['actions'][r['side']][r['selected']],loss=r['threshold_loss'],stop=r['stop'],runs=r['runs']) for r in sorted(actual,key=lambda r:(r['game'],r['frame']))],
+                  any_positive_selected_loss_lower=[(r['game'],r['frame']) for r in actual if r['threshold_loss'][0]>1e-8],
+                  newly_small_loss_roots=sorted(after-before),combined_small_loss_roots=len(after),combined_unresolved_roots=360-len(after),
+                  rejected_mutations=rejected,ordinary_bot_changed=False,strength_improvement_proven=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()
