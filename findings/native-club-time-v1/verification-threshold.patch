@@ -1,0 +1,11 @@
+--- a/crates/bot/src/bounds/loss_threshold.rs
++++ b/crates/bot/src/bounds/loss_threshold.rs
+@@ -89,6 +89,8 @@
+                 Some(PolicyLossThresholdStop::AboveThreshold)
+             } else if loss.hi <= threshold {
+                 Some(PolicyLossThresholdStop::AtMostThreshold)
++            } else if self.cfg.verification_trial_limit.is_some_and(|limit|self.stats.trials>=limit) {
++                Some(PolicyLossThresholdStop::WorkExhausted)
+             } else if self
+                 .cfg
+                 .time_budget
