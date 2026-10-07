@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+import math
+import sys
+from collections import Counter
+from pathlib import Path
+
+
+def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check(result,protocol,trace):
+    n=protocol['games'];assert n%2==0 and result['games']==n and result['pairs']==n//2
+    assert result['iterations']==protocol['iterations'] and result['null_control']==protocol['null_control']
+    scores=result['game_scores'];assert len(scores)==n and all(s in [0.,.5,1.] for s in scores)
+    pairs=[sum(scores[i:i+2])/2 for i in range(0,n,2)];assert pairs==result['pair_scores']
+    counts=Counter(scores);assert result['wins']==counts[1.] and result['losses']==counts[0.]
+    assert result['ties']+result['caps']==counts[.5]
+    mean=sum(scores)/n;assert result['score']==mean
+    ci=1.96*math.sqrt(sum((s-mean)**2 for s in pairs)/(len(pairs)-1)/len(pairs))
+    assert abs(result['ci95_halfwidth']-ci)<1e-12
+    assert result['replayed_games']==n and result['replayed_decisions']==len(trace)
+    assert {r['game'] for r in trace}==set(range(n))
+    for game in range(n):
+        for side in [0,1]:
+            rows=[r for r in trace if r['game']==game and r['side']==side]
+            assert [r['ordinal'] for r in rows]==list(range(len(rows)))
+            assert all(len(r['key'])==32 and r['action'] for r in rows)
+    if protocol['null_control']:assert all(s==.5 for s in pairs)
+    return {'score':mean,'paired95':[mean-ci,mean+ci],'unresolved_caps':result['caps'],'positive_screen':mean-ci>.5 and result['caps']==0}
+
+
+def main():
+    name=sys.argv[1] if len(sys.argv)>1 else 'main';assert name in ['main','null']
+    p=Path('findings/native-overkill-duel-v1');t=Path('tmp/native-overkill-duel-v1')
+    protocol_path=p/('protocol.json' if name=='main' else 'null-protocol.json');protocol=json.loads(protocol_path.read_text())
+    assert sha(p/'native_overkill_duel.rs')==protocol['helper_sha256']
+    assert sha(t/'solver')==protocol['binary_sha256']
+    for path,expected in {**protocol['inputs'],**protocol['source_sha256']}.items():assert sha(path)==expected
+    result=json.loads((t/(name+'.json')).read_text());tracepath=t/(name+'-trace.jsonl')
+    trace=[json.loads(l) for l in tracepath.read_text().splitlines()]
+    assert result['protocol_sha256']==sha(protocol_path) and result['trace_sha256']==sha(tracepath)
+    summary=check(result,protocol,trace);rejected=[]
+    for mutation in ['missing_game','wrong_pair','false_score','false_replay']:
+        r=copy.deepcopy(result)
+        if mutation=='missing_game':r['game_scores'].pop()
+        elif mutation=='wrong_pair':r['pair_scores'][0]+=1.
+        elif mutation=='false_score':r['score']+=.1
+        else:r['replayed_decisions']-=1
+        try:check(r,protocol,trace)
+        except AssertionError:rejected.append(mutation)
+        else:raise AssertionError('accepted '+mutation)
+    print(json.dumps(dict(schema=protocol['schema'],arm=name,checks=summary,result=result,rejected_mutations=rejected,default_enabled=False,deployed_comparison=False,matched_time_comparison=False),indent=2))
+
+
+if __name__=='__main__':main()
