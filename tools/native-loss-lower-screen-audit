@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def rows(path):
+    p=Path(path)
+    data=gzip.decompress(p.read_bytes()) if p.suffix=='.gz' else p.read_bytes()
+    return [json.loads(l) for l in data.decode().splitlines()]
+
+
+def main():
+    scratch, roots_path=map(Path,sys.argv[1:])
+    directory=Path('findings/native-loss-lower-screen-v1')
+    protocol=json.loads((directory/'protocol.json').read_text())
+    original=json.loads(Path('findings/native-endgame-refine-v1/protocol.json').read_text())
+    assert protocol['indices']==original['indices'] and len(protocol['indices'])==70
+    assert protocol['mode']=='loss_lower' and protocol['action_overrides']=={}
+    assert digest(roots_path)==protocol['roots_sha256']
+    for path,field in [('findings/native-loss-threshold-v1/native_loss_threshold.rs','helper_sha256'),
+                       ('crates/bot/src/bounds/loss_threshold.rs','solver_source_sha256'),
+                       ('crates/bot/src/bounds.rs','parent_bounds_source_sha256'),
+                       ('tmp/native-loss-threshold-v1/solver','solver_binary_sha256'),
+                       ('findings/native-loss-threshold-v1/summary.json','pilot_summary_sha256')]:
+        assert digest(path)==protocol[field]
+    roots=rows(roots_path);records=rows(scratch/'main.jsonl')
+    check=runpy.run_path('tools/native-loss-threshold-audit')['check_threshold']
+    result=check(records,protocol,roots)
+    lookup={(r['game'],r['frame']):r for r in records}
+    pilot=rows('findings/native-loss-threshold-v1/actual_decisions.jsonl.gz')
+    for r in pilot:
+        current=lookup[r['game'],r['frame']]
+        assert {k:v for k,v in current.items() if k!='elapsed_ms'}=={k:v for k,v in r.items() if k!='elapsed_ms'}
+    prior_small=set()
+    baseline=[]
+    for study,name in [('native-endgame-bounds-v1','records'),('native-endgame-refine-v1','records'),
+                       ('native-endgame-scheduling-v1','quotient'),('native-endgame-quotient-v1','records')]:
+        earlier=rows(f'findings/{study}/{name}.jsonl.gz')
+        baseline.extend(earlier)
+        prior_small.update((r['game'],r['frame']) for r in earlier if r['pure_action_losses'][r['selected']][1]<=.02)
+    for earlier in baseline:
+        key=earlier['game'],earlier['frame']
+        if key not in lookup:
+            continue
+        current=lookup[key]
+        for a,b in zip([earlier['value_p0'],*earlier['cells_p0']],[current['value_p0'],*current['cells_p0']]):
+            assert max(a[0],b[0])<=min(a[1],b[1])+1e-8
+    small={(r['game'],r['frame']) for r in records if r['stop']=='AtMostThreshold'}
+    rejected=[]
+    for kind in ['missing_root','wrong_target','false_above_threshold','inflated_loss']:
+        altered=copy.deepcopy(records)
+        if kind=='missing_root':
+            altered.pop()
+        elif kind=='wrong_target':
+            altered[0]['target']=(altered[0]['target']+1)%len(altered[0]['actions'][altered[0]['side']])
+        elif kind=='false_above_threshold':
+            altered[0]['stop']='AboveThreshold'
+        else:
+            altered[0]['threshold_loss'][0]=.1
+            altered[0]['pure_action_losses'][altered[0]['target']][0]=.1
+        try:
+            check(altered,protocol,roots)
+        except AssertionError:
+            rejected.append(kind)
+        else:
+            raise AssertionError('accepted mutation: '+kind)
+    result.update({'schema':protocol['schema'],'protocol_sha256':digest(directory/'protocol.json'),
+                   'records_sha256':digest(scratch/'main.jsonl'),'six_pilot_repeats_identical_except_time':True,
+                   'all_intervals_overlap_prior':True,'rejected_mutations':rejected,
+                   'new_small_loss_keys':sorted(small-prior_small),
+                   'combined_small_loss_roots':len(small|prior_small),
+                   'combined_small_loss_games':len({g for g,f in small|prior_small}),
+                   'combined_unresolved_roots':360-len(small|prior_small),
+                   'nonzero_actual_loss_lower_roots':sum(r['threshold_loss'][0]>1e-8 for r in records),
+                   'slowest_root':{k:max(records,key=lambda r:r['elapsed_ms'])[k] for k in ['game','frame','elapsed_ms','runs','nodes']},
+                   'ordinary_bot_changed':False,'blind_policy_error_proven':False,'strength_improvement_proven':False})
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':
+    main()

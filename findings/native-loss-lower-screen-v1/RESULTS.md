@@ -1,0 +1,11 @@
+# Complete directed loss-lower-bound screen
+
+All 70 fixed roots completed. There were zero AboveThreshold decisions, four AtMostThreshold decisions, 47 WorkExhausted stops and 19 NodeBudget stops. No actual selected-action loss lower bound exceeded 1e-8, and no selected action was proved strictly dominated. Total engine executions were 15,614,228. This remains inconclusive about mistakes in the unresolved positions and about full-game optimality.
+
+Game 32 frame 38 and game 161 frame 15 are newly certified within 0.02 selected-action loss. The other two threshold successes (game 1 frame 37 and game 7 frame 21) had already been certified. Combining all earlier interval evidence now gives 41 roots from 41 games with small fixed-world loss and 319 unresolved roots out of the original 360. Earlier certificates remain valid even where this different allocation yields wider intervals.
+
+The six pilot actual-action results repeat exactly except elapsed time. Every root and cell interval overlaps earlier evidence, all payoff matrices pass the independent rational LP checker, and all target actions are the original archived bot actions. Missing roots, wrong targets, false AboveThreshold labels and inflated loss lower bounds are rejected. The positive controls in native-loss-threshold-v1 were counterfactual bad alternatives; they must not be counted as observed bot mistakes.
+
+The slowest root was game 117 frame 23: about 138.6 seconds on this native run, 250,000 engine executions and 3,023 retained nodes. This illustrates that engine-execution count alone is not an equal-time cost measure. No iPad timing or practical in-game response-time claim follows. No ordinary bot behavior or public deployment changed; the new library entry point is used only by the research helper.
+
+The next coverage expansion should branch from replay-verified histories using alternative legal opponent actions, then preserve the ordinary observer/belief lifecycle when asking the bot for its response. This explores reachable off-trajectory positions without calibrating to human players or treating this sampled team pool as optimal. Any resulting certificate still needs its hidden-information scope stated explicitly.

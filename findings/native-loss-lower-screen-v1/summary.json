@@ -1,0 +1,371 @@
+{
+  "roots": 70,
+  "games": 70,
+  "runs": 15614228,
+  "stops": {
+    "AtMostThreshold": 4,
+    "WorkExhausted": 47,
+    "NodeBudget": 19
+  },
+  "value_width_at_most_002": {
+    "roots": 4,
+    "games": 4,
+    "keys": [
+      [
+        1,
+        37
+      ],
+      [
+        7,
+        21
+      ],
+      [
+        32,
+        38
+      ],
+      [
+        161,
+        15
+      ]
+    ]
+  },
+  "selected_pure_loss_at_most_002": {
+    "roots": 4,
+    "games": 4,
+    "keys": [
+      [
+        1,
+        37
+      ],
+      [
+        7,
+        21
+      ],
+      [
+        32,
+        38
+      ],
+      [
+        161,
+        15
+      ]
+    ]
+  },
+  "selected_pure_loss_above_002": {
+    "roots": 0,
+    "games": 0,
+    "keys": []
+  },
+  "selected_strictly_dominated": {
+    "roots": 0,
+    "games": 0,
+    "keys": []
+  },
+  "unresolved_selected_pure_loss": {
+    "roots": 66,
+    "games": 66,
+    "keys": [
+      [
+        0,
+        18
+      ],
+      [
+        3,
+        97
+      ],
+      [
+        4,
+        60
+      ],
+      [
+        10,
+        32
+      ],
+      [
+        13,
+        41
+      ],
+      [
+        16,
+        18
+      ],
+      [
+        19,
+        17
+      ],
+      [
+        22,
+        38
+      ],
+      [
+        26,
+        26
+      ],
+      [
+        27,
+        57
+      ],
+      [
+        28,
+        72
+      ],
+      [
+        29,
+        57
+      ],
+      [
+        33,
+        53
+      ],
+      [
+        34,
+        18
+      ],
+      [
+        37,
+        21
+      ],
+      [
+        39,
+        25
+      ],
+      [
+        51,
+        33
+      ],
+      [
+        52,
+        54
+      ],
+      [
+        53,
+        29
+      ],
+      [
+        56,
+        20
+      ],
+      [
+        57,
+        21
+      ],
+      [
+        59,
+        27
+      ],
+      [
+        62,
+        36
+      ],
+      [
+        73,
+        41
+      ],
+      [
+        75,
+        31
+      ],
+      [
+        76,
+        26
+      ],
+      [
+        77,
+        33
+      ],
+      [
+        80,
+        28
+      ],
+      [
+        81,
+        29
+      ],
+      [
+        83,
+        27
+      ],
+      [
+        84,
+        40
+      ],
+      [
+        85,
+        41
+      ],
+      [
+        87,
+        49
+      ],
+      [
+        92,
+        54
+      ],
+      [
+        94,
+        22
+      ],
+      [
+        101,
+        45
+      ],
+      [
+        104,
+        52
+      ],
+      [
+        105,
+        33
+      ],
+      [
+        110,
+        32
+      ],
+      [
+        113,
+        37
+      ],
+      [
+        115,
+        29
+      ],
+      [
+        117,
+        23
+      ],
+      [
+        118,
+        32
+      ],
+      [
+        119,
+        27
+      ],
+      [
+        122,
+        68
+      ],
+      [
+        128,
+        22
+      ],
+      [
+        131,
+        39
+      ],
+      [
+        136,
+        54
+      ],
+      [
+        141,
+        27
+      ],
+      [
+        143,
+        37
+      ],
+      [
+        144,
+        86
+      ],
+      [
+        147,
+        15
+      ],
+      [
+        149,
+        33
+      ],
+      [
+        151,
+        33
+      ],
+      [
+        153,
+        15
+      ],
+      [
+        158,
+        16
+      ],
+      [
+        162,
+        38
+      ],
+      [
+        165,
+        25
+      ],
+      [
+        166,
+        22
+      ],
+      [
+        169,
+        19
+      ],
+      [
+        170,
+        32
+      ],
+      [
+        173,
+        37
+      ],
+      [
+        176,
+        68
+      ],
+      [
+        179,
+        29
+      ],
+      [
+        181,
+        97
+      ],
+      [
+        191,
+        31
+      ]
+    ]
+  },
+  "max_nodes_plus_closed": 51632,
+  "max_runs": 250000,
+  "schema": "nc2000-native-loss-lower-screen-v1",
+  "protocol_sha256": "5a277a40e8688181d2433f68c4b0a2cae4a731dcab0936d4b653dff460304e77",
+  "records_sha256": "3b69a8ffa4f27a9d002d34bf137474b8614b84eaacbf388791ef1ebbfe6019ea",
+  "six_pilot_repeats_identical_except_time": true,
+  "all_intervals_overlap_prior": true,
+  "rejected_mutations": [
+    "missing_root",
+    "wrong_target",
+    "false_above_threshold",
+    "inflated_loss"
+  ],
+  "new_small_loss_keys": [
+    [
+      32,
+      38
+    ],
+    [
+      161,
+      15
+    ]
+  ],
+  "combined_small_loss_roots": 41,
+  "combined_small_loss_games": 39,
+  "combined_unresolved_roots": 319,
+  "nonzero_actual_loss_lower_roots": 0,
+  "slowest_root": {
+    "game": 117,
+    "frame": 23,
+    "elapsed_ms": 138619.783667,
+    "runs": 250000,
+    "nodes": 3023
+  },
+  "ordinary_bot_changed": false,
+  "blind_policy_error_proven": false,
+  "strength_improvement_proven": false
+}
