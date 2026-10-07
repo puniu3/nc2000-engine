@@ -1,0 +1,11 @@
+{
+  "roots": 10,
+  "cells": 160,
+  "runs": 41627,
+  "all_non_time_fields_match_refined_archive": true,
+  "performance_sample": false,
+  "repeated_ranking_output_identical": true,
+  "comparison_correction": "Initial equality against native-first-step-census-v1 failed because that archive uses cap256, while the registered verification uses cap4096. All outputs instead match native-first-step-refine-v1 exactly. Original screening and its cap256 hash remain unchanged; no search rerun or post-outcome budget change.",
+  "matching_archive": "findings/native-first-step-refine-v1/records.jsonl.gz",
+  "matching_archive_sha256": "bfd38b6db44921dd7ca736343612f93d66b4a42a02f505cbcd67d823dca30c32"
+}

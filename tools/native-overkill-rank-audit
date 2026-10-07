@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+import gzip
+import hashlib
+import json
+import math
+from collections import Counter
+from fractions import Fraction
+from pathlib import Path
+
+
+def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def rows(path):
+    raw=Path(path).read_bytes()
+    if str(path).endswith('.gz'):raw=gzip.decompress(raw)
+    return [json.loads(line) for line in raw.splitlines()]
+
+
+def interval(cell,side):
+    m=list(map(Fraction,cell['outcome_mass_p0win_p1win_tie_live']))
+    known=m[side]+m[2]/2
+    return [max(0.,float(known)-1e-9),min(1.,float(known+m[3]+Fraction(cell['pending_mass']))+1e-9)]
+
+
+def assess(row,source,root):
+    side=row['side'];actions=source['actions'];n=len(actions[1])
+    assert row['state_sha256']==source['state_sha256']==root['record']['state_sha256']
+    assert [s['action'] for s in row['scores']]==actions[side]
+    usable=[]
+    for s in row['scores']:
+        assert all(math.isfinite(s[k]) and s[k]>=0 for k in ['raw','accuracy','capped'])
+        assert s['accuracy']<=1 and s['capped']<=1
+        expected=min(s['raw']/s['accuracy'],1)*s['accuracy'] if s['accuracy'] else 0.
+        assert abs(expected-s['capped'])<1e-14
+        if not s['suicidal']:usable.append(s)
+    raw=max(usable,key=lambda s:s['raw']) if usable else None
+    assert row['eligible']==bool(raw and raw['raw']>0 and raw['action']==row['baseline'])
+    candidate=max(usable,key=lambda s:(s['capped'],s['raw']))['action'] if row['eligible'] else row['baseline']
+    assert row['candidate']==candidate and row['baseline'] in actions[side]
+    indices=[actions[side].index(row[k]) for k in ['baseline','candidate']]
+    intervals=[];reply_details=[]
+    for i in indices:
+        cells=[source['cells'][i*n+j if side==0 else j*n+i] for j in range(len(actions[1-side]))]
+        bounds=[interval(c,side) for c in cells]
+        intervals.append([min(b[0] for b in bounds),min(b[1] for b in bounds)])
+        reply_details.append(bounds)
+    original,changed=intervals
+    actual=root['record']['current_response']['action'] if side==root['record']['side'] else None
+    return dict(game=row['game'],frame=row['frame'],side=side,baseline=row['baseline'],candidate=row['candidate'],actual_root_action=actual,own_status=row['own_status'],baseline_security=original,candidate_security=changed,guarantee_gain_lower=changed[0]-original[1],guarantee_loss_lower=original[0]-changed[1],immediate_floor_change=changed[0]-original[0],reply_bounds=reply_details,scores=row['scores'])
+
+
+def main():
+    p=Path('findings/native-overkill-rank-v1');protocol=json.loads((p/'protocol.json').read_text())
+    assert sha(p/'native_overkill_rank.rs')==protocol['helper_sha256']
+    roots_path='tmp/native-endgame-census-v1/roots.jsonl';assert sha(roots_path)==protocol['roots_sha256']
+    archive='findings/native-first-step-census-v1/records.jsonl.gz';assert sha(archive)==protocol['first_step_archive_sha256']
+    roots={(r['record']['game'],r['record']['frame']):r for r in rows(roots_path)}
+    census={(r['game'],r['frame']):r for r in rows(archive)}
+    actual=rows(p/'records.jsonl.gz');seen=set();changes=[]
+    for row in actual:
+        key=row['game'],row['frame'];full=(*key,row['side']);assert full not in seen;seen.add(full)
+        r=assess(row,census[key],roots[key])
+        if row['baseline']!=row['candidate']:changes.append(r)
+    assert seen=={(g,f,s) for g,f in roots for s in [0,1]}
+    gains=[r for r in changes if r['guarantee_gain_lower']>1e-8]
+    losses=[r for r in changes if r['guarantee_loss_lower']>1e-8]
+    output=dict(schema=protocol['schema'],protocol_sha256=sha(p/'protocol.json'),records_sha256=sha(p/'records.jsonl.gz'),greedy_decisions=len(actual),changed_decisions=len(changes),changed_roots=len({(r['game'],r['frame']) for r in changes}),changed_games=len({r['game'] for r in changes}),changed_own_status=dict(Counter(r['own_status'] for r in changes)),certified_security_gains=gains,certified_security_losses=losses,changes=changes,ordinary_bot_changed=False,strength_improvement_proven=False,scope=protocol['scope'])
+    print(json.dumps(output,indent=2))
+
+
+if __name__=='__main__':main()

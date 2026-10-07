@@ -1,0 +1,1063 @@
+{
+  "changes": [
+    {
+      "game": 94,
+      "frame": 24,
+      "side": 1,
+      "baseline": "move rockslide",
+      "candidate": "move icebeam",
+      "actual_root_action": null,
+      "own_status": "Par",
+      "baseline_security": [
+        0.6649178715057348,
+        0.991085738184676
+      ],
+      "candidate_security": [
+        0.0011714524628869297,
+        0.9988857181531436
+      ],
+      "guarantee_gain_lower": -0.9899142857217891,
+      "guarantee_loss_lower": -0.33396784664740886,
+      "immediate_floor_change": -0.6637464190428478,
+      "reply_bounds": [
+        [
+          [
+            0.6649178715057348,
+            0.991085738184676
+          ],
+          [
+            0.6708984365,
+            1.0
+          ],
+          [
+            0.6708984365,
+            1.0
+          ],
+          [
+            0.6708984365,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.0011714524628869297,
+            0.9988857181531436
+          ],
+          [
+            0.10096153734820143,
+            1.0
+          ],
+          [
+            0.10096153734820143,
+            1.0
+          ],
+          [
+            0.10096153734820142,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move rockslide",
+          "raw": 1.324607843137255,
+          "accuracy": 0.89453125,
+          "capped": 0.89453125,
+          "suicidal": false
+        },
+        {
+          "action": "move earthquake",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        },
+        {
+          "action": "move icebeam",
+          "raw": 0.9343043884220356,
+          "accuracy": 1.0,
+          "capped": 0.9343043884220356,
+          "suicidal": false
+        },
+        {
+          "action": "move dynamicpunch",
+          "raw": 0.16178863211951447,
+          "accuracy": 0.49609375,
+          "capped": 0.16178863211951447,
+          "suicidal": false
+        }
+      ]
+    },
+    {
+      "game": 104,
+      "frame": 52,
+      "side": 1,
+      "baseline": "move crosschop",
+      "candidate": "move rockslide",
+      "actual_root_action": null,
+      "own_status": "None",
+      "baseline_security": [
+        0.796874999,
+        0.9208984385238742
+      ],
+      "candidate_security": [
+        0.894531249,
+        0.9589280358681654
+      ],
+      "guarantee_gain_lower": -0.02636718952387418,
+      "guarantee_loss_lower": -0.1620530368681654,
+      "immediate_floor_change": 0.09765625,
+      "reply_bounds": [
+        [
+          [
+            0.796874999,
+            0.9208984385238742
+          ],
+          [
+            0.796874999,
+            1.0
+          ],
+          [
+            0.796874999,
+            1.0
+          ],
+          [
+            0.796874999,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.894531249,
+            0.9589280358681654
+          ],
+          [
+            0.894531249,
+            1.0
+          ],
+          [
+            0.894531249,
+            1.0
+          ],
+          [
+            0.894531249,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move crosschop",
+          "raw": 2.2651785714285717,
+          "accuracy": 0.796875,
+          "capped": 0.796875,
+          "suicidal": false
+        },
+        {
+          "action": "move earthquake",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        },
+        {
+          "action": "move rockslide",
+          "raw": 1.261531279178338,
+          "accuracy": 0.89453125,
+          "capped": 0.89453125,
+          "suicidal": false
+        },
+        {
+          "action": "move hiddenpower",
+          "raw": 0.33053221288515405,
+          "accuracy": 1.0,
+          "capped": 0.33053221288515405,
+          "suicidal": false
+        }
+      ]
+    },
+    {
+      "game": 113,
+      "frame": 37,
+      "side": 1,
+      "baseline": "move hydropump",
+      "candidate": "move icebeam",
+      "actual_root_action": "move icebeam",
+      "own_status": "None",
+      "baseline_security": [
+        0.796874999,
+        1.0
+      ],
+      "candidate_security": [
+        0.062499999,
+        1.0
+      ],
+      "guarantee_gain_lower": -0.937500001,
+      "guarantee_loss_lower": -0.20312500099999997,
+      "immediate_floor_change": -0.734375,
+      "reply_bounds": [
+        [
+          [
+            0.796874999,
+            1.0
+          ],
+          [
+            0.796874999,
+            1.0
+          ],
+          [
+            0.796874999,
+            1.0
+          ],
+          [
+            0.949218749,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.7079467763437493,
+            1.0
+          ],
+          [
+            0.062499999,
+            1.0
+          ],
+          [
+            0.062499999,
+            1.0
+          ],
+          [
+            0.765624999,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move hydropump",
+          "raw": 1.1984375,
+          "accuracy": 0.796875,
+          "capped": 0.796875,
+          "suicidal": false
+        },
+        {
+          "action": "move icebeam",
+          "raw": 0.8020915032679738,
+          "accuracy": 1.0,
+          "capped": 0.8020915032679738,
+          "suicidal": false
+        },
+        {
+          "action": "move sleeptalk",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        },
+        {
+          "action": "move rest",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        }
+      ]
+    },
+    {
+      "game": 113,
+      "frame": 39,
+      "side": 1,
+      "baseline": "move hydropump",
+      "candidate": "move icebeam",
+      "actual_root_action": "move icebeam",
+      "own_status": "None",
+      "baseline_security": [
+        0.796874999,
+        0.9912595758901367
+      ],
+      "candidate_security": [
+        0.999999999,
+        1.0
+      ],
+      "guarantee_gain_lower": 0.008740423109863338,
+      "guarantee_loss_lower": -0.20312500099999997,
+      "immediate_floor_change": 0.203125,
+      "reply_bounds": [
+        [
+          [
+            0.9279813756479492,
+            0.9912595758901367
+          ],
+          [
+            0.796874999,
+            1.0
+          ],
+          [
+            0.796874999,
+            1.0
+          ],
+          [
+            0.949218749,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move hydropump",
+          "raw": 2.2470703125,
+          "accuracy": 0.796875,
+          "capped": 0.796875,
+          "suicidal": false
+        },
+        {
+          "action": "move icebeam",
+          "raw": 1.503921568627451,
+          "accuracy": 1.0,
+          "capped": 1.0,
+          "suicidal": false
+        },
+        {
+          "action": "move sleeptalk",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        },
+        {
+          "action": "move rest",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        }
+      ]
+    },
+    {
+      "game": 115,
+      "frame": 31,
+      "side": 0,
+      "baseline": "move rockslide",
+      "candidate": "move hiddenpower",
+      "actual_root_action": null,
+      "own_status": "None",
+      "baseline_security": [
+        0.0,
+        0.9375000009999995
+      ],
+      "candidate_security": [
+        0.0,
+        0.937500001
+      ],
+      "guarantee_gain_lower": -0.9375000009999995,
+      "guarantee_loss_lower": -0.937500001,
+      "immediate_floor_change": 0.0,
+      "reply_bounds": [
+        [
+          [
+            0.8181488503946529,
+            0.9375000009999995
+          ],
+          [
+            0.894531249,
+            1.0
+          ],
+          [
+            0.894531249,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.91461181540625,
+            0.937500001
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move crosschop",
+          "raw": 3.380208333333334,
+          "accuracy": 0.796875,
+          "capped": 0.796875,
+          "suicidal": false
+        },
+        {
+          "action": "move earthquake",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        },
+        {
+          "action": "move rockslide",
+          "raw": 7.726879084967321,
+          "accuracy": 0.89453125,
+          "capped": 0.89453125,
+          "suicidal": false
+        },
+        {
+          "action": "move hiddenpower",
+          "raw": 2.0052287581699346,
+          "accuracy": 1.0,
+          "capped": 1.0,
+          "suicidal": false
+        }
+      ]
+    },
+    {
+      "game": 135,
+      "frame": 21,
+      "side": 1,
+      "baseline": "move megahorn",
+      "candidate": "move hiddenpower",
+      "actual_root_action": "move hiddenpower",
+      "own_status": "None",
+      "baseline_security": [
+        0.843749999,
+        1.0
+      ],
+      "candidate_security": [
+        0.999999999,
+        1.0
+      ],
+      "guarantee_gain_lower": -9.999999717180685e-10,
+      "guarantee_loss_lower": -0.15625000099999997,
+      "immediate_floor_change": 0.15625,
+      "reply_bounds": [
+        [
+          [
+            0.843749999,
+            1.0
+          ],
+          [
+            0.843749999,
+            1.0
+          ],
+          [
+            0.843749999,
+            1.0
+          ],
+          [
+            0.843749999,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move megahorn",
+          "raw": 1.664512383900929,
+          "accuracy": 0.84375,
+          "capped": 0.84375,
+          "suicidal": false
+        },
+        {
+          "action": "move hiddenpower",
+          "raw": 1.1690402476780186,
+          "accuracy": 1.0,
+          "capped": 1.0,
+          "suicidal": false
+        },
+        {
+          "action": "move curse",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        },
+        {
+          "action": "move rest",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        }
+      ]
+    },
+    {
+      "game": 147,
+      "frame": 15,
+      "side": 1,
+      "baseline": "move rockslide",
+      "candidate": "move crunch",
+      "actual_root_action": "move crunch",
+      "own_status": "None",
+      "baseline_security": [
+        0.4944381703867187,
+        1.0
+      ],
+      "candidate_security": [
+        0.552734374,
+        1.0
+      ],
+      "guarantee_gain_lower": -0.44726562599999997,
+      "guarantee_loss_lower": -0.5055618296132813,
+      "immediate_floor_change": 0.058296203613281306,
+      "reply_bounds": [
+        [
+          [
+            0.8945312490000001,
+            1.0
+          ],
+          [
+            0.894531249,
+            1.0
+          ],
+          [
+            0.4944381703867187,
+            1.0
+          ],
+          [
+            0.894531249,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.552734374,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move rockslide",
+          "raw": 3.42339527027027,
+          "accuracy": 0.89453125,
+          "capped": 0.89453125,
+          "suicidal": false
+        },
+        {
+          "action": "move dynamicpunch",
+          "raw": 0.4219031531531532,
+          "accuracy": 0.49609375,
+          "capped": 0.4219031531531532,
+          "suicidal": false
+        },
+        {
+          "action": "move fireblast",
+          "raw": 1.2874006359300478,
+          "accuracy": 0.84375,
+          "capped": 0.84375,
+          "suicidal": false
+        },
+        {
+          "action": "move crunch",
+          "raw": 1.538314785373609,
+          "accuracy": 1.0,
+          "capped": 1.0,
+          "suicidal": false
+        }
+      ]
+    },
+    {
+      "game": 147,
+      "frame": 17,
+      "side": 1,
+      "baseline": "move rockslide",
+      "candidate": "move crunch",
+      "actual_root_action": "move crunch",
+      "own_status": "None",
+      "baseline_security": [
+        0.4944381703867187,
+        0.9699143639831043
+      ],
+      "candidate_security": [
+        0.552734374,
+        0.9699143639831042
+      ],
+      "guarantee_gain_lower": -0.41717998998310424,
+      "guarantee_loss_lower": -0.47547619359638543,
+      "immediate_floor_change": 0.058296203613281306,
+      "reply_bounds": [
+        [
+          [
+            0.8234536356986392,
+            0.9699143639831043
+          ],
+          [
+            0.894531249,
+            1.0
+          ],
+          [
+            0.4944381703867187,
+            1.0
+          ],
+          [
+            0.894531249,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.920542055746077,
+            0.9699143639831042
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.552734374,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move rockslide",
+          "raw": 5.016952205882353,
+          "accuracy": 0.89453125,
+          "capped": 0.89453125,
+          "suicidal": false
+        },
+        {
+          "action": "move dynamicpunch",
+          "raw": 0.615234068627451,
+          "accuracy": 0.49609375,
+          "capped": 0.49609375,
+          "suicidal": false
+        },
+        {
+          "action": "move fireblast",
+          "raw": 0.9526764705882355,
+          "accuracy": 0.84375,
+          "capped": 0.84375,
+          "suicidal": false
+        },
+        {
+          "action": "move crunch",
+          "raw": 1.1383529411764706,
+          "accuracy": 1.0,
+          "capped": 1.0,
+          "suicidal": false
+        }
+      ]
+    },
+    {
+      "game": 149,
+      "frame": 45,
+      "side": 0,
+      "baseline": "move rockslide",
+      "candidate": "move hiddenpower",
+      "actual_root_action": null,
+      "own_status": "None",
+      "baseline_security": [
+        0.894531249,
+        0.894531251
+      ],
+      "candidate_security": [
+        0.999999999,
+        1.0
+      ],
+      "guarantee_gain_lower": 0.10546874800000006,
+      "guarantee_loss_lower": -0.10546875099999997,
+      "immediate_floor_change": 0.10546875,
+      "reply_bounds": [
+        [
+          [
+            0.894531249,
+            0.894531251
+          ],
+          [
+            0.894531249,
+            0.9756610587141487
+          ],
+          [
+            0.894531249,
+            1.0
+          ],
+          [
+            0.894531249,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move crosschop",
+          "raw": 1.0705645161290323,
+          "accuracy": 0.796875,
+          "capped": 0.796875,
+          "suicidal": false
+        },
+        {
+          "action": "move rockslide",
+          "raw": 2.4569339025932955,
+          "accuracy": 0.89453125,
+          "capped": 0.89453125,
+          "suicidal": false
+        },
+        {
+          "action": "move earthquake",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        },
+        {
+          "action": "move hiddenpower",
+          "raw": 1.2837444655281467,
+          "accuracy": 1.0,
+          "capped": 1.0,
+          "suicidal": false
+        }
+      ]
+    },
+    {
+      "game": 161,
+      "frame": 15,
+      "side": 1,
+      "baseline": "move rockslide",
+      "candidate": "move crunch",
+      "actual_root_action": "move crunch",
+      "own_status": "None",
+      "baseline_security": [
+        0.4944381703867187,
+        1.0
+      ],
+      "candidate_security": [
+        0.552734374,
+        1.0
+      ],
+      "guarantee_gain_lower": -0.44726562599999997,
+      "guarantee_loss_lower": -0.5055618296132813,
+      "immediate_floor_change": 0.058296203613281306,
+      "reply_bounds": [
+        [
+          [
+            0.8945312490000001,
+            1.0
+          ],
+          [
+            0.894531249,
+            1.0
+          ],
+          [
+            0.4944381703867187,
+            1.0
+          ],
+          [
+            0.894531249,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.552734374,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move rockslide",
+          "raw": 6.33328125,
+          "accuracy": 0.89453125,
+          "capped": 0.89453125,
+          "suicidal": false
+        },
+        {
+          "action": "move dynamicpunch",
+          "raw": 0.7805208333333333,
+          "accuracy": 0.49609375,
+          "capped": 0.49609375,
+          "suicidal": false
+        },
+        {
+          "action": "move fireblast",
+          "raw": 2.3816911764705884,
+          "accuracy": 0.84375,
+          "capped": 0.84375,
+          "suicidal": false
+        },
+        {
+          "action": "move crunch",
+          "raw": 2.8458823529411768,
+          "accuracy": 1.0,
+          "capped": 1.0,
+          "suicidal": false
+        }
+      ]
+    }
+  ],
+  "gains": [
+    {
+      "game": 113,
+      "frame": 39,
+      "side": 1,
+      "baseline": "move hydropump",
+      "candidate": "move icebeam",
+      "actual_root_action": "move icebeam",
+      "own_status": "None",
+      "baseline_security": [
+        0.796874999,
+        0.9912595758901367
+      ],
+      "candidate_security": [
+        0.999999999,
+        1.0
+      ],
+      "guarantee_gain_lower": 0.008740423109863338,
+      "guarantee_loss_lower": -0.20312500099999997,
+      "immediate_floor_change": 0.203125,
+      "reply_bounds": [
+        [
+          [
+            0.9279813756479492,
+            0.9912595758901367
+          ],
+          [
+            0.796874999,
+            1.0
+          ],
+          [
+            0.796874999,
+            1.0
+          ],
+          [
+            0.949218749,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move hydropump",
+          "raw": 2.2470703125,
+          "accuracy": 0.796875,
+          "capped": 0.796875,
+          "suicidal": false
+        },
+        {
+          "action": "move icebeam",
+          "raw": 1.503921568627451,
+          "accuracy": 1.0,
+          "capped": 1.0,
+          "suicidal": false
+        },
+        {
+          "action": "move sleeptalk",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        },
+        {
+          "action": "move rest",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        }
+      ]
+    },
+    {
+      "game": 149,
+      "frame": 45,
+      "side": 0,
+      "baseline": "move rockslide",
+      "candidate": "move hiddenpower",
+      "actual_root_action": null,
+      "own_status": "None",
+      "baseline_security": [
+        0.894531249,
+        0.894531251
+      ],
+      "candidate_security": [
+        0.999999999,
+        1.0
+      ],
+      "guarantee_gain_lower": 0.10546874800000006,
+      "guarantee_loss_lower": -0.10546875099999997,
+      "immediate_floor_change": 0.10546875,
+      "reply_bounds": [
+        [
+          [
+            0.894531249,
+            0.894531251
+          ],
+          [
+            0.894531249,
+            0.9756610587141487
+          ],
+          [
+            0.894531249,
+            1.0
+          ],
+          [
+            0.894531249,
+            1.0
+          ]
+        ],
+        [
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ],
+          [
+            0.999999999,
+            1.0
+          ]
+        ]
+      ],
+      "scores": [
+        {
+          "action": "move crosschop",
+          "raw": 1.0705645161290323,
+          "accuracy": 0.796875,
+          "capped": 0.796875,
+          "suicidal": false
+        },
+        {
+          "action": "move rockslide",
+          "raw": 2.4569339025932955,
+          "accuracy": 0.89453125,
+          "capped": 0.89453125,
+          "suicidal": false
+        },
+        {
+          "action": "move earthquake",
+          "raw": 0.0,
+          "accuracy": 1.0,
+          "capped": 0.0,
+          "suicidal": false
+        },
+        {
+          "action": "move hiddenpower",
+          "raw": 1.2837444655281467,
+          "accuracy": 1.0,
+          "capped": 1.0,
+          "suicidal": false
+        }
+      ]
+    }
+  ],
+  "losses": []
+}
