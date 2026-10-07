@@ -1,0 +1,12 @@
+{
+  "purpose": "Independent finite-horizon engine enumeration for the two selected first actions after the generic solver result. No normal bot change.",
+  "candidate": "Substitute, then Thunderbolt on each subsequent own turn; enumerate all opposing legal choices, asserting exactly one. Three-turn truncation retains unknown [0,1].",
+  "before": "Agility first, then every legal own continuation action; enumerate all opposing choices, asserting exactly one. Two-turn truncation retains unknown [0,1].",
+  "limits": {
+    "runs_per_side_and_first_action": 500000,
+    "cell_cap": 4096
+  },
+  "source_sha256": "00c78c264185761e3b189f9af97a69ead37b8bfb0932e16b1a5080209235d3d0",
+  "root_helper_sha256": "c98786975c1c5b76fe975d0ad0bcd9d9455a38b0fe7cf76748c784b816bdc317",
+  "scope": "Independent engine traversal without generic bound graph, compression, matrix solver or stored value reuse. Full state and known loadouts; not full blind information-set guarantee."
+}
