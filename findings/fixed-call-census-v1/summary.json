@@ -1,0 +1,35 @@
+{
+  "cells": 14300,
+  "original_solver_runs": 220111,
+  "original_full_native_runs": 412820,
+  "components": 41860,
+  "projected_components": 32968,
+  "uncached_component_runs": 220296,
+  "component_audit_runs": 308958,
+  "first_component_runs": 145508,
+  "repeated_components": 22338,
+  "repeated_component_runs": 74788,
+  "exact_components": 8892,
+  "unique_keys": 19522,
+  "maximum_mixture_error": 1.2212453270876722e-15,
+  "maximum_projection_error": 2.498001805406602e-16,
+  "maximum_collision_error": 0.0,
+  "total_solver_runs": 496818,
+  "hypothetical_saved_runs": 74603,
+  "hypothetical_saved_fraction": 0.15016162860443866,
+  "hypothetical_total_runs": 422215,
+  "extra_diagnostic_runs": 942074,
+  "reference_calls": 3044,
+  "reference_bounds": [
+    0.08926996926318925,
+    0.08928985574286716
+  ],
+  "negative_controls": [
+    "wrong_integer_weight_preserving_total",
+    "altered_component_native"
+  ],
+  "production_changed": false,
+  "strength_demonstrated": false,
+  "cache_implemented": false,
+  "scope": "Numeric census only, repeated twice. Instrumented solver rows match the frozen reference exactly after removing diagnostics and wall times. Each selected Sleep Talk is split into force-this-move-if-executed kernels. Native full enumeration checks each reconstructed mixture; eligible components also compare the guarded projection against native outcomes. Integer RNG weights are independently checked. Comparison keys trim the other side to its chosen move. Observed equality does not establish validity for arbitrary states. No new proof-backend archive or formal equivalence proof is supplied. Full kernels replace possibly partial original cells in the hypothetical work count. Counts exclude key/cache overhead, are not measured runtime savings, and cannot be added to the previous overlapping census. No production integration."
+}

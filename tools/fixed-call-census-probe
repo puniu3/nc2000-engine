@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from collections import Counter
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/fixed-call-census-v1'
+reference_path = root / 'findings/item-projection-v1/records.json.gz'
+checks = runpy.run_path(str(root / 'tools/item-projection-probe'))
+
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def extract(rows, reference):
+    assert len(rows) == len(reference)
+    assert {k: v for k, v in rows[0].items() if k != 'setup_seconds'} == {
+        k: v for k, v in reference[0].items() if k != 'setup_seconds'}
+    census = [row['ledger'].pop('split_census') for row in rows[1:-1]]
+    assert checks['stable'](rows) == checks['stable'](reference)
+    for key in ['mix', 'adversary', 'bounds', 'calls', 'runs', 'active', 'converged']:
+        assert rows[-1][key] == reference[-1][key]
+    return census
+
+
+def metrics(census):
+    totals = Counter()
+    seen = {}
+    mixture_error = projection_error = collision_error = 0.
+    for records in census:
+        identities = set()
+        for cell in records:
+            identity = (cell['guarded'], cell['depth'], tuple(cell['choices']))
+            assert identity not in identities
+            identities.add(identity)
+            pool = cell['pool']
+            parts = cell['components']
+            assert pool and len(pool) == len(parts)
+            assert cell['choices'][cell['caller']] == 'move sleeptalk'
+            assert sum(c == 'move sleeptalk' for c in cell['choices']) == 1
+            totals['cells'] += 1
+            totals['original_solver_runs'] += cell['runs']
+            totals['original_full_native_runs'] += cell['original_native_runs']
+            mixed = [0.] * 4
+            for i, part in enumerate(parts):
+                n = len(pool)
+                total = 2**32
+                assert part['move'] == pool[i]
+                assert part['count'] == ((i + 1) * total + n - 1) // n - (i * total + n - 1) // n
+                for field in ['outcomes', 'native']:
+                    assert len(part[field]) == 4
+                    assert all(0 <= x <= 1 + 1e-12 for x in part[field])
+                    assert abs(sum(part[field]) - 1) < 1e-12
+                error = max(abs(a - b) for a, b in zip(part['outcomes'], part['native']))
+                projection_error = max(projection_error, error)
+                assert error < 1e-12
+                for j in range(4):
+                    mixed[j] += part['count'] / total * part['outcomes'][j]
+                assert part['runs'] > 0 and part['native_runs'] > 0
+                projected = part['rejection'] is None
+                assert part['audit_runs'] == (part['native_runs'] if projected else 0)
+                if not projected:
+                    assert part['runs'] == part['native_runs']
+                totals['components'] += 1
+                totals['projected_components' if projected else 'exact_components'] += 1
+                totals['uncached_component_runs'] += part['runs']
+                totals['component_audit_runs'] += part['audit_runs']
+                key = (cell['damage_omitted'], cell['claw_omitted'], part['key'], tuple(cell['choices']), part['move'])
+                if key in seen:
+                    totals['repeated_components'] += 1
+                    totals['repeated_component_runs'] += part['runs']
+                    error = max(abs(a - b) for a, b in zip(seen[key], part['native']))
+                    collision_error = max(collision_error, error)
+                    assert error < 1e-12
+                else:
+                    seen[key] = part['native']
+                    totals['first_component_runs'] += part['runs']
+            error = max(abs(a - b) for a, b in zip(mixed, cell['native']))
+            mixture_error = max(mixture_error, error)
+            assert error < 1e-12
+    return dict(totals, unique_keys=len(seen), maximum_mixture_error=mixture_error,
+                maximum_projection_error=projection_error, maximum_collision_error=collision_error)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', nargs=2, type=Path)
+    args = parser.parse_args()
+    paths = [Path(__file__).resolve(), reference_path, root / 'tools/item-projection-probe']
+    paths += [root / 'crates/bot/examples' / name for name in [
+        'fixed_call_census.rs', 'fixed_call_census_witness.rs', 'policy_witness.rs',
+        'item_projection_guard.rs', 'stream_step/mod.rs', 'aliased_witness/mod.rs', 'threshold_witness/mod.rs']]
+    for directory in ['crates/bot/src', 'crates/engine/src']:
+        paths += list((root / directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    reference = json.loads(gzip.decompress(reference_path.read_bytes()))['others'][0]
+    if args.record:
+        assert not archive.exists()
+        runs = [[json.loads(line) for line in p.read_bytes().splitlines()] for p in args.record]
+        census, repeated = [extract(rows, reference) for rows in runs]
+        assert census == repeated
+        bundle = dict(hashes=hashes, census=census, repeat_sha256=digest(repeated))
+    else:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert bundle['hashes'] == hashes
+        census = bundle['census']
+    assert digest(census) == bundle['repeat_sha256']
+    assert len(census) == len(reference) - 2
+    result = metrics(census)
+    for field in ['count', 'native']:
+        bad = copy.deepcopy(census)
+        first = next(records[0] for records in bad if records)
+        if field == 'count':
+            first['components'][0]['count'] += 1
+            first['components'][1]['count'] -= 1
+        else:
+            first['components'][0]['native'][0] += .01
+        try:
+            metrics(bad)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError('Accepted altered ' + field)
+    total = reference[-1]['runs']
+    saved = result['original_solver_runs'] - result['first_component_runs']
+    result.update(total_solver_runs=total, hypothetical_saved_runs=saved,
+                  hypothetical_saved_fraction=saved / total, hypothetical_total_runs=total - saved,
+                  extra_diagnostic_runs=result['original_full_native_runs'] + result['uncached_component_runs'] + result['component_audit_runs'],
+                  reference_calls=reference[-1]['calls'], reference_bounds=reference[-1]['bounds'],
+                  negative_controls=['wrong_integer_weight_preserving_total', 'altered_component_native'],
+                  production_changed=False, strength_demonstrated=False, cache_implemented=False,
+                  scope='Numeric census only, repeated twice. Instrumented solver rows match the frozen reference exactly after removing diagnostics and wall times. '
+                  'Each selected Sleep Talk is split into force-this-move-if-executed kernels. Native full enumeration checks each reconstructed mixture; '
+                  'eligible components also compare the guarded projection against native outcomes. Integer RNG weights are independently checked. '
+                  'Comparison keys trim the other side to its chosen move. Observed equality does not establish validity for arbitrary states. '
+                  'No new proof-backend archive or formal equivalence proof is supplied. Full kernels replace possibly partial original cells in the hypothetical work count. '
+                  'Counts exclude key/cache overhead, are not measured runtime savings, and cannot be added to the previous overlapping census. No production integration.')
+    if args.record:
+        archive.mkdir()
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, separators=(',', ':')).encode(), mtime=0))
+        (archive / 'summary.json').write_text(json.dumps(result, indent=2) + '\n')
+    else:
+        assert result == json.loads((archive / 'summary.json').read_bytes())
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()
