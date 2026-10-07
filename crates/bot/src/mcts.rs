@@ -344,6 +344,7 @@ pub struct RolloutRules {
     /// Rollout sides play the Perish trap and its counter ([`perish_combo`]).
     /// Implies `perish_escape`, without which the combo kills its own singer.
     pub perish_combo: bool,
+    pub capped_damage: bool,
 }
 
 /// Unfinished rollouts return a leaf evaluation rather than a terminal outcome.
@@ -575,19 +576,32 @@ fn greedy_pick(
         cs[rng.below(cs.len())]
     };
     if let (Some(att), Some(def)) = (att, def) {
-        let mut best: Option<(SearchChoice, f64)> = None;
+        let mut best: Option<(SearchChoice, f64, f64)> = None;
         for &c in cs {
             if let SearchChoice::Move(id) = c {
                 if suicidal(&c) {
                     continue;
                 }
                 // Rollout policy always couples evasion (the accurate estimate).
-                let mut score = eval::expected_hit_fraction(sim, dex, att, def, id, true);
+                let raw_score = eval::expected_hit_fraction(sim, dex, att, def, id, true);
+                let mut score = if rules.capped_damage {
+                    let accuracy = sim.hit_probability(dex, att, def, id);
+                    if accuracy > 0.0 {
+                        (raw_score / accuracy).min(1.0) * accuracy
+                    } else {
+                        0.0
+                    }
+                } else {
+                    raw_score
+                };
                 if score <= 0.0 && rules.status {
                     score = status_pseudo_score(sim, dex, side, att, def, id);
                 }
-                if best.map_or(true, |(_, b)| score > b) {
-                    best = Some((c, score));
+                if best.map_or(true, |(_, old_score, old_raw)| {
+                    score > old_score
+                        || (rules.capped_damage && score == old_score && raw_score > old_raw)
+                }) {
+                    best = Some((c, score, raw_score));
                 }
             }
         }
@@ -596,7 +610,7 @@ fn greedy_pick(
         // only when that clearly beats staying. Draws no rng, so rollouts
         // where the trigger never fires keep their exact streams.
         if rules.switch {
-            if let Some((_, stay)) = best {
+            if let Some((_, stay, _)) = best {
                 if stay < ROLLOUT_SWITCH_TRIGGER {
                     let mut sw: Option<(SearchChoice, f64)> = None;
                     for &c in cs {
@@ -620,7 +634,7 @@ fn greedy_pick(
                 }
             }
         }
-        if let Some((c, score)) = best {
+        if let Some((c, score, _)) = best {
             if score > 0.0 {
                 return c;
             }

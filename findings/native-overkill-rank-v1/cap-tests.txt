@@ -1,0 +1,10 @@
+   Compiling nc2000-bot v0.1.0 (/Volumes/Work/puniu/nc2000-engine/crates/bot)
+    Finished `release` profile [optimized] target(s) in 7.97s
+     Running tests/rollout_damage_cap.rs (target/release/deps/rollout_damage_cap-15ee9ec9b074c583)
+
+running 2 tests
+test inactive_cap_and_equal_accuracy_preserve_choices_and_rng ... ok
+test capped_ranking_prefers_certified_winning_hit_over_overkill ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

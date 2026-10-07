@@ -1,0 +1,9 @@
+{
+  "default_enabled": false,
+  "setting": "RmConfig.rollout_capped_damage",
+  "existing_regressions_passed": 266,
+  "new_tests_passed": 2,
+  "new_controls": "Exact engine outcome gap for overkill/accurate-hit in both orientations; 512 seed/side/fixture comparisons of unchanged choice and next RNG value when cap inactive or accuracy equal.",
+  "test_setup_correction": "First new-test run failed at fixture deserialization due to missing name, before exercising ranking. Added fixture name, reran both successfully. All 266 existing tests had already passed with the final library code.",
+  "whole_game_strength_proven": false
+}
