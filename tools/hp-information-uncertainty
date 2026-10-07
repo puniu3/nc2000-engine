@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import random
+import sys
+
+
+COEFFICIENTS = [(-1, 1, 0, 0), (0, 0, -1, 1), (-1, 0, 1, 0), (0, -1, 0, 1), (1, -1, -1, 1)]
+LABELS = ['HP evidence with usual moves', 'HP evidence with oracle moves', 'oracle moves without HP evidence', 'oracle moves with HP evidence', 'interaction']
+
+
+def interval(scores, coefficients):
+    lo = hi = 0
+    for score, coefficient in zip(scores, coefficients):
+        if score is None:
+            lo += min(0, coefficient)
+            hi += max(0, coefficient)
+        else:
+            lo += score * coefficient
+            hi += score * coefficient
+    return lo, hi
+
+
+def estimate(groups, repetitions=20000, seed=2026100802):
+    blocks = [b for group in groups for b in group]
+    n = len(blocks)
+    result = []
+    rng = random.Random(seed)
+    for coefficients, label in zip(COEFFICIENTS, LABELS):
+        bounds = [interval(b, coefficients) for b in blocks]
+        lo, hi = (sum(v[i] for v in bounds)/n for i in (0,1))
+        draws = []
+        if lo == hi:
+            values = [[interval(b, coefficients)[0] for b in g] for g in groups]
+            for _ in range(repetitions):
+                draws.append(sum(rng.choice(g) for g in values for _ in g)/n)
+            draws.sort()
+        result.append({'contrast':label, 'blocks':n, 'observed_mean_bounds':[lo, hi],
+                       'stratified_percentile_95': [draws[int(repetitions*.025)], draws[int(repetitions*.975)-1]] if draws else None})
+    return result
+
+
+def main():
+    if sys.argv[1:] == ['--self-test']:
+        assert interval([None]*4, COEFFICIENTS[0]) == (-1,1)
+        assert interval([None]*4, COEFFICIENTS[4]) == (-2,2)
+        assert interval([1,0,0,1], COEFFICIENTS[4]) == (2,2)
+        assert interval([1,None,0,1], COEFFICIENTS[4]) == (1,2)
+        assert all(r['observed_mean_bounds']==[0,0] and r['stratified_percentile_95']==[0,0] for r in estimate([[[1,1,1,1]]*8]*3,100))
+        print('five contrast and cap checks passed')
+        return
+    directory = Path(sys.argv[1])
+    data = (directory/'records.json.gz').read_bytes()
+    summary_bytes = (directory/'summary.json').read_bytes()
+    summary = json.loads(summary_bytes)
+    assert hashlib.sha256(data).hexdigest() == summary['records_sha256']
+    records = json.loads(gzip.decompress(data))
+    by_key = {(r['case'],r['trial'],r['arm']):r['score'] for r in records['games']}
+    assert len(by_key) == len(records['games']) == summary['games']
+    groups = {}
+    for row in summary['paired']:
+        assert row['scores'] == [by_key[(row['case'],row['trial'],a)] for a in range(4)]
+        if row['case'] != 'onpool-control':
+            groups.setdefault(row['case'],[]).append(row['scores'])
+    output = {'method':'20,000 percentile bootstrap draws, resampling complete four-arm seed blocks within each fixed case; seed 2026100802. Descriptive uncertainty only, conditional on the three constructed fixtures and the chosen opponent. Small strata can give poor coverage; these are not adoption thresholds or simultaneous confidence intervals. Caps yield worst-case mean bounds and no bootstrap interval for affected contrasts.',
+              'contrasts':estimate(list(groups.values())),
+              'summary_sha256':hashlib.sha256(summary_bytes).hexdigest(),
+              'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+    print(json.dumps(output,indent=2))
+
+
+if __name__ == '__main__':
+    main()
