@@ -564,6 +564,7 @@ impl Battle {
                 .moves
                 .id(&toid(mv))
                 .ok_or_else(|| EngineError::InvalidChoice(format!("unknown move {mv}")))?;
+            let move_id = dex.canonical_move_id(move_id);
             let ms = dex.move_static(move_id);
             let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
             // calculatePP: pp * (5 + ppUps) / 5; gen<=2 && pp==40 → -= ppUps
