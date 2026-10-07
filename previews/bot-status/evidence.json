@@ -41259,6 +41259,397 @@
         "error_proven": false,
         "strength_improvement_proven": false
       }
+    },
+    "findings/native-waking-loss-v1/summary.json": {
+      "sha256": "5a9484574a72506db78393ea130230f790e5164ca37bf09b6785344d1afcf2b0",
+      "data": {
+        "schema": "nc2000-native-waking-loss-v1",
+        "arms": {
+          "control": {
+            "roots": 1,
+            "games": 1,
+            "runs": 250000,
+            "stops": {
+              "WorkExhausted": 1
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  62,
+                  92
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 682,
+            "max_runs": 250000,
+            "records_sha256": "7b26cf6df5e4804250517ce030ccaac7b33e7cbff7edd0bcc0d287d9c04c1078",
+            "protocol_sha256": "0594d7173384e38ca964fd595c236ac73b1ca443b64ea2657f5234cb9f46a886",
+            "targets": [
+              {
+                "game": 62,
+                "frame": 92,
+                "threshold_loss": [
+                  0.0,
+                  1.0
+                ],
+                "pure_action_values": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000,
+                "nodes": 682,
+                "elapsed_ms": 4244.658292,
+                "stats": {
+                  "eager_runs": 233940,
+                  "eager_failures": 49,
+                  "retained_eager_runs": 0,
+                  "retained_eager_leaves": 0,
+                  "expansions": 16090,
+                  "trials": 16091,
+                  "reused_nodes": 48969
+                }
+              }
+            ]
+          },
+          "prefix": {
+            "roots": 1,
+            "games": 1,
+            "runs": 250000,
+            "stops": {
+              "WorkExhausted": 1
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 1,
+              "games": 1,
+              "keys": [
+                [
+                  62,
+                  92
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 6677,
+            "max_runs": 250000,
+            "records_sha256": "d12c0357c8cf89a29d7cdfdcc70b99ee7fce60168239922329cfab9ed9681f1e",
+            "protocol_sha256": "a75d43e91d64ce15bf34ed2e1cf60a07d0f2bf1ae999b2a0616e330f08306198",
+            "targets": [
+              {
+                "game": 62,
+                "frame": 92,
+                "threshold_loss": [
+                  0.0,
+                  1.0
+                ],
+                "pure_action_values": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000,
+                "nodes": 6677,
+                "elapsed_ms": 6734.375542000001,
+                "stats": {
+                  "eager_runs": 245277,
+                  "eager_failures": 54,
+                  "retained_eager_runs": 217797,
+                  "retained_eager_leaves": 217797,
+                  "expansions": 4809,
+                  "trials": 4809,
+                  "reused_nodes": 243292
+                }
+              }
+            ]
+          }
+        },
+        "rejected_mutations": [
+          "control:missing_root",
+          "control:wrong_target",
+          "control:false_threshold",
+          "control:invalid_cell",
+          "control:wrong_root",
+          "prefix:missing_root",
+          "prefix:wrong_target",
+          "prefix:false_threshold",
+          "prefix:invalid_cell",
+          "prefix:wrong_root"
+        ],
+        "excluded_selection_mismatch": {
+          "game": 62,
+          "frame": 172,
+          "runs": 250000,
+          "records_sha256": "172e2da5c82164ec5780faf73722903e5b4120dca74576869a5bd280aa927b51",
+          "reason": "File-order index117 was used by a solver that sorts roots. Corrected selection is sorted index77, derived from game/frame before rerun."
+        },
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false
+      }
+    },
+    "findings/native-chance-coverage-v1/summary.json": {
+      "sha256": "1c3c36e32dad71144bf8485c2547d4a3ab3a919fe080cea303169b489182fe0c",
+      "data": {
+        "cells": [
+          {
+            "own": "move thunder",
+            "reply": "move thunderbolt",
+            "baseline_resolved_mass": 0.0007196863494067545,
+            "candidate_resolved_mass": 0.3005904643698564,
+            "baseline_runs": 4096,
+            "candidate_runs": 4096,
+            "candidate_complete": false,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move thunder",
+            "reply": "move hiddenpower",
+            "baseline_resolved_mass": 0.0018544455706869794,
+            "candidate_resolved_mass": 0.3526869222065272,
+            "baseline_runs": 4096,
+            "candidate_runs": 4096,
+            "candidate_complete": false,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move thunder",
+            "reply": "move reflect",
+            "baseline_resolved_mass": 0.5667667022123211,
+            "candidate_resolved_mass": 0.9747525058116726,
+            "baseline_runs": 4096,
+            "candidate_runs": 4096,
+            "candidate_complete": false,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move thunder",
+            "reply": "move rest",
+            "baseline_resolved_mass": 0.038838851138186914,
+            "candidate_resolved_mass": 0.39604539789094473,
+            "baseline_runs": 4096,
+            "candidate_runs": 4096,
+            "candidate_complete": false,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move hiddenpower",
+            "reply": "move thunderbolt",
+            "baseline_resolved_mass": 0.0031174879796717556,
+            "candidate_resolved_mass": 0.4807323988933217,
+            "baseline_runs": 4096,
+            "candidate_runs": 4096,
+            "candidate_complete": false,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move hiddenpower",
+            "reply": "move hiddenpower",
+            "baseline_resolved_mass": 0.007529354659498292,
+            "candidate_resolved_mass": 0.6121268640509692,
+            "baseline_runs": 4096,
+            "candidate_runs": 4096,
+            "candidate_complete": false,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move hiddenpower",
+            "reply": "move reflect",
+            "baseline_resolved_mass": 1.0,
+            "candidate_resolved_mass": 1.0,
+            "baseline_runs": 2560,
+            "candidate_runs": 2560,
+            "candidate_complete": true,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move hiddenpower",
+            "reply": "move rest",
+            "baseline_resolved_mass": 0.25080128205021957,
+            "candidate_resolved_mass": 0.7403447079357558,
+            "baseline_runs": 4096,
+            "candidate_runs": 4096,
+            "candidate_complete": false,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move rest",
+            "reply": "move thunderbolt",
+            "baseline_resolved_mass": 0.5044070512812944,
+            "candidate_resolved_mass": 0.8882510662645744,
+            "baseline_runs": 4096,
+            "candidate_runs": 4096,
+            "candidate_complete": false,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move rest",
+            "reply": "move hiddenpower",
+            "baseline_resolved_mass": 0.6304754273515139,
+            "candidate_resolved_mass": 0.9594710912951245,
+            "baseline_runs": 4096,
+            "candidate_runs": 4096,
+            "candidate_complete": false,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move rest",
+            "reply": "move reflect",
+            "baseline_resolved_mass": 1.0,
+            "candidate_resolved_mass": 1.0,
+            "baseline_runs": 128,
+            "candidate_runs": 128,
+            "candidate_complete": true,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move rest",
+            "reply": "move rest",
+            "baseline_resolved_mass": 1.0,
+            "candidate_resolved_mass": 1.0,
+            "baseline_runs": 768,
+            "candidate_runs": 768,
+            "candidate_complete": true,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move sleeptalk",
+            "reply": "move thunderbolt",
+            "baseline_resolved_mass": 0.754407051281305,
+            "candidate_resolved_mass": 0.9958454034285411,
+            "baseline_runs": 4096,
+            "candidate_runs": 4096,
+            "candidate_complete": false,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move sleeptalk",
+            "reply": "move hiddenpower",
+            "baseline_resolved_mass": 1.0,
+            "candidate_resolved_mass": 1.0,
+            "baseline_runs": 2560,
+            "candidate_runs": 2560,
+            "candidate_complete": true,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move sleeptalk",
+            "reply": "move reflect",
+            "baseline_resolved_mass": 1.0,
+            "candidate_resolved_mass": 1.0,
+            "baseline_runs": 128,
+            "candidate_runs": 128,
+            "candidate_complete": true,
+            "candidate_terminal_mass": 0.0
+          },
+          {
+            "own": "move sleeptalk",
+            "reply": "move rest",
+            "baseline_resolved_mass": 1.0,
+            "candidate_resolved_mass": 1.0,
+            "baseline_runs": 768,
+            "candidate_runs": 768,
+            "candidate_complete": true,
+            "candidate_terminal_mass": 0.0
+          }
+        ],
+        "improved_cells": 10,
+        "old_complete_cells_preserved": 6,
+        "leaf_count": 47872,
+        "pending_count": 66680,
+        "baseline_runs": 47872,
+        "candidate_runs": 47872,
+        "prefix_partition_checks": 16,
+        "schema": "nc2000-native-chance-coverage-v1",
+        "records_sha256": "3af8a597b75a497358bd7ac973edf8ede81dbad263a5ae2781991d6e5201657f",
+        "protocol_sha256": "8833d0bf470d4340b28b373c31d607c9adb57e3e9bbe8f8fa5e76eccb613a5ea",
+        "replay_verification": {
+          "cells_checked": 16,
+          "leaf_replays": 47872,
+          "pending_replays": 66680,
+          "total_extra_runs": 114552,
+          "max_probability_error": 0.0,
+          "records_sha256": "3af8a597b75a497358bd7ac973edf8ede81dbad263a5ae2781991d6e5201657f",
+          "performance_sample": false
+        },
+        "rejected_mutations": [
+          "missing_cell",
+          "wrong_reply",
+          "overlapping_prefix",
+          "false_mass",
+          "false_baseline"
+        ],
+        "graph_search_changed": false,
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false
+      }
     }
   },
   "foresight_fix": {
@@ -47383,7 +47774,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-07T23:35:46.700944+09:00",
+    "checked_at": "2026-10-07T23:54:46.868291+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -47430,14 +47821,16 @@
     "followup_first_step": "native-first-step-loss-v1",
     "followup_snorlax_witness": "native-snorlax-witness-v1",
     "followup_frontier_step": "native-frontier-step-v1",
-    "followup_result_commit": "4605de7dea82fc12587a6b1207008a2bd2cf1e7d",
+    "followup_result_commit": "e8f182d0e79d428ddf84c95aed501b08736888fa",
     "followup_frontier_refine": "native-frontier-refine-v1",
     "followup_frontier_defer": "native-frontier-defer-v1",
     "followup_frontier_defer_complete": "native-frontier-defer-complete-v1",
     "followup_frontier_time": "native-frontier-time-v1",
     "followup_frontier_wake": "native-frontier-wake-v1",
     "followup_wake_witness": "native-wake-witness-v1",
-    "followup_waking_choice_census": "native-waking-choice-census-v1"
+    "followup_waking_choice_census": "native-waking-choice-census-v1",
+    "followup_waking_loss": "native-waking-loss-v1",
+    "followup_chance_coverage": "native-chance-coverage-v1"
   },
   "native_endgame_census": {
     "status": "complete",
