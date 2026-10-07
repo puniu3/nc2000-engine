@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from collections import Counter
+from fractions import Fraction as F
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/hidden-family-replan-v1'
+ledger_check = runpy.run_path(str(root / 'tools/policy-witness-probe'))['verify']
+policy_check = runpy.run_path(str(root / 'tools/hidden-move-witness-probe'))['check_policy']
+
+
+def read(path):
+    return json.loads(gzip.decompress((root / path).read_bytes()))
+
+
+def derive(kernels, ledgers):
+    focus = []
+    bounds = []
+    for kernel in kernels['rows']:
+        name = kernel['case']['replacement']
+        leaves = [v for v in kernel['leaves'] if
+                  '|move|p1a: Zapdos|Thunderbolt|p2a: Marowak|[from] Sleep Talk' in v['log'] and
+                  any('|-miss|' in x for x in v['log'])]
+        assert leaves and len({tuple(v['cache_key']) for v in leaves}) == 1
+        leaf = leaves[0]
+        key = leaf['cache_key']
+        own = next(n for n in ledgers[name]['rockslide']['nodes'] if n['depth'] == 1 and n['cache_key'] == key)
+        counter = next(n for n in ledgers[name]['sleeptalk']['nodes'] if n['depth'] == 1 and n['cache_key'] == key)
+        upper = {b['choices'][1]: float(1 - F(b['bounds'][0])) for b in counter['branches']}
+        focus.append(dict(case=kernel['case'], leaf=leaf))
+        bounds.append(dict(world=name, lower=own['bounds'][0], upper=upper))
+    return dict(rows=focus, bounds=bounds)
+
+
+def verify(out, focus):
+    assert out['focus'] == focus
+    assert out['checks'] == dict(active_model_checks=624, forced_joint_checks=624)
+    worlds = [r['case']['replacement'] for r in focus['rows']]
+    assert len(worlds) == len(set(worlds)) == 39
+    assert [w['move'] for w in out['worlds']] == worlds
+    for row, world in zip(focus['rows'], out['worlds']):
+        assert world['cache_key'] == row['leaf']['cache_key']
+        for side in [0, 1]:
+            active = next(p for p in world['state']['sides'][side]['pokemon'] if p['active'])
+            assert active['hp'] == [196, 33][side]
+            if side == 0:
+                assert active['status'] == 'slp' and active['statusState']['time'] == 2
+        assert world['state']['turn'] == 29
+    certificate = out['snore_certificate']
+    cfg = certificate['config']
+    assert cfg['target_side'] == cfg['policy_side'] == 1
+    assert cfg['first_choice'] == 'move rockslide' and cfg['priority'] == ['move rockslide']
+    assert cfg['horizon'] == 2 and cfg['work_budget'] == 200000 and cfg['cell_cap'] == 10000
+    assert cfg['guarded_keys'] and cfg['support_certificate'] and cfg['rest_at_percent'] is None
+    assert not cfg.get('opening', [])
+    assert certificate['nodes'][certificate['root']]['cache_key'] == out['worlds'][worlds.index('snore')]['cache_key']
+    report = ledger_check(certificate)
+    policy_check(certificate)
+    bounds = copy.deepcopy(focus['bounds'])
+    assert bounds[worlds.index('snore')]['lower'] == 0
+    bounds[worlds.index('snore')]['lower'] = certificate['bounds'][0]
+    lower = min(F(r['lower']) for r in bounds)
+    actions = focus['rows'][0]['case']['actions']
+    upper = {a: min(F(r['upper'][a]) for r in bounds) for a in actions}
+    ceiling = min(max(F(v) for v in r['upper'].values()) for r in bounds)
+    assert 0 <= ceiling - lower < F(1, 10**8)
+    assert upper['move rockslide'] == ceiling
+    assert all(v < F(1, 10**8) for a, v in upper.items() if a != 'move rockslide')
+    reflect = worlds.index('reflect')
+    indexed = {(r['mode'], r['seed'], r['timed'], r['template']): r for r in out['rows']}
+    keys = {(m, 0x2026110401 + i, t, v) for m in ['catalog', 'uniform', 'robust']
+            for i in range(16) for t in [False, True] for v in ([0] if t else [0, reflect])}
+    assert len(indexed) == len(out['rows']) == 144 and set(indexed) == keys
+    identities = 0
+    snapshot_fields = ['best', 'visits', 'means', 'rng', 'nodes', 'iterations',
+                       'world_counts', 'arm_counts', 'own_rng', 'world_rng', 'reward_sum']
+    for (mode, seed, timed, template), row in indexed.items():
+        n = row['iterations']
+        assert n > 0 and sum(row['visits']) == n and len(row['visits']) == len(row['means']) == 4
+        assert row['best'] in actions and all(0 <= m <= 1 for m in row['means'])
+        assert abs(sum(v * m for v, m in zip(row['visits'], row['means'])) - row['reward_sum']) < 1e-6
+        assert 0 <= row['setup_seconds'] < row['seconds']
+        if timed: assert .5 <= row['seconds'] <= .55
+        else:
+            assert n == 27000
+            if template:
+                assert all(row[f] == indexed[mode, seed, timed, 0][f] for f in snapshot_fields)
+                identities += 1
+        assert len(row['world_counts']) == 39 and len(row['arm_counts']) == 156
+        assert sum(row['world_counts']) == (0 if mode == 'catalog' else n)
+        assert sum(row['arm_counts']) == (n if mode == 'robust' else 0)
+        if mode == 'robust':
+            assert row['world_counts'] == [sum(row['arm_counts'][i*4:(i+1)*4]) for i in range(39)]
+    groups = []
+    for timed in [False, True]:
+        for mode in ['catalog', 'uniform', 'robust']:
+            group = [r for r in out['rows'] if r['timed'] == timed and r['mode'] == mode and r['template'] == 0]
+            losses = [max(F(0), lower - upper[r['best']] - F(1, 10**8)) for r in group]
+            groups.append(dict(mode=mode, timed=timed, searches=16, choices=dict(Counter(r['best'] for r in group)),
+                provably_inferior_choices=sum(v > 0 for v in losses), mean_loss_lower=float(sum(losses) / 16),
+                iterations_mean=sum(r['iterations'] for r in group)/16,
+                seconds_range=[min(r['seconds'] for r in group), max(r['seconds'] for r in group)]))
+    return dict(worlds=39, replayed_common_history_extensions=39, searches=144,
+        same_model_hidden_template_identity_pairs=identities, checks=out['checks'],
+        conditional_game_bounds=[float(lower), float(ceiling)],
+        conditional_first_action_upper={a: float(v) for a, v in upper.items()},
+        snore_refinement=report, groups=groups, world_bounds=bounds, production_changed=False,
+        scope='The same 39-move model after Sleep Talk calls Thunderbolt and our opening Rock Slide misses. '
+              'All complete logs and observers agree across worlds; sleep time is 2, Zapdos HP196 and Marowak HP33. '
+              'Chance scripts and logs are replayed from the previously enumerated kernels. Archived Rock Slide '
+              'continuation certificates give common-policy lower bounds, with a new two-step Snore certificate '
+              'replacing an old budget-limited zero lower bound. The fixed opposing continuation Sleep Talk then '
+              'Hidden Power Ice gives per-opening upper bounds. Only this extension of the fixed finite model is '
+              'solved, not the full information set or game. Searches start fresh here: fixed 27000 iterations '
+              'and native 500ms, including belief/search setup but excluding replay/model creation and certificate '
+              'computation. No comparison of frozen-policy loss to full-battle strength is claimed. All three '
+              'search modes use unchanged algorithms from the prior experiment. Native timings do not measure iPad.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', type=Path)
+    args = parser.parse_args()
+    kernels = read('findings/hidden-family-policy-v1/records.json.gz')['kernels']
+    proof = read('findings/hidden-move-family-v1/records.json.gz')['result']['rows']
+    old = read('findings/hidden-move-witness-v1/records.json.gz')['scheduled']
+    ledgers = {r['case']['replacement']: {x['first']: x['ledger'] for x in r['ledgers']} for r in proof}
+    ledgers['rest'] = {x['first']: x['ledger'] for x in old['ledgers'] if x['variant'] == 0}
+    focus = derive(kernels, ledgers)
+    paths = [Path(__file__).resolve(), root / 'crates/bot/examples/hidden_family_replan.rs',
+             root / 'crates/bot/examples/hidden_family_search.rs', root / 'crates/bot/examples/hidden_terminal.rs',
+             root / 'crates/bot/examples/policy_witness.rs', root / 'tools/policy-witness-probe',
+             root / 'tools/hidden-move-witness-probe', root / 'data/gen2stadium2.json',
+             root / 'data/belief-pool-v3/belief-pool.json', root / 'findings/hidden-family-policy-v1/records.json.gz',
+             root / 'findings/hidden-move-family-v1/records.json.gz', root / 'findings/hidden-move-witness-v1/records.json.gz']
+    for directory in ['crates/bot/src', 'crates/engine/src']:
+        paths += list((root / directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists()
+        result = json.loads(args.record.read_bytes())
+        summary = verify(result, focus)
+        archive.mkdir()
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(dict(result=result, hashes=hashes), separators=(',', ':')).encode(), mtime=0))
+        (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    bundle = read('findings/hidden-family-replan-v1/records.json.gz')
+    assert bundle['hashes'] == hashes
+    summary = verify(bundle['result'], focus)
+    assert summary == json.loads((archive / 'summary.json').read_bytes())
+    faults = ['missing_seed', 'snapshot', 'budget', 'chance_path', 'sleep_clock', 'certificate_bound']
+    for fault in faults:
+        bad = copy.deepcopy(bundle['result'])
+        if fault == 'missing_seed': bad['rows'].pop()
+        elif fault == 'snapshot': bad['rows'][1]['rng'] += 1
+        elif fault == 'budget': bad['rows'][-1]['seconds'] = .49
+        elif fault == 'chance_path': bad['focus']['rows'][0]['leaf']['script'][0] += 1
+        elif fault == 'sleep_clock': next(p for p in bad['worlds'][0]['state']['sides'][0]['pokemon'] if p['active'])['statusState']['time'] = 3
+        elif fault == 'certificate_bound': bad['snore_certificate']['bounds'][0] += .01
+        try: verify(bad, focus)
+        except AssertionError: pass
+        else: raise AssertionError(f'Accepted corruption: {fault}')
+    print(json.dumps({k: v for k, v in summary.items() if k not in ['world_bounds', 'scope']}, indent=2))
+
+
+if __name__ == '__main__':
+    main()

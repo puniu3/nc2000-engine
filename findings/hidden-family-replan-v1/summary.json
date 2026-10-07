@@ -1,0 +1,520 @@
+{
+  "worlds": 39,
+  "replayed_common_history_extensions": 39,
+  "searches": 144,
+  "same_model_hidden_template_identity_pairs": 48,
+  "checks": {
+    "active_model_checks": 624,
+    "forced_joint_checks": 624
+  },
+  "conditional_game_bounds": [
+    0.01863606755201143,
+    0.018636067777270227
+  ],
+  "conditional_first_action_upper": {
+    "move earthquake": 7.99993404854149e-12,
+    "move rockslide": 0.018636067777270227,
+    "move swordsdance": 7.99993404854149e-12,
+    "move hiddenpowerflying": 4.400013686733928e-11
+  },
+  "snore_refinement": {
+    "runs": 26658,
+    "nodes": 8990,
+    "bounds": [
+      0.03173955221438242,
+      0.03173955343092204
+    ],
+    "node_kinds": {
+      "terminal": 321,
+      "horizon": 8076,
+      "decision": 593
+    },
+    "partial_branches": 0
+  },
+  "groups": [
+    {
+      "mode": "catalog",
+      "timed": false,
+      "searches": 16,
+      "choices": {
+        "move rockslide": 16
+      },
+      "provably_inferior_choices": 0,
+      "mean_loss_lower": 0.0,
+      "iterations_mean": 27000.0,
+      "seconds_range": [
+        0.261430625,
+        0.365177334
+      ]
+    },
+    {
+      "mode": "uniform",
+      "timed": false,
+      "searches": 16,
+      "choices": {
+        "move rockslide": 16
+      },
+      "provably_inferior_choices": 0,
+      "mean_loss_lower": 0.0,
+      "iterations_mean": 27000.0,
+      "seconds_range": [
+        0.361766666,
+        0.438669625
+      ]
+    },
+    {
+      "mode": "robust",
+      "timed": false,
+      "searches": 16,
+      "choices": {
+        "move rockslide": 16
+      },
+      "provably_inferior_choices": 0,
+      "mean_loss_lower": 0.0,
+      "iterations_mean": 27000.0,
+      "seconds_range": [
+        0.418379708,
+        0.471299417
+      ]
+    },
+    {
+      "mode": "catalog",
+      "timed": true,
+      "searches": 16,
+      "choices": {
+        "move rockslide": 16
+      },
+      "provably_inferior_choices": 0,
+      "mean_loss_lower": 0.0,
+      "iterations_mean": 39235.75,
+      "seconds_range": [
+        0.500001375,
+        0.500027
+      ]
+    },
+    {
+      "mode": "uniform",
+      "timed": true,
+      "searches": 16,
+      "choices": {
+        "move rockslide": 16
+      },
+      "provably_inferior_choices": 0,
+      "mean_loss_lower": 0.0,
+      "iterations_mean": 32025.75,
+      "seconds_range": [
+        0.500001417,
+        0.500026875
+      ]
+    },
+    {
+      "mode": "robust",
+      "timed": true,
+      "searches": 16,
+      "choices": {
+        "move rockslide": 16
+      },
+      "provably_inferior_choices": 0,
+      "mean_loss_lower": 0.0,
+      "iterations_mean": 29593.0625,
+      "seconds_range": [
+        0.5000005,
+        0.500031042
+      ]
+    }
+  ],
+  "world_bounds": [
+    {
+      "world": "rest",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "agility",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "bide",
+      "lower": 0.0279541015055,
+      "upper": {
+        "move earthquake": 7.99993404854149e-12,
+        "move rockslide": 0.027954101621388006,
+        "move swordsdance": 7.99993404854149e-12,
+        "move hiddenpowerflying": 4.400013686733928e-11
+      }
+    },
+    {
+      "world": "curse",
+      "lower": 0.05590820307,
+      "upper": {
+        "move earthquake": 0.018636067726327754,
+        "move rockslide": 0.1209874459281467,
+        "move swordsdance": 0.09748096954223473,
+        "move hiddenpowerflying": 0.018636067794327582
+      }
+    },
+    {
+      "world": "detect",
+      "lower": 0.01863606765601143,
+      "upper": {
+        "move earthquake": 1.2666534487948411e-11,
+        "move rockslide": 0.018636067780603338,
+        "move swordsdance": 1.2666534487948411e-11,
+        "move hiddenpowerflying": 4.8666515262141274e-11
+      }
+    },
+    {
+      "world": "doubleedge",
+      "lower": 0.01863606765801143,
+      "upper": {
+        "move earthquake": 9.333422923418766e-12,
+        "move rockslide": 0.018636067777270227,
+        "move swordsdance": 9.333422923418766e-12,
+        "move hiddenpowerflying": 4.533340369761163e-11
+      }
+    },
+    {
+      "world": "doubleteam",
+      "lower": 0.03255208322877135,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.032552083451307445,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.466682910324153e-11
+      }
+    },
+    {
+      "world": "drillpeck",
+      "lower": 0.01863606765801143,
+      "upper": {
+        "move earthquake": 9.333422923418766e-12,
+        "move rockslide": 0.018636067777270227,
+        "move swordsdance": 9.333422923418766e-12,
+        "move hiddenpowerflying": 4.533340369761163e-11
+      }
+    },
+    {
+      "world": "endure",
+      "lower": 0.01863606755201143,
+      "upper": {
+        "move earthquake": 1.2666534487948411e-11,
+        "move rockslide": 0.01863606788460337,
+        "move swordsdance": 1.2666534487948411e-11,
+        "move hiddenpowerflying": 1.2066581067671223e-10
+      }
+    },
+    {
+      "world": "flash",
+      "lower": 0.03399022404457713,
+      "upper": {
+        "move earthquake": 1.2666756532553336e-11,
+        "move rockslide": 0.03399022437310606,
+        "move swordsdance": 1.2666756532553336e-11,
+        "move hiddenpowerflying": 1.2266532234406213e-10
+      }
+    },
+    {
+      "world": "fly",
+      "lower": 0.0279541015055,
+      "upper": {
+        "move earthquake": 7.99993404854149e-12,
+        "move rockslide": 0.027954101621388006,
+        "move swordsdance": 7.99993404854149e-12,
+        "move hiddenpowerflying": 4.400013686733928e-11
+      }
+    },
+    {
+      "world": "frustration",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "hyperbeam",
+      "lower": 0.020601590370667076,
+      "upper": {
+        "move earthquake": 1.147404393719853e-11,
+        "move rockslide": 0.020601590596059927,
+        "move swordsdance": 1.147404393719853e-11,
+        "move hiddenpowerflying": 8.34747826417015e-11
+      }
+    },
+    {
+      "world": "mimic",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "mudslap",
+      "lower": 0.032570520243217584,
+      "upper": {
+        "move earthquake": 3.666678072278273e-11,
+        "move rockslide": 0.032570521843757416,
+        "move swordsdance": 3.666678072278273e-11,
+        "move hiddenpowerflying": 5.906657385423841e-10
+      }
+    },
+    {
+      "world": "peck",
+      "lower": 0.03610738086650607,
+      "upper": {
+        "move earthquake": 1.9583112909060674e-11,
+        "move rockslide": 0.03610738151494408,
+        "move swordsdance": 1.9583112909060674e-11,
+        "move hiddenpowerflying": 2.355846628887548e-10
+      }
+    },
+    {
+      "world": "protect",
+      "lower": 0.01863606765601143,
+      "upper": {
+        "move earthquake": 1.2666534487948411e-11,
+        "move rockslide": 0.018636067780603338,
+        "move swordsdance": 1.2666534487948411e-11,
+        "move hiddenpowerflying": 4.8666515262141274e-11
+      }
+    },
+    {
+      "world": "rage",
+      "lower": 0.03727213499300572,
+      "upper": {
+        "move earthquake": 2.2666646337654583e-11,
+        "move rockslide": 0.037272135851522115,
+        "move swordsdance": 2.2666646337654583e-11,
+        "move hiddenpowerflying": 3.106658263973827e-10
+      }
+    },
+    {
+      "world": "raindance",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "razorwind",
+      "lower": 0.0279541015055,
+      "upper": {
+        "move earthquake": 7.99993404854149e-12,
+        "move rockslide": 0.027954101621388006,
+        "move swordsdance": 7.99993404854149e-12,
+        "move hiddenpowerflying": 4.400013686733928e-11
+      }
+    },
+    {
+      "world": "reflect",
+      "lower": 0.037272135335005716,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.03727213550952313,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 7.666600687628033e-11
+      }
+    },
+    {
+      "world": "return",
+      "lower": 0.020875979587394716,
+      "upper": {
+        "move earthquake": 1.349353961899169e-11,
+        "move rockslide": 0.02087597981680489,
+        "move swordsdance": 1.349353961899169e-11,
+        "move hiddenpowerflying": 8.549372321198234e-11
+      }
+    },
+    {
+      "world": "roar",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "rocksmash",
+      "lower": 0.037272134622005716,
+      "upper": {
+        "move earthquake": 3.666655867817781e-11,
+        "move rockslide": 0.03727213622252101,
+        "move swordsdance": 3.666655867817781e-11,
+        "move hiddenpowerflying": 5.766661592687683e-10
+      }
+    },
+    {
+      "world": "sandstorm",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "skyattack",
+      "lower": 0.0279541015055,
+      "upper": {
+        "move earthquake": 7.99993404854149e-12,
+        "move rockslide": 0.027954101621388006,
+        "move swordsdance": 7.99993404854149e-12,
+        "move hiddenpowerflying": 4.400013686733928e-11
+      }
+    },
+    {
+      "world": "snore",
+      "lower": 0.03173955221438242,
+      "upper": {
+        "move earthquake": 4.866684832904866e-11,
+        "move rockslide": 0.03173955343092316,
+        "move swordsdance": 4.866684832904866e-11,
+        "move hiddenpowerflying": 4.446658596890529e-10
+      }
+    },
+    {
+      "world": "steelwing",
+      "lower": 0.03623022580135954,
+      "upper": {
+        "move earthquake": 3.1592062299523604e-11,
+        "move rockslide": 0.036230226925806575,
+        "move swordsdance": 3.1592062299523604e-11,
+        "move hiddenpowerflying": 4.4359416140338226e-10
+      }
+    },
+    {
+      "world": "substitute",
+      "lower": 0.018636067654011428,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.018636067782603627,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 6.066691593531459e-11
+      }
+    },
+    {
+      "world": "sunnyday",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "swagger",
+      "lower": 0.05590820307,
+      "upper": {
+        "move earthquake": 2.2070456573430874e-11,
+        "move rockslide": 0.1539659501208317,
+        "move swordsdance": 2.2070456573430874e-11,
+        "move hiddenpowerflying": 3.660752811995849e-10
+      }
+    },
+    {
+      "world": "swift",
+      "lower": 0.03610738086650606,
+      "upper": {
+        "move earthquake": 1.9583112909060674e-11,
+        "move rockslide": 0.03610738151494486,
+        "move swordsdance": 1.9583112909060674e-11,
+        "move hiddenpowerflying": 2.355832195988228e-10
+      }
+    },
+    {
+      "world": "takedown",
+      "lower": 0.03326549248400626,
+      "upper": {
+        "move earthquake": 2.3379853608673784e-11,
+        "move rockslide": 0.033265493242253696,
+        "move swordsdance": 2.3379853608673784e-11,
+        "move hiddenpowerflying": 2.7538205049637554e-10
+      }
+    },
+    {
+      "world": "thunder",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "thundershock",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "thunderwave",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "toxic",
+      "lower": 0.03727213520500571,
+      "upper": {
+        "move earthquake": 1.4666712289113093e-11,
+        "move rockslide": 0.03727213563952181,
+        "move swordsdance": 1.4666712289113093e-11,
+        "move hiddenpowerflying": 1.586679676535141e-10
+      }
+    },
+    {
+      "world": "whirlwind",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    },
+    {
+      "world": "zapcannon",
+      "lower": 0.03727213531100571,
+      "upper": {
+        "move earthquake": 1.0666800775993579e-11,
+        "move rockslide": 0.037272135533523154,
+        "move swordsdance": 1.0666800775993579e-11,
+        "move hiddenpowerflying": 8.266620721286699e-11
+      }
+    }
+  ],
+  "production_changed": false,
+  "scope": "The same 39-move model after Sleep Talk calls Thunderbolt and our opening Rock Slide misses. All complete logs and observers agree across worlds; sleep time is 2, Zapdos HP196 and Marowak HP33. Chance scripts and logs are replayed from the previously enumerated kernels. Archived Rock Slide continuation certificates give common-policy lower bounds, with a new two-step Snore certificate replacing an old budget-limited zero lower bound. The fixed opposing continuation Sleep Talk then Hidden Power Ice gives per-opening upper bounds. Only this extension of the fixed finite model is solved, not the full information set or game. Searches start fresh here: fixed 27000 iterations and native 500ms, including belief/search setup but excluding replay/model creation and certificate computation. No comparison of frozen-policy loss to full-battle strength is claimed. All three search modes use unchanged algorithms from the prior experiment. Native timings do not measure iPad."
+}
