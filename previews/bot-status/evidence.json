@@ -59007,102 +59007,182 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-08T06:15:56.413776+09:00",
-    "study": "release-strength-v1",
-    "status": "complete",
-    "strength_vs_deployed": "not_established",
-    "deployed": false,
-    "release_strength": {
-      "study": "release-strength-v1",
-      "status": "complete",
-      "baseline": "c7b11e8",
-      "screen_games_per_arm": 96,
-      "confirmation_games": 384,
-      "deployed": false,
-      "progress": {
-        "corrections": {
-          "completed": 96,
-          "planned": 96,
-          "wins": 49,
-          "losses": 47,
-          "ties": 0,
-          "score": 0.5104166666666666
-        },
-        "legal_picks": {
-          "completed": 96,
-          "planned": 96,
-          "wins": 50,
-          "losses": 46,
-          "ties": 0,
-          "score": 0.5208333333333334
-        },
-        "combined": {
-          "completed": 96,
-          "planned": 96,
-          "wins": 50,
-          "losses": 46,
-          "ties": 0,
-          "score": 0.5208333333333334
-        },
-        "selected": "combined",
-        "confirmation": {
-          "arm": "combined",
-          "completed": 384,
-          "planned": 384
-        },
-        "decision": "no_deployment"
+    "study": "release-strength-extension-v1",
+    "status": "追加検証中",
+    "completed_new_games": 15,
+    "planned_new_games": 1152,
+    "plan": {
+      "authorization": "User explicitly requested increasing verification or relaxing the threshold after the completed 384-game result. Prior study and its failed gate remain unchanged.",
+      "candidate": "f3751eae953ab45a62751bc42a4d9614a44972dd",
+      "frozen_runtime_candidate": "2b708e1933ef4cd79df1129595fa2dd076846ed0",
+      "baseline": "c7b11e882d75e552fd62c530012eb7c2d82b9e64",
+      "format": "NC2000 engine rules, six registered/three picked, level 50-55, picked level sum <=155, shared current corrected referee, blind native observation matching Web lifecycle, exact native HP retained, 27000 iterations, c=0.4, hp_buckets=16, no pondering. Same 24-team catalog and 103-team weighted belief prior as deployed. Uniform catalog matchup draws; pair swaps agent side while preserving teams and battle/search seeds.",
+      "new_batch": {
+        "games": 1152,
+        "seed": 2026100821,
+        "threads": 8
       },
-      "decision": "no_deployment",
-      "result": {
-        "games": 384,
-        "wins": 196,
-        "losses": 188,
-        "ties": 0,
-        "score": 0.5104166666666666,
-        "posterior": {
-          "1": {
-            "probability_above_half": 0.679765,
-            "mean": 0.5103626943005182,
-            "credible95": [
-              0.4673466926904817,
-              0.5535932579661819
-            ],
-            "probability_below_49_percent": 0.17818
-          },
-          "4": {
-            "probability_above_half": 0.68093,
-            "mean": 0.5102040816326531,
-            "credible95": [
-              0.46740436857669965,
-              0.5532494984173594
-            ],
-            "probability_below_49_percent": 0.1782
-          },
-          "16": {
-            "probability_above_half": 0.6718,
-            "mean": 0.5096153846153846,
-            "credible95": [
-              0.4675838554614121,
-              0.5517017770089356
-            ],
-            "probability_below_49_percent": 0.180615
-          }
-        },
-        "replay": {
-          "games": 384,
-          "replayed_decisions": 18411,
-          "replayed_states": 9659,
-          "games_with_hidden_power": 161,
-          "hidden_power_uses": 370
-        },
-        "records_sha256": "ddbbcf94c82b0e82dc9a2a910b3053f9db83a985549605afc95924ff3f582c28"
-      }
+      "analysis": {
+        "total_games": 1536,
+        "previous_games": 384,
+        "previous_records_sha256": "ddbbcf94c82b0e82dc9a2a910b3053f9db83a985549605afc95924ff3f582c28",
+        "pooling": "Only the unchanged selected candidate confirmation and this new batch; all screening and older comparisons excluded. New batch separately reported. This is an explicitly outcome-informed follow-up, not an untouched original confirmatory study."
+      },
+      "posterior": {
+        "prior_masses": [
+          1,
+          4,
+          16
+        ],
+        "draws": 200000,
+        "seed": 2026100822,
+        "model": "Same symmetric Dirichlet pair-score categorical model as prior study; conditional Bayesian decision probabilities, not frequentist significance or global strength guarantees."
+      },
+      "gate": {
+        "all_prior_probability_above_half_min": 0.8,
+        "all_prior_probability_below_49_percent_max_exclusive": 0.1,
+        "new_batch_score_above": 0.5,
+        "pooled_score_above": 0.5,
+        "validation": "All games terminal, full legal replay, frozen hashes, existing isolated regression/build/browser tests and source equivalence; recheck deployed baseline before publication."
+      },
+      "stopping": "One fixed additional batch. No decisions from interim scores, sample extension, candidate tuning, or further threshold change within this follow-up.",
+      "rationale": "User accepts a less conservative deployment decision. 80% corresponds to at least 4:1 posterior odds of improvement, with a separate guard on regressions exceeding one percentage point. This is a practical release criterion rather than proof of superiority. Current 68% does not qualify.",
+      "planning_estimate": {
+        "observed_pair_variance": 0.09413176265270506,
+        "same_observed_effect_probability_at_1536_normal_approx": 0.8266207319587778,
+        "estimated_minutes": 86,
+        "note": "Plug-in precision estimate, not predictive power or promised probability. Based on prior 384-game wall time of about29 minutes."
+      },
+      "runtime_sha256": "e8dfe89d8ff00097b0b1471ec04e905fcf7006aa736231d464b24baabbe94733"
     },
-    "previous_native_comparison": {
-      "wins": 99,
-      "losses": 93,
-      "study": "native-deployed-duel-v1",
-      "not_pooled": true
+    "decision": null,
+    "sources": {
+      "plan.json": {
+        "sha256": "5446ad32e39a9046f84160fc6c729cd7955aab4c4842091f7b3b68edd8387d14",
+        "data": {
+          "authorization": "User explicitly requested increasing verification or relaxing the threshold after the completed 384-game result. Prior study and its failed gate remain unchanged.",
+          "candidate": "f3751eae953ab45a62751bc42a4d9614a44972dd",
+          "frozen_runtime_candidate": "2b708e1933ef4cd79df1129595fa2dd076846ed0",
+          "baseline": "c7b11e882d75e552fd62c530012eb7c2d82b9e64",
+          "format": "NC2000 engine rules, six registered/three picked, level 50-55, picked level sum <=155, shared current corrected referee, blind native observation matching Web lifecycle, exact native HP retained, 27000 iterations, c=0.4, hp_buckets=16, no pondering. Same 24-team catalog and 103-team weighted belief prior as deployed. Uniform catalog matchup draws; pair swaps agent side while preserving teams and battle/search seeds.",
+          "new_batch": {
+            "games": 1152,
+            "seed": 2026100821,
+            "threads": 8
+          },
+          "analysis": {
+            "total_games": 1536,
+            "previous_games": 384,
+            "previous_records_sha256": "ddbbcf94c82b0e82dc9a2a910b3053f9db83a985549605afc95924ff3f582c28",
+            "pooling": "Only the unchanged selected candidate confirmation and this new batch; all screening and older comparisons excluded. New batch separately reported. This is an explicitly outcome-informed follow-up, not an untouched original confirmatory study."
+          },
+          "posterior": {
+            "prior_masses": [
+              1,
+              4,
+              16
+            ],
+            "draws": 200000,
+            "seed": 2026100822,
+            "model": "Same symmetric Dirichlet pair-score categorical model as prior study; conditional Bayesian decision probabilities, not frequentist significance or global strength guarantees."
+          },
+          "gate": {
+            "all_prior_probability_above_half_min": 0.8,
+            "all_prior_probability_below_49_percent_max_exclusive": 0.1,
+            "new_batch_score_above": 0.5,
+            "pooled_score_above": 0.5,
+            "validation": "All games terminal, full legal replay, frozen hashes, existing isolated regression/build/browser tests and source equivalence; recheck deployed baseline before publication."
+          },
+          "stopping": "One fixed additional batch. No decisions from interim scores, sample extension, candidate tuning, or further threshold change within this follow-up.",
+          "rationale": "User accepts a less conservative deployment decision. 80% corresponds to at least 4:1 posterior odds of improvement, with a separate guard on regressions exceeding one percentage point. This is a practical release criterion rather than proof of superiority. Current 68% does not qualify.",
+          "planning_estimate": {
+            "observed_pair_variance": 0.09413176265270506,
+            "same_observed_effect_probability_at_1536_normal_approx": 0.8266207319587778,
+            "estimated_minutes": 86,
+            "note": "Plug-in precision estimate, not predictive power or promised probability. Based on prior 384-game wall time of about29 minutes."
+          },
+          "runtime_sha256": "e8dfe89d8ff00097b0b1471ec04e905fcf7006aa736231d464b24baabbe94733"
+        }
+      },
+      "binding.json": {
+        "sha256": "541b496f03afc4665ed6f0577c13ea7bfc30c6ff427a95b7d57b45573c4e3faa",
+        "data": {
+          "plan_sha256": "5446ad32e39a9046f84160fc6c729cd7955aab4c4842091f7b3b68edd8387d14",
+          "runner_sha256": "a00f54df71da47141f4849f1b10054abebeb73cc17224211c2435197f1548e8d",
+          "manifest": {
+            "type": "manifest",
+            "config": {
+              "schema": "nc2000-native-deployed-duel-v1",
+              "seed": 2026100821,
+              "games": 1152,
+              "threads": 8,
+              "pool": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ce55d34048b2ece4-team-pool.json",
+              "dex": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+              "agents": [
+                {
+                  "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/a562f35b73d03a47-combined-worker",
+                  "args": [
+                    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "27000"
+                  ],
+                  "artifacts": [
+                    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+                  ]
+                },
+                {
+                  "program": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/8c973d54ce32f0d3-8c973d54ce32f0d3-deployed-worker",
+                  "args": [
+                    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "27000"
+                  ],
+                  "artifacts": [
+                    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json"
+                  ]
+                }
+              ],
+              "record": true,
+              "crn_agent_seeds": true
+            },
+            "hashes": {
+              "arena": "sha256:55e1aa4497b61773edb030a60086023e72abffaf0dfe607c904b4140abc0a0c3",
+              "pool": "sha256:ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+              "dex": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+              "agents": [
+                {
+                  "program": "sha256:a562f35b73d03a47959ea3d22a495773c7ffebcc09bf5de0d2a3eac47c86f9f9",
+                  "artifacts": [
+                    {
+                      "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                      "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                    },
+                    {
+                      "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                      "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                    }
+                  ]
+                },
+                {
+                  "program": "sha256:8c973d54ce32f0d3420e9439ef4fe1349d50a51e6c8c0d4cd556216c2040178f",
+                  "artifacts": [
+                    {
+                      "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                      "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                    },
+                    {
+                      "path": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+                      "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
     }
   },
   "native_endgame_census": {
@@ -59357,6 +59437,105 @@
         },
         "records_sha256": "ddbbcf94c82b0e82dc9a2a910b3053f9db83a985549605afc95924ff3f582c28"
       }
+    }
+  },
+  "previous_report_before_extension": {
+    "checked_at": "2026-10-08T06:15:56.413776+09:00",
+    "study": "release-strength-v1",
+    "status": "complete",
+    "strength_vs_deployed": "not_established",
+    "deployed": false,
+    "release_strength": {
+      "study": "release-strength-v1",
+      "status": "complete",
+      "baseline": "c7b11e8",
+      "screen_games_per_arm": 96,
+      "confirmation_games": 384,
+      "deployed": false,
+      "progress": {
+        "corrections": {
+          "completed": 96,
+          "planned": 96,
+          "wins": 49,
+          "losses": 47,
+          "ties": 0,
+          "score": 0.5104166666666666
+        },
+        "legal_picks": {
+          "completed": 96,
+          "planned": 96,
+          "wins": 50,
+          "losses": 46,
+          "ties": 0,
+          "score": 0.5208333333333334
+        },
+        "combined": {
+          "completed": 96,
+          "planned": 96,
+          "wins": 50,
+          "losses": 46,
+          "ties": 0,
+          "score": 0.5208333333333334
+        },
+        "selected": "combined",
+        "confirmation": {
+          "arm": "combined",
+          "completed": 384,
+          "planned": 384
+        },
+        "decision": "no_deployment"
+      },
+      "decision": "no_deployment",
+      "result": {
+        "games": 384,
+        "wins": 196,
+        "losses": 188,
+        "ties": 0,
+        "score": 0.5104166666666666,
+        "posterior": {
+          "1": {
+            "probability_above_half": 0.679765,
+            "mean": 0.5103626943005182,
+            "credible95": [
+              0.4673466926904817,
+              0.5535932579661819
+            ],
+            "probability_below_49_percent": 0.17818
+          },
+          "4": {
+            "probability_above_half": 0.68093,
+            "mean": 0.5102040816326531,
+            "credible95": [
+              0.46740436857669965,
+              0.5532494984173594
+            ],
+            "probability_below_49_percent": 0.1782
+          },
+          "16": {
+            "probability_above_half": 0.6718,
+            "mean": 0.5096153846153846,
+            "credible95": [
+              0.4675838554614121,
+              0.5517017770089356
+            ],
+            "probability_below_49_percent": 0.180615
+          }
+        },
+        "replay": {
+          "games": 384,
+          "replayed_decisions": 18411,
+          "replayed_states": 9659,
+          "games_with_hidden_power": 161,
+          "hidden_power_uses": 370
+        },
+        "records_sha256": "ddbbcf94c82b0e82dc9a2a910b3053f9db83a985549605afc95924ff3f582c28"
+      }
+    },
+    "previous_native_comparison": {
+      "wins": 99,
+      "losses": 93,
+      "study": "native-deployed-duel-v1",
+      "not_pooled": true
     }
   }
 }

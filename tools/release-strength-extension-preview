@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+import hashlib
+import json
+import re
+from pathlib import Path
+
+
+root = Path(__file__).resolve().parent.parent
+study = root / 'findings/release-strength-extension-v1'
+scratch = root / 'tmp/release-strength-extension-v1'
+plan = json.loads((study / 'plan.json').read_text())
+records = scratch / 'games.jsonl'
+completed = 0
+if records.exists():
+    with records.open() as stream:
+        for line in stream:
+            if line.endswith('\n'):
+                completed += 1
+    completed = max(0, completed - 1)
+decision_path = study / 'decision.json'
+decision = json.loads(decision_path.read_text()) if decision_path.exists() else None
+status = '追加検証中'
+headline = '対戦数を4倍に増やし、<br>採用を再判定します。'
+lead = '前回は196勝188敗、優位確率約68%でした。依頼を受け、同じ候補を追加1,152対戦で検証します。合計1,536対戦を取り切り、優位確率80%以上・1ポイント以上の悪化確率10%未満を採用基準にします。'
+body = f'<p><strong>追加分：{completed:,} / 1,152対戦完了。</strong>途中の勝敗では採否を決めません。公開版はc7b11e8のままです。</p>'
+if decision:
+    pooled = decision['pooled']
+    new = json.loads((study / 'new-batch.json').read_text())
+    primary = pooled['posterior']['1']
+    passed = decision['statistical_gate_met']
+    status = '統計基準通過・公開確認中' if passed else '追加検証完了・採用見送り'
+    headline = '追加検証で、採用基準を満たしました。' if passed else '検証を増やしても、<br>採用基準には届きませんでした。'
+    lead = f"合計{pooled['games']:,}対戦は{pooled['wins']}勝{pooled['losses']}敗、得点率{pooled['score'] * 100:.2f}%。指定モデルで公開版を上回る事後確率は{primary['probability_above_half'] * 100:.2f}%、1ポイント以上悪化する確率は{primary['probability_below_49_percent'] * 100:.2f}%でした。"
+    body = f"<p>追加分のみ：{new['wins']}勝{new['losses']}敗・{new['ties']}分。合計：{pooled['wins']}勝{pooled['losses']}敗・{pooled['ties']}分。</p><table class=\"comparison\"><thead><tr><th>事前分布の重み</th><th>優位確率</th><th>1ポイント以上悪化</th></tr></thead><tbody>"
+    for mass, result in pooled['posterior'].items():
+        body += f"<tr><td>{mass}</td><td>{result['probability_above_half'] * 100:.2f}%</td><td>{result['probability_below_49_percent'] * 100:.2f}%</td></tr>"
+    body += '</tbody></table>'
+    body += '<p>統計基準を通過しました。公開反映は別途確認中です。</p>' if passed else '<p><strong>緩和した採用基準も満たさず、公開版を維持します。</strong>同等性や最適の天井への近さを示す結果ではありません。</p>'
+section = '<section class="section" id="release-strength-extension"><h2>追加検証と採用基準の見直し</h2>' + body + '<p>同じ候補・公開版・規定・27,000回探索・24構成を固定し、別乱数で追加。以前の独立確認384対戦のみ合算し、候補選びの対戦や過去の別比較は加えません。追加分単独でも得点率50%超を要求します。</p><p>採用基準を90%から80%へ緩和しました。3種類の事前分布すべてで優位確率80%以上、1ポイント以上の悪化確率10%未満が必要です。これは公開判断の基準で、統計的有意性やゲーム全体の強さの証明ではありません。前回の結果を受けた追加検証であることも明記して残します。</p><p class="note">最初の検証と不採用結果は下に保存。今回の追加1,152対戦の終了までは勝敗で打ち切らず、この追試内で基準を再変更しません。資料：release-strength-extension-v1。</p></section>'
+page = root / 'previews/bot-status/index.html'
+html = page.read_text()
+html = re.sub(r'<span class="status">.*?</span>', f'<span class="status">{status}</span>', html, count=1)
+html = re.sub(r'<h1>.*?</h1>', f'<h1>{headline}</h1>', html, count=1)
+html = re.sub(r'<p class="lead">.*?</p>', f'<p class="lead">{lead}</p>', html, count=1)
+html = re.sub(r'<p class="meta">.*?</p>', f'<p class="meta">2026年10月8日 JST · {status} · 人間の成績への較正なし</p>', html, count=1)
+if 'id="release-strength-extension"' in html:
+    html = re.sub(r'<section class="section" id="release-strength-extension">.*?</section>', section, html, count=1, flags=re.S)
+else:
+    html = html.replace('<section class="section" id="release-strength">', section + '\n<section class="section" id="release-strength">', 1)
+html = html.replace('公開版を上回る変更の選定：完了・公開見送り', '前回の検証：384対戦では公開見送り')
+html = html.replace('勝敗を見た対戦数の追加や、採用基準の引き下げは行いません。', 'この初回検証では追加や基準変更を行わず完了しました。その後の依頼に基づく追試は上段に分けて記録します。')
+html = html.replace('公開版を上回ると判断して採用できる候補は、今回得られませんでした。', '初回の384対戦では、公開版を上回ると判断して採用できる候補は得られませんでした。')
+page.write_text(html)
+path = root / 'previews/bot-status/evidence.json'
+data = json.loads(path.read_text())
+if data['latest_report'].get('study') != study.name:
+    data['previous_report_before_extension'] = data['latest_report']
+data['latest_report'] = {'study': study.name, 'status': status, 'completed_new_games': completed, 'planned_new_games': 1152, 'plan': plan, 'decision': decision}
+data['latest_report']['sources'] = {p.name: {'sha256': hashlib.sha256(p.read_bytes()).hexdigest(), 'data': json.loads(p.read_text())} for p in study.glob('*.json')}
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+print(json.dumps({'completed': completed, 'status': status}, ensure_ascii=False))
