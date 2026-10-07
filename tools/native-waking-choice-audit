@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+import collections
+import hashlib
+import json
+from pathlib import Path
+
+root_path=Path('tmp/native-endgame-census-v1/roots.jsonl')
+raw=root_path.read_bytes()
+expected='25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c'
+assert hashlib.sha256(raw).hexdigest()==expected
+roots=[json.loads(line) for line in raw.splitlines()]
+assert len(roots)==360
+selected=[]
+for index,row in enumerate(roots):
+    record=row['record'];side=row['battle']['sides'][record['side']]
+    pokemon=side['roster'][side['active']];data=pokemon['status_state']['data']
+    counter=next((int.from_bytes(bytes(v['bits']),'little',signed=True) for k,v in zip(data['keys'][:data['n']],data['values'][:data['n']]) if k=='Time'),None)
+    if pokemon['status']=='Slp' and counter==1:
+        selected.append(dict(root_index=index,game=record['game'],frame=record['frame'],side=record['side'],state_sha256=record['state_sha256'],action=record['current_response']['action']))
+print(json.dumps(dict(schema='nc2000-native-waking-choice-census-v1',source_sha256=expected,source_roots=len(roots),waking_roots=len(selected),actions=dict(collections.Counter(r['action'] for r in selected)),records=selected,sleep_talk_roots=[r for r in selected if r['action']=='move sleeptalk'],scope='Read-only census of actual stored full-state waking counters and ordinary-bot choices. A waking Sleep Talk choice is not by itself a long-term error certificate; preserving other PP or delaying can matter. No human calibration or usual-bot modification.',error_proven=False,strength_improvement_proven=False),indent=2))
