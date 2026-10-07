@@ -1,0 +1,41 @@
+diff --git a/crates/engine/src/battle/choices.rs b/crates/engine/src/battle/choices.rs
+index ab58eca..e049674 100644
+--- a/crates/engine/src/battle/choices.rs
++++ b/crates/engine/src/battle/choices.rs
+@@ -242,6 +242,7 @@ impl Battle {
+ 
+         let move_id = resolved.or_else(|| dex.moves.id(move_id_str))
+             .ok_or_else(|| EngineError::InvalidChoice(format!("unknown move {move_id_str}")))?;
++        let move_id = dex.canonical_move_id(move_id);
+         let mut move_slot = None;
+         let mut enabled = false;
+         for (i, slot) in moves.iter().enumerate() {
+diff --git a/crates/engine/src/battle/mod.rs b/crates/engine/src/battle/mod.rs
+index bb0a514..7996729 100644
+--- a/crates/engine/src/battle/mod.rs
++++ b/crates/engine/src/battle/mod.rs
+@@ -564,6 +564,7 @@ impl Battle {
+                 .moves
+                 .id(&toid(mv))
+                 .ok_or_else(|| EngineError::InvalidChoice(format!("unknown move {mv}")))?;
++            let move_id = dex.canonical_move_id(move_id);
+             let ms = dex.move_static(move_id);
+             let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
+             // calculatePP: pp * (5 + ppUps) / 5; gen<=2 && pp==40 → -= ppUps
+diff --git a/crates/engine/src/dex.rs b/crates/engine/src/dex.rs
+index 31a20fe..39be190 100644
+--- a/crates/engine/src/dex.rs
++++ b/crates/engine/src/dex.rs
+@@ -1293,6 +1293,12 @@ impl Dex {
+         &self.moves_static[id.0 as usize]
+     }
+ 
++    pub fn canonical_move_id(&self, id: MoveId) -> MoveId {
++        self.moves.get(id).extra.get("placeholderFor").and_then(Value::as_str)
++            .map(|name| self.moves.id(&toid(name)).expect("move placeholder must resolve"))
++            .unwrap_or(id)
++    }
++
+     pub fn conds_id(&self, key: &str) -> Option<CondId> {
+         self.conds.id(key)
+     }

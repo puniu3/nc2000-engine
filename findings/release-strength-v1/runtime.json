@@ -1,0 +1,27 @@
+{
+  "arena": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/55e1aa4497b61773-arena",
+  "replay": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/48ce4c6556c3da1b-replay",
+  "baseline_worker": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/8c973d54ce32f0d3-8c973d54ce32f0d3-deployed-worker",
+  "pool": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ce55d34048b2ece4-team-pool.json",
+  "belief": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json",
+  "dex": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+  "workers": {
+    "corrections": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/afec630e928078d0-corrections-worker",
+    "legal_picks": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/72c21d0d21196871-legal_picks-worker",
+    "combined": "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/a562f35b73d03a47-combined-worker"
+  },
+  "sha256": {
+    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/55e1aa4497b61773-arena": "55e1aa4497b61773edb030a60086023e72abffaf0dfe607c904b4140abc0a0c3",
+    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/b2a2bee56df07571-belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ce55d34048b2ece4-team-pool.json": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/a562f35b73d03a47-combined-worker": "a562f35b73d03a47959ea3d22a495773c7ffebcc09bf5de0d2a3eac47c86f9f9",
+    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/72c21d0d21196871-legal_picks-worker": "72c21d0d2119687141b0332c12d558610a4c148d7144cc274269e1c3df11518c",
+    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/afec630e928078d0-corrections-worker": "afec630e928078d019b5fd0fc786b64332df58d3870357cd632d583e8f4090e5",
+    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/8c973d54ce32f0d3-8c973d54ce32f0d3-deployed-worker": "8c973d54ce32f0d3420e9439ef4fe1349d50a51e6c8c0d4cd556216c2040178f",
+    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/ecfe4c596917fd94-gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "/Volumes/Work/puniu/nc2000-engine/tmp/release-strength-v1/artifacts/48ce4c6556c3da1b-replay": "48ce4c6556c3da1b944832d481e6065f32e27183856aedafa26677d2cd4e50f0"
+  },
+  "audit_sha256": "2a9267d34da1b5cd82e31822308bc36d04764cc9487128fdf8f867b0e45db763",
+  "native_audit_sha256": "8fedcd52d97a09a2d659adeb168613854289dacc005d8b0220a4fc09d2e6e2ff",
+  "worker_source_sha256": "8c2fcc3c52eaadee8c3cf5a5c68f73bb4d3ebefdf1507911742df605753c1906"
+}

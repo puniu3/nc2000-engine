@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+import argparse
+import collections
+import gzip
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import random
+import subprocess
+from pathlib import Path
+
+
+def load_tool(name):
+    loader = importlib.machinery.SourceFileLoader(name, str(Path('tools') / name))
+    spec = importlib.util.spec_from_loader(name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def posterior(scores, mass, draws, seed):
+    values = [0, .25, .5, .75, 1]
+    counts = collections.Counter(scores)
+    assert set(counts) <= set(values)
+    rng = random.Random(seed)
+    samples = []
+    for _ in range(draws):
+        weights = [rng.gammavariate(counts[v] + mass / 5, 1) for v in values]
+        samples.append(sum(v * w for v, w in zip(values, weights)) / sum(weights))
+    samples.sort()
+    return {
+        'probability_above_half': sum(x > .5 for x in samples) / draws,
+        'mean': (sum(scores) + .5 * mass) / (len(scores) + mass),
+        'credible95': [samples[int(draws * .025)], samples[int(draws * .975)]],
+        'probability_below_49_percent': sum(x < .49 for x in samples) / draws,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('mode', choices=['controls', 'run'])
+    parser.add_argument('directory', nargs='?', type=Path)
+    args = parser.parse_args()
+    plan = json.loads(Path('findings/release-strength-v1/plan.json').read_text())
+    model = plan['posterior']
+    if args.mode == 'controls':
+        cases = {'symmetric': [0, 1] * 30, 'positive': [1] * 60, 'negative': [0] * 60}
+        result = {k: posterior(v, 1, 20000, model['seed']) for k, v in cases.items()}
+        assert .48 < result['symmetric']['probability_above_half'] < .52
+        assert result['positive']['probability_above_half'] > .999
+        assert result['negative']['probability_above_half'] < .001
+    else:
+        audit = load_tool('native-deployed-audit')
+        directory = args.directory
+        data = audit.read_rows(directory / 'games.jsonl')
+        expected = audit.manifest(directory)
+        iterations = int(expected['config']['agents'][0]['args'][-1])
+        result = audit.audit(data, expected, iterations)
+        replay = json.loads(Path('findings/release-strength-v1/runtime.json').read_text())['replay']
+        result['replay'] = json.loads(subprocess.check_output([replay, str(directory / 'games.jsonl')], text=True))
+        result['score'] = sum(result['pair_scores']) / len(result['pair_scores'])
+        result['posterior'] = {
+            str(mass): posterior(result['pair_scores'], mass, model['draws'], model['seed'])
+            for mass in model['prior_masses']
+        }
+        result['confirmation_threshold_met'] = (
+            result['games'] == plan['confirmation']['games']
+            and expected['config']['seed'] == plan['confirmation']['seed']
+            and result['score'] > .5
+            and result['posterior']['1']['probability_above_half'] >= .90
+            and result['posterior']['4']['probability_above_half'] >= .85
+        )
+        raw = (directory / 'games.jsonl').read_bytes()
+        result['records_sha256'] = hashlib.sha256(raw).hexdigest()
+        result['manifest'] = expected
+        target = Path('findings/release-strength-v1') / directory.name
+        target.mkdir(exist_ok=True)
+        (target / 'records.jsonl.gz').write_bytes(gzip.compress(raw, mtime=0))
+        (target / 'summary.json').write_text(json.dumps(result, indent=2) + '\n')
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()
