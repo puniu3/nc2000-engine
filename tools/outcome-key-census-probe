@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from pathlib import Path
+
+root=Path(__file__).resolve().parents[1]
+archive=root/'findings/outcome-key-census-v1'
+reference_dir=root/'findings/item-projection-v1'
+checks=runpy.run_path(str(root/'tools/item-projection-probe'))
+
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value,separators=(',',':'),sort_keys=True).encode()).hexdigest()
+
+
+def extract(rows,reference):
+    assert len(rows)==len(reference)
+    assert {k:v for k,v in rows[0].items() if k!='setup_seconds'}=={k:v for k,v in reference[0].items() if k!='setup_seconds'}
+    records=[]
+    for actual,expected in zip(rows[1:-1],reference[1:-1]):
+        cells=actual['ledger'].pop('census')
+        assert checks['stable']([None,actual,None])==checks['stable']([None,expected,None])
+        records.append(cells)
+    for key in ['mix','adversary','bounds','calls','runs','active','converged']:
+        assert rows[-1][key]==reference[-1][key]
+    return records
+
+
+def validate(census,reference,proof):
+    assert len(census)==len(reference)-2
+    cells=0
+    for records,row in zip(census,reference[1:-1]):
+        expected={}
+        for node in row['ledger']['nodes']:
+            for branch in node.get('branches',[]):
+                if not branch['outcome_projected']:continue
+                damage,claw,guarded=node['cache_key']
+                key=(guarded,damage,claw,node['depth'],tuple(branch['choices']))
+                assert key not in expected
+                expected[key]=(node,branch)
+        if proof:assert len(records)==len(expected)
+        seen=set()
+        for cell in records:
+            key=(cell['guarded'],cell['damage_omitted'],cell['claw_omitted'],cell['depth'],tuple(cell['choices']))
+            assert key not in seen;seen.add(key)
+            node,branch=expected[key]
+            assert cell['runs']==branch['runs'] and cell['runs']>0
+            audit=branch['outcome_audit']
+            assert cell['outcomes']==audit['abstract']
+            if proof:
+                assert cell['raw']==node['state_key'] and cell['native']==audit['native']
+                assert cell['native_runs']>0
+            else:assert 'native' not in cell and 'native_runs' not in cell
+            for name in ['raw','guarded','trimmed','unsafe_trimmed_calls']:
+                assert 0<=int(cell[name])<2**128
+            cells+=1
+    return cells
+
+
+def census_metrics(census,reference):
+    result={}
+    for mode in ['raw','guarded','trimmed','unsafe_trimmed_calls']:
+        groups={};observations=work=0;within_call=same_world=new_world=0
+        for call,(records,row) in enumerate(zip(census,reference[1:-1]),1):
+            for cell in records:
+                key=(cell[mode],tuple(cell['choices']))
+                values=cell.get('native',cell['outcomes'])
+                identity=dict(call=call,world=row['id'],kind=row['kind'],state=cell['raw'],choices=cell['choices'],outcomes=values)
+                observations+=1;work+=cell['runs']
+                if key not in groups:
+                    groups[key]=dict(first=identity,values=values,first_runs=cell['runs'],runs=0,hits=0,max_error=0.,conflict=None,worlds=set(),calls=set())
+                else:
+                    g=groups[key];g['hits']+=1;g['runs']+=cell['runs']
+                    if call in g['calls']:within_call+=1
+                    elif row['id'] in g['worlds']:same_world+=1
+                    else:new_world+=1
+                    error=max(abs(a-b) for a,b in zip(g['values'],values));g['max_error']=max(error,g['max_error'])
+                    if error>1e-12 and g['conflict'] is None:g['conflict']=identity
+                groups[key]['worlds'].add(row['id']);groups[key]['calls'].add(call)
+        conflicts=[g for g in groups.values() if g['conflict'] is not None]
+        examples=[dict(first=g['first'],conflict=g['conflict'],first_conflict_mass_error=max(abs(a-b) for a,b in zip(g['values'],g['conflict']['outcomes'])),group_maximum_mass_error=g['max_error']) for g in sorted(conflicts,key=lambda g:g['conflict']['call'])[:3]]
+        result[mode]=dict(observations=observations,observed_runs=work,unique_keys=len(groups),
+            repeated_cells=sum(g['hits'] for g in groups.values()),candidate_reused_runs=sum(g['runs'] for g in groups.values()),
+            consistent_reused_runs=sum(g['runs'] for g in groups.values() if g['conflict'] is None),
+            within_call_repeats=within_call,same_world_repeats=same_world,new_world_repeats=new_world,
+            conflicting_keys=len(conflicts),maximum_mass_error=max(g['max_error'] for g in groups.values()),examples=examples)
+        assert within_call+same_world+new_world==result[mode]['repeated_cells']
+    return result
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--record',nargs=4,type=Path);args=parser.parse_args()
+    paths=[Path(__file__).resolve(),root/'crates/bot/examples/outcome_key_census.rs',root/'crates/bot/examples/outcome_key_census_witness.rs',
+        root/'crates/bot/examples/policy_witness.rs',root/'crates/bot/examples/item_projection_guard.rs',root/'crates/bot/examples/stream_step/mod.rs',
+        root/'tools/item-projection-probe',reference_dir/'proofs.jsonl.gz',reference_dir/'records.json.gz',reference_dir/'summary.json']
+    for directory in ['crates/bot/src','crates/engine/src']:paths+=list((root/directory).rglob('*.rs'))
+    hashes={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    reference=[json.loads(l) for l in gzip.decompress((reference_dir/'proofs.jsonl.gz').read_bytes()).splitlines()]
+    numeric_reference=json.loads(gzip.decompress((reference_dir/'records.json.gz').read_bytes()))['others'][0]
+    certified=checks['verify_reference'](reference)
+    if args.record:
+        assert not archive.exists()
+        rows=[[json.loads(l) for l in p.read_bytes().splitlines()] for p in args.record]
+        numeric=extract(rows[0],numeric_reference);numeric_repeat=extract(rows[1],numeric_reference)
+        proof=extract(rows[2],reference);proof_repeat=extract(rows[3],reference)
+        assert numeric==numeric_repeat and proof==proof_repeat
+        bundle=dict(hashes=hashes,numeric=numeric,proof=proof,numeric_repeat_sha256=digest(numeric_repeat),proof_repeat_sha256=digest(proof_repeat))
+        del rows,numeric_repeat,proof_repeat
+    else:
+        bundle=json.loads(gzip.decompress((archive/'records.json.gz').read_bytes()));assert bundle['hashes']==hashes
+        numeric=bundle['numeric'];proof=bundle['proof']
+    assert digest(numeric)==bundle['numeric_repeat_sha256'] and digest(proof)==bundle['proof_repeat_sha256']
+    counts=dict(proof=validate(proof,reference,True),numeric=validate(numeric,reference,False))
+    assert counts['proof']==certified['projection']['cells']
+    bad=copy.deepcopy(proof);bad[0][0]['native'][0]+=.01
+    try:validate(bad,reference,True)
+    except AssertionError:pass
+    else:raise AssertionError('Accepted altered native outcome')
+    bad=copy.deepcopy(proof);bad[0].pop()
+    try:validate(bad,reference,True)
+    except AssertionError:pass
+    else:raise AssertionError('Accepted missing projected cell')
+    numeric_metrics=census_metrics(numeric,reference);proof_metrics=census_metrics(proof,reference)
+    assert numeric_metrics['trimmed']['conflicting_keys']==proof_metrics['trimmed']['conflicting_keys']==0
+    assert numeric_metrics['unsafe_trimmed_calls']['conflicting_keys']>0
+    result=numeric_reference[-1]
+    summary=dict(counts=counts,numeric=numeric_metrics,proof=proof_metrics,total_numeric_runs=result['runs'],
+        candidate_reuse_fraction=numeric_metrics['trimmed']['candidate_reused_runs']/result['runs'],
+        reference_bounds=result['bounds'],reference_mix=result['mix'],reference_calls=result['calls'],
+        negative_controls=['altered_native_outcome','missing_projected_cell','discarded_sleep_talk_pool'],
+        production_changed=False,strength_demonstrated=False,cache_implemented=False,
+        scope='Measurement only: no calculations are skipped. Every instrumented solver row is identical to the '
+              'archived item-projection solver after removing the census and wall times, with two runs per backend. '
+              'Each measured cell is bound to the archived native outcome audit by guarded state identity and joint '
+              'choices. Raw and existing guarded keys are compared with a candidate which removes unselected '
+              'current/base moves of active Pokemon only when the chosen move is not Sleep Talk; existing damage '
+              'and Quick Claw guards are retained unchanged. HP, items, conditions and other state fields remain. '
+              'A deliberately unsafe key also discards the Sleep Talk pool and produces outcome conflicts. '
+              'Observed agreement of the candidate does not prove equivalence on every state. Potential saved '
+              'runs count repeated cells on this fixed computation schedule, exclude key-building and cache costs, '
+              'and are not a measured speedup. This census alone does not establish enough runtime savings '
+              'to reach 500ms. No cache or production integration is adopted here.')
+    if args.record:
+        archive.mkdir();(archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))
+        (archive/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    else:assert summary==json.loads((archive/'summary.json').read_bytes())
+    print(json.dumps({k:v for k,v in summary.items() if k not in ['scope','proof']},indent=2))
+
+
+if __name__=='__main__':main()

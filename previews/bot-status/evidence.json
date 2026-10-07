@@ -18030,6 +18030,369 @@
         "strength_demonstrated": false,
         "scope": "The previous final-step eligibility guard is retained, with additional explicitly reviewed item callbacks. Type boosts and critical-rate changes are evaluated before damage variance and have no dependence on post-hit HP. Status cures and PP restoration depend only on alive/dead status or non-HP state; banned damaging statuses and confusion cannot be introduced by the approved moves. Mail item-taking callbacks are unreachable with these moves. Berserk Gene remains excluded. All rejected cells use the previous exact path. Projected final-step kernels are audited against exact native outcome probabilities; other cells are checked against native raw-state kernels. Every ledger, policy, controller query, mixture and ceiling is independently checked. Two runs per backend and zero/500ms controls are included. The 1440-case HP/item/move grid includes active Rock, Ice and Steel boost items. A further 48 cases cover Farfetchd with Stick, Chansey with Lucky Punch and Mystery Berry PP restoration; the tests require the critical items to change actual outcome probabilities and PP restoration to occur in both enumerators. Existing unsafe-effect and sandstorm fallback controls are retained. This is a source-reviewed argument plus finite testing, not a machine-checked proof over all engine states. Time excludes input loading, model replay and independent audits. No production integration or deployed-strength claim."
       }
+    },
+    "findings/outcome-key-census-v1/summary.json": {
+      "sha256": "c8a2b6fb0214dc0f3ed9a5359238c3a4473385896258b996ac0332ff970f51d9",
+      "data": {
+        "counts": {
+          "proof": 51729,
+          "numeric": 32993
+        },
+        "numeric": {
+          "raw": {
+            "observations": 32993,
+            "observed_runs": 152832,
+            "unique_keys": 32023,
+            "repeated_cells": 970,
+            "candidate_reused_runs": 6624,
+            "consistent_reused_runs": 6624,
+            "within_call_repeats": 0,
+            "same_world_repeats": 970,
+            "new_world_repeats": 0,
+            "conflicting_keys": 0,
+            "maximum_mass_error": 0.0,
+            "examples": []
+          },
+          "guarded": {
+            "observations": 32993,
+            "observed_runs": 152832,
+            "unique_keys": 31950,
+            "repeated_cells": 1043,
+            "candidate_reused_runs": 6931,
+            "consistent_reused_runs": 6931,
+            "within_call_repeats": 0,
+            "same_world_repeats": 1043,
+            "new_world_repeats": 0,
+            "conflicting_keys": 0,
+            "maximum_mass_error": 0.0,
+            "examples": []
+          },
+          "trimmed": {
+            "observations": 32993,
+            "observed_runs": 152832,
+            "unique_keys": 15716,
+            "repeated_cells": 17277,
+            "candidate_reused_runs": 60804,
+            "consistent_reused_runs": 60804,
+            "within_call_repeats": 1649,
+            "same_world_repeats": 1043,
+            "new_world_repeats": 14585,
+            "conflicting_keys": 0,
+            "maximum_mass_error": 0.0,
+            "examples": []
+          },
+          "unsafe_trimmed_calls": {
+            "observations": 32993,
+            "observed_runs": 152832,
+            "unique_keys": 12653,
+            "repeated_cells": 20340,
+            "candidate_reused_runs": 101048,
+            "consistent_reused_runs": 57344,
+            "within_call_repeats": 1649,
+            "same_world_repeats": 1043,
+            "new_world_repeats": 17648,
+            "conflicting_keys": 690,
+            "maximum_mass_error": 0.3333333332557231,
+            "examples": [
+              {
+                "first": {
+                  "call": 2,
+                  "world": "berry/rest",
+                  "kind": "rockslide",
+                  "state": "76417038104292005140861232905408143854",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.34985351556809974,
+                    0.3333333332557231,
+                    0.31681315117617714,
+                    0.0
+                  ]
+                },
+                "conflict": {
+                  "call": 15,
+                  "world": "berry/agility",
+                  "kind": "rockslide",
+                  "state": "52457266987416141273751268679880020160",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.07031250000818545,
+                    0.3333333332557231,
+                    0.5963541667360914,
+                    0.0
+                  ]
+                },
+                "first_conflict_mass_error": 0.2795410155599143,
+                "group_maximum_mass_error": 0.3333333332557231
+              },
+              {
+                "first": {
+                  "call": 2,
+                  "world": "berry/rest",
+                  "kind": "rockslide",
+                  "state": "149142104696856007665591353674089719396",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.34985351556809974,
+                    0.3333333332557231,
+                    0.31681315117617714,
+                    0.0
+                  ]
+                },
+                "conflict": {
+                  "call": 15,
+                  "world": "berry/agility",
+                  "kind": "rockslide",
+                  "state": "116814136437171825396422248810607662952",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.07031250000818545,
+                    0.3333333332557231,
+                    0.5963541667360914,
+                    0.0
+                  ]
+                },
+                "first_conflict_mass_error": 0.2795410155599143,
+                "group_maximum_mass_error": 0.3333333332557231
+              },
+              {
+                "first": {
+                  "call": 2,
+                  "world": "berry/rest",
+                  "kind": "rockslide",
+                  "state": "323974762462832551396672318437947201165",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.34985351556809974,
+                    0.3333333332557231,
+                    0.31681315117617714,
+                    0.0
+                  ]
+                },
+                "conflict": {
+                  "call": 15,
+                  "world": "berry/agility",
+                  "kind": "rockslide",
+                  "state": "339512270744875601687943446112934894832",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.07031250000818545,
+                    0.3333333332557231,
+                    0.5963541667360914,
+                    0.0
+                  ]
+                },
+                "first_conflict_mass_error": 0.2795410155599143,
+                "group_maximum_mass_error": 0.3333333332557231
+              }
+            ]
+          }
+        },
+        "proof": {
+          "raw": {
+            "observations": 51729,
+            "observed_runs": 230167,
+            "unique_keys": 49833,
+            "repeated_cells": 1896,
+            "candidate_reused_runs": 10432,
+            "consistent_reused_runs": 10432,
+            "within_call_repeats": 0,
+            "same_world_repeats": 1896,
+            "new_world_repeats": 0,
+            "conflicting_keys": 0,
+            "maximum_mass_error": 0.0,
+            "examples": []
+          },
+          "guarded": {
+            "observations": 51729,
+            "observed_runs": 230167,
+            "unique_keys": 49687,
+            "repeated_cells": 2042,
+            "candidate_reused_runs": 11046,
+            "consistent_reused_runs": 11046,
+            "within_call_repeats": 0,
+            "same_world_repeats": 2042,
+            "new_world_repeats": 0,
+            "conflicting_keys": 0,
+            "maximum_mass_error": 0.0,
+            "examples": []
+          },
+          "trimmed": {
+            "observations": 51729,
+            "observed_runs": 230167,
+            "unique_keys": 23412,
+            "repeated_cells": 28317,
+            "candidate_reused_runs": 106406,
+            "consistent_reused_runs": 106406,
+            "within_call_repeats": 1649,
+            "same_world_repeats": 2042,
+            "new_world_repeats": 24626,
+            "conflicting_keys": 0,
+            "maximum_mass_error": 0.0,
+            "examples": []
+          },
+          "unsafe_trimmed_calls": {
+            "observations": 51729,
+            "observed_runs": 230167,
+            "unique_keys": 20349,
+            "repeated_cells": 31380,
+            "candidate_reused_runs": 146650,
+            "consistent_reused_runs": 102946,
+            "within_call_repeats": 1649,
+            "same_world_repeats": 2042,
+            "new_world_repeats": 27689,
+            "conflicting_keys": 690,
+            "maximum_mass_error": 0.3333333332557231,
+            "examples": [
+              {
+                "first": {
+                  "call": 2,
+                  "world": "berry/rest",
+                  "kind": "rockslide",
+                  "state": "76417038104292005140861232905408143854",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.3498535155680998,
+                    0.3333333332557231,
+                    0.31681315117617714,
+                    0.0
+                  ]
+                },
+                "conflict": {
+                  "call": 15,
+                  "world": "berry/agility",
+                  "kind": "rockslide",
+                  "state": "52457266987416141273751268679880020160",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.07031250000818545,
+                    0.3333333332557231,
+                    0.5963541667360914,
+                    0.0
+                  ]
+                },
+                "first_conflict_mass_error": 0.27954101555991434,
+                "group_maximum_mass_error": 0.3333333332557231
+              },
+              {
+                "first": {
+                  "call": 2,
+                  "world": "berry/rest",
+                  "kind": "rockslide",
+                  "state": "149142104696856007665591353674089719396",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.3498535155680998,
+                    0.3333333332557231,
+                    0.31681315117617714,
+                    0.0
+                  ]
+                },
+                "conflict": {
+                  "call": 15,
+                  "world": "berry/agility",
+                  "kind": "rockslide",
+                  "state": "116814136437171825396422248810607662952",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.07031250000818545,
+                    0.3333333332557231,
+                    0.5963541667360914,
+                    0.0
+                  ]
+                },
+                "first_conflict_mass_error": 0.27954101555991434,
+                "group_maximum_mass_error": 0.3333333332557231
+              },
+              {
+                "first": {
+                  "call": 2,
+                  "world": "berry/rest",
+                  "kind": "rockslide",
+                  "state": "323974762462832551396672318437947201165",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.3498535155680998,
+                    0.3333333332557231,
+                    0.31681315117617714,
+                    0.0
+                  ]
+                },
+                "conflict": {
+                  "call": 15,
+                  "world": "berry/agility",
+                  "kind": "rockslide",
+                  "state": "339512270744875601687943446112934894832",
+                  "choices": [
+                    "move sleeptalk",
+                    "move rockslide"
+                  ],
+                  "outcomes": [
+                    0.07031250000818545,
+                    0.3333333332557231,
+                    0.5963541667360914,
+                    0.0
+                  ]
+                },
+                "first_conflict_mass_error": 0.27954101555991434,
+                "group_maximum_mass_error": 0.3333333332557231
+              }
+            ]
+          }
+        },
+        "total_numeric_runs": 496818,
+        "candidate_reuse_fraction": 0.12238687004094055,
+        "reference_bounds": [
+          0.08926996926318925,
+          0.08928985574286716
+        ],
+        "reference_mix": [
+          0.4442382191836013,
+          0.5557617808163987
+        ],
+        "reference_calls": 3044,
+        "negative_controls": [
+          "altered_native_outcome",
+          "missing_projected_cell",
+          "discarded_sleep_talk_pool"
+        ],
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "cache_implemented": false,
+        "scope": "Measurement only: no calculations are skipped. Every instrumented solver row is identical to the archived item-projection solver after removing the census and wall times, with two runs per backend. Each measured cell is bound to the archived native outcome audit by guarded state identity and joint choices. Raw and existing guarded keys are compared with a candidate which removes unselected current/base moves of active Pokemon only when the chosen move is not Sleep Talk; existing damage and Quick Claw guards are retained unchanged. HP, items, conditions and other state fields remain. A deliberately unsafe key also discards the Sleep Talk pool and produces outcome conflicts. Observed agreement of the candidate does not prove equivalence on every state. Potential saved runs count repeated cells on this fixed computation schedule, exclude key-building and cache costs, and are not a measured speedup. This census alone does not establish enough runtime savings to reach 500ms. No cache or production integration is adopted here."
+      }
     }
   },
   "foresight_fix": {
