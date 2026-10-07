@@ -19,6 +19,8 @@
 
 mod correlated;
 pub use correlated::{AffineCell, CorrelatedLoss, RootCorrelation};
+mod loss_threshold;
+pub use loss_threshold::{PolicyLossThresholdReport, PolicyLossThresholdStop};
 
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
