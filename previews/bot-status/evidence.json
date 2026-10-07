@@ -29067,6 +29067,197 @@
         },
         "native_contract": "Uses Observer::new, observe, Belief::new, sync_checked, per-game SplitMix64 and BlindSearch::new/step/best with UCB c=0.4 and hp_buckets=16, as ordinary WasmBlindSearcher without pinned sets, baked tables, community prior or pondering. Full native observation (including exact HP) is retained intentionally. Fixed 128-iteration checks are not strength trials."
       }
+    },
+    "findings/native-deployed-duel-v1/protocol.json": {
+      "sha256": "72ddfae55ea9e96a9e89a35dbee1736f5c5081abbb0563cc8d8a97397ea9b315",
+      "data": {
+        "schema": "nc2000-native-deployed-duel-study-v1",
+        "registered_at": "2026-10-07T08:59:49.867216+00:00",
+        "directory": "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main",
+        "manifest": {
+          "type": "manifest",
+          "config": {
+            "schema": "nc2000-native-deployed-duel-v1",
+            "seed": 2026100708,
+            "games": 192,
+            "threads": 4,
+            "pool": "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/ce55d34048b2ece4-team-pool.json",
+            "dex": "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+            "agents": [
+              {
+                "program": "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/a8bf65829bdade47-current-worker",
+                "args": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/b2a2bee56df07571-belief-pool.json",
+                  "27000"
+                ],
+                "artifacts": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/b2a2bee56df07571-belief-pool.json"
+                ]
+              },
+              {
+                "program": "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/8c973d54ce32f0d3-deployed-worker",
+                "args": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/b2a2bee56df07571-belief-pool.json",
+                  "27000"
+                ],
+                "artifacts": [
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                  "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/b2a2bee56df07571-belief-pool.json"
+                ]
+              }
+            ],
+            "record": true,
+            "crn_agent_seeds": true
+          },
+          "hashes": {
+            "arena": "sha256:55e1aa4497b61773edb030a60086023e72abffaf0dfe607c904b4140abc0a0c3",
+            "pool": "sha256:ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+            "dex": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+            "agents": [
+              {
+                "program": "sha256:a8bf65829bdade4736a189653bb963bf863edefe27ddcc8eb75cb35789da901e",
+                "artifacts": [
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                  },
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                  }
+                ]
+              },
+              {
+                "program": "sha256:8c973d54ce32f0d3420e9439ef4fe1349d50a51e6c8c0d4cd556216c2040178f",
+                "artifacts": [
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/ecfe4c596917fd94-gen2stadium2.json",
+                    "hash": "sha256:ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+                  },
+                  {
+                    "path": "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/b2a2bee56df07571-belief-pool.json",
+                    "hash": "sha256:b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "replay": "/Volumes/Work/puniu/nc2000-engine/tmp/native-deployed-v1/main/artifacts/48ce4c6556c3da1b-replay",
+        "replay_sha256": "48ce4c6556c3da1b944832d481e6065f32e27183856aedafa26677d2cd4e50f0",
+        "checker_sha256": "8fedcd52d97a09a2d659adeb168613854289dacc005d8b0220a4fc09d2e6e2ff",
+        "evaluator_sha256": "85cb9af9254dd49eb9b549a322d21e8bf20930d266f1e464103f6a02281e5f93",
+        "arena_source_sha256": "6d87f29dd282989536c2c453c12e80f00dcc94036b298f85b0e0d974b3949f92",
+        "replay_source_sha256": "5e1829eba7296ede319b21a866337db7c3e852d4b5108bbb0d5a4eef61dfdbe1",
+        "native_transport_provenance_sha256": "5252061d7518e324099d78ea38e5598c33ea40d9b69d934e4c4a1460bd511650",
+        "deployment": {
+          "sha": "c7b11e882d75e552fd62c530012eb7c2d82b9e64",
+          "id": 6867231409,
+          "state": "success",
+          "updated_at": "2026-10-05T18:47:23Z",
+          "checked_at": "2026-10-07T08:59:49.872620+00:00",
+          "url": "https://puniu3.github.io/nc2000-engine/"
+        },
+        "scope": "Preregistered 192 games, 96 swaps. Current default native bot at runtime base 6c2bd9e versus deployed c7b11e8 bot, both without hp-type-evidence. Fixed 27000 iterations, UCB c=0.4, HP buckets 16. Same current corrected native referee for both, retaining each worker version own search and internal simulation engine. Native observation, including exact HP, matches the ordinary Web BlindSearcher lifecycle; no protocol importer, pinned sets, baked tables, community fallback prior or pondering. Uniform draws from the current 24-team catalog, same shipped weighted 103-team belief prior, common 32-bit bot seeds and battle seed within each swapped pair. Complete terminal games only; failures are not ties. Positive strength evidence requires pair-based betting95 lower bound above 0.5 after all 192 games. No optional stopping or adding seeds for significance. An interval containing 0.5 is inconclusive, not equivalence. Results are conditional on these rules, pool and equal iterations; not browser timing, human strength or full-game optimality evidence."
+      }
+    },
+    "findings/native-deployed-duel-v1/smoke-summary.json": {
+      "sha256": "0dfd616efb2e3512fb890e09ce2dc47f95b841fc8e012e375776e394e850d501",
+      "data": {
+        "runs": {
+          "smoke-aa": {
+            "games": 4,
+            "decisions": [
+              93,
+              93
+            ],
+            "wins": 2,
+            "losses": 2,
+            "ties": 0,
+            "pair_scores": [
+              0.5,
+              0.5
+            ],
+            "replay": {
+              "games": 4,
+              "replayed_decisions": 186,
+              "replayed_states": 96,
+              "games_with_hidden_power": 4,
+              "hidden_power_uses": 14
+            }
+          },
+          "smoke-bb": {
+            "games": 4,
+            "decisions": [
+              70,
+              70
+            ],
+            "wins": 2,
+            "losses": 2,
+            "ties": 0,
+            "pair_scores": [
+              0.5,
+              0.5
+            ],
+            "replay": {
+              "games": 4,
+              "replayed_decisions": 140,
+              "replayed_states": 72,
+              "games_with_hidden_power": 4,
+              "hidden_power_uses": 4
+            }
+          },
+          "smoke-ab": {
+            "games": 4,
+            "decisions": [
+              77,
+              78
+            ],
+            "wins": 2,
+            "losses": 2,
+            "ties": 0,
+            "pair_scores": [
+              0.5,
+              0.5
+            ],
+            "replay": {
+              "games": 4,
+              "replayed_decisions": 155,
+              "replayed_states": 80,
+              "games_with_hidden_power": 4,
+              "hidden_power_uses": 8
+            }
+          },
+          "smoke-repeat": {
+            "games": 4,
+            "decisions": [
+              77,
+              78
+            ],
+            "wins": 2,
+            "losses": 2,
+            "ties": 0,
+            "pair_scores": [
+              0.5,
+              0.5
+            ],
+            "replay": {
+              "games": 4,
+              "replayed_decisions": 155,
+              "replayed_states": 80,
+              "games_with_hidden_power": 4,
+              "hidden_power_uses": 8
+            }
+          }
+        },
+        "negative_controls": 7,
+        "replay_negative_controls": 3,
+        "identity_pairs": 4,
+        "repeat_games": 4
+      }
     }
   },
   "foresight_fix": {
@@ -35191,19 +35382,13 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-07T17:49:24.670928+09:00",
-    "study": "hp-combined-v1",
-    "preregistration_commit": "7bcae70",
+    "checked_at": "2026-10-07T18:01:56.754791+09:00",
+    "study": "native-deployed-duel-v1",
+    "preregistration_commit": "0c69b5d",
     "status": "running",
     "planned_games": 192,
+    "parallel_study": "hp-combined-v1",
     "deployment_rechecked": true,
-    "strength_vs_deployed": "unproved",
-    "deployment_checked_at": "2026-10-07T17:33:34.049963+09:00",
-    "native_transport": {
-      "commit": "de2d12e",
-      "states": 345,
-      "matching_current_searches": 622,
-      "strength_claim": false
-    }
+    "strength_vs_deployed": "unproved"
   }
 }
