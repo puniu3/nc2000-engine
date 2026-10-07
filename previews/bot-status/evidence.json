@@ -51669,6 +51669,113 @@
         "root_helper_sha256": "efc669f4fa057ce136c6f448ea0a371ae2d0dc36b1c27d287da25cffc8bdf2d9",
         "reason": "Correct shared special-stat EVs and assert per-set format validation; supersedes root helper hash in direct-protocol.json for final runs."
       }
+    },
+    "findings/priority-substitute-format-v1/plan.json": {
+      "sha256": "a725eb3d1081367dd637d4921065a733c49a496660eed962ea03da29c8519045",
+      "data": {
+        "source_commit": "70742b3",
+        "hypothesis": "A faster Jolteon behind a Substitute can spend one turn rebuilding after Scizor Quick Attack breaks it, exhausting priority PP before attacking. An immediate Thunderbolt may expose it to a lethal second Quick Attack. The old final mask removes Substitute without changing search statistics.",
+        "fixture": "Both teams pass validate_team with six registered species, three level-50 selected. Electrode Explosion removes Magikarp; Golem Explosion faints into immune Gengar. Then the prior legal PP-depletion prefix reaches Jolteon versus Scizor. All state transitions use engine actions. No HP/PP edits.",
+        "budgets": {
+          "first_step_cell_cap": 4096,
+          "proof_engine_runs": 500000,
+          "proof_nodes": 50000,
+          "proof_loss_target": 0.001,
+          "search_iterations": 27000,
+          "search_seeds": [
+            2026100807,
+            2026100808,
+            2026100809,
+            2026100810
+          ],
+          "sides": [
+            0,
+            1
+          ]
+        },
+        "scope": "Full-format legal reachability, conditional known-loadout analysis, not typical play frequency or blind guarantee. No production bot changes. Preserve unsuccessful results; no outcome-driven tuning."
+      }
+    },
+    "findings/priority-substitute-format-v1/summary.json": {
+      "sha256": "07cdb58c9b36ceb910ec984aab74e4c259c5d57d0e16060542c8bff28caf085b",
+      "data": {
+        "searches": 8,
+        "repaired_choices": 8,
+        "identical_search_statistics": true,
+        "minimum_certified_choice_gain": 0.9184138738012101,
+        "old_choice_counts": {
+          "move agility": 6,
+          "move thunderbolt": 2
+        },
+        "full_format_validation": true,
+        "registered_per_side": 6,
+        "selected_per_side": 3,
+        "independent_fixed_policy_lower": 0.9959550665465201,
+        "generic_engine_runs": 24310,
+        "direct_engine_runs": 16768,
+        "schema": "nc2000-priority-substitute-format-v1",
+        "rejected_mutations": [
+          "missing_seed",
+          "changed_search_reward",
+          "wrong_old_choice",
+          "false_loss",
+          "wrong_orientation",
+          "false_direct_win",
+          "false_format"
+        ],
+        "hashes": {
+          "findings/priority-substitute-format-v1/plan.json": "a725eb3d1081367dd637d4921065a733c49a496660eed962ea03da29c8519045",
+          "findings/priority-substitute-format-v1/direct-binding.json": "cde104bda9dd2106fc3074e84a95349558621909ffe8ff5144e302817653bfd1",
+          "findings/priority-substitute-format-v1/priority_substitute_choice.rs": "b88861a027f0288b5a8d9d746b265da57b5a8f1c72b64bce00669ba3e22c1473",
+          "findings/priority-substitute-format-v1/priority_substitute_proof.rs": "88d06e152f4c8530d906016888d4da6a92709b23e5ec19f4033685264a876a83",
+          "findings/priority-substitute-format-v1/priority_substitute_direct.rs": "00c78c264185761e3b189f9af97a69ead37b8bfb0932e16b1a5080209235d3d0",
+          "tmp/priority-substitute-format-v1/before.jsonl": "46387c0f50743cb3e876c01f3a6c2811f9b254b8c6be3c1d6be7e9856547cb38",
+          "tmp/priority-substitute-format-v1/after.jsonl": "6ce2581373b1021dda5b0b71ab5dd8513f3e11310ff1ecd63852c83db5149cbc",
+          "tmp/priority-substitute-format-v1/proof.jsonl": "c5dd03233e57fb24d681babb0f8257eee11ee475e0afb6dcba7bfd9595b9cea4",
+          "tmp/priority-substitute-format-v1/direct.jsonl": "60e4dda00daafd40887163cd3121bb7da072ba1fa6f89df7c5a2e9b102410b98",
+          "tmp/priority-substitute-format-v1/before": "3c92fffb429c32c87a2173931f78d45527db2324773508a100fd4f9b366eca9b",
+          "tmp/priority-substitute-format-v1/after": "c90e224ede744dbb8f0eb74862f0411a6a0d53539a9f1ad7e2c3b0ecb1cabd60",
+          "tmp/priority-substitute-format-v1/proof": "3c2422da747dce25a98618fa1cef6ea6f0858f7ef513afd8ad043b4c03d692e4",
+          "tmp/priority-substitute-format-v1/direct": "7ae6c9da2d65fb51e793ab8887724866a20349b8b619643f4b95dd801c01cd9e",
+          "tmp/priority-substitute-format-v1/test.txt": "9681a6bdfd47735e6a17dd4019f3f5175975dc884dddedaa681115b837c7f271"
+        },
+        "generic_proof_repeat_identical": true,
+        "known_loadouts_only": true,
+        "direct_certificate_covers_agility_before_choices_only": true,
+        "blind_information_set_certificate": false,
+        "full_game_strength_improvement_proven": false
+      }
+    },
+    "findings/priority-substitute-format-v1/interpretation.json": {
+      "sha256": "d34d0cdcc16b4255391e6ce12c31feea4b97ce50b73f8313de16798e90ba9ebd",
+      "data": {
+        "status": "complete",
+        "claim": "Full-format legal reachability and conditional improvement of all eight tested selections; no production code changed in this follow-up.",
+        "validation": "Both six-species teams passed validate_team; three level-50 Pokemon selected on each side. The engine reached turn 113 with legal choices and no direct HP, PP or battle-state edits.",
+        "actual_before_comparison": "Research adapter built with pre-fix b7a6099 smmcts.rs; other relevant files matched current code. Root states and search statistics agree exactly with the current main build. Only mask and final selection differ.",
+        "old_choice_counts": {
+          "agility": 6,
+          "thunderbolt": 2
+        },
+        "old_conditional_value": "Agility exactly zero; Thunderbolt at most 0.08078039609439766.",
+        "new_conditional_value": "Substitute followed by optimal play at least 0.9991117403873804; independent fixed Thunderbolt continuation at least 0.9959550665465201.",
+        "limitations": [
+          "One constructed position, two side orientations and four fresh seeds; not eight independent matches.",
+          "Known loadouts; not a bound covering all hidden-move, EV, item or selected-team alternatives.",
+          "Engine and repository team-validator reachability; not proof that optimal prior play reaches this position.",
+          "Original 192-game census had zero occurrences of this exclusion.",
+          "No new average-strength comparison, public deployment, or playable WASM rebuild."
+        ],
+        "next_question": "Which other final-selection exclusions can remove a useful move after the opponent acts first? Use engine-complete local counterexamples and actual choice certificates, with exposure measured separately."
+      }
+    },
+    "findings/priority-substitute-format-v1/direct-binding.json": {
+      "sha256": "cde104bda9dd2106fc3074e84a95349558621909ffe8ff5144e302817653bfd1",
+      "data": {
+        "root_helper_sha256": "b88861a027f0288b5a8d9d746b265da57b5a8f1c72b64bce00669ba3e22c1473",
+        "direct_helper_sha256": "00c78c264185761e3b189f9af97a69ead37b8bfb0932e16b1a5080209235d3d0",
+        "scope": "Same independent traversal and budgets as priority-substitute-choice-v1: Substitute then Thunderbolt, depth 3; Agility then all own legal actions, depth 2; every opponent action enumerated, singleton asserted. Added Thunderbolt old selections are covered by the generic solver only."
+      }
     }
   },
   "foresight_fix": {
@@ -57793,7 +57900,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-08T02:13:34.026365+09:00",
+    "checked_at": "2026-10-08T05:03:49.423433+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -57840,7 +57947,7 @@
     "followup_first_step": "native-first-step-loss-v1",
     "followup_snorlax_witness": "native-snorlax-witness-v1",
     "followup_frontier_step": "native-frontier-step-v1",
-    "followup_result_commit": "6c3b139acd4d55a7f32eab042f69a5072255e087",
+    "followup_result_commit": "bbb393038991f97106aac7259c1cd39f1598ee79",
     "followup_frontier_refine": "native-frontier-refine-v1",
     "followup_frontier_defer": "native-frontier-defer-v1",
     "followup_frontier_defer_complete": "native-frontier-defer-complete-v1",
@@ -57882,7 +57989,8 @@
     "followup_overkill_divergence": "native-overkill-divergence-v1",
     "followup_asymmetric_terminal": "native-asymmetric-terminal-v1",
     "followup_priority_substitute": "priority-substitute-v1",
-    "followup_priority_substitute_choice": "priority-substitute-choice-v1"
+    "followup_priority_substitute_choice": "priority-substitute-choice-v1",
+    "followup_priority_substitute_format": "priority-substitute-format-v1"
   },
   "native_endgame_census": {
     "status": "complete",
