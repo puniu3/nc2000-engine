@@ -1,0 +1,72 @@
+{
+  "schema": "nc2000-native-endgame-scheduling-v1",
+  "source_roots": 360,
+  "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
+  "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "work_budget": 250000,
+  "node_budget": 50000,
+  "cell_cap": 4096,
+  "tolerance": 0.02,
+  "threads": 4,
+  "indices": [
+    0,
+    1,
+    4,
+    6,
+    8,
+    12
+  ],
+  "registered_at": "2026-10-07T09:59:35.000897+00:00",
+  "source_census_commit": "d31e427",
+  "helper_sha256": "5a970be9839a05e6a73d61ead42dd688c42a433162f2a8c029ab97a0f5a6667f",
+  "scope": "Diagnostic scheduling comparison on the six selected roots. Same 250k execution budget, 50k node stopping threshold and 4096 cell cap. Full control arm must reproduce frozen bounds and counters. No runtime adoption from this six-root comparison.",
+  "classification": {
+    "tight_value_width": 0.02,
+    "pure_loss_proven_lower_gt": 0.02,
+    "pure_loss_small_upper_le": 0.02,
+    "strict_domination_gap_lower_gt": 1e-06,
+    "unresolved_retained": true,
+    "aggregate_by_game": true
+  },
+  "selection": "First two unresolved deeper-screen roots in each stratum: neither active, one active, or both actives have direct healing PP. Sorted by game/frame.",
+  "screen_summary_sha256": "500b007af7583debda194db9a4fe6fc9558b141923380d38ca1cb771dac75b1d",
+  "screen_commit": "dea5166",
+  "healing_moves": [
+    "rest",
+    "recover",
+    "softboiled",
+    "milkdrink",
+    "synthesis",
+    "moonlight",
+    "morningsun"
+  ],
+  "control_source_sha256": "af9c9281e015f93789042487835564b1898525a2976f75c8541472dfc43170bc",
+  "variants": {
+    "control": {
+      "dead_quick_claw_quotient": false,
+      "retain_eager_prefix": false,
+      "selected_only": false
+    },
+    "quotient": {
+      "dead_quick_claw_quotient": true,
+      "retain_eager_prefix": false,
+      "selected_only": false
+    },
+    "quotient_selected": {
+      "dead_quick_claw_quotient": true,
+      "retain_eager_prefix": false,
+      "selected_only": true
+    },
+    "quotient_retained": {
+      "dead_quick_claw_quotient": true,
+      "retain_eager_prefix": true,
+      "selected_only": false
+    },
+    "quotient_retained_selected": {
+      "dead_quick_claw_quotient": true,
+      "retain_eager_prefix": true,
+      "selected_only": true
+    }
+  },
+  "solver_binary_sha256": "acbad1e013344979ae68520c8a477b9626fd5b30a035d13e9f00db9767564c82"
+}
