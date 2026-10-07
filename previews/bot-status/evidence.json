@@ -51357,6 +51357,103 @@
         "interpretation": "66 pairs differ at preview,26 first differ in battle,4 have identical recorded choices. All26 battle divergences have at least2 living members on each side. Preview subgroup mean0.4394 and battle subgroup0.5 are post-treatment descriptions, not causal effects. Do not infer that disabling the candidate only for preview would fix its strength.",
         "decision": "Keep capped rollout ranking disabled; do not retune it or conditionally adopt it using these same games."
       }
+    },
+    "findings/native-asymmetric-terminal-v1/protocol.json": {
+      "sha256": "efed69caf4c4b4a9e83dd95a9547555340fdae6d818abcd863592c859d641e73",
+      "data": {
+        "schema": "nc2000-native-asymmetric-terminal-v1",
+        "source_commit": "b009bca29352843d4e072de9307e4d3dc0b7cc78",
+        "source_games_sha256": "bffa990fd1f36e828cf4ce16c97ef8c09c7b3e13bd83b67d2999211c534a49de",
+        "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+        "census_helper_sha256": "49ec8d88892dc98714fb05e720015c71844d7b2dc3794ad1bf2a4d5ec6de748b",
+        "scan_helper_sha256": "040b6e783c5f5341765592384649ba7d970dd6dd072bf593185c52845fb18f4d",
+        "cell_cap": 256,
+        "selection": "Every recorded current-agent decision at an idle simultaneous move request, with more than one legal own action, exactly one living party member on one side and two or three on the other. No selection by result, chosen action, value or opponent hidden information.",
+        "scope": "Exploratory extension of the frozen native deployed comparison. These are not fresh independent games. True hidden state is fixed; the analysis bounds full-information optimal continuation with a specified pure first action. It does not certify the blind information-set policy or human-relative strength. Normal bot unchanged.",
+        "bounds": "For each joint action, L=P(own win)+0.5*P(tie), U=L+P(nonterminal)+P(unexpanded). Subtract/add 1e-9 outward padding and clip to [0,1]. Alternative security lower=min_reply L; selected security upper=min_reply U. max_alternative_lower minus selected_security_upper > 1e-8 certifies conditional pure-action security loss. Unresolved mass is never treated as a loss.",
+        "budget": "One 256-run partial enumeration per legal joint action; no adaptive budget extension in this study. Repeat the complete extraction and scan and require identical non-timing results.",
+        "controls": [
+          "certain winning alternative",
+          "identical terminal values",
+          "nonterminal selected branch",
+          "unexpanded selected branch",
+          "tie half score",
+          "opposite side orientation",
+          "one reply suffices to bound selected security above",
+          "all replies required for alternative security below"
+        ],
+        "prior_failure": "Generic endgame search integration and deeper bound scheduling already failed performance or strength gates. This study only checks the previously excluded asymmetric native roots for one-step outcome certificates."
+      }
+    },
+    "findings/native-asymmetric-terminal-v1/summary.json": {
+      "sha256": "aedffb348206ab0009f1d2787c7c443ad040386583d0497938c4c0d1fa745dfd",
+      "data": {
+        "roots": 696,
+        "games": 175,
+        "strata": {
+          "1v2": 238,
+          "1v3": 48,
+          "2v1": 350,
+          "3v1": 60
+        },
+        "joint_actions": 14030,
+        "incomplete_joint_actions": 3607,
+        "resolved_nonterminal_cells": 13005,
+        "any_terminal_mass_cells": 3252,
+        "complete_joint_actions": 10423,
+        "total_runs": 1457943,
+        "conditional_errors": [],
+        "selected_loss_at_most_002": 21,
+        "alternative_security_lower_above_zero": 192,
+        "schema": "nc2000-native-asymmetric-terminal-v1",
+        "protocol_sha256": "efed69caf4c4b4a9e83dd95a9547555340fdae6d818abcd863592c859d641e73",
+        "binding_sha256": "a3c22589ec088ca8321373562bef6d43a891fa253b33206121eed93ff312fd8d",
+        "records_sha256": "8d2ae3776dcfe41d8c7faca81d1e3b25040bb4bc9def56f8bf00017ef6023ec7",
+        "roots_sha256": "508fd86ff51b4161d86b5d8f2443301402d04c85ea40fcb3d5417e17f001f3a6",
+        "repeat_identical_except_timing": true,
+        "synthetic_controls": [
+          "certain winning alternative",
+          "identical terminal values",
+          "nonterminal selected branch",
+          "unexpanded selected branch",
+          "tie half score",
+          "opposite side orientation",
+          "one reply suffices to bound selected security above",
+          "all replies required for alternative security below"
+        ],
+        "rejected_mutations": [
+          "missing_root",
+          "wrong_selected",
+          "invalid_mass",
+          "hidden_pending_mass",
+          "snapshot_hp"
+        ],
+        "replayed_games": 192,
+        "replayed_states": 4498,
+        "replayed_decisions": 8534,
+        "ordinary_bot_changed": false,
+        "blind_policy_loss_proven": false,
+        "strength_improvement_proven": false
+      }
+    },
+    "findings/native-asymmetric-terminal-v1/interpretation.json": {
+      "sha256": "f8093de84408426569fc765df0fef12d92cf3117040bb745f59bb95ef6a1b3e2",
+      "data": {
+        "result": "No positive conditional selected pure-action loss lower bound in 696 asymmetric roots. No bot change is supported by this screen.",
+        "near_optimal_scope": "21 selected actions have a full-state worst-reply terminal score lower bound at least 0.98. Since any game value is at most 1, their conditional pure-action loss is at most 0.02. This does not cover alternative hidden worlds or a blind mixed policy.",
+        "unresolved": "The other 675 roots do not obtain that near-optimality guarantee. No detected error is not equivalence or an optimality-ceiling claim.",
+        "coverage": "All qualifying current-agent roots in the existing192 games: own/foe1v2=238,1v3=48,2v1=350,3v1=60. Same source games as the360-root1v1 census; do not add these as independent games or as fresh strength trials.",
+        "enumeration": "14,030 joint first actions, each capped at256 engine runs.10,423 were completely enumerated;3,607 retain unknown probability mass.13,005 cells have positive resolved nonterminal mass, so complete first-turn enumeration alone cannot resolve their continuation values.",
+        "validation": "Both extractions are byte-identical. Both complete scans match outside timing.192games/4,498states/8,534decisions replay against source hashes, legal choices and final outcomes.8 analytical controls and5 deliberately corrupted records are checked by the audit.",
+        "next_action": "Do not increase this screen budget or promote an immediate-terminal override from this evidence. Finding a practical correction requires a concrete continuation defect; the present screen supplies no such candidate.",
+        "reproduction": {
+          "adapter": "Start from build.json adapter_base in an isolated worktree, apply decompressed adapter.patch.gz and materialize adapter-extra.json.gz path-to-source entries. Source hashes are in build.json.",
+          "examples": "Copy native_asymmetric_census.rs and native_asymmetric_scan.rs to the adapter crates/bot/examples; build release and copy the binaries immediately to tmp/native-asymmetric-terminal-v1/census and scan.",
+          "census": "census tmp/native-deployed-v1/main/games.jsonl ROOTS.jsonl > CENSUS.json; repeat. The source is the decompressed frozen native-deployed-duel-v1 records archive; its manifest points to the frozen source artifacts.",
+          "scan": "scan findings/native-asymmetric-terminal-v1/binding.json ROOTS.jsonl data/gen2stadium2.json OUTPUT.jsonl; repeat. Output path must not exist.",
+          "audit": "python3 tools/native-asymmetric-terminal-audit; expected scratch filenames and artifact hashes are bound in the protocol, binding and tool."
+        }
+      }
     }
   },
   "foresight_fix": {
@@ -57481,7 +57578,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-08T01:30:55.715184+09:00",
+    "checked_at": "2026-10-08T01:44:39.791455+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -57528,7 +57625,7 @@
     "followup_first_step": "native-first-step-loss-v1",
     "followup_snorlax_witness": "native-snorlax-witness-v1",
     "followup_frontier_step": "native-frontier-step-v1",
-    "followup_result_commit": "995ae80fb4ed9383b1e2c7395799de4d1f94cf23",
+    "followup_result_commit": "e174dff55590e00202889fb05d715b1e5923e3d7",
     "followup_frontier_refine": "native-frontier-refine-v1",
     "followup_frontier_defer": "native-frontier-defer-v1",
     "followup_frontier_defer_complete": "native-frontier-defer-complete-v1",
@@ -57567,7 +57664,8 @@
       "positive_strength_evidence": false,
       "decision": "not_adopted"
     },
-    "followup_overkill_divergence": "native-overkill-divergence-v1"
+    "followup_overkill_divergence": "native-overkill-divergence-v1",
+    "followup_asymmetric_terminal": "native-asymmetric-terminal-v1"
   },
   "native_endgame_census": {
     "status": "complete",
