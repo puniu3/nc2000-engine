@@ -1,0 +1,78 @@
+{
+  "schema": "nc2000-native-marowak-witness-v1",
+  "registered_at": "2026-10-07T12:51:53.007866+00:00",
+  "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
+  "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "helper_sha256": "17b8b8d836cc4add60f233efbf26e7c01f638a2689876cd20458b26521097908",
+  "implementation_commit": "15bf311fbe1c4eb781da65c9d1a0541bd402852a",
+  "bounds_sha256": "efe33f1f70fae6b9ebd73ede353b3d9a4115749378fbb81366eed6f8d8e4c8c6",
+  "work_budget": 2000000,
+  "node_budget": 200000,
+  "jobs": [
+    {
+      "id": "earthquake-guarantee",
+      "direction": "lower",
+      "target": "earthquake",
+      "first": "earthquake",
+      "priority": [
+        "earthquake",
+        "hiddenpower",
+        "rockslide",
+        "swordsdance"
+      ]
+    },
+    {
+      "id": "hiddenpower-upper-return",
+      "direction": "upper",
+      "target": "hiddenpower",
+      "first": "return",
+      "priority": [
+        "icebeam",
+        "return",
+        "recover",
+        "curse"
+      ]
+    },
+    {
+      "id": "hiddenpower-upper-icebeam",
+      "direction": "upper",
+      "target": "hiddenpower",
+      "first": "icebeam",
+      "priority": [
+        "icebeam",
+        "return",
+        "recover",
+        "curse"
+      ]
+    },
+    {
+      "id": "hiddenpower-upper-curse",
+      "direction": "upper",
+      "target": "hiddenpower",
+      "first": "curse",
+      "priority": [
+        "icebeam",
+        "return",
+        "recover",
+        "curse"
+      ]
+    },
+    {
+      "id": "hiddenpower-upper-recover",
+      "direction": "upper",
+      "target": "hiddenpower",
+      "first": "recover",
+      "priority": [
+        "icebeam",
+        "return",
+        "recover",
+        "curse"
+      ]
+    }
+  ],
+  "reference_archive": "findings/native-loss-lower-screen-v1/records.jsonl.gz",
+  "reference_archive_sha256": "0a6519922d4b6a675d6f243669f7a1edf42ac0524f596aaed892af6175238d55",
+  "scope": "Exploratory actual game10/frame32. Own fixed Earthquake policy gives only a lower bound against all opponent continuations. Four fixed opponent first replies followed by Ice Beam priority give only upper bounds for the actual Hidden Power first action with all own continuations free. Certify positive pure-action loss only if alternative lower exceeds the actual upper by 1e-8. Fixed actual hidden state, independent chance classes, full-information continuations; no blind-policy or strength claim.",
+  "selection": "Follow-up to the previously profiled Marowak/Porygon2 root. Actual Hidden Power is Bug, power70; Earthquake has power100 and same-type bonus. Neither has a damaging secondary effect. PP and future states are not equated; stronger immediate damage alone is not a dominance certificate. All four first replies retained.",
+  "ordinary_bot_changed": false
+}
