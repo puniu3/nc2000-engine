@@ -1,0 +1,9 @@
+{
+  "checked_example_targets": 199,
+  "excluded_unchanged_helper_targets": [
+    "item_projection_guard",
+    "terminal_projection_guard"
+  ],
+  "exit_code": 0,
+  "scope": "lib, bins, tests and all examples except the two confirmed pre-existing helpers without executable entry points"
+}
