@@ -1,0 +1,35 @@
+--- a/crates/bot/src/hp_attack_kernel.rs
++++ b/crates/bot/src/hp_attack_kernel.rs
+@@ -103,6 +103,9 @@
+ 
+ #[derive(Default, Clone, Debug)]
+ pub struct KernelStats {
++    pub verification_hits: usize,
++    pub verification_runs: usize,
++    pub verification_max_error: f64,
+     pub calls: usize,
+     pub eligible: usize,
+     pub hits: usize,
+@@ -170,6 +173,22 @@
+         self.stats.eligible += usize::from(key.is_some());
+         if let Some(kernels) = key.as_ref().and_then(|key| self.entries.get(key)) {
+             if let Some(step) = kernels.iter().find_map(|kernel| kernel.translate(base)) {
++                let direct=enumerate_step(dex,base,choices,1_000_000).expect("verification enumeration completes");
++                let map=|step:&StepEnum| {
++                    let mut result=std::collections::BTreeMap::<(u8,u128),f64>::new();
++                    for leaf in &step.leaves {
++                        let b=&leaf.battle;let damage=!b.damage_bookkeeping_observable(dex);let claw=!b.quick_claw_roll_observable(dex);
++                        let key=if claw {b.state_key128_without_quick_claw_roll(dex,damage)} else if damage {b.state_key128_without_damage_bookkeeping()} else {b.state_key128()};
++                        *result.entry((u8::from(damage)|u8::from(claw)<<1,key)).or_default()+=leaf.prob;
++                    }
++                    assert!((result.values().sum::<f64>()-1.).abs()<1e-8);result
++                };
++                let expected=map(&direct);let actual=map(&step);assert_eq!(actual.len(),expected.len());
++                for (key,mass) in actual {
++                    let error=(mass-expected[&key]).abs();assert!(error<1e-10);
++                    self.stats.verification_max_error=self.stats.verification_max_error.max(error);
++                }
++                self.stats.verification_hits+=1;self.stats.verification_runs+=direct.runs;
+                 self.stats.hits += 1;
+                 self.stats.translated_leaves += step.leaves.len();
+                 return Some(step);
