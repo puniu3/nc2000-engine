@@ -1,0 +1,48 @@
+{
+  "roots": 696,
+  "games": 175,
+  "strata": {
+    "1v2": 238,
+    "1v3": 48,
+    "2v1": 350,
+    "3v1": 60
+  },
+  "joint_actions": 14030,
+  "incomplete_joint_actions": 3607,
+  "resolved_nonterminal_cells": 13005,
+  "any_terminal_mass_cells": 3252,
+  "complete_joint_actions": 10423,
+  "total_runs": 1457943,
+  "conditional_errors": [],
+  "selected_loss_at_most_002": 21,
+  "alternative_security_lower_above_zero": 192,
+  "schema": "nc2000-native-asymmetric-terminal-v1",
+  "protocol_sha256": "efed69caf4c4b4a9e83dd95a9547555340fdae6d818abcd863592c859d641e73",
+  "binding_sha256": "a3c22589ec088ca8321373562bef6d43a891fa253b33206121eed93ff312fd8d",
+  "records_sha256": "8d2ae3776dcfe41d8c7faca81d1e3b25040bb4bc9def56f8bf00017ef6023ec7",
+  "roots_sha256": "508fd86ff51b4161d86b5d8f2443301402d04c85ea40fcb3d5417e17f001f3a6",
+  "repeat_identical_except_timing": true,
+  "synthetic_controls": [
+    "certain winning alternative",
+    "identical terminal values",
+    "nonterminal selected branch",
+    "unexpanded selected branch",
+    "tie half score",
+    "opposite side orientation",
+    "one reply suffices to bound selected security above",
+    "all replies required for alternative security below"
+  ],
+  "rejected_mutations": [
+    "missing_root",
+    "wrong_selected",
+    "invalid_mass",
+    "hidden_pending_mass",
+    "snapshot_hp"
+  ],
+  "replayed_games": 192,
+  "replayed_states": 4498,
+  "replayed_decisions": 8534,
+  "ordinary_bot_changed": false,
+  "blind_policy_loss_proven": false,
+  "strength_improvement_proven": false
+}

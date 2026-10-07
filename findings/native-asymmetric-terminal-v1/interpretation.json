@@ -1,0 +1,16 @@
+{
+  "result": "No positive conditional selected pure-action loss lower bound in 696 asymmetric roots. No bot change is supported by this screen.",
+  "near_optimal_scope": "21 selected actions have a full-state worst-reply terminal score lower bound at least 0.98. Since any game value is at most 1, their conditional pure-action loss is at most 0.02. This does not cover alternative hidden worlds or a blind mixed policy.",
+  "unresolved": "The other 675 roots do not obtain that near-optimality guarantee. No detected error is not equivalence or an optimality-ceiling claim.",
+  "coverage": "All qualifying current-agent roots in the existing192 games: own/foe1v2=238,1v3=48,2v1=350,3v1=60. Same source games as the360-root1v1 census; do not add these as independent games or as fresh strength trials.",
+  "enumeration": "14,030 joint first actions, each capped at256 engine runs.10,423 were completely enumerated;3,607 retain unknown probability mass.13,005 cells have positive resolved nonterminal mass, so complete first-turn enumeration alone cannot resolve their continuation values.",
+  "validation": "Both extractions are byte-identical. Both complete scans match outside timing.192games/4,498states/8,534decisions replay against source hashes, legal choices and final outcomes.8 analytical controls and5 deliberately corrupted records are checked by the audit.",
+  "next_action": "Do not increase this screen budget or promote an immediate-terminal override from this evidence. Finding a practical correction requires a concrete continuation defect; the present screen supplies no such candidate.",
+  "reproduction": {
+    "adapter": "Start from build.json adapter_base in an isolated worktree, apply decompressed adapter.patch.gz and materialize adapter-extra.json.gz path-to-source entries. Source hashes are in build.json.",
+    "examples": "Copy native_asymmetric_census.rs and native_asymmetric_scan.rs to the adapter crates/bot/examples; build release and copy the binaries immediately to tmp/native-asymmetric-terminal-v1/census and scan.",
+    "census": "census tmp/native-deployed-v1/main/games.jsonl ROOTS.jsonl > CENSUS.json; repeat. The source is the decompressed frozen native-deployed-duel-v1 records archive; its manifest points to the frozen source artifacts.",
+    "scan": "scan findings/native-asymmetric-terminal-v1/binding.json ROOTS.jsonl data/gen2stadium2.json OUTPUT.jsonl; repeat. Output path must not exist.",
+    "audit": "python3 tools/native-asymmetric-terminal-audit; expected scratch filenames and artifact hashes are bound in the protocol, binding and tool."
+  }
+}
