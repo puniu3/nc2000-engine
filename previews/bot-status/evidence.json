@@ -51564,6 +51564,111 @@
         "wasm_rebuilt": false,
         "public_deployed": false
       }
+    },
+    "findings/priority-substitute-choice-v1/plan.json": {
+      "sha256": "a5e78362be63ce844642961100187cadbe0508a1be8006958ff5009af41666e8",
+      "data": {
+        "source_commit": "6d055318aaa60ed5649673b2abbd6eebf8721f19",
+        "hypothesis": "A faster Jolteon behind a Substitute can spend one turn rebuilding after Scizor Quick Attack breaks it, exhausting priority PP before attacking. An immediate Thunderbolt may expose it to a lethal second Quick Attack. The old final mask removes Substitute without changing search statistics.",
+        "fixture": "Reduced two-Pokemon vs one-Pokemon engine battle. Gengar spends opposing Quick Attack, Swords Dance and Protect PP through legal turns, faints with Explosion into Protect; Jolteon enters and uses Substitute into the final Swords Dance. No HP/PP/state editing. This is a constructed tactical example, not sampled match frequency.",
+        "budgets": {
+          "first_step_cell_cap": 4096,
+          "proof_engine_runs": 500000,
+          "proof_nodes": 50000,
+          "proof_loss_target": 0.001,
+          "search_iterations": 27000,
+          "search_seeds": [
+            2026100803,
+            2026100804,
+            2026100805,
+            2026100806
+          ],
+          "sides": [
+            0,
+            1
+          ]
+        },
+        "scope": "Known loadouts conditional game analysis. Unknown fourth moves or unobserved EV/item alternatives are not certified. No human calibration, no normal bot modifications, no new outcome-based tuning of the previous correction. If this construction fails, preserve the result rather than count restored legality as winning play."
+      }
+    },
+    "findings/priority-substitute-choice-v1/summary.json": {
+      "sha256": "f61d380c6250852aa2331399fb6b0e3742086735e462b14750b93078193fb77c",
+      "data": {
+        "searches": 8,
+        "repaired_choices": 8,
+        "identical_search_statistics": true,
+        "minimum_certified_choice_gain": 0.9991117403833804,
+        "independent_fixed_policy_lower": 0.9959550665465201,
+        "generic_engine_runs": 24404,
+        "direct_engine_runs": 16768,
+        "schema": "nc2000-priority-substitute-choice-v1",
+        "rejected_mutations": [
+          "missing_seed",
+          "changed_search_reward",
+          "wrong_old_choice",
+          "false_loss",
+          "wrong_orientation",
+          "false_direct_win"
+        ],
+        "hashes": {
+          "findings/priority-substitute-choice-v1/plan.json": "a5e78362be63ce844642961100187cadbe0508a1be8006958ff5009af41666e8",
+          "findings/priority-substitute-choice-v1/direct-protocol.json": "d7df1c31bdb025499d72c9708e83f3cd5d6e910a2e277b8e37eadaccecc904c5",
+          "findings/priority-substitute-choice-v1/direct-binding.json": "39afe5e8c84fbd2a9d196fa3a53aad7c6ca4185b9b63f5f995cf6184cf4d2a29",
+          "findings/priority-substitute-choice-v1/priority_substitute_choice.rs": "efc669f4fa057ce136c6f448ea0a371ae2d0dc36b1c27d287da25cffc8bdf2d9",
+          "findings/priority-substitute-choice-v1/priority_substitute_proof.rs": "88d06e152f4c8530d906016888d4da6a92709b23e5ec19f4033685264a876a83",
+          "findings/priority-substitute-choice-v1/priority_substitute_direct.rs": "00c78c264185761e3b189f9af97a69ead37b8bfb0932e16b1a5080209235d3d0",
+          "tmp/priority-substitute-choice-v1/final-before.jsonl": "0e5fdcdc694cabc3dfee1148f035b027618c8ab3b850d90dd6be51a6c65caaa7",
+          "tmp/priority-substitute-choice-v1/final-search.jsonl": "6f08787b88303ec77ac58370bb577d31fbef6794d28236a30caec8c1fd0c5416",
+          "tmp/priority-substitute-choice-v1/final-proof.jsonl": "381b998ce51018fa71c66399f3dd4ef11ba6ae98b2a8d523e20c32fe065b5041",
+          "tmp/priority-substitute-choice-v1/final-direct.jsonl": "60e4dda00daafd40887163cd3121bb7da072ba1fa6f89df7c5a2e9b102410b98",
+          "tmp/priority-substitute-choice-v1/final-before": "415de629c4fa99603907bd70a7910eefc862e717009f34b1b7121861e3de9429",
+          "tmp/priority-substitute-choice-v1/final-search": "e86eda7f01427eca26bbfe2ed57deeeabfc447313c42c84b3db8b1027c2119e7",
+          "tmp/priority-substitute-choice-v1/final-proof": "871b741aa9863c7407b42277c67dcf956b79fc341e610c06bf7cb23028a9d4ec",
+          "tmp/priority-substitute-choice-v1/final-direct": "1ea50edc72a5f4cf48b40e91ea0ea785eb18a3b92c0918ee918a021b70258239",
+          "tmp/priority-substitute-choice-v1/final-test.txt": "51dd15ecbd968fb5ec64157aaba566a8a8447ba04b96dbbc51677ad963cab541"
+        },
+        "generic_proof_repeat_identical": true,
+        "known_loadouts_only": true,
+        "blind_information_set_certificate": false,
+        "full_game_strength_improvement_proven": false,
+        "scope": "Constructed reduced2-vs-1 battle, reaching a1-vs-1 tactical state by legal engine actions without HP/PP edits. Known loadouts; generic full-information continuation bounds and pinned BlindSearch. Format validator rejects only reduced team size; all per-set checks pass after shared-special-EV correction. This does not certify arbitrary hidden fourth moves, different stats/items, standard6-entry/3-picked team reachability, or occurrence in ordinary games. The8 searches are paired diagnostics on2orientations of1fixture, not8 independent matches. Current192-game census found no exposure to this exclusion. No additional normal bot change, public deployment, or WASM rebuild.",
+        "independent_scope": "Direct traversal proves Agility first loses even with every future own legal choice; Substitute then repeated Thunderbolt has the recorded lower bound. The fixed continuation is distinct from optimal continuation in the generic solver, so its upper endpoint is not an upper bound on the optimal value.",
+        "new_regression_tests_passed": 1,
+        "before_code_commit": "b7a6099",
+        "fix_code_commit": "28f3b48"
+      }
+    },
+    "findings/priority-substitute-choice-v1/fixture-correction.json": {
+      "sha256": "1999d0b924ab6b9f75d74eff8966aa3c707b4401f0a46eda25dc552261bf0852",
+      "data": {
+        "initial_compile_failure": "Helper pp accessor declared u8; engine PP is i32. Corrected before execution.",
+        "initial_prefix_failure": "Swords Dance has30 base PP/48 full PP in the frozen dex. The initial prefix exhausted Gengar waiting moves before exhausting opposing Swords Dance; both search and proof attempts stopped before emitting records.",
+        "correction": "During Swords Dance depletion, switch Jolteon in, use Agility, then switch Gengar back for Explosion into Protect. This spends PP through engine actions without HP/PP edits. The intended root still has a living Jolteon with Substitute against full-HP Scizor at+6Attack,2QuickAttackPP and no other PP.",
+        "budget_or_acceptance_change": false,
+        "special_stat_correction": "Initial tactical fixture gave Scizor255SpA EV and0SpD EV, rejected by the format special-stat coupling rule. Corrected both to0 before final certification; the foe has no special attacks. Archive initial measurements as excluded. Each reduced team now runs the format validator and must have team-size as its only error. Search and certificates are rerun on the corrected state."
+      }
+    },
+    "findings/priority-substitute-choice-v1/direct-protocol.json": {
+      "sha256": "d7df1c31bdb025499d72c9708e83f3cd5d6e910a2e277b8e37eadaccecc904c5",
+      "data": {
+        "purpose": "Independent finite-horizon engine enumeration for the two selected first actions after the generic solver result. No normal bot change.",
+        "candidate": "Substitute, then Thunderbolt on each subsequent own turn; enumerate all opposing legal choices, asserting exactly one. Three-turn truncation retains unknown [0,1].",
+        "before": "Agility first, then every legal own continuation action; enumerate all opposing choices, asserting exactly one. Two-turn truncation retains unknown [0,1].",
+        "limits": {
+          "runs_per_side_and_first_action": 500000,
+          "cell_cap": 4096
+        },
+        "source_sha256": "00c78c264185761e3b189f9af97a69ead37b8bfb0932e16b1a5080209235d3d0",
+        "root_helper_sha256": "c98786975c1c5b76fe975d0ad0bcd9d9455a38b0fe7cf76748c784b816bdc317",
+        "scope": "Independent engine traversal without generic bound graph, compression, matrix solver or stored value reuse. Full state and known loadouts; not full blind information-set guarantee."
+      }
+    },
+    "findings/priority-substitute-choice-v1/direct-binding.json": {
+      "sha256": "39afe5e8c84fbd2a9d196fa3a53aad7c6ca4185b9b63f5f995cf6184cf4d2a29",
+      "data": {
+        "root_helper_sha256": "efc669f4fa057ce136c6f448ea0a371ae2d0dc36b1c27d287da25cffc8bdf2d9",
+        "reason": "Correct shared special-stat EVs and assert per-set format validation; supersedes root helper hash in direct-protocol.json for final runs."
+      }
     }
   },
   "foresight_fix": {
@@ -57688,7 +57793,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-08T01:55:41.125938+09:00",
+    "checked_at": "2026-10-08T02:13:34.026365+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -57735,7 +57840,7 @@
     "followup_first_step": "native-first-step-loss-v1",
     "followup_snorlax_witness": "native-snorlax-witness-v1",
     "followup_frontier_step": "native-frontier-step-v1",
-    "followup_result_commit": "28f3b488300e44a4ba9c797b234f0a1599af1ecc",
+    "followup_result_commit": "6c3b139acd4d55a7f32eab042f69a5072255e087",
     "followup_frontier_refine": "native-frontier-refine-v1",
     "followup_frontier_defer": "native-frontier-defer-v1",
     "followup_frontier_defer_complete": "native-frontier-defer-complete-v1",
@@ -57776,7 +57881,8 @@
     },
     "followup_overkill_divergence": "native-overkill-divergence-v1",
     "followup_asymmetric_terminal": "native-asymmetric-terminal-v1",
-    "followup_priority_substitute": "priority-substitute-v1"
+    "followup_priority_substitute": "priority-substitute-v1",
+    "followup_priority_substitute_choice": "priority-substitute-choice-v1"
   },
   "native_endgame_census": {
     "status": "complete",
