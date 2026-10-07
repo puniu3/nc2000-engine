@@ -57990,7 +57990,15 @@
     "followup_asymmetric_terminal": "native-asymmetric-terminal-v1",
     "followup_priority_substitute": "priority-substitute-v1",
     "followup_priority_substitute_choice": "priority-substitute-choice-v1",
-    "followup_priority_substitute_format": "priority-substitute-format-v1"
+    "followup_priority_substitute_format": "priority-substitute-format-v1",
+    "release_strength": {
+      "study": "release-strength-v1",
+      "status": "screening",
+      "baseline": "c7b11e8",
+      "screen_games_per_arm": 96,
+      "confirmation_games": 384,
+      "deployed": false
+    }
   },
   "native_endgame_census": {
     "status": "complete",

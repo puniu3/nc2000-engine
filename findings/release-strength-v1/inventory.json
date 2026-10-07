@@ -1,0 +1,93 @@
+[
+  {
+    "family": "waiting_and_recovery",
+    "decision": "Already deployed",
+    "evidence": [
+      "destiny-bond waiting",
+      "opponent residual waiting",
+      "own Leftovers waiting",
+      "priority healing"
+    ]
+  },
+  {
+    "family": "early_perish",
+    "decision": "Already deployed; baseline default",
+    "evidence": [
+      "operational-perish-bayes-v1/decision.json"
+    ]
+  },
+  {
+    "family": "corrections",
+    "decision": "Current screen",
+    "evidence": [
+      "27a0226",
+      "fcaa4b8",
+      "2354463",
+      "01b5493",
+      "28f3b48"
+    ]
+  },
+  {
+    "family": "legal_picks",
+    "decision": "Current screen",
+    "evidence": [
+      "96b641d"
+    ]
+  },
+  {
+    "family": "combined",
+    "decision": "Current screen",
+    "evidence": [
+      "corrections + legal_picks"
+    ]
+  },
+  {
+    "family": "capped_rollout_damage",
+    "decision": "Rejected: 88 wins / 104 losses; disabled",
+    "evidence": [
+      "native-overkill-duel-v1/summary.json"
+    ]
+  },
+  {
+    "family": "early_rest",
+    "decision": "Reverted after natural-match robustness regression",
+    "evidence": [
+      "early-rest-natural-v1/summary.json"
+    ]
+  },
+  {
+    "family": "certified_endgame_integration",
+    "decision": "Failed strength/waiting-time gates; disabled",
+    "evidence": [
+      "Web 1200-game score 0.4575"
+    ]
+  },
+  {
+    "family": "learned_value_matrix_search",
+    "decision": "Owner cut after matched-time score 0.495; no reactivation",
+    "evidence": [
+      "docs/GAME-SOLVING-PLAN.md"
+    ]
+  },
+  {
+    "family": "root_revisit",
+    "decision": "384 games tied 192-192; disabled",
+    "evidence": [
+      "root-revisit-holdout-v1"
+    ]
+  },
+  {
+    "family": "hp_type_inference",
+    "decision": "No established improvement; disabled",
+    "evidence": [
+      "hp-combined-v1"
+    ]
+  },
+  {
+    "family": "other_research",
+    "decision": "Conditional witnesses, solver performance and local certificates do not independently justify deployment",
+    "evidence": [
+      "No new humans or human-ladder calibration"
+    ]
+  }
+]
