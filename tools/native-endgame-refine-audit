@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+import runpy
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def rows(path):
+    return [json.loads(l) for l in Path(path).read_text().splitlines()]
+
+
+def main():
+    scratch, roots_path, screen_path = map(Path, sys.argv[1:])
+    protocol_path = Path('findings/native-endgame-refine-v1/protocol.json')
+    protocol = json.loads(protocol_path.read_text())
+    initial = json.loads(Path('findings/native-endgame-bounds-v1/summary.json').read_text())
+    assert digest('findings/native-endgame-bounds-v1/summary.json') == protocol['screen_summary_sha256']
+    assert digest(screen_path) == initial['records_sha256']
+    assert digest(roots_path) == protocol['roots_sha256']
+    assert digest('findings/native-endgame-bounds-v1/native_endgame_bounds.rs') == protocol['helper_sha256']
+    assert digest('tmp/native-endgame-bounds-v1/solver') == protocol['solver_binary_sha256']
+    roots = sorted(rows(roots_path), key=lambda r: (r['record']['game'],r['record']['frame']))
+    unresolved = set(map(tuple,initial['unresolved_selected_pure_loss']['keys']))
+    earliest = {}
+    for i,r in enumerate(roots):
+        k = r['record']['game'],r['record']['frame']
+        if k in unresolved:
+            earliest.setdefault(k[0],i)
+    assert protocol['indices'] == list(earliest.values()) and len(earliest) == 70
+    audit = runpy.run_path('tools/native-endgame-bounds-audit')
+    controls = []
+    pad = 5e-12
+    for name, side, cells, value, values, losses, selected, gaps in [
+        ('mixing_is_not_domination',0,[[1.,1.],[0.,0.],[0.,0.],[1.,1.]],[.5,.5],[[0.,pad],[0.,pad]],[[.5-pad,.5],[.5-pad,.5]],0,[-1.,1.-1e-10]),
+        ('dominated_row',0,[[1.,1.],[1.,1.],[0.,0.],[0.,0.]],[1.,1.],[[1.-pad,1.],[0.,pad]],[[0.,pad],[1.-pad,1.]],1,[1.-1e-10,1.-1e-10]),
+        ('dominated_column_side_one',1,[[1.,1.],[0.,0.],[1.,1.],[0.,0.]],[0.,0.],[[0.,pad],[1.-pad,1.]],[[1.-pad,1.],[0.,pad]],0,[1.-1e-10,1.-1e-10]),
+    ]:
+        alternative = 1-selected
+        row = {'game':-1,'frame':-1,'actions':[['a','b'],['a','b']],'side':side,'selected':selected,
+               'cells_p0':cells,'value_p0':value,'pure_action_values':values,'pure_action_losses':losses,
+               'domination':[{'action':['a','b'][alternative],'reply_gap_lower':gaps,'minimum_gap_lower':min(gaps)}]}
+        loss, dominance, _ = audit['derived'](row)
+        assert (dominance[0]['minimum_gap_lower'] > 1e-6) == (name != 'mixing_is_not_domination')
+        controls.append(name)
+    records = rows(scratch/'main.jsonl')
+    result = audit['check'](records,protocol,roots)
+    baseline = {(r['game'],r['frame']):r for r in rows(screen_path)}
+    for r in records:
+        parent = baseline[r['game'],r['frame']]
+        for old,new in zip([parent['value_p0'],*parent['cells_p0']], [r['value_p0'],*r['cells_p0']]):
+            assert new[0]+1e-8 >= old[0] and new[1] <= old[1]+1e-8
+    repeats = rows(scratch/'repeat.jsonl')
+    assert {(r['game'],r['frame']) for r in repeats} == {(7,21),(181,97),(0,18),(1,37)}
+    for r in repeats:
+        original = next(a for a in records if (a['game'],a['frame']) == (r['game'],r['frame']))
+        assert {k:v for k,v in r.items() if k!='elapsed_ms'} == {k:v for k,v in original.items() if k!='elapsed_ms'}
+    all_small = set(map(tuple,initial['selected_pure_loss_at_most_002']['keys'])) | set(map(tuple,result['selected_pure_loss_at_most_002']['keys']))
+    result.update({'schema':protocol['schema'],'protocol_sha256':digest(protocol_path),
+                   'records_sha256':digest(scratch/'main.jsonl'),'repeat_sha256':digest(scratch/'repeat.jsonl'),
+                   'roots_sha256':digest(roots_path),'selection_verified':True,'all_cell_bounds_nested':True,
+                   'repeat_four_roots_identical_except_time':True,'binaries_match_protocol':True,
+                   'matrix_check':'independent rational LP vertex enumeration','known_payoff_controls':controls,
+                   'combined_small_loss_roots':len(all_small),'combined_small_loss_games':len({g for g,f in all_small}),
+                   'combined_unresolved_roots':360-len(all_small),
+                   'blind_policy_error_proven':False,'strength_improvement_proven':False})
+    print(json.dumps(result,indent=2))
+
+
+if __name__ == '__main__':
+    main()
