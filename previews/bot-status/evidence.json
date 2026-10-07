@@ -38213,6 +38213,175 @@
         "ordinary_bot_changed": false,
         "strength_improvement_proven": false
       }
+    },
+    "findings/native-marowak-witness-v1/summary.json": {
+      "sha256": "dbb640c0fa2fa7f97eaf68c72bb105178920a6a71a92522138d0c19e1198becc",
+      "data": {
+        "results": [
+          {
+            "id": "earthquake-guarantee",
+            "transfer_direction": "lower",
+            "transfer_bound": 0.9306855194487832,
+            "target_score_interval": [
+              0.9306855194487832,
+              0.9306864968633306
+            ],
+            "stop": "WidthMet",
+            "runs": 967722,
+            "nodes": 55266,
+            "elapsed_ms": 20756.735084
+          },
+          {
+            "id": "hiddenpower-upper-return",
+            "transfer_direction": "upper",
+            "transfer_bound": 0.9885644912719727,
+            "target_score_interval": [
+              0.9885644912719727,
+              0.9885644912719727
+            ],
+            "stop": "WidthMet",
+            "runs": 606,
+            "nodes": 21,
+            "elapsed_ms": 7.393333999999999
+          },
+          {
+            "id": "hiddenpower-upper-icebeam",
+            "transfer_direction": "upper",
+            "transfer_bound": 0.9823436293663694,
+            "target_score_interval": [
+              0.9823436293663694,
+              0.9823436293663694
+            ],
+            "stop": "WidthMet",
+            "runs": 1482,
+            "nodes": 55,
+            "elapsed_ms": 19.571084
+          },
+          {
+            "id": "hiddenpower-upper-curse",
+            "transfer_direction": "upper",
+            "transfer_bound": 0.9985525116609576,
+            "target_score_interval": [
+              0.99855162584646,
+              0.9985525116609576
+            ],
+            "stop": "WidthMet",
+            "runs": 3530,
+            "nodes": 218,
+            "elapsed_ms": 49.771708
+          },
+          {
+            "id": "hiddenpower-upper-recover",
+            "transfer_direction": "upper",
+            "transfer_bound": 0.9676788507621585,
+            "target_score_interval": [
+              0.967677858780402,
+              0.9676788507621585
+            ],
+            "stop": "WidthMet",
+            "runs": 242944,
+            "nodes": 11115,
+            "elapsed_ms": 4444.194708
+          }
+        ],
+        "earthquake_security_lower": 0.9306855194487832,
+        "hiddenpower_security_upper": 0.9676788507621585,
+        "selected_pure_loss_lower": 0.0,
+        "positive_pure_loss_proven": false,
+        "schema": "nc2000-native-marowak-witness-v1",
+        "protocol_sha256": "9b4e8494e14aa2fe0995df720b23d61c42ac360eceabf13e24315e3dfa88b473",
+        "records_sha256": "70b5fbdb6eef05481a6985b37a1c1a5edd1e8da793c5dd6194ad94e2467a9ebc",
+        "repeat_sha256": "02fa5d4891b51b55bb31e59c37a38f6f281ab338d18310e39c476f2d777cb74c",
+        "repeats_match": true,
+        "rejected_mutations": [
+          "missing_job",
+          "wrong_fixed_side",
+          "wrong_bound_direction",
+          "false_bound",
+          "restricted_free_actions"
+        ],
+        "blind_policy_error_proven": false,
+        "strength_improvement_proven": false,
+        "ordinary_bot_changed": false
+      }
+    },
+    "findings/native-marowak-witness-v1/continuation-summary.json": {
+      "sha256": "9b06f69810b95cfdeb6b3b0f11757dcf76f7eb196708e6cc178f3395be061e47",
+      "data": {
+        "first_step": [
+          {
+            "reply": "return",
+            "outcome_masses": [
+              0.91796875,
+              0.005126953125,
+              0.0,
+              0.076904296875
+            ],
+            "projection_equal": true
+          },
+          {
+            "reply": "icebeam",
+            "outcome_masses": [
+              0.91796875,
+              0.005126953125,
+              0.0,
+              0.076904296875
+            ],
+            "projection_equal": true
+          },
+          {
+            "reply": "curse",
+            "outcome_masses": [
+              0.91796875,
+              0.0,
+              0.0,
+              0.08203125
+            ],
+            "projection_equal": true
+          },
+          {
+            "reply": "recover",
+            "outcome_masses": [
+              0.91796875,
+              0.0,
+              0.0,
+              0.08203125
+            ],
+            "projection_equal": true
+          }
+        ],
+        "selected_policy_guarantee": [
+          0.930685499324752,
+          0.9306864968633307
+        ],
+        "alternative_policy_guarantee": [
+          0.9306855194487832,
+          0.9306864968633306
+        ],
+        "selected_guarantee_runs": 946978,
+        "repeats_match": true,
+        "fixed_policy_value_difference_upper": 9.975385786287205e-07,
+        "outcome_and_projection_equal": true,
+        "full_successor_equivalence_proven": false,
+        "actual_action_mistake_proven": false,
+        "strength_improvement_proven": false,
+        "records_sha256": {
+          "first-step.json": "4a20b92407ad416a2587a05e0350405fec3c6cc736ad8b1af42be77d79c7ebfe",
+          "selected-guarantee.jsonl": "40ca31408f63c25a8fb792c5efb5e03d86695fa525885d949af71ce60034d04a",
+          "selected-guarantee-repeat.jsonl": "88cee70b8fada28641c86ffb0d653b324dbb0ded7f40bba3486e2b0a891c80fb"
+        },
+        "protocols_sha256": {
+          "first-step-protocol.json": "6e3fbe20d0365523d51454e8ab004cb4630974f8792960026ed35a5677aedfe7",
+          "selected-guarantee-protocol.json": "6024c8fd7075217db74ee642c0ebea81906a628ee0bd4784c8151fff271aee5a"
+        },
+        "rejected_mutations": [
+          "missing_pair",
+          "changed_outcome",
+          "wrong_first_action",
+          "wrong_transfer_direction",
+          "inflated_guarantee"
+        ]
+      }
     }
   },
   "foresight_fix": {
@@ -44337,7 +44506,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-07T21:48:35.868677+09:00",
+    "checked_at": "2026-10-07T22:04:35.760359+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -44379,7 +44548,8 @@
     "followup_region_solver": "native-region-solver-v1",
     "followup_club_regions": "native-club-regions-v1",
     "followup_club_time": "native-club-time-v1",
-    "followup_fixed_reply": "native-fixed-reply-refine-v1"
+    "followup_fixed_reply": "native-fixed-reply-refine-v1",
+    "followup_marowak_witness": "native-marowak-witness-v1"
   },
   "native_endgame_census": {
     "status": "complete",
