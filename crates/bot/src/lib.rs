@@ -44,6 +44,7 @@ pub mod first_continuation;
 pub mod history_continuation;
 pub mod horizon_pp;
 pub mod hp_transition;
+pub mod hp_attack_kernel;
 pub mod import;
 pub mod learning;
 pub mod learned;
