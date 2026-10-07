@@ -1,0 +1,17 @@
+{
+  "schema": "nc2000-native-overkill-rank-v1",
+  "registered_at": "2026-10-07T15:41:28.936127+00:00",
+  "source_roots": 360,
+  "implementation_commit": "937325d4f9b1b7cb0b92437496434533a201477a",
+  "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
+  "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "helper_sha256": "77f1cb765b195cd3ad480d5c3b2335c0b1c64476b433c03b8b681dc29f08f010",
+  "first_step_archive_sha256": "2b8d7bbf0e1fa1fd166b2ba3ca45d2617cc9ebd10559e89d49cf339781aeb875",
+  "selection": "All 360 frozen native roots, both sides: 720 greedy decisions. No root selection by candidate outcomes.",
+  "candidate": "Cap raw conditional mean damage at current target HP before applying hit probability. Break capped-score ties by the original raw score. Change only positive-scoring ordinary greedy picks; preserve Perish overrides, all-zero choices and last-mon self-KO exclusions. No production modification.",
+  "analysis": "Join the frozen engine-enumerated first-step cells. Report changed decisions and exact terminal-score intervals against every reply, keeping unresolved mass [0,1]. Compare candidate and baseline pure security intervals; do not infer long-term gain from immediate KO alone. No tuning after this screen.",
+  "scope": "Known native battle states and an approximate proposed rollout ranking. The engine outcome checks, not the capped estimate, provide certificates. Not blind-policy or whole-game strength proof.",
+  "solver_binary_sha256": "b591d7e48f71a2bcb65d2a7368499b9ef74882fa0e5da411af30a1cdbd44e631",
+  "library_helper_sha256": "ff2316b1353f1bf51513177613def07f299357fe64d7bb8da0c8dc216b78da54",
+  "library_binary_sha256": "bc7b9b994c23a9329a2baed0f057f5b497911714cbf9aab96fd62fe9126683fe"
+}
