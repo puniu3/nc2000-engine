@@ -1,0 +1,4 @@
+{
+  "root_helper_sha256": "efc669f4fa057ce136c6f448ea0a371ae2d0dc36b1c27d287da25cffc8bdf2d9",
+  "reason": "Correct shared special-stat EVs and assert per-set format validation; supersedes root helper hash in direct-protocol.json for final runs."
+}

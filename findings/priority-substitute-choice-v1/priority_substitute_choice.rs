@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 fn set(species: &str, moves: &[&str], defense: u8, special_defense: u8) -> PokemonSet {
     serde_json::from_value(json!({"name":species,"species":species,"level":50,
         "gender":"M","moves":moves,"evs":{"hp":255,"atk":255,"def":defense,
-        "spa":255,"spd":special_defense,"spe":255},
+        "spa":special_defense,"spd":special_defense,"spe":255},
         "ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30}})).unwrap()
 }
 
@@ -27,6 +27,13 @@ fn position(dex: &Dex, side: usize) -> (Battle, Battle) {
         set("Jolteon", &["Substitute", "Thunderbolt", "Agility"],0,255)];
     let foe = vec![set("Scizor", &["Quick Attack", "Swords Dance", "Protect"],255,0)];
     let teams = if side==0 {[own,foe]} else {[foe,own]};
+    let learnsets=nc2000_engine::validate::Learnsets::from_json(include_str!("../../data/learnsets-gen2.json")).unwrap();
+    for team in &teams {
+        let verdict=nc2000_engine::validate::validate_team(dex,&learnsets,&serde_json::to_string(team).unwrap());
+        let errors:Vec<_>=verdict["findings"].as_array().unwrap().iter().filter(|f|f["severity"]=="error").collect();
+        assert!(!errors.is_empty());
+        assert!(errors.iter().all(|f|f["code"]=="team-size"),"{verdict}");
+    }
     let preview = Battle::from_fixture(dex,"1,2,3,4",&teams[0],&teams[1]).unwrap();
     let mut b = preview.clone();
     b.choose(dex,side,"team 1,2").unwrap();b.choose(dex,1-side,"team 1").unwrap();

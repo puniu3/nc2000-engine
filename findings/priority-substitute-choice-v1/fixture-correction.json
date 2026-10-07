@@ -2,5 +2,6 @@
   "initial_compile_failure": "Helper pp accessor declared u8; engine PP is i32. Corrected before execution.",
   "initial_prefix_failure": "Swords Dance has30 base PP/48 full PP in the frozen dex. The initial prefix exhausted Gengar waiting moves before exhausting opposing Swords Dance; both search and proof attempts stopped before emitting records.",
   "correction": "During Swords Dance depletion, switch Jolteon in, use Agility, then switch Gengar back for Explosion into Protect. This spends PP through engine actions without HP/PP edits. The intended root still has a living Jolteon with Substitute against full-HP Scizor at+6Attack,2QuickAttackPP and no other PP.",
-  "budget_or_acceptance_change": false
+  "budget_or_acceptance_change": false,
+  "special_stat_correction": "Initial tactical fixture gave Scizor255SpA EV and0SpD EV, rejected by the format special-stat coupling rule. Corrected both to0 before final certification; the foe has no special attacks. Archive initial measurements as excluded. Each reduced team now runs the format validator and must have team-size as its only error. Search and certificates are rerun on the corrected state."
 }
