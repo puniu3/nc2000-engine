@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import importlib.util
+import json
+import math
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def read_rows(path):
+    return [json.loads(line) for line in Path(path).read_text().splitlines()]
+
+
+def manifest(directory):
+    directory = Path(directory)
+    cfg = json.loads((directory/'config.json').read_text())
+    arena = json.loads((directory/'launcher.json').read_text())['arena']
+    return {'type': 'manifest', 'config': cfg, 'hashes': {
+        'arena': 'sha256:'+digest(arena), 'pool': 'sha256:'+digest(cfg['pool']),
+        'dex': 'sha256:'+digest(cfg['dex']), 'agents': [
+            {'program': 'sha256:'+digest(a['program']),
+             'artifacts': [{'path': p, 'hash': 'sha256:'+digest(p)} for p in a['artifacts']]}
+            for a in cfg['agents']]}}
+
+
+def audit(data, expected, iterations):
+    assert data[0] == expected, 'manifest'
+    games = sorted(data[1:], key=lambda g: g['game'])
+    assert [g['game'] for g in games] == list(range(expected['config']['games'])), 'coverage'
+    decisions = [0, 0]
+    for g in games:
+        n = g['game']
+        assert g['type'] == 'game' and g['capped'] is False, 'terminal'
+        assert g['pair'] == n//2 and g['swap'] == n%2, 'pairing'
+        p1 = {'p1': 1., 'p2': 0., 'tie': .5}[g['outcome']]
+        assert g['score'] == (p1 if n%2 == 0 else 1-p1), 'score'
+        assert 0 <= g['turns'] <= 1001, 'turn limit'
+        assert g['agent_seeds'][0] == g['agent_seeds'][1] and 0 <= g['agent_seeds'][0] < 2**32, 'agent seeds'
+        if n%2:
+            for key in ['team_ids', 'battle_seed', 'agent_seeds']:
+                assert g[key] == games[n-1][key], key
+        counts = [0, 0]
+        assert g['frames'], 'frames'
+        for f in g['frames']:
+            a, r = f['agent'], f['response']
+            assert a == f['side'] ^ g['swap'], 'orientation'
+            assert r['key'] == f['state_key'], 'state key'
+            assert len(f['state_sha256']) == 64, 'state fingerprint'
+            assert r['action'] in f['legal_actions'], 'legal action'
+            assert r['iterations'] == iterations, 'iterations'
+            assert r['actions'] and sum(v['visits'] for v in r['actions']) == iterations, 'visits'
+            assert any(v['input'] == r['action'] for v in r['actions']), 'selected action'
+            assert all(type(v['visits']) is int and v['visits'] >= 0 and
+                       math.isfinite(v['mean']) and 0 <= v['mean'] <= 1 for v in r['actions']), 'root statistics'
+            counts[a] += 1
+            decisions[a] += 1
+        assert [len(v) for v in g['decision_ns']] == counts, 'timing coverage'
+    return {'games': len(games), 'decisions': decisions,
+            'wins': sum(g['score'] == 1 for g in games),
+            'losses': sum(g['score'] == 0 for g in games),
+            'ties': sum(g['score'] == .5 for g in games),
+            'pair_scores': [(games[i]['score']+games[i+1]['score'])/2 for i in range(0,len(games),2)]}
+
+
+def scrub(value):
+    if isinstance(value, dict):
+        return {k: scrub(v) for k,v in value.items() if k not in ['elapsed_ns','decision_ns']}
+    if isinstance(value, list):
+        return [scrub(v) for v in value]
+    return value
+
+
+def smoke(root, replay):
+    result = {}
+    for name in ['smoke-aa','smoke-bb','smoke-ab','smoke-repeat']:
+        path = root/name/'games.jsonl'
+        result[name] = audit(read_rows(path), manifest(root/name), 128)
+        result[name]['replay'] = json.loads(subprocess.check_output([replay,str(path)],text=True))
+    for name in ['smoke-aa','smoke-bb']:
+        games = sorted(read_rows(root/name/'games.jsonl')[1:],key=lambda g:g['game'])
+        assert result[name]['pair_scores'] == [.5,.5], 'identity scores'
+        for a,b in zip(games[::2],games[1::2]):
+            for key in ['outcome','turns','terminal_key','terminal_seed']:
+                assert a[key] == b[key], 'identity outcome'
+            frames = [scrub(g['frames']) for g in [a,b]]
+            for group in frames:
+                for f in group:
+                    del f['agent']
+            assert frames[0] == frames[1], 'identity trajectory'
+    a = sorted(read_rows(root/'smoke-ab/games.jsonl')[1:],key=lambda g:g['game'])
+    b = sorted(read_rows(root/'smoke-repeat/games.jsonl')[1:],key=lambda g:g['game'])
+    assert scrub(a) == scrub(b), 'repeat'
+    data = read_rows(root/'smoke-ab/games.jsonl')
+    expected = manifest(root/'smoke-ab')
+    mutations = [lambda d:d.pop(), lambda d:d.append(copy.deepcopy(d[-1])),
+        lambda d:d[1].update(score=.5), lambda d:d[1]['agent_seeds'].__setitem__(0,0),
+        lambda d:d[1]['frames'][0]['response'].update(action='invalid'),
+        lambda d:d[1]['frames'][0]['response'].update(key=0),
+        lambda d:d[1]['frames'][0]['response'].update(iterations=127)]
+    for change in mutations:
+        d = copy.deepcopy(data)
+        change(d)
+        try:
+            audit(d,expected,128)
+        except AssertionError:
+            continue
+        raise AssertionError('mutation accepted')
+    replay_mutations = [
+        lambda d:d[1].update(outcome='tie',score=.5),
+        lambda d:d[1].update(terminal_seed='0,0,0,0'),
+        lambda d:d[1]['frames'][0].update(state_sha256='0'*64),
+    ]
+    with tempfile.TemporaryDirectory(prefix='native-duel-mutations-') as scratch:
+        for index,change in enumerate(replay_mutations):
+            d = copy.deepcopy(data)
+            change(d)
+            path = Path(scratch)/f'{index}.jsonl'
+            path.write_text(''.join(json.dumps(r)+'\n' for r in d))
+            check = subprocess.run([replay,str(path)],capture_output=True,text=True)
+            assert check.returncode != 0 and 'assertion' in check.stderr, 'replay mutation accepted'
+    return {'runs': result, 'negative_controls': len(mutations),
+            'replay_negative_controls':len(replay_mutations), 'identity_pairs': 4, 'repeat_games':4}
+
+
+def main():
+    mode, path = sys.argv[1:3]
+    if mode == 'smoke':
+        result = smoke(Path(path),sys.argv[3])
+    else:
+        protocol = json.loads(Path(path).read_text())
+        assert digest(__file__) == protocol['checker_sha256'], 'checker changed'
+        evaluator = Path(__file__).with_name('evaluate-learning.py')
+        assert digest(evaluator) == protocol['evaluator_sha256'], 'evaluator changed'
+        replay = protocol['replay']
+        assert digest(replay) == protocol['replay_sha256'], 'replay changed'
+        source = Path(protocol['directory'])/'games.jsonl'
+        result = audit(read_rows(source),protocol['manifest'],27000)
+        result['replay'] = json.loads(subprocess.check_output([replay,str(source)],text=True))
+        spec = importlib.util.spec_from_file_location('evaluation',evaluator)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        result.update(module.score_intervals(result['pair_scores']))
+        result['positive_strength_evidence'] = result['betting95'][0] > .5
+        result['records_sha256'] = digest(source)
+        result['protocol_sha256'] = digest(path)
+        result['scope'] = protocol['scope']
+    print(json.dumps(result,indent=2))
+
+
+if __name__ == '__main__':
+    main()

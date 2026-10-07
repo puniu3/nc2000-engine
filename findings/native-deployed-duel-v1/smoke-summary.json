@@ -1,0 +1,92 @@
+{
+  "runs": {
+    "smoke-aa": {
+      "games": 4,
+      "decisions": [
+        93,
+        93
+      ],
+      "wins": 2,
+      "losses": 2,
+      "ties": 0,
+      "pair_scores": [
+        0.5,
+        0.5
+      ],
+      "replay": {
+        "games": 4,
+        "replayed_decisions": 186,
+        "replayed_states": 96,
+        "games_with_hidden_power": 4,
+        "hidden_power_uses": 14
+      }
+    },
+    "smoke-bb": {
+      "games": 4,
+      "decisions": [
+        70,
+        70
+      ],
+      "wins": 2,
+      "losses": 2,
+      "ties": 0,
+      "pair_scores": [
+        0.5,
+        0.5
+      ],
+      "replay": {
+        "games": 4,
+        "replayed_decisions": 140,
+        "replayed_states": 72,
+        "games_with_hidden_power": 4,
+        "hidden_power_uses": 4
+      }
+    },
+    "smoke-ab": {
+      "games": 4,
+      "decisions": [
+        77,
+        78
+      ],
+      "wins": 2,
+      "losses": 2,
+      "ties": 0,
+      "pair_scores": [
+        0.5,
+        0.5
+      ],
+      "replay": {
+        "games": 4,
+        "replayed_decisions": 155,
+        "replayed_states": 80,
+        "games_with_hidden_power": 4,
+        "hidden_power_uses": 8
+      }
+    },
+    "smoke-repeat": {
+      "games": 4,
+      "decisions": [
+        77,
+        78
+      ],
+      "wins": 2,
+      "losses": 2,
+      "ties": 0,
+      "pair_scores": [
+        0.5,
+        0.5
+      ],
+      "replay": {
+        "games": 4,
+        "replayed_decisions": 155,
+        "replayed_states": 80,
+        "games_with_hidden_power": 4,
+        "hidden_power_uses": 8
+      }
+    }
+  },
+  "negative_controls": 7,
+  "replay_negative_controls": 3,
+  "identity_pairs": 4,
+  "repeat_games": 4
+}
