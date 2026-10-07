@@ -1,0 +1,14 @@
+{
+  "native_validated_worlds": 2200,
+  "same_history_boundaries": 72600,
+  "lower_certificates_verified": 2530,
+  "upper_certificates_reverified": 2,
+  "screening_repeat_identities": 2200,
+  "repeated_proof_worlds": 7,
+  "negative_controls": [
+    "missing_rock",
+    "inflated_value",
+    "wrong_root"
+  ],
+  "production_changed": false
+}

@@ -16163,6 +16163,69 @@
         ],
         "production_changed": false
       }
+    },
+    "findings/item-move-product-v1/records.json.gz": {
+      "sha256": "9692a3300a69b9b28c6f4d19e3885b782afa7b2745070dfe6b7208bf94f18bf0"
+    },
+    "findings/item-move-product-v1/proofs.jsonl.gz": {
+      "sha256": "3a41dfefee46d0c09d12b5a1e780f41aa9987f0c2543e4220013600d1dcb9d97"
+    },
+    "findings/item-move-product-v1/summary.json": {
+      "sha256": "632a68a805a57effe8aa65a0fd1b945510280c1decf5d034098a903a42e640bd",
+      "data": {
+        "items": 55,
+        "moves_or_empty": 40,
+        "worlds": 2200,
+        "same_history_boundaries": 72600,
+        "screening_repeat_identities": 2200,
+        "repeated_proof_worlds": 7,
+        "repeated_certificates": 12,
+        "sword_certificates": 2200,
+        "rock_certificates": 330,
+        "rock_proofs_omitted": 1870,
+        "total_engine_runs": 1452959,
+        "total_certificate_nodes": 283626,
+        "partial_branches": 1316,
+        "bounds": [
+          0.08927540472102809,
+          0.08928985574286721
+        ],
+        "width": 1.445102183912321e-05,
+        "rockslide_probability": 0.44423821918360845,
+        "prior_target": 0.08927440472102809,
+        "smallest_lower_worlds": [
+          "brightpowder/doubleedge",
+          "brightpowder/drillpeck",
+          "focusband/doubleedge",
+          "focusband/drillpeck"
+        ],
+        "best_pure_security_upper": 0.08774481888788177,
+        "mixed_gain_over_every_pure_lower": 0.0015305858331463229,
+        "upper_worlds": [
+          "item/doubleedge/brightpowder",
+          "item/doubleedge/focusband"
+        ],
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "The Cartesian product of 55 item names previously witnessed by seeded replay and all 40 legal fourth-move/empty-slot candidates at one fixed Zapdos/Marowak decision. Every one of 2200 teams passes native validation and reproduces all 33 public-history boundaries with the original seed and semantic choices. Stats, happiness and counter state stay fixed. This is not a complete information set: previous failures with this seed do not exclude other chance histories, and stat combinations are not covered. The first-action mix is fixed from the earlier 43-world analysis and is not retuned on this product. It uses a common Rock Slide continuation. Each two-step lower witness faces all replies; truncated mass remains [0,1]. An omitted Rock Slide witness uses the universal lower bound zero only when the Sword Dance contribution alone suffices. Rational backups and every policy action are checked. Seven boundary/control/heaviest worlds are replayed, with matching full certificates. The dual upper certificate reuses the two immutable item-world ledgers and their precommitted opponent policy, revalidated against generated model keys. Engine transitions and guarded-state identity remain trusted. The output is an offline proof of a restricted robust game, not an online runtime, full-game ceiling, human calibration or deployed-bot improvement."
+      }
+    },
+    "findings/item-move-product-v1/checks.json": {
+      "sha256": "be98c3b75649da459f293c6622603caadf1a63ef7e4d0a909524650f3c476cdb",
+      "data": {
+        "native_validated_worlds": 2200,
+        "same_history_boundaries": 72600,
+        "lower_certificates_verified": 2530,
+        "upper_certificates_reverified": 2,
+        "screening_repeat_identities": 2200,
+        "repeated_proof_worlds": 7,
+        "negative_controls": [
+          "missing_rock",
+          "inflated_value",
+          "wrong_root"
+        ],
+        "production_changed": false
+      }
     }
   },
   "foresight_fix": {
