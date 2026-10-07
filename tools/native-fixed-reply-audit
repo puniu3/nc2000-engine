@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import math
+import runpy
+import subprocess
+from collections import defaultdict
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def rows(path):
+    data = Path(path).read_bytes()
+    if str(path).endswith('.gz'):
+        data = gzip.decompress(data)
+    return [json.loads(line) for line in data.splitlines()]
+
+
+def selection(protocol):
+    groups = defaultdict(list)
+    for path, sha in protocol['selection_sources'].items():
+        assert digest(path) == sha
+        for row in rows(path):
+            groups[row['game'], row['frame']].append(row)
+    ranked = []
+    for key, records in sorted(groups.items()):
+        r = records[0]
+        side, selected = r['side'], r['selected']
+        assert all((x['state_sha256'], x['side'], x['actions'], x['selected']) ==
+                   (r['state_sha256'], side, r['actions'], selected) for x in records)
+        n, m = map(len, r['actions'])
+        cells = [[max(x['cells_p0'][i][0] for x in records),
+                  min(x['cells_p0'][i][1] for x in records)] for i in range(n*m)]
+        assert all(a <= b+1e-8 for a, b in cells)
+        oriented = [[cells[i*m+j] if side == 0 else
+                     [1-cells[j*m+i][1], 1-cells[j*m+i][0]]
+                     for j in range(len(r['actions'][1-side]))]
+                    for i in range(len(r['actions'][side]))]
+        values = [[min(c[0] for c in rr), min(c[1] for c in rr)] for rr in oriented]
+        if values[selected][1]-values[selected][0] <= .02:
+            continue
+        alternate = max((i for i in range(len(values)) if i != selected), key=lambda i: values[i][0])
+        ranked.append(dict(game=key[0], frame=key[1], selected=r['actions'][side][selected],
+                           alternate=r['actions'][side][alternate], selected_bounds=values[selected],
+                           alternate_bounds=values[alternate], margin=values[alternate][0]-values[selected][1]))
+    ranked.sort(key=lambda r: -r['margin'])
+    assert (ranked[0]['game'], ranked[0]['frame']) == (104, 52)
+    return ranked
+
+
+def check(actual, protocol, roots, reference):
+    assert len(actual) == len(protocol['jobs'])
+    result = []
+    for r, job in zip(actual, protocol['jobs']):
+        key = job['game'], job['frame']
+        root, prior = roots[key]['record'], reference[key]
+        side = root['side']
+        assert (r['id'], r['game'], r['frame']) == (job['id'], *key)
+        assert r['state_sha256'] == root['state_sha256'] == prior['state_sha256']
+        assert r['side'] == side and r['actions'] == prior['actions']
+        assert r['actual_action'] == root['current_response']['action']
+        assert r['target'] == job['target']
+        if job['classification'] == 'actual':
+            assert r['target'] == r['actual_action']
+        assert r['opponent_priority'] == job['opponent_priority']
+        assert set('move '+m for m in r['opponent_priority']) == set(root['opponent_legal_actions'])
+        assert r['restricted_actions'][side] == root['legal_actions']
+        assert r['restricted_actions'][1-side] == ['move '+job['opponent_priority'][0]]
+        assert len(r['restricted_cells_p0']) == len(root['legal_actions'])
+        for lo, hi in r['restricted_cells_p0']:
+            assert math.isfinite(lo) and math.isfinite(hi) and -1e-9 <= lo <= hi+1e-9 <= 1+1e-8
+        target = root['legal_actions'].index(job['target'])
+        lo, hi = r['restricted_cells_p0'][target]
+        assert r['target_cell_p0'] == [lo, hi]
+        score = [lo, hi] if side == 0 else [1-hi, 1-lo]
+        assert r['target_score_against_fixed_opponent'] == score
+        assert r['unrestricted_target_upper'] == score[1]
+        assert score[1]+1e-8 >= prior['pure_action_values'][target][0]
+        assert 0 <= r['runs'] == r['total_runs'] <= protocol['work_budget']
+        assert r['stop'] in ['WidthMet', 'WorkExhausted', 'NodeBudget']
+        for item in ['time_budget: None', 'dead_quick_claw_quotient: true',
+                     f"work_budget: {protocol['work_budget']}",
+                     f"node_budget: {protocol['node_budget']}",
+                     f"cell_cap: {protocol['cell_cap']}"]:
+            assert item in r['config']
+        alternatives = [(v[0], i) for i, v in enumerate(prior['pure_action_values']) if i != target]
+        lower, alternate = max(alternatives)
+        loss_lower = max(0., lower-score[1]-1e-10)
+        if job['classification'] == 'positive_control':
+            assert target != prior['selected'] and loss_lower > .02
+        if job['classification'] == 'negative_control':
+            assert target == prior['selected'] and loss_lower <= 1e-8
+        result.append(dict(id=r['id'], classification=job['classification'],
+                           target=job['target'], unrestricted_target_upper=score[1],
+                           alternative=prior['actions'][side][alternate], alternative_lower=lower,
+                           selected_loss_lower=loss_lower, positive_loss_proven=loss_lower > 1e-8,
+                           stop=r['stop'], runs=r['runs'], nodes=r['nodes'], elapsed_ms=r['elapsed_ms']))
+    return result
+
+
+def main():
+    p = Path('findings/native-fixed-reply-v1')
+    t = Path('tmp/native-fixed-reply-v1')
+    protocol = json.loads((p/'protocol.json').read_text())
+    assert digest(p/'native_fixed_reply.rs') == protocol['helper_sha256']
+    assert digest(t/'solver') == protocol['solver_binary_sha256']
+    for filename, key in [('bounds.rs', 'bounds_sha256'), ('bounds/loss_threshold.rs', 'loss_source_sha256')]:
+        source = subprocess.check_output(['git', 'show', protocol['implementation_commit']+':crates/bot/src/'+filename])
+        assert hashlib.sha256(source).hexdigest() == protocol[key]
+    roots_path = 'tmp/native-endgame-census-v1/roots.jsonl'
+    assert digest(roots_path) == protocol['roots_sha256']
+    assert digest(protocol['reference_archive']) == protocol['reference_archive_sha256']
+    roots = {(r['record']['game'], r['record']['frame']): r for r in rows(roots_path)}
+    reference = {(r['game'], r['frame']): r for r in rows(protocol['reference_archive'])}
+    derived = runpy.run_path('tools/native-endgame-bounds-audit')['derived']
+    for key in {(j['game'], j['frame']) for j in protocol['jobs']}:
+        derived(reference[key])
+    actual = rows(t/'main.jsonl')
+    results = check(actual, protocol, roots, reference)
+    rejected = []
+    for kind in ['missing_job', 'wrong_orientation', 'false_upper', 'changed_target', 'restricted_own_actions']:
+        changed = copy.deepcopy(actual)
+        if kind == 'missing_job':
+            changed.pop()
+        elif kind == 'wrong_orientation':
+            changed[0]['side'] = 1-changed[0]['side']
+        elif kind == 'false_upper':
+            changed[2]['unrestricted_target_upper'] = -1
+        elif kind == 'changed_target':
+            changed[2]['target'] = 'move drillpeck'
+        else:
+            changed[2]['restricted_actions'][changed[2]['side']].pop()
+        try:
+            check(changed, protocol, roots, reference)
+        except AssertionError:
+            rejected.append(kind)
+        else:
+            raise AssertionError('accepted '+kind)
+    ranked = selection(protocol)
+    print(json.dumps(dict(schema=protocol['schema'], protocol_sha256=digest(p/'protocol.json'),
+                          records_sha256=digest(t/'main.jsonl'), selection_top=ranked[:10],
+                          results=results, rejected_mutations=rejected,
+                          actual_positive_loss_certificates=sum(r['positive_loss_proven'] for r in results if r['classification']=='actual'),
+                          ordinary_bot_changed=False, strength_improvement_proven=False), indent=2))
+
+
+if __name__ == '__main__':
+    main()
