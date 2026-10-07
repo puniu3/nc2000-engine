@@ -1,0 +1,71 @@
+   Compiling nc2000-bot v0.1.0 (/Volumes/Work/puniu/nc2000-engine/crates/bot)
+    Finished `release` profile [optimized] target(s) in 53.58s
+     Running unittests src/lib.rs (target/release/deps/nc2000_bot-64908959f5686f2c)
+
+running 63 tests
+test bounds::tests::cross_bounds_certify_iterated_row_and_column_dominance ... ok
+test bounds::tests::closed_value_does_not_certify_a_policy_against_unchecked_replies ... ok
+test bounds::tests::explicit_correlated_policies_do_not_require_a_root_witness ... ok
+test bounds::tests::compacted_mixed_policy_survives_while_value_only_cache_has_no_policy ... ok
+test bounds::tests::chance_groups_prioritize_total_uncertainty_without_merging_states ... ok
+test bounds::tests::chance_fairness_visits_small_unresolved_branches_and_skips_closed_ones ... ok
+test bounds::tests::elapsed_budget_stops_without_discarding_the_interval ... ok
+test bounds::tests::closed_sweep_preserves_root_bounds_and_compacts_exact_children ... ok
+test bounds::tests::distance_to_turn_limit_changes_certified_value ... ok
+test bounds::tests::fixed_policy_bounds_keep_the_opponent_free_and_orient_both_sides ... ok
+test bounds::tests::forced_action_has_zero_loss_even_when_the_value_is_unknown ... ok
+test bounds::tests::aggregated_lazy_edges_match_exhaustive_successor_probabilities ... ok
+test bounds::tests::fixed_policy_applies_after_the_root_and_falls_back_when_unavailable ... ok
+test bounds::tests::fixed_strategy_cannot_change_after_search - should panic ... ok
+test bounds::tests::fixed_first_action_does_not_replace_continuation_priority ... ok
+test bounds::tests::frozen_switch_continuation_uses_moves_when_switches_are_not_prioritized ... ok
+test bounds::tests::held_quick_claw_changes_outcomes_and_cannot_be_quotiented ... ok
+test bounds::tests::boom_aware_rest_matches_exhaustive_response_on_both_sides ... ok
+test bounds::tests::frozen_strategy_switches_only_to_legal_nonfrozen_benches ... ok
+test bounds::tests::mixed_policy_certificates_and_side_swap_match_best_responses ... ok
+test bounds::tests::imported_policy_certificates_bound_values_without_certifying_actions ... ok
+test bounds::tests::mixed_policy_loss_uses_one_reply_to_the_distribution ... ok
+test bounds::tests::observer_guard_covers_direct_and_generated_counter_moves ... ok
+test bounds::tests::partial_action_bounds_enclose_exhaustive_first_action_values ... ok
+test bounds::tests::forced_replacement_policy_and_no_choice_opponent_are_certified ... ok
+test bounds::tests::policy_refinement_continues_after_the_value_closes ... ok
+test bounds::tests::policy_target_skips_sufficient_replies_without_changing_certificates ... ok
+test bounds::tests::pruning_and_support_br_preserve_a_closed_game_value ... ok
+test bounds::tests::partial_strategies_cover_random_damage_recovery_and_turn_cap ... ok
+test bounds::tests::quick_claw_quotient_guards_every_roster_and_keeps_key_domains_separate ... ok
+test bounds::tests::policy_refinement_partial_bounds_enclose_exhaustive_microgame ... ok
+test bounds::tests::reroot_retains_solved_continuations_and_discards_ancestors ... ok
+test bounds::tests::recover_guard_uses_public_last_foe_and_visible_species ... ok
+test bounds::tests::rest_strategy_cannot_change_after_search - should panic ... ok
+test bounds::tests::rest_strategy_reacts_to_damage_and_returns_to_attack_after_healing ... ok
+test bounds::tests::restricted_game_embeds_policies_in_original_action_space ... ok
+test bounds::tests::imported_descendant_bounds_preserve_a_two_turn_game ... ok
+test bounds::tests::safe_states_have_identical_semantic_successor_distributions ... ok
+test bounds::tests::semantic_key_omits_only_damage_history_payload ... ok
+test bounds::tests::fainted_quick_claw_is_ignored_only_at_idle_move_requests ... ok
+test bounds::tests::solver_tracks_a_two_sided_resource_root_without_invariant_failure ... ok
+test bounds::tests::hp_cached_search_matches_exhaustive_values_and_counts_actual_runs ... ok
+test bounds::tests::sleeping_fixed_strategy_matches_exhaustive_turn_and_respects_root_override ... ok
+test bounds::tests::explicit_resource_threshold_preserves_prefix_across_node_budgets ... ok
+test bounds::tests::strategy_target_stops_before_value_closure_and_small_budgets_resume ... ok
+test bounds::tests::support_br_scheduler_visits_tied_pure_response_and_fair_cursor ... ok
+test bounds::tests::tagged_solver_key_merges_safe_states_but_not_observer_states ... ok
+test bounds::tests::terminal_folding_preserves_bounds_and_releases_leaf_nodes ... ok
+test bounds::tests::value_certificate_import_rejects_a_different_dex - should panic ... ok
+test bounds::tests::waking_rest_cannot_change_after_search - should panic ... ok
+test bounds::tests::unselected_quick_claw_cannot_enter_play_or_change_successor_kernels ... ok
+test bounds::tests::winning_fixed_reply_is_not_exported_as_a_whole_game_guarantee ... ok
+test bounds::tests::healing_strategy_matches_exhaustive_turn_and_respects_status_pp_and_first_action ... ok
+test bounds::tests::a_frozen_bench_blocks_ice_beam_freeze_on_the_switch_in ... ok
+test bounds::tests::complete_leaf_scripts_replay_merged_damage_successors ... ok
+test bounds::tests::waking_rest_matches_exhaustive_responses_and_respects_strategy_guards ... ok
+test bounds::tests::strategy_refinement_encloses_exhaustive_policies_and_resumes ... ok
+test bounds::tests::fixed_policy_partial_bounds_enclose_exhaustive_two_turn_best_response ... ok
+test bounds::tests::resource_and_directional_search_enclose_exhaustive_two_turn_policies ... ok
+test bounds::tests::fixed_reply_bounds_keep_future_replies_free_and_resume ... ok
+test bounds::tests::retained_eager_prefix_resumes_exhaustive_successor_distribution ... ok
+test bounds::tests::quick_claw_quotient_preserves_complete_kernels_with_switches_and_thief ... ok
+test bounds::tests::unrestricted_descendant_certificates_preserve_exhaustive_values_and_actions ... ok
+
+test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 176 filtered out; finished in 2.07s
+

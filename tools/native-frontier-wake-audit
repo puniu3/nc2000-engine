@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from pathlib import Path
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def compare(old, new):
+    unchanged = 0
+    changed = []
+    for a,b in zip(old['frontier_probe']['samples'],new['frontier_probe']['samples']):
+        for k in ['index','state_key128','state_sha256','battle_json']:
+            assert a[k] == b[k]
+        state = json.loads(a['battle_json'])
+        side = state['sides'][old['side']]
+        own = side['roster'][side['active']]
+        data = own['status_state']['data']
+        counter = next((int.from_bytes(bytes(v['bits']),'little',signed=True) for k,v in zip(data['keys'][:data['n']],data['values'][:data['n']]) if k=='Time'),None)
+        waking = own['status']=='Slp' and counter==1
+        assert b['wake_override'] == waking and b['baseline_fixed_action'] == a['fixed_action']
+        if not waking:
+            assert a == {k:v for k,v in b.items() if k not in ['wake_override','baseline_fixed_action']}
+            unchanged += 1
+        else:
+            assert a['fixed_action']=='move sleeptalk' and b['fixed_action']=='move doubleedge'
+            assert [c['reply'] for c in a['cells']] == [c['reply'] for c in b['cells']]
+            terminal = all(not c['exhausted'] and c['pending_mass']==0 and all(v==0 for i,v in enumerate(c['mass']) if i!=old['side']) for c in b['cells'])
+            changed.append(dict(index=b['index'],before=a['one_step_score_bounds'],after=b['one_step_score_bounds'],all_replies_terminal_wins=terminal))
+    return dict(unchanged_states=unchanged,waking_states=changed,all_replies_terminal_win_states=sum(r['all_replies_terminal_wins'] for r in changed))
+
+
+def main():
+    p=Path('findings/native-frontier-wake-v1');t=Path('tmp/native-frontier-wake-v1')
+    protocol=json.loads((p/'protocol.json').read_text())
+    old_raw=gzip.decompress(Path('findings/native-frontier-refine-v1/records.jsonl.gz').read_bytes())
+    assert hashlib.sha256(old_raw).hexdigest()==protocol['input_records_sha256']
+    assert sha(p/'native_frontier_wake.rs')==protocol['helper_sha256']
+    assert sha(t/'solver')==protocol['solver_binary_sha256']
+    old=json.loads(old_raw);new=json.loads((t/'main.jsonl').read_text())
+    parent=next(r for r in map(json.loads,gzip.decompress(Path('findings/native-snorlax-witness-v1/records.jsonl.gz').read_bytes()).splitlines()) if r['id']=='rest-guarantee')
+    check=runpy.run_path('tools/native-frontier-step-audit')['check']
+    result=check(new,protocol,parent);result.update(compare(old,new))
+    vp=json.loads((p/'verification-protocol.json').read_text());v=json.loads((t/'verification.json').read_text())
+    assert sha(p/'native_frontier_wake_verify.rs')==vp['helper_sha256']
+    assert sha(t/'verify-solver')==vp['binary_sha256']
+    assert sha(t/'main.jsonl')==vp['records_sha256']==v['records_sha256']
+    assert v['cells_checked']==result['total_cells'] and v['extra_engine_runs']==result['additional_probe_runs']
+    assert v['policy_validation_runs']==result['samples'] and v['max_probability_error']==0
+    assert v['performance_sample'] is False
+    rejected=[]
+    for kind in ['wrong_override','wrong_action','changed_state','false_bound']:
+        r=copy.deepcopy(new);sample=next(s for s in r['frontier_probe']['samples'] if s['wake_override'])
+        if kind=='wrong_override':sample['wake_override']=False
+        elif kind=='wrong_action':sample['fixed_action']='move sleeptalk'
+        elif kind=='changed_state':sample['battle_json']+=' '
+        else:sample['one_step_score_bounds']=[0.,0.]
+        try:check(r,protocol,parent);compare(old,r)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    result.update(schema=protocol['schema'],records_sha256=sha(t/'main.jsonl'),protocol_sha256=sha(p/'protocol.json'),replay_verification=v,rejected_mutations=rejected,root_search_rerun=False,ordinary_bot_changed=False,strength_improvement_proven=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()
