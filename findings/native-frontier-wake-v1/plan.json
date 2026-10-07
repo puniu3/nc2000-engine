@@ -1,0 +1,36 @@
+{
+  "schema": "nc2000-native-frontier-wake-v1",
+  "registered_at": "2026-10-07T14:23:13.101233+00:00",
+  "implementation_commit": "fd87684a2a06fdb1a08228ffb3f67d3b374e188b",
+  "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
+  "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "helper_sha256": "4aa1b426bf5dc41968029e4ead7ac06a25c5ca614298b86358aaba8651724eef",
+  "bounds_sha256": "5715026343693c264a2443d302a22fd6ec0868d69d7c5c5b94a4236062803adb",
+  "work_budget": 2000000,
+  "node_budget": 200000,
+  "jobs": [
+    {
+      "id": "rest-guarantee",
+      "direction": "lower",
+      "target": "rest",
+      "first": "rest",
+      "priority": [
+        "doubleedge",
+        "curse",
+        "rest",
+        "sleeptalk"
+      ],
+      "sleep_talk": true
+    }
+  ],
+  "reference_archive": "findings/native-loss-lower-screen-v1/records.jsonl.gz",
+  "reference_archive_sha256": "0a6519922d4b6a675d6f243669f7a1edf42ac0524f596aaed892af6175238d55",
+  "selection_summary_sha256": "4f14cf2b73134c26a7633e15597bcd4993896a3b2e9a6909673079972b6ed424",
+  "selection": "The first-ranked root in the completed cap4096 one-step census: game87/frame49, actual Rest versus Double Edge. Immediate-win difference is a hypothesis, not an error certificate.",
+  "scope": "Same64 stored states, all256 replies, cap4096. Override only own Slp/Time==1 states from Sleep Talk to the first legal registered priority move. Preserve engine status rules. This tests a research fixed-policy weakness, not a usual-bot mistake, actual-game regret or global strength. Root-search fields are copied from frozen input; no new graph search or bound injection. Compare original completed one-step event masses and guarantees; all other53 states must be unchanged.",
+  "ordinary_bot_changed": false,
+  "sample_count": 64,
+  "probe_cell_cap": 4096,
+  "parent_records_sha256": "83c46f2128b7d5029f48426dd0a06df8a911a70a04ddb8a99d4dfd2bec424003",
+  "input_records_sha256": "7f4ec1cc7f19e41b9c182a3256b293cc92157dcc7bde7909371212e27c167579"
+}
