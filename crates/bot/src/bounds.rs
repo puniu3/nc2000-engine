@@ -490,6 +490,7 @@ pub struct BoundSolver<'d> {
     fixed_policy: Option<(usize, Vec<SearchChoice>)>,
     fixed_first_action: Option<(NodeKey, SearchChoice)>,
     fixed_sleep_talk: bool,
+    fixed_sleep_talk_skip_wake: bool,
     fixed_frozen_switch: bool,
     fixed_rest_percent: Option<u8>,
     fixed_recover_percent: Option<u8>,
@@ -561,7 +562,14 @@ impl<'d> FixedPolicySolver<'d> {
         assert!(self.solver.nodes.is_empty() && self.solver.closed.is_empty(),
             "fixed strategy must be configured before search");
         self.solver.fixed_sleep_talk = true;
+        self.solver.fixed_sleep_talk_skip_wake = false;
         self
+    }
+
+    pub fn with_sleep_talk_until_wake(self) -> Self {
+        let mut fixed = self.with_sleep_talk();
+        fixed.solver.fixed_sleep_talk_skip_wake = true;
+        fixed
     }
 
     /// Refine one first opponent reply, retaining every later opponent choice.
@@ -718,6 +726,7 @@ impl<'d> BoundSolver<'d> {
             fixed_policy: None,
             fixed_first_action: None,
             fixed_sleep_talk: false,
+            fixed_sleep_talk_skip_wake: false,
             fixed_frozen_switch: false,
             fixed_rest_percent: None,
             fixed_recover_percent: None,
@@ -746,6 +755,7 @@ impl<'d> BoundSolver<'d> {
             fixed_policy: None,
             fixed_first_action: None,
             fixed_sleep_talk: false,
+            fixed_sleep_talk_skip_wake: false,
             fixed_frozen_switch: false,
             fixed_rest_percent: None,
             fixed_recover_percent: None,
@@ -1292,7 +1302,12 @@ impl<'d> BoundSolver<'d> {
                             }) { return vec![Some(action)]; }
                         }
                         if self.fixed_sleep_talk && probe.active_id(side)
-                            .is_some_and(|id| probe.poke(id).status == nc2000_engine::state::Status::Slp) {
+                            .is_some_and(|id| {
+                                let pokemon = probe.poke(id);
+                                pokemon.status == nc2000_engine::state::Status::Slp
+                                    && (!self.fixed_sleep_talk_skip_wake
+                                        || pokemon.status_state.get_int(nc2000_engine::state::DK::Time)>1)
+                            }) {
                             if let Some(action) = self.dex.moves.id("sleeptalk").map(SearchChoice::Move)
                                 .filter(|action| legal.contains(action)) {
                                 return vec![Some(action)];
@@ -3199,9 +3214,12 @@ mod tests {
         let talk = SearchChoice::Move(dex.moves.id("sleeptalk").unwrap());
         let splash = SearchChoice::Move(dex.moves.id("splash").unwrap());
         for side in 0..2 {
-            for (sleeping, pp, first, selected) in [
-                (false, 10, None, attack), (true, 10, None, talk),
-                (true, 0, None, attack), (true, 10, Some(splash), splash),
+            for (sleeping, pp, first, selected, sleep_time) in [
+                (false, 10, None, attack, None), (true, 10, None, talk, None),
+                (true, 0, None, attack, None), (true, 10, Some(splash), splash, None),
+                (true, 10, None, attack, Some(1)), (true, 10, None, talk, Some(2)),
+                (true, 10, None, talk, Some(3)), (true, 0, None, attack, Some(2)),
+                (true, 10, Some(splash), splash, Some(1)),
             ] {
                 let moves = &["Seismic Toss", "Sleep Talk", "Splash"];
                 let mut root = if side == 0 { battle(&dex, moves, &["Splash"]) }
@@ -3213,6 +3231,9 @@ mod tests {
                 let foe = root.active_id(1 - side).unwrap();
                 root.poke_mut(foe).hp = 25;
                 if sleeping { root.set_status(&dex, me, "slp", Some(me), EffectHandle::None, true); }
+                if let Some(time) = sleep_time {
+                    root.poke_mut(me).status_state.set_int(nc2000_engine::state::DK::Time,time);
+                }
                 root.poke_mut(me).move_slots[1].pp = pp;
                 root.poke_mut(me).base_move_slots[1].pp = pp;
                 let mut choices = [Some(splash); 2];
@@ -3223,11 +3244,13 @@ mod tests {
                     leaf.prob * if side == 0 { value } else { 1.0 - value }
                 }).sum();
                 let cfg = BoundConfig { eps: 1e-10, ..BoundConfig::default() };
-                let mut solver = match first {
+                let solver = match first {
                     Some(action) => super::FixedPolicySolver::new_with_first_action(&dex,
                         cfg, side, vec![attack], &root, action),
                     None => super::FixedPolicySolver::new(&dex, cfg, side, vec![attack]),
-                }.with_sleep_talk();
+                };
+                let mut solver = if sleep_time.is_some() { solver.with_sleep_talk_until_wake() }
+                    else { solver.with_sleep_talk() };
                 let report = solver.solve(&root);
                 assert!((report.guaranteed_score.lo - expected).abs() < 1e-10);
                 assert!((report.guaranteed_score.hi - expected).abs() < 1e-10);
