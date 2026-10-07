@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import math
+from collections import Counter
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def rows(path):
+    return [json.loads(line) for line in Path(path).read_bytes().splitlines()]
+
+
+def action_bounds(row):
+    side = row['side']
+    columns = len(row['actions'][1])
+    result = []
+    for action in range(len(row['actions'][side])):
+        intervals = []
+        for reply in range(len(row['actions'][1 - side])):
+            index = action * columns + reply if side == 0 else reply * columns + action
+            cell = row['cells'][index]
+            masses = cell['outcome_mass_p0win_p1win_tie_live']
+            lower = masses[side] + masses[2] / 2
+            upper = lower + masses[3] + cell['pending_mass']
+            intervals.append((max(0, lower - 1e-9), min(1, upper + 1e-9)))
+        result.append([min(x[0] for x in intervals), min(x[1] for x in intervals)])
+    return result
+
+
+def diagnose(row):
+    bounds = action_bounds(row)
+    selected = bounds[row['selected']]
+    best = max(range(len(bounds)), key=lambda i: bounds[i][0])
+    return dict(game=row['game'], frame=row['frame'], side=row['side'],
+                selected=row['actions'][row['side']][row['selected']],
+                selected_security=selected, best_lower_action=row['actions'][row['side']][best],
+                best_security_lower=bounds[best][0],
+                selected_loss_lower=max(0, bounds[best][0] - selected[1]),
+                selected_loss_upper=min(1, 1 - selected[0]), action_bounds=bounds)
+
+
+def controls():
+    def cell(win=0, loss=0, tie=0, live=0, pending=0):
+        assert win + loss + tie + live + pending == 1
+        return dict(outcome_mass_p0win_p1win_tie_live=[win, loss, tie, live], pending_mass=pending)
+    row = dict(game=-1, frame=-1, side=0, selected=0,
+               actions=[['selected', 'alternative'], ['reply']], cells=[cell(loss=1), cell(win=1)])
+    assert diagnose(row)['selected_loss_lower'] > .99999999
+    row['cells'][0] = cell(win=1)
+    assert diagnose(row)['selected_loss_lower'] == 0
+    for name in ['live', 'pending']:
+        row['cells'][0] = cell(**{name: 1})
+        assert diagnose(row)['selected_loss_lower'] == 0
+        assert action_bounds(row)[0] == [0, 1]
+    row['cells'][0] = cell(tie=1)
+    assert abs(diagnose(row)['selected_loss_lower'] - .5) < 3e-9
+    row['actions'] = [['reply'], ['selected', 'alternative']]
+    row['side'] = 1
+    row['cells'] = [cell(win=1), cell(loss=1)]
+    assert diagnose(row)['selected_loss_lower'] > .99999999
+    row.update(side=0, actions=[['selected', 'alternative'], ['reply0', 'reply1']],
+               cells=[cell(loss=1), cell(live=1), cell(win=1), cell(win=1)])
+    assert diagnose(row)['selected_loss_lower'] > .99999999
+    row['cells'][3] = cell(live=1)
+    assert diagnose(row)['selected_loss_lower'] == 0
+    return 8
+
+
+def check(actual, snapshots, census, games, protocol):
+    expected = {(r['record']['game'], r['record']['frame']): r for r in snapshots}
+    assert len(expected) == len(snapshots) == len(actual) == census['selected_roots']
+    assert sorted((r['record'] for r in snapshots), key=lambda r: (r['game'], r['frame'])) == census['roots']
+    seen = set()
+    counts = Counter()
+    strata = Counter()
+    diagnostics = []
+    for row in actual:
+        key = row['game'], row['frame']
+        assert key not in seen
+        seen.add(key)
+        source = expected[key]
+        record, battle = source['record'], source['battle']
+        raw = json.dumps(battle, ensure_ascii=False, separators=(',', ':')).encode()
+        assert hashlib.sha256(raw).hexdigest() == record['state_sha256'] == row['state_sha256']
+        alive = [s['pokemon_left'] for s in battle['sides']]
+        assert alive == record['alive'] and sorted(alive) in [[1, 2], [1, 3]]
+        assert battle['started'] and not battle['ended'] and not battle['mid_turn']
+        assert not any(battle[k] for k in ['queue', 'faint_queue', 'event_stack', 'effect_stack'])
+        side = row['side']
+        assert side == record['side'] == record['game'] % 2
+        frame = games[record['game']]['frames'][record['frame']]
+        assert frame['agent'] == 0 and frame['side'] == side
+        assert frame['state_sha256'] == row['state_sha256']
+        assert frame['response'] == record['current_response']
+        assert len(row['actions'][side]) > 1
+        assert row['actions'][side] == record['legal_actions'] == frame['legal_actions']
+        assert row['actions'][1 - side] == record['opponent_legal_actions']
+        assert row['actions'][side][row['selected']] == frame['response']['action']
+        assert len(row['cells']) == len(row['actions'][0]) * len(row['actions'][1])
+        for cell in row['cells']:
+            masses = cell['outcome_mass_p0win_p1win_tie_live']
+            pending = cell['pending_mass']
+            assert len(masses) == 4
+            assert all(math.isfinite(x) and 0 <= x <= 1 + 1e-9 for x in [*masses, pending])
+            assert abs(sum(masses) + pending - 1) < 1e-9
+            assert 0 <= cell['runs'] <= protocol['cell_cap']
+            assert cell['leaves'] >= 0 and cell['pending_scripts'] >= 0
+            if not cell['exhausted']:
+                assert pending == 0 and cell['pending_scripts'] == 0
+            counts['joint_actions'] += 1
+            counts['incomplete_joint_actions' if cell['exhausted'] else 'complete_joint_actions'] += 1
+            counts['resolved_nonterminal_cells'] += masses[3] > 0
+            counts['any_terminal_mass_cells'] += sum(masses[:3]) > 0
+        assert row['runs'] == sum(c['runs'] for c in row['cells'])
+        counts['total_runs'] += row['runs']
+        strata[f'{alive[side]}v{alive[1-side]}'] += 1
+        diagnostics.append(diagnose(row))
+    assert seen == set(expected)
+    assert len({g for g, _ in seen}) == census['selected_games']
+    return dict(roots=len(seen), games=census['selected_games'], strata=dict(sorted(strata.items())),
+                **counts, diagnostics=diagnostics,
+                conditional_errors=[r for r in diagnostics if r['selected_loss_lower'] > 1e-8],
+                selected_loss_at_most_002=sum(r['selected_loss_upper'] <= .02 for r in diagnostics),
+                alternative_security_lower_above_zero=sum(r['best_security_lower'] > 0 for r in diagnostics))
+
+
+def main():
+    p = Path('findings/native-asymmetric-terminal-v1')
+    t = Path('tmp/native-asymmetric-terminal-v1')
+    protocol = json.loads((p / 'protocol.json').read_text())
+    binding = json.loads((p / 'binding.json').read_text())
+    assert controls() == len(protocol['controls'])
+    for name, field in [('native_asymmetric_census.rs', 'census_helper_sha256'),
+                        ('native_asymmetric_scan.rs', 'scan_helper_sha256')]:
+        assert digest(p / name) == protocol[field]
+    for name in ['census', 'scan', 'roots.jsonl', 'census.json']:
+        assert digest(t / name) == binding['sha256'][name]
+    assert digest(t / 'roots.jsonl') == binding['roots_sha256']
+    assert binding['dex_sha256'] == protocol['dex_sha256'] == digest('data/gen2stadium2.json')
+    assert binding['cell_cap'] == protocol['cell_cap']
+    for name in ['roots.jsonl', 'census.json']:
+        assert (t / name).read_bytes() == (t / ('repeat-' + name)).read_bytes()
+    actual, repeat = rows(t / 'main.jsonl'), rows(t / 'repeat-main.jsonl')
+    strip_time = lambda rr: [{k: v for k, v in r.items() if k != 'elapsed_ms'} for r in rr]
+    assert strip_time(actual) == strip_time(repeat)
+    source = Path('tmp/native-deployed-v1/main/games.jsonl')
+    assert digest(source) == protocol['source_games_sha256']
+    games = {r['game']: r for r in rows(source)[1:]}
+    snapshots = rows(t / 'roots.jsonl')
+    census = json.loads((t / 'census.json').read_text())
+    assert census['selected_roots'] == binding['source_roots']
+    result = check(actual, snapshots, census, games, protocol)
+    rejected = []
+    for kind in ['missing_root', 'wrong_selected', 'invalid_mass', 'hidden_pending_mass', 'snapshot_hp']:
+        changed, changed_snapshots = copy.deepcopy(actual), copy.deepcopy(snapshots)
+        if kind == 'missing_root':
+            changed.pop()
+        elif kind == 'wrong_selected':
+            changed[0]['selected'] = (changed[0]['selected'] + 1) % len(changed[0]['actions'][changed[0]['side']])
+        elif kind == 'invalid_mass':
+            changed[0]['cells'][0]['outcome_mass_p0win_p1win_tie_live'][0] = 2
+        elif kind == 'hidden_pending_mass':
+            cell = next(c for r in changed for c in r['cells'] if c['pending_mass'] > 1e-6)
+            cell['pending_mass'] = 0
+        else:
+            changed_snapshots[0]['battle']['sides'][0]['roster'][0]['hp'] += 1
+        try:
+            check(changed, changed_snapshots, census, games, protocol)
+        except AssertionError:
+            rejected.append(kind)
+        else:
+            raise AssertionError('accepted ' + kind)
+    result.update(schema=protocol['schema'], protocol_sha256=digest(p / 'protocol.json'),
+                  binding_sha256=digest(p / 'binding.json'), records_sha256=digest(t / 'main.jsonl'),
+                  roots_sha256=digest(t / 'roots.jsonl'), repeat_identical_except_timing=True,
+                  synthetic_controls=protocol['controls'], rejected_mutations=rejected,
+                  replayed_games=census['games'], replayed_states=census['replayed_states'],
+                  replayed_decisions=census['replayed_decisions'], ordinary_bot_changed=False,
+                  blind_policy_loss_proven=False, strength_improvement_proven=False)
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()
