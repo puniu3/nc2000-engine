@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+import gzip
+import hashlib
+import json
+from pathlib import Path
+
+
+root=Path('findings/hp-category-roots-v1')
+data=(root/'records.json.gz').read_bytes()
+summary=json.loads((root/'summary.json').read_text())
+assert hashlib.sha256(data).hexdigest()==summary['records_sha256']
+records=json.loads(gzip.decompress(data))
+rows=[]
+for after in records['after']:
+    if after['rep']!=0:continue
+    before=next(r for r in records['before'] if (r['case'],r['trial'],r['rep'])==(after['case'],after['trial'],0))
+    actual=after['truth']['foe']
+    models=[(json.loads(k),n) for k,n in after['models'].items()]
+    hp=next((m['damage'] for m in after['truth']['foe_damage'] if m['move']=='hiddenpower'),None)
+    estimates=[(next((d['damage'] for d in m['active']['foe_damage'] if d['move']=='hiddenpower'),None),n) for m,n in models]
+    ranges=[v for v,n in estimates if v is not None]
+    types=sorted({m['active']['foe']['hp_type'] for m,n in models if 'hiddenpower' in m['active']['foe']['moves']})
+    missing=sum(n for m,n in models if not set(actual['moves']).issubset(m['active']['foe']['moves']))
+    wrong_types=sum(n for m,n in models if hp is not None and m['active']['foe']['hp_type']!=actual['hp_type'])
+    for arm in ['before','after']:
+        same=[r for r in records[arm] if (r['case'],r['trial'])==(after['case'],after['trial'])]
+        assert all(r['models']==same[0]['models'] and r['truth']==same[0]['truth'] for r in same)
+    rows.append({'case':after['case'],'trial':after['trial'],'samples':sum(n for m,n in models),'true_hp_type':actual['hp_type'] if hp is not None else None,'modeled_hp_types':types,'samples_wrong_hp_type':wrong_types,'samples_missing_true_moves':missing,'modeled_hp_damage_range':[min(ranges),max(ranges)] if ranges else None,'same_estimator_on_actual_hp':hp})
+representative=[]
+for arm in ['before','after']:
+    r=next(r for r in records[arm] if (r['case'],r['trial'],r['rep'])==('dragonair-fighting',0,0))
+    m=json.loads(next(iter(r['models'])))
+    representative.append({'arm':arm,'choice':r['best'],'modeled_foe':m['active']['foe'],'modeled_damage':m['active']['foe_damage'],'actual_foe':r['truth']['foe'],'same_estimator_on_actual':r['truth']['foe_damage']})
+print(json.dumps({'roots':rows,'representative':representative,'records_sha256':hashlib.sha256(data).hexdigest(),'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'scope':'Descriptive synthetic-root model errors; estimator values are not exact native damage or win probabilities. Repeated search seeds share model samples and are not counted as independent roots. Actual hidden sets are used only for diagnosis.'},indent=2))

@@ -25612,6 +25612,1390 @@
           "web-build.log": "2f7e3144167b387169e71e814dbf9d7854a4a0ccf200b161df727482e0a09546"
         }
       }
+    },
+    "findings/hp-category-roots-v1/summary.json": {
+      "sha256": "fe0219434cb1483db99cf5fb008ec8c8b009d45ff9b8caacb093b2c67631eb56",
+      "data": {
+        "search_pairs": 78,
+        "roots": 26,
+        "choice_changes": 13,
+        "cases": [
+          {
+            "case": "articuno-fighting",
+            "search_pairs": 24,
+            "choice_changes": 0,
+            "changed_roots": 0,
+            "statistics_changes": 2
+          },
+          {
+            "case": "dragonair-fighting",
+            "search_pairs": 24,
+            "choice_changes": 12,
+            "changed_roots": 6,
+            "statistics_changes": 24
+          },
+          {
+            "case": "exeggutor-bug",
+            "search_pairs": 24,
+            "choice_changes": 1,
+            "changed_roots": 1,
+            "statistics_changes": 24
+          },
+          {
+            "case": "onpool-control",
+            "search_pairs": 6,
+            "choice_changes": 0,
+            "changed_roots": 0,
+            "statistics_changes": 6
+          }
+        ],
+        "changes": [
+          {
+            "case": "articuno-fighting",
+            "trial": 0,
+            "rep": 0,
+            "before": "move doubleedge",
+            "after": "move doubleedge",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 0,
+            "rep": 1,
+            "before": "move doubleedge",
+            "after": "move doubleedge",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 0,
+            "rep": 2,
+            "before": "move doubleedge",
+            "after": "move doubleedge",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 1,
+            "rep": 0,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 1,
+            "rep": 1,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 1,
+            "rep": 2,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 2,
+            "rep": 0,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 2,
+            "rep": 1,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 2,
+            "rep": 2,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 3,
+            "rep": 0,
+            "before": "move doubleedge",
+            "after": "move doubleedge",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 3,
+            "rep": 1,
+            "before": "move doubleedge",
+            "after": "move doubleedge",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 3,
+            "rep": 2,
+            "before": "move doubleedge",
+            "after": "move doubleedge",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 4,
+            "rep": 0,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 4,
+            "rep": 1,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 4,
+            "rep": 2,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 5,
+            "rep": 0,
+            "before": "move doubleedge",
+            "after": "move doubleedge",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 5,
+            "rep": 1,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 5,
+            "rep": 2,
+            "before": "move doubleedge",
+            "after": "move doubleedge",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 6,
+            "rep": 0,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 6,
+            "rep": 1,
+            "before": "move doubleedge",
+            "after": "move doubleedge",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 6,
+            "rep": 2,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 7,
+            "rep": 0,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 7,
+            "rep": 1,
+            "before": "move curse",
+            "after": "move curse",
+            "actions_changed": false,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 7,
+            "rep": 2,
+            "before": "move doubleedge",
+            "after": "move doubleedge",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 0,
+            "rep": 0,
+            "before": "move icebeam",
+            "after": "move thunder",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 0,
+            "rep": 1,
+            "before": "move icebeam",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 0,
+            "rep": 2,
+            "before": "move thunder",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 1,
+            "rep": 0,
+            "before": "move icebeam",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 1,
+            "rep": 1,
+            "before": "move counter",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 1,
+            "rep": 2,
+            "before": "move icebeam",
+            "after": "move thunder",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 2,
+            "rep": 0,
+            "before": "move thunder",
+            "after": "move thunder",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 2,
+            "rep": 1,
+            "before": "move thunder",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 2,
+            "rep": 2,
+            "before": "move icebeam",
+            "after": "move counter",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 3,
+            "rep": 0,
+            "before": "move icebeam",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 3,
+            "rep": 1,
+            "before": "move icebeam",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 3,
+            "rep": 2,
+            "before": "move icebeam",
+            "after": "move thunder",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 4,
+            "rep": 0,
+            "before": "move thunder",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 4,
+            "rep": 1,
+            "before": "move thunder",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 4,
+            "rep": 2,
+            "before": "move icebeam",
+            "after": "move thunder",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 5,
+            "rep": 0,
+            "before": "move icebeam",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 5,
+            "rep": 1,
+            "before": "move thunder",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 5,
+            "rep": 2,
+            "before": "move thunder",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 6,
+            "rep": 0,
+            "before": "move icebeam",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 6,
+            "rep": 1,
+            "before": "move icebeam",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 6,
+            "rep": 2,
+            "before": "move icebeam",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 7,
+            "rep": 0,
+            "before": "move icebeam",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 7,
+            "rep": 1,
+            "before": "move thunder",
+            "after": "move thunder",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 7,
+            "rep": 2,
+            "before": "move icebeam",
+            "after": "move icebeam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 0,
+            "rep": 0,
+            "before": "move toxic",
+            "after": "move toxic",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 0,
+            "rep": 1,
+            "before": "move toxic",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": true,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 0,
+            "rep": 2,
+            "before": "move toxic",
+            "after": "move toxic",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 1,
+            "rep": 0,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 1,
+            "rep": 1,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 1,
+            "rep": 2,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 2,
+            "rep": 0,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 2,
+            "rep": 1,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 2,
+            "rep": 2,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 3,
+            "rep": 0,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 3,
+            "rep": 1,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 3,
+            "rep": 2,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 4,
+            "rep": 0,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 4,
+            "rep": 1,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 4,
+            "rep": 2,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 5,
+            "rep": 0,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 5,
+            "rep": 1,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 5,
+            "rep": 2,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 6,
+            "rep": 0,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 6,
+            "rep": 1,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 6,
+            "rep": 2,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 7,
+            "rep": 0,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 7,
+            "rep": 1,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 7,
+            "rep": 2,
+            "before": "move pursuit",
+            "after": "move pursuit",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "onpool-control",
+            "trial": 0,
+            "rep": 0,
+            "before": "move bodyslam",
+            "after": "move bodyslam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "onpool-control",
+            "trial": 0,
+            "rep": 1,
+            "before": "move bodyslam",
+            "after": "move bodyslam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "onpool-control",
+            "trial": 0,
+            "rep": 2,
+            "before": "move bodyslam",
+            "after": "move bodyslam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "onpool-control",
+            "trial": 1,
+            "rep": 0,
+            "before": "move bodyslam",
+            "after": "move bodyslam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "onpool-control",
+            "trial": 1,
+            "rep": 1,
+            "before": "move bodyslam",
+            "after": "move bodyslam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          },
+          {
+            "case": "onpool-control",
+            "trial": 1,
+            "rep": 2,
+            "before": "move bodyslam",
+            "after": "move bodyslam",
+            "actions_changed": true,
+            "chosen_changed": false,
+            "truth_foe_damage_changed": false
+          }
+        ],
+        "repeat_searches": 78,
+        "equal_inputs": true,
+        "equal_model_attributes": true,
+        "changed_sources": [
+          "crates/bot/src/eval.rs"
+        ],
+        "negative_controls": 5,
+        "protocol_sha256": "d5ed9384b6843b39687ad6e2e6cac5306bc994fef3a7de1b34cfbfd347a100cd",
+        "checker_sha256": "25d0e327a146ce165c63231f4e141116b88143aa57ad0e49428eb661207b5a38",
+        "scope": "26 fresh common roots (24 constructed exposures and two on-pool controls), three paired search seeds each, 27000 iterations at c=0.4. Default HP inference remains off. Compare source snapshots before/after the runtime HP-category estimator fix. Root states, public observations, sample model attributes, and search seeds must agree. Model damage estimates may change; no true foe information is fed into search. Truth and sampled attributes are recorded for diagnosis only. A changed action or score is not a strength or optimality claim. All roots are retained regardless of exposure or choice changes. Mac timings are descriptive and not an equal-time or iPad benchmark.",
+        "strength_vs_deployed": "unproved",
+        "records_sha256": "9c0091107675824f0f67972af0e44d4e008dc8b39bb0abab8b81c96e65b598d6"
+      }
+    },
+    "findings/hp-category-roots-v1/diagnostics.json": {
+      "sha256": "723735ed07995e730c66668c50a3eb95205d151f3f0bf24ece98d5aa81c86269",
+      "data": {
+        "roots": [
+          {
+            "case": "articuno-fighting",
+            "trial": 0,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              29.615686274509805,
+              29.615686274509805
+            ],
+            "same_estimator_on_actual_hp": 74.03921568627452
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 1,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              29.615686274509805,
+              29.615686274509805
+            ],
+            "same_estimator_on_actual_hp": 74.03921568627452
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 2,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              29.61568627450981,
+              29.61568627450981
+            ],
+            "same_estimator_on_actual_hp": 74.03921568627452
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 3,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              29.61568627450981,
+              29.61568627450981
+            ],
+            "same_estimator_on_actual_hp": 74.03921568627452
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 4,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              29.615686274509805,
+              29.615686274509805
+            ],
+            "same_estimator_on_actual_hp": 74.03921568627452
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 5,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              29.615686274509805,
+              29.615686274509805
+            ],
+            "same_estimator_on_actual_hp": 74.03921568627452
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 6,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              29.61568627450981,
+              29.61568627450981
+            ],
+            "same_estimator_on_actual_hp": 74.03921568627452
+          },
+          {
+            "case": "articuno-fighting",
+            "trial": 7,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              29.615686274509805,
+              29.615686274509805
+            ],
+            "same_estimator_on_actual_hp": 74.03921568627452
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 0,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              24.062745098039215,
+              24.062745098039215
+            ],
+            "same_estimator_on_actual_hp": 149.9294117647059
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 1,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              24.062745098039215,
+              24.062745098039215
+            ],
+            "same_estimator_on_actual_hp": 149.9294117647059
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 2,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              24.062745098039215,
+              24.062745098039215
+            ],
+            "same_estimator_on_actual_hp": 149.9294117647059
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 3,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              24.062745098039215,
+              24.062745098039215
+            ],
+            "same_estimator_on_actual_hp": 149.9294117647059
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 4,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              24.062745098039215,
+              24.062745098039215
+            ],
+            "same_estimator_on_actual_hp": 149.9294117647059
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 5,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              24.062745098039215,
+              24.062745098039215
+            ],
+            "same_estimator_on_actual_hp": 149.9294117647059
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 6,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              24.062745098039215,
+              24.062745098039215
+            ],
+            "same_estimator_on_actual_hp": 149.9294117647059
+          },
+          {
+            "case": "dragonair-fighting",
+            "trial": 7,
+            "samples": 64,
+            "true_hp_type": "Fighting",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              24.062745098039215,
+              24.062745098039215
+            ],
+            "same_estimator_on_actual_hp": 149.9294117647059
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 0,
+            "samples": 64,
+            "true_hp_type": "Bug",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              14.345098039215689,
+              14.345098039215689
+            ],
+            "same_estimator_on_actual_hp": 53.67843137254902
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 1,
+            "samples": 64,
+            "true_hp_type": "Bug",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              14.345098039215687,
+              14.345098039215687
+            ],
+            "same_estimator_on_actual_hp": 53.67843137254902
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 2,
+            "samples": 64,
+            "true_hp_type": "Bug",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              14.345098039215689,
+              14.345098039215689
+            ],
+            "same_estimator_on_actual_hp": 53.67843137254902
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 3,
+            "samples": 64,
+            "true_hp_type": "Bug",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              14.345098039215687,
+              14.345098039215687
+            ],
+            "same_estimator_on_actual_hp": 53.67843137254902
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 4,
+            "samples": 64,
+            "true_hp_type": "Bug",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              14.345098039215687,
+              14.345098039215687
+            ],
+            "same_estimator_on_actual_hp": 53.67843137254902
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 5,
+            "samples": 64,
+            "true_hp_type": "Bug",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              14.345098039215687,
+              14.345098039215687
+            ],
+            "same_estimator_on_actual_hp": 53.67843137254902
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 6,
+            "samples": 64,
+            "true_hp_type": "Bug",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              14.345098039215687,
+              14.345098039215687
+            ],
+            "same_estimator_on_actual_hp": 53.67843137254902
+          },
+          {
+            "case": "exeggutor-bug",
+            "trial": 7,
+            "samples": 64,
+            "true_hp_type": "Bug",
+            "modeled_hp_types": [
+              "Dark"
+            ],
+            "samples_wrong_hp_type": 64,
+            "samples_missing_true_moves": 64,
+            "modeled_hp_damage_range": [
+              14.345098039215687,
+              14.345098039215687
+            ],
+            "same_estimator_on_actual_hp": 53.67843137254902
+          },
+          {
+            "case": "onpool-control",
+            "trial": 0,
+            "samples": 64,
+            "true_hp_type": null,
+            "modeled_hp_types": [],
+            "samples_wrong_hp_type": 0,
+            "samples_missing_true_moves": 0,
+            "modeled_hp_damage_range": null,
+            "same_estimator_on_actual_hp": null
+          },
+          {
+            "case": "onpool-control",
+            "trial": 1,
+            "samples": 64,
+            "true_hp_type": null,
+            "modeled_hp_types": [],
+            "samples_wrong_hp_type": 0,
+            "samples_missing_true_moves": 0,
+            "modeled_hp_damage_range": null,
+            "same_estimator_on_actual_hp": null
+          }
+        ],
+        "representative": [
+          {
+            "arm": "before",
+            "choice": "move icebeam",
+            "modeled_foe": {
+              "species": "dragonair",
+              "moves": [
+                "hiddenpower"
+              ],
+              "item": null,
+              "hp_type": "Dark",
+              "hp_power": 70,
+              "stats": [
+                148,
+                127,
+                133,
+                133,
+                133
+              ],
+              "hp": 170,
+              "maxhp": 183
+            },
+            "modeled_damage": [
+              {
+                "move": "hiddenpower",
+                "damage": 76.8156862745098
+              }
+            ],
+            "actual_foe": {
+              "species": "dragonair",
+              "moves": [
+                "attract",
+                "hiddenpower",
+                "rest",
+                "thunderwave"
+              ],
+              "item": "leftovers",
+              "hp_type": "Fighting",
+              "hp_power": 70,
+              "stats": [
+                145,
+                124,
+                133,
+                133,
+                133
+              ],
+              "hp": 170,
+              "maxhp": 170
+            },
+            "same_estimator_on_actual": [
+              {
+                "move": "attract",
+                "damage": 0.0
+              },
+              {
+                "move": "thunderwave",
+                "damage": 0.0
+              },
+              {
+                "move": "hiddenpower",
+                "damage": 149.9294117647059
+              },
+              {
+                "move": "rest",
+                "damage": 0.0
+              }
+            ]
+          },
+          {
+            "arm": "after",
+            "choice": "move thunder",
+            "modeled_foe": {
+              "species": "dragonair",
+              "moves": [
+                "hiddenpower"
+              ],
+              "item": null,
+              "hp_type": "Dark",
+              "hp_power": 70,
+              "stats": [
+                148,
+                127,
+                133,
+                133,
+                133
+              ],
+              "hp": 170,
+              "maxhp": 183
+            },
+            "modeled_damage": [
+              {
+                "move": "hiddenpower",
+                "damage": 24.062745098039215
+              }
+            ],
+            "actual_foe": {
+              "species": "dragonair",
+              "moves": [
+                "attract",
+                "hiddenpower",
+                "rest",
+                "thunderwave"
+              ],
+              "item": "leftovers",
+              "hp_type": "Fighting",
+              "hp_power": 70,
+              "stats": [
+                145,
+                124,
+                133,
+                133,
+                133
+              ],
+              "hp": 170,
+              "maxhp": 170
+            },
+            "same_estimator_on_actual": [
+              {
+                "move": "attract",
+                "damage": 0.0
+              },
+              {
+                "move": "thunderwave",
+                "damage": 0.0
+              },
+              {
+                "move": "hiddenpower",
+                "damage": 149.9294117647059
+              },
+              {
+                "move": "rest",
+                "damage": 0.0
+              }
+            ]
+          }
+        ],
+        "records_sha256": "9c0091107675824f0f67972af0e44d4e008dc8b39bb0abab8b81c96e65b598d6",
+        "script_sha256": "04674d66c246a05bf46ec896c59b8c196467787c7eeb4605edf20be6f2c8a3e7",
+        "scope": "Descriptive synthetic-root model errors; estimator values are not exact native damage or win probabilities. Repeated search seeds share model samples and are not counted as independent roots. Actual hidden sets are used only for diagnosis."
+      }
     }
   },
   "foresight_fix": {
@@ -31724,6 +33108,15 @@
     "integrated": true,
     "preview_verified": true,
     "deployed": false,
+    "strength_vs_deployed": "unproved"
+  },
+  "hp_category_roots": {
+    "status": "complete",
+    "search_pairs": 78,
+    "roots": 26,
+    "choice_changes": 13,
+    "repeat_searches": 78,
+    "runtime_changed": false,
     "strength_vs_deployed": "unproved"
   }
 }
