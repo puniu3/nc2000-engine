@@ -42096,6 +42096,987 @@
         "exit_code": 0,
         "scope": "lib, bins, tests and all examples except the two confirmed pre-existing helpers without executable entry points"
       }
+    },
+    "findings/native-depth-profile-v1/summary.json": {
+      "sha256": "1620cfbb580b07d6a494a9e0dcfaf1dcf40b4efef1a9f88e30a83d182f1b78e2",
+      "data": {
+        "schema": "nc2000-native-depth-profile-v1",
+        "protocol_sha256": "57c8b13e93448af35090f59a94df275b2396bc93254220121e448b09338888c7",
+        "arms": {
+          "control": {
+            "archive_sha256": "8c50921f4fd0ae720ba3d0cf136e7d34f42ebebaec4094ec809b6ab7c9db6175",
+            "checks": {
+              "roots": 1,
+              "games": 1,
+              "runs": 250000,
+              "stops": {
+                "WorkExhausted": 1
+              },
+              "value_width_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_above_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_strictly_dominated": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "unresolved_selected_pure_loss": {
+                "roots": 1,
+                "games": 1,
+                "keys": [
+                  [
+                    62,
+                    92
+                  ]
+                ]
+              },
+              "max_nodes_plus_closed": 682,
+              "max_runs": 250000
+            },
+            "prior_non_time_output_matches": true,
+            "threshold_loss": [
+              0.0,
+              1.0
+            ],
+            "runs": 250000,
+            "nodes": 682,
+            "diagnostics": {
+              "turns": {
+                "0": [
+                  0,
+                  1
+                ],
+                "1": [
+                  206,
+                  9
+                ],
+                "2": [
+                  442,
+                  8
+                ],
+                "3": [
+                  16,
+                  0
+                ]
+              },
+              "root_chance": [
+                {
+                  "visits": 17,
+                  "runs": 4113,
+                  "pending_mass": 0.999999651712411,
+                  "pending_scripts": 533,
+                  "resolved_edges": 17,
+                  "unique_children": 5,
+                  "child_uncertainty": 3.4828758912734573e-07,
+                  "largest_edge_uncertainty": 1.746229834315811e-07,
+                  "largest_child_uncertainty": 1.746229834315811e-07,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 17,
+                  "runs": 4113,
+                  "pending_mass": 0.9999964335350863,
+                  "pending_scripts": 516,
+                  "resolved_edges": 17,
+                  "unique_children": 5,
+                  "child_uncertainty": 3.56646491266402e-06,
+                  "largest_edge_uncertainty": 1.7881393503393905e-06,
+                  "largest_child_uncertainty": 1.7881393503393905e-06,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 7808,
+                  "runs": 70080,
+                  "pending_mass": 0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 6784,
+                  "unique_children": 80,
+                  "child_uncertainty": 0.9999999999999994,
+                  "largest_edge_uncertainty": 0.0036449432373046875,
+                  "largest_child_uncertainty": 0.15234375,
+                  "expanded_children": 1,
+                  "max_child_runs": 59200,
+                  "total_child_runs": 59200
+                },
+                {
+                  "visits": 16,
+                  "runs": 4112,
+                  "pending_mass": 0.9999345824694856,
+                  "pending_scripts": 364,
+                  "resolved_edges": 16,
+                  "unique_children": 2,
+                  "child_uncertainty": 6.541753051433876e-05,
+                  "largest_edge_uncertainty": 1.5142946874244966e-05,
+                  "largest_child_uncertainty": 6.218703516943283e-05,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 16,
+                  "runs": 4112,
+                  "pending_mass": 0.9999994415738389,
+                  "pending_scripts": 432,
+                  "resolved_edges": 16,
+                  "unique_children": 4,
+                  "child_uncertainty": 5.584261615573076e-07,
+                  "largest_edge_uncertainty": 6.888480610986262e-08,
+                  "largest_child_uncertainty": 2.7553922443945047e-07,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 16,
+                  "runs": 4112,
+                  "pending_mass": 0.9999942817161062,
+                  "pending_scripts": 416,
+                  "resolved_edges": 16,
+                  "unique_children": 3,
+                  "child_uncertainty": 5.71828389434683e-06,
+                  "largest_edge_uncertainty": 7.053804145649932e-07,
+                  "largest_child_uncertainty": 2.8215216582599726e-06,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 16,
+                  "runs": 50833,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 40,
+                  "unique_children": 40,
+                  "child_uncertainty": 0.9999296876802944,
+                  "largest_edge_uncertainty": 0.08413461539021228,
+                  "largest_child_uncertainty": 0.08413461539021228,
+                  "expanded_children": 3,
+                  "max_child_runs": 16091,
+                  "total_child_runs": 48273
+                },
+                {
+                  "visits": 16,
+                  "runs": 4112,
+                  "pending_mass": 0.9996948242184658,
+                  "pending_scripts": 280,
+                  "resolved_edges": 16,
+                  "unique_children": 2,
+                  "child_uncertainty": 0.0003051757815342171,
+                  "largest_edge_uncertainty": 7.335956285855397e-05,
+                  "largest_child_uncertainty": 0.00029735076146754965,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 16,
+                  "runs": 4112,
+                  "pending_mass": 0.9999663768670075,
+                  "pending_scripts": 272,
+                  "resolved_edges": 16,
+                  "unique_children": 2,
+                  "child_uncertainty": 3.362313299274332e-05,
+                  "largest_edge_uncertainty": 7.164019810405662e-06,
+                  "largest_child_uncertainty": 2.90381602995654e-05,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 16,
+                  "runs": 4112,
+                  "pending_mass": 0.9996556991181542,
+                  "pending_scripts": 256,
+                  "resolved_edges": 16,
+                  "unique_children": 2,
+                  "child_uncertainty": 0.0003443008818456916,
+                  "largest_edge_uncertainty": 7.335956285855397e-05,
+                  "largest_child_uncertainty": 0.00029735076146754965,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 16,
+                  "runs": 5006,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 2,
+                  "unique_children": 2,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.5,
+                  "largest_child_uncertainty": 0.5,
+                  "expanded_children": 1,
+                  "max_child_runs": 4878,
+                  "total_child_runs": 4878
+                },
+                {
+                  "visits": 15,
+                  "runs": 5005,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 1,
+                  "unique_children": 1,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 1.0,
+                  "largest_child_uncertainty": 1.0,
+                  "expanded_children": 1,
+                  "max_child_runs": 4237,
+                  "total_child_runs": 4237
+                },
+                {
+                  "visits": 856,
+                  "runs": 4952,
+                  "pending_mass": 0.20158092782770032,
+                  "pending_scripts": 548,
+                  "resolved_edges": 856,
+                  "unique_children": 23,
+                  "child_uncertainty": 0.7984190721722987,
+                  "largest_edge_uncertainty": 0.0018164056999241118,
+                  "largest_child_uncertainty": 0.07615905542146695,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 7219,
+                  "runs": 71215,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 40,
+                  "unique_children": 40,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.08413461539021228,
+                  "largest_child_uncertainty": 0.08413461539021228,
+                  "expanded_children": 1,
+                  "max_child_runs": 68655,
+                  "total_child_runs": 68655
+                },
+                {
+                  "visits": 15,
+                  "runs": 5005,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 2,
+                  "unique_children": 2,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.5,
+                  "largest_child_uncertainty": 0.5,
+                  "expanded_children": 1,
+                  "max_child_runs": 4877,
+                  "total_child_runs": 4877
+                },
+                {
+                  "visits": 16,
+                  "runs": 5006,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 2,
+                  "unique_children": 2,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.5,
+                  "largest_child_uncertainty": 0.5,
+                  "expanded_children": 1,
+                  "max_child_runs": 4238,
+                  "total_child_runs": 4238
+                }
+              ],
+              "trial_depth_counts": [
+                0,
+                7776,
+                8273,
+                42
+              ],
+              "depth_limit_trials": 0,
+              "material_descent_bypasses": 0,
+              "graph": {
+                "unexpanded_nodes": 664,
+                "initialized_nodes": 18,
+                "stored_battles": 682,
+                "resolved_edges": 16426,
+                "unique_child_edges": 813,
+                "pending_scripts": 26033,
+                "pending_script_entries": 234680
+              }
+            },
+            "unexpanded_node_fraction": 0.9736070381231672,
+            "max_initialized_turn_delta": 2,
+            "max_observed_trial_depth": 3
+          },
+          "prefix": {
+            "archive_sha256": "800377435a6936bc3344750b340c697d00cfcd45da41e9d186b9057857500276",
+            "checks": {
+              "roots": 1,
+              "games": 1,
+              "runs": 250000,
+              "stops": {
+                "WorkExhausted": 1
+              },
+              "value_width_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_above_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_strictly_dominated": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "unresolved_selected_pure_loss": {
+                "roots": 1,
+                "games": 1,
+                "keys": [
+                  [
+                    62,
+                    92
+                  ]
+                ]
+              },
+              "max_nodes_plus_closed": 6677,
+              "max_runs": 250000
+            },
+            "prior_non_time_output_matches": true,
+            "threshold_loss": [
+              0.0,
+              1.0
+            ],
+            "runs": 250000,
+            "nodes": 6677,
+            "diagnostics": {
+              "turns": {
+                "0": [
+                  0,
+                  1
+                ],
+                "1": [
+                  1132,
+                  7
+                ],
+                "2": [
+                  3341,
+                  10
+                ],
+                "3": [
+                  2183,
+                  1
+                ],
+                "4": [
+                  0,
+                  1
+                ],
+                "5": [
+                  1,
+                  0
+                ]
+              },
+              "root_chance": [
+                {
+                  "visits": 160,
+                  "runs": 4255,
+                  "pending_mass": 0.99904569440038,
+                  "pending_scripts": 3196,
+                  "resolved_edges": 311,
+                  "unique_children": 172,
+                  "child_uncertainty": 0.000954305599623363,
+                  "largest_edge_uncertainty": 4.229725482289803e-05,
+                  "largest_child_uncertainty": 0.0001047737896783937,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 5,
+                  "runs": 4100,
+                  "pending_mass": 0.9981455388980852,
+                  "pending_scripts": 162,
+                  "resolved_edges": 144,
+                  "unique_children": 141,
+                  "child_uncertainty": 0.0018544611019146217,
+                  "largest_edge_uncertainty": 7.031231927995427e-05,
+                  "largest_child_uncertainty": 7.031231927995427e-05,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 2179,
+                  "runs": 111395,
+                  "pending_mass": 0.15173675245144064,
+                  "pending_scripts": 459,
+                  "resolved_edges": 609,
+                  "unique_children": 80,
+                  "child_uncertainty": 0.8482632475485596,
+                  "largest_edge_uncertainty": 0.15234375,
+                  "largest_child_uncertainty": 0.15234375,
+                  "expanded_children": 1,
+                  "max_child_runs": 106770,
+                  "total_child_runs": 106770
+                },
+                {
+                  "visits": 5,
+                  "runs": 4100,
+                  "pending_mass": 0.9611595336141404,
+                  "pending_scripts": 115,
+                  "resolved_edges": 5,
+                  "unique_children": 2,
+                  "child_uncertainty": 0.03884046638585936,
+                  "largest_edge_uncertainty": 0.038838851138186914,
+                  "largest_child_uncertainty": 0.03883965876202314,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 5,
+                  "runs": 4100,
+                  "pending_mass": 0.996882508346472,
+                  "pending_scripts": 139,
+                  "resolved_edges": 276,
+                  "unique_children": 273,
+                  "child_uncertainty": 0.0031174916535280555,
+                  "largest_edge_uncertainty": 0.00012166401359641617,
+                  "largest_child_uncertainty": 0.00012166401359641617,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 5,
+                  "runs": 4100,
+                  "pending_mass": 0.9924706077202126,
+                  "pending_scripts": 126,
+                  "resolved_edges": 264,
+                  "unique_children": 260,
+                  "child_uncertainty": 0.007529392279787189,
+                  "largest_edge_uncertainty": 0.0001348311146349894,
+                  "largest_child_uncertainty": 0.0001348311146349894,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 5,
+                  "runs": 14552,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 40,
+                  "unique_children": 40,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.08413461539021228,
+                  "largest_child_uncertainty": 0.08413461539021228,
+                  "expanded_children": 1,
+                  "max_child_runs": 11992,
+                  "total_child_runs": 11992
+                },
+                {
+                  "visits": 5,
+                  "runs": 4100,
+                  "pending_mass": 0.7491948054397457,
+                  "pending_scripts": 94,
+                  "resolved_edges": 5,
+                  "unique_children": 2,
+                  "child_uncertainty": 0.2508051945602529,
+                  "largest_edge_uncertainty": 0.25080128205021957,
+                  "largest_child_uncertainty": 0.25080128205021957,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 5,
+                  "runs": 4100,
+                  "pending_mass": 0.49558549813809116,
+                  "pending_scripts": 82,
+                  "resolved_edges": 45,
+                  "unique_children": 41,
+                  "child_uncertainty": 0.5044145018619088,
+                  "largest_edge_uncertainty": 0.07591834435601186,
+                  "largest_child_uncertainty": 0.07591834435601186,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 5,
+                  "runs": 4100,
+                  "pending_mass": 0.36937589726775066,
+                  "pending_scripts": 71,
+                  "resolved_edges": 25,
+                  "unique_children": 21,
+                  "child_uncertainty": 0.630624102732247,
+                  "largest_edge_uncertainty": 0.13047542735151327,
+                  "largest_child_uncertainty": 0.13062410273224703,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 5,
+                  "runs": 4994,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 2,
+                  "unique_children": 2,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.5,
+                  "largest_child_uncertainty": 0.5,
+                  "expanded_children": 1,
+                  "max_child_runs": 4866,
+                  "total_child_runs": 4866
+                },
+                {
+                  "visits": 4,
+                  "runs": 4993,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 1,
+                  "unique_children": 1,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 1.0,
+                  "largest_child_uncertainty": 1.0,
+                  "expanded_children": 1,
+                  "max_child_runs": 4225,
+                  "total_child_runs": 4225
+                },
+                {
+                  "visits": 154,
+                  "runs": 4249,
+                  "pending_mass": 0.11245659833327676,
+                  "pending_scripts": 134,
+                  "resolved_edges": 213,
+                  "unique_children": 60,
+                  "child_uncertainty": 0.8875434016667234,
+                  "largest_edge_uncertainty": 0.07591834435601186,
+                  "largest_child_uncertainty": 0.08014683540583961,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 2258,
+                  "runs": 66875,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 40,
+                  "unique_children": 40,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.08413461539021228,
+                  "largest_child_uncertainty": 0.08413461539021228,
+                  "expanded_children": 1,
+                  "max_child_runs": 64315,
+                  "total_child_runs": 64315
+                },
+                {
+                  "visits": 4,
+                  "runs": 4993,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 2,
+                  "unique_children": 2,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.5,
+                  "largest_child_uncertainty": 0.5,
+                  "expanded_children": 1,
+                  "max_child_runs": 4865,
+                  "total_child_runs": 4865
+                },
+                {
+                  "visits": 5,
+                  "runs": 4994,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 2,
+                  "unique_children": 2,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.5,
+                  "largest_child_uncertainty": 0.5,
+                  "expanded_children": 1,
+                  "max_child_runs": 4226,
+                  "total_child_runs": 4226
+                }
+              ],
+              "trial_depth_counts": [
+                0,
+                885,
+                3673,
+                248,
+                2,
+                1
+              ],
+              "depth_limit_trials": 0,
+              "material_descent_bypasses": 0,
+              "graph": {
+                "unexpanded_nodes": 6657,
+                "initialized_nodes": 20,
+                "stored_battles": 6677,
+                "resolved_edges": 11272,
+                "unique_child_edges": 6817,
+                "pending_scripts": 23188,
+                "pending_script_entries": 217353
+              }
+            },
+            "unexpanded_node_fraction": 0.9970046428036543,
+            "max_initialized_turn_delta": 4,
+            "max_observed_trial_depth": 5
+          },
+          "priority": {
+            "archive_sha256": "f2240a6f8946060e2cb36eab4f72520cce3f6badd7e15980dc929f2d892595ae",
+            "checks": {
+              "roots": 1,
+              "games": 1,
+              "runs": 250000,
+              "stops": {
+                "WorkExhausted": 1
+              },
+              "value_width_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_above_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_strictly_dominated": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "unresolved_selected_pure_loss": {
+                "roots": 1,
+                "games": 1,
+                "keys": [
+                  [
+                    62,
+                    92
+                  ]
+                ]
+              },
+              "max_nodes_plus_closed": 3449,
+              "max_runs": 250000
+            },
+            "prior_non_time_output_matches": true,
+            "threshold_loss": [
+              0.0,
+              1.0
+            ],
+            "runs": 250000,
+            "nodes": 3449,
+            "diagnostics": {
+              "turns": {
+                "0": [
+                  0,
+                  1
+                ],
+                "1": [
+                  1038,
+                  15
+                ],
+                "2": [
+                  2392,
+                  1
+                ],
+                "3": [
+                  2,
+                  0
+                ]
+              },
+              "root_chance": [
+                {
+                  "visits": 4,
+                  "runs": 4099,
+                  "pending_mass": 0.6993369273942914,
+                  "pending_scripts": 17927,
+                  "resolved_edges": 267,
+                  "unique_children": 264,
+                  "child_uncertainty": 0.3006630726057015,
+                  "largest_edge_uncertainty": 0.02327805385148409,
+                  "largest_child_uncertainty": 0.02327805385148409,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 4,
+                  "runs": 4099,
+                  "pending_mass": 0.6472044486072739,
+                  "pending_scripts": 14596,
+                  "resolved_edges": 223,
+                  "unique_children": 220,
+                  "child_uncertainty": 0.3527955513927029,
+                  "largest_edge_uncertainty": 0.025634765626705303,
+                  "largest_child_uncertainty": 0.025634765626705303,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 4,
+                  "runs": 13056,
+                  "pending_mass": 0.02524749418835947,
+                  "pending_scripts": 1592,
+                  "resolved_edges": 80,
+                  "unique_children": 80,
+                  "child_uncertainty": 0.9747525058116395,
+                  "largest_edge_uncertainty": 0.15234375,
+                  "largest_child_uncertainty": 0.15234375,
+                  "expanded_children": 1,
+                  "max_child_runs": 8960,
+                  "total_child_runs": 8960
+                },
+                {
+                  "visits": 1089,
+                  "runs": 5184,
+                  "pending_mass": 0.5785557252051919,
+                  "pending_scripts": 8312,
+                  "resolved_edges": 1101,
+                  "unique_children": 13,
+                  "child_uncertainty": 0.4214442747948361,
+                  "largest_edge_uncertainty": 0.15234375,
+                  "largest_child_uncertainty": 0.15234375,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 2,
+                  "runs": 4097,
+                  "pending_mass": 0.5190056195154983,
+                  "pending_scripts": 10135,
+                  "resolved_edges": 164,
+                  "unique_children": 163,
+                  "child_uncertainty": 0.4809943804844989,
+                  "largest_edge_uncertainty": 0.01277472140690951,
+                  "largest_child_uncertainty": 0.01277472140690951,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 2,
+                  "runs": 4097,
+                  "pending_mass": 0.387809651712011,
+                  "pending_scripts": 7248,
+                  "resolved_edges": 98,
+                  "unique_children": 97,
+                  "child_uncertainty": 0.6121903482879795,
+                  "largest_edge_uncertainty": 0.028314534027435743,
+                  "largest_child_uncertainty": 0.028314534027435743,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 2,
+                  "runs": 3328,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 40,
+                  "unique_children": 40,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.08413461539021228,
+                  "largest_child_uncertainty": 0.08413461539021228,
+                  "expanded_children": 1,
+                  "max_child_runs": 768,
+                  "total_child_runs": 768
+                },
+                {
+                  "visits": 2,
+                  "runs": 4224,
+                  "pending_mass": 0.2596552920642328,
+                  "pending_scripts": 2076,
+                  "resolved_edges": 8,
+                  "unique_children": 8,
+                  "child_uncertainty": 0.7403447079357728,
+                  "largest_edge_uncertainty": 0.37443894613933576,
+                  "largest_child_uncertainty": 0.37443894613933576,
+                  "expanded_children": 1,
+                  "max_child_runs": 128,
+                  "total_child_runs": 128
+                },
+                {
+                  "visits": 2,
+                  "runs": 8192,
+                  "pending_mass": 0.1117489337354188,
+                  "pending_scripts": 3144,
+                  "resolved_edges": 40,
+                  "unique_children": 40,
+                  "child_uncertainty": 0.8882510662645743,
+                  "largest_edge_uncertainty": 0.4165720023137875,
+                  "largest_child_uncertainty": 0.4165720023137875,
+                  "expanded_children": 1,
+                  "max_child_runs": 4096,
+                  "total_child_runs": 4096
+                },
+                {
+                  "visits": 2,
+                  "runs": 8192,
+                  "pending_mass": 0.04052890870484441,
+                  "pending_scripts": 1704,
+                  "resolved_edges": 21,
+                  "unique_children": 21,
+                  "child_uncertainty": 0.9594710912951614,
+                  "largest_edge_uncertainty": 0.4609328050360845,
+                  "largest_child_uncertainty": 0.4609328050360845,
+                  "expanded_children": 1,
+                  "max_child_runs": 4096,
+                  "total_child_runs": 4096
+                },
+                {
+                  "visits": 2,
+                  "runs": 896,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 2,
+                  "unique_children": 2,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.5,
+                  "largest_child_uncertainty": 0.5,
+                  "expanded_children": 1,
+                  "max_child_runs": 768,
+                  "total_child_runs": 768
+                },
+                {
+                  "visits": 2,
+                  "runs": 896,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 1,
+                  "unique_children": 1,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 1.0,
+                  "largest_child_uncertainty": 1.0,
+                  "expanded_children": 1,
+                  "max_child_runs": 128,
+                  "total_child_runs": 128
+                },
+                {
+                  "visits": 199,
+                  "runs": 4294,
+                  "pending_mass": 0.0030756760852762577,
+                  "pending_scripts": 544,
+                  "resolved_edges": 258,
+                  "unique_children": 60,
+                  "child_uncertainty": 0.9969243239147237,
+                  "largest_edge_uncertainty": 0.08413461539021228,
+                  "largest_child_uncertainty": 0.08413461539021228,
+                  "expanded_children": 0,
+                  "max_child_runs": 0,
+                  "total_child_runs": 0
+                },
+                {
+                  "visits": 931,
+                  "runs": 179458,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 40,
+                  "unique_children": 40,
+                  "child_uncertainty": 0.9999999999999987,
+                  "largest_edge_uncertainty": 0.08413461539021205,
+                  "largest_child_uncertainty": 0.08413461539021205,
+                  "expanded_children": 6,
+                  "max_child_runs": 37052,
+                  "total_child_runs": 176898
+                },
+                {
+                  "visits": 2,
+                  "runs": 896,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 2,
+                  "unique_children": 2,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.5,
+                  "largest_child_uncertainty": 0.5,
+                  "expanded_children": 1,
+                  "max_child_runs": 768,
+                  "total_child_runs": 768
+                },
+                {
+                  "visits": 3,
+                  "runs": 4992,
+                  "pending_mass": -0.0,
+                  "pending_scripts": 0,
+                  "resolved_edges": 2,
+                  "unique_children": 2,
+                  "child_uncertainty": 1.0,
+                  "largest_edge_uncertainty": 0.5,
+                  "largest_child_uncertainty": 0.5,
+                  "expanded_children": 1,
+                  "max_child_runs": 4224,
+                  "total_child_runs": 4224
+                }
+              ],
+              "trial_depth_counts": [
+                0,
+                1310,
+                941,
+                1
+              ],
+              "depth_limit_trials": 0,
+              "material_descent_bypasses": 0,
+              "graph": {
+                "unexpanded_nodes": 3432,
+                "initialized_nodes": 17,
+                "stored_battles": 3449,
+                "resolved_edges": 9629,
+                "unique_child_edges": 7448,
+                "pending_scripts": 470175,
+                "pending_script_entries": 5190333
+              }
+            },
+            "unexpanded_node_fraction": 0.9950710350826326,
+            "max_initialized_turn_delta": 2,
+            "max_observed_trial_depth": 3
+          }
+        },
+        "rejected_mutations": [
+          "control:node_count",
+          "control:trial_count",
+          "control:chance_width",
+          "prefix:node_count",
+          "prefix:trial_count",
+          "prefix:chance_width",
+          "priority:node_count",
+          "priority:trial_count",
+          "priority:chance_width"
+        ],
+        "scope": "One fixed hidden-state root; retained-node counts are not probability-weighted coverage. Initialization does not imply solved value. No causal scheduling comparison yet.",
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false
+      }
     }
   },
   "foresight_fix": {
@@ -48220,7 +49201,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-08T00:12:30.770022+09:00",
+    "checked_at": "2026-10-08T00:25:02.402958+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -48267,7 +49248,7 @@
     "followup_first_step": "native-first-step-loss-v1",
     "followup_snorlax_witness": "native-snorlax-witness-v1",
     "followup_frontier_step": "native-frontier-step-v1",
-    "followup_result_commit": "47cfeb462d29385edc847cbd7091f7628c7544e3",
+    "followup_result_commit": "5b7086f68d2618dd5940dd8e1703ff35f8bb01ef",
     "followup_frontier_refine": "native-frontier-refine-v1",
     "followup_frontier_defer": "native-frontier-defer-v1",
     "followup_frontier_defer_complete": "native-frontier-defer-complete-v1",
@@ -48277,7 +49258,8 @@
     "followup_waking_choice_census": "native-waking-choice-census-v1",
     "followup_waking_loss": "native-waking-loss-v1",
     "followup_chance_coverage": "native-chance-coverage-v1",
-    "followup_chance_solver": "native-chance-solver-v1"
+    "followup_chance_solver": "native-chance-solver-v1",
+    "followup_depth_profile": "native-depth-profile-v1"
   },
   "native_endgame_census": {
     "status": "complete",
