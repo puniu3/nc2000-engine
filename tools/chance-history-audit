@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from fractions import Fraction as F
+from pathlib import Path
+
+ROOT=Path(__file__).resolve().parents[1]
+ARCHIVE=ROOT/'findings/chance-history-v1'
+CHECK_ROW=runpy.run_path(str(ROOT/'tools/item-move-product-probe'))['check_row']
+VISIBLE=runpy.run_path(str(ROOT/'tools/canonical-history-audit'))['visible']
+TOTAL=2**32
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def path_probability(trace):
+    result=F(1)
+    for draw in trace:
+        counts=draw['counts']
+        assert counts and all(isinstance(n,int) and n>=0 for n in counts)
+        assert sum(counts)==TOTAL
+        chosen=draw['chosen']
+        assert isinstance(chosen,int) and 0<=chosen<len(counts) and counts[chosen]>0
+        result*=F(counts[chosen],TOTAL)
+    assert result>0
+    return result
+
+
+def check(records, repeated):
+    assert len(records)==len(repeated)==41
+    assert records[0]==repeated[0]
+    for a,b in zip(records[1:],repeated[1:]):
+        assert {k:v for k,v in a.items() if k!='seconds'}=={k:v for k,v in b.items() if k!='seconds'}
+    prior_screen=json.loads(gzip.decompress((ROOT/'findings/canonical-history-v1/records.json.gz').read_bytes()))['screen']
+    rejected=[r for r in prior_screen['rows'] if r['request']['id'].startswith('product/kingsrock/')]
+    assert len(rejected)==40 and all('root' not in r and r['mismatch']['reason']=='visible_log' for r in rejected)
+    config=records[0]
+    finite=json.loads((ROOT/'findings/hidden-parameter-family-v1/summary.json').read_bytes())['finite_family']
+    assert config['case']==prior_screen['case']
+    assert config['p']==finite['rockslide_probability'] and config['target']==finite['lower']-1e-6
+    assert config['first']==0 and config['count']==40
+    witness=config['witness']
+    assert len(witness)==32
+    for step,w in enumerate(witness):
+        assert w['step']==step and 0<w['runs']<=200000
+        assert w['script']==[d['chosen'] for d in w['trace']]
+        path_probability(w['trace'])
+        assert w['guided_key']==prior_screen['tape'][step+1]['key']
+        assert w['frame']==prior_screen['tape'][step+1]['frame']
+    lowers=[]
+    probabilities=[]
+    reports=[]
+    for index,(row,reference) in enumerate(zip(records[1:],rejected)):
+        assert row['index']==index and row['request']==reference['request']
+        assert row['id']==reference['request']['id']
+        assert len(row['steps'])==32
+        probability=F(1)
+        for step,path in enumerate(row['steps']):
+            assert path['step']==step
+            assert [d['chosen'] for d in path['trace']]==witness[step]['script']
+            probability*=path_probability(path['trace'])
+            assert path['frame']==prior_screen['tape'][step+1]['frame']
+        probabilities.append(probability)
+        assert row['root']['key']==row['steps'][-1]['key']
+        assert VISIBLE(row['root']['full_log'],1)==prior_screen['tape'][-1]['frame']['lines']
+        mon=next(p for p in row['root']['state']['sides'][0]['pokemon'] if p['active'])
+        assert mon['item']=='kingsrock' and mon['hp']==mon['maxhp']==196
+        assert [m['id'] for m in mon['moves']]==['hiddenpower' if m.startswith('hiddenpower') else m for m in reference['request']['patch']['moves']]
+        lower,checked=CHECK_ROW(row,dict(request=row['request'],root=row['root']),config)
+        lowers.append(lower)
+        reports.extend(checked.values())
+    previous=json.loads((ROOT/'findings/canonical-bounds-v1/summary.json').read_bytes())
+    assert all(sha(ROOT/name)==expected for name,expected in previous['candidate_engine_hashes'].items())
+    assert all(sha(ROOT/'findings/canonical-bounds-v1'/name)==expected for name,expected in previous['artifact_hashes'].items())
+    assert min(lowers)-F(1,10**8)>F(previous['bounds'][0])
+    return dict(restored_worlds=40,visible_boundaries=40*33,scripted_transitions=40*32,
+        witness_search_runs=sum(w['runs'] for w in witness),witness_draws=sum(len(w['trace']) for w in witness),
+        reference_replay_runs=32,replay_runs=40*32,lower_certificates=len(reports),proof_runs=sum(r['runs'] for r in reports),
+        minimum_new_lower=float(min(lowers)-F(1,10**8)),minimum_new_world=records[1+lowers.index(min(lowers))]['id'],
+        selected_path_probability_range=[float(min(probabilities)),float(max(probabilities))],
+        extended_worlds=previous['worlds']+40,extended_bounds=previous['bounds'],
+        repeated_worlds=40,unit_tests=2)
+
+
+def negative_controls(records):
+    for fault in ['missing_world','impossible_draw','public_history','inflated_lower']:
+        changed=copy.deepcopy(records)
+        if fault=='missing_world':
+            changed.pop()
+        elif fault=='impossible_draw':
+            draw=next(d for row in changed[1:] for path in row['steps'] for d in path['trace'] if len(d['counts'])>1)
+            selected=draw['chosen'];other=(selected+1)%len(draw['counts'])
+            draw['counts'][other]+=draw['counts'][selected];draw['counts'][selected]=0
+        elif fault=='public_history':
+            changed[1]['steps'][-1]['frame']['lines'].append('|turn|999')
+        else:
+            changed[1]['swordsdance']['bounds'][0]+=.01
+        try:
+            check(changed,changed)
+        except AssertionError:
+            continue
+        raise AssertionError('accepted corruption: '+fault)
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--record',nargs=2,type=Path,metavar=('RECORDS','REPEAT'))
+    args=parser.parse_args()
+    if args.record:
+        raw=[p.read_bytes() for p in args.record]
+    else:
+        raw=[gzip.decompress((ARCHIVE/name).read_bytes()) for name in ['records.jsonl.gz','repeat.jsonl.gz']]
+    records,repeated=[[json.loads(l) for l in b.splitlines()] for b in raw]
+    report=check(records,repeated)
+    negative_controls(records)
+    if args.record:
+        assert not ARCHIVE.exists()
+        ARCHIVE.mkdir()
+        for name,b in zip(['records.jsonl.gz','repeat.jsonl.gz'],raw):
+            (ARCHIVE/name).write_bytes(gzip.compress(b,mtime=0))
+        (ARCHIVE/'tests.log').write_bytes(Path('/tmp/nc-chance-history-tests.log').read_bytes())
+        sources=['crates/bot/examples/chance_history.rs','crates/bot/examples/threshold_witness/mod.rs',
+            'crates/bot/examples/policy_witness.rs','crates/bot/src/player.rs','tools/chance-history-audit',
+            'tools/item-move-product-probe','tools/canonical-history-audit','tools/policy-witness-probe','tools/hidden-move-witness-probe',
+            'findings/canonical-history-v1/records.json.gz','findings/canonical-bounds-v1/summary.json',
+            'findings/hidden-parameter-family-v1/summary.json','findings/policy-gap-v1/corpus.jsonl.gz','data/gen2stadium2.json','data/learnsets-gen2.json']
+        summary=dict(report,date='2026-10-07',negative_controls=4,source_hashes={name:sha(ROOT/name) for name in sources},
+            artifact_hashes={p.name:sha(p) for p in ARCHIVE.iterdir()},
+            scope='Positive-support paths under the independent chance-class model used by the native enumerator. This does not exhibit one alternative initial LCG seed reproducing the entire history. A single compatible root per item/move entry is witnessed; hidden counter variants, other chance histories, and the full stat/item/move product remain uncovered. The selected path probability is not the total likelihood of the observed history or a posterior weight. Comparison-only item normalization guides witness search; every reported root and policy certificate uses the actual Kings Rock item.',
+            runtime_changed=False,strength_vs_deployed='unproved')
+        (ARCHIVE/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
+    else:
+        summary=json.loads((ARCHIVE/'summary.json').read_bytes())
+        assert all(summary[k]==v for k,v in report.items())
+        assert all(sha(ROOT/name)==expected for name,expected in summary['source_hashes'].items())
+        assert all(sha(ARCHIVE/name)==expected for name,expected in summary['artifact_hashes'].items())
+    print(json.dumps(report,ensure_ascii=False))
+
+
+if __name__=='__main__':
+    main()
