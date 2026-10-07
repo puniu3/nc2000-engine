@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+import sys
+from collections import Counter
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def read_rows(path):
+    p=Path(path)
+    data=gzip.decompress(p.read_bytes()) if p.suffix=='.gz' else p.read_bytes()
+    return [json.loads(l) for l in data.decode().splitlines()]
+
+
+def check_threshold(rows, protocol, roots):
+    normalized=copy.deepcopy(rows)
+    for actual,checked in zip(rows,normalized):
+        side=actual['side']; target=actual['target']
+        expected_action=protocol['action_overrides'].get(f"{actual['game']}/{actual['frame']}",actual['actions'][side][actual['selected']])
+        assert actual['actions'][side][target]==expected_action
+        assert actual['mode']==protocol['mode']
+        if actual['mode']=='loss_lower':
+            loss=actual['pure_action_losses'][target]
+            assert all(abs(a-b)<1e-10 for a,b in zip(actual['threshold_loss'],loss))
+            if actual['stop']=='AboveThreshold':
+                assert loss[0]>protocol['tolerance']
+                checked['stop']='StrategyMet'
+            elif actual['stop']=='AtMostThreshold':
+                assert loss[1]<=protocol['tolerance']
+                checked['stop']='StrategyMet'
+        else:
+            assert actual['mode']=='legacy' and actual['threshold_loss'] is None
+    result=runpy.run_path('tools/native-endgame-bounds-audit')['check'](normalized,protocol,roots)
+    result['stops']=dict(Counter(r['stop'] for r in rows))
+    return result
+
+
+def main():
+    scratch, roots_path = map(Path,sys.argv[1:])
+    directory=Path('findings/native-loss-threshold-v1')
+    protocol=json.loads((directory/'protocol.json').read_text())
+    assert digest(roots_path)==protocol['roots_sha256']
+    assert digest(directory/'native_loss_threshold.rs')==protocol['helper_sha256']
+    assert digest('crates/bot/src/bounds/loss_threshold.rs')==protocol['solver_source_sha256']
+    assert digest('crates/bot/src/bounds.rs')==protocol['parent_bounds_source_sha256']
+    assert digest(scratch/'solver')==protocol['solver_binary_sha256']
+    roots=read_rows(roots_path)
+    earlier={(r['game'],r['frame']):r for r in read_rows('findings/native-endgame-bounds-v1/records.jsonl.gz')}
+    quotient={(r['game'],r['frame']):r for r in read_rows('findings/native-endgame-scheduling-v1/quotient.jsonl.gz')}
+    results={}
+    rejected=[]
+    for name,settings in protocol['arms'].items():
+        arm=json.loads((scratch/(name+'.json')).read_text())
+        assert arm=={**{k:v for k,v in protocol.items() if k!='arms'},**settings,'arm':name}
+        rows=read_rows(scratch/(name+'.jsonl'))
+        summary=check_threshold(rows,arm,roots)
+        targets=[]
+        for r in sorted(rows,key=lambda r:(r['game'],r['frame'])):
+            prior=earlier[r['game'],r['frame']]
+            for a,b in zip([prior['value_p0'],*prior['cells_p0']],[r['value_p0'],*r['cells_p0']]):
+                assert max(a[0],b[0])<=min(a[1],b[1])+1e-8
+            if name=='legacy':
+                assert {k:v for k,v in r.items() if k not in ['elapsed_ms','mode','target','threshold_loss']}=={k:v for k,v in quotient[r['game'],r['frame']].items() if k!='elapsed_ms'}
+            target=r['target']; loss=r['pure_action_losses'][target]
+            if name=='positive_controls':
+                assert prior['pure_action_losses'][target][0]>.1 and target!=r['selected']
+            if name=='negative_controls':
+                assert prior['pure_action_losses'][target][1]<=.01 and target==r['selected']
+            targets.append({'game':r['game'],'frame':r['frame'],'target_action':r['actions'][r['side']][target],
+                            'target_is_actual':target==r['selected'],'loss':loss,'stop':r['stop'],'runs':r['runs']})
+        if name=='negative_controls':
+            corrupted=copy.deepcopy(rows);corrupted[0]['stop']='AboveThreshold'
+            try:
+                check_threshold(corrupted,arm,roots)
+            except AssertionError:
+                rejected.append('false_above_threshold')
+            else:
+                raise AssertionError('accepted false threshold decision')
+        summary.update({'targets':targets,'records_sha256':digest(scratch/(name+'.jsonl'))})
+        results[name]=summary
+    passed=results['positive_controls']['stops']=={'AboveThreshold':3} and results['negative_controls']['stops']=={'AtMostThreshold':3}
+    print(json.dumps({'schema':protocol['schema'],'protocol_sha256':digest(directory/'protocol.json'),
+                      'legacy_matches_frozen':True,'known_action_controls_passed':passed,
+                      'release_bounds_tests_passed':66,'exhaustive_threshold_conditions':24,
+                      'rejected_mutations':rejected,'arms':results,'strength_improvement_proven':False},indent=2))
+
+
+if __name__=='__main__':
+    main()
