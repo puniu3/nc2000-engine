@@ -43077,6 +43077,3106 @@
         "ordinary_bot_changed": false,
         "strength_improvement_proven": false
       }
+    },
+    "findings/native-material-descent-v1/summary.json": {
+      "sha256": "313c82ce30036f46b87257ac2d188947a1582f977cf2a8c967de4eb828f4c4da",
+      "data": {
+        "schema": "nc2000-native-material-descent-v1",
+        "protocol_sha256": "13de16fc02f59b00e4cb23a63f6d2b0d80db4aa581eb142a64436f3baeba0d61",
+        "arms": {
+          "control": {
+            "checks": {
+              "roots": 1,
+              "games": 1,
+              "runs": 250000,
+              "stops": {
+                "WorkExhausted": 1
+              },
+              "value_width_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_above_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_strictly_dominated": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "unresolved_selected_pure_loss": {
+                "roots": 1,
+                "games": 1,
+                "keys": [
+                  [
+                    62,
+                    92
+                  ]
+                ]
+              },
+              "max_nodes_plus_closed": 3449,
+              "max_runs": 250000
+            },
+            "search_outputs_match_exactly": true,
+            "diagnostic_sum_max_repeat_error": 3.3306690738754696e-16,
+            "records_sha256": [
+              "f997f141b4bd7cf69c48a62cb177b2c92d89653505d94bcb23e0936d653a2355",
+              "65ba7ab42ed14cd071e227959859df4f01ad6ed9c959e89697167e7a4be6df2e"
+            ],
+            "runs": [
+              {
+                "game": 62,
+                "frame": 92,
+                "turn": 44,
+                "side": 0,
+                "state_sha256": "5f816e795b9a742b986ac44c51b3b15d5e62dd3209c271cf1d89c9bf2cc695fe",
+                "selected": 3,
+                "actions": [
+                  [
+                    "move thunder",
+                    "move hiddenpower",
+                    "move rest",
+                    "move sleeptalk"
+                  ],
+                  [
+                    "move thunderbolt",
+                    "move hiddenpower",
+                    "move reflect",
+                    "move rest"
+                  ]
+                ],
+                "value_p0": [
+                  0.0,
+                  1.0
+                ],
+                "cells_p0": [
+                  [
+                    0.0,
+                    0.9999999999999932
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999785
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999993
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000082
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999917
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000056
+                  ],
+                  [
+                    0.0,
+                    0.999999999999993
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000058
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000002
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999987
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "pure_action_values": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "pure_action_losses": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "domination": [
+                  {
+                    "action": "move thunder",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move hiddenpower",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move rest",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  }
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000,
+                "mode": "loss_lower",
+                "target": 3,
+                "threshold_loss": [
+                  0.0,
+                  1.0
+                ],
+                "total_runs": 250000,
+                "nodes": 3449,
+                "closed": 0,
+                "elapsed_ms": 3851.319958,
+                "config": "BoundConfig { time_budget: None, work_budget: 250000, cell_cap: 4096, retain_eager_prefix: true, probability_first_eager: true, defer_eager_frontier: false, profile_pending_selection: false, node_budget: 50000, eps: 0.02, trial_depth: 24, descend_floor: 0.1, dead_damage_quotient: true, dead_quick_claw_quotient: true, hp_transition_capacity: 0, hp_transition_eager: false, fold_terminal_nodes: true, fold_closed_nodes: true, monotone_stall_scheduling: true, two_sided_resource_scheduling: true, certified_action_pruning: true, support_br_scheduling: true, reuse_unchanged_backups: true, aggregate_lazy_children: false, chance_fair_period: 0, chance_status_groups: false, chance_material_order: false, material_descent_period: 0, resource_closure_nodes: None, resource_closure_period: 1, directed_policy_refinement: false, target_aware_refinement: false, strategy_refinement: false }",
+                "stats": {
+                  "eager_runs": 247819,
+                  "eager_failures": 58,
+                  "retained_eager_runs": 237451,
+                  "retained_eager_leaves": 237451,
+                  "expansions": 2252,
+                  "trials": 2252,
+                  "reused_nodes": 246552
+                },
+                "diagnostics": {
+                  "turns": {
+                    "0": [
+                      0,
+                      1
+                    ],
+                    "1": [
+                      1038,
+                      15
+                    ],
+                    "2": [
+                      2392,
+                      1
+                    ],
+                    "3": [
+                      2,
+                      0
+                    ]
+                  },
+                  "root_chance": [
+                    {
+                      "visits": 4,
+                      "runs": 4099,
+                      "pending_mass": 0.6993369273942914,
+                      "pending_scripts": 17927,
+                      "resolved_edges": 267,
+                      "unique_children": 264,
+                      "child_uncertainty": 0.3006630726057015,
+                      "largest_edge_uncertainty": 0.02327805385148409,
+                      "largest_child_uncertainty": 0.02327805385148409,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 4099,
+                      "pending_mass": 0.6472044486072739,
+                      "pending_scripts": 14596,
+                      "resolved_edges": 223,
+                      "unique_children": 220,
+                      "child_uncertainty": 0.35279555139270274,
+                      "largest_edge_uncertainty": 0.025634765626705303,
+                      "largest_child_uncertainty": 0.025634765626705303,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 13056,
+                      "pending_mass": 0.02524749418835947,
+                      "pending_scripts": 1592,
+                      "resolved_edges": 80,
+                      "unique_children": 80,
+                      "child_uncertainty": 0.9747525058116395,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 1,
+                      "max_child_runs": 8960,
+                      "total_child_runs": 8960
+                    },
+                    {
+                      "visits": 1089,
+                      "runs": 5184,
+                      "pending_mass": 0.5785557252051919,
+                      "pending_scripts": 8312,
+                      "resolved_edges": 1101,
+                      "unique_children": 13,
+                      "child_uncertainty": 0.42144427479483604,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 4097,
+                      "pending_mass": 0.5190056195154983,
+                      "pending_scripts": 10135,
+                      "resolved_edges": 164,
+                      "unique_children": 163,
+                      "child_uncertainty": 0.4809943804844987,
+                      "largest_edge_uncertainty": 0.01277472140690951,
+                      "largest_child_uncertainty": 0.01277472140690951,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 4097,
+                      "pending_mass": 0.387809651712011,
+                      "pending_scripts": 7248,
+                      "resolved_edges": 98,
+                      "unique_children": 97,
+                      "child_uncertainty": 0.6121903482879802,
+                      "largest_edge_uncertainty": 0.028314534027435743,
+                      "largest_child_uncertainty": 0.028314534027435743,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 3328,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 1,
+                      "max_child_runs": 768,
+                      "total_child_runs": 768
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 4224,
+                      "pending_mass": 0.2596552920642328,
+                      "pending_scripts": 2076,
+                      "resolved_edges": 8,
+                      "unique_children": 8,
+                      "child_uncertainty": 0.7403447079357728,
+                      "largest_edge_uncertainty": 0.37443894613933576,
+                      "largest_child_uncertainty": 0.37443894613933576,
+                      "expanded_children": 1,
+                      "max_child_runs": 128,
+                      "total_child_runs": 128
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 8192,
+                      "pending_mass": 0.1117489337354188,
+                      "pending_scripts": 3144,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 0.8882510662645743,
+                      "largest_edge_uncertainty": 0.4165720023137875,
+                      "largest_child_uncertainty": 0.4165720023137875,
+                      "expanded_children": 1,
+                      "max_child_runs": 4096,
+                      "total_child_runs": 4096
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 8192,
+                      "pending_mass": 0.04052890870484441,
+                      "pending_scripts": 1704,
+                      "resolved_edges": 21,
+                      "unique_children": 21,
+                      "child_uncertainty": 0.9594710912951614,
+                      "largest_edge_uncertainty": 0.4609328050360845,
+                      "largest_child_uncertainty": 0.4609328050360845,
+                      "expanded_children": 1,
+                      "max_child_runs": 4096,
+                      "total_child_runs": 4096
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 896,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 768,
+                      "total_child_runs": 768
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 896,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 1,
+                      "unique_children": 1,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 1.0,
+                      "largest_child_uncertainty": 1.0,
+                      "expanded_children": 1,
+                      "max_child_runs": 128,
+                      "total_child_runs": 128
+                    },
+                    {
+                      "visits": 199,
+                      "runs": 4294,
+                      "pending_mass": 0.0030756760852762577,
+                      "pending_scripts": 544,
+                      "resolved_edges": 258,
+                      "unique_children": 60,
+                      "child_uncertainty": 0.9969243239147239,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 931,
+                      "runs": 179458,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 0.9999999999999987,
+                      "largest_edge_uncertainty": 0.08413461539021205,
+                      "largest_child_uncertainty": 0.08413461539021205,
+                      "expanded_children": 6,
+                      "max_child_runs": 37052,
+                      "total_child_runs": 176898
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 896,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 768,
+                      "total_child_runs": 768
+                    },
+                    {
+                      "visits": 3,
+                      "runs": 4992,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 4224,
+                      "total_child_runs": 4224
+                    }
+                  ],
+                  "trial_depth_counts": [
+                    0,
+                    1310,
+                    941,
+                    1
+                  ],
+                  "depth_limit_trials": 0,
+                  "material_descent_bypasses": 0,
+                  "graph": {
+                    "unexpanded_nodes": 3432,
+                    "initialized_nodes": 17,
+                    "stored_battles": 3449,
+                    "resolved_edges": 9629,
+                    "unique_child_edges": 7448,
+                    "pending_scripts": 470175,
+                    "pending_script_entries": 5190333
+                  }
+                }
+              },
+              {
+                "game": 62,
+                "frame": 92,
+                "turn": 44,
+                "side": 0,
+                "state_sha256": "5f816e795b9a742b986ac44c51b3b15d5e62dd3209c271cf1d89c9bf2cc695fe",
+                "selected": 3,
+                "actions": [
+                  [
+                    "move thunder",
+                    "move hiddenpower",
+                    "move rest",
+                    "move sleeptalk"
+                  ],
+                  [
+                    "move thunderbolt",
+                    "move hiddenpower",
+                    "move reflect",
+                    "move rest"
+                  ]
+                ],
+                "value_p0": [
+                  0.0,
+                  1.0
+                ],
+                "cells_p0": [
+                  [
+                    0.0,
+                    0.9999999999999932
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999785
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999993
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000082
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999917
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000056
+                  ],
+                  [
+                    0.0,
+                    0.999999999999993
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000058
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000002
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999987
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "pure_action_values": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "pure_action_losses": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "domination": [
+                  {
+                    "action": "move thunder",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move hiddenpower",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move rest",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  }
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000,
+                "mode": "loss_lower",
+                "target": 3,
+                "threshold_loss": [
+                  0.0,
+                  1.0
+                ],
+                "total_runs": 250000,
+                "nodes": 3449,
+                "closed": 0,
+                "elapsed_ms": 3515.315958,
+                "config": "BoundConfig { time_budget: None, work_budget: 250000, cell_cap: 4096, retain_eager_prefix: true, probability_first_eager: true, defer_eager_frontier: false, profile_pending_selection: false, node_budget: 50000, eps: 0.02, trial_depth: 24, descend_floor: 0.1, dead_damage_quotient: true, dead_quick_claw_quotient: true, hp_transition_capacity: 0, hp_transition_eager: false, fold_terminal_nodes: true, fold_closed_nodes: true, monotone_stall_scheduling: true, two_sided_resource_scheduling: true, certified_action_pruning: true, support_br_scheduling: true, reuse_unchanged_backups: true, aggregate_lazy_children: false, chance_fair_period: 0, chance_status_groups: false, chance_material_order: false, material_descent_period: 0, resource_closure_nodes: None, resource_closure_period: 1, directed_policy_refinement: false, target_aware_refinement: false, strategy_refinement: false }",
+                "stats": {
+                  "eager_runs": 247819,
+                  "eager_failures": 58,
+                  "retained_eager_runs": 237451,
+                  "retained_eager_leaves": 237451,
+                  "expansions": 2252,
+                  "trials": 2252,
+                  "reused_nodes": 246552
+                },
+                "diagnostics": {
+                  "turns": {
+                    "0": [
+                      0,
+                      1
+                    ],
+                    "1": [
+                      1038,
+                      15
+                    ],
+                    "2": [
+                      2392,
+                      1
+                    ],
+                    "3": [
+                      2,
+                      0
+                    ]
+                  },
+                  "root_chance": [
+                    {
+                      "visits": 4,
+                      "runs": 4099,
+                      "pending_mass": 0.6993369273942914,
+                      "pending_scripts": 17927,
+                      "resolved_edges": 267,
+                      "unique_children": 264,
+                      "child_uncertainty": 0.3006630726057016,
+                      "largest_edge_uncertainty": 0.02327805385148409,
+                      "largest_child_uncertainty": 0.02327805385148409,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 4099,
+                      "pending_mass": 0.6472044486072739,
+                      "pending_scripts": 14596,
+                      "resolved_edges": 223,
+                      "unique_children": 220,
+                      "child_uncertainty": 0.35279555139270286,
+                      "largest_edge_uncertainty": 0.025634765626705303,
+                      "largest_child_uncertainty": 0.025634765626705303,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 13056,
+                      "pending_mass": 0.02524749418835947,
+                      "pending_scripts": 1592,
+                      "resolved_edges": 80,
+                      "unique_children": 80,
+                      "child_uncertainty": 0.9747525058116399,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 1,
+                      "max_child_runs": 8960,
+                      "total_child_runs": 8960
+                    },
+                    {
+                      "visits": 1089,
+                      "runs": 5184,
+                      "pending_mass": 0.5785557252051919,
+                      "pending_scripts": 8312,
+                      "resolved_edges": 1101,
+                      "unique_children": 13,
+                      "child_uncertainty": 0.4214442747948361,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 4097,
+                      "pending_mass": 0.5190056195154983,
+                      "pending_scripts": 10135,
+                      "resolved_edges": 164,
+                      "unique_children": 163,
+                      "child_uncertainty": 0.48099438048449866,
+                      "largest_edge_uncertainty": 0.01277472140690951,
+                      "largest_child_uncertainty": 0.01277472140690951,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 4097,
+                      "pending_mass": 0.387809651712011,
+                      "pending_scripts": 7248,
+                      "resolved_edges": 98,
+                      "unique_children": 97,
+                      "child_uncertainty": 0.61219034828798,
+                      "largest_edge_uncertainty": 0.028314534027435743,
+                      "largest_child_uncertainty": 0.028314534027435743,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 3328,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 1,
+                      "max_child_runs": 768,
+                      "total_child_runs": 768
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 4224,
+                      "pending_mass": 0.2596552920642328,
+                      "pending_scripts": 2076,
+                      "resolved_edges": 8,
+                      "unique_children": 8,
+                      "child_uncertainty": 0.7403447079357728,
+                      "largest_edge_uncertainty": 0.37443894613933576,
+                      "largest_child_uncertainty": 0.37443894613933576,
+                      "expanded_children": 1,
+                      "max_child_runs": 128,
+                      "total_child_runs": 128
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 8192,
+                      "pending_mass": 0.1117489337354188,
+                      "pending_scripts": 3144,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 0.8882510662645743,
+                      "largest_edge_uncertainty": 0.4165720023137875,
+                      "largest_child_uncertainty": 0.4165720023137875,
+                      "expanded_children": 1,
+                      "max_child_runs": 4096,
+                      "total_child_runs": 4096
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 8192,
+                      "pending_mass": 0.04052890870484441,
+                      "pending_scripts": 1704,
+                      "resolved_edges": 21,
+                      "unique_children": 21,
+                      "child_uncertainty": 0.9594710912951614,
+                      "largest_edge_uncertainty": 0.4609328050360845,
+                      "largest_child_uncertainty": 0.4609328050360845,
+                      "expanded_children": 1,
+                      "max_child_runs": 4096,
+                      "total_child_runs": 4096
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 896,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 768,
+                      "total_child_runs": 768
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 896,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 1,
+                      "unique_children": 1,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 1.0,
+                      "largest_child_uncertainty": 1.0,
+                      "expanded_children": 1,
+                      "max_child_runs": 128,
+                      "total_child_runs": 128
+                    },
+                    {
+                      "visits": 199,
+                      "runs": 4294,
+                      "pending_mass": 0.0030756760852762577,
+                      "pending_scripts": 544,
+                      "resolved_edges": 258,
+                      "unique_children": 60,
+                      "child_uncertainty": 0.9969243239147237,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 931,
+                      "runs": 179458,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 0.9999999999999987,
+                      "largest_edge_uncertainty": 0.08413461539021205,
+                      "largest_child_uncertainty": 0.08413461539021205,
+                      "expanded_children": 6,
+                      "max_child_runs": 37052,
+                      "total_child_runs": 176898
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 896,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 768,
+                      "total_child_runs": 768
+                    },
+                    {
+                      "visits": 3,
+                      "runs": 4992,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 4224,
+                      "total_child_runs": 4224
+                    }
+                  ],
+                  "trial_depth_counts": [
+                    0,
+                    1310,
+                    941,
+                    1
+                  ],
+                  "depth_limit_trials": 0,
+                  "material_descent_bypasses": 0,
+                  "graph": {
+                    "unexpanded_nodes": 3432,
+                    "initialized_nodes": 17,
+                    "stored_battles": 3449,
+                    "resolved_edges": 9629,
+                    "unique_child_edges": 7448,
+                    "pending_scripts": 470175,
+                    "pending_script_entries": 5190333
+                  }
+                }
+              }
+            ]
+          },
+          "order": {
+            "checks": {
+              "roots": 1,
+              "games": 1,
+              "runs": 250000,
+              "stops": {
+                "WorkExhausted": 1
+              },
+              "value_width_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_above_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_strictly_dominated": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "unresolved_selected_pure_loss": {
+                "roots": 1,
+                "games": 1,
+                "keys": [
+                  [
+                    62,
+                    92
+                  ]
+                ]
+              },
+              "max_nodes_plus_closed": 5142,
+              "max_runs": 250000
+            },
+            "search_outputs_match_exactly": true,
+            "diagnostic_sum_max_repeat_error": 2.220446049250313e-16,
+            "records_sha256": [
+              "ef0d7efd1d233e86074e166b0cdebea81e297c5032c2d3a0e3486a555a57b885",
+              "fbc860ef5e2d381f9c7fdc98f28e10379817be8ca0df3eeb1c17b97977389a5d"
+            ],
+            "runs": [
+              {
+                "game": 62,
+                "frame": 92,
+                "turn": 44,
+                "side": 0,
+                "state_sha256": "5f816e795b9a742b986ac44c51b3b15d5e62dd3209c271cf1d89c9bf2cc695fe",
+                "selected": 3,
+                "actions": [
+                  [
+                    "move thunder",
+                    "move hiddenpower",
+                    "move rest",
+                    "move sleeptalk"
+                  ],
+                  [
+                    "move thunderbolt",
+                    "move hiddenpower",
+                    "move reflect",
+                    "move rest"
+                  ]
+                ],
+                "value_p0": [
+                  0.0,
+                  1.0
+                ],
+                "cells_p0": [
+                  [
+                    0.0,
+                    0.9999999999999933
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999785
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000195
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999993
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999917
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000056
+                  ],
+                  [
+                    0.0,
+                    0.999999999999993
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000058
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000004
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "pure_action_values": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "pure_action_losses": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "domination": [
+                  {
+                    "action": "move thunder",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move hiddenpower",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move rest",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  }
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000,
+                "mode": "loss_lower",
+                "target": 3,
+                "threshold_loss": [
+                  0.0,
+                  1.0
+                ],
+                "total_runs": 250000,
+                "nodes": 5142,
+                "closed": 0,
+                "elapsed_ms": 3561.8299580000003,
+                "config": "BoundConfig { time_budget: None, work_budget: 250000, cell_cap: 4096, retain_eager_prefix: true, probability_first_eager: true, defer_eager_frontier: false, profile_pending_selection: false, node_budget: 50000, eps: 0.02, trial_depth: 24, descend_floor: 0.1, dead_damage_quotient: true, dead_quick_claw_quotient: true, hp_transition_capacity: 0, hp_transition_eager: false, fold_terminal_nodes: true, fold_closed_nodes: true, monotone_stall_scheduling: true, two_sided_resource_scheduling: true, certified_action_pruning: true, support_br_scheduling: true, reuse_unchanged_backups: true, aggregate_lazy_children: false, chance_fair_period: 0, chance_status_groups: false, chance_material_order: true, material_descent_period: 0, resource_closure_nodes: None, resource_closure_period: 1, directed_policy_refinement: false, target_aware_refinement: false, strategy_refinement: false }",
+                "stats": {
+                  "eager_runs": 245882,
+                  "eager_failures": 55,
+                  "retained_eager_runs": 222586,
+                  "retained_eager_leaves": 222586,
+                  "expansions": 4196,
+                  "trials": 4196,
+                  "reused_nodes": 240919
+                },
+                "diagnostics": {
+                  "turns": {
+                    "0": [
+                      0,
+                      1
+                    ],
+                    "1": [
+                      1043,
+                      10
+                    ],
+                    "2": [
+                      3109,
+                      5
+                    ],
+                    "3": [
+                      972,
+                      1
+                    ],
+                    "4": [
+                      1,
+                      0
+                    ]
+                  },
+                  "root_chance": [
+                    {
+                      "visits": 6,
+                      "runs": 4101,
+                      "pending_mass": 0.6993008999094621,
+                      "pending_scripts": 17930,
+                      "resolved_edges": 269,
+                      "unique_children": 264,
+                      "child_uncertainty": 0.30069910009053097,
+                      "largest_edge_uncertainty": 0.02327805385148409,
+                      "largest_child_uncertainty": 0.02327805385148409,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 5,
+                      "runs": 4100,
+                      "pending_mass": 0.6471682388785531,
+                      "pending_scripts": 14596,
+                      "resolved_edges": 224,
+                      "unique_children": 220,
+                      "child_uncertainty": 0.35283176112142345,
+                      "largest_edge_uncertainty": 0.025634765626705303,
+                      "largest_child_uncertainty": 0.025634765626705303,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 840,
+                      "runs": 4935,
+                      "pending_mass": 0.014068747650915675,
+                      "pending_scripts": 1241,
+                      "resolved_edges": 919,
+                      "unique_children": 80,
+                      "child_uncertainty": 0.9859312523490836,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1198,
+                      "runs": 5293,
+                      "pending_mass": 0.575428308181514,
+                      "pending_scripts": 8312,
+                      "resolved_edges": 1210,
+                      "unique_children": 13,
+                      "child_uncertainty": 0.42457169181850646,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 4099,
+                      "pending_mass": 0.5184816563331328,
+                      "pending_scripts": 10133,
+                      "resolved_edges": 166,
+                      "unique_children": 163,
+                      "child_uncertainty": 0.4815183436668643,
+                      "largest_edge_uncertainty": 0.01277472140690951,
+                      "largest_child_uncertainty": 0.01277472140690951,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 4099,
+                      "pending_mass": 0.38768268323796573,
+                      "pending_scripts": 7248,
+                      "resolved_edges": 100,
+                      "unique_children": 97,
+                      "child_uncertainty": 0.6123173167620252,
+                      "largest_edge_uncertainty": 0.028314534027435743,
+                      "largest_child_uncertainty": 0.028314534027435743,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 11520,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 1,
+                      "max_child_runs": 8960,
+                      "total_child_runs": 8960
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 4099,
+                      "pending_mass": 0.25879258360579965,
+                      "pending_scripts": 2073,
+                      "resolved_edges": 11,
+                      "unique_children": 8,
+                      "child_uncertainty": 0.741207416394206,
+                      "largest_edge_uncertainty": 0.37443894613933576,
+                      "largest_child_uncertainty": 0.37443894613933576,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 14848,
+                      "pending_mass": 0.1117489337354188,
+                      "pending_scripts": 3144,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 0.8882510662645743,
+                      "largest_edge_uncertainty": 0.4165720023137875,
+                      "largest_child_uncertainty": 0.4165720023137875,
+                      "expanded_children": 1,
+                      "max_child_runs": 10752,
+                      "total_child_runs": 10752
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 14848,
+                      "pending_mass": 0.04052890870484441,
+                      "pending_scripts": 1704,
+                      "resolved_edges": 21,
+                      "unique_children": 21,
+                      "child_uncertainty": 0.9594710912951614,
+                      "largest_edge_uncertainty": 0.4609328050360845,
+                      "largest_child_uncertainty": 0.4609328050360845,
+                      "expanded_children": 1,
+                      "max_child_runs": 10752,
+                      "total_child_runs": 10752
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 9088,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 8960,
+                      "total_child_runs": 8960
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 4993,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 1,
+                      "unique_children": 1,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 1.0,
+                      "largest_child_uncertainty": 1.0,
+                      "expanded_children": 1,
+                      "max_child_runs": 4225,
+                      "total_child_runs": 4225
+                    },
+                    {
+                      "visits": 201,
+                      "runs": 4296,
+                      "pending_mass": 0.0030722373557667826,
+                      "pending_scripts": 544,
+                      "resolved_edges": 260,
+                      "unique_children": 60,
+                      "child_uncertainty": 0.9969277626442332,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1905,
+                      "runs": 145599,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 3,
+                      "max_child_runs": 65913,
+                      "total_child_runs": 143039
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 9088,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 8960,
+                      "total_child_runs": 8960
+                    },
+                    {
+                      "visits": 5,
+                      "runs": 4994,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 4226,
+                      "total_child_runs": 4226
+                    }
+                  ],
+                  "trial_depth_counts": [
+                    0,
+                    2270,
+                    1911,
+                    13,
+                    2
+                  ],
+                  "depth_limit_trials": 0,
+                  "material_descent_bypasses": 0,
+                  "graph": {
+                    "unexpanded_nodes": 5125,
+                    "initialized_nodes": 17,
+                    "stored_battles": 5142,
+                    "resolved_edges": 10633,
+                    "unique_child_edges": 6532,
+                    "pending_scripts": 401334,
+                    "pending_script_entries": 4454899
+                  }
+                }
+              },
+              {
+                "game": 62,
+                "frame": 92,
+                "turn": 44,
+                "side": 0,
+                "state_sha256": "5f816e795b9a742b986ac44c51b3b15d5e62dd3209c271cf1d89c9bf2cc695fe",
+                "selected": 3,
+                "actions": [
+                  [
+                    "move thunder",
+                    "move hiddenpower",
+                    "move rest",
+                    "move sleeptalk"
+                  ],
+                  [
+                    "move thunderbolt",
+                    "move hiddenpower",
+                    "move reflect",
+                    "move rest"
+                  ]
+                ],
+                "value_p0": [
+                  0.0,
+                  1.0
+                ],
+                "cells_p0": [
+                  [
+                    0.0,
+                    0.9999999999999933
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999785
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000195
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999993
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999917
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000056
+                  ],
+                  [
+                    0.0,
+                    0.999999999999993
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000058
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000004
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "pure_action_values": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "pure_action_losses": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "domination": [
+                  {
+                    "action": "move thunder",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move hiddenpower",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move rest",
+                    "reply_gap_lower": [
+                      -1.0,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  }
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000,
+                "mode": "loss_lower",
+                "target": 3,
+                "threshold_loss": [
+                  0.0,
+                  1.0
+                ],
+                "total_runs": 250000,
+                "nodes": 5142,
+                "closed": 0,
+                "elapsed_ms": 3587.141041,
+                "config": "BoundConfig { time_budget: None, work_budget: 250000, cell_cap: 4096, retain_eager_prefix: true, probability_first_eager: true, defer_eager_frontier: false, profile_pending_selection: false, node_budget: 50000, eps: 0.02, trial_depth: 24, descend_floor: 0.1, dead_damage_quotient: true, dead_quick_claw_quotient: true, hp_transition_capacity: 0, hp_transition_eager: false, fold_terminal_nodes: true, fold_closed_nodes: true, monotone_stall_scheduling: true, two_sided_resource_scheduling: true, certified_action_pruning: true, support_br_scheduling: true, reuse_unchanged_backups: true, aggregate_lazy_children: false, chance_fair_period: 0, chance_status_groups: false, chance_material_order: true, material_descent_period: 0, resource_closure_nodes: None, resource_closure_period: 1, directed_policy_refinement: false, target_aware_refinement: false, strategy_refinement: false }",
+                "stats": {
+                  "eager_runs": 245882,
+                  "eager_failures": 55,
+                  "retained_eager_runs": 222586,
+                  "retained_eager_leaves": 222586,
+                  "expansions": 4196,
+                  "trials": 4196,
+                  "reused_nodes": 240919
+                },
+                "diagnostics": {
+                  "turns": {
+                    "0": [
+                      0,
+                      1
+                    ],
+                    "1": [
+                      1043,
+                      10
+                    ],
+                    "2": [
+                      3109,
+                      5
+                    ],
+                    "3": [
+                      972,
+                      1
+                    ],
+                    "4": [
+                      1,
+                      0
+                    ]
+                  },
+                  "root_chance": [
+                    {
+                      "visits": 6,
+                      "runs": 4101,
+                      "pending_mass": 0.6993008999094621,
+                      "pending_scripts": 17930,
+                      "resolved_edges": 269,
+                      "unique_children": 264,
+                      "child_uncertainty": 0.3006991000905308,
+                      "largest_edge_uncertainty": 0.02327805385148409,
+                      "largest_child_uncertainty": 0.02327805385148409,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 5,
+                      "runs": 4100,
+                      "pending_mass": 0.6471682388785531,
+                      "pending_scripts": 14596,
+                      "resolved_edges": 224,
+                      "unique_children": 220,
+                      "child_uncertainty": 0.35283176112142356,
+                      "largest_edge_uncertainty": 0.025634765626705303,
+                      "largest_child_uncertainty": 0.025634765626705303,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 840,
+                      "runs": 4935,
+                      "pending_mass": 0.014068747650915675,
+                      "pending_scripts": 1241,
+                      "resolved_edges": 919,
+                      "unique_children": 80,
+                      "child_uncertainty": 0.9859312523490836,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1198,
+                      "runs": 5293,
+                      "pending_mass": 0.575428308181514,
+                      "pending_scripts": 8312,
+                      "resolved_edges": 1210,
+                      "unique_children": 13,
+                      "child_uncertainty": 0.42457169181850646,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 4099,
+                      "pending_mass": 0.5184816563331328,
+                      "pending_scripts": 10133,
+                      "resolved_edges": 166,
+                      "unique_children": 163,
+                      "child_uncertainty": 0.48151834366686425,
+                      "largest_edge_uncertainty": 0.01277472140690951,
+                      "largest_child_uncertainty": 0.01277472140690951,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 4099,
+                      "pending_mass": 0.38768268323796573,
+                      "pending_scripts": 7248,
+                      "resolved_edges": 100,
+                      "unique_children": 97,
+                      "child_uncertainty": 0.6123173167620249,
+                      "largest_edge_uncertainty": 0.028314534027435743,
+                      "largest_child_uncertainty": 0.028314534027435743,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 11520,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 1,
+                      "max_child_runs": 8960,
+                      "total_child_runs": 8960
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 4099,
+                      "pending_mass": 0.25879258360579965,
+                      "pending_scripts": 2073,
+                      "resolved_edges": 11,
+                      "unique_children": 8,
+                      "child_uncertainty": 0.741207416394206,
+                      "largest_edge_uncertainty": 0.37443894613933576,
+                      "largest_child_uncertainty": 0.37443894613933576,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 14848,
+                      "pending_mass": 0.1117489337354188,
+                      "pending_scripts": 3144,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 0.8882510662645743,
+                      "largest_edge_uncertainty": 0.4165720023137875,
+                      "largest_child_uncertainty": 0.4165720023137875,
+                      "expanded_children": 1,
+                      "max_child_runs": 10752,
+                      "total_child_runs": 10752
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 14848,
+                      "pending_mass": 0.04052890870484441,
+                      "pending_scripts": 1704,
+                      "resolved_edges": 21,
+                      "unique_children": 21,
+                      "child_uncertainty": 0.9594710912951614,
+                      "largest_edge_uncertainty": 0.4609328050360845,
+                      "largest_child_uncertainty": 0.4609328050360845,
+                      "expanded_children": 1,
+                      "max_child_runs": 10752,
+                      "total_child_runs": 10752
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 9088,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 8960,
+                      "total_child_runs": 8960
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 4993,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 1,
+                      "unique_children": 1,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 1.0,
+                      "largest_child_uncertainty": 1.0,
+                      "expanded_children": 1,
+                      "max_child_runs": 4225,
+                      "total_child_runs": 4225
+                    },
+                    {
+                      "visits": 201,
+                      "runs": 4296,
+                      "pending_mass": 0.0030722373557667826,
+                      "pending_scripts": 544,
+                      "resolved_edges": 260,
+                      "unique_children": 60,
+                      "child_uncertainty": 0.9969277626442332,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1905,
+                      "runs": 145599,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 3,
+                      "max_child_runs": 65913,
+                      "total_child_runs": 143039
+                    },
+                    {
+                      "visits": 4,
+                      "runs": 9088,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 8960,
+                      "total_child_runs": 8960
+                    },
+                    {
+                      "visits": 5,
+                      "runs": 4994,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 4226,
+                      "total_child_runs": 4226
+                    }
+                  ],
+                  "trial_depth_counts": [
+                    0,
+                    2270,
+                    1911,
+                    13,
+                    2
+                  ],
+                  "depth_limit_trials": 0,
+                  "material_descent_bypasses": 0,
+                  "graph": {
+                    "unexpanded_nodes": 5125,
+                    "initialized_nodes": 17,
+                    "stored_battles": 5142,
+                    "resolved_edges": 10633,
+                    "unique_child_edges": 6532,
+                    "pending_scripts": 401334,
+                    "pending_script_entries": 4454899
+                  }
+                }
+              }
+            ]
+          },
+          "descent": {
+            "checks": {
+              "roots": 1,
+              "games": 1,
+              "runs": 250000,
+              "stops": {
+                "WorkExhausted": 1
+              },
+              "value_width_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_at_most_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_pure_loss_above_002": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "selected_strictly_dominated": {
+                "roots": 0,
+                "games": 0,
+                "keys": []
+              },
+              "unresolved_selected_pure_loss": {
+                "roots": 1,
+                "games": 1,
+                "keys": [
+                  [
+                    62,
+                    92
+                  ]
+                ]
+              },
+              "max_nodes_plus_closed": 5633,
+              "max_runs": 250000
+            },
+            "search_outputs_match_exactly": true,
+            "diagnostic_sum_max_repeat_error": 3.3306690738754696e-16,
+            "records_sha256": [
+              "176d6691712ed75fc54d63cc888b5583414bf3271caf4524ec1450257620f1d7",
+              "73f353183fd041f7f20a581a921539a7fd8ec1884859c94397a7f383a6f44d14"
+            ],
+            "runs": [
+              {
+                "game": 62,
+                "frame": 92,
+                "turn": 44,
+                "side": 0,
+                "state_sha256": "5f816e795b9a742b986ac44c51b3b15d5e62dd3209c271cf1d89c9bf2cc695fe",
+                "selected": 3,
+                "actions": [
+                  [
+                    "move thunder",
+                    "move hiddenpower",
+                    "move rest",
+                    "move sleeptalk"
+                  ],
+                  [
+                    "move thunderbolt",
+                    "move hiddenpower",
+                    "move reflect",
+                    "move rest"
+                  ]
+                ],
+                "value_p0": [
+                  0.0,
+                  0.9999999999999969
+                ],
+                "cells_p0": [
+                  [
+                    2.6761284602773188e-15,
+                    0.9999999999999986
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999785
+                  ],
+                  [
+                    9.66458728672951e-06,
+                    0.9999999999999996
+                  ],
+                  [
+                    8.146208588791608e-10,
+                    1.0000000000000298
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999917
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000056
+                  ],
+                  [
+                    0.0,
+                    0.999999999999993
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000058
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    0.9999999996829698
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "pure_action_values": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    0.9999999996999698
+                  ]
+                ],
+                "pure_action_losses": [
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ]
+                ],
+                "domination": [
+                  {
+                    "action": "move thunder",
+                    "reply_gap_lower": [
+                      -0.9999999997829672,
+                      -1.0,
+                      -0.9999903355127133,
+                      -0.9999999992853792
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move hiddenpower",
+                    "reply_gap_lower": [
+                      -0.9999999997829698,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move rest",
+                    "reply_gap_lower": [
+                      -0.9999999997829698,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  }
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000,
+                "mode": "loss_lower",
+                "target": 3,
+                "threshold_loss": [
+                  0.0,
+                  0.9999999999999969
+                ],
+                "total_runs": 250000,
+                "nodes": 5633,
+                "closed": 0,
+                "elapsed_ms": 3177.033958,
+                "config": "BoundConfig { time_budget: None, work_budget: 250000, cell_cap: 4096, retain_eager_prefix: true, probability_first_eager: true, defer_eager_frontier: false, profile_pending_selection: false, node_budget: 50000, eps: 0.02, trial_depth: 24, descend_floor: 0.1, dead_damage_quotient: true, dead_quick_claw_quotient: true, hp_transition_capacity: 0, hp_transition_eager: false, fold_terminal_nodes: true, fold_closed_nodes: true, monotone_stall_scheduling: true, two_sided_resource_scheduling: true, certified_action_pruning: true, support_br_scheduling: true, reuse_unchanged_backups: true, aggregate_lazy_children: false, chance_fair_period: 0, chance_status_groups: false, chance_material_order: true, material_descent_period: 2, resource_closure_nodes: None, resource_closure_period: 1, directed_policy_refinement: false, target_aware_refinement: false, strategy_refinement: false }",
+                "stats": {
+                  "eager_runs": 249036,
+                  "eager_failures": 45,
+                  "retained_eager_runs": 182529,
+                  "retained_eager_leaves": 182529,
+                  "expansions": 1291,
+                  "trials": 1422,
+                  "reused_nodes": 219695
+                },
+                "diagnostics": {
+                  "turns": {
+                    "0": [
+                      0,
+                      1
+                    ],
+                    "1": [
+                      1044,
+                      10
+                    ],
+                    "2": [
+                      1303,
+                      7
+                    ],
+                    "3": [
+                      1463,
+                      4
+                    ],
+                    "4": [
+                      222,
+                      3
+                    ],
+                    "5": [
+                      175,
+                      5
+                    ],
+                    "6": [
+                      74,
+                      2
+                    ],
+                    "7": [
+                      455,
+                      2
+                    ],
+                    "8": [
+                      147,
+                      5
+                    ],
+                    "9": [
+                      75,
+                      1
+                    ],
+                    "10": [
+                      2,
+                      1
+                    ],
+                    "11": [
+                      107,
+                      4
+                    ],
+                    "12": [
+                      54,
+                      1
+                    ],
+                    "13": [
+                      2,
+                      1
+                    ],
+                    "14": [
+                      107,
+                      4
+                    ],
+                    "15": [
+                      28,
+                      1
+                    ],
+                    "16": [
+                      6,
+                      1
+                    ],
+                    "17": [
+                      60,
+                      4
+                    ],
+                    "18": [
+                      28,
+                      1
+                    ],
+                    "19": [
+                      14,
+                      1
+                    ],
+                    "20": [
+                      60,
+                      4
+                    ],
+                    "21": [
+                      27,
+                      1
+                    ],
+                    "22": [
+                      13,
+                      1
+                    ],
+                    "23": [
+                      59,
+                      4
+                    ],
+                    "24": [
+                      28,
+                      0
+                    ]
+                  },
+                  "root_chance": [
+                    {
+                      "visits": 651,
+                      "runs": 38815,
+                      "pending_mass": 0.6942713650983634,
+                      "pending_scripts": 19094,
+                      "resolved_edges": 589,
+                      "unique_children": 265,
+                      "child_uncertainty": 0.3057286349016308,
+                      "largest_edge_uncertainty": 0.02327805385148409,
+                      "largest_child_uncertainty": 0.02327805385148409,
+                      "expanded_children": 1,
+                      "max_child_runs": 34394,
+                      "total_child_runs": 34394
+                    },
+                    {
+                      "visits": 3,
+                      "runs": 4865,
+                      "pending_mass": 0.6472768680647154,
+                      "pending_scripts": 14596,
+                      "resolved_edges": 221,
+                      "unique_children": 220,
+                      "child_uncertainty": 0.35272313193526117,
+                      "largest_edge_uncertainty": 0.025634765626705303,
+                      "largest_child_uncertainty": 0.025634765626705303,
+                      "expanded_children": 1,
+                      "max_child_runs": 768,
+                      "total_child_runs": 768
+                    },
+                    {
+                      "visits": 12,
+                      "runs": 18365,
+                      "pending_mass": 0.025218802289058206,
+                      "pending_scripts": 1592,
+                      "resolved_edges": 85,
+                      "unique_children": 80,
+                      "child_uncertainty": 0.9747715331236546,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 2,
+                      "max_child_runs": 13496,
+                      "total_child_runs": 14264
+                    },
+                    {
+                      "visits": 30,
+                      "runs": 22515,
+                      "pending_mass": 0.6034524938709763,
+                      "pending_scripts": 7588,
+                      "resolved_edges": 27,
+                      "unique_children": 13,
+                      "child_uncertainty": 0.3965475053144334,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 1,
+                      "max_child_runs": 18405,
+                      "total_child_runs": 18405
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 4120,
+                      "pending_mass": 0.519267601106681,
+                      "pending_scripts": 10136,
+                      "resolved_edges": 163,
+                      "unique_children": 163,
+                      "child_uncertainty": 0.4807323988933162,
+                      "largest_edge_uncertainty": 0.01277472140690951,
+                      "largest_child_uncertainty": 0.01277472140690951,
+                      "expanded_children": 1,
+                      "max_child_runs": 24,
+                      "total_child_runs": 24
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 4864,
+                      "pending_mass": 0.3878731359490336,
+                      "pending_scripts": 7248,
+                      "resolved_edges": 97,
+                      "unique_children": 97,
+                      "child_uncertainty": 0.6121268640509574,
+                      "largest_edge_uncertainty": 0.028314534027435743,
+                      "largest_child_uncertainty": 0.028314534027435743,
+                      "expanded_children": 1,
+                      "max_child_runs": 768,
+                      "total_child_runs": 768
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 2560,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 4096,
+                      "pending_mass": 0.2596552920642328,
+                      "pending_scripts": 2076,
+                      "resolved_edges": 8,
+                      "unique_children": 8,
+                      "child_uncertainty": 0.7403447079357727,
+                      "largest_edge_uncertainty": 0.37443894613933576,
+                      "largest_child_uncertainty": 0.37443894613933576,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 4096,
+                      "pending_mass": 0.1117489337354188,
+                      "pending_scripts": 3144,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 0.8882510662645742,
+                      "largest_edge_uncertainty": 0.4165720023137875,
+                      "largest_child_uncertainty": 0.4165720023137875,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 4096,
+                      "pending_mass": 0.04052890870484441,
+                      "pending_scripts": 1704,
+                      "resolved_edges": 21,
+                      "unique_children": 21,
+                      "child_uncertainty": 0.9594710912951614,
+                      "largest_edge_uncertainty": 0.4609328050360845,
+                      "largest_child_uncertainty": 0.4609328050360845,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 128,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 768,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 1,
+                      "unique_children": 1,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 1.0,
+                      "largest_child_uncertainty": 1.0,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 712,
+                      "runs": 137128,
+                      "pending_mass": 0.002794044138949847,
+                      "pending_scripts": 541,
+                      "resolved_edges": 415,
+                      "unique_children": 60,
+                      "child_uncertainty": 0.9972059555440127,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 2,
+                      "max_child_runs": 128581,
+                      "total_child_runs": 132677
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 2560,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 128,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 896,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 128,
+                      "total_child_runs": 128
+                    }
+                  ],
+                  "trial_depth_counts": [
+                    0,
+                    716,
+                    214,
+                    26,
+                    51,
+                    81,
+                    40,
+                    23,
+                    16,
+                    15,
+                    8,
+                    8,
+                    10,
+                    7,
+                    7,
+                    10,
+                    6,
+                    6,
+                    9,
+                    6,
+                    6,
+                    8,
+                    5,
+                    5,
+                    139
+                  ],
+                  "depth_limit_trials": 131,
+                  "material_descent_bypasses": 977,
+                  "graph": {
+                    "unexpanded_nodes": 5553,
+                    "initialized_nodes": 80,
+                    "stored_battles": 5622,
+                    "resolved_edges": 8240,
+                    "unique_child_edges": 7277,
+                    "pending_scripts": 195615,
+                    "pending_script_entries": 2089748
+                  }
+                }
+              },
+              {
+                "game": 62,
+                "frame": 92,
+                "turn": 44,
+                "side": 0,
+                "state_sha256": "5f816e795b9a742b986ac44c51b3b15d5e62dd3209c271cf1d89c9bf2cc695fe",
+                "selected": 3,
+                "actions": [
+                  [
+                    "move thunder",
+                    "move hiddenpower",
+                    "move rest",
+                    "move sleeptalk"
+                  ],
+                  [
+                    "move thunderbolt",
+                    "move hiddenpower",
+                    "move reflect",
+                    "move rest"
+                  ]
+                ],
+                "value_p0": [
+                  0.0,
+                  0.9999999999999969
+                ],
+                "cells_p0": [
+                  [
+                    2.6761284602773188e-15,
+                    0.9999999999999986
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999785
+                  ],
+                  [
+                    9.66458728672951e-06,
+                    0.9999999999999996
+                  ],
+                  [
+                    8.146208588791608e-10,
+                    1.0000000000000298
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999917
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000056
+                  ],
+                  [
+                    0.0,
+                    0.999999999999993
+                  ],
+                  [
+                    0.0,
+                    1.0000000000000058
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    0.9999999996829698
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ],
+                "pure_action_values": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    0.0,
+                    0.9999999996999698
+                  ]
+                ],
+                "pure_action_losses": [
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ],
+                  [
+                    0.0,
+                    0.9999999999999969
+                  ]
+                ],
+                "domination": [
+                  {
+                    "action": "move thunder",
+                    "reply_gap_lower": [
+                      -0.9999999997829672,
+                      -1.0,
+                      -0.9999903355127133,
+                      -0.9999999992853792
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move hiddenpower",
+                    "reply_gap_lower": [
+                      -0.9999999997829698,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  },
+                  {
+                    "action": "move rest",
+                    "reply_gap_lower": [
+                      -0.9999999997829698,
+                      -1.0,
+                      -1.0,
+                      -1.0
+                    ],
+                    "minimum_gap_lower": -1.0
+                  }
+                ],
+                "stop": "WorkExhausted",
+                "runs": 250000,
+                "mode": "loss_lower",
+                "target": 3,
+                "threshold_loss": [
+                  0.0,
+                  0.9999999999999969
+                ],
+                "total_runs": 250000,
+                "nodes": 5633,
+                "closed": 0,
+                "elapsed_ms": 3189.308125,
+                "config": "BoundConfig { time_budget: None, work_budget: 250000, cell_cap: 4096, retain_eager_prefix: true, probability_first_eager: true, defer_eager_frontier: false, profile_pending_selection: false, node_budget: 50000, eps: 0.02, trial_depth: 24, descend_floor: 0.1, dead_damage_quotient: true, dead_quick_claw_quotient: true, hp_transition_capacity: 0, hp_transition_eager: false, fold_terminal_nodes: true, fold_closed_nodes: true, monotone_stall_scheduling: true, two_sided_resource_scheduling: true, certified_action_pruning: true, support_br_scheduling: true, reuse_unchanged_backups: true, aggregate_lazy_children: false, chance_fair_period: 0, chance_status_groups: false, chance_material_order: true, material_descent_period: 2, resource_closure_nodes: None, resource_closure_period: 1, directed_policy_refinement: false, target_aware_refinement: false, strategy_refinement: false }",
+                "stats": {
+                  "eager_runs": 249036,
+                  "eager_failures": 45,
+                  "retained_eager_runs": 182529,
+                  "retained_eager_leaves": 182529,
+                  "expansions": 1291,
+                  "trials": 1422,
+                  "reused_nodes": 219695
+                },
+                "diagnostics": {
+                  "turns": {
+                    "0": [
+                      0,
+                      1
+                    ],
+                    "1": [
+                      1044,
+                      10
+                    ],
+                    "2": [
+                      1303,
+                      7
+                    ],
+                    "3": [
+                      1463,
+                      4
+                    ],
+                    "4": [
+                      222,
+                      3
+                    ],
+                    "5": [
+                      175,
+                      5
+                    ],
+                    "6": [
+                      74,
+                      2
+                    ],
+                    "7": [
+                      455,
+                      2
+                    ],
+                    "8": [
+                      147,
+                      5
+                    ],
+                    "9": [
+                      75,
+                      1
+                    ],
+                    "10": [
+                      2,
+                      1
+                    ],
+                    "11": [
+                      107,
+                      4
+                    ],
+                    "12": [
+                      54,
+                      1
+                    ],
+                    "13": [
+                      2,
+                      1
+                    ],
+                    "14": [
+                      107,
+                      4
+                    ],
+                    "15": [
+                      28,
+                      1
+                    ],
+                    "16": [
+                      6,
+                      1
+                    ],
+                    "17": [
+                      60,
+                      4
+                    ],
+                    "18": [
+                      28,
+                      1
+                    ],
+                    "19": [
+                      14,
+                      1
+                    ],
+                    "20": [
+                      60,
+                      4
+                    ],
+                    "21": [
+                      27,
+                      1
+                    ],
+                    "22": [
+                      13,
+                      1
+                    ],
+                    "23": [
+                      59,
+                      4
+                    ],
+                    "24": [
+                      28,
+                      0
+                    ]
+                  },
+                  "root_chance": [
+                    {
+                      "visits": 651,
+                      "runs": 38815,
+                      "pending_mass": 0.6942713650983634,
+                      "pending_scripts": 19094,
+                      "resolved_edges": 589,
+                      "unique_children": 265,
+                      "child_uncertainty": 0.30572863490163066,
+                      "largest_edge_uncertainty": 0.02327805385148409,
+                      "largest_child_uncertainty": 0.02327805385148409,
+                      "expanded_children": 1,
+                      "max_child_runs": 34394,
+                      "total_child_runs": 34394
+                    },
+                    {
+                      "visits": 3,
+                      "runs": 4865,
+                      "pending_mass": 0.6472768680647154,
+                      "pending_scripts": 14596,
+                      "resolved_edges": 221,
+                      "unique_children": 220,
+                      "child_uncertainty": 0.35272313193526117,
+                      "largest_edge_uncertainty": 0.025634765626705303,
+                      "largest_child_uncertainty": 0.025634765626705303,
+                      "expanded_children": 1,
+                      "max_child_runs": 768,
+                      "total_child_runs": 768
+                    },
+                    {
+                      "visits": 12,
+                      "runs": 18365,
+                      "pending_mass": 0.025218802289058206,
+                      "pending_scripts": 1592,
+                      "resolved_edges": 85,
+                      "unique_children": 80,
+                      "child_uncertainty": 0.9747715331236543,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 2,
+                      "max_child_runs": 13496,
+                      "total_child_runs": 14264
+                    },
+                    {
+                      "visits": 30,
+                      "runs": 22515,
+                      "pending_mass": 0.6034524938709763,
+                      "pending_scripts": 7588,
+                      "resolved_edges": 27,
+                      "unique_children": 13,
+                      "child_uncertainty": 0.3965475053144334,
+                      "largest_edge_uncertainty": 0.15234375,
+                      "largest_child_uncertainty": 0.15234375,
+                      "expanded_children": 1,
+                      "max_child_runs": 18405,
+                      "total_child_runs": 18405
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 4120,
+                      "pending_mass": 0.519267601106681,
+                      "pending_scripts": 10136,
+                      "resolved_edges": 163,
+                      "unique_children": 163,
+                      "child_uncertainty": 0.48073239889331626,
+                      "largest_edge_uncertainty": 0.01277472140690951,
+                      "largest_child_uncertainty": 0.01277472140690951,
+                      "expanded_children": 1,
+                      "max_child_runs": 24,
+                      "total_child_runs": 24
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 4864,
+                      "pending_mass": 0.3878731359490336,
+                      "pending_scripts": 7248,
+                      "resolved_edges": 97,
+                      "unique_children": 97,
+                      "child_uncertainty": 0.6121268640509571,
+                      "largest_edge_uncertainty": 0.028314534027435743,
+                      "largest_child_uncertainty": 0.028314534027435743,
+                      "expanded_children": 1,
+                      "max_child_runs": 768,
+                      "total_child_runs": 768
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 2560,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 4096,
+                      "pending_mass": 0.2596552920642328,
+                      "pending_scripts": 2076,
+                      "resolved_edges": 8,
+                      "unique_children": 8,
+                      "child_uncertainty": 0.7403447079357728,
+                      "largest_edge_uncertainty": 0.37443894613933576,
+                      "largest_child_uncertainty": 0.37443894613933576,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 4096,
+                      "pending_mass": 0.1117489337354188,
+                      "pending_scripts": 3144,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 0.8882510662645743,
+                      "largest_edge_uncertainty": 0.4165720023137875,
+                      "largest_child_uncertainty": 0.4165720023137875,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 4096,
+                      "pending_mass": 0.04052890870484441,
+                      "pending_scripts": 1704,
+                      "resolved_edges": 21,
+                      "unique_children": 21,
+                      "child_uncertainty": 0.9594710912951614,
+                      "largest_edge_uncertainty": 0.4609328050360845,
+                      "largest_child_uncertainty": 0.4609328050360845,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 128,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 768,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 1,
+                      "unique_children": 1,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 1.0,
+                      "largest_child_uncertainty": 1.0,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 712,
+                      "runs": 137128,
+                      "pending_mass": 0.002794044138949847,
+                      "pending_scripts": 541,
+                      "resolved_edges": 415,
+                      "unique_children": 60,
+                      "child_uncertainty": 0.9972059555440127,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 2,
+                      "max_child_runs": 128581,
+                      "total_child_runs": 132677
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 2560,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 40,
+                      "unique_children": 40,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.08413461539021228,
+                      "largest_child_uncertainty": 0.08413461539021228,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 1,
+                      "runs": 128,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 0,
+                      "max_child_runs": 0,
+                      "total_child_runs": 0
+                    },
+                    {
+                      "visits": 2,
+                      "runs": 896,
+                      "pending_mass": -0.0,
+                      "pending_scripts": 0,
+                      "resolved_edges": 2,
+                      "unique_children": 2,
+                      "child_uncertainty": 1.0,
+                      "largest_edge_uncertainty": 0.5,
+                      "largest_child_uncertainty": 0.5,
+                      "expanded_children": 1,
+                      "max_child_runs": 128,
+                      "total_child_runs": 128
+                    }
+                  ],
+                  "trial_depth_counts": [
+                    0,
+                    716,
+                    214,
+                    26,
+                    51,
+                    81,
+                    40,
+                    23,
+                    16,
+                    15,
+                    8,
+                    8,
+                    10,
+                    7,
+                    7,
+                    10,
+                    6,
+                    6,
+                    9,
+                    6,
+                    6,
+                    8,
+                    5,
+                    5,
+                    139
+                  ],
+                  "depth_limit_trials": 131,
+                  "material_descent_bypasses": 977,
+                  "graph": {
+                    "unexpanded_nodes": 5553,
+                    "initialized_nodes": 80,
+                    "stored_battles": 5622,
+                    "resolved_edges": 8240,
+                    "unique_child_edges": 7277,
+                    "pending_scripts": 195615,
+                    "pending_script_entries": 2089748
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "gains": {
+          "order": {
+            "selected_lower_increase": 0.0,
+            "selected_upper_decrease": 0.0,
+            "any_reported_endpoint_gain": 0.0
+          },
+          "descent": {
+            "selected_lower_increase": 0.0,
+            "selected_upper_decrease": 3.1086244689504383e-15,
+            "any_reported_endpoint_gain": 3.000302228883811e-10
+          }
+        },
+        "rejected_mutations": [
+          "control:wrong_mode",
+          "control:node_count",
+          "control:false_loss",
+          "order:wrong_mode",
+          "order:node_count",
+          "order:false_loss",
+          "descent:wrong_mode",
+          "descent:node_count",
+          "descent:false_loss"
+        ],
+        "baseline_reproduced": true,
+        "diagnostic_repeat_exception": "Only post-search child_uncertainty sums permit 1e-12 difference: HashMap values iteration changes floating-point addition order. Search outputs and all other diagnostic fields require exact equality. Exception recorded after strict diagnostic comparison failed; no trial rerun.",
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false
+      }
+    },
+    "findings/native-material-descent-v1/decision.json": {
+      "sha256": "aeba2f788ece71421e5913d1a20f0f53afe5a47fa535f21ed23bcf7593c9510d",
+      "data": {
+        "decision": "Stop scheduling tuning on game62/frame92; leave all production settings unchanged.",
+        "reason": "No primary gain above preregistered 1e-6. Largest secondary endpoint change is 3.000302228883811e-10, too small for an actionable choice guarantee. No selected-action error or small-loss certificate.",
+        "mechanism": {
+          "descent_bypasses": 977,
+          "trial_depth_limit_hits": 131,
+          "initialized_nodes": 80,
+          "initialized_nodes_with_retained_battle": 69,
+          "max_trial_depth": 24
+        },
+        "validation": {
+          "release_test": "bounds::tests::fixed_reply_bounds_keep_future_replies_free_and_resume",
+          "result": "passed, both sides, exact two-turn values, free future replies, incremental budgets and descent settings",
+          "independent_payoff_checks": "all six records passed",
+          "search_repeats": "all non-time search outputs exactly equal",
+          "diagnostic_exception": "Post-search child_uncertainty sum differs at most 3.3306690738754696e-16 across repeats due to HashMap iteration order. Audit initially rejected strict equality. Narrow 1e-12 tolerance applied only to that diagnostic field, without rerunning searches.",
+          "retained_state_accounting": "11 initialized graph nodes no longer retain Battle; turn histogram covers 5622 stored battles, graph covers 5633 nodes. Counts now reconciled separately."
+        },
+        "strength_improvement_proven": false,
+        "whole_game_ceiling_proven": false
+      }
     }
   },
   "foresight_fix": {
@@ -49201,7 +52301,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-08T00:25:02.402958+09:00",
+    "checked_at": "2026-10-08T00:30:05.612925+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -49248,7 +52348,7 @@
     "followup_first_step": "native-first-step-loss-v1",
     "followup_snorlax_witness": "native-snorlax-witness-v1",
     "followup_frontier_step": "native-frontier-step-v1",
-    "followup_result_commit": "5b7086f68d2618dd5940dd8e1703ff35f8bb01ef",
+    "followup_result_commit": "41314739b437561ed0cce7a9a7b49edb11f99012",
     "followup_frontier_refine": "native-frontier-refine-v1",
     "followup_frontier_defer": "native-frontier-defer-v1",
     "followup_frontier_defer_complete": "native-frontier-defer-complete-v1",
@@ -49259,7 +52359,8 @@
     "followup_waking_loss": "native-waking-loss-v1",
     "followup_chance_coverage": "native-chance-coverage-v1",
     "followup_chance_solver": "native-chance-solver-v1",
-    "followup_depth_profile": "native-depth-profile-v1"
+    "followup_depth_profile": "native-depth-profile-v1",
+    "followup_material_descent": "native-material-descent-v1"
   },
   "native_endgame_census": {
     "status": "complete",
