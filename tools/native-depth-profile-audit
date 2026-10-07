@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from pathlib import Path
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check(row, parent):
+    assert {k:v for k,v in row.items() if k not in ['elapsed_ms','diagnostics']} == {k:v for k,v in parent.items() if k != 'elapsed_ms'}
+    d=row['diagnostics']; g=d['graph']
+    assert sum(v[0] for v in d['turns'].values()) == g['unexpanded_nodes']
+    assert sum(v[1] for v in d['turns'].values()) == g['initialized_nodes']
+    assert g['unexpanded_nodes']+g['initialized_nodes'] == g['stored_battles'] == row['nodes']
+    assert sum(d['trial_depth_counts']) == row['stats']['trials']
+    assert len(d['root_chance']) == len(row['cells_p0']) == 16
+    for cell,(lo,hi) in zip(d['root_chance'],row['cells_p0']):
+        assert abs(cell['pending_mass']+cell['child_uncertainty']-(hi-lo)) < 1e-10
+        assert 0 <= cell['expanded_children'] <= cell['unique_children'] <= cell['resolved_edges']
+        assert cell['largest_edge_uncertainty'] <= cell['largest_child_uncertainty']+1e-10 <= cell['child_uncertainty']+2e-10
+    assert d['depth_limit_trials'] == d['material_descent_bypasses'] == 0
+
+
+def main():
+    p=Path('findings/native-depth-profile-v1')
+    protocol=json.loads((p/'protocol.json').read_text())
+    assert sha(p/'native_depth_profile.rs') == protocol['helper_sha256']
+    rootpath=Path('tmp/native-endgame-census-v1/roots.jsonl')
+    assert sha(rootpath) == protocol['roots_sha256']
+    roots=[json.loads(line) for line in rootpath.read_text().splitlines()]
+    audit=runpy.run_path('tools/native-chance-solver-audit')['check']
+    results={};rejected=[]
+    for arm in protocol['arms']:
+        path=p/(arm+'.jsonl.gz')
+        row=json.loads(gzip.decompress(path.read_bytes()))
+        parent=json.loads(gzip.decompress(Path(f'findings/native-chance-solver-v1/{arm}-1.jsonl.gz').read_bytes()))
+        checks=audit([row],json.loads((p/(arm+'-protocol.json')).read_text()),roots)
+        check(row,parent)
+        d=row['diagnostics'];g=d['graph']
+        results[arm]=dict(archive_sha256=sha(path),checks=checks,prior_non_time_output_matches=True,threshold_loss=row['threshold_loss'],runs=row['runs'],nodes=row['nodes'],diagnostics=d,unexpanded_node_fraction=g['unexpanded_nodes']/g['stored_battles'],max_initialized_turn_delta=max(int(k) for k,v in d['turns'].items() if v[1]),max_observed_trial_depth=max(i for i,n in enumerate(d['trial_depth_counts']) if n))
+        for mutation in ['node_count','trial_count','chance_width']:
+            altered=copy.deepcopy(row)
+            if mutation=='node_count':altered['diagnostics']['turns']['0'][1]+=1
+            elif mutation=='trial_count':altered['diagnostics']['trial_depth_counts'][0]+=1
+            else:altered['diagnostics']['root_chance'][0]['child_uncertainty']+=.01
+            try:check(altered,parent)
+            except AssertionError:rejected.append(arm+':'+mutation)
+            else:raise AssertionError('accepted '+mutation)
+    print(json.dumps(dict(schema=protocol['schema'],protocol_sha256=sha(p/'protocol.json'),arms=results,rejected_mutations=rejected,scope='One fixed hidden-state root; retained-node counts are not probability-weighted coverage. Initialization does not imply solved value. No causal scheduling comparison yet.',ordinary_bot_changed=False,strength_improvement_proven=False),indent=2))
+
+
+if __name__=='__main__':main()
