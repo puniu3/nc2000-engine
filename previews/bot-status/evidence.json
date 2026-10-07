@@ -15082,6 +15082,156 @@
         "full_control_identities": 40,
         "production_changed": false
       }
+    },
+    "findings/legal-family-alias-certificate-v1/records.json.gz": {
+      "sha256": "3cc2a89d2f0f59c353b64a0d86786df7327fefed5d896023a67a43790693a423"
+    },
+    "findings/legal-family-alias-certificate-v1/summary.json": {
+      "sha256": "0e9aa321e8d52e6a38f2db3cf6f9ff366b236f9288eba7c61e773fbf02aa0eb5",
+      "data": {
+        "worlds": 40,
+        "reports": {
+          "control": {
+            "seconds": 1.112675542,
+            "upper_seconds": 0.211268792,
+            "lower_runs": 47347,
+            "upper_runs": 10029,
+            "lower": 0.09948420336156084,
+            "rival_upper": 0.09939236121505779,
+            "certified_gain_lower": 9.183214650305445e-05,
+            "proven_worlds": 40,
+            "alias_pairs": 0,
+            "alias_audit_runs": 0,
+            "audit_seconds": 3.792e-06
+          },
+          "control_repeat": {
+            "seconds": 1.064289375,
+            "upper_seconds": 0.198819916,
+            "lower_runs": 47347,
+            "upper_runs": 10029,
+            "lower": 0.09948420336156084,
+            "rival_upper": 0.09939236121505779,
+            "certified_gain_lower": 9.183214650305445e-05,
+            "proven_worlds": 40,
+            "alias_pairs": 0,
+            "alias_audit_runs": 0,
+            "audit_seconds": 1.67e-07
+          },
+          "merged": {
+            "seconds": 0.879974833,
+            "upper_seconds": 0.196922041,
+            "lower_runs": 36191,
+            "upper_runs": 10029,
+            "lower": 0.09948420336156084,
+            "rival_upper": 0.09939236121505779,
+            "certified_gain_lower": 9.183214650305445e-05,
+            "proven_worlds": 40,
+            "alias_pairs": 1250,
+            "alias_audit_runs": 185080,
+            "audit_seconds": 1.847265541
+          },
+          "merged_repeat": {
+            "seconds": 0.917395208,
+            "upper_seconds": 0.206166875,
+            "lower_runs": 36191,
+            "upper_runs": 10029,
+            "lower": 0.09948420336156084,
+            "rival_upper": 0.09939236121505779,
+            "certified_gain_lower": 9.183214650305445e-05,
+            "proven_worlds": 40,
+            "alias_pairs": 1250,
+            "alias_audit_runs": 185080,
+            "audit_seconds": 1.972787833
+          },
+          "fast": {
+            "seconds": 0.847909958,
+            "upper_seconds": 0.170235542,
+            "lower_runs": 36191,
+            "upper_runs": 10029,
+            "lower": 0.09948420336156084,
+            "rival_upper": 0.09939236121505779,
+            "certified_gain_lower": 9.183214650305445e-05,
+            "proven_worlds": 40,
+            "alias_pairs": 1250,
+            "alias_audit_runs": 185080,
+            "audit_seconds": 1.998235583
+          },
+          "fast_repeat": {
+            "seconds": 0.865949167,
+            "upper_seconds": 0.172740167,
+            "lower_runs": 36191,
+            "upper_runs": 10029,
+            "lower": 0.09948420336156084,
+            "rival_upper": 0.09939236121505779,
+            "certified_gain_lower": 9.183214650305445e-05,
+            "proven_worlds": 40,
+            "alias_pairs": 1250,
+            "alias_audit_runs": 185080,
+            "audit_seconds": 2.024275916
+          },
+          "rivals": {
+            "seconds": 0.821576083,
+            "upper_seconds": 0.069324542,
+            "lower_runs": 36191,
+            "upper_runs": 3666,
+            "lower": 0.09948420336156084,
+            "rival_upper": 0.09939236121505779,
+            "certified_gain_lower": 9.183214650305445e-05,
+            "proven_worlds": 40,
+            "alias_pairs": 1250,
+            "alias_audit_runs": 185080,
+            "audit_seconds": 2.000165625
+          },
+          "rivals_repeat": {
+            "seconds": 0.80940575,
+            "upper_seconds": 0.068136083,
+            "lower_runs": 36191,
+            "upper_runs": 3666,
+            "lower": 0.09948420336156084,
+            "rival_upper": 0.09939236121505779,
+            "certified_gain_lower": 9.183214650305445e-05,
+            "proven_worlds": 40,
+            "alias_pairs": 1250,
+            "alias_audit_runs": 185080,
+            "audit_seconds": 2.03237325
+          },
+          "cap_one": {
+            "seconds": 0.178397917,
+            "upper_seconds": 0.173752458,
+            "lower_runs": 40,
+            "upper_runs": 10029,
+            "lower": 0.0,
+            "rival_upper": 0.09939236121505779,
+            "certified_gain_lower": 0.0,
+            "proven_worlds": 0,
+            "alias_pairs": 0,
+            "alias_audit_runs": 0,
+            "audit_seconds": 8.3e-08
+          }
+        },
+        "repeat_lower_identities": 160,
+        "repeat_upper_identities": 4,
+        "all_upper_values_computed_during_timing": true,
+        "production_changed": false,
+        "strength_demonstrated": false,
+        "scope": "One fixed endgame and its generated 40 hidden-move candidates. The common Rock Slide policy, Double Edge countermodel and Sleep Talk/Sleep Talk/Hidden Power Ice opposing policy are specified research inputs, not automatically discovered here. Each execution computes the opposing policy bounds before deriving its lower-proof threshold; no archived numeric upper bound is supplied to the native solver. Only competing pure first actions need upper bounds in the rivals variant; Rock Slide remains [0,1] in that upper certificate. Every legal reply remains in the lower ledger. Aliases reference an earlier equivalent reply with zero additional engine runs. Full state, log and chance traces are compared over all chance paths for every reused reply after the timed proof. These audits and rational ledger/reference checks are verification costs outside the timing. The fast enumerator discards partial progress on exhaustion and retains [0,1]; the one-run control certifies no action. Native timings include candidate generation, upper and lower proofs, ledger construction and retaining audit states; exclude input loading, prefix replay, audit execution, final serialization and independent verification. Two timings per mode are feasibility measurements. Stats, items and counter state remain fixed; no complete information-set or mixed-strategy optimum claim, human calibration, iPad result or deployed-bot superiority claim."
+      }
+    },
+    "findings/legal-family-alias-certificate-v1/checks.json": {
+      "sha256": "8501b98eafcb4916f906d9d5813357ea9def04a4182fbc4b361d57b3bc62dde9",
+      "data": {
+        "negative_controls": [
+          "self_alias",
+          "alias_value",
+          "missing_audit"
+        ],
+        "capped_worlds_without_certificate": 40,
+        "alias_state_log_and_chance_traces_checked": true,
+        "upper_and_lower_reference_subsets_checked": true,
+        "repeat_lower_identities": 160,
+        "repeat_upper_identities": 4,
+        "production_changed": false
+      }
     }
   },
   "foresight_fix": {

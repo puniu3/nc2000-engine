@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+import argparse
+import copy
+import gzip
+import hashlib
+import json
+import runpy
+from fractions import Fraction as F
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+archive = root / 'findings/legal-family-alias-certificate-v1'
+checks = runpy.run_path(str(root / 'tools/legal-family-threshold-probe'))
+ledger_check, policy_check = checks['ledger_check'], checks['policy_check']
+key, masses = checks['key'], checks['masses']
+modes = ['control', 'merged', 'fast', 'rivals']
+names = [m + s for m in modes for s in ['', '_repeat']] + ['cap_one']
+
+
+def expanded(ledger, world):
+    result = copy.deepcopy(ledger)
+    actual = sum(b['runs'] for n in ledger['nodes'] for b in n.get('branches', []))
+    assert actual == ledger['runs'] <= ledger['config']['work_budget']
+    extra, identities = 0, []
+    for node in result['nodes']:
+        branches = node.get('branches', [])
+        for index, branch in enumerate(branches):
+            if 'alias_of' not in branch:
+                continue
+            source = branch['alias_of']
+            assert 0 <= source < index and 'alias_of' not in branches[source]
+            representative = branches[source]
+            assert branch['runs'] == 0
+            assert {k: v for k, v in branch.items() if k not in ['alias_of', 'choices', 'runs']} == {
+                k: v for k, v in representative.items() if k not in ['choices', 'runs']}
+            assert branch['choices'] != representative['choices']
+            identities.append((world, *key(node), tuple(branch['choices']), tuple(representative['choices'])))
+            branch.pop('alias_of')
+            branch['runs'] = representative['runs']
+            extra += branch['runs']
+    result['runs'] += extra
+    result['config']['work_budget'] += extra
+    return result, extra, identities
+
+
+def check_upper(ledger, reference, rivals):
+    assert ledger['config'] == reference['config']
+    ledger_check(ledger)
+    policy_check(ledger)
+    nodes, old_nodes = ledger['nodes'], reference['nodes']
+    old = {key(n): n for n in old_nodes}
+    for node in nodes:
+        before = old[key(node)]
+        assert node['kind'] == before['kind']
+        if node['depth'] > 0 or not rivals:
+            assert all(abs(a-b) < 1e-10 for a, b in zip(node['bounds'], before['bounds']))
+        if node['kind'] != 'decision':
+            continue
+        for field in ['legal', 'selected', 'maximizing']:
+            assert node[field] == before[field]
+        assert len(node['branches']) == len(before['branches'])
+        for branch, prior in zip(node['branches'], before['branches']):
+            assert branch['choices'] == prior['choices']
+            ignored = rivals and node['depth'] == 0 and branch['choices'][1] == 'move rockslide'
+            if ignored:
+                assert branch['runs'] == 0 and branch['children'] == [] and branch['pending'] == 1
+            else:
+                assert branch['runs'] == prior['runs']
+            current, previous = masses(branch, nodes), masses(prior, old_nodes)
+            assert set(current) <= set(previous)
+            assert all(current[k] <= previous[k] for k in current)
+            residual = sum(previous.values()) - sum(current.values())
+            assert abs(F(branch['pending'])-F(prior['pending'])-residual) < F(1, 10**10)
+            if node['depth'] > 0 or not rivals:
+                assert current == previous
+
+
+def verify(data, previous, historical_upper):
+    expected = [r['move'] for r in previous['rows']]
+    doubleedge = next(r['ledger'] for r in previous['rows'] if r['move'] == 'doubleedge')
+    baseline_upper = data['control']['upper']
+    cfg = dict(game=6, decision=32, target_side=0, policy_side=0, first_choice='move sleeptalk',
+        priority=['move hiddenpowerice'], rest_at_percent=None,
+        opening=['move sleeptalk', 'move sleeptalk', 'move hiddenpowerice'], horizon=3,
+        work_budget=200000, cell_cap=10000, guarded_keys=True, support_certificate=True)
+    assert baseline_upper['config'] == cfg
+    assert baseline_upper['nodes'][-1]['state_key'] == doubleedge['nodes'][-1]['state_key']
+    reports = {}
+    for label in names:
+        run = data[label]
+        capped = label == 'cap_one'
+        rivals = label.startswith('rivals')
+        merged = label.startswith(('merged', 'fast', 'rivals'))
+        assert run['case'] == previous['case'] and run['upper_world'] == 'doubleedge'
+        assert run['merged'] == merged
+        assert run.get('fast', False) == (label.startswith('fast') or capped)
+        assert run.get('rivals_only', False) == rivals and run.get('capped', False) == capped
+        assert [r['move'] for r in run['rows']] == expected
+        assert run['generation_seconds'] >= 0 and run['upper_seconds'] >= 0 and run['audit_seconds'] >= 0
+        assert all(r['seconds'] >= 0 for r in run['rows'])
+        assert run['generation_seconds'] + run['upper_seconds'] + sum(r['seconds'] for r in run['rows']) <= run['seconds']
+        check_upper(run['upper'], baseline_upper, rivals)
+        upper = {b['choices'][1]: 1-b['bounds'][0] for b in run['upper']['nodes'][-1]['branches']}
+        assert upper == run['upper_by_action']
+        if not rivals:
+            assert all(abs(upper[a]-historical_upper[a]) < 1e-10 for a in upper)
+        rival_upper = max(v for a, v in upper.items() if a != 'move rockslide')
+        assert run['threshold'] == rival_upper + 1e-6
+        assert rival_upper < .1
+        identities = []
+        for row, prior in zip(run['rows'], previous['rows']):
+            virtual, extra, aliases = expanded(row['ledger'], row['move'])
+            identities += aliases
+            if capped:
+                assert virtual['config'] == dict(prior['ledger']['config'], work_budget=1, cell_cap=1)
+                assert virtual['runs'] == 1 and virtual['bounds'] == [0, 1] and not aliases
+                ledger_check(virtual)
+                policy_check(virtual)
+            else:
+                reference = copy.deepcopy(prior['ledger'])
+                reference['config']['work_budget'] += extra
+                checks['check_ledger'](virtual, reference, run['threshold'])
+        audit_ids = []
+        for audit in run['audits']:
+            assert audit['runs'] > 0 and audit['runs'] % 2 == 0 and audit['leaves'] > 0
+            assert abs(F(audit['mass'])-1) < F(1, 10**10)
+            audit_ids.append((audit['world'], *audit['key'], audit['depth'],
+                tuple(audit['choices']), tuple(audit['representative'])))
+        assert len(identities) == len(set(identities))
+        assert len(audit_ids) == len(set(audit_ids)) and set(identities) == set(audit_ids)
+        assert bool(identities) == merged
+        lower = min(row['ledger']['bounds'][0] for row in run['rows'])
+        reports[label] = dict(seconds=run['seconds'], upper_seconds=run['upper_seconds'],
+            lower_runs=sum(r['ledger']['runs'] for r in run['rows']), upper_runs=run['upper']['runs'],
+            lower=lower, rival_upper=rival_upper,
+            certified_gain_lower=max(0., float(F(lower)-F(rival_upper)-F(1, 10**8))),
+            proven_worlds=sum(r['ledger']['bounds'][0] > rival_upper for r in run['rows']),
+            alias_pairs=len(identities), alias_audit_runs=sum(a['runs'] for a in run['audits']),
+            audit_seconds=run['audit_seconds'])
+        assert reports[label]['proven_worlds'] == (0 if capped else 40)
+    for mode in modes:
+        a, b = data[mode], data[mode + '_repeat']
+        assert a['upper'] == b['upper'] and a['audits'] == b['audits']
+        assert [r['ledger'] for r in a['rows']] == [r['ledger'] for r in b['rows']]
+    return dict(worlds=40, reports=reports, repeat_lower_identities=160, repeat_upper_identities=4,
+        all_upper_values_computed_during_timing=True, production_changed=False, strength_demonstrated=False,
+        scope='One fixed endgame and its generated 40 hidden-move candidates. The common Rock Slide '
+              'policy, Double Edge countermodel and Sleep Talk/Sleep Talk/Hidden Power Ice opposing '
+              'policy are specified research inputs, not automatically discovered here. Each execution '
+              'computes the opposing policy bounds before deriving its lower-proof threshold; no archived '
+              'numeric upper bound is supplied to the native solver. Only competing pure first actions '
+              'need upper bounds in the rivals variant; Rock Slide remains [0,1] in that upper certificate. '
+              'Every legal reply remains in the lower ledger. Aliases reference an earlier equivalent '
+              'reply with zero additional engine runs. Full state, log and chance traces are compared '
+              'over all chance paths for every reused reply after the timed proof. These audits and '
+              'rational ledger/reference checks are verification costs outside the timing. The fast '
+              'enumerator discards partial progress on exhaustion and retains [0,1]; the one-run control '
+              'certifies no action. Native timings include candidate generation, upper and lower proofs, '
+              'ledger construction and retaining audit states; exclude input loading, prefix replay, '
+              'audit execution, final serialization and independent verification. Two timings per mode '
+              'are feasibility measurements. Stats, items and counter state remain fixed; no complete '
+              'information-set or mixed-strategy optimum claim, human calibration, iPad result or '
+              'deployed-bot superiority claim.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record', nargs=9, type=Path)
+    args = parser.parse_args()
+    previous_path = root / 'findings/legal-family-bounds-v1/records.json.gz'
+    previous = json.loads(gzip.decompress(previous_path.read_bytes()))['result']
+    upper_path = root / 'findings/hidden-move-family-v1/summary.json'
+    historical_upper = next(r['upper'] for r in json.loads(upper_path.read_bytes())['rows'] if r['move'] == 'doubleedge')
+    paths = [Path(__file__).resolve(), previous_path, upper_path,
+        root / 'crates/bot/examples/legal_family_alias_certificate.rs', root / 'crates/bot/examples/aliased_witness/mod.rs',
+        root / 'crates/bot/examples/legal_move_models/mod.rs', root / 'crates/bot/examples/hidden_family_search.rs',
+        root / 'crates/bot/examples/policy_witness.rs', root / 'tools/legal-family-threshold-probe',
+        root / 'tools/policy-witness-probe', root / 'tools/hidden-move-witness-probe',
+        root / 'data/legal-move-sources-gen2.json', root / 'data/learnsets-gen2.json',
+        root / 'data/gen2stadium2.json', root / 'data/belief-pool-v3/belief-pool.json',
+        root / 'findings/policy-gap-v1/corpus.jsonl.gz']
+    for directory in ['crates/bot/src', 'crates/engine/src']:
+        paths += list((root / directory).rglob('*.rs'))
+    hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    if args.record:
+        assert not archive.exists()
+        data = {name: json.loads(path.read_bytes()) for name, path in zip(names, args.record)}
+    else:
+        bundle = json.loads(gzip.decompress((archive / 'records.json.gz').read_bytes()))
+        assert bundle['hashes'] == hashes
+        data = bundle['data']
+    summary = verify(data, previous, historical_upper)
+    for fault in ['self_alias', 'alias_value', 'missing_audit']:
+        broken = copy.deepcopy(data['rivals'])
+        ledger = next(r['ledger'] for r in broken['rows'] if any('alias_of' in b for n in r['ledger']['nodes'] for b in n.get('branches', [])))
+        node = next(n for n in ledger['nodes'] if any('alias_of' in b for b in n.get('branches', [])))
+        index = next(i for i, b in enumerate(node['branches']) if 'alias_of' in b)
+        if fault == 'self_alias':
+            node['branches'][index]['alias_of'] = index
+        elif fault == 'alias_value':
+            node['branches'][index]['bounds'][0] += .01
+        else:
+            broken['audits'].pop()
+        bad = dict(data, rivals=broken)
+        try:
+            verify(bad, previous, historical_upper)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError(f'Accepted corruption: {fault}')
+    report = dict(negative_controls=['self_alias', 'alias_value', 'missing_audit'],
+        capped_worlds_without_certificate=40, alias_state_log_and_chance_traces_checked=True,
+        upper_and_lower_reference_subsets_checked=True, repeat_lower_identities=160,
+        repeat_upper_identities=4, production_changed=False)
+    if args.record:
+        archive.mkdir()
+        (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(dict(data=data, hashes=hashes),
+            separators=(',', ':')).encode(), mtime=0))
+        for name, value in [('summary', summary), ('checks', report)]:
+            (archive / (name + '.json')).write_text(json.dumps(value, indent=2) + '\n')
+    else:
+        assert summary == json.loads((archive / 'summary.json').read_bytes())
+        assert report == json.loads((archive / 'checks.json').read_bytes())
+    print(json.dumps({k: v for k, v in summary.items() if k != 'scope'}, indent=2))
+
+
+if __name__ == '__main__':
+    main()

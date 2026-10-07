@@ -1,0 +1,13 @@
+{
+  "negative_controls": [
+    "self_alias",
+    "alias_value",
+    "missing_audit"
+  ],
+  "capped_worlds_without_certificate": 40,
+  "alias_state_log_and_chance_traces_checked": true,
+  "upper_and_lower_reference_subsets_checked": true,
+  "repeat_lower_identities": 160,
+  "repeat_upper_identities": 4,
+  "production_changed": false
+}
