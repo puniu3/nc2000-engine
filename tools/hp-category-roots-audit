@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+import copy
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def load(path):
+    with Path(path).open() as f:
+        manifest=json.loads(next(f)); rows=[json.loads(line) for line in f]
+    return manifest, rows
+
+
+def key(row):
+    return row['case'],row['trial'],row['rep']
+
+
+def structural_models(row):
+    result={}
+    for encoded,count in row['models'].items():
+        m=json.loads(encoded)
+        m['active'].pop('static_eval');m['active'].pop('foe_damage')
+        k=json.dumps(m,sort_keys=True)
+        result[k]=result.get(k,0)+count
+    return result
+
+
+def verify(p, before, after, repeat):
+    expected={(c['id'],trial,rep) for c in p['fixture']['cases'] for trial in range(c['pairs']) for rep in range(p['repeats'])}
+    maps=[]
+    for rows in [before,after,repeat]:
+        mapping={key(r):r for r in rows}
+        assert len(mapping)==len(rows) and set(mapping)==expected
+        for row in rows:
+            assert row['side']==row['trial']%2
+            assert row['iterations']==p['fixture']['iterations']
+            assert sum(a['visits'] for a in row['actions'])==row['iterations']
+            assert sum(row['models'].values())==p['samples']
+            assert all(0<=a['mean']<=1 and a['visits']>=0 for a in row['actions'])
+            eligible=[(i,a) for i,a in enumerate(row['actions']) if not a['dominated']]
+            if not eligible:eligible=list(enumerate(row['actions']))
+            best=max(eligible,key=lambda x:(x[1]['visits'],x[0]))[1]
+            assert row['best']==best['action']
+        maps.append(mapping)
+    changes=[]
+    for k in sorted(expected):
+        a,b,r=[m[k] for m in maps]
+        x=copy.deepcopy(b);y=copy.deepcopy(r);x.pop('seconds');y.pop('seconds');assert x==y
+        for field in ['side','battle_seed','search_seed','history','key','observation','fallback','iterations']:
+            assert a[field]==b[field],(k,field)
+        assert [(x['action'],x['dominated']) for x in a['actions']]==[(x['action'],x['dominated']) for x in b['actions']]
+        assert a['truth']['own']==b['truth']['own'] and a['truth']['foe']==b['truth']['foe']
+        assert structural_models(a)==structural_models(b)
+        changes.append({'case':k[0],'trial':k[1],'rep':k[2],'before':a['best'],'after':b['best'],'actions_changed':a['actions']!=b['actions'],'chosen_changed':a['best']!=b['best'],
+                        'truth_foe_damage_changed':a['truth']['foe_damage']!=b['truth']['foe_damage']})
+    return changes
+
+
+def main():
+    protocol,before_path,after_path,repeat_path,outdir=map(Path,sys.argv[1:])
+    p=json.loads(protocol.read_text())
+    bm,before=load(before_path);am,after=load(after_path);rm,repeat=load(repeat_path)
+    assert all(m['protocol_sha256']==digest(protocol) for m in [bm,am,rm])
+    assert bm['probe_sha256']==am['probe_sha256']==rm['probe_sha256']
+    assert am==rm
+    assert set(bm['sources'])==set(am['sources'])
+    differences=[k for k in bm['sources'] if bm['sources'][k]!=am['sources'][k]]
+    assert differences==['crates/bot/src/eval.rs'],differences
+    changes=verify(p,before,after,repeat)
+    for mode in ['missing','seed','model','best','repeat']:
+        bad=copy.deepcopy(after);rep=copy.deepcopy(repeat)
+        if mode=='missing':bad.pop()
+        elif mode=='seed':bad[0]['search_seed']+=1
+        elif mode=='model':
+            old=next(iter(bad[0]['models']));m=json.loads(old);count=bad[0]['models'].pop(old);m['roster'][0]['stats'][0]+=1;bad[0]['models'][json.dumps(m)]=count
+        elif mode=='best':bad[0]['best']='move invalid'
+        else:rep[0]['actions'][0]['mean']+=.001
+        if mode in ('seed','model','best'):
+            index=next(i for i,r in enumerate(rep) if key(r)==key(bad[0]))
+            rep[index]=copy.deepcopy(bad[0])
+        try:verify(p,before,bad,rep)
+        except AssertionError:continue
+        raise AssertionError(f'{mode} accepted')
+    by_case=[]
+    for case in p['fixture']['cases']:
+        rows=[r for r in changes if r['case']==case['id']]
+        by_case.append({'case':case['id'],'search_pairs':len(rows),'choice_changes':sum(r['chosen_changed'] for r in rows),'changed_roots':len({r['trial'] for r in rows if r['chosen_changed']}),'statistics_changes':sum(r['actions_changed'] for r in rows)})
+    summary={'search_pairs':len(changes),'roots':len({(r['case'],r['trial']) for r in changes}),'choice_changes':sum(r['chosen_changed'] for r in changes),'cases':by_case,'changes':changes,
+             'repeat_searches':len(repeat),'equal_inputs':True,'equal_model_attributes':True,'changed_sources':differences,'negative_controls':5,
+             'protocol_sha256':digest(protocol),'checker_sha256':digest(__file__),'scope':p['interpretation'],'strength_vs_deployed':'unproved'}
+    outdir.mkdir(exist_ok=True);assert not (outdir/'summary.json').exists()
+    packed={'before_manifest':bm,'after_manifest':am,'before':before,'after':after,'repeat':repeat}
+    (outdir/'records.json.gz').write_bytes(gzip.compress(json.dumps(packed,separators=(',',':')).encode(),mtime=0))
+    summary['records_sha256']=digest(outdir/'records.json.gz')
+    (outdir/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in summary.items() if k not in ('changes','scope')},indent=2))
+
+
+if __name__=='__main__':
+    main()

@@ -1,0 +1,129 @@
+{
+  "search_pairs": 8,
+  "roots": 8,
+  "choice_changes": 5,
+  "cases": [
+    {
+      "case": "articuno-fighting",
+      "search_pairs": 2,
+      "choice_changes": 0,
+      "changed_roots": 0,
+      "statistics_changes": 0
+    },
+    {
+      "case": "dragonair-fighting",
+      "search_pairs": 2,
+      "choice_changes": 2,
+      "changed_roots": 2,
+      "statistics_changes": 2
+    },
+    {
+      "case": "exeggutor-bug",
+      "search_pairs": 2,
+      "choice_changes": 2,
+      "changed_roots": 2,
+      "statistics_changes": 2
+    },
+    {
+      "case": "onpool-control",
+      "search_pairs": 2,
+      "choice_changes": 1,
+      "changed_roots": 1,
+      "statistics_changes": 1
+    }
+  ],
+  "changes": [
+    {
+      "case": "articuno-fighting",
+      "trial": 0,
+      "rep": 0,
+      "before": "switch 2",
+      "after": "switch 2",
+      "actions_changed": false,
+      "chosen_changed": false,
+      "truth_foe_damage_changed": false
+    },
+    {
+      "case": "articuno-fighting",
+      "trial": 1,
+      "rep": 0,
+      "before": "move rest",
+      "after": "move rest",
+      "actions_changed": false,
+      "chosen_changed": false,
+      "truth_foe_damage_changed": false
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 0,
+      "rep": 0,
+      "before": "move counter",
+      "after": "switch 2",
+      "actions_changed": true,
+      "chosen_changed": true,
+      "truth_foe_damage_changed": false
+    },
+    {
+      "case": "dragonair-fighting",
+      "trial": 1,
+      "rep": 0,
+      "before": "move counter",
+      "after": "switch 3",
+      "actions_changed": true,
+      "chosen_changed": true,
+      "truth_foe_damage_changed": false
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 0,
+      "rep": 0,
+      "before": "move rest",
+      "after": "move charm",
+      "actions_changed": true,
+      "chosen_changed": true,
+      "truth_foe_damage_changed": false
+    },
+    {
+      "case": "exeggutor-bug",
+      "trial": 1,
+      "rep": 0,
+      "before": "move rest",
+      "after": "move charm",
+      "actions_changed": true,
+      "chosen_changed": true,
+      "truth_foe_damage_changed": false
+    },
+    {
+      "case": "onpool-control",
+      "trial": 0,
+      "rep": 0,
+      "before": "switch 2",
+      "after": "move earthquake",
+      "actions_changed": true,
+      "chosen_changed": true,
+      "truth_foe_damage_changed": false
+    },
+    {
+      "case": "onpool-control",
+      "trial": 1,
+      "rep": 0,
+      "before": "move bodyslam",
+      "after": "move bodyslam",
+      "actions_changed": false,
+      "chosen_changed": false,
+      "truth_foe_damage_changed": false
+    }
+  ],
+  "repeat_searches": 8,
+  "equal_inputs": true,
+  "equal_model_attributes": true,
+  "changed_sources": [
+    "crates/bot/src/eval.rs"
+  ],
+  "negative_controls": 5,
+  "protocol_sha256": "e584c7cf3afd87acf7e2d02f093f76eb8f0972c7db2d352c2a8389c97eaf4e4d",
+  "checker_sha256": "25d0e327a146ce165c63231f4e141116b88143aa57ad0e49428eb661207b5a38",
+  "scope": "26 fresh common roots (24 constructed exposures and two on-pool controls), three paired search seeds each, 27000 iterations at c=0.4. Default HP inference remains off. Compare source snapshots before/after the runtime HP-category estimator fix. Root states, public observations, sample model attributes, and search seeds must agree. Model damage estimates may change; no true foe information is fed into search. Truth and sampled attributes are recorded for diagnosis only. A changed action or score is not a strength or optimality claim. All roots are retained regardless of exposure or choice changes. Mac timings are descriptive and not an equal-time or iPad benchmark.",
+  "strength_vs_deployed": "unproved",
+  "records_sha256": "bb63d4e27ebdbae69603b02352072dde55c1aa9688ada8c97bd7ffcab60ba0a1"
+}
