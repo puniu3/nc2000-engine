@@ -1,0 +1,14 @@
+{
+  "hits": 230,
+  "extra_verification_runs": 52336,
+  "max_probability_error": 0.0,
+  "search_outputs_match": true,
+  "protocol_sha256": "7f23f3067fd126926e721750af1a85c66840159773a462699214066bf1bd3fc3",
+  "records_sha256": "ea12dc8cf355bad9ea5616de05742c1ff9f0933eab95a643f70649b6595159e7",
+  "rejected_mutations": [
+    "missing_root",
+    "wrong_hit_count",
+    "invalid_probability_error"
+  ],
+  "performance_sample": false
+}

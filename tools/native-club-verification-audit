@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+from pathlib import Path
+
+
+def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def rows(path):return [json.loads(l) for l in Path(path).read_text().splitlines()]
+
+
+def check(actual,reference):
+    assert len(actual)==len(reference)==6
+    seen=set();hits=0;runs=0;error=0.
+    for r in actual:
+        key=r['game'],r['frame'];assert key not in seen;seen.add(key)
+        expected=reference[key]
+        assert {k:v for k,v in r.items() if k not in ['verification','elapsed_ms']}=={k:v for k,v in expected.items() if k!='elapsed_ms'}
+        v=r['verification'];assert v['hits']==r['kernel']['hits']
+        assert 0<=v['max_error']<1e-10
+        assert v['runs']>=v['hits']
+        hits+=v['hits'];runs+=v['runs'];error=max(error,v['max_error'])
+    return dict(hits=hits,extra_verification_runs=runs,max_probability_error=error,search_outputs_match=True)
+
+
+def main():
+    p=Path('findings/native-club-regions-v1');t=Path('tmp/native-club-regions-v1')
+    protocol=json.loads((p/'verification-protocol.json').read_text())
+    for path,key in [(t/'verify-solver','verification_binary_sha256'),(p/'native_club_verify.rs','verification_helper_sha256'),(p/'hp-kernel-verification.patch','verification_patch_sha256')]:assert digest(path)==protocol[key]
+    reference={(r['game'],r['frame']):r for r in rows(t/'regions-1.jsonl')};actual=rows(t/'verification.jsonl')
+    result=check(actual,reference);rejected=[]
+    for kind in ['missing_root','wrong_hit_count','invalid_probability_error']:
+        changed=copy.deepcopy(actual)
+        if kind=='missing_root':changed.pop()
+        elif kind=='wrong_hit_count':changed[0]['verification']['hits']+=1
+        else:changed[0]['verification']['max_error']=.1
+        try:check(changed,reference)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    result.update(protocol_sha256=digest(p/'verification-protocol.json'),records_sha256=digest(t/'verification.jsonl'),rejected_mutations=rejected,performance_sample=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()

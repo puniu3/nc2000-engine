@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+import runpy
+from pathlib import Path
+
+
+def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def rows(path):return [json.loads(l) for l in Path(path).read_text().splitlines()]
+
+
+def check(rr,protocol,roots,prior):
+    assert len(rr)==1
+    r=rr[0];assert (r['game'],r['frame'])==(10,32)
+    assert r['stop'] in ['TimeBudget','AtMostThreshold','AboveThreshold']
+    assert r['runs']<protocol['work_budget'] and r['nodes']+r['closed']<protocol['node_budget']
+    assert r['elapsed_ms']<=protocol['time_budget_ms']+protocol['allowed_time_overshoot_ms']
+    if r['stop']=='TimeBudget':assert r['elapsed_ms']>=protocol['time_budget_ms']
+    assert r['kernel']['peak_leaves']<=protocol['hp_attack_region_capacity']
+    assert 'time_budget: Some(6s)' in r['config']
+    normalized=copy.deepcopy(rr)
+    if r['stop']=='TimeBudget':normalized[0]['stop']='WorkExhausted'
+    runpy.run_path('tools/native-loss-threshold-audit')['check_threshold'](normalized,protocol,roots)
+    for a,b in zip([prior['value_p0'],*prior['cells_p0']],[r['value_p0'],*r['cells_p0']]):
+        assert max(a[0],b[0])<=min(a[1],b[1])+1e-8
+    return dict(elapsed_ms=r['elapsed_ms'],runs=r['runs'],nodes=r['nodes'],stop=r['stop'],
+        loss=r['threshold_loss'],kernel=r['kernel'],timing_gate_passed=True)
+
+
+def main():
+    p=Path('findings/native-club-time-v1');t=Path('tmp/native-club-time-v1')
+    protocol=json.loads((p/'protocol.json').read_text())
+    assert digest(t/'solver')==protocol['solver_binary_sha256']
+    assert digest(p/'native_club_time.rs')==protocol['helper_sha256']
+    roots=rows('tmp/native-endgame-census-v1/roots.jsonl')
+    assert digest('tmp/native-endgame-census-v1/roots.jsonl')==protocol['roots_sha256']
+    prior=next(r for r in rows('tmp/native-loss-lower-screen-v1/main.jsonl') if (r['game'],r['frame'])==(10,32))
+    results={};records={};protocols={}
+    for name in protocol['run_order']:
+        arm='regions' if name.startswith('regions') else 'control'
+        a=json.loads((t/(name+'.json')).read_text())
+        assert a=={**protocol,'hp_attack_region_capacity':protocol['arms'][arm],'arm':arm,'pass':name}
+        rr=rows(t/(name+'.jsonl'));results[name]=check(rr,a,roots,prior);records[name]=rr;protocols[name]=a
+    rejected=[]
+    for kind in ['time_overshoot','wrong_stop','false_loss']:
+        changed=copy.deepcopy(records['regions-1'])
+        if kind=='time_overshoot':changed[0]['elapsed_ms']=1e9
+        elif kind=='wrong_stop':changed[0]['stop']='NodeBudget'
+        else:changed[0]['threshold_loss']=[2.,2.]
+        try:check(changed,protocols['regions-1'],roots,prior)
+        except AssertionError:rejected.append(kind)
+        else:raise AssertionError('accepted '+kind)
+    result=dict(schema=protocol['schema'],protocol_sha256=digest(p/'protocol.json'),passes=results,
+        artifacts={name:digest(t/(name+'.jsonl')) for name in protocol['run_order']},rejected_mutations=rejected,
+        timing_gate_passed=True,ordinary_bot_changed=False,strength_improvement_proven=False)
+    print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()

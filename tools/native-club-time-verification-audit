@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check(actual, expected, protocol):
+    assert len(actual) == len(expected) == 1
+    a, b = copy.deepcopy(actual[0]), expected[0]
+    verification = a.pop('verification')
+    a.pop('elapsed_ms')
+    assert a['stop'] == 'WorkExhausted' and b['stop'] == 'TimeBudget'
+    a['stop'] = b['stop']
+    limit = protocol['verification_trial_limit']
+    assert a['stats']['trials'] == limit
+    marker = f'verification_trial_limit: Some({limit}), '
+    assert marker in a['config'] and 'time_budget: None' in a['config']
+    a['config'] = a['config'].replace(marker, '').replace('time_budget: None', 'time_budget: Some(6s)')
+    assert a == {k: v for k, v in b.items() if k != 'elapsed_ms'}
+    assert verification['hits'] == a['kernel']['hits'] > 0
+    assert verification['runs'] >= verification['hits']
+    assert 0 <= verification['max_error'] < 1e-10
+    return dict(hits=verification['hits'], extra_verification_runs=verification['runs'],
+                max_probability_error=verification['max_error'], search_outputs_match=True)
+
+
+def main():
+    p = Path('findings/native-club-time-v1')
+    t = Path('tmp/native-club-time-v1')
+    passes = {}
+    for name in ['regions-1', 'regions-2']:
+        protocol_path = p / f'{name}-verification-protocol.json'
+        protocol = json.loads(protocol_path.read_text())
+        assert protocol['verification_is_performance_sample'] is False
+        for path, key in [(t / 'verify-solver', 'verification_binary_sha256'),
+                          (p / 'native_club_time_verify.rs', 'verification_helper_sha256'),
+                          (t / f'{name}.jsonl', 'source_result_sha256')]:
+            assert digest(path) == protocol[key]
+        for path, sha in protocol['verification_patches'].items():
+            assert digest(p / path) == sha
+        records = t / f'{name}-verification.jsonl'
+        actual = [json.loads(line) for line in records.read_text().splitlines()]
+        expected = [json.loads(line) for line in (t / f'{name}.jsonl').read_text().splitlines()]
+        result = check(actual, expected, protocol)
+        rejected = []
+        for kind in ['wrong_hit_count', 'invalid_probability_error', 'changed_payoff', 'changed_trial_count']:
+            changed = copy.deepcopy(actual)
+            if kind == 'wrong_hit_count':
+                changed[0]['verification']['hits'] += 1
+            elif kind == 'invalid_probability_error':
+                changed[0]['verification']['max_error'] = .1
+            elif kind == 'changed_payoff':
+                changed[0]['cells_p0'][0][0] += .1
+            else:
+                changed[0]['stats']['trials'] += 1
+            try:
+                check(changed, expected, protocol)
+            except AssertionError:
+                rejected.append(kind)
+            else:
+                raise AssertionError('accepted ' + kind)
+        result.update(protocol_sha256=digest(protocol_path), records_sha256=digest(records),
+                      rejected_mutations=rejected)
+        passes[name] = result
+    print(json.dumps(dict(passes=passes, performance_sample=False), indent=2))
+
+
+if __name__ == '__main__':
+    main()
