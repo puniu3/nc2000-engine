@@ -1,0 +1,60 @@
+{
+  "schema": "nc2000-native-depth-profile-v1",
+  "source_roots": 360,
+  "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
+  "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "work_budget": 250000,
+  "node_budget": 50000,
+  "cell_cap": 4096,
+  "tolerance": 0.02,
+  "threads": 1,
+  "indices": [
+    77
+  ],
+  "registered_at": "2026-10-07T15:17:19.665495+00:00",
+  "source_census_commit": "d31e427",
+  "helper_sha256": "069f1eb6a5601e39dc2ef30381fca129922d324917cdaf1ed6d21e0ae90898c0",
+  "scope": "Read-only post-search diagnostics reproducing each of the three frozen250k-execution/50k-state runs on game62/frame92. Record initialized/unexpanded retained nodes by turn delta, trial depth and root-cell chance uncertainties. Exclude diagnostic work from elapsed search time. Require every existing non-time output to reproduce exactly. Determine whether the traversal reaches deeper continuations before trying existing material-directed descent; no ordinary bot change.",
+  "classification": {
+    "tight_value_width": 0.02,
+    "pure_loss_proven_lower_gt": 0.02,
+    "pure_loss_small_upper_le": 0.02,
+    "strict_domination_gap_lower_gt": 1e-06,
+    "unresolved_retained": true,
+    "aggregate_by_game": true
+  },
+  "selection": "The sole ordinary-bot Sleep Talk selection among the24 waking-state roots in the frozen360-root census: game62/frame92. Selection uses the current stored state and action, not follow-up regret.",
+  "screen_summary_sha256": "500b007af7583debda194db9a4fe6fc9558b141923380d38ca1cb771dac75b1d",
+  "screen_commit": "dea5166",
+  "healing_moves": [
+    "rest",
+    "recover",
+    "softboiled",
+    "milkdrink",
+    "synthesis",
+    "moonlight",
+    "morningsun"
+  ],
+  "dead_quick_claw_quotient": true,
+  "retain_eager_prefix": true,
+  "selected_only": false,
+  "mode": "loss_lower",
+  "action_overrides": {},
+  "solver_source_sha256": "737b82a959ea7895dc6c68f5c32275ffea4839b823c99abcc6cb92a8a55251e3",
+  "parent_bounds_source_sha256": "fcfa7be284c502d46a508947522604f576c92767b01ba4d7c3ac6b1cd71b29bd",
+  "implementation_commit": "9ba022a45c4016ec2519fcdad3795fa9c39cc8d2",
+  "pilot_summary_sha256": "90dc3eaea9eb66d8364afba4c143e04c867c0e35ca411eb81b0535abc970890e",
+  "nominated_keys": [
+    [
+      62,
+      92
+    ]
+  ],
+  "nomination_summary_sha256": "ba802be3b8108233cb10dc174bac8622cffd464048b2aacf98d778554edd3e1b",
+  "old_screen_archive_sha256": "0a6519922d4b6a675d6f243669f7a1edf42ac0524f596aaed892af6175238d55",
+  "source_helper": "findings/native-depth-profile-v1/native_depth_profile.rs",
+  "selection_correction": "The nomination root_index117 is file order, whereas this frozen solver sorts by game/frame. The initial record game62/frame172 is excluded. Corrected indices are derived by the nominated game/frame pair before this run.",
+  "enumerate_source_sha256": "6ac1d14740da165c92c7ccdb35573d523e24e0144133bcfef216f10816e53d2a",
+  "solver_binary_sha256": "438c8b13ee821fef7b13889b2fcc166e65e7728a635b5079381145eec224a72c",
+  "probability_first_eager": false
+}
