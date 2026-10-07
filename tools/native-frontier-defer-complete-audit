@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+import copy
+import hashlib
+import json
+import runpy
+from pathlib import Path
+
+
+def check(actual, protocol, root, prior, parent):
+    base = runpy.run_path('tools/native-snorlax-witness-audit')['check'](actual, protocol, root, prior)
+    for row, job in zip(actual, protocol['jobs']):
+        enabled = str(job['defer']).lower()
+        assert f'retain_eager_prefix: {enabled}' in row['config']
+        assert f'defer_eager_frontier: {enabled}' in row['config']
+        assert row['deferred_eager_leaves'] > 0 if job['defer'] else row['deferred_eager_leaves'] == 0
+        if not job['defer']: assert row['deferred_eager_leaves'] == 0
+    ignore = {'elapsed_ms', 'id'}
+    for a, b in [(actual[0], actual[3]), (actual[1], actual[2])]:
+        assert {k:v for k,v in a.items() if k not in ignore|{'job'}} == {k:v for k,v in b.items() if k not in ignore|{'job'}}
+        assert {k:v for k,v in a['job'].items() if k!='id'} == {k:v for k,v in b['job'].items() if k!='id'}
+    for k, v in parent.items():
+        if k not in ['id', 'job', 'elapsed_ms']:
+            assert actual[0][k] == v
+    base.update(repeats_match=True, control_reproduces_parent=True,
+                candidate_activated=actual[1]['deferred_eager_leaves']>0,
+                lower_bound_change=actual[1]['transfer_bound']-actual[0]['transfer_bound'],
+                interval_width_change=(actual[1]['target_score_interval'][1]-actual[1]['target_score_interval'][0])-(actual[0]['target_score_interval'][1]-actual[0]['target_score_interval'][0]),
+                deferred_eager_leaves=[r['deferred_eager_leaves'] for r in actual])
+    return base
+
+
+def main():
+    m = runpy.run_path('tools/native-snorlax-witness-audit')
+    p = Path('findings/native-frontier-defer-complete-v1')
+    t = Path('tmp/native-frontier-defer-complete-v1')
+    protocol = json.loads((p/'protocol.json').read_text())
+    for path, key in [(p/'native_frontier_defer_complete.rs','helper_sha256'),(t/'solver','solver_binary_sha256'),('crates/bot/src/bounds.rs','bounds_sha256'),('crates/engine/src/battle/enumerate.rs','enumerate_sha256'),('tmp/native-endgame-census-v1/roots.jsonl','roots_sha256'),(protocol['reference_archive'],'reference_archive_sha256')]:
+        assert m['digest'](path) == protocol[key]
+    root = next(r['record'] for r in m['rows']('tmp/native-endgame-census-v1/roots.jsonl') if (r['record']['game'],r['record']['frame']) == (87,49))
+    prior = next(r for r in m['rows'](protocol['reference_archive']) if (r['game'],r['frame']) == (87,49))
+    parent = next(r for r in m['rows']('findings/native-snorlax-witness-v1/records.jsonl.gz') if r['id'] == 'rest-guarantee')
+    actual = m['rows'](t/'main.jsonl')
+    result = check(actual, protocol, root, prior, parent)
+    rejected = []
+    for kind in ['missing_job','false_bound','wrong_mode','changed_repeat','restricted_reply']:
+        r = copy.deepcopy(actual)
+        if kind == 'missing_job': r.pop()
+        elif kind == 'false_bound': r[1]['transfer_bound'] = 1.
+        elif kind == 'wrong_mode': r[1]['config'] = r[0]['config']
+        elif kind == 'changed_repeat': r[2]['nodes'] += 1
+        else: r[1]['restricted_actions'][1-r[1]['fixed_side']].pop()
+        try: check(r, protocol, root, prior, parent)
+        except AssertionError: rejected.append(kind)
+        else: raise AssertionError('accepted '+kind)
+    vp = json.loads((p/'verification-protocol.json').read_text())
+    verification = json.loads((t/'verification.json').read_text())
+    assert m['digest'](p/'native_frontier_script_verify.rs') == vp['helper_sha256']
+    assert m['digest'](t/'verify-solver') == vp['binary_sha256']
+    assert verification['records_sha256'] == vp['input_records_sha256'] == m['digest']('tmp/native-frontier-refine-v1/main.jsonl')
+    assert verification['cells_checked'] == 256 and verification['policy_validation_runs'] == 64
+    assert verification['max_probability_error'] == 0 and verification['merged_leaves'] > 0
+    assert verification['leaf_replays'] >= verification['merged_leaves']
+    assert verification['performance_sample'] is False
+    result.update(schema=protocol['schema'], protocol_sha256=m['digest'](p/'protocol.json'), records_sha256=m['digest'](t/'main.jsonl'), rejected_mutations=rejected, ordinary_bot_changed=False, strength_improvement_proven=False, matched_time_comparison=False,
+                  representative_verification=verification,
+                  total_verification_engine_runs=sum(verification[k] for k in ['extra_engine_runs','leaf_replays','policy_validation_runs']))
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()
