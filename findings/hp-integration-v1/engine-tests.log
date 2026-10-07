@@ -1,0 +1,134 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling nc2000-engine v0.1.0 (/Volumes/Work/puniu/nc2000-engine/tmp/hp-canonical/crates/engine)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.95s
+     Running unittests src/lib.rs (target/debug/deps/nc2000_engine-9664e1c0eebbde51)
+
+running 17 tests
+test prng::tests::sensitive_damage_falls_back_to_exact_classes ... ok
+test prng::tests::seeded_context_path_is_bit_identical ... ok
+test prng::tests::heal_split_adds_only_two_representatives ... ok
+test prng::tests::mean_damage_is_one_probability_preserving_class ... ok
+test prng::tests::minimal_endpoint_probes_preserve_buckets_and_span_representatives ... ok
+test prng::tests::threshold_damage_splits_ko_from_survival ... ok
+test prng::tests::lean_clock_components_can_be_ablated_independently ... ok
+test fxhash::tests::paired_fingerprint_preserves_primitive_writes_and_composite_hashes ... ok
+test validate::tests::canonicalized_team_constructs_a_battle ... ok
+test validate::tests::unown_forme ... ok
+test validate::tests::canonicalize_fixes_derivables ... ok
+test validate::tests::dragonite_evolution_floor ... ok
+test validate::tests::clean_team_passes_with_no_findings ... ok
+test validate::tests::team_level_clauses ... ok
+test validate::tests::hidden_power_typing ... ok
+test validate::tests::error_catalogue ... ok
+test validate::tests::clause_dupes ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/ghost_trapping.rs (target/debug/deps/ghost_trapping-ceb73ba30909108c)
+
+running 13 tests
+test spider_web_gengar ... ok
+test mean_look_gengar ... ok
+test clamp_gengar ... ok
+test fire_spin_misdreavus ... ok
+test spider_web_misdreavus ... ok
+test fire_spin_gengar ... ok
+test mean_look_snorlax ... ok
+test clamp_misdreavus ... ok
+test mean_look_misdreavus ... ok
+test spider_web_snorlax ... ok
+test clamp_snorlax ... ok
+test fire_spin_snorlax ... ok
+test try_trap_agrees_with_gen2_status_immunity ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/hidden_power_aliases.rs (target/debug/deps/hidden_power_aliases-c092d96b962d0e99)
+
+running 3 tests
+test lower_power_changes_damage_and_input_aliases_share_public_logs ... ok
+test kings_rock_applies_to_typed_input ... ok
+test all_types_use_the_canonical_slot_and_keep_dv_properties ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/packed_effect_data.rs (target/debug/deps/packed_effect_data-9ac31f6744034cfe)
+
+running 2 tests
+test effect_updates_replace_values_and_preserve_scalar_equality ... ok
+test scalar_storage_preserves_all_variants_and_float_bits ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/preview_caps.rs (target/debug/deps/preview_caps-890c169ebc2be3de)
+
+running 2 tests
+test ordinary_preview_keeps_level_limit_and_smaller_parties_work ... ok
+test relaxed_preview_is_side_specific_and_survives_cloning ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/sleep_clause.rs (target/debug/deps/sleep_clause-47d4b445317f5673)
+
+running 18 tests
+test a_missed_sleep_move_does_not_forfeit ... ok
+test first_sleep_berries_cure_normally_and_release_the_clause ... ok
+test encore_forcing_a_sleep_move_still_forfeits ... ok
+test forfeit_stops_after_move_damage_and_the_remaining_turn ... ok
+test a_sleep_move_called_by_metronome_still_forfeits ... ok
+test freeze_is_independent_of_sleep_and_blocks_only_a_second_freeze ... ok
+test failed_sleep_does_not_forfeit ... ok
+test a_second_foe_sleep_forfeits_on_a_staying_or_switching_target ... ok
+test an_existing_rest_sleeper_counts_and_berries_do_not_prevent_forfeit ... ok
+test rest_after_foe_sleep_is_legal ... ok
+test curing_sleep_before_a_slower_sleep_move_makes_the_infliction_legal ... ok
+test cured_or_fainted_sleepers_do_not_count ... ok
+test restored_sleepers_do_not_reenact_infliction_in_either_order ... ok
+test thawing_releases_only_the_freeze_clause ... ok
+test unpicked_sleepers_do_not_engage_the_clause ... ok
+test sleep_talk_and_mirror_move_attribute_sleep_to_the_caller ... ok
+test restoring_non_sleep_status_preserves_companion_effects ... ok
+test the_inflicting_side_loses_with_logging_enabled_or_disabled ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/structured_choices.rs (target/debug/deps/structured_choices-998f871872fcf6b3)
+
+running 2 tests
+test malformed_and_partial_teams_and_wrong_requests_match ... ok
+test disabled_struggle_recharge_and_lock_match ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/verdicts_engine_rules.rs (target/debug/deps/verdicts_engine_rules-5aa794291b7e0ea0)
+
+running 18 tests
+test q1_trapper_fainting_frees_the_victim ... ok
+test q1_meanlook_sets_trapped_and_blocks_switch ... ok
+test q3_slower_attacker_hits_an_already_awake_sleeper ... ok
+test q4_awake_sleep_talk_fails_and_still_spends_pp ... ok
+test q2_perish_counter_is_a_volatile_dropped_on_switch_out ... ok
+test q1_trapped_mon_can_whirlwind_the_ghost_trapper_out_and_is_freed ... ok
+test q1_trapper_switching_out_frees_the_victim ... ok
+test q1_trapped_victim_can_still_be_dragged_out ... ok
+test q3_rest_sleeps_two_turns_and_wakes_inside_its_own_beforemove ... ok
+test q1_faster_whirlwind_fails_when_the_slower_one_is_still_queued ... ok
+test q2_phazed_out_mon_returns_without_a_counter ... ok
+test q5_sleeping_or_statused_target_cannot_be_frozen ... ok
+test q7_non_ghost_curse_boosts_and_costs_speed ... ok
+test q6_return_is_immune_but_earthquake_is_not ... ok
+test q5_freeze_clause_alive_blocks_fainted_does_not ... ok
+test q2_both_holders_faint_and_reentry_is_clean ... ok
+test q8_double_team_and_bright_powder_stack ... ok
+test q8_bright_powder_turns_a_never_miss_move_into_235_of_256 ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s
+
+   Doc-tests nc2000_engine
+
+running 1 test
+test crates/engine/src/battle/search.rs - battle::search (line 9) ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

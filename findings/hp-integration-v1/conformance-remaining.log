@@ -1,0 +1,78 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.97s
+     Running tests/meta_pool.rs (target/debug/deps/meta_pool-b98c9aeb9d03ed65)
+
+running 2 tests
+test meta_pool_preview_respects_max_total_level ... ok
+test meta_pool_teams_play_to_completion ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/operational_parity.rs (target/debug/deps/operational_parity-8f37f916549ddf44)
+
+running 1 test
+test operational_rules_preserve_reference_state_and_rng_until_a_sleep_forfeit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.95s
+
+     Running tests/prng_parity.rs (target/debug/deps/prng_parity-071855356ee2e6e4)
+
+running 1 test
+test prng_matches_reference_vectors ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ps_sleep_clause.rs (target/debug/deps/ps_sleep_clause-198a4bd4fbaa8795)
+
+running 2 tests
+test second_foe_sleep_is_blocked ... ok
+test rest_sleep_does_not_engage_the_clause ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/replay.rs (target/debug/deps/replay-afbefa210a867e54)
+
+running 4 tests
+test puredata_corpus_replays_bit_exact ... ok
+test full_corpus_replays_bit_exact ... ok
+test directed_corpus_replays_bit_exact ... ok
+test directed_sleep_corpus_replays_bit_exact ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.33s
+
+     Running tests/search_api.rs (target/debug/deps/search_api-723f128ec108f05d)
+
+running 5 tests
+test nolog_replay_reaches_identical_state ... ok
+test random_playouts_terminate ... ok
+test reusable_battle_clone_resets_every_field ... ok
+test legal_choices_cover_corpus ... ok
+test search_keys_preserve_state_partitions ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.21s
+
+     Running tests/team_products.rs (target/debug/deps/team_products-7cdaf79323c32d65)
+
+running 5 tests
+test weights_are_distributions ... ok
+test memberships_follow_the_labels ... ok
+test dominated_verdicts_name_a_live_replacement ... ok
+test shipped_sets_are_the_inventory_sets ... ok
+test every_shipped_team_is_legal_and_plays_out ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+     Running tests/team_products_v2.rs (target/debug/deps/team_products_v2-55e4dac3aead4aa4)
+
+running 6 tests
+test the_live_profile_is_blind_at_c_0_4 ... ok
+test draw_weights_are_cluster_balanced ... ok
+test everything_was_measured_on_the_frozen_prior ... ok
+test memberships_follow_the_selection ... ok
+test shipped_sets_are_the_inventory_sets ... ok
+test every_shipped_team_is_legal_and_plays_out ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+

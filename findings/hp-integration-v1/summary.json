@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-07",
+  "integration_commit": "27b27e3dbe5d50316ab9442e3d8d6538efc23424",
+  "candidate_commit": "752ad3c39e348a2b17558a0010cdc4ccd5d46674",
+  "runtime_diff_from_tested_branch": "",
+  "integrated": true,
+  "deployed": false,
+  "certified_policy_integrated": false,
+  "strength_vs_deployed": "unproved",
+  "checks": {
+    "engine": {
+      "passed": 75,
+      "failed": 0
+    },
+    "conformance_remaining": {
+      "passed": 26,
+      "failed": 0
+    },
+    "conformance_earlier": {
+      "passed": 11,
+      "failed": 1
+    },
+    "bot": {
+      "passed": 230,
+      "failed": 0
+    },
+    "wasm": {
+      "passed": 8,
+      "failed": 0
+    },
+    "legacy_baseline": {
+      "passed": 0,
+      "failed": 1
+    }
+  },
+  "legacy_replay_failure": "frozen_compact_replay_remains_compatible fails with incompatible replay version on both the baseline and candidate; not a new passing compatibility claim",
+  "browser": {
+    "seed_input": 7,
+    "status": 200,
+    "button": "Hidden Power\nICE\nSpecial\n35 BP\nPP 24/24\nType and power are fixed by the user's DVs (shown values are the actual ones).",
+    "public_move_present": true,
+    "errors": [],
+    "overflow": false,
+    "privacy": [
+      {
+        "status": 403,
+        "type": null
+      },
+      {
+        "status": 200,
+        "type": "text/html"
+      }
+    ]
+  },
+  "preview": "https://mini-usb.local:18080/nc2000-hp/",
+  "proof_engine_matches_integrated_engine": true,
+  "proof_summary_sha256": "97ab7fb8df7557723fffc04811df80b9f019d5378e134cf4150ed612ee40864b",
+  "wasm_sha256": "75352a51ff9f55a117b0501fa9144fb86a942e735f672b7b95a34d399a7f1e43",
+  "preview_wasm_sha256": "75352a51ff9f55a117b0501fa9144fb86a942e735f672b7b95a34d399a7f1e43",
+  "changed_source_hashes": {
+    "crates/engine/src/battle/choices.rs": "d85f199ebc17262f84ad9931720911494f9a18809c6d2197b70f08b76ba8f304",
+    "crates/engine/src/battle/mod.rs": "0769921956f1ce181b9f7267519826761e52a7ff1f22d6d671bec2499599af3d",
+    "crates/engine/src/dex.rs": "01ed292c69b2906e263641281e5736f9568b54908c4827a9def4c8eb6c6954c1",
+    "crates/engine/tests/hidden_power_aliases.rs": "6302bba5419f69e19c5141ca3b38869e5cf0aac244e65befa3b0f78c04459d1a",
+    "crates/bot/src/belief.rs": "c764e7c99a6bf47c8b0827426f503d8a5584e3f1f47a1565c74cb8c0cb0a36fa",
+    "crates/bot/src/observe.rs": "aeaf3a271bc5eb997ec51231d0e0ab8a277c194350757b3dfdf6ccd61016d36a",
+    "crates/wasm/src/lib.rs": "c996b34db6139e4e9edd9af4cc8c3465d0f56dfba19ccc636e9064f76288e115"
+  },
+  "artifact_hashes": {
+    "bot-tests.log": "4ff1bbadbc29a365d0fee997e9eac7c21bf127da58a0ccaf491ffd9b4fcaa47c",
+    "browser-check.json": "4b3eec318612dcecc094a7bbf0ce400836156056fb616d5c6bdaaca7a2cd81da",
+    "browser-check.mjs": "490c93a75a59cbbebca8e377d172984e30fa40e082896b0c5c3eb573dfb9ccb5",
+    "conformance-earlier.log": "21ced8e459c8c896b6f631be8487c3c9a3f7916544513de9d3eb4a093c04e8ab",
+    "conformance-remaining.log": "2d166f96caf0cd0b73d4e9a2033b7329a6ba8a7206d6bce41a3ac6a1d3b684df",
+    "engine-tests.log": "2ea2c7e02f279e99228df33a10f48517529301381bb26268b5fb64e3f6b3c404",
+    "legacy-replay-baseline.log": "3bb72349e2a8c5ce9fbbd4bf63a5ec406832b7ffecba50d82cf55aa045ab45c7",
+    "wasm-build.log": "52a60067cd975eaac07c3042c417ff8d5c2ef9e126009f9463665111501a28bb",
+    "wasm-tests.log": "52f6e41dac07f442b4622f58aaa4f30259d84d17c38306c3aa609abd1d01e5fa",
+    "web-build.log": "053e0b66929a924ba952e2990c0ee593f3d8350427aba9371c0ad0a28bc1508e"
+  }
+}
