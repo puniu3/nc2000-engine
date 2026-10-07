@@ -35629,6 +35629,844 @@
         "strength_improvement_proven": false,
         "registration_commit": "212cbde"
       }
+    },
+    "findings/native-attack-kernels-v1/summary.json": {
+      "sha256": "d8754a2ca67c06533aa73b11d957128482159fa1b13d35bd43d0a6ec433dfc5e",
+      "data": {
+        "coverage": [
+          {
+            "game": 0,
+            "frame": 18,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 0
+          },
+          {
+            "game": 3,
+            "frame": 97,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 0
+          },
+          {
+            "game": 4,
+            "frame": 60,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 8
+          },
+          {
+            "game": 10,
+            "frame": 32,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 0
+          },
+          {
+            "game": 13,
+            "frame": 41,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 4
+          },
+          {
+            "game": 16,
+            "frame": 18,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 0
+          }
+        ],
+        "cases": 12,
+        "calls_per_pass": 96,
+        "total_compared_distributions": 576,
+        "all_semantic_probability_hashes_match": true,
+        "arms": {
+          "control": {
+            "runs": 35815,
+            "calls": 96,
+            "milliseconds": [
+              501.99462300000005,
+              494.08933300000007
+            ],
+            "mean_ms": 498.0419780000001,
+            "kernel_stats": {
+              "calls": 0,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "elapsed_ratio_to_control": 1.0
+          },
+          "scripts": {
+            "runs": 28675,
+            "calls": 96,
+            "milliseconds": [
+              539.2308300000001,
+              546.0819520000001
+            ],
+            "mean_ms": 542.6563910000001,
+            "kernel_stats": {
+              "calls": 0,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "elapsed_ratio_to_control": 1.089579623748101
+          },
+          "kernel": {
+            "runs": 35815,
+            "calls": 96,
+            "milliseconds": [
+              490.15703800000006,
+              497.9459620000001
+            ],
+            "mean_ms": 494.0515000000001,
+            "kernel_stats": {
+              "calls": 96,
+              "eligible": 96,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 96,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "elapsed_ratio_to_control": 0.991987667352811
+          }
+        },
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false,
+        "schema": "nc2000-native-attack-kernels-v1",
+        "protocol_sha256": "46aaf460cf59ee03180769ae923e77f23138c04abe6ff60f69b2bc42fedf51b8",
+        "records_sha256": "488505cf8ec6a7e0883e9625ba2e38c69698b3a66120f6b2ed3a6675f1be1b45",
+        "frozen_loss_outputs_match": true,
+        "rejected_mutations": [
+          "wrong_probability_hash",
+          "missing_pass",
+          "false_coverage",
+          "wrong_calls"
+        ]
+      }
+    },
+    "findings/native-attack-regions-v1/summary.json": {
+      "sha256": "40f5af718f50ea87106b58a9dbbee129423f66981f60e4c2410caf8b4e1821ac",
+      "data": {
+        "coverage": [
+          {
+            "game": 0,
+            "frame": 18,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 0
+          },
+          {
+            "game": 3,
+            "frame": 97,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 0
+          },
+          {
+            "game": 4,
+            "frame": 60,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 8
+          },
+          {
+            "game": 10,
+            "frame": 32,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 0
+          },
+          {
+            "game": 13,
+            "frame": 41,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 4
+          },
+          {
+            "game": 16,
+            "frame": 18,
+            "families": 8,
+            "states": 64,
+            "legal_pairs": 128,
+            "admitted_pairs": 0
+          }
+        ],
+        "cases": 12,
+        "calls_per_pass": 96,
+        "total_compared_distributions": 768,
+        "all_semantic_probability_hashes_match": true,
+        "arms": {
+          "control": {
+            "runs": 35815,
+            "calls": 96,
+            "milliseconds": [
+              479.51978900000006,
+              519.496264
+            ],
+            "mean_ms": 499.5080265,
+            "kernel_stats": {
+              "calls": 0,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "elapsed_ratio_to_control": 1.0
+          },
+          "scripts": {
+            "runs": 28675,
+            "calls": 96,
+            "milliseconds": [
+              512.898956,
+              551.7065840000001
+            ],
+            "mean_ms": 532.30277,
+            "kernel_stats": {
+              "calls": 0,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "elapsed_ratio_to_control": 1.0656540871420812
+          },
+          "kernel": {
+            "runs": 35815,
+            "calls": 96,
+            "milliseconds": [
+              470.2750879999999,
+              485.192876
+            ],
+            "mean_ms": 477.73398199999997,
+            "kernel_stats": {
+              "calls": 96,
+              "eligible": 96,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 96,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "elapsed_ratio_to_control": 0.9564090197857911
+          },
+          "regions": {
+            "runs": 29781,
+            "calls": 96,
+            "milliseconds": [
+              438.13054300000016,
+              441.886876
+            ],
+            "mean_ms": 440.00870950000007,
+            "kernel_stats": {
+              "calls": 96,
+              "eligible": 96,
+              "hits": 36,
+              "rejected_hp": 48,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 28,
+              "peak_leaves": 16381,
+              "translated_leaves": 3017
+            },
+            "elapsed_ratio_to_control": 0.8808841623288711
+          }
+        },
+        "ordinary_bot_changed": false,
+        "strength_improvement_proven": false,
+        "schema": "nc2000-native-attack-regions-v1",
+        "protocol_sha256": "6ebc56d4bed11af24a677ecfdfecc856cae6acb485f54f788d0c49de31827442",
+        "records_sha256": "7fb2aafc03e977ebec219fe0b5420ce60800a9047013121fafb5428b5808f850",
+        "frozen_loss_outputs_match": true,
+        "rejected_mutations": [
+          "wrong_probability_hash",
+          "missing_pass",
+          "false_coverage",
+          "wrong_calls"
+        ],
+        "implementation_commit": "69f8da1",
+        "terminal_hp_grid_comparisons": 208,
+        "admitted_move_item_status_conditions": 80
+      }
+    },
+    "findings/native-region-solver-v1/summary.json": {
+      "sha256": "f582088781e3f2ead367d10fdf39b1fc260b78fbf9074c73cc8b187d8501e49e",
+      "data": {
+        "schema": "nc2000-native-region-solver-v1",
+        "protocol_sha256": "ebfc412b8ad8b15b889de419dc383e8cec806ab8108098e4584df7f60fc75a89",
+        "passes": {
+          "control-1": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 6,
+              "games": 6,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  13,
+                  41
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 36127,
+            "max_runs": 250000
+          },
+          "regions-1": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 6,
+              "games": 6,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  13,
+                  41
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 36127,
+            "max_runs": 250000
+          },
+          "regions-2": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 6,
+              "games": 6,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  13,
+                  41
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 36127,
+            "max_runs": 250000
+          },
+          "control-2": {
+            "roots": 6,
+            "games": 6,
+            "runs": 1500000,
+            "stops": {
+              "WorkExhausted": 6
+            },
+            "value_width_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_at_most_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_pure_loss_above_002": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "selected_strictly_dominated": {
+              "roots": 0,
+              "games": 0,
+              "keys": []
+            },
+            "unresolved_selected_pure_loss": {
+              "roots": 6,
+              "games": 6,
+              "keys": [
+                [
+                  0,
+                  18
+                ],
+                [
+                  3,
+                  97
+                ],
+                [
+                  4,
+                  60
+                ],
+                [
+                  10,
+                  32
+                ],
+                [
+                  13,
+                  41
+                ],
+                [
+                  16,
+                  18
+                ]
+              ]
+            },
+            "max_nodes_plus_closed": 36127,
+            "max_runs": 250000
+          }
+        },
+        "comparisons": [
+          {
+            "game": 0,
+            "frame": 18,
+            "control_loss": [
+              0.0,
+              0.7447208493191223
+            ],
+            "region_loss": [
+              0.0,
+              0.7447208493191223
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                4980.655875,
+                4951.919583999999
+              ],
+              "regions": [
+                5037.316374999999,
+                5048.06625
+              ]
+            },
+            "elapsed_ratio": 1.0153844455177572,
+            "kernel": {
+              "calls": 231,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              14435,
+              14435
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          },
+          {
+            "game": 3,
+            "frame": 97,
+            "control_loss": [
+              0.0,
+              0.9496806103462128
+            ],
+            "region_loss": [
+              0.0,
+              0.9496806103462128
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                6700.284167,
+                6094.040916
+              ],
+              "regions": [
+                5970.03825,
+                6353.323833
+              ]
+            },
+            "elapsed_ratio": 0.9631896956701707,
+            "kernel": {
+              "calls": 866,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              36127,
+              36127
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          },
+          {
+            "game": 4,
+            "frame": 60,
+            "control_loss": [
+              0.0,
+              0.4326923078770051
+            ],
+            "region_loss": [
+              0.0,
+              0.4326923078770051
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                6056.954125,
+                5827.271542
+              ],
+              "regions": [
+                6066.1605420000005,
+                5962.800875
+              ]
+            },
+            "elapsed_ratio": 1.012178811986203,
+            "kernel": {
+              "calls": 854,
+              "eligible": 12,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 10822,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              33114,
+              33114
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          },
+          {
+            "game": 10,
+            "frame": 32,
+            "control_loss": [
+              0.0,
+              0.06826167249688964
+            ],
+            "region_loss": [
+              0.0,
+              0.06826167249688964
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                6100.295499999999,
+                5974.386708
+              ],
+              "regions": [
+                6102.334958,
+                5700.8994170000005
+              ]
+            },
+            "elapsed_ratio": 0.9775192565465489,
+            "kernel": {
+              "calls": 3710,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              35181,
+              35181
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          },
+          {
+            "game": 13,
+            "frame": 41,
+            "control_loss": [
+              0.0,
+              1.0
+            ],
+            "region_loss": [
+              0.0,
+              1.0
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                5293.444333,
+                5341.812583
+              ],
+              "regions": [
+                5285.337458,
+                5327.080292
+              ]
+            },
+            "elapsed_ratio": 0.9978525045346446,
+            "kernel": {
+              "calls": 139,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              21118,
+              21118
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          },
+          {
+            "game": 16,
+            "frame": 18,
+            "control_loss": [
+              0.0,
+              0.06723047089976741
+            ],
+            "region_loss": [
+              0.0,
+              0.06723047089976741
+            ],
+            "upper_change": 0.0,
+            "timing_ms": {
+              "control": [
+                5477.329334,
+                5423.916625000001
+              ],
+              "regions": [
+                5319.837584,
+                5452.63875
+              ]
+            },
+            "elapsed_ratio": 0.9881876231868991,
+            "kernel": {
+              "calls": 1603,
+              "eligible": 0,
+              "hits": 0,
+              "rejected_hp": 0,
+              "rejected_source": 0,
+              "rejected_capacity": 0,
+              "evictions": 0,
+              "peak_leaves": 0,
+              "translated_leaves": 0
+            },
+            "nodes": [
+              14592,
+              14592
+            ],
+            "runs": [
+              250000,
+              250000
+            ]
+          }
+        ],
+        "total_timing_ms": {
+          "control": [
+            34608.963334,
+            33613.347958
+          ],
+          "regions": [
+            33781.025167,
+            33844.809417
+          ]
+        },
+        "elapsed_ratio": 0.991256867486547,
+        "repeats_match": true,
+        "control_matches_frozen": true,
+        "rejected_mutations": [
+          "missing_root",
+          "wrong_cache_capacity",
+          "false_loss",
+          "invalid_cell"
+        ],
+        "ordinary_bot_changed": false,
+        "main_solver_changed": false,
+        "strength_improvement_proven": false,
+        "artifacts": {
+          "control-1": "a879be3b7ace9b4f4cd74fd2079f7e6ecc894f13494a3be9b85b16cdba3a4557",
+          "regions-1": "b430a255fb02ca0b851bea0a96500b6c0beb6a757e914263aab244ba073f1c7a",
+          "regions-2": "2aff8d0312fca491864b08e933bccab6e505c515e94a1b841402915f15929557",
+          "control-2": "212970917583b712057065ea28d99d814cc65d5c58f9dc3361e7b2c6cf32108c"
+        },
+        "registration_commit": "98386a8",
+        "decision": "do_not_integrate",
+        "total_candidate_calls_per_pass": 7403,
+        "total_candidate_eligible_per_pass": 12,
+        "total_candidate_hits_per_pass": 0
+      }
     }
   },
   "foresight_fix": {
@@ -41753,7 +42591,7 @@
     "strength_vs_deployed": "unproved"
   },
   "latest_report": {
-    "checked_at": "2026-10-07T20:17:10.194790+09:00",
+    "checked_at": "2026-10-07T20:53:12.399747+09:00",
     "study": "native-deployed-duel-v1",
     "preregistration_commit": "0c69b5d",
     "status": "complete",
@@ -41791,7 +42629,8 @@
     "followup_quotient": "native-endgame-quotient-v1",
     "followup_loss_lower": "native-loss-lower-screen-v1",
     "followup_counterfactual": "native-counterfactual-loss-v1",
-    "followup_resource_fibers": "native-resource-fibers-v1"
+    "followup_resource_fibers": "native-resource-fibers-v1",
+    "followup_region_solver": "native-region-solver-v1"
   },
   "native_endgame_census": {
     "status": "complete",
@@ -41854,6 +42693,18 @@
     "hp_only_count_reduction_max": 0.9933014089185374,
     "semantic_quotient_proven": false,
     "ordinary_bot_changed": false,
+    "strength_improvement_proven": false
+  },
+  "native_region_solver": {
+    "status": "complete",
+    "decision": "do_not_integrate",
+    "roots": 6,
+    "calls_per_candidate_pass": 7403,
+    "eligible_per_candidate_pass": 12,
+    "hits_per_candidate_pass": 0,
+    "changed_root_bounds": 0,
+    "ordinary_bot_changed": false,
+    "main_solver_changed": false,
     "strength_improvement_proven": false
   }
 }
