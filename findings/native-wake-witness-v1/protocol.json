@@ -1,0 +1,81 @@
+{
+  "schema": "nc2000-native-wake-witness-v1",
+  "registered_at": "2026-10-07T14:28:20.504014+00:00",
+  "implementation_commit": "047f699d30ffaf64ff4b0a0faee8a75b06695375",
+  "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
+  "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "helper_sha256": "fa092b94eac9f8afc718bbd1152bbdcf98fba5f95d2b8434bed46a75d4e588b2",
+  "bounds_sha256": "61fdba7d569f729f09404877bd8e4b2b98ddde0905a41f141044ccff6f7ec515",
+  "work_budget": 2000000,
+  "node_budget": 200000,
+  "jobs": [
+    {
+      "id": "trial-0",
+      "direction": "lower",
+      "target": "rest",
+      "first": "rest",
+      "priority": [
+        "doubleedge",
+        "curse",
+        "rest",
+        "sleeptalk"
+      ],
+      "sleep_talk": true,
+      "defer": false,
+      "wake_priority": false
+    },
+    {
+      "id": "trial-1",
+      "direction": "lower",
+      "target": "rest",
+      "first": "rest",
+      "priority": [
+        "doubleedge",
+        "curse",
+        "rest",
+        "sleeptalk"
+      ],
+      "sleep_talk": true,
+      "defer": false,
+      "wake_priority": true
+    },
+    {
+      "id": "trial-2",
+      "direction": "lower",
+      "target": "rest",
+      "first": "rest",
+      "priority": [
+        "doubleedge",
+        "curse",
+        "rest",
+        "sleeptalk"
+      ],
+      "sleep_talk": true,
+      "defer": false,
+      "wake_priority": true
+    },
+    {
+      "id": "trial-3",
+      "direction": "lower",
+      "target": "rest",
+      "first": "rest",
+      "priority": [
+        "doubleedge",
+        "curse",
+        "rest",
+        "sleeptalk"
+      ],
+      "sleep_talk": true,
+      "defer": false,
+      "wake_priority": false
+    }
+  ],
+  "reference_archive": "findings/native-loss-lower-screen-v1/records.jsonl.gz",
+  "reference_archive_sha256": "0a6519922d4b6a675d6f243669f7a1edf42ac0524f596aaed892af6175238d55",
+  "selection_summary_sha256": "4f14cf2b73134c26a7633e15597bcd4993896a3b2e9a6909673079972b6ed424",
+  "selection": "The first-ranked root in the completed cap4096 one-step census: game87/frame49, actual Rest versus Double Edge. Immediate-win difference is a hypothesis, not an error certificate.",
+  "scope": "ABBA same ceilings2m engine executions/200k retained states/eps1e-6. Game87/frame49 Rest-first own fixed policy, all opponent choices free. Compare old Sleep Talk at any Slp state with opt-in registered priority on waking turns. Deferral false for both. Require default parent reproduction, deterministic non-time repeats, expanded waking-state activation, independent matrix checks. This changes a research witness policy only, not sleep rules or usual-bot decisions; compare lower guarantees without ranking true policy values from lower endpoints.",
+  "ordinary_bot_changed": false,
+  "enumerate_sha256": "b2b5120d27c14ff8b73dd5c5ca98c29f4b75fd519384bd46ec14eb95d1879b58",
+  "solver_binary_sha256": "a225cdd189cc1974d549e444587874d685e1b8b3d6c855f3a455790bfec47520"
+}
