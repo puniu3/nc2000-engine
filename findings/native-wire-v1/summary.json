@@ -1,0 +1,19 @@
+{
+  "games": 16,
+  "states": 345,
+  "current_roundtrips": 345,
+  "deployed_roundtrips": 345,
+  "direct_transfer_searches_equal": 622,
+  "states_with_queue": 76,
+  "states_with_active_move": 0,
+  "negative_controls": 3,
+  "hashes": {
+    "tmp/native-wire-v1/states.jsonl": "c31a07258052f76b762782a9c6556c697346765e1140d4be6fb77df0b10e4e58",
+    "tmp/native-wire-v1/current-worker": "a8bf65829bdade4736a189653bb963bf863edefe27ddcc8eb75cb35789da901e",
+    "tmp/native-wire-v1/deployed-worker": "8c973d54ce32f0d3420e9439ef4fe1349d50a51e6c8c0d4cd556216c2040178f",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "/Volumes/Work/puniu/nc2000-engine/tools/native-wire-check": "129795188045ebc91208d991144e83c83ced060a09efc5ef595d2d9208ad2957"
+  },
+  "scope": "Research transport feasibility: current in-process native searches equal transferred current searches; current and deployed engines restore all serialized state, seeded PRNG, debug clone and persistent state key. No head-to-head strength measurement, browser wall-time equivalence or strategy improvement is established."
+}

@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+root = Path(sys.argv[1]).resolve()
+assert not subprocess.check_output(['git', '-C', str(root), 'diff', '--name-only'], text=True).strip()
+engine = root / 'crates/engine'
+state = engine / 'src/state.rs'
+s = state.read_text()
+s, count = re.subn(r'^(pub )?(struct|enum) (\w+)',
+                  r'#[derive(serde::Serialize, serde::Deserialize)]\n\g<0>', s, flags=re.M)
+assert count == 33, count
+s = s.replace('    pub listener_pool:', '    #[serde(skip)]\n    pub listener_pool:')
+s = s.replace('    pub prng: BattleRng,', '    #[serde(with = "crate::research_wire::rng")]\n    pub prng: BattleRng,')
+s, count = re.subn(r"^(    pub \w+: &'static str,)$",
+                  r'    #[serde(deserialize_with = "crate::research_wire::intern")]\n\1', s, flags=re.M)
+assert count == 3, count
+s = s.replace("    pub non_ghost_target: Option<&'static str>,",
+              '    #[serde(deserialize_with = "crate::research_wire::optional_intern")]\n'
+              "    pub non_ghost_target: Option<&'static str>,")
+s = re.sub(r"(    pub \w+: )&'static str,", r'\1crate::research_wire::Text,', s)
+s = s.replace("Option<&'static str>,", "Option<crate::research_wire::Text>,")
+state.write_text(s)
+dex = engine / 'src/dex.rs'
+s = dex.read_text()
+for name in ['CbMask', 'TypeId', 'TypeList', 'MoveId', 'SpeciesId', 'ItemId', 'CondId',
+             'Category', 'Accuracy', 'FixedDamage', 'Multihit', 'HitEffect']:
+    s, count = re.subn(r'^(pub (?:struct|enum) '+name+r'\b)',
+                      r'#[derive(serde::Serialize, serde::Deserialize)]\n\1', s, flags=re.M)
+    assert count == 1, name
+s = s.replace('fn leak_intern(s: &str)', 'pub(crate) fn leak_intern(s: &str)')
+dex.write_text(s)
+module = engine / 'src/battle/mod.rs'
+s = module.read_text().replace('pub enum EffectHandle {',
+    '#[derive(serde::Serialize, serde::Deserialize)]\npub enum EffectHandle {')
+module.write_text(s)
+cargo = engine / 'Cargo.toml'
+s = cargo.read_text()
+assert 'smallvec = "1.15.2"' in s
+cargo.write_text(s.replace('smallvec = "1.15.2"', 'smallvec = { version = "1.15.2", features = ["serde"] }'))
+lib = engine / 'src/lib.rs'
+lib.write_text(lib.read_text()+'\npub mod research_wire;\n')
+(engine / 'src/research_wire.rs').write_text('''pub type Text = &'static str;
+
+use serde::{Deserialize, Deserializer};
+
+pub fn intern<'de, D: Deserializer<'de>>(d: D) -> Result<&'static str, D::Error> {
+    Ok(crate::dex::leak_intern(&String::deserialize(d)?))
+}
+
+pub fn optional_intern<'de, D: Deserializer<'de>>(d: D) -> Result<Option<&'static str>, D::Error> {
+    Ok(Option::<String>::deserialize(d)?.as_deref().map(crate::dex::leak_intern))
+}
+
+pub mod rng {
+    use crate::prng::{BattleRng, Prng};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(r: &BattleRng, s: S) -> Result<S::Ok, S::Error> {
+        if r.oracle.is_some() {
+            return Err(serde::ser::Error::custom("wire only supports seeded battles"));
+        }
+        r.seed_str().serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<BattleRng, D::Error> {
+        let seed = String::deserialize(d)?;
+        Prng::from_seed_str(&seed).map(BattleRng::seeded)
+            .ok_or_else(|| serde::de::Error::custom("invalid LCG seed"))
+    }
+}
+''')
+print(root)

@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def start(program, dex, pool):
+    return subprocess.Popen([program, dex, pool, '128'], stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE, text=True)
+
+
+def call(worker, command):
+    worker.stdin.write(json.dumps(command, separators=(',', ':')) + '\n')
+    worker.stdin.flush()
+    line = worker.stdout.readline()
+    assert line, f'worker exited {worker.poll()}'
+    return json.loads(line)
+
+
+def same_state(record, reply):
+    for key in ['battle', 'key', 'debug']:
+        assert record[key] == reply[key], key
+
+
+def main():
+    states, current, deployed, dex, pool = sys.argv[1:]
+    workers = [start(current, dex, pool), start(current, dex, pool), start(deployed, dex, pool)]
+    games, n, decisions, queued, active_move = set(), 0, 0, 0, 0
+    first = None
+    try:
+        with Path(states).open() as source:
+            for line in source:
+                record = json.loads(line)
+                if first is None:
+                    first = record
+                if record['round'] == 0:
+                    assert record['game'] not in games, 'duplicate game'
+                    games.add(record['game'])
+                    for side in range(2):
+                        assert call(workers[side], {'op': 'new', 'battle': record['battle'],
+                            'side': side, 'seed': [19, 23][side]}) == {'ready': True}
+                for worker in [workers[0], workers[2]]:
+                    same_state(record, call(worker, {'op': 'roundtrip', 'battle': record['battle']}))
+                for side, expected in enumerate(record['expected']):
+                    if expected is not None:
+                        actual = call(workers[side], {'op': 'choose', 'battle': record['battle']})
+                        assert actual == expected, f'direct/transfer search game={record["game"]} round={record["round"]} side={side}'
+                        decisions += 1
+                n += 1
+                queued += bool(record['battle']['queue'])
+                active_move += record['battle']['active_move'] is not None
+        assert first is not None
+        reply = call(workers[2], {'op': 'roundtrip', 'battle': first['battle']})
+        controls = 0
+        for key, changed in [('key', first['key'] ^ 1), ('debug', 'invalid'), ('battle', {})]:
+            broken = dict(reply)
+            broken[key] = changed
+            try:
+                same_state(first, broken)
+            except AssertionError:
+                controls += 1
+            else:
+                raise AssertionError('mutation accepted')
+    finally:
+        for worker in workers:
+            worker.stdin.close()
+            worker.wait(timeout=10)
+            worker.stdout.close()
+    assert all(worker.returncode == 0 for worker in workers)
+    print(json.dumps({'games': len(games), 'states': n, 'current_roundtrips': n,
+        'deployed_roundtrips': n, 'direct_transfer_searches_equal': decisions,
+        'states_with_queue': queued, 'states_with_active_move': active_move,
+        'negative_controls': controls,
+        'hashes': {p: digest(p) for p in [states, current, deployed, dex, pool, __file__]},
+        'scope': 'Research transport feasibility: current in-process native searches equal transferred current searches; current and deployed engines restore all serialized state, seeded PRNG, debug clone and persistent state key. No head-to-head strength measurement, browser wall-time equivalence or strategy improvement is established.'}, indent=2))
+
+
+if __name__ == '__main__':
+    main()

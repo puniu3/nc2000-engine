@@ -1,0 +1,13 @@
+# Native battle transport feasibility
+
+The ordinary deployed browser uses WasmBlindSearcher over native Battle observations. ProtocolAgent gameplay cannot by itself establish superiority on that path. This adapter transfers the same current referee state to a worker built from each source version, retaining the deployed worker's own search and internal engine. The full native information contract, including exact HP, is intentionally preserved.
+
+The adapter adds serde implementations in isolated worktrees. It changes no bot source or battle rule logic. Interned text stays the same Rust type via an alias; the existing intern table restores it. Only the reusable listener scratch pool is omitted; Battle::clone already empties that cache. PRNG transfer supports seeded play only and preserves the seed. Oracle-mode serialization returns an error.
+
+Sixteen previously recorded smoke games were replayed. All player frames were reproduced. At 345 states, serialization/deserialization preserved the debug representation of the cloned state and its persistent state key. Both the current and deployed workers returned exactly the same serialized state, debug clone and key. The sample includes 76 states with pending queue entries and no states with a retained active_move.
+
+Current native searches were also run directly on the original in-process battles and through two persistent transferred-state workers, maintaining observer/belief history. All 622 decisions at 128 iterations matched action, search seed, root visits and means. Three deliberately changed responses (state, key, debug) were rejected. This tests transport; it does not show that the worker wrapper matches every browser scheduling path, and it does not measure strength.
+
+The worker follows the ordinary WasmBlindSearcher lifecycle with UCB c=0.4, HP buckets 16, no pinned sets, no baked tables and no community fallback prior. Pondering and browser timing are outside this check. A future duel must fix the referee rules, seeds, data, iterations, sample size and candidate before measuring outcomes. The running 192-game protocol-path comparison remains a separate experiment.
+
+Reproduce in clean isolated checkouts at the commits recorded in provenance.json: run `python3 tools/native-wire-prepare TREE`, copy these two Rust helpers into that tree's bot examples, and build them there. The checked state archive is states.jsonl.gz. `tools/native-wire-check` accepts a states JSONL, current worker, deployed worker, dex and belief pool, in that order. Both workers must be built without additional bot features for this check.
