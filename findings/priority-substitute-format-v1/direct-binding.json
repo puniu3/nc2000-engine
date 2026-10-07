@@ -1,0 +1,5 @@
+{
+  "root_helper_sha256": "b88861a027f0288b5a8d9d746b265da57b5a8f1c72b64bce00669ba3e22c1473",
+  "direct_helper_sha256": "00c78c264185761e3b189f9af97a69ead37b8bfb0932e16b1a5080209235d3d0",
+  "scope": "Same independent traversal and budgets as priority-substitute-choice-v1: Substitute then Thunderbolt, depth 3; Agility then all own legal actions, depth 2; every opponent action enumerated, singleton asserted. Added Thunderbolt old selections are covered by the generic solver only."
+}
