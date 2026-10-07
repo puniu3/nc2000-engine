@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+import copy
+import functools
+import hashlib
+import itertools
+import json
+import math
+import sys
+from collections import Counter
+from fractions import Fraction
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def linear_solve(rows, rhs):
+    a = [list(row) + [y] for row, y in zip(rows, rhs)]
+    n = len(a)
+    for col in range(n):
+        pivot = next((i for i in range(col, n) if a[i][col]), None)
+        if pivot is None:
+            return None
+        a[col], a[pivot] = a[pivot], a[col]
+        v = a[col][col]
+        a[col] = [x / v for x in a[col]]
+        for i in range(n):
+            if i != col:
+                v = a[i][col]
+                a[i] = [x - v * y for x, y in zip(a[i], a[col])]
+    return [row[-1] for row in a]
+
+
+@functools.lru_cache(None)
+def matrix_value(matrix):
+    a = [[Fraction(str(x)) for x in row] for row in matrix]
+    n, m = len(a), len(a[0])
+    zero, one = Fraction(0), Fraction(1)
+    constraints = [[one if j == i else zero for j in range(n)] + [zero] for i in range(n)]
+    constraints += [[a[i][j] for i in range(n)] + [-one] for j in range(m)]
+    best = None
+    for selected in itertools.combinations(constraints, n):
+        solved = linear_solve([[one] * n + [zero], *selected], [one] + [zero] * n)
+        if solved is None:
+            continue
+        p, v = solved[:-1], solved[-1]
+        if min(p) < 0 or any(sum(p[i] * a[i][j] for i in range(n)) < v for j in range(m)):
+            continue
+        best = v if best is None else max(best, v)
+    assert best is not None
+    return float(best)
+
+
+def derived(row):
+    n, m = map(len, row['actions'])
+    cells = row['cells_p0']
+    assert len(cells) == n * m
+    for lo, hi in [*cells, row['value_p0']]:
+        assert math.isfinite(lo) and math.isfinite(hi) and -1e-9 <= lo <= hi + 1e-9 <= 1 + 1e-8
+    endpoints = [tuple(tuple(cells[i*m+j][k] for j in range(m)) for i in range(n)) for k in [0, 1]]
+    independent = list(map(matrix_value, endpoints))
+    assert row['value_p0'][0] <= independent[0] + 1e-8, ('lower matrix', row['game'], row['frame'])
+    assert row['value_p0'][1] >= independent[1] - 1e-8, ('upper matrix', row['game'], row['frame'])
+    side, selected = row['side'], row['selected']
+    own_n, opp_n = len(row['actions'][side]), len(row['actions'][1-side])
+    oriented = [[cells[i*m+j] if side == 0 else [1-cells[j*m+i][1], 1-cells[j*m+i][0]] for j in range(opp_n)] for i in range(own_n)]
+    value = row['value_p0'] if side == 0 else [1-row['value_p0'][1], 1-row['value_p0'][0]]
+    pad = 1e-12 * (len(cells)+1)
+    values = [[max(0, min(c[0] for c in rr)-pad), min(1, min(c[1] for c in rr)+pad)] for rr in oriented]
+    losses = [[max(0, value[0]-v[1]), max(0, value[1]-v[0])] for v in values]
+    for expected, actual in [(values, row['pure_action_values']), (losses, row['pure_action_losses'])]:
+        assert len(expected) == len(actual)
+        assert all(abs(x-y) < 1e-8 for a,b in zip(expected,actual) for x,y in zip(a,b))
+    dominance = []
+    for i in range(own_n):
+        if i == selected:
+            continue
+        gaps = [max(-1, oriented[i][j][0]-oriented[selected][j][1]-1e-10) for j in range(opp_n)]
+        dominance.append({'action': row['actions'][side][i], 'reply_gap_lower': gaps, 'minimum_gap_lower': min(gaps)})
+    assert row['domination'] == dominance
+    return losses[selected], dominance, independent
+
+
+def check(rows, protocol, roots):
+    ordered = sorted(roots, key=lambda r: (r['record']['game'], r['record']['frame']))
+    expected = {(ordered[i]['record']['game'], ordered[i]['record']['frame']): ordered[i]['record'] for i in protocol['indices']}
+    assert len(rows) == len(expected)
+    seen = set()
+    pure_large, pure_small, dominated, tight = [], [], [], []
+    total_runs = 0
+    for r in rows:
+        key = r['game'], r['frame']
+        assert key not in seen and key in expected
+        seen.add(key)
+        original = expected[key]
+        assert r['state_sha256'] == original['state_sha256'] and r['side'] == original['side']
+        side = r['side']
+        assert r['actions'][side] == original['legal_actions']
+        assert r['actions'][1-side] == original['opponent_legal_actions']
+        assert r['actions'][side][r['selected']] == original['current_response']['action']
+        assert 0 <= r['runs'] == r['total_runs'] <= protocol['work_budget']
+        assert r['stop'] in ['StrategyMet','WorkExhausted','NodeBudget']
+        loss, dominance, independent = derived(r)
+        total_runs += r['runs']
+        if loss[0] > .02:
+            pure_large.append(key)
+        if loss[1] <= .02:
+            pure_small.append(key)
+        if any(d['minimum_gap_lower'] > 1e-6 for d in dominance):
+            dominated.append(key)
+        if r['value_p0'][1]-r['value_p0'][0] <= .02:
+            tight.append(key)
+    def group(keys):
+        return {'roots': len(keys), 'games': len({g for g,f in keys}), 'keys': keys}
+    return {'roots': len(rows), 'games': len({g for g,f in seen}), 'runs': total_runs,
+            'stops': dict(Counter(r['stop'] for r in rows)), 'value_width_at_most_002': group(tight),
+            'selected_pure_loss_at_most_002': group(pure_small), 'selected_pure_loss_above_002': group(pure_large),
+            'selected_strictly_dominated': group(dominated),
+            'unresolved_selected_pure_loss': group(sorted(seen-set(pure_large)-set(pure_small))),
+            'max_nodes_plus_closed': max(r['nodes']+r['closed'] for r in rows),
+            'max_runs': max(r['runs'] for r in rows)}
+
+
+def main():
+    protocol_path, result_path, roots_path = map(Path,sys.argv[1:])
+    protocol = json.loads(protocol_path.read_text())
+    assert digest(roots_path) == protocol['roots_sha256']
+    assert matrix_value(((1.,0.),(0.,1.))) == .5
+    assert matrix_value(((1.,1.),(0.,0.))) == 1
+    assert matrix_value(((1.,0.),(1.,0.))) == 0
+    roots = [json.loads(l) for l in roots_path.read_text().splitlines()]
+    rows = [json.loads(l) for l in result_path.read_text().splitlines()]
+    result = check(rows,protocol,roots)
+    rejected = []
+    for kind in ['missing_root','invalid_cell','wrong_selected','inflated_value']:
+        altered=copy.deepcopy(rows)
+        if kind == 'missing_root':
+            altered.pop()
+        elif kind == 'invalid_cell':
+            altered[0]['cells_p0'][0]=[1.,0.]
+        elif kind == 'wrong_selected':
+            altered[0]['selected']=(altered[0]['selected']+1)%len(altered[0]['actions'][altered[0]['side']])
+        else:
+            altered[0]['value_p0']=[2.,2.]
+        try:
+            check(altered,protocol,roots)
+        except AssertionError:
+            rejected.append(kind)
+        else:
+            raise AssertionError('accepted mutation: '+kind)
+    result.update({'schema':protocol['schema'],'protocol_sha256':digest(protocol_path),
+                   'records_sha256':digest(result_path),'roots_sha256':digest(roots_path),
+                   'rejected_mutations':rejected,'matrix_check':'independent rational LP vertex enumeration',
+                   'blind_policy_error_proven':False,'strength_improvement_proven':False})
+    print(json.dumps(result,indent=2))
+
+
+if __name__ == '__main__':
+    main()
