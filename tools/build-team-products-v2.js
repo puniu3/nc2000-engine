@@ -20,6 +20,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { optimizeLowAttack } = require('./optimize-low-attack');
 
 const REPO = path.join(__dirname, '..');
 const arg = name => {
@@ -76,11 +77,21 @@ const clusters = size.size;
 const drawWeight = t => 1 / (clusters * size.get(clusterKey(t)));
 const round = x => Math.round(x * 1e6) / 1e6;
 const provenance = t => ({ family: t.family, origin: t.origin, source: t.source.name, url: t.source.url, version: t.source.version || null });
+// Optimize only the playable catalog. All measurements, the Nash solution,
+// reference inventory and frozen opponent prior keep their original inputs.
+const dex = read('data/gen2stadium2.json');
+const optimized = new Map(selected.map(t => [t.id, optimizeLowAttack(t.sets, dex)]));
 write('data/team-pool-v2/team-pool.json', {
 	format: 'nc2000-team-pool-v2',
 	generator: 'tools/build-team-products-v2.js',
 	protocol: sel.protocol,
 	condition: sel.condition,
+	setOptimization: {
+		policy: 'low-attack-v1: no Physical move, Hidden Power or external move access; minimum Attack DV preserving HP, gender and shiny status; Attack EV 0',
+		changedTeams: selected.filter(t => optimized.get(t.id).changedSets > 0).length,
+		changedSets: selected.reduce((sum, t) => sum + optimized.get(t.id).changedSets, 0),
+		scoreBasis: 'confirmation scores refer to the original inventory sets, before low-attack-v1; optimized sets have not been remeasured',
+	},
 	drawRule: 'each variant cluster among the selected parties is drawn with equal probability, split equally among its members (drawWeight sums to 1); the same weights serve the human Random and the bot draw',
 	teams: selected.map((t, i) => ({
 		id: t.id, rank: i + 1, label: 'selected',
@@ -88,7 +99,7 @@ write('data/team-pool-v2/team-pool.json', {
 		drawWeight: round(drawWeight(t)),
 		score: round(sel.labels[t.id].score),
 		provenance: provenance(t),
-		sets: t.sets,
+		sets: optimized.get(t.id).sets,
 	})),
 });
 
