@@ -1,0 +1,53 @@
+{
+  "format": "nc2000-attract-gender-census-v1",
+  "priorSha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+  "prior": {
+    "totalTeamWeight": 61.749997,
+    "weightedSources": {
+      "M": 0.25,
+      "F": 1,
+      "N": 0
+    },
+    "sources": [
+      {
+        "team": "mjj-2021-q10con",
+        "slot": 1,
+        "species": "Ninetales",
+        "gender": "F",
+        "weight": 1
+      },
+      {
+        "team": "lineage-fine-s07",
+        "slot": 5,
+        "species": "Snorlax",
+        "gender": "M",
+        "weight": 0.25
+      }
+    ],
+    "preferFemale": true,
+    "basis": "female targets resist female sources and are susceptible to male sources; weighted direct-source-set mass is a proxy, not encounter or win probability"
+  },
+  "catalog": {
+    "totalTeamWeight": 0.999998,
+    "weightedSources": {
+      "M": 0,
+      "F": 0,
+      "N": 0
+    },
+    "sources": [],
+    "preferFemale": false,
+    "basis": "female targets resist female sources and are susceptible to male sources; weighted direct-source-set mass is a proxy, not encounter or win probability"
+  },
+  "nash": {
+    "totalTeamWeight": 0.9999999999999999,
+    "weightedSources": {
+      "M": 0,
+      "F": 0,
+      "N": 0
+    },
+    "sources": [],
+    "preferFemale": false,
+    "basis": "female targets resist female sources and are susceptible to male sources; weighted direct-source-set mass is a proxy, not encounter or win probability"
+  },
+  "inference": "Female preference is justified only under the frozen prior direct-source-weight proxy (female source mass 1 versus male 0.25). Same-sex immunity is symmetric. Catalog mirror matches have no direct Attract users; no universal gender or win-rate advantage is established."
+}

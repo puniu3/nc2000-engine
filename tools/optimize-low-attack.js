@@ -4,14 +4,17 @@ const toid = name => String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
 const CALLERS = new Set(['metronome', 'mimic', 'mirrormove', 'transform']);
 const STATS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
 
-/** Optimize validated Gen 2 catalog sets without changing HP, gender or shiny
+/** Optimize validated Gen 2 catalog sets without changing HP or shiny
  * status. Use the generation-specific dex: e.g. Pursuit and Thief are Special.
  * Hidden Power and external move access are deliberately outside this policy.
  * The inventory, measured Nash mixture and frozen opponent prior stay original.
+ * Gender is preserved by default. The catalog may opt into female preference
+ * using the frozen prior's direct-Attract source mix; this is not universal.
  */
-function optimizeLowAttack(sets, dex) {
+function optimizeLowAttack(sets, dex, { preferFemale = false } = {}) {
 	const optimized = structuredClone(sets);
 	let changedSets = 0;
+	let changedGenders = 0;
 	for (const set of optimized) {
 		const ids = set.moves.map(toid);
 		if (ids.some(id => id.startsWith('hiddenpower'))) continue;
@@ -33,9 +36,14 @@ function optimizeLowAttack(sets, dex) {
 		const old = dv('atk');
 		const gender = atk => species.gender || (atk < (species.genderRatio?.F ?? 0.5) * 16 ? 'F' : 'M');
 		const shiny = atk => ['def', 'spe', 'spa'].every(stat => dv(stat) === 10) && atk % 4 >= 2;
+		// Retain the source gender when this set itself uses Attract: changing
+		// it also changes which opponents its own Attract can target.
+		const allowFemale = preferFemale && gender(old) === 'M' && !ids.includes('attract');
 		let minimum = old;
 		for (let candidate = 0; candidate <= old; candidate++) {
-			if (candidate % 2 === old % 2 && gender(candidate) === gender(old) && shiny(candidate) === shiny(old)) {
+			if (candidate % 2 === old % 2 &&
+				(gender(candidate) === gender(old) || (allowFemale && gender(candidate) === 'F')) &&
+				shiny(candidate) === shiny(old)) {
 				minimum = candidate;
 				break;
 			}
@@ -45,8 +53,12 @@ function optimizeLowAttack(sets, dex) {
 			set.evs.atk = 0;
 			changedSets++;
 		}
+		if (gender(minimum) !== gender(old)) {
+			set.gender = gender(minimum);
+			changedGenders++;
+		}
 	}
-	return { sets: optimized, changedSets };
+	return { sets: optimized, changedSets, changedGenders };
 }
 
 module.exports = { optimizeLowAttack };

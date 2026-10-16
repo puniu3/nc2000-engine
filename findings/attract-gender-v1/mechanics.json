@@ -1,0 +1,330 @@
+{
+  "format": "nc2000-attract-gender-mechanics-v1",
+  "baselineSha256": "844f39c062dad3c807951793ed293721acad10e766baf58f301419bf95f6781d",
+  "optimizedSha256": "549539b911498bbc805e3975e0218cf1dae2560bce4fd515239ce3185e6ee754",
+  "matrixControl": "Identical stats, moves, items, seed and field; gender intervention only. Genderless Ninetales/Venusaur are synthetic negative controls, not legal catalog proposals.",
+  "matrix": [
+    {
+      "sourceGender": "M",
+      "targetGender": "M",
+      "infatuatedProbability": 0.0,
+      "targetActsProbability": 1.0,
+      "leaves": 2
+    },
+    {
+      "sourceGender": "M",
+      "targetGender": "F",
+      "infatuatedProbability": 1.0,
+      "targetActsProbability": 0.5,
+      "leaves": 4
+    },
+    {
+      "sourceGender": "M",
+      "targetGender": "N",
+      "infatuatedProbability": 0.0,
+      "targetActsProbability": 1.0,
+      "leaves": 2
+    },
+    {
+      "sourceGender": "F",
+      "targetGender": "M",
+      "infatuatedProbability": 1.0,
+      "targetActsProbability": 0.5,
+      "leaves": 4
+    },
+    {
+      "sourceGender": "F",
+      "targetGender": "F",
+      "infatuatedProbability": 0.0,
+      "targetActsProbability": 1.0,
+      "leaves": 2
+    },
+    {
+      "sourceGender": "F",
+      "targetGender": "N",
+      "infatuatedProbability": 0.0,
+      "targetActsProbability": 1.0,
+      "leaves": 2
+    },
+    {
+      "sourceGender": "N",
+      "targetGender": "M",
+      "infatuatedProbability": 0.0,
+      "targetActsProbability": 1.0,
+      "leaves": 2
+    },
+    {
+      "sourceGender": "N",
+      "targetGender": "F",
+      "infatuatedProbability": 0.0,
+      "targetActsProbability": 1.0,
+      "leaves": 2
+    },
+    {
+      "sourceGender": "N",
+      "targetGender": "N",
+      "infatuatedProbability": 0.0,
+      "targetActsProbability": 1.0,
+      "leaves": 2
+    }
+  ],
+  "validatedTeams": 24,
+  "changedSets": 6,
+  "selfHitComparisons": 4056,
+  "selfHitIncreases": 0,
+  "unchanged": "HP, non-Attack stats, moves, items, EVs, levels, team IDs, draw weights",
+  "rows": [
+    {
+      "baseId": "rental-cban-8",
+      "slot": 3,
+      "species": "Venusaur",
+      "hp": 186,
+      "genderBefore": "M",
+      "genderAfter": "F",
+      "attackDvBefore": 3,
+      "attackDvAfter": 1,
+      "attackBefore": 90,
+      "attackAfter": 88,
+      "damage": [
+        {
+          "move": "Razor Leaf",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Sleep Powder",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Leech Seed",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Synthesis",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        }
+      ]
+    },
+    {
+      "baseId": "sample-10",
+      "slot": 5,
+      "species": "Venusaur",
+      "hp": 186,
+      "genderBefore": "M",
+      "genderAfter": "F",
+      "attackDvBefore": 3,
+      "attackDvAfter": 1,
+      "attackBefore": 90,
+      "attackAfter": 88,
+      "damage": [
+        {
+          "move": "Razor Leaf",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Leech Seed",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Sleep Powder",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Synthesis",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        }
+      ]
+    },
+    {
+      "baseId": "mjj-2014-thdrcomb",
+      "slot": 3,
+      "species": "Venusaur",
+      "hp": 186,
+      "genderBefore": "M",
+      "genderAfter": "F",
+      "attackDvBefore": 3,
+      "attackDvAfter": 1,
+      "attackBefore": 90,
+      "attackAfter": 88,
+      "damage": [
+        {
+          "move": "Razor Leaf",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Leech Seed",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Sleep Powder",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Synthesis",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 25
+        }
+      ]
+    },
+    {
+      "baseId": "sample-06",
+      "slot": 1,
+      "species": "Umbreon",
+      "hp": 201,
+      "genderBefore": "M",
+      "genderAfter": "F",
+      "attackDvBefore": 3,
+      "attackDvAfter": 1,
+      "attackBefore": 73,
+      "attackAfter": 71,
+      "damage": [
+        {
+          "move": "Pursuit",
+          "neutralBefore": 9,
+          "neutralAfter": 9,
+          "swaggerBefore": 17,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Charm",
+          "neutralBefore": 9,
+          "neutralAfter": 9,
+          "swaggerBefore": 17,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Toxic",
+          "neutralBefore": 9,
+          "neutralAfter": 9,
+          "swaggerBefore": 17,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Rest",
+          "neutralBefore": 9,
+          "neutralAfter": 9,
+          "swaggerBefore": 17,
+          "swaggerAfter": 17
+        }
+      ]
+    },
+    {
+      "baseId": "mjj-2010-garap-a",
+      "slot": 2,
+      "species": "Jolteon",
+      "hp": 171,
+      "genderBefore": "M",
+      "genderAfter": "F",
+      "attackDvBefore": 3,
+      "attackDvAfter": 1,
+      "attackBefore": 73,
+      "attackAfter": 71,
+      "damage": [
+        {
+          "move": "Thunderbolt",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Swagger",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Substitute",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Baton Pass",
+          "neutralBefore": 13,
+          "neutralAfter": 13,
+          "swaggerBefore": 25,
+          "swaggerAfter": 24
+        }
+      ]
+    },
+    {
+      "baseId": "rental-cban-14",
+      "slot": 1,
+      "species": "Vaporeon",
+      "hp": 259,
+      "genderBefore": "M",
+      "genderAfter": "F",
+      "attackDvBefore": 3,
+      "attackDvAfter": 1,
+      "attackBefore": 79,
+      "attackAfter": 77,
+      "damage": [
+        {
+          "move": "Hydro Pump",
+          "neutralBefore": 14,
+          "neutralAfter": 14,
+          "swaggerBefore": 26,
+          "swaggerAfter": 26
+        },
+        {
+          "move": "Ice Beam",
+          "neutralBefore": 14,
+          "neutralAfter": 14,
+          "swaggerBefore": 26,
+          "swaggerAfter": 26
+        },
+        {
+          "move": "Sleep Talk",
+          "neutralBefore": 14,
+          "neutralAfter": 14,
+          "swaggerBefore": 26,
+          "swaggerAfter": 26
+        },
+        {
+          "move": "Rest",
+          "neutralBefore": 14,
+          "neutralAfter": 14,
+          "swaggerBefore": 26,
+          "swaggerAfter": 26
+        }
+      ]
+    }
+  ]
+}
