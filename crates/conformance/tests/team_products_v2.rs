@@ -3,7 +3,8 @@
 //! selected parties with cluster-balanced draw weights, the Nash support is
 //! inside the catalog, the frozen prior holds every measured eligible team
 //! whatever its selection label, all three were measured on the same prior
-//! file, sets are the inventory's, and every shipped team is legal and plays
+//! file, catalog sets match the audited optimization of the inventory while
+//! prior/Nash sets stay original, and every shipped team is legal and plays
 //! a game to completion. The live search profile is blind at c = 0.4.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -97,14 +98,40 @@ fn everything_was_measured_on_the_frozen_prior() {
 }
 
 #[test]
-fn shipped_sets_are_the_inventory_sets() {
+fn shipped_sets_match_the_inventory_and_audited_catalog_optimization() {
     let p = products();
-    for file in [&p.catalog, &p.prior, &p.nash] {
+    for file in [&p.prior, &p.nash] {
         for t in file["teams"].as_array().unwrap() {
             let id = t["id"].as_str().unwrap();
             assert_eq!(t["sets"], p.inventory[id]["sets"], "{id}: sets differ from the inventory");
         }
     }
+    let attack = read("findings/low-attack-catalog-v1/audit.json");
+    let gender = read("findings/attract-gender-v1/mechanics.json");
+    let mut applied = [0, 0];
+    for t in p.catalog["teams"].as_array().unwrap() {
+        let id = t["id"].as_str().unwrap();
+        let mut expected = p.inventory[id]["sets"].clone();
+        for (pass, audit) in [&attack, &gender].iter().enumerate() {
+            for row in audit["rows"].as_array().unwrap().iter().filter(|r| r["baseId"] == id) {
+                let set = &mut expected[row["slot"].as_u64().unwrap() as usize - 1];
+                assert_eq!(set["species"], row["species"], "{id}: audited species");
+                assert_eq!(set["ivs"]["atk"].as_u64().unwrap() / 2,
+                    row["attackDvBefore"].as_u64().unwrap(), "{id}: audited baseline DV");
+                set["ivs"]["atk"] = Value::from(row["attackDvAfter"].as_u64().unwrap() * 2);
+                if pass == 0 {
+                    assert_eq!(set["evs"]["atk"], row["attackEvBefore"], "{id}: audited baseline EV");
+                    set["evs"]["atk"] = Value::from(0);
+                } else {
+                    assert_eq!(set["gender"], row["genderBefore"], "{id}: audited baseline gender");
+                    set["gender"] = row["genderAfter"].clone();
+                }
+                applied[pass] += 1;
+            }
+        }
+        assert_eq!(t["sets"], expected, "{id}: sets differ from the audited optimization");
+    }
+    assert_eq!(applied, [27, 6], "every audited adjustment applies exactly once");
 }
 
 #[test]
