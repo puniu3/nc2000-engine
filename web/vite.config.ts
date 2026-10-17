@@ -30,6 +30,9 @@ const webDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webDir, "..");
 const dataDir = path.join(repoRoot, "data");
 const base = process.env.NC2000_BASE ?? "/";
+// Research builds execute live search exclusively; the default production
+// build still requires a freshly baked, source-matching preview artifact.
+const compiledPreviewEnabled = process.env.NC2000_DISABLE_COMPILED_PREVIEW !== "1";
 
 function serveRepoData(): Plugin {
   // The app fetches `${BASE_URL}data/...`; accept both the based path and
@@ -84,6 +87,7 @@ function verifyCompiledPreview(): Plugin {
     name: "verify-compiled-preview",
     apply: "build",
     buildStart() {
+      if (!compiledPreviewEnabled) return;
       const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
       const catalog = JSON.parse(fs.readFileSync(path.join(dataDir, "team-pool-v2/team-pool.json"), "utf8"));
       const profiles = JSON.parse(fs.readFileSync(path.join(dataDir, "search-profiles.json"), "utf8"));
@@ -131,7 +135,10 @@ function evaluatorBuildId(): string {
 
 export default defineConfig({
   base,
-  define: { __EVALUATOR_BUILD__: JSON.stringify(evaluatorBuildId()) },
+  define: {
+    __EVALUATOR_BUILD__: JSON.stringify(evaluatorBuildId()),
+    __COMPILED_PREVIEW_ENABLED__: compiledPreviewEnabled,
+  },
   plugins: [verifyCompiledPreview(), serveRepoData()],
   esbuild: {
     jsx: "automatic",

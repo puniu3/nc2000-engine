@@ -80,6 +80,17 @@ export interface StateView {
   outcome: "p1" | "p2" | "tie" | null;
 }
 
+export type ActionPolicyMode = "legacy" | "visit-sample" | "estimated-mix";
+
+/** Actual execution probabilities, conditional on this search's evidence.
+ * Estimated/visit policies are not equilibrium or win-rate certificates.
+ * preview-sampled describes a legacy table draw already made upstream. */
+export interface PlayPolicy {
+  source: string;
+  actions: { input: string; probability: number }[];
+}
+
+/** Search diagnostics. `frac` is allocation, not execution probability. */
 export interface RootPolicy {
   iterations: number;
   preview: boolean;

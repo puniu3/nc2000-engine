@@ -2232,6 +2232,26 @@ impl ProtocolAgent {
         Some(legal[0].clone())
     }
 
+    /// Execution distribution in request syntax. Project the whole policy
+    /// before sampling, merging aliases and displaced mass; never discard
+    /// probability after the draw. Preview tables have already sampled in
+    /// the legacy lifecycle and are explicitly labelled as such.
+    pub fn decision_policy(&self, dex: &Dex, mode: crate::decision::PolicyMode) -> Option<crate::decision::DecisionPolicy<String>> {
+        use crate::decision::DecisionPolicy;
+        if let Some(input) = &self.forced { return Some(DecisionPolicy::pure("forced", input.clone())); }
+        if let Some(action) = self.baked { return Some(DecisionPolicy::pure("preview-sampled", action.to_input(dex))); }
+        let policy = self.search.as_ref()?.decision_policy(mode)?.map(|&action| ps_input(dex, action));
+        let req = self.request.as_ref()?;
+        if req.team_preview { return Some(policy); }
+        let legal = req.legal_inputs();
+        if legal.is_empty() { return None; }
+        let projected = policy.actions().iter().any(|row| !legal.contains(&row.input));
+        DecisionPolicy::new(if projected { "request-projected" } else { policy.source() },
+            policy.actions().iter().map(|row| (
+                if legal.contains(&row.input) { row.input.clone() } else { legal[0].clone() }, row.probability,
+            ))).ok()
+    }
+
     /// JSON belief info (mirrors the wasm `BlindSearcher.beliefInfo`).
     pub fn belief_info(&self) -> String {
         match &self.belief {

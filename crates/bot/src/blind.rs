@@ -1222,6 +1222,31 @@ impl BlindSearch {
             .map(|i|self.my_acts[i])
     }
 
+    /// Actual execution probabilities, not `rootPolicy` visit diagnostics.
+    /// Neither empirical mode certifies equilibrium or policy improvement.
+    pub fn decision_policy(&self, mode: crate::decision::PolicyMode) -> Option<crate::decision::DecisionPolicy<SearchChoice>> {
+        use crate::decision::{DecisionPolicy, PolicyMode};
+        let best = self.best()?;
+        if mode == PolicyMode::EstimatedMix {
+            if let Some(mixed) = self.mixed_policy() {
+                if let Ok(policy) = DecisionPolicy::new("estimated-mix", self.my_acts.iter().copied().zip(mixed.policy)) {
+                    return Some(policy);
+                }
+            }
+            return Some(DecisionPolicy::pure("estimated-mix-fallback", best));
+        }
+        if mode == PolicyMode::VisitSample {
+            let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
+            let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
+            let entries = self.my_acts.iter().enumerate()
+                .filter(|&(i, _)| allowed(i) && (!safe || !self.my_dominated[i]))
+                .map(|(i, &action)| (action, f64::from(self.my_n[i] - self.joint_probe_n[i])));
+            if let Ok(policy) = DecisionPolicy::new("visit-sample", entries) { return Some(policy); }
+            return Some(DecisionPolicy::pure("visit-sample-fallback", best));
+        }
+        Some(DecisionPolicy::pure("legacy", best))
+    }
+
     pub fn root_policy_evidence(&self) -> (Vec<bool>, Vec<crate::root_policy::RootType>) {
         let eligible: Vec<bool> = (0..self.my_acts.len()).map(|i|
             self.my_mask.as_ref().map_or(true, |m| m[i]) && !self.my_dominated[i]).collect();
@@ -1883,6 +1908,12 @@ mod mixed_selection_tests {
         search.root_types = vec![RootTypeStats { samples: 40000, replies: 2,
             cells: vec![(10000, 0.), (10000, 10000.), (10000, 10000.), (10000, 0.)] }];
         let rng=search.rng.0;
+        use crate::decision::PolicyMode;
+        let policy = search.decision_policy(PolicyMode::EstimatedMix).unwrap();
+        assert_eq!(policy.source(), "estimated-mix");
+        assert_eq!(policy.actions().len(), 2);
+        assert_eq!(policy.sample(0.), actions[0]);
+        assert_eq!(policy.sample(0.9), actions[1]);
         assert_eq!(search.sample_mixed(0.),Some(actions[0]));
         assert_eq!(search.sample_mixed(0.5),Some(actions[1]));
         assert_eq!(search.sample_mixed(1.-f64::EPSILON),Some(actions[1]));
@@ -1892,9 +1923,15 @@ mod mixed_selection_tests {
         assert_eq!(search.best(),Some(actions[0]));
         search.my_n[1]+=30000;search.joint_probe_n[1]+=30000;
         assert_eq!(search.best(),Some(actions[0]));
+        let visits = search.decision_policy(PolicyMode::VisitSample).unwrap();
+        assert!((visits.actions()[0].probability - 2. / 3.).abs() < 1e-12);
         search.mask_actions(&[false,true]);
         assert!(search.mixed_policy().is_none());
         assert_eq!(search.sample_mixed(0.),Some(actions[1]));
+        for mode in [PolicyMode::Legacy, PolicyMode::VisitSample, PolicyMode::EstimatedMix] {
+            assert_eq!(search.decision_policy(mode).unwrap().actions().len(), 1);
+            assert_eq!(search.decision_policy(mode).unwrap().sample(0.), actions[1]);
+        }
         search.mask_actions(&[true,true]);search.my_dominated[0]=true;
         assert!(search.mixed_policy().is_none());
         assert_eq!(search.sample_mixed(0.),Some(actions[1]));

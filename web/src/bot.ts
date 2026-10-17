@@ -1,12 +1,13 @@
 // Main-thread client for the bot search worker.
 
 import type { WorkerRequest, WorkerResponse } from "./bot-worker";
-import type { BeliefInfo, PriorInfo, PriorReport, RootPolicy } from "./types";
+import type { BeliefInfo, PriorInfo, PriorReport, RootPolicy, PlayPolicy, ActionPolicyMode } from "./types";
 import { endgameSettings, type EndgameSettings } from "./endgame-settings";
 
 export interface SearchOutcome {
   best: string | null;
   policy: RootPolicy;
+  playPolicy: PlayPolicy | null;
   ms: number;
   wasmMemoryBytes: number;
   endgame?: string;
@@ -55,6 +56,7 @@ export class BotWorker {
             p.resolve({
               best: m.best,
               policy: JSON.parse(m.policy) as RootPolicy,
+              playPolicy: m.playPolicy,
               ms: m.ms,
               wasmMemoryBytes: m.wasmMemoryBytes,
               endgame: m.endgame,
@@ -98,6 +100,7 @@ export class BotWorker {
       priorJson?: string;
       compiledPreview?: boolean;
       endgame?: EndgameSettings;
+      actionPolicy?: ActionPolicyMode;
     },
   ): Promise<void> {
     await this.ready;
@@ -116,6 +119,7 @@ export class BotWorker {
       seed: number;
       mode: "open" | "blind";
       endgame?: EndgameSettings;
+      actionPolicy?: ActionPolicyMode;
     },
   ): Promise<void> {
     await this.ready;

@@ -62,6 +62,50 @@ draw with a fixed mixture and the same strength choices. The start screen links 
 client (`tools/ps-client.js`) uses the same blind information policy and team
 files; its iteration count is controlled separately by the CLI.
 
+## Execution distributions and mixed-policy experiments
+
+`BlindSearcher` and `ProtocolSearcher` expose a distribution-first decision API.
+After the usual `observe` / `onRequest` and `step` calls:
+
+```js
+const policy = JSON.parse(searcher.playPolicy("visit-sample")); // no RNG draw
+const decision = JSON.parse(searcher.commitDecision("visit-sample"));
+// decision = { input, policy: { source, actions: [{ input, probability }] } }
+// Submit decision.input once. Repeated commits return the same snapshot.
+```
+
+`legacy` is the default worker mode (point mass on the existing best action).
+`visit-sample` samples ordinary root visits, excluding probe allocations and
+masked/dominated actions when alternatives exist. It is an empirical baseline,
+not a Nash solver. `estimated-mix` uses the existing Bayesian joint-action
+estimator and its 0.02 evidence gate; insufficient evidence returns a labelled
+pure fallback. Its nonstationary search samples do **not** certify improvement.
+No additional iterations or new information about the opponent are introduced.
+
+The worker accepts `searcher.actionPolicy` in `newBattle` / `newFork` and returns
+`playPolicy` alongside the sampled `best`. Existing `rootPolicy()` / result
+`policy` remain visit diagnostics: their `frac` is not a play probability.
+The WASM `best()` accessor retains the legacy rule. Sampling uses a separate,
+domain-separated RNG and freezes the chosen action and distribution until the
+next `observe`, `onRequest`, or `setPosition`. This is reproducible randomness,
+not a cryptographic unpredictability guarantee. Baked preview draws made by
+the legacy lifecycle are labelled `preview-sampled` (conditional point mass,
+not the original table distribution). Compiled argmax preview caches are not
+used for experimental modes.
+
+The reusable Rust `decision::DecisionPolicy` validates and normalizes arbitrary
+legal-action distributions without removing rare positive actions; the policy
+provider and sampler can evolve independently. `root_policy::interval` can
+supply a justified distribution when its payoff-bound contract is satisfied.
+The ordinary blind estimator does not yet supply those bounds.
+
+After rebuilding WASM, `cd web && npm run test:policy` exercises all three modes
+through real workers. `npm run build:research` explicitly disables compiled
+preview lookup, allowing research builds while the saved preview artifact is
+stale. Normal `npm run build` retains its exact-source artifact check and needs
+a fresh preview bake before production promotion. No default strategy switch
+or deployment is implied by the experimental API.
+
 ## Server-side preview cache interface
 
 `tools/preview-cache.js` supplies a Node.js interface for caching completed

@@ -1,0 +1,13 @@
+# From the project root, with a Rust toolchain providing wasm32-unknown-unknown:
+crates/wasm/build.sh
+cargo test --release -p nc2000-bot --lib decision::
+cargo test --release -p nc2000-bot --lib mixed_sampling_respects_masks
+cargo test --release -p nc2000-wasm --lib
+node tools/probe-play-policy.mjs
+# From web/:
+NC2000_DISABLE_COMPILED_PREVIEW=1 npm run test:policy
+npm run test:worker
+npm run build:research
+# Normal npm run build deliberately retains the stale-preview rejection.
+# This host's relocated rustup rust-lld needed a scratch linker wrapper setting
+# DYLD_LIBRARY_PATH to its toolchain lib directory; no host configuration changed.

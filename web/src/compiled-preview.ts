@@ -22,6 +22,7 @@ for (const key of Object.keys(artifact.policies)) {
 }
 
 export async function compiledPreviewMatches(poolJson: string, dexJson: string): Promise<boolean> {
+  if (!__COMPILED_PREVIEW_ENABLED__) return false;
   if (artifact.format !== "nc2000-compiled-preview-v1") return false;
   const digest = async (text: string) => {
     const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -35,6 +36,7 @@ export async function compiledPreviewMatches(poolJson: string, dexJson: string):
  * only our own set and the opponent's public roster, never their hidden set.
  * Sampling the precomputed seeds preserves search-seed diversity. */
 export function compiledPreviewPick(build: string, key: string | undefined, seed: number, c: number, cacheInfo?: string): string | undefined {
+  if (!__COMPILED_PREVIEW_ENABLED__) return undefined;
   if (build !== artifact.build || c !== artifact.c || key === undefined || !cacheInfo) return undefined;
   const [, foe] = JSON.parse(key);
   const observed = JSON.parse(cacheInfo).opponentPublic as unknown[][];

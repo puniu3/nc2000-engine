@@ -1,0 +1,49 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>混合方策を返すbot — 構造と検証</title>
+<style>body{margin:0;background:#f6f3eb;color:#363c34;font:16px/1.85 system-ui,sans-serif}main{max-width:850px;margin:auto;padding:24px}h1{font-size:1.7rem;line-height:1.5}h2{font-size:1.2rem;margin-top:2rem}a{color:#526b4c}table{border-collapse:collapse;width:100%;font-size:.94rem}td,th{padding:10px;border-bottom:1px solid #d6d3c7;text-align:left}th{background:#e9ebdf}code{overflow-wrap:anywhere}pre{white-space:pre-wrap;padding:16px;background:#e9ebdf;border-radius:8px}.box{padding:18px;border:1px solid #c6cbbb;border-radius:8px;margin:16px 0}.muted{color:#62665e;font-size:.9rem}label{display:block;margin-top:12px}input{accent-color:#6b7a59;max-width:100%}input[type=range]{width:100%}button{padding:9px 14px;background:#e9ebdf;border:1px solid #aeb7a4;border-radius:5px;color:#363c34;font-size:1rem}.flow{display:flex;gap:8px;flex-wrap:wrap}.flow span{border:1px solid #c6cbbb;padding:8px 12px;border-radius:5px}output{font-weight:600}*{box-sizing:border-box}</style>
+<main><p class="muted">2026-10-17 · nc2000-engine · ローカル実装・未公開</p>
+<h1>混合方策を保持して実行する構造へ</h1>
+<p><strong>可能です。通常対局と棋譜からの再開に、確率分布を返し、その分布から一度だけ抽選する経路を実装しました。</strong>既定値は従来方式を維持し、混合方式を実験設定で選べます。</p>
+<h2>何が問題なのか</h2>
+<p>同時手番でも純粋均衡があるゲームはあります。また、探索中・実対局中に一回につき一手だけ実行することは正常です。問題になるのは、混合が必要な局面で、確率分布を最後に最多訪問の一手へ潰してしまうことです。</p>
+<p>現行の通常手は <code>argmax(visits)</code> です。探索seedを変えれば選択も変わるので、seed全体で見たbotまで常に純粋とは限りません。しかし、その間接的な混合は均衡を狙って制御された確率ではありません。選出表など、以前から混合を使う別経路もあります。</p>
+<p>一般のゼロ和同時手番では、純粋手に制限した <code>maxₐ minᵦ Q(a,b)</code> と、分布を許す <code>maxₚ minᵦ Σₐ p(a)Q(a,b)</code> が異なり得ます。さらに Q は相手の応手と、その後の方策を含む価値です。最後の抽選だけ直しても、探索途中の評価がその混合を扱えなければ最適性は得られません。</p>
+<div class="box"><strong>二択の資源待ちゲームで確かめる</strong>
+<p class="muted">以前解析したクラスの抽象モデル。行＝攻撃／待機、列＝攻撃／防御。成功時の値を1とし、Q = [[1,0],[0,1/k]]。後続も最適方策を実行すると仮定したモデル値であり、実botの勝率ではありません。</p>
+<label>残り防御資源 k：<input id="k" type="number" value="7" min="1" max="64"></label>
+<label>攻撃確率 p：<output id="pv"></output><input id="p" type="range" min="0" max="1" step="0.0001" value="0.125"></label>
+<button id="optimal">最適混合にする</button> <button id="pure">待機だけにする</button>
+<p>この分布の最悪応手に対する値：<output id="value"></output><br>最適混合 p = 1/(k+1)：<output id="opt"></output></p></div>
+<h2>新しい決定経路</h2>
+<div class="flow"><span>観測・探索</span><span>→ 合法手の確率分布 π</span><span>→ 一度だけ抽選</span><span>→ 一手を提出</span></div>
+<p>Rustの共通 <code>DecisionPolicy</code> が分布を検証・正規化し、低確率の正の成分を閾値で切り捨てません。Protocol側は合法な入力表現へ分布全体を対応づけ、同じ入力へ集まった確率を合算します。抽選用乱数は探索用乱数から分離しました。</p>
+<table><tr><th>API</th><th>意味</th></tr><tr><td><code>playPolicy(mode)</code></td><td>実行する分布。読むだけでは抽選しない。</td></tr><tr><td><code>commitDecision(mode)</code></td><td><code>{input, policy}</code> を返して確定。繰り返しても引き直さない。</td></tr><tr><td><code>rootPolicy()</code></td><td>従来の訪問数・平均値。<code>frac</code> は実行確率とは区別。</td></tr></table>
+<p>次の <code>observe / onRequest / setPosition</code> で決定を更新します。確定後に探索を追加しても、確定済みの手と分布は維持します。対局seedからの再現可能な乱数であり、暗号学的な予測不能性は保証しません。</p>
+<h2>選べる方式と、元の反例での結果</h2>
+<p>再構築した同じ局面・81,000反復・探索seed 813001を、新しいローカルWASMで確認しました。</p>
+<table><tr><th>方式</th><th>返された分布</th><th>解釈</th></tr><tr><td><code>legacy</code></td><td>のろい 100%</td><td>従来の最多訪問手。</td></tr><tr><td><code>visit-sample</code></td><td>じしん 10.96%<br>のろい 89.04%</td><td>訪問割合の実験用ベースライン。均衡保証なし。</td></tr><tr><td><code>estimated-mix</code></td><td>のろい 100%</td><td>既存の混合推定器が根拠不足でフォールバック。</td></tr></table>
+<p>抽選した今回の一手は「のろい」でした。混合方式でも、その都度の出力は一手です。分布が保持されていることと、勝率が上がることは別の検証事項です。<a href="probe.json">実測JSON</a></p>
+<p>既存の混合推定器の0.02判定閾値と探索方法は維持しました。非定常な探索平均から作る推定値に、厳密な信頼区間や均衡の保証は付けていません。従来の選出表で既に抽選済みの手は <code>preview-sampled</code> と明示し、その抽選後の条件付き点質量を返します。これは表全体の混合分布の公開ではありません。</p>
+<h2>呼び出し例</h2>
+<pre>await bot.newBattle(p1, p2, battleSeed, {
+  poolJson, side: 1, seed: 7,
+  actionPolicy: "visit-sample"
+});
+const result = await bot.search(1, 81000, 7, false);
+// result.playPolicy.actions = [{input, probability}, ...]
+// result.best はその分布から確定した一手
+
+// WASMを直接使う場合
+searcher.observe(battle);
+searcher.step(81000);
+const policy = JSON.parse(searcher.playPolicy("visit-sample"));
+const decision = JSON.parse(searcher.commitDecision("visit-sample"));</pre>
+<p>通常対局・forkとも同じ設定を受け取ります。WASMの旧 <code>best()</code> は互換性のため従来動作です。新しいWorkerは <code>commitDecision</code> を使用します。</p>
+<h2>確認できたこと</h2>
+<ul><li>共通分布・抽選の2テスト、探索側の混合／マスク検証、WASMの9テストが成功。</li><li>実Workerで3方式×連続3決定×2入力タイミング＝18決定と、forkの3決定を確認。正規化・合法性・抽選結果と報告分布の一致、入力タイミングの不変性を検証。<a href="worker-policy.json">21決定の結果</a></li><li>既存Workerの固定予算・flush・キャンセル・終盤経路の検証も成功。</li><li>TypeScript検査と研究用の最適化ビルドが成功。<a href="build.log">ビルド記録</a></li></ul>
+<p><strong>通常の製品ビルドは、保存済み選出表のソース一致検査で止まります。</strong>表は書き換えていません。<code>npm run build:research</code> は事前計算表を実行時にも無効にして、ライブ探索を使う明示的な研究ビルドです。混合実験の方式も古いargmax選出キャッシュを利用しません。既定方策の変更・本番への公開は行っていません。製品への昇格時には選出表の再計算が必要です。</p>
+<h2>次に解くべきクラス</h2>
+<p>狙う構造は「情報集合 → 全合法手上の分布 → 相手の各応手との組合せ → 後続の混合方策を含む価値」です。既知の有限ゲームでは行列ゲームの後退計算、隠れ情報がある場合は同じ情報集合で共通に実行できる方策が必要です。前回の区間評価器が返す分布も共通APIに載せられますが、通常のblind探索はまだその厳密な価値境界を供給できません。</p>
+<p>探索の各節点を単純にno-regretへ変えるだけでも十分ではありません。同時手番以外は完全情報のゲームですら、観測利得をそのまま使う局所学習は均衡への収束を保証しないことが示されています。これは現在の隠れ情報botへの直接の収束証明ではありません。<a href="https://arxiv.org/abs/1804.09045">Kovařík・Lisý, Analysis of Hannan Consistent Selection for Monte Carlo Tree Search in Simultaneous Move Games</a></p>
+<p><a href="/nc2000-policy-class/index.html">前回：問題クラスと保証付き方策改善</a> · <a href="/nc2000-bot-counterexample/index.html">非最適性の反例と純勝率境界</a></p>
+<p class="muted">実装・再現手順はリポジトリのREADME、<code>crates/bot/src/decision.rs</code>、<code>web/tests/worker-policy.mjs</code>、<code>tools/probe-play-policy.mjs</code>。新規の対戦勝率比較は実施していません。</p>
+</main><script>const k=document.querySelector('#k'),p=document.querySelector('#p');function update(){let n=Math.max(1,Math.min(64,Math.floor(Number(k.value)||1)));k.value=n;document.querySelector('#pv').textContent=(100*Number(p.value)).toFixed(2)+'%';document.querySelector('#value').textContent=Math.min(Number(p.value),(1-Number(p.value))/n).toFixed(5);document.querySelector('#opt').textContent=(100/(n+1)).toFixed(2)+'%（値 '+(1/(n+1)).toFixed(5)+'）'}k.oninput=p.oninput=update;document.querySelector('#optimal').onclick=()=>{p.value=1/(Number(k.value)+1);update()};document.querySelector('#pure').onclick=()=>{p.value=0;update()};update();</script></html>

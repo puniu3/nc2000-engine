@@ -36,6 +36,7 @@ import init, {
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import { searchProfile } from "./search-profile";
 import { compiledPreviewMatches, compiledPreviewPick } from "./compiled-preview";
+import type { ActionPolicyMode, PlayPolicy } from "./types";
 import type { EndgameSettings } from "./endgame-settings";
 import { runEndgameSearch } from "./endgame-search";
 
@@ -54,6 +55,7 @@ export type WorkerRequest =
         priorJson?: string;
         compiledPreview?: boolean;
         endgame?: EndgameSettings;
+        actionPolicy?: ActionPolicyMode;
       };
     }
   /** A forked battle (`?fork`): the mirror is `Battle.fromFork(fork, seed)`
@@ -69,6 +71,7 @@ export type WorkerRequest =
         seed: number;
         mode: "open" | "blind";
         endgame?: EndgameSettings;
+        actionPolicy?: ActionPolicyMode;
       };
     }
   | { t: "apply"; picks: [number, string][] }
@@ -91,6 +94,7 @@ export type WorkerResponse =
       id: number;
       best: string | null;
       policy: string;
+      playPolicy: PlayPolicy | null;
       ms: number;
       wasmMemoryBytes: number;
       endgame?: string;
@@ -120,6 +124,7 @@ let battle: Battle | null = null;
 let searcher: BlindSearcher | null = null;
 let compiledAllowed: Promise<boolean> = Promise.resolve(false);
 let previewSeed = 0;
+let actionPolicy: ActionPolicyMode = "legacy";
 let forked: {
   channel: PlayerChannel;
   searcher: ProtocolSearcher;
@@ -147,9 +152,10 @@ async function handle(m: WorkerRequest): Promise<void> {
   await ready;
   switch (m.t) {
     case "battle": {
+      actionPolicy = m.searcher.actionPolicy ?? "legacy";
       gen += 1;
       previewSeed = m.searcher.seed;
-      compiledAllowed = m.searcher.compiledPreview === false || m.searcher.priorJson
+      compiledAllowed = actionPolicy !== "legacy" || m.searcher.compiledPreview === false || m.searcher.priorJson
         ? Promise.resolve(false) : compiledPreviewMatches(m.searcher.poolJson, embeddedDexJson()).catch(() => false);
       searcher?.free();
       searcher = null;
@@ -191,6 +197,7 @@ async function handle(m: WorkerRequest): Promise<void> {
       break;
     }
     case "fork": {
+      actionPolicy = m.searcher.actionPolicy ?? "legacy";
       gen += 1;
       forkMode = m.searcher.mode;
       searcher?.free();
@@ -257,6 +264,29 @@ interface SearchMsg {
   ponder: boolean;
 }
 
+// Commit only after the search finishes. Polls/progress never redraw. The
+// protocol path maps the entire distribution to engine input syntax so the
+// reported probabilities describe exactly the submitted action space.
+function finishDecision(s: { commitDecision(mode: string): string }, protocolSide?: number): {
+  best: string | null; playPolicy: PlayPolicy | null;
+} {
+  const decision = JSON.parse(s.commitDecision(actionPolicy)) as { input: string; policy: PlayPolicy } | null;
+  if (!decision) return { best: null, playPolicy: null };
+  const resolve = (input: string) => {
+    if (protocolSide === undefined) return input;
+    const resolved = battle!.resolveChoice(protocolSide, input);
+    if (!resolved) throw new Error(`Cannot resolve policy action: ${input}`);
+    return resolved;
+  };
+  const probabilities = new Map<string, number>();
+  for (const row of decision.policy.actions) {
+    const input = resolve(row.input);
+    probabilities.set(input, (probabilities.get(input) ?? 0) + row.probability);
+  }
+  return { best: resolve(decision.input), playPolicy: { source: decision.policy.source,
+    actions: [...probabilities].map(([input, probability]) => ({ input, probability })) } };
+}
+
 // One decision point on the persistent per-game searcher: observe()
 // snapshots the mirror's state (updating the belief's observations), then
 // the stepped search runs to its fixed count. The searcher is NOT freed per
@@ -281,6 +311,7 @@ async function runSearch(m: SearchMsg): Promise<void> {
   // the artifact is built and versioned with the same sources.
   if (compiled && (JSON.parse(battle!.legalChoices(m.side)) as { input: string }[]).some(c => c.input === compiled)) {
     post({ t: "result", id: m.id, best: compiled,
+      playPolicy: { source: "preview-sampled", actions: [{ input: compiled, probability: 1 }] },
       policy: JSON.stringify({ iterations: 0, preview: true, baked: true,
         actions: [{ input: compiled, visits: 0, mean: 0.5, frac: 1 }] }),
       ms: performance.now() - t0, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "table" });
@@ -303,7 +334,7 @@ async function runSearch(m: SearchMsg): Promise<void> {
   post({
     t: "result",
     id: m.id,
-    best: s.best() ?? null,
+    ...finishDecision(s),
     policy: s.rootPolicy(),
     ms: performance.now() - t0,
     wasmMemoryBytes: wasmMemory.buffer.byteLength,
@@ -339,8 +370,7 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
       progress: done => post({ t: "progress", id: m.id, done, budget: m.budget }),
     }, t0);
     if (!current) return;
-    const best = f.searcher.best();
-    post({ t: "result", id: m.id, best: best === undefined ? null : (battle!.resolveChoice(m.side, best) ?? null),
+    post({ t: "result", id: m.id, ...finishDecision(f.searcher, m.side),
       policy: f.searcher.rootPolicy(), ms: performance.now() - t0, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "search", endgame: f.searcher.endgameStats() });
     return;
   }
@@ -356,11 +386,10 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
     await new Promise((r) => setTimeout(r, 0));
   }
   if (gen !== myGen) return;
-  const best = f.searcher.best();
   post({
     t: "result",
     id: m.id,
-    best: best === undefined ? null : (battle!.resolveChoice(m.side, best) ?? null),
+    ...finishDecision(f.searcher, m.side),
     policy: f.searcher.rootPolicy(),
     ms: performance.now() - t0,
     wasmMemoryBytes: wasmMemory.buffer.byteLength,
