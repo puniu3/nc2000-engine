@@ -22,5 +22,10 @@
     }
   ],
   "preview_entry": "nc2000-mixed-policy-strength",
-  "goal_status": "active"
+  "goal_status": "active",
+  "watcher": {
+    "pid": 40861,
+    "exec_session_id": 70575,
+    "command": "python3 tools/watch-mixed-policy.py"
+  }
 }

@@ -32,6 +32,16 @@ if args.progress:
             for c in sorted({j['cell'] for j in jobs.values()})}}, indent=2))
     raise SystemExit()
 assert len(rows) == len(jobs), f'incomplete: {len(rows)}/{len(jobs)}'
+expected_counts = {
+    f'{kind}-{mode}': (2 if plan['pilot'] else
+        (8 if mode == 'legacy' else 256) if kind == 'direct' else
+        128 if kind == 'oracle' else 64)
+    for kind in ['direct', 'oracle', 'control']
+    for mode in ['legacy', 'visit-sample', 'estimated-mix']
+}
+actual_counts = {cell: sum(r['job']['cell'] == cell for r in rows.values()) for cell in expected_counts}
+assert actual_counts == expected_counts, (actual_counts, expected_counts)
+assert plan['budget'] == 81000 and plan['attacker_budget'] == 243000
 assert not any(r['capped'] or r['score'] is None for r in rows.values()), 'unresolved games require bounds, not tie imputation'
 for r in rows.values():
     assert r['score'] in (0, 0.5, 1)
@@ -43,6 +53,16 @@ for r in rows.values():
     for phase in counts.values():
         assert phase['iterations'] == phase['decisions'] * plan['budget']
         assert phase['mixed'] <= phase['decisions'] and phase['fallback'] <= phase['decisions']
+    assert len(set(r['job']['agent_seeds'] + r['job']['model_seeds'])) == 5, 'oracle shares actual defender seed'
+    if r['job']['opponent'] in ('oracle', 'control'):
+        assert len(r['model_stats']) == 3
+        calls = [s['preview']['decisions'] + s['battle']['decisions'] for s in r['model_stats']]
+        assert len(set(calls)) == 1, 'ensemble replicas queried inconsistently'
+        for model in r['model_stats']:
+            for phase in model.values():
+                assert phase['iterations'] == phase['decisions'] * plan['budget']
+        if r['job']['opponent'] == 'oracle':
+            assert calls[0] > 0, 'oracle was never queried'
     if r['job']['opponent'] == 'control':
         assert all(s['preview']['decisions'] == s['battle']['decisions'] == 0 for s in r['model_stats'])
 
