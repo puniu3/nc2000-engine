@@ -36,7 +36,7 @@ body += '''<h2>比較条件</h2><p>現在の24チームを実際のdrawWeightで
 <p>直接対決は各候補256局。exploiter戦は従来方式も含めて各128局。方策を読まない対照は各64局。従来方式同士の左右交換テスト8局を加え、計1,096局です。予備測定18局は本測定に混ぜません。</p>
 <h2>exploiterの意味</h2><p>対象方策を、実際の対象botとは異なる3つのseedで推定し、現在の同時手番での応手を探索します。対象botが実際に抽選した手・内部seedは渡しません。対象botはblindですが、攻撃側には真の盤面を与える強いストレステストです。</p>
 <p>攻撃側の探索予算は243,000反復。対照も同じ盤面情報・同じ探索予算を持ち、方策の推定だけを行いません。exploiterには追加で対象モデル3回分の計算があるため、総実行時間を揃えた比較ではありません。これは近似ベストレスポンスへの耐性であり、厳密な最悪応手やNash exploitabilityの証明ではありません。</p>
-<h2>判定方法</h2><p>純勝率（勝ち数÷全対局数）と、引き分けを0.5とするスコアを分けます。左右交換した2局を一つの標本として、100,000回のブロックbootstrapを行います。主要4比較の区間は98.75%（Bonferroniで全体95%）。その他の95%区間は補助的な記述です。0をまたぐ差は「改善を確認できない」であり、同等性の証明ではありません。</p><p><a href="plan.json">実行前に固定した全条件・試合予定</a></p>'''
+<h2>判定方法</h2><p>純勝率（勝ち数÷全対局数）と、引き分けを0.5とするスコアを分けます。左右交換した2局を一つの標本として、100,000回のブロックbootstrapを行います。主要4比較は各98.75%のbootstrap区間を使います（Bonferroniによる名目上の全体水準95%）。有限標本で厳密な被覆率を保証する区間ではありません。その他の95%区間は補助的な記述です。0をまたぐ差は「改善を確認できない」であり、同等性の証明ではありません。</p><p><a href="plan.json">実行前に固定した全条件・試合予定</a></p>'''
 if parity:
     body += f'<p>実際のコンパイル済みWASMと評価用ネイティブbotは、{parity["decisions"]}決定で、選択手・分布・訪問数・平均値が一致しました。<a href="wasm-parity.json">一致検証</a></p>'
 if canary:
@@ -53,7 +53,16 @@ if summary:
     body += '</table></div><p>「制限引分」はエンジンの1000ターン制限による引き分けで、分の内数です。勝率の改善と、引き分けを増やすことによるスコアの改善は区別します。</p><h2>主要な差：正なら改善</h2><table><tr><th>候補</th><th>直接対決：50%からの差［98.75%］</th><th>exploiter戦：従来方式からの差［98.75%］</th></tr>'
     for mode, r in summary['primary'].items():
         body += f'<tr><td>{mode_name[mode]}</td><td>{interval(r["direct_score_minus_half"],True)}</td><td>{interval(r["oracle_score_minus_legacy"],True)}</td></tr>'
-    body += '</table><p>上表はスコア差です。純勝率の対応差、方策を読むことによる攻撃効果、個別ブロック値も集計JSONに保存しています。</p><h2>混合は実際に使われたか</h2><table><tr><th>直接対決の対象方式</th><th>選出：混合決定／全決定</th><th>対戦中：混合決定／全決定</th><th>対戦中：従来手と異なる選択</th></tr>'
+    body += '</table><p>上表はスコア差です。</p><h2>純勝率の差（補助比較）</h2><table><tr><th>候補</th><th>直接対決：候補の勝率−相手の勝率［95%］</th><th>exploiter戦：従来方式からの勝率差［95%］</th></tr>'
+    for mode in ['visit-sample', 'estimated-mix']:
+        direct_win = summary['secondary'][f'pure-win-direct-{mode}-minus-opponent']
+        oracle_win = summary['secondary'][f'pure-win-oracle-{mode}-minus-legacy']
+        body += f'<tr><td>{mode_name[mode]}</td><td>{interval(direct_win,True)}</td><td>{interval(oracle_win,True)}</td></tr>'
+    body += '</table><p>直接対決では相手の勝ちが候補の負けなので、勝率差は（勝ち数−負け数）÷全対局数です。引き分けを除外した勝率ではありません。</p><h2>exploiterは実際に攻略できたか</h2><table><tr><th>対象方式</th><th>方策を読む攻撃による対象スコアの低下［95%］</th></tr>'
+    for mode in ['legacy', 'visit-sample', 'estimated-mix']:
+        effect = summary['secondary'][f'oracle-loss-vs-control-{mode}']
+        body += f'<tr><td>{mode_name[mode]}</td><td>{interval(effect,True)}</td></tr>'
+    body += '</table><p>同じ32組・64局の条件で、方策を読まない攻撃へのスコアから、読む攻撃へのスコアを引いた値です。正なら方策を読む攻撃の方が有効でした。0をまたぐ場合、攻撃側の検出力にも限界があり、耐性の証明にはなりません。補助比較は多重比較補正をしていません。</p><h2>混合は実際に使われたか</h2><table><tr><th>直接対決の対象方式</th><th>選出：混合決定／全決定</th><th>対戦中：混合決定／全決定</th><th>対戦中：従来手と異なる選択</th></tr>'
     for mode in ['visit-sample','estimated-mix']:
         stats = summary['cells'][f'direct-{mode}']['stats']
         p, b = stats['preview'], stats['battle']

@@ -118,6 +118,10 @@ if not plan['pilot']:
         resistance = paired(f'oracle-{mode}', 'oracle-legacy')
         primary[mode] = {'direct_score_minus_half': direct, 'oracle_score_minus_legacy': resistance,
             'both_improvements_demonstrated': direct['interval'][0] > 0 and resistance['interval'][0] > 0}
+        # In the same direct games the opponent's wins are the target's losses.
+        # Thus W/N - L/N = 2 * (score - 0.5), with draws retained in N.
+        secondary[f'pure-win-direct-{mode}-minus-opponent'] = bootstrap(
+            [2 * (s - 0.5) for s in cells[f'direct-{mode}']['block_scores'].values()], 0.95)
         secondary[f'pure-win-oracle-{mode}-minus-legacy'] = paired(f'oracle-{mode}', 'oracle-legacy', 'block_wins', 0.95)
     for mode in ['legacy', 'visit-sample', 'estimated-mix']:
         secondary[f'oracle-loss-vs-control-{mode}'] = paired(f'control-{mode}', f'oracle-{mode}', level=0.95)
