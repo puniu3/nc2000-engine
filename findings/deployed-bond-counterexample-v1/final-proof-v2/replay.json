@@ -1,0 +1,6139 @@
+{
+  "trace": [
+    {
+      "state": {
+        "turn": 0,
+        "sides": [
+          {
+            "name": "P1",
+            "active": null,
+            "party": [
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 48,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Starmie",
+                "name": "Starmie",
+                "level": 50,
+                "gender": "",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "surf",
+                    "name": "Surf",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water",
+                  "Psychic"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Marowak",
+                "name": "Marowak",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ground"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Heracross",
+                "name": "Heracross",
+                "level": 50,
+                "gender": "M",
+                "hp": 186,
+                "maxhp": 186,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "megahorn",
+                    "name": "Megahorn",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Bug",
+                  "Fighting"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 6,
+            "sideConditions": [],
+            "request": "teampreview"
+          },
+          {
+            "name": "P2",
+            "active": null,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 126,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 61,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "F",
+                "hp": 266,
+                "maxhp": 266,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "bodyslam",
+                    "name": "Body Slam",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Marowak",
+                "name": "Marowak",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ground"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Heracross",
+                "name": "Heracross",
+                "level": 50,
+                "gender": "M",
+                "hp": 186,
+                "maxhp": 186,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "megahorn",
+                    "name": "Megahorn",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Bug",
+                  "Fighting"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 6,
+            "sideConditions": [],
+            "request": "teampreview"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "18381,62694,2349,23117",
+      "actions": [
+        "team 1, 2, 3",
+        "team 1, 2, 3"
+      ]
+    },
+    {
+      "state": {
+        "turn": 1,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 48,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 3,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 126,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 61,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 3,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "36062,35681,55417,29732",
+      "actions": [
+        "move explosion",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 1,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "fnt",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 48,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "switch"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "fnt",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 126,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 61,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "switch"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "62268,65377,50315,13110",
+      "actions": [
+        "switch 2",
+        "switch 2"
+      ]
+    },
+    {
+      "state": {
+        "turn": 2,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 48,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 126,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 61,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "11932,45944,14323,47377",
+      "actions": [
+        "move quickattack",
+        "switch 3"
+      ]
+    },
+    {
+      "state": {
+        "turn": 3,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 47,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 110,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 61,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "31833,44301,35013,64874",
+      "actions": [
+        "move quickattack",
+        "move splash"
+      ]
+    },
+    {
+      "state": {
+        "turn": 4,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 46,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 94,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 60,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "61967,23411,29660,19199",
+      "actions": [
+        "move quickattack",
+        "move splash"
+      ]
+    },
+    {
+      "state": {
+        "turn": 5,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 45,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 76,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 59,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "2172,28258,34577,38496",
+      "actions": [
+        "move quickattack",
+        "move splash"
+      ]
+    },
+    {
+      "state": {
+        "turn": 6,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 44,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 59,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 58,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "1185,34162,25417,3037",
+      "actions": [
+        "move quickattack",
+        "move splash"
+      ]
+    },
+    {
+      "state": {
+        "turn": 7,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 43,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 42,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 57,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "18340,48496,7697,18566",
+      "actions": [
+        "move quickattack",
+        "move splash"
+      ]
+    },
+    {
+      "state": {
+        "turn": 8,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 42,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "4930,44709,42689,20267",
+      "actions": [
+        "move quickattack",
+        "switch 3"
+      ]
+    },
+    {
+      "state": {
+        "turn": 9,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 165,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 41,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "34735,16190,35829,56762",
+      "actions": [
+        "move quickattack",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 10,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 137,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 40,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 23,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "16365,35292,63478,42926",
+      "actions": [
+        "move quickattack",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 11,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 107,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 39,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 22,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "47079,38434,12359,55906",
+      "actions": [
+        "move quickattack",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 12,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 79,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 38,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 21,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "29686,2426,56162,27094",
+      "actions": [
+        "move quickattack",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 13,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 48,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 37,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 20,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "21900,51570,35640,2570",
+      "actions": [
+        "move quickattack",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 14,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 19,
+                "maxhp": 165,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 36,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 19,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "4717,1085,9511,12030",
+      "actions": [
+        "move quickattack",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 14,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "fnt",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 35,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 1,
+            "sideConditions": [],
+            "request": "switch"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 18,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": ""
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "11923,11212,2381,61440",
+      "actions": [
+        "switch 3",
+        null
+      ]
+    },
+    {
+      "state": {
+        "turn": 15,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 250,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 35,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 1,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 166,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 18,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "58897,19163,61782,20163",
+      "actions": [
+        "move earthquake",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 16,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 206,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 15,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 16,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 35,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 1,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 54,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 17,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "32674,15687,46558,38593",
+      "actions": [
+        "move curse",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 17,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 162,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 1,
+                  "def": 1,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": -1,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 15,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 15,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 35,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 1,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 54,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 16,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "33929,12656,17468,62716",
+      "actions": [
+        "move curse",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 18,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 121,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 2,
+                  "def": 2,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": -2,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 15,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 14,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 35,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 1,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 54,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 15,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "19152,57576,26570,38611",
+      "actions": [
+        "move curse",
+        "move thunderbolt"
+      ]
+    },
+    {
+      "state": {
+        "turn": 19,
+        "sides": [
+          {
+            "name": "P1",
+            "active": 0,
+            "party": [
+              {
+                "species": "Snorlax",
+                "name": "Snorlax",
+                "level": 50,
+                "gender": "M",
+                "hp": 75,
+                "maxhp": 250,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 3,
+                  "def": 3,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": -3,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "earthquake",
+                    "name": "Earthquake",
+                    "pp": 15,
+                    "maxpp": 16,
+                    "disabled": false
+                  },
+                  {
+                    "id": "curse",
+                    "name": "Curse",
+                    "pp": 13,
+                    "maxpp": 16,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Normal"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Electrode",
+                "name": "Electrode",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 166,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "explosion",
+                    "name": "Explosion",
+                    "pp": 7,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "quickattack",
+                    "name": "Quick Attack",
+                    "pp": 35,
+                    "maxpp": 48,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 1,
+            "sideConditions": [],
+            "request": "move"
+          },
+          {
+            "name": "P2",
+            "active": 0,
+            "party": [
+              {
+                "species": "Gengar",
+                "name": "Gengar",
+                "level": 50,
+                "gender": "M",
+                "hp": 54,
+                "maxhp": 166,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 14,
+                    "maxpp": 24,
+                    "disabled": false
+                  },
+                  {
+                    "id": "destinybond",
+                    "name": "Destiny Bond",
+                    "pp": 8,
+                    "maxpp": 8,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Ghost",
+                  "Poison"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Raikou",
+                "name": "Raikou",
+                "level": 50,
+                "gender": "",
+                "hp": 0,
+                "maxhp": 165,
+                "fainted": true,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "thunderbolt",
+                    "name": "Thunderbolt",
+                    "pp": 24,
+                    "maxpp": 24,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Electric"
+                ],
+                "volatiles": [],
+                "trapped": false
+              },
+              {
+                "species": "Magikarp",
+                "name": "Magikarp",
+                "level": 50,
+                "gender": "M",
+                "hp": 26,
+                "maxhp": 126,
+                "fainted": false,
+                "status": "",
+                "boosts": {
+                  "atk": 0,
+                  "def": 0,
+                  "spa": 0,
+                  "spd": 0,
+                  "spe": 0,
+                  "accuracy": 0,
+                  "evasion": 0
+                },
+                "moves": [
+                  {
+                    "id": "splash",
+                    "name": "Splash",
+                    "pp": 56,
+                    "maxpp": 61,
+                    "disabled": false
+                  }
+                ],
+                "item": null,
+                "types": [
+                  "Water"
+                ],
+                "volatiles": [],
+                "trapped": false
+              }
+            ],
+            "pokemonLeft": 2,
+            "sideConditions": [],
+            "request": "move"
+          }
+        ],
+        "field": {
+          "weather": null,
+          "pseudoWeather": [
+            "maxtotallevel",
+            "stadiumsleepclause",
+            "freezeclausemod"
+          ]
+        },
+        "outcome": null
+      },
+      "seed": "35135,63656,38841,53366",
+      "actions": [
+        "move curse",
+        "move destinybond"
+      ]
+    }
+  ],
+  "root": {
+    "turn": 20,
+    "sides": [
+      {
+        "name": "P1",
+        "active": 0,
+        "party": [
+          {
+            "species": "Snorlax",
+            "name": "Snorlax",
+            "level": 50,
+            "gender": "M",
+            "hp": 75,
+            "maxhp": 250,
+            "fainted": false,
+            "status": "",
+            "boosts": {
+              "atk": 4,
+              "def": 4,
+              "spa": 0,
+              "spd": 0,
+              "spe": -4,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "earthquake",
+                "name": "Earthquake",
+                "pp": 15,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "curse",
+                "name": "Curse",
+                "pp": 12,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": null,
+            "types": [
+              "Normal"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Electrode",
+            "name": "Electrode",
+            "level": 50,
+            "gender": "",
+            "hp": 0,
+            "maxhp": 166,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "explosion",
+                "name": "Explosion",
+                "pp": 7,
+                "maxpp": 8,
+                "disabled": false
+              }
+            ],
+            "item": null,
+            "types": [
+              "Electric"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Raikou",
+            "name": "Raikou",
+            "level": 50,
+            "gender": "",
+            "hp": 0,
+            "maxhp": 165,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "quickattack",
+                "name": "Quick Attack",
+                "pp": 35,
+                "maxpp": 48,
+                "disabled": false
+              }
+            ],
+            "item": null,
+            "types": [
+              "Electric"
+            ],
+            "volatiles": [],
+            "trapped": false
+          }
+        ],
+        "pokemonLeft": 1,
+        "sideConditions": [],
+        "request": "move"
+      },
+      {
+        "name": "P2",
+        "active": 0,
+        "party": [
+          {
+            "species": "Gengar",
+            "name": "Gengar",
+            "level": 50,
+            "gender": "M",
+            "hp": 54,
+            "maxhp": 166,
+            "fainted": false,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "thunderbolt",
+                "name": "Thunderbolt",
+                "pp": 14,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "destinybond",
+                "name": "Destiny Bond",
+                "pp": 7,
+                "maxpp": 8,
+                "disabled": false
+              }
+            ],
+            "item": null,
+            "types": [
+              "Ghost",
+              "Poison"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Raikou",
+            "name": "Raikou",
+            "level": 50,
+            "gender": "",
+            "hp": 0,
+            "maxhp": 165,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "thunderbolt",
+                "name": "Thunderbolt",
+                "pp": 24,
+                "maxpp": 24,
+                "disabled": false
+              }
+            ],
+            "item": null,
+            "types": [
+              "Electric"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Magikarp",
+            "name": "Magikarp",
+            "level": 50,
+            "gender": "M",
+            "hp": 26,
+            "maxhp": 126,
+            "fainted": false,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "splash",
+                "name": "Splash",
+                "pp": 56,
+                "maxpp": 61,
+                "disabled": false
+              }
+            ],
+            "item": null,
+            "types": [
+              "Water"
+            ],
+            "volatiles": [],
+            "trapped": false
+          }
+        ],
+        "pokemonLeft": 2,
+        "sideConditions": [],
+        "request": "move"
+      }
+    ],
+    "field": {
+      "weather": null,
+      "pseudoWeather": [
+        "maxtotallevel",
+        "stadiumsleepclause",
+        "freezeclausemod"
+      ]
+    },
+    "outcome": null
+  },
+  "seed": "17328,41406,64768,18104"
+}

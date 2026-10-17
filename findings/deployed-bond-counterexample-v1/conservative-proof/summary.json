@@ -1,0 +1,14 @@
+{
+  "pure_win_bounds": [
+    0.0,
+    0.11718750000000004
+  ],
+  "runs": 8296,
+  "nodes": 116,
+  "truncated": 0,
+  "conservative_discards": 1782,
+  "seconds": 0.17502325,
+  "horizon": "12",
+  "policy": "Uniform attack deadline 1..8 while facing Gengar; attack immediately on a different foe; after the first attack keep attacking. Only own history and public foe species are used.",
+  "numerical_safety_margin": 1e-8
+}

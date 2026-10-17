@@ -1,0 +1,18 @@
+Run in the nc2000-engine repository containing these files and the pinned deployment assets under findings/deployed-endurance-v1.
+
+Existing evidence arithmetic and seed-plan audit:
+  python3 tools/deployed-bond-audit.py
+
+Fresh direct proof (output directory must not already exist):
+  cargo build --release -p nc2000-bot --example bond_counterexample
+  target/release/examples/bond_counterexample findings/deployed-bond-counterexample-v1/screen-fixture.json /tmp/nc2000-bond-proof-recheck 12
+
+Public WASM parity against the fresh native trajectories:
+  cd web
+  node tests/deployed-bond-parity.mjs /tmp/nc2000-bond-proof-recheck
+
+Replay the preregistered 128-seed experiment (about 4 minutes; new output path required):
+  cd web
+  node tests/deployed-bond-probe.mjs screen blind 128 /tmp/nc2000-bond-search-recheck.jsonl
+
+The final proof is final-proof-v2. Earlier exploratory directories are retained as failed or deliberately looser bounds, and do not support the reported conclusion. The final direct proof counts pure wins, treats draws as losses, and allows every legal opposing action. The Curse upper proof leaves every future own action free. Native/WASM parity is a sampled compatibility check, not a proof for every chance branch. Use the full repository for compiling; this evidence bundle is not a standalone source distribution.

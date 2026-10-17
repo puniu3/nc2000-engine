@@ -1,0 +1,803 @@
+{
+  "game": 3000,
+  "seed": "2,3,4,5",
+  "teams": [
+    [
+      {
+        "name": "Electrode",
+        "species": "Electrode",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Explosion"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Raikou",
+        "species": "Raikou",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Quick Attack"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 4,
+          "def": 4,
+          "hp": 4,
+          "spa": 4,
+          "spd": 4,
+          "spe": 4
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Snorlax",
+        "species": "Snorlax",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Earthquake",
+          "Curse"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 120,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Starmie",
+        "species": "Starmie",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Surf"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Marowak",
+        "species": "Marowak",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Earthquake"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Heracross",
+        "species": "Heracross",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Megahorn"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      }
+    ],
+    [
+      {
+        "name": "Raikou",
+        "species": "Raikou",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Thunderbolt"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 4,
+          "def": 4,
+          "hp": 4,
+          "spa": 4,
+          "spd": 4,
+          "spe": 4
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Gengar",
+        "species": "Gengar",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Thunderbolt",
+          "Destiny Bond"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Magikarp",
+        "species": "Magikarp",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Splash"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Snorlax",
+        "species": "Snorlax",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Body Slam"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Marowak",
+        "species": "Marowak",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Earthquake"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Heracross",
+        "species": "Heracross",
+        "item": "",
+        "ability": "",
+        "moves": [
+          "Megahorn"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      }
+    ]
+  ],
+  "decisions": [
+    {
+      "key": "304043030114599839784062264947497975300",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "111262287790907267011673172247844748135",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "76403704877820953405484056915701494508",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "221114202422494223518195087000700162639",
+      "choices": [
+        0,
+        2
+      ]
+    },
+    {
+      "key": "89864583981816543404632122348626424982",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "140576390853893896576699971726716131230",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "228967587948779706303262931671009218053",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "145849439340932232009628504216897225856",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "263570261132543102668237509444584674254",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "202710045645661251598351390165107093690",
+      "choices": [
+        0,
+        1
+      ]
+    },
+    {
+      "key": "143230429560815194605177407305086329114",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "34538567109792847058670860533418154495",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "241782562769171595127928475826597101762",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "134257656154804522197671617708103426540",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "18641421535136166360259004785736229654",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "177165327180359126619537218081840185595",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "278748059999972109402144940388134215121",
+      "choices": [
+        0,
+        null
+      ]
+    },
+    {
+      "key": "210279946281619126622298812599999029637",
+      "choices": [
+        0,
+        0
+      ]
+    },
+    {
+      "key": "314635733718066127958705631097859056314",
+      "choices": [
+        1,
+        0
+      ]
+    },
+    {
+      "key": "73987223178306122005256934639224144552",
+      "choices": [
+        1,
+        0
+      ]
+    },
+    {
+      "key": "265856930341392073361365755989045348339",
+      "choices": [
+        1,
+        0
+      ]
+    },
+    {
+      "key": "326772116885665781140028445122704263396",
+      "choices": [
+        1,
+        1
+      ]
+    },
+    {
+      "key": "25881634785650814297360671742280718499",
+      "choices": [
+        0,
+        0
+      ]
+    }
+  ],
+  "samples": [
+    22
+  ],
+  "outcome": null,
+  "prefix_only": true,
+  "expected_root": {
+    "turn": 20,
+    "prngSeed": "17328,41406,64768,18104",
+    "requestState": "move",
+    "field": {
+      "weather": "",
+      "weatherState": {
+        "id": ""
+      },
+      "pseudoWeather": {
+        "maxtotallevel": {
+          "id": "maxtotallevel"
+        },
+        "stadiumsleepclause": {
+          "id": "stadiumsleepclause"
+        },
+        "freezeclausemod": {
+          "id": "freezeclausemod"
+        }
+      }
+    },
+    "sides": [
+      {
+        "pokemonLeft": 1,
+        "sideConditions": {},
+        "active": [
+          "p1: Snorlax"
+        ],
+        "pokemon": [
+          {
+            "ident": "p1: Snorlax",
+            "species": "snorlax",
+            "hp": 75,
+            "maxhp": 250,
+            "fainted": false,
+            "status": "",
+            "statusState": {
+              "id": ""
+            },
+            "boosts": {
+              "atk": 4,
+              "def": 4,
+              "spa": 0,
+              "spd": 0,
+              "spe": -4,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "item": "",
+            "lastItem": "",
+            "itemState": {
+              "id": ""
+            },
+            "moves": [
+              {
+                "id": "earthquake",
+                "pp": 15,
+                "disabled": false
+              },
+              {
+                "id": "curse",
+                "pp": 12,
+                "disabled": false
+              }
+            ],
+            "volatiles": {},
+            "types": [
+              "Normal"
+            ],
+            "transformed": false,
+            "active": true,
+            "position": 0
+          },
+          {
+            "ident": "p1: Electrode",
+            "species": "electrode",
+            "hp": 0,
+            "maxhp": 166,
+            "fainted": true,
+            "status": "",
+            "statusState": {
+              "id": ""
+            },
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "item": "",
+            "lastItem": "",
+            "itemState": {
+              "id": ""
+            },
+            "moves": [
+              {
+                "id": "explosion",
+                "pp": 7,
+                "disabled": false
+              }
+            ],
+            "volatiles": {},
+            "types": [
+              "Electric"
+            ],
+            "transformed": false,
+            "active": false,
+            "position": 1
+          },
+          {
+            "ident": "p1: Raikou",
+            "species": "raikou",
+            "hp": 0,
+            "maxhp": 165,
+            "fainted": true,
+            "status": "",
+            "statusState": {
+              "id": ""
+            },
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "item": "",
+            "lastItem": "",
+            "itemState": {
+              "id": ""
+            },
+            "moves": [
+              {
+                "id": "quickattack",
+                "pp": 35,
+                "disabled": false
+              }
+            ],
+            "volatiles": {},
+            "types": [
+              "Electric"
+            ],
+            "transformed": false,
+            "active": false,
+            "position": 2
+          }
+        ]
+      },
+      {
+        "pokemonLeft": 2,
+        "sideConditions": {},
+        "active": [
+          "p2: Gengar"
+        ],
+        "pokemon": [
+          {
+            "ident": "p2: Gengar",
+            "species": "gengar",
+            "hp": 54,
+            "maxhp": 166,
+            "fainted": false,
+            "status": "",
+            "statusState": {
+              "id": ""
+            },
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "item": "",
+            "lastItem": "",
+            "itemState": {
+              "id": ""
+            },
+            "moves": [
+              {
+                "id": "thunderbolt",
+                "pp": 14,
+                "disabled": false
+              },
+              {
+                "id": "destinybond",
+                "pp": 7,
+                "disabled": false
+              }
+            ],
+            "volatiles": {},
+            "types": [
+              "Ghost",
+              "Poison"
+            ],
+            "transformed": false,
+            "active": true,
+            "position": 0
+          },
+          {
+            "ident": "p2: Raikou",
+            "species": "raikou",
+            "hp": 0,
+            "maxhp": 165,
+            "fainted": true,
+            "status": "",
+            "statusState": {
+              "id": ""
+            },
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "item": "",
+            "lastItem": "",
+            "itemState": {
+              "id": ""
+            },
+            "moves": [
+              {
+                "id": "thunderbolt",
+                "pp": 24,
+                "disabled": false
+              }
+            ],
+            "volatiles": {},
+            "types": [
+              "Electric"
+            ],
+            "transformed": false,
+            "active": false,
+            "position": 1
+          },
+          {
+            "ident": "p2: Magikarp",
+            "species": "magikarp",
+            "hp": 26,
+            "maxhp": 126,
+            "fainted": false,
+            "status": "",
+            "statusState": {
+              "id": ""
+            },
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "item": "",
+            "lastItem": "",
+            "itemState": {
+              "id": ""
+            },
+            "moves": [
+              {
+                "id": "splash",
+                "pp": 56,
+                "disabled": false
+              }
+            ],
+            "volatiles": {},
+            "types": [
+              "Water"
+            ],
+            "transformed": false,
+            "active": false,
+            "position": 2
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "trials": 768,
+  "state_and_rng_checks": 3731,
+  "outcomes": {
+    "p1": 260,
+    "p2": 508
+  },
+  "distinct_joint_actions": [
+    "[\"move earthquake\",\"move thunderbolt\"]",
+    "[null,\"switch 3\"]",
+    "[\"move earthquake\",\"move splash\"]",
+    "[\"move curse\",\"move thunderbolt\"]",
+    "[\"move earthquake\",\"move destinybond\"]",
+    "[\"move curse\",\"move destinybond\"]",
+    "[\"move earthquake\",\"switch 3\"]",
+    "[\"move curse\",\"switch 3\"]"
+  ],
+  "scope": "Complete stateView and PRNG equality for original prefix and 768 deterministic counterfactual trajectories. This checks sampled trajectories, not every enumerated chance branch."
+}

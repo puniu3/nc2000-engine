@@ -1,0 +1,52 @@
+{
+  "schema": "nc2000-deployed-bond-counterexample-v1",
+  "choice_counts": {
+    "move curse": 128
+  },
+  "curse_pure_win_upper": 0.0,
+  "constructive_pure_win_lower": 0.105743398203125,
+  "seed_probability_one_sided_confidence": 0.999,
+  "attack_probability_upper": 0.052536474344624606,
+  "current_seed_mixed_policy_win_upper": 0.052536474344624606,
+  "guaranteed_win_gap_lower": 0.0532069238585004,
+  "proof_engine_runs": 9954,
+  "proof_seconds": 0.566788583,
+  "native_matrix_value": [
+    0.1143263566904275,
+    0.11432647705078128
+  ],
+  "searches": 128,
+  "search_seconds": 252.83385541499993,
+  "engine_parity": {
+    "trials": 768,
+    "state_and_rng_checks": 3731,
+    "outcomes": {
+      "p1": 260,
+      "p2": 508
+    },
+    "distinct_joint_actions": [
+      "[\"move earthquake\",\"move thunderbolt\"]",
+      "[null,\"switch 3\"]",
+      "[\"move earthquake\",\"move splash\"]",
+      "[\"move curse\",\"move thunderbolt\"]",
+      "[\"move earthquake\",\"move destinybond\"]",
+      "[\"move curse\",\"move destinybond\"]",
+      "[\"move earthquake\",\"switch 3\"]",
+      "[\"move curse\",\"switch 3\"]"
+    ],
+    "scope": "Complete stateView and PRNG equality for original prefix and 768 deterministic counterfactual trajectories. This checks sampled trajectories, not every enumerated chance branch."
+  },
+  "limits": [
+    "Constructed legal 6-entry/3-selected custom-team endgame; occurrence frequency in ordinary games is not established.",
+    "Bounds refer to this fixed true matchup against every legal opposing policy, not to a guarantee over every hidden loadout.",
+    "The alternative reads public foe species and its own action history only. The baseline is deployed blind Strong without pinOpponent.",
+    "The first-action Curse upper bound and alternative lower bound are exhaustive conservative engine calculations; the full seed-mixture comparison is statistical at one-sided 99.9% confidence.",
+    "Chance enumeration uses independent per-draw engine probabilities and floating arithmetic with 1e-8 lower-bound padding, not an exhaustive count over all LCG initial seeds.",
+    "Native/deployed engine parity is checked on sampled trajectories, not a formal equivalence proof. No bot changes or deployment."
+  ],
+  "arithmetic_audit": {
+    "lower_nodes": 395,
+    "upper_nodes": 91,
+    "negative_controls": 2
+  }
+}
