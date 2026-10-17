@@ -1,0 +1,438 @@
+{
+  "schema": "nc2000-mixed-policy-evaluation-v1",
+  "pilot": true,
+  "budget": 81000,
+  "attacker_budget": 243000,
+  "max_turns": 1001,
+  "source_sha256": {
+    "crates/bot/examples/mixed_policy_eval.rs": "b6860020ecac2eee940bec2759e4cc8ec8416fbd390fe6b69d66ee186019f24a",
+    "crates/bot/examples/support/execution_agent.rs": "60661ad8dcf37184a0b2b8a76d7aad163237aff258d11029494f19a1db41e48b",
+    "crates/bot/src/decision.rs": "be3e29e5f22b87d7376e39628a5a62e3443e85636583cd406632abc116a5a106",
+    "crates/bot/src/blind.rs": "7786a25d0abd3263c48c15bd1f138d8f739317a6d5e1bab9cfa155487d8d9673",
+    "crates/bot/src/root_policy.rs": "ffc73d957b9ec0d434e50ae3d85514021f8b79ec6293fc447a35cc7ab62636e8",
+    "crates/bot/src/exploit.rs": "3e66a143a376f0bb9b6b75aa6ca999ee3ac62e2ecac73ce630796c847f113161",
+    "crates/bot/src/smmcts.rs": "2093fd0bb72b23937916c14c99d2cdb58e42d65a6d0900586d6fa5cc73139085",
+    "crates/bot/src/belief.rs": "c764e7c99a6bf47c8b0827426f503d8a5584e3f1f47a1565c74cb8c0cb0a36fa",
+    "crates/bot/src/observe.rs": "aeaf3a271bc5eb997ec51231d0e0ab8a277c194350757b3dfdf6ccd61016d36a",
+    "Cargo.lock": "660b08e3820abd0955963946b248119cbc0f3d34e38fc86518cd276c26396a66",
+    "solver_build": "fnv1a64:fafcd915f31d6c2f:m17e-solver-build-v3"
+  },
+  "input_sha256": {
+    "data/team-pool-v2/team-pool.json": "549539b911498bbc805e3975e0218cf1dae2560bce4fd515239ce3185e6ee754",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+  },
+  "jobs": [
+    {
+      "id": "direct-legacy-000-0",
+      "cell": "direct-legacy",
+      "block": 0,
+      "leg": 0,
+      "mode": "legacy",
+      "opponent": "direct",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "direct-legacy-000-1",
+      "cell": "direct-legacy",
+      "block": 0,
+      "leg": 1,
+      "mode": "legacy",
+      "opponent": "direct",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "oracle-legacy-000-0",
+      "cell": "oracle-legacy",
+      "block": 0,
+      "leg": 0,
+      "mode": "legacy",
+      "opponent": "oracle",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "oracle-legacy-000-1",
+      "cell": "oracle-legacy",
+      "block": 0,
+      "leg": 1,
+      "mode": "legacy",
+      "opponent": "oracle",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "control-legacy-000-0",
+      "cell": "control-legacy",
+      "block": 0,
+      "leg": 0,
+      "mode": "legacy",
+      "opponent": "control",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "control-legacy-000-1",
+      "cell": "control-legacy",
+      "block": 0,
+      "leg": 1,
+      "mode": "legacy",
+      "opponent": "control",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "direct-visit-sample-000-0",
+      "cell": "direct-visit-sample",
+      "block": 0,
+      "leg": 0,
+      "mode": "visit-sample",
+      "opponent": "direct",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "direct-visit-sample-000-1",
+      "cell": "direct-visit-sample",
+      "block": 0,
+      "leg": 1,
+      "mode": "visit-sample",
+      "opponent": "direct",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "oracle-visit-sample-000-0",
+      "cell": "oracle-visit-sample",
+      "block": 0,
+      "leg": 0,
+      "mode": "visit-sample",
+      "opponent": "oracle",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "oracle-visit-sample-000-1",
+      "cell": "oracle-visit-sample",
+      "block": 0,
+      "leg": 1,
+      "mode": "visit-sample",
+      "opponent": "oracle",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "control-visit-sample-000-0",
+      "cell": "control-visit-sample",
+      "block": 0,
+      "leg": 0,
+      "mode": "visit-sample",
+      "opponent": "control",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "control-visit-sample-000-1",
+      "cell": "control-visit-sample",
+      "block": 0,
+      "leg": 1,
+      "mode": "visit-sample",
+      "opponent": "control",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "direct-estimated-mix-000-0",
+      "cell": "direct-estimated-mix",
+      "block": 0,
+      "leg": 0,
+      "mode": "estimated-mix",
+      "opponent": "direct",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "direct-estimated-mix-000-1",
+      "cell": "direct-estimated-mix",
+      "block": 0,
+      "leg": 1,
+      "mode": "estimated-mix",
+      "opponent": "direct",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "oracle-estimated-mix-000-0",
+      "cell": "oracle-estimated-mix",
+      "block": 0,
+      "leg": 0,
+      "mode": "estimated-mix",
+      "opponent": "oracle",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "oracle-estimated-mix-000-1",
+      "cell": "oracle-estimated-mix",
+      "block": 0,
+      "leg": 1,
+      "mode": "estimated-mix",
+      "opponent": "oracle",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "control-estimated-mix-000-0",
+      "cell": "control-estimated-mix",
+      "block": 0,
+      "leg": 0,
+      "mode": "estimated-mix",
+      "opponent": "control",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    },
+    {
+      "id": "control-estimated-mix-000-1",
+      "cell": "control-estimated-mix",
+      "block": 0,
+      "leg": 1,
+      "mode": "estimated-mix",
+      "opponent": "control",
+      "teams": [
+        14,
+        5
+      ],
+      "battle_seed": "35054,46989,39370,62525",
+      "agent_seeds": [
+        612218900,
+        3972915101
+      ],
+      "model_seeds": [
+        1352447693,
+        2652817176,
+        3917742957
+      ]
+    }
+  ],
+  "protocol": {
+    "population": "24 shipped catalog teams drawn independently by normalized drawWeight; shipped blind prior",
+    "information": "defenders blind; attacker true state is a deliberately stronger stress test, same for oracle and control",
+    "policy": "exact live search lifecycle, UCB c=0.4 buckets=16; no baked/compiled previews; all decisions including preview use requested mode",
+    "oracle": "three independent persistent target-model seeds, never live target seed; root distribution only; deeper attacker UCB; approximate BR, not exact exploitability",
+    "control": "same attacker search/rollout and own 243000 iterations, oracle disabled; total compute differs by three target searches",
+    "schedule": "same teams, chance seeds and physical-side agent seeds across cells; both target sides per block; pilot seeds disjoint",
+    "primary": "each candidate vs legacy: W/D/L and mean score, block-bootstrap confidence interval; against tailored oracle: paired target-score difference vs legacy, same blocks",
+    "secondary": "paired pure-win difference; oracle-vs-control target score loss on common first 32 blocks; preview/battle mixing activation, legacy disagreement, latency, terminal coverage",
+    "inference": "100000 block-bootstrap draws fixed seed 202610170303; 98.75% two-sided intervals for four primary contrasts (Bonferroni family 95%); other intervals descriptive 95%; block is unit",
+    "criterion": "direct improvement: score-minus-0.5 interval lower >0; resistance improvement: oracle defender-score difference interval lower >0. Report pure-win estimates separately. Broad promotion requires both, no claim from significance in only one.",
+    "stopping": "fixed 128 pairs direct per candidate, 64 pairs oracle per defender, 32 pairs control per defender, 4 legacy-null pairs. No outcome-driven stopping or parameter selection. Pilot for timing and correctness only.",
+    "caps": "engine turn-1000 draw rule; operational max_turns=1001; any nonterminal cap reported as unresolved and bounded, not silently drawn",
+    "scope": "live research path, not deployed compiled-preview behavior or formal Nash exploitability"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "created_utc": "2026-10-17T14:49:57.984211+00:00",
+  "state_file_is_not_liveness_evidence": true,
+  "executable": "target/release/examples/mixed_policy_eval",
+  "executable_sha256": "6a4dbe94969bc01858c7f2e380e70903b02cb6c3272fd35ce1045db7f8b88fd0",
+  "runs": [
+    {
+      "kind": "pilot",
+      "pid": 25915,
+      "exec_session_id": 32099,
+      "threads": 6,
+      "directory": "findings/mixed-policy-strength-v1/pilot",
+      "jobs": 18
+    },
+    {
+      "kind": "main",
+      "pid": 29529,
+      "exec_session_id": 90985,
+      "threads": 8,
+      "directory": "findings/mixed-policy-strength-v1/main",
+      "jobs": 1096
+    }
+  ],
+  "preview_entry": "nc2000-mixed-policy-strength",
+  "goal_status": "active"
+}
