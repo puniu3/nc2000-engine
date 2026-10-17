@@ -10,7 +10,12 @@
       "exec_session_id": 32099,
       "threads": 6,
       "directory": "findings/mixed-policy-strength-v1/pilot",
-      "jobs": 18
+      "jobs": 18,
+      "status": "completed_and_audited",
+      "exit_code": 0,
+      "completion_observed_utc": "2026-10-17T15:29:10.967268+00:00",
+      "audited_games": 18,
+      "summary": "findings/mixed-policy-strength-v1/pilot/summary.json"
     },
     {
       "kind": "main",

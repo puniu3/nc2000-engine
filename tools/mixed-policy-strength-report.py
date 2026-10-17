@@ -14,6 +14,8 @@ canary = json.loads((root / 'exploiter-canary.json').read_text()) if (root / 'ex
 parity_path = root / 'wasm-parity.json'
 parity = json.loads(parity_path.read_text()) if parity_path.exists() else None
 summary = json.loads((main / 'summary.json').read_text()) if (main / 'summary.json').exists() else None
+pilot_path = root / 'pilot/summary.json'
+pilot = json.loads(pilot_path.read_text()) if pilot_path.exists() else None
 stamp = datetime.datetime.now(datetime.timezone.utc).astimezone(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M JST')
 mode_name = {'legacy': '従来方式', 'visit-sample': '訪問割合で抽選', 'estimated-mix': '混合推定器'}
 kind_name = {'direct': '従来方式と直接対決', 'oracle': '対象方策を読むexploiter', 'control': '方策を読まない対照'}
@@ -39,6 +41,9 @@ body += '''<h2>比較条件</h2><p>現在の24チームを実際のdrawWeightで
 <h2>判定方法</h2><p>純勝率（勝ち数÷全対局数）と、引き分けを0.5とするスコアを分けます。左右交換した2局を一つの標本として、100,000回のブロックbootstrapを行います。主要4比較は各98.75%のbootstrap区間を使います（Bonferroniによる名目上の全体水準95%）。有限標本で厳密な被覆率を保証する区間ではありません。その他の95%区間は補助的な記述です。0をまたぐ差は「改善を確認できない」であり、同等性の証明ではありません。</p><p><a href="plan.json">実行前に固定した全条件・試合予定</a></p>'''
 if parity:
     body += f'<p>実際のコンパイル済みWASMと評価用ネイティブbotは、{parity["decisions"]}決定で、選択手・分布・訪問数・平均値が一致しました。<a href="wasm-parity.json">一致検証</a></p>'
+if pilot:
+    assert pilot['pilot'] and pilot['games'] == 18 and pilot['all_terminal'] and pilot['null_control'] == 'pass'
+    body += '<p>予備測定18局は完了し、全局の終局、探索予算、対象と攻撃側モデルのseed分離、左右交換の整合性が監査を通りました。予備測定は本測定の推定には含めません。</p>'
 if canary:
     controls = sum(r['correct'] for r in canary['rows'] if not r['oracle'])
     body += f'<p>既知のカウンター局面で、方策を読むexploiterは正しい応手を{canary["oracle_correct"]}/{canary["oracle_trials"]}回選択し、読まない対照は{controls}/8回でした。方策の違いに応答できることを確認する正の対照であり、本測定の勝率推定には含めません。<a href="exploiter-canary.json">検証データ</a></p>'
