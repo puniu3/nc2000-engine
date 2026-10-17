@@ -91,10 +91,12 @@ for cell in sorted({j['cell'] for j in jobs.values()}):
                     for k in group[0]['target_stats'][phase]} for phase in ['preview', 'battle']}
     cells[cell] = {'games': len(group), 'wins': sum(r['score'] == 1 for r in group),
         'draws': sum(r['score'] == 0.5 for r in group), 'losses': sum(r['score'] == 0 for r in group),
+        'turn_limit_draws': sum(r['score'] == 0.5 and r['turns'] > 1000 for r in group),
         'score': bootstrap(list(block_score.values())) if len(block_score) >= 2 else {'estimate': np.mean(list(block_score.values()))},
         'pure_win': bootstrap(list(block_win.values())) if len(block_win) >= 2 else {'estimate': np.mean(list(block_win.values()))},
         'block_scores': block_score, 'block_wins': block_win, 'stats': stats,
         'mean_turns': float(np.mean([r['turns'] for r in group])),
+        'max_turns': max(r['turns'] for r in group),
         'target_ms_per_decision': sum(r['target_ns'] for r in group) / sum(r['target_calls'] for r in group) / 1e6,
         'opponent_ms_per_decision': sum(r['opponent_ns'] for r in group) / sum(r['opponent_calls'] for r in group) / 1e6}
 

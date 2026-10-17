@@ -49,8 +49,8 @@ if summary:
         for mode in ['legacy', 'visit-sample', 'estimated-mix']:
             if kind == 'direct' and mode == 'legacy': continue
             c = summary['cells'][f'{kind}-{mode}']
-            body += f'<tr><td>{kind_name[kind]}</td><td>{mode_name[mode]}</td><td>{c["wins"]}–{c["draws"]}–{c["losses"]}</td><td>{interval(c["pure_win"])}</td><td>{interval(c["score"])}</td></tr>'
-    body += '</table></div><h2>主要な差：正なら改善</h2><table><tr><th>候補</th><th>直接対決：50%からの差［98.75%］</th><th>exploiter戦：従来方式からの差［98.75%］</th></tr>'
+            body += f'<tr><td>{kind_name[kind]}</td><td>{mode_name[mode]}</td><td>{c["wins"]}–{c["draws"]}–{c["losses"]}<br><small>制限引分 {c["turn_limit_draws"]}</small></td><td>{interval(c["pure_win"])}</td><td>{interval(c["score"])}</td></tr>'
+    body += '</table></div><p>「制限引分」はエンジンの1000ターン制限による引き分けで、分の内数です。勝率の改善と、引き分けを増やすことによるスコアの改善は区別します。</p><h2>主要な差：正なら改善</h2><table><tr><th>候補</th><th>直接対決：50%からの差［98.75%］</th><th>exploiter戦：従来方式からの差［98.75%］</th></tr>'
     for mode, r in summary['primary'].items():
         body += f'<tr><td>{mode_name[mode]}</td><td>{interval(r["direct_score_minus_half"],True)}</td><td>{interval(r["oracle_score_minus_legacy"],True)}</td></tr>'
     body += '</table><p>上表はスコア差です。純勝率の対応差、方策を読むことによる攻撃効果、個別ブロック値も集計JSONに保存しています。</p><h2>混合は実際に使われたか</h2><table><tr><th>直接対決の対象方式</th><th>選出：混合決定／全決定</th><th>対戦中：混合決定／全決定</th><th>対戦中：従来手と異なる選択</th></tr>'
