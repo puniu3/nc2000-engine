@@ -1,0 +1,33 @@
+{
+  "tlsVerifiedSeparately": true,
+  "layouts": [
+    {
+      "width": 834,
+      "scrollWidth": 834,
+      "title": "NC2000：より良い選択肢の存在を調べる",
+      "heading": "より良い選択肢は存在するか",
+      "links": [
+        "https://mini-usb.local:18080/nc2000-theoretical-headroom/summary.json",
+        "https://mini-usb.local:18080/nc2000-theoretical-headroom/protocol.json",
+        "https://mini-usb.local:18080/nc2000-theoretical-headroom/screen.jsonl",
+        "https://mini-usb.local:18080/nc2000-theoretical-headroom/wide.jsonl",
+        "https://mini-usb.local:18080/nc2000-theoretical-headroom/focus.jsonl",
+        "https://mini-usb.local:18080/nc2000-endurance/index.html"
+      ]
+    },
+    {
+      "width": 390,
+      "scrollWidth": 390,
+      "title": "NC2000：より良い選択肢の存在を調べる",
+      "heading": "より良い選択肢は存在するか",
+      "links": [
+        "https://mini-usb.local:18080/nc2000-theoretical-headroom/summary.json",
+        "https://mini-usb.local:18080/nc2000-theoretical-headroom/protocol.json",
+        "https://mini-usb.local:18080/nc2000-theoretical-headroom/screen.jsonl",
+        "https://mini-usb.local:18080/nc2000-theoretical-headroom/wide.jsonl",
+        "https://mini-usb.local:18080/nc2000-theoretical-headroom/focus.jsonl",
+        "https://mini-usb.local:18080/nc2000-endurance/index.html"
+      ]
+    }
+  ]
+}
