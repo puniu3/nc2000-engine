@@ -1,0 +1,29 @@
+{
+  "status": "complete",
+  "objective": "Investigate deployed strong-tier endurance behavior and whether an alternative strategy improves it",
+  "startCleanCommit": "00b4371",
+  "deployedBattleBudget": 81000,
+  "terminalBaselineGames": 8,
+  "pairedTrials": 16,
+  "terminalContinuationGames": 32,
+  "liveHandles": {},
+  "remaining": [],
+  "preview": "https://mini-usb.local:18080/nc2000-endurance/index.html",
+  "previewIndexEntry": "nc2000-endurance",
+  "authoritativeResults": [
+    "summary.json",
+    "analysis.json",
+    "case-analysis.json",
+    "continuation-probes/g4-d12-baseline-4-t500.json"
+  ],
+  "verification": [
+    "completion-audit.json",
+    "continuation-audit.json",
+    "preview-verification.json",
+    "tls-route-verification.json",
+    "code-provenance.json"
+  ],
+  "computeAccounting": "compute-usage.json",
+  "schedulerExplanation": "scheduler-audit.json",
+  "scope": "One conditional policy comparison plus purposively selected endurance observations; no general optimality or catalog-wide strength claim"
+}

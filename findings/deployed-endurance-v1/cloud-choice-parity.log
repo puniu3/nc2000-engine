@@ -1,0 +1,12 @@
+g4-d12-conserve-heal-3.json 0 0 move softboiled
+g4-d12-conserve-heal-3.json 0 1 move icebeam
+g4-d12-conserve-heal-3.json 26 0 move sleeptalk
+g4-d12-conserve-heal-3.json 26 1 move surf
+g4-d12-conserve-heal-3.json 52 0 move surf
+g4-d12-conserve-heal-3.json 52 1 move surf
+g4-d12-conserve-heal-5.json 0 0 move softboiled
+g4-d12-conserve-heal-5.json 0 1 move icebeam
+g4-d12-conserve-heal-5.json 9 0 move thunder
+g4-d12-conserve-heal-5.json 9 1 move softboiled
+g4-d12-conserve-heal-5.json 17 0 move thunder
+g4-d12-conserve-heal-5.json 17 1 move icebeam

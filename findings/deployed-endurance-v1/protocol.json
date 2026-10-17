@@ -1,0 +1,107 @@
+{
+  "scope": "Purposive endurance stress cases, not catalog-wide win rate",
+  "budget": 81000,
+  "preview": "production compiled preview, fallback 729000",
+  "jobs": [
+    {
+      "id": "g0",
+      "pair": [
+        13,
+        14
+      ],
+      "seed": "1701,41,2026,1017",
+      "searchSeeds": [
+        7001,
+        8001
+      ]
+    },
+    {
+      "id": "g1",
+      "pair": [
+        13,
+        14
+      ],
+      "seed": "1701,42,2026,1017",
+      "searchSeeds": [
+        7002,
+        8002
+      ]
+    },
+    {
+      "id": "g2",
+      "pair": [
+        14,
+        14
+      ],
+      "seed": "1702,41,2026,1017",
+      "searchSeeds": [
+        7011,
+        8011
+      ]
+    },
+    {
+      "id": "g3",
+      "pair": [
+        14,
+        14
+      ],
+      "seed": "1702,42,2026,1017",
+      "searchSeeds": [
+        7012,
+        8012
+      ]
+    },
+    {
+      "id": "g4",
+      "pair": [
+        13,
+        13
+      ],
+      "seed": "1703,41,2026,1017",
+      "searchSeeds": [
+        7021,
+        8021
+      ]
+    },
+    {
+      "id": "g5",
+      "pair": [
+        13,
+        13
+      ],
+      "seed": "1703,42,2026,1017",
+      "searchSeeds": [
+        7022,
+        8022
+      ]
+    },
+    {
+      "id": "g6",
+      "pair": [
+        5,
+        21
+      ],
+      "seed": "1704,41,2026,1017",
+      "searchSeeds": [
+        7031,
+        8031
+      ]
+    },
+    {
+      "id": "g7",
+      "pair": [
+        5,
+        21
+      ],
+      "seed": "1704,42,2026,1017",
+      "searchSeeds": [
+        7032,
+        8032
+      ]
+    }
+  ],
+  "decisionCap": 2200,
+  "sourceWorker": "bot-worker-mrxcXXq0.js",
+  "referee": "Exact wasm-bindgen prefix from production worker, same downloaded WASM",
+  "baselineCommit": "00b4371"
+}

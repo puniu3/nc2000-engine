@@ -1,0 +1,18 @@
+{
+  "pid": 62448,
+  "trial": 8,
+  "arm": "baseline",
+  "started": 1792228208.77829,
+  "command": [
+    "node",
+    "tests/endurance-continuation.mjs",
+    "g4",
+    "12",
+    "1",
+    "baseline",
+    "8",
+    "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/deployed-endurance-v1/continuations/g4-d12-baseline-8.json"
+  ],
+  "returncode": 0,
+  "seconds": 995.2765238285065
+}

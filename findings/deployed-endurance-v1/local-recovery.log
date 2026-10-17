@@ -1,0 +1,26 @@
+{"trial": 3, "arm": "conserve-heal", "existing": true}
+{"pid": 49081, "trial": 2, "arm": "conserve-heal", "started": 1792226848.065978, "command": ["node", "tests/endurance-continuation.mjs", "g4", "12", "1", "conserve-heal", "2", "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/deployed-endurance-v1/continuations/g4-d12-conserve-heal-2.json"], "returncode": 0, "seconds": 1245.8161339759827}
+{"pid": 49082, "trial": 3, "arm": "baseline", "started": 1792226848.066306, "command": ["node", "tests/endurance-continuation.mjs", "g4", "12", "1", "baseline", "3", "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/deployed-endurance-v1/continuations/g4-d12-baseline-3.json"], "returncode": 0, "seconds": 1372.0917999744415}
+{"pid": 49080, "trial": 2, "arm": "baseline", "started": 1792226848.066019, "command": ["node", "tests/endurance-continuation.mjs", "g4", "12", "1", "baseline", "2", "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/deployed-endurance-v1/continuations/g4-d12-baseline-2.json"], "returncode": 0, "seconds": 1662.3958957195282}
+{"trial": 5, "arm": "conserve-heal", "existing": true}
+{"pid": 61275, "trial": 4, "arm": "conserve-heal", "started": 1792228093.888526, "command": ["node", "tests/endurance-continuation.mjs", "g4", "12", "1", "conserve-heal", "4", "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/deployed-endurance-v1/continuations/g4-d12-conserve-heal-4.json"], "returncode": 0, "seconds": 1573.3872940540314}
+{"pid": 65518, "trial": 6, "arm": "baseline", "started": 1792228510.4684422, "command": ["node", "tests/endurance-continuation.mjs", "g4", "12", "1", "baseline", "6", "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/deployed-endurance-v1/continuations/g4-d12-baseline-6.json"], "returncode": 0, "seconds": 1292.5772669315338}
+{"pid": 62540, "trial": 5, "arm": "baseline", "started": 1792228220.164055, "command": ["node", "tests/endurance-continuation.mjs", "g4", "12", "1", "baseline", "5", "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/deployed-endurance-v1/continuations/g4-d12-baseline-5.json"], "returncode": 0, "seconds": 1892.1947519779205}
+{"pid": 80896, "trial": 7, "arm": "conserve-heal", "started": 1792230112.364816, "command": ["node", "tests/endurance-continuation.mjs", "g4", "12", "1", "conserve-heal", "7", "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/deployed-endurance-v1/continuations/g4-d12-conserve-heal-7.json"], "returncode": 0, "seconds": 487.1023578643799}
+{"trial": 8, "arm": "baseline", "existing": true}
+Traceback (most recent call last):
+  File "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/tools/endurance-local.py", line 23, in <module>
+    with concurrent.futures.ThreadPoolExecutor(max_workers=a.workers) as pool:
+                                                                        ^^^^^^^
+  File "/Users/puniu/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/Users/puniu/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/Users/puniu/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/tools/endurance-local.py", line 9, in run
+    # Other local queues may claim a case first. Wait for their result instead
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+BlockingIOError: [Errno 35] Resource temporarily unavailable

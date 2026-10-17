@@ -1,0 +1,30 @@
+{
+  "command": {
+    "returncode": 124,
+    "error": "execution_timeout",
+    "wall_seconds": 1080.1455724099999
+  },
+  "canary": {
+    "exactRootPolicies": 2,
+    "fullState": true,
+    "rootBeliefPreserved": true,
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v18.20.4"
+  },
+  "completed": [
+    {
+      "file": "g4-d12-conserve-heal-3.json",
+      "score": 0,
+      "turn": 61,
+      "sha256": "76525fa5ccfbbc05464a85fbb0e82f99dae217e66c6473b8fe83bff74ef27666"
+    },
+    {
+      "file": "g4-d12-conserve-heal-5.json",
+      "score": 0,
+      "turn": 26,
+      "sha256": "b506782aa906ea08c250dbac4714e557610186bb3a34e82814abf690b991be3c"
+    }
+  ],
+  "incompleteTreatment": "not scored; resume missing cases locally at unchanged81k"
+}

@@ -1,0 +1,35 @@
+{
+  id: 'g1',
+  states: 24,
+  exactRootPolicies: 7,
+  terminal: 'p2',
+  turn: 21
+}
+{
+  id: 'g2',
+  states: 42,
+  exactRootPolicies: 8,
+  terminal: 'p2',
+  turn: 38
+}
+{
+  id: 'g3',
+  states: 30,
+  exactRootPolicies: 8,
+  terminal: 'p1',
+  turn: 26
+}
+{
+  id: 'g4',
+  states: 133,
+  exactRootPolicies: 12,
+  terminal: 'p1',
+  turn: 129
+}
+{
+  id: 'g5',
+  states: 24,
+  exactRootPolicies: 6,
+  terminal: 'p2',
+  turn: 20
+}

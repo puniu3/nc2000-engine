@@ -1,0 +1,542 @@
+{
+  "scope": "Post-hoc budget diagnostic; excluded from win-rate comparisons",
+  "file": "g4-d12-baseline-4.json",
+  "decision": 490,
+  "turn": 500,
+  "state": {
+    "turn": 500,
+    "sides": [
+      {
+        "name": "P1",
+        "active": 0,
+        "party": [
+          {
+            "species": "Blissey",
+            "name": "Blissey",
+            "level": 50,
+            "gender": "F",
+            "hp": 327,
+            "maxhp": 361,
+            "fainted": false,
+            "status": "par",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "thunder",
+                "name": "Thunder",
+                "pp": 2,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "icebeam",
+                "name": "Ice Beam",
+                "pp": 0,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "counter",
+                "name": "Counter",
+                "pp": 0,
+                "maxpp": 32,
+                "disabled": false
+              },
+              {
+                "id": "softboiled",
+                "name": "Soft-Boiled",
+                "pp": 0,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Quick Claw",
+            "types": [
+              "Normal"
+            ],
+            "volatiles": [
+              "parspeeddrop"
+            ],
+            "trapped": false
+          },
+          {
+            "species": "Suicune",
+            "name": "Suicune",
+            "level": 50,
+            "gender": "",
+            "hp": 199,
+            "maxhp": 206,
+            "fainted": false,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "surf",
+                "name": "Surf",
+                "pp": 6,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "icebeam",
+                "name": "Ice Beam",
+                "pp": 2,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "rest",
+                "name": "Rest",
+                "pp": 0,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "sleeptalk",
+                "name": "Sleep Talk",
+                "pp": 0,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Scope Lens",
+            "types": [
+              "Water"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Tyranitar",
+            "name": "Tyranitar",
+            "level": 55,
+            "gender": "M",
+            "hp": 0,
+            "maxhp": 226,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "rockslide",
+                "name": "Rock Slide",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "crunch",
+                "name": "Crunch",
+                "pp": 24,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "dynamicpunch",
+                "name": "Dynamic Punch",
+                "pp": 7,
+                "maxpp": 8,
+                "disabled": false
+              },
+              {
+                "id": "icebeam",
+                "name": "Ice Beam",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Leftovers",
+            "types": [
+              "Rock",
+              "Dark"
+            ],
+            "volatiles": [],
+            "trapped": false
+          }
+        ],
+        "pokemonLeft": 2,
+        "sideConditions": [],
+        "request": "move"
+      },
+      {
+        "name": "P2",
+        "active": 0,
+        "party": [
+          {
+            "species": "Suicune",
+            "name": "Suicune",
+            "level": 50,
+            "gender": "",
+            "hp": 128,
+            "maxhp": 206,
+            "fainted": false,
+            "status": "slp",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "surf",
+                "name": "Surf",
+                "pp": 1,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "icebeam",
+                "name": "Ice Beam",
+                "pp": 0,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "rest",
+                "name": "Rest",
+                "pp": 1,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "sleeptalk",
+                "name": "Sleep Talk",
+                "pp": 0,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Scope Lens",
+            "types": [
+              "Water"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Blissey",
+            "name": "Blissey",
+            "level": 50,
+            "gender": "F",
+            "hp": 357,
+            "maxhp": 361,
+            "fainted": false,
+            "status": "par",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "thunder",
+                "name": "Thunder",
+                "pp": 0,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "icebeam",
+                "name": "Ice Beam",
+                "pp": 0,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "counter",
+                "name": "Counter",
+                "pp": 0,
+                "maxpp": 32,
+                "disabled": false
+              },
+              {
+                "id": "softboiled",
+                "name": "Soft-Boiled",
+                "pp": 0,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Quick Claw",
+            "types": [
+              "Normal"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Tyranitar",
+            "name": "Tyranitar",
+            "level": 55,
+            "gender": "M",
+            "hp": 0,
+            "maxhp": 226,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "rockslide",
+                "name": "Rock Slide",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "crunch",
+                "name": "Crunch",
+                "pp": 24,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "dynamicpunch",
+                "name": "Dynamic Punch",
+                "pp": 7,
+                "maxpp": 8,
+                "disabled": false
+              },
+              {
+                "id": "icebeam",
+                "name": "Ice Beam",
+                "pp": 15,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Leftovers",
+            "types": [
+              "Rock",
+              "Dark"
+            ],
+            "volatiles": [],
+            "trapped": false
+          }
+        ],
+        "pokemonLeft": 2,
+        "sideConditions": [],
+        "request": "move"
+      }
+    ],
+    "field": {
+      "weather": null,
+      "pseudoWeather": [
+        "maxtotallevel",
+        "stadiumsleepclause",
+        "freezeclausemod"
+      ]
+    },
+    "outcome": null
+  },
+  "rows": [
+    {
+      "side": 0,
+      "budget": 81000,
+      "best": "switch 2",
+      "played": "switch 2",
+      "policy": {
+        "iterations": 81000,
+        "preview": false,
+        "baked": false,
+        "actions": [
+          {
+            "input": "switch 2",
+            "visits": 74002,
+            "mean": 0.7285134441078192,
+            "frac": 0.9136049382716049
+          },
+          {
+            "input": "move thunder",
+            "visits": 6998,
+            "mean": 0.7173741939285098,
+            "frac": 0.08639506172839506
+          }
+        ]
+      }
+    },
+    {
+      "side": 0,
+      "budget": 243000,
+      "best": "switch 2",
+      "played": "switch 2",
+      "policy": {
+        "iterations": 243000,
+        "preview": false,
+        "baked": false,
+        "actions": [
+          {
+            "input": "switch 2",
+            "visits": 231014,
+            "mean": 0.7259814626752733,
+            "frac": 0.9506748971193416
+          },
+          {
+            "input": "move thunder",
+            "visits": 11986,
+            "mean": 0.7160365143390813,
+            "frac": 0.04932510288065844
+          }
+        ]
+      }
+    },
+    {
+      "side": 0,
+      "budget": 729000,
+      "best": "switch 2",
+      "played": "switch 2",
+      "policy": {
+        "iterations": 729000,
+        "preview": false,
+        "baked": false,
+        "actions": [
+          {
+            "input": "switch 2",
+            "visits": 703873,
+            "mean": 0.723748202995577,
+            "frac": 0.9655322359396433
+          },
+          {
+            "input": "move thunder",
+            "visits": 25127,
+            "mean": 0.7162275543518057,
+            "frac": 0.034467764060356655
+          }
+        ]
+      }
+    },
+    {
+      "side": 1,
+      "budget": 81000,
+      "best": "switch 2",
+      "played": "switch 2",
+      "policy": {
+        "iterations": 81000,
+        "preview": false,
+        "baked": false,
+        "actions": [
+          {
+            "input": "switch 2",
+            "visits": 63122,
+            "mean": 0.2602928991912698,
+            "frac": 0.779283950617284
+          },
+          {
+            "input": "move surf",
+            "visits": 14203,
+            "mean": 0.254051317869977,
+            "frac": 0.17534567901234568
+          },
+          {
+            "input": "move rest",
+            "visits": 3675,
+            "mean": 0.24313258869049245,
+            "frac": 0.04537037037037037
+          }
+        ]
+      }
+    },
+    {
+      "side": 1,
+      "budget": 243000,
+      "best": "switch 2",
+      "played": "switch 2",
+      "policy": {
+        "iterations": 243000,
+        "preview": false,
+        "baked": false,
+        "actions": [
+          {
+            "input": "switch 2",
+            "visits": 219372,
+            "mean": 0.2598221844023702,
+            "frac": 0.9027654320987655
+          },
+          {
+            "input": "move surf",
+            "visits": 18541,
+            "mean": 0.25246516309316785,
+            "frac": 0.07630041152263374
+          },
+          {
+            "input": "move rest",
+            "visits": 5087,
+            "mean": 0.2430505714186201,
+            "frac": 0.020934156378600823
+          }
+        ]
+      }
+    },
+    {
+      "side": 1,
+      "budget": 729000,
+      "best": "switch 2",
+      "played": "switch 2",
+      "policy": {
+        "iterations": 729000,
+        "preview": false,
+        "baked": false,
+        "actions": [
+          {
+            "input": "switch 2",
+            "visits": 698855,
+            "mean": 0.2584318654784736,
+            "frac": 0.9586488340192044
+          },
+          {
+            "input": "move surf",
+            "visits": 24215,
+            "mean": 0.2507400861756251,
+            "frac": 0.03321673525377229
+          },
+          {
+            "input": "move rest",
+            "visits": 5930,
+            "mean": 0.24110082645962908,
+            "frac": 0.00813443072702332
+          }
+        ]
+      }
+    }
+  ]
+}

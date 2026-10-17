@@ -1,0 +1,23 @@
+[
+  {
+    "file": "index.html",
+    "http": 200,
+    "tlsVerified": true,
+    "sha256": "8f1e245b69782711256e4597adbd17564896c6d71f960226609e86af75d7e0ad",
+    "servedBytesMatchArtifact": true
+  },
+  {
+    "file": "g4-resources.svg",
+    "http": 200,
+    "tlsVerified": true,
+    "sha256": "cc4cd90822b62618f32cbc57ebd5151656278b0ea9e819b3b7ec3ee612a658ac",
+    "servedBytesMatchArtifact": true
+  },
+  {
+    "file": "g4-resources.png",
+    "http": 200,
+    "tlsVerified": true,
+    "sha256": "5bf11a20a89407c859d96479fe52b1ff33aa06caa71a6c37753dc682a24de4de",
+    "servedBytesMatchArtifact": true
+  }
+]

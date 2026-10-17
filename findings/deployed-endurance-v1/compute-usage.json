@@ -1,0 +1,13 @@
+{
+  "stoppedRun": "cloud-3",
+  "stoppedSecondsFromSubmissionThroughVerifiedCleanup": 520.199777,
+  "stoppedRunRateUsdPerHour": 1.295,
+  "yenPerUsd": 160,
+  "stoppedRunEstimatedYen": 29.94038716511111,
+  "completedTimeoutRun": "cloud-4",
+  "completedTimeoutRunEstimatedYen": 72.654,
+  "estimatedTotalYen": 102.5943871651111,
+  "reserveTotalYen": 116.654,
+  "scope": "Before credits; conservative accounting estimate, not an invoice. Stopped run estimated from submission until verified resource cleanup.",
+  "allCloudResourcesCleared": true
+}

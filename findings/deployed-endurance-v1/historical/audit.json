@@ -1,0 +1,30 @@
+{
+  "fullStateAndLegalReplay": true,
+  "decisions": 30,
+  "outcome": "p1",
+  "endTurn": 38,
+  "score": 0,
+  "firstDivergence": {
+    "turn": 10,
+    "baseline": [
+      [
+        0,
+        "move softboiled"
+      ],
+      [
+        1,
+        "move softboiled"
+      ]
+    ],
+    "alternative": [
+      [
+        0,
+        "move softboiled"
+      ],
+      [
+        1,
+        "move icebeam"
+      ]
+    ]
+  }
+}

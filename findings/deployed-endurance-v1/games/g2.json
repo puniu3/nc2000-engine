@@ -1,0 +1,380 @@
+{
+  "job": {
+    "id": "g2",
+    "pair": [
+      14,
+      14
+    ],
+    "seed": "1702,41,2026,1017",
+    "searchSeeds": [
+      7011,
+      8011
+    ]
+  },
+  "outcome": "p2",
+  "turn": 38,
+  "decisions": 42,
+  "state": {
+    "turn": 38,
+    "sides": [
+      {
+        "name": "P1",
+        "active": 0,
+        "party": [
+          {
+            "species": "Suicune",
+            "name": "Suicune",
+            "level": 50,
+            "gender": "",
+            "hp": 0,
+            "maxhp": 206,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "surf",
+                "name": "Surf",
+                "pp": 19,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "icebeam",
+                "name": "Ice Beam",
+                "pp": 10,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "rest",
+                "name": "Rest",
+                "pp": 13,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "sleeptalk",
+                "name": "Sleep Talk",
+                "pp": 5,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Scope Lens",
+            "types": [
+              "Water"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Marowak",
+            "name": "Marowak",
+            "level": 50,
+            "gender": "M",
+            "hp": 0,
+            "maxhp": 166,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "earthquake",
+                "name": "Earthquake",
+                "pp": 15,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "fireblast",
+                "name": "Fire Blast",
+                "pp": 8,
+                "maxpp": 8,
+                "disabled": false
+              },
+              {
+                "id": "rockslide",
+                "name": "Rock Slide",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "swordsdance",
+                "name": "Swords Dance",
+                "pp": 48,
+                "maxpp": 48,
+                "disabled": false
+              }
+            ],
+            "item": "Thick Club",
+            "types": [
+              "Ground"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Snorlax",
+            "name": "Snorlax",
+            "level": 55,
+            "gender": "M",
+            "hp": 0,
+            "maxhp": 292,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "doubleedge",
+                "name": "Double-Edge",
+                "pp": 24,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "curse",
+                "name": "Curse",
+                "pp": 15,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "rest",
+                "name": "Rest",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "sleeptalk",
+                "name": "Sleep Talk",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Leftovers",
+            "types": [
+              "Normal"
+            ],
+            "volatiles": [],
+            "trapped": false
+          }
+        ],
+        "pokemonLeft": 0,
+        "sideConditions": [],
+        "request": ""
+      },
+      {
+        "name": "P2",
+        "active": 0,
+        "party": [
+          {
+            "species": "Snorlax",
+            "name": "Snorlax",
+            "level": 55,
+            "gender": "M",
+            "hp": 226,
+            "maxhp": 292,
+            "fainted": false,
+            "status": "",
+            "boosts": {
+              "atk": 1,
+              "def": 1,
+              "spa": 0,
+              "spd": 0,
+              "spe": -1,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "doubleedge",
+                "name": "Double-Edge",
+                "pp": 22,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "curse",
+                "name": "Curse",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "rest",
+                "name": "Rest",
+                "pp": 15,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "sleeptalk",
+                "name": "Sleep Talk",
+                "pp": 12,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Leftovers",
+            "types": [
+              "Normal"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Marowak",
+            "name": "Marowak",
+            "level": 50,
+            "gender": "M",
+            "hp": 62,
+            "maxhp": 166,
+            "fainted": false,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "earthquake",
+                "name": "Earthquake",
+                "pp": 14,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "fireblast",
+                "name": "Fire Blast",
+                "pp": 8,
+                "maxpp": 8,
+                "disabled": false
+              },
+              {
+                "id": "rockslide",
+                "name": "Rock Slide",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "swordsdance",
+                "name": "Swords Dance",
+                "pp": 48,
+                "maxpp": 48,
+                "disabled": false
+              }
+            ],
+            "item": "Thick Club",
+            "types": [
+              "Ground"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Suicune",
+            "name": "Suicune",
+            "level": 50,
+            "gender": "",
+            "hp": 0,
+            "maxhp": 206,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "surf",
+                "name": "Surf",
+                "pp": 9,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "icebeam",
+                "name": "Ice Beam",
+                "pp": 7,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "rest",
+                "name": "Rest",
+                "pp": 15,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "sleeptalk",
+                "name": "Sleep Talk",
+                "pp": 14,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Scope Lens",
+            "types": [
+              "Water"
+            ],
+            "volatiles": [],
+            "trapped": false
+          }
+        ],
+        "pokemonLeft": 2,
+        "sideConditions": [],
+        "request": ""
+      }
+    ],
+    "field": {
+      "weather": null,
+      "pseudoWeather": [
+        "maxtotallevel",
+        "stadiumsleepclause",
+        "freezeclausemod"
+      ]
+    },
+    "outcome": "p2"
+  },
+  "kifu": "NC2-AUXPO0hCYRQH8GMXPoNuuVTcwDAisSSiBxEh9DCqpSAIgtq6JQk1dCFwypCCEAShLAKTnIKipkuDIDgEGYrgJDoogo9BB-8gvhA_P-_weYYz_A6c8z-K5Z3TYFjY33TMXAoBAz-A3mFKWWDqCgBwyw0h0KMmpGDQmFjMOUL6DdXPmxPjmhKTaiL11p5Ze_2FaUU1vvnb40YySaVle_H5h-0HFyVK5T7dbib-L57dUEuf86ZR3ZDbECRrGZmY54XJD3YlZl0lY01HJE4YWfc-VcTuvTVrNtR_X7RYqDQQn5eOtIdioBtq2rPkPBmPeDA127fddfVKQpHFkkp-BsxRQD3sxMOjyWtkZ12_3N_c3TbX-6mu-sfa"
+}

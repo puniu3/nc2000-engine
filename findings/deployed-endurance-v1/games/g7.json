@@ -1,0 +1,382 @@
+{
+  "job": {
+    "id": "g7",
+    "pair": [
+      5,
+      21
+    ],
+    "seed": "1704,42,2026,1017",
+    "searchSeeds": [
+      7032,
+      8032
+    ]
+  },
+  "outcome": "p2",
+  "turn": 33,
+  "decisions": 38,
+  "state": {
+    "turn": 33,
+    "sides": [
+      {
+        "name": "P1",
+        "active": 0,
+        "party": [
+          {
+            "species": "Snorlax",
+            "name": "Snorlax",
+            "level": 50,
+            "gender": "M",
+            "hp": 0,
+            "maxhp": 266,
+            "fainted": true,
+            "status": "par",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "doubleedge",
+                "name": "Double-Edge",
+                "pp": 20,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "earthquake",
+                "name": "Earthquake",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "selfdestruct",
+                "name": "Self-Destruct",
+                "pp": 8,
+                "maxpp": 8,
+                "disabled": false
+              },
+              {
+                "id": "curse",
+                "name": "Curse",
+                "pp": 15,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Leftovers",
+            "types": [
+              "Normal"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Zapdos",
+            "name": "Zapdos",
+            "level": 50,
+            "gender": "",
+            "hp": 0,
+            "maxhp": 196,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "thunderbolt",
+                "name": "Thunderbolt",
+                "pp": 22,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "hiddenpowerice",
+                "name": "Hidden Power Ice",
+                "pp": 24,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "reflect",
+                "name": "Reflect",
+                "pp": 32,
+                "maxpp": 32,
+                "disabled": false
+              },
+              {
+                "id": "rest",
+                "name": "Rest",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Mint Berry",
+            "types": [
+              "Electric",
+              "Flying"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Porygon2",
+            "name": "Porygon2",
+            "level": 55,
+            "gender": "",
+            "hp": 0,
+            "maxhp": 209,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "return",
+                "name": "Return",
+                "pp": 28,
+                "maxpp": 32,
+                "disabled": false
+              },
+              {
+                "id": "icebeam",
+                "name": "Ice Beam",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "curse",
+                "name": "Curse",
+                "pp": 13,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "recover",
+                "name": "Recover",
+                "pp": 14,
+                "maxpp": 32,
+                "disabled": false
+              }
+            ],
+            "item": "Miracle Berry",
+            "types": [
+              "Normal"
+            ],
+            "volatiles": [],
+            "trapped": false
+          }
+        ],
+        "pokemonLeft": 0,
+        "sideConditions": [],
+        "request": ""
+      },
+      {
+        "name": "P2",
+        "active": 0,
+        "party": [
+          {
+            "species": "Snorlax",
+            "name": "Snorlax",
+            "level": 50,
+            "gender": "M",
+            "hp": 101,
+            "maxhp": 266,
+            "fainted": false,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "bodyslam",
+                "name": "Body Slam",
+                "pp": 23,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "earthquake",
+                "name": "Earthquake",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "flamethrower",
+                "name": "Flamethrower",
+                "pp": 24,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "rest",
+                "name": "Rest",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "Mint Berry",
+            "types": [
+              "Normal"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Zapdos",
+            "name": "Zapdos",
+            "level": 50,
+            "gender": "",
+            "hp": 0,
+            "maxhp": 196,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "thunderbolt",
+                "name": "Thunderbolt",
+                "pp": 21,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "hiddenpowerice",
+                "name": "Hidden Power Ice",
+                "pp": 24,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "id": "rest",
+                "name": "Rest",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "sleeptalk",
+                "name": "Sleep Talk",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item": "PRZ Cure Berry",
+            "types": [
+              "Electric",
+              "Flying"
+            ],
+            "volatiles": [],
+            "trapped": false
+          },
+          {
+            "species": "Porygon2",
+            "name": "Enigami",
+            "level": 55,
+            "gender": "",
+            "hp": 0,
+            "maxhp": 209,
+            "fainted": true,
+            "status": "",
+            "boosts": {
+              "atk": 0,
+              "def": 0,
+              "spa": 0,
+              "spd": 0,
+              "spe": 0,
+              "accuracy": 0,
+              "evasion": 0
+            },
+            "moves": [
+              {
+                "id": "return",
+                "name": "Return",
+                "pp": 7,
+                "maxpp": 32,
+                "disabled": false
+              },
+              {
+                "id": "icebeam",
+                "name": "Ice Beam",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "curse",
+                "name": "Curse",
+                "pp": 13,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "id": "recover",
+                "name": "Recover",
+                "pp": 32,
+                "maxpp": 32,
+                "disabled": false
+              }
+            ],
+            "item": "Leftovers",
+            "types": [
+              "Normal"
+            ],
+            "volatiles": [],
+            "trapped": false
+          }
+        ],
+        "pokemonLeft": 1,
+        "sideConditions": [],
+        "request": ""
+      }
+    ],
+    "field": {
+      "weather": null,
+      "pseudoWeather": [
+        "maxtotallevel",
+        "stadiumsleepclause",
+        "freezeclausemod"
+      ]
+    },
+    "outcome": "p2"
+  },
+  "kifu": "NC2-AUXOP0gCYRgG8Pfj6HPyrCBxkf4MGUINDUVJNIQE4WK2qENaiYUNfTQ4BOk1XEoGDRZ3CS0uDS1GS1PRYthi0NAg6iCCOuihi6Ke58Gd7_AMv-cZXrRmO0r_EIc1tnRGPiwHNH4Gs6ZKtREAJOTAGOY1e5AF07jV8_eW0V4H_AVRuQ76wnaby_gUCiqUNSdXb7Yi94fqSGS497j-lrvaV6Wl42LJ3Pers1dXqBigfUbTVMKSFsUuJRMKUwvEsaHLb0r19FAa0Wglsm7nt3f4VkqQAOTh52Upo32orQRHj43tloVjMvkSUkn4dT86_92u87llZjY14VeLPtMk8Qtef1rvKdQF3yK-O8FhL2tALEjpwQYvOwM0wAA"
+}

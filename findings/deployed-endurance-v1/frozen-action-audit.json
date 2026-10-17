@@ -1,0 +1,3080 @@
+{
+  "id": "g4",
+  "decision": 22,
+  "side": 0,
+  "trialSeeds": [
+    55000,
+    55063
+  ],
+  "comparisons": 960,
+  "byAction": {
+    "move icebeam": {
+      "comparisons": 320,
+      "visibleStateEqual": 320,
+      "prngEqual": 320
+    },
+    "move counter": {
+      "comparisons": 320,
+      "visibleStateEqual": 183,
+      "prngEqual": 64
+    },
+    "move softboiled": {
+      "comparisons": 320,
+      "visibleStateEqual": 320,
+      "prngEqual": 320
+    }
+  },
+  "visibleStateEqual": 823,
+  "prngEqual": 704,
+  "scope": "One-step stateView and PRNG audit, not equality of all hidden engine fields or all chance outcomes",
+  "examples": [
+    {
+      "trial": 0,
+      "reference": {
+        "own": "move thunder",
+        "foe": "move thunder",
+        "state": {
+          "turn": 21,
+          "sides": [
+            {
+              "name": "P1",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 336,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "frz",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 9,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 172,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            },
+            {
+              "name": "P2",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 336,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 8,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 190,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            }
+          ],
+          "field": {
+            "weather": null,
+            "pseudoWeather": [
+              "maxtotallevel",
+              "stadiumsleepclause",
+              "freezeclausemod"
+            ]
+          },
+          "outcome": null
+        },
+        "seed": "57532,10558,57583,17283",
+        "log": [
+          "|",
+          "|move|p2a: Blissey|Thunder|p1a: Blissey|[miss]",
+          "|-miss|p2a: Blissey",
+          "|cant|p1a: Blissey|frz",
+          "|",
+          "|upkeep",
+          "|turn|21"
+        ]
+      },
+      "row": {
+        "own": "move counter",
+        "foe": "move thunder",
+        "state": {
+          "turn": 21,
+          "sides": [
+            {
+              "name": "P1",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 302,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "frz",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 9,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 172,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            },
+            {
+              "name": "P2",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 336,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 8,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 190,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            }
+          ],
+          "field": {
+            "weather": null,
+            "pseudoWeather": [
+              "maxtotallevel",
+              "stadiumsleepclause",
+              "freezeclausemod"
+            ]
+          },
+          "outcome": null
+        },
+        "seed": "62227,6125,64236,6589",
+        "log": [
+          "|",
+          "|move|p2a: Blissey|Thunder|p1a: Blissey",
+          "|split|p1",
+          "|-damage|p1a: Blissey|302/361 frz",
+          "|-damage|p1a: Blissey|84/100 frz",
+          "|cant|p1a: Blissey|frz",
+          "|",
+          "|upkeep",
+          "|turn|21"
+        ]
+      }
+    },
+    {
+      "trial": 0,
+      "reference": {
+        "own": "move thunder",
+        "foe": "move icebeam",
+        "state": {
+          "turn": 21,
+          "sides": [
+            {
+              "name": "P1",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 308,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "frz",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 9,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 172,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            },
+            {
+              "name": "P2",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 336,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 7,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 190,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            }
+          ],
+          "field": {
+            "weather": null,
+            "pseudoWeather": [
+              "maxtotallevel",
+              "stadiumsleepclause",
+              "freezeclausemod"
+            ]
+          },
+          "outcome": null
+        },
+        "seed": "62227,6125,64236,6589",
+        "log": [
+          "|",
+          "|move|p2a: Blissey|Ice Beam|p1a: Blissey",
+          "|split|p1",
+          "|-damage|p1a: Blissey|308/361 frz",
+          "|-damage|p1a: Blissey|86/100 frz",
+          "|cant|p1a: Blissey|frz",
+          "|",
+          "|upkeep",
+          "|turn|21"
+        ]
+      },
+      "row": {
+        "own": "move counter",
+        "foe": "move icebeam",
+        "state": {
+          "turn": 21,
+          "sides": [
+            {
+              "name": "P1",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 307,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "frz",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 9,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 172,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            },
+            {
+              "name": "P2",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 336,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 7,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 190,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            }
+          ],
+          "field": {
+            "weather": null,
+            "pseudoWeather": [
+              "maxtotallevel",
+              "stadiumsleepclause",
+              "freezeclausemod"
+            ]
+          },
+          "outcome": null
+        },
+        "seed": "30721,50915,58946,23666",
+        "log": [
+          "|",
+          "|move|p2a: Blissey|Ice Beam|p1a: Blissey",
+          "|split|p1",
+          "|-damage|p1a: Blissey|307/361 frz",
+          "|-damage|p1a: Blissey|86/100 frz",
+          "|cant|p1a: Blissey|frz",
+          "|",
+          "|upkeep",
+          "|turn|21"
+        ]
+      }
+    },
+    {
+      "trial": 1,
+      "reference": {
+        "own": "move thunder",
+        "foe": "move thunder",
+        "state": {
+          "turn": 21,
+          "sides": [
+            {
+              "name": "P1",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 304,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "frz",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 9,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 172,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            },
+            {
+              "name": "P2",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 336,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 8,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 190,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            }
+          ],
+          "field": {
+            "weather": null,
+            "pseudoWeather": [
+              "maxtotallevel",
+              "stadiumsleepclause",
+              "freezeclausemod"
+            ]
+          },
+          "outcome": null
+        },
+        "seed": "13797,38188,60225,56357",
+        "log": [
+          "|",
+          "|cant|p1a: Blissey|frz",
+          "|move|p2a: Blissey|Thunder|p1a: Blissey",
+          "|split|p1",
+          "|-damage|p1a: Blissey|304/361 frz",
+          "|-damage|p1a: Blissey|85/100 frz",
+          "|",
+          "|upkeep",
+          "|turn|21"
+        ]
+      },
+      "row": {
+        "own": "move counter",
+        "foe": "move thunder",
+        "state": {
+          "turn": 21,
+          "sides": [
+            {
+              "name": "P1",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 336,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "frz",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 9,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 172,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            },
+            {
+              "name": "P2",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 336,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 8,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 190,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            }
+          ],
+          "field": {
+            "weather": null,
+            "pseudoWeather": [
+              "maxtotallevel",
+              "stadiumsleepclause",
+              "freezeclausemod"
+            ]
+          },
+          "outcome": null
+        },
+        "seed": "44139,44007,16384,47777",
+        "log": [
+          "|",
+          "|move|p2a: Blissey|Thunder|p1a: Blissey|[miss]",
+          "|-miss|p2a: Blissey",
+          "|cant|p1a: Blissey|frz",
+          "|",
+          "|upkeep",
+          "|turn|21"
+        ]
+      }
+    },
+    {
+      "trial": 1,
+      "reference": {
+        "own": "move thunder",
+        "foe": "move icebeam",
+        "state": {
+          "turn": 21,
+          "sides": [
+            {
+              "name": "P1",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 310,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "frz",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 9,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 172,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            },
+            {
+              "name": "P2",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 336,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 7,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 190,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            }
+          ],
+          "field": {
+            "weather": null,
+            "pseudoWeather": [
+              "maxtotallevel",
+              "stadiumsleepclause",
+              "freezeclausemod"
+            ]
+          },
+          "outcome": null
+        },
+        "seed": "29051,53302,37562,8890",
+        "log": [
+          "|",
+          "|cant|p1a: Blissey|frz",
+          "|move|p2a: Blissey|Ice Beam|p1a: Blissey",
+          "|split|p1",
+          "|-damage|p1a: Blissey|310/361 frz",
+          "|-damage|p1a: Blissey|86/100 frz",
+          "|",
+          "|upkeep",
+          "|turn|21"
+        ]
+      },
+      "row": {
+        "own": "move counter",
+        "foe": "move icebeam",
+        "state": {
+          "turn": 21,
+          "sides": [
+            {
+              "name": "P1",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 306,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "frz",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 14,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 9,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 172,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            },
+            {
+              "name": "P2",
+              "active": 0,
+              "party": [
+                {
+                  "species": "Blissey",
+                  "name": "Blissey",
+                  "level": 50,
+                  "gender": "F",
+                  "hp": 336,
+                  "maxhp": 361,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "thunder",
+                      "name": "Thunder",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 7,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "counter",
+                      "name": "Counter",
+                      "pp": 32,
+                      "maxpp": 32,
+                      "disabled": false
+                    },
+                    {
+                      "id": "softboiled",
+                      "name": "Soft-Boiled",
+                      "pp": 13,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Quick Claw",
+                  "types": [
+                    "Normal"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Suicune",
+                  "name": "Suicune",
+                  "level": 50,
+                  "gender": "",
+                  "hp": 190,
+                  "maxhp": 206,
+                  "fainted": false,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "surf",
+                      "name": "Surf",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "rest",
+                      "name": "Rest",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "sleeptalk",
+                      "name": "Sleep Talk",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Scope Lens",
+                  "types": [
+                    "Water"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                },
+                {
+                  "species": "Tyranitar",
+                  "name": "Tyranitar",
+                  "level": 55,
+                  "gender": "M",
+                  "hp": 0,
+                  "maxhp": 226,
+                  "fainted": true,
+                  "status": "",
+                  "boosts": {
+                    "atk": 0,
+                    "def": 0,
+                    "spa": 0,
+                    "spd": 0,
+                    "spe": 0,
+                    "accuracy": 0,
+                    "evasion": 0
+                  },
+                  "moves": [
+                    {
+                      "id": "rockslide",
+                      "name": "Rock Slide",
+                      "pp": 16,
+                      "maxpp": 16,
+                      "disabled": false
+                    },
+                    {
+                      "id": "crunch",
+                      "name": "Crunch",
+                      "pp": 24,
+                      "maxpp": 24,
+                      "disabled": false
+                    },
+                    {
+                      "id": "dynamicpunch",
+                      "name": "Dynamic Punch",
+                      "pp": 7,
+                      "maxpp": 8,
+                      "disabled": false
+                    },
+                    {
+                      "id": "icebeam",
+                      "name": "Ice Beam",
+                      "pp": 15,
+                      "maxpp": 16,
+                      "disabled": false
+                    }
+                  ],
+                  "item": "Leftovers",
+                  "types": [
+                    "Rock",
+                    "Dark"
+                  ],
+                  "volatiles": [],
+                  "trapped": false
+                }
+              ],
+              "pokemonLeft": 2,
+              "sideConditions": [],
+              "request": "move"
+            }
+          ],
+          "field": {
+            "weather": null,
+            "pseudoWeather": [
+              "maxtotallevel",
+              "stadiumsleepclause",
+              "freezeclausemod"
+            ]
+          },
+          "outcome": null
+        },
+        "seed": "35672,52479,49874,45099",
+        "log": [
+          "|",
+          "|move|p2a: Blissey|Ice Beam|p1a: Blissey",
+          "|split|p1",
+          "|-damage|p1a: Blissey|306/361 frz",
+          "|-damage|p1a: Blissey|85/100 frz",
+          "|cant|p1a: Blissey|frz",
+          "|",
+          "|upkeep",
+          "|turn|21"
+        ]
+      }
+    }
+  ]
+}

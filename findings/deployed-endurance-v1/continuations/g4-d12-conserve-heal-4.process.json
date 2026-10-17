@@ -1,0 +1,18 @@
+{
+  "pid": 61275,
+  "trial": 4,
+  "arm": "conserve-heal",
+  "started": 1792228093.888526,
+  "command": [
+    "node",
+    "tests/endurance-continuation.mjs",
+    "g4",
+    "12",
+    "1",
+    "conserve-heal",
+    "4",
+    "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/deployed-endurance-v1/continuations/g4-d12-conserve-heal-4.json"
+  ],
+  "returncode": 0,
+  "seconds": 1573.3872940540314
+}

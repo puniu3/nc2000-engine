@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python3",
+    "tools/endurance-cloud.py"
+  ],
+  "inputs": {
+    "payload/web/tests/endurance-runtime.mjs": "2249d27845678ffcf991bfa9c4417148155d4a55ee9f8873b8514b9848f5b810",
+    "payload/web/tests/endurance-continuation.mjs": "cddd5658b1c4e407c8b5af010a1c3425f11eb243a5ecfb29e922417c1dafed5d",
+    "payload/web/tests/endurance-canary.mjs": "9d1f26c34fc5ca39e386b54ed613b1cc28adfaae97ff882b0e9a7d3022cab3b4",
+    "payload/tools/endurance-cloud.py": "fd00d6ce7a66aae70d3a5548104a3f36c7496f4d0ab97fe72d4f2fa0ffee9680",
+    "payload/findings/deployed-endurance-v1/assets/bot-worker-mrxcXXq0.js": "230126b8cd2aae29d9e41d97e51271bd6c9afcfd6cb63b0536940132a59c5d3b",
+    "payload/findings/deployed-endurance-v1/assets/nc2000_wasm_bg-CrMX1Tng.wasm": "3164238a3912eb7444a9cf24c49281980893e332221cfc8c27accb750bb0c4ab",
+    "payload/findings/deployed-endurance-v1/belief-pool-v3--belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "payload/findings/deployed-endurance-v1/games/g4.jsonl": "4e7c500e6f38527db1c9103cdb17a0f74106bf430e80c750478db92af8ef56ca"
+  },
+  "budget_yen": 200.0,
+  "minutes": 28,
+  "created": "2026-10-17T08:17:19.816136+00:00"
+}

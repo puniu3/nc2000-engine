@@ -1,0 +1,16 @@
+{
+  "localCloudBehavioralSourceEqual": true,
+  "onlyDifference": "Local continuation prints progress every10decisions; cloud snapshot has no diagnostic prints.",
+  "runtimeIdentical": true,
+  "interventionReads": [
+    "own HP",
+    "own max HP",
+    "own status",
+    "public opposing active species",
+    "public opposing active status",
+    "own legal actions"
+  ],
+  "remoteContinuationSha256": "cddd5658b1c4e407c8b5af010a1c3425f11eb243a5ecfb29e922417c1dafed5d",
+  "localContinuationSha256": "dbec0899df784ccc809b3974ebdc061b99c7510e9ee64de0945f7e92b3e9054a",
+  "rootSeedHandling": "Fresh trial seeds; final historical log observed, then empty fork observed to reset log cursor. One extra unused root seed consumed identically in both arms."
+}
