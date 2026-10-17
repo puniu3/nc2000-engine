@@ -1,0 +1,8 @@
+g4-t10 pass=0 value=Bounds { lo: 0.0, hi: 0.9999999999999991 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=1084775 nodes=300173 closed=0
+g4-t10 "NodeBudget" runs=1084775 depthlimit=0 elapsed=31.8
+g4-t53 pass=0 value=Bounds { lo: 0.0, hi: 1.0 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=2000000 nodes=258507 closed=0
+g4-t53 "WorkExhausted" runs=2000000 depthlimit=0 elapsed=53.3
+loop4-t500 pass=0 value=Bounds { lo: 0.0, hi: 1.0 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=1331277 nodes=300017 closed=3
+loop4-t500 "NodeBudget" runs=1331277 depthlimit=0 elapsed=26.6
+loop12-t500 pass=0 value=Bounds { lo: 0.0, hi: 1.0 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=918729 nodes=299231 closed=798
+loop12-t500 "NodeBudget" runs=918729 depthlimit=0 elapsed=17.5

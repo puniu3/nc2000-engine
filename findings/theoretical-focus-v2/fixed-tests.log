@@ -1,0 +1,239 @@
+   Compiling nc2000-bot v0.1.0 (/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/crates/bot)
+    Finished `release` profile [optimized] target(s) in 1m 53s
+     Running unittests src/lib.rs (target/release/deps/nc2000_bot-64908959f5686f2c)
+
+running 6 tests
+
+thread 'bounds::tests::fixed_strategy_cannot_change_after_search' (37385307) panicked at crates/bot/src/bounds.rs:560:9:
+fixed strategy must be configured before search
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test bounds::tests::fixed_strategy_cannot_change_after_search - should panic ... ok
+test bounds::tests::fixed_policy_bounds_keep_the_opponent_free_and_orient_both_sides ... ok
+test bounds::tests::fixed_policy_applies_after_the_root_and_falls_back_when_unavailable ... ok
+test bounds::tests::fixed_first_action_does_not_replace_continuation_priority ... ok
+test bounds::tests::fixed_policy_partial_bounds_enclose_exhaustive_two_turn_best_response ... ok
+test bounds::tests::fixed_reply_bounds_keep_future_replies_free_and_resume ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 234 filtered out; finished in 0.56s
+
+     Running tests/belief.rs (target/release/deps/belief-536d13112eac94da)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/blind.rs (target/release/deps/blind-70b21ecd324e93f0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running tests/bots.rs (target/release/deps/bots-120829ea6240e037)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running tests/claw_information.rs (target/release/deps/claw_information-38f64a71a8f1ff01)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/compiled_preview.rs (target/release/deps/compiled_preview-eb1ab544d5731905)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/destiny_bond_wait.rs (target/release/deps/destiny_bond_wait-76443f367a48864a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/endgame.rs (target/release/deps/endgame-ffeb41b02947d29d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/evasion.rs (target/release/deps/evasion-be768983bed4e7e0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/exchange.rs (target/release/deps/exchange-9790891cf12fea72)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/first_continuation.rs (target/release/deps/first_continuation-8b7bbb1da7dd76f9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/foresight.rs (target/release/deps/foresight-b521aada0ae2a70d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/fork.rs (target/release/deps/fork-28cc837a6d7b8d15)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/hidden_pick_legality.rs (target/release/deps/hidden_pick_legality-a9cd61d0bb55808d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/hidden_power_damage.rs (target/release/deps/hidden_power_damage-b280f7860f1514e3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/history_continuation.rs (target/release/deps/history_continuation-c073e498b2390a76)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/import.rs (target/release/deps/import-3b9d93817bb12cbd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/learning_search.rs (target/release/deps/learning_search-3370eeff31c10565)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/mask_sleep_talk.rs (target/release/deps/mask_sleep_talk-20d80cfa6550b5b2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/own_recovery_wait.rs (target/release/deps/own_recovery_wait-a6583d6471f67dd3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/perish_deadline.rs (target/release/deps/perish_deadline-a70626843eb11da5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/pick_prior.rs (target/release/deps/pick_prior-ef1c1366f7522eac)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/player.rs (target/release/deps/player-17ddc3e1cc912ca5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/position.rs (target/release/deps/position-78b9a332e5be6707)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/preview_aliases.rs (target/release/deps/preview_aliases-4ae76598a8377d8a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/preview_tables.rs (target/release/deps/preview_tables-132cf9b627b14e35)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/priority_heal.rs (target/release/deps/priority_heal-46ee9e7cf4dd4488)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/priority_substitute.rs (target/release/deps/priority_substitute-170c05a4891e79e4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/priority_substitute_choice.rs (target/release/deps/priority_substitute_choice-5e8bbda2f815613d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/priority_substitute_format.rs (target/release/deps/priority_substitute_format-80857d839f84539e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/report_4296.rs (target/release/deps/report_4296-37841886e6006269)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/residual_wait.rs (target/release/deps/residual_wait-1cfb2df0bafbb006)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/rollout_damage_cap.rs (target/release/deps/rollout_damage_cap-15ee9ec9b074c583)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/root_mix_probes.rs (target/release/deps/root_mix_probes-884b9dbeb645e0ae)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sleep_clause.rs (target/release/deps/sleep_clause-ed97372806a272fe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/sleep_equivalence.rs (target/release/deps/sleep_equivalence-d2d4a0df2bfc4544)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/teamgen.rs (target/release/deps/teamgen-ab934d25af0b2e5e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/value.rs (target/release/deps/value-2285b9b39c2caed5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s

@@ -1,0 +1,483 @@
+{
+  "conclusion": "No separation of current and alternative value bounds. No stronger action certified. This does not prove optimality.",
+  "roots": 4,
+  "solver_runs": 20,
+  "engine_executions": 26833435,
+  "combined": [
+    {
+      "name": "g4-t10",
+      "value_p0": [
+        0,
+        1
+      ],
+      "score_loss": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "cells_p0": [
+        [
+          0.0,
+          0.9999999999999521
+        ],
+        [
+          0.0,
+          0.9999999999999915
+        ],
+        [
+          0.0,
+          0.9999999999999991
+        ],
+        [
+          0.0,
+          0.999999999999999
+        ],
+        [
+          0.0,
+          0.9999999999999997
+        ],
+        [
+          0.0,
+          0.9999999999999968
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.9999999999999996
+        ],
+        [
+          0.0,
+          0.999999999999998
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.9999999999999974
+        ],
+        [
+          0.0,
+          0.9999999999999996
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.9999999999999997
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.9999999999999979
+        ],
+        [
+          0.0,
+          0.9999999999999999
+        ],
+        [
+          0.0,
+          0.9999999999999997
+        ],
+        [
+          0.0,
+          0.9999999999999997
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.9999999999999993
+        ],
+        [
+          0.0,
+          0.9999999999999999
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.9999999999999998
+        ],
+        [
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "name": "g4-t53",
+      "value_p0": [
+        0,
+        1
+      ],
+      "score_loss": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "cells_p0": [
+        [
+          0.0,
+          0.9999999999999841
+        ],
+        [
+          0.0,
+          0.9999999999999925
+        ],
+        [
+          0.0,
+          0.9999999999999986
+        ],
+        [
+          0.0,
+          0.9999999999999982
+        ],
+        [
+          0.0,
+          0.9999999999999996
+        ],
+        [
+          0.0,
+          0.9999999999999979
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.9999999999999993
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.9999999999999997
+        ],
+        [
+          0.0,
+          0.9999999999999986
+        ],
+        [
+          0.0,
+          0.9999999999999996
+        ],
+        [
+          0.0,
+          0.9999999999999998
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.9999999999999991
+        ],
+        [
+          0.0,
+          0.9999999999999978
+        ],
+        [
+          0.0,
+          0.9999999999999993
+        ],
+        [
+          0.0,
+          0.9999999999999999
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.9999999999999996
+        ],
+        [
+          0.0,
+          0.9999999999999999
+        ],
+        [
+          0.0,
+          0.9999999999999998
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "name": "loop4-t500",
+      "value_p0": [
+        0,
+        1
+      ],
+      "score_loss": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "cells_p0": [
+        [
+          0.0,
+          0.9999999999999915
+        ],
+        [
+          0.0,
+          0.999999999999998
+        ],
+        [
+          0.0,
+          0.9999999999999942
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "name": "loop12-t500",
+      "value_p0": [
+        0,
+        1
+      ],
+      "score_loss": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "cells_p0": [
+        [
+          0.0,
+          1.0000000000000002
+        ],
+        [
+          0.0,
+          0.9999999999999906
+        ],
+        [
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0
+        ]
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "name": "g4-t10",
+      "before_total_work": 489908,
+      "before_minor_child_work": 0,
+      "after_minor_child_work": 3290,
+      "after_child_uncertainty": 0.9999999999999997,
+      "fair_stop": "NodeBudget"
+    },
+    {
+      "name": "g4-t53",
+      "before_total_work": 1001348,
+      "before_minor_child_work": 0,
+      "after_minor_child_work": 43170,
+      "after_child_uncertainty": 0.9999999999999993,
+      "fair_stop": "WorkExhausted"
+    },
+    {
+      "name": "loop4-t500",
+      "before_total_work": 3625679,
+      "before_minor_child_work": 0,
+      "after_minor_child_work": 266,
+      "after_child_uncertainty": 1.0,
+      "fair_stop": "NodeBudget"
+    },
+    {
+      "name": "loop12-t500",
+      "before_total_work": 9555116,
+      "before_minor_child_work": 0,
+      "after_minor_child_work": 522,
+      "after_child_uncertainty": 1.0,
+      "fair_stop": "NodeBudget"
+    }
+  ],
+  "resume": {
+    "loop4-t500": [
+      {
+        "pass": 0,
+        "value": [
+          0.0,
+          1.0
+        ],
+        "loss": [
+          0.0,
+          1.0
+        ],
+        "stop": "WorkExhausted",
+        "total_runs": 2000000,
+        "nodes": 138928,
+        "closed": 13255,
+        "seconds": 20.568186584
+      },
+      {
+        "pass": 1,
+        "value": [
+          0.0,
+          1.0
+        ],
+        "loss": [
+          0.0,
+          1.0
+        ],
+        "stop": "NodeBudget",
+        "total_runs": 3625679,
+        "nodes": 271868,
+        "closed": 28169,
+        "seconds": 62.370507
+      }
+    ],
+    "loop12-t500": [
+      {
+        "pass": 0,
+        "value": [
+          0.0,
+          1.0
+        ],
+        "loss": [
+          0.0,
+          1.0
+        ],
+        "stop": "WorkExhausted",
+        "total_runs": 2000000,
+        "nodes": 49801,
+        "closed": 14528,
+        "seconds": 17.421829042
+      },
+      {
+        "pass": 1,
+        "value": [
+          0.0,
+          1.0
+        ],
+        "loss": [
+          0.0,
+          1.0
+        ],
+        "stop": "WorkExhausted",
+        "total_runs": 4000000,
+        "nodes": 87034,
+        "closed": 36937,
+        "seconds": 37.085011875
+      },
+      {
+        "pass": 2,
+        "value": [
+          0.0,
+          1.0
+        ],
+        "loss": [
+          0.0,
+          1.0
+        ],
+        "stop": "WorkExhausted",
+        "total_runs": 6000000,
+        "nodes": 129847,
+        "closed": 64211,
+        "seconds": 60.64710425
+      },
+      {
+        "pass": 3,
+        "value": [
+          0.0,
+          1.0
+        ],
+        "loss": [
+          0.0,
+          1.0
+        ],
+        "stop": "WorkExhausted",
+        "total_runs": 8000000,
+        "nodes": 166410,
+        "closed": 93936,
+        "seconds": 89.499793709
+      },
+      {
+        "pass": 4,
+        "value": [
+          0.0,
+          1.0
+        ],
+        "loss": [
+          0.0,
+          1.0
+        ],
+        "stop": "NodeBudget",
+        "total_runs": 9555116,
+        "nodes": 183329,
+        "closed": 116675,
+        "seconds": 118.817461542
+      }
+    ]
+  },
+  "maximum_compacted_solved_states": {
+    "loop4-t500": 28169,
+    "loop12-t500": 116675
+  },
+  "maximum_baseline_path_depth": 22,
+  "tests_passed": 6,
+  "model": "Full-information engine chance enumeration; optimal continuation unless fixed-counterpolicy is stated; score W=1,D=0.5,L=0; not a blind-policy win-rate experiment."
+}

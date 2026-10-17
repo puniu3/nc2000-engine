@@ -1,0 +1,9 @@
+{
+  "work": 200000,
+  "nodes": 100000,
+  "milliseconds": 10000,
+  "depth": 1024,
+  "priority": true,
+  "material": true,
+  "quotient": true
+}

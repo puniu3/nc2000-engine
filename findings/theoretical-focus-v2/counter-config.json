@@ -1,0 +1,18 @@
+{
+  "work": 2000000,
+  "nodes": 300000,
+  "milliseconds": 60000,
+  "depth": 1024,
+  "priority": true,
+  "material": true,
+  "quotient": true,
+  "mode": "fixed-counterpolicy",
+  "side": 1,
+  "priority_moves": [
+    "struggle",
+    "surf",
+    "thunder",
+    "icebeam",
+    "rest"
+  ]
+}

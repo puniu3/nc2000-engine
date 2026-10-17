@@ -1,0 +1,4 @@
+g4-t10 "TimeBudget" runs=152408 depthlimit=0 elapsed=10.0
+g4-t53 "TimeBudget" runs=151372 depthlimit=0 elapsed=10.0
+loop4-t500 "WorkExhausted" runs=200000 depthlimit=0 elapsed=8.0
+loop12-t500 "WorkExhausted" runs=200000 depthlimit=0 elapsed=7.3

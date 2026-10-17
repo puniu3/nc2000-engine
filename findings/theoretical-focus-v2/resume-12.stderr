@@ -1,0 +1,6 @@
+loop12-t500 pass=0 value=Bounds { lo: 0.0, hi: 1.0 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=2000000 nodes=49801 closed=14528
+loop12-t500 pass=1 value=Bounds { lo: 0.0, hi: 1.0 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=4000000 nodes=87034 closed=36937
+loop12-t500 pass=2 value=Bounds { lo: 0.0, hi: 1.0 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=6000000 nodes=129847 closed=64211
+loop12-t500 pass=3 value=Bounds { lo: 0.0, hi: 1.0 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=8000000 nodes=166410 closed=93936
+loop12-t500 pass=4 value=Bounds { lo: 0.0, hi: 1.0 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=9555116 nodes=183329 closed=116675
+loop12-t500 "NodeBudget" runs=9555116 depthlimit=0 elapsed=118.8

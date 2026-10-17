@@ -1,0 +1,46 @@
+{
+  "base_commit": "32100309",
+  "roots": [
+    "g4-t10",
+    "g4-t53",
+    "loop4-t500",
+    "loop12-t500"
+  ],
+  "input_parity": "Reconstruct from initial teams and recorded choices. Check 1115 historical states and original g4 PRNG states each invocation. Hidden Power display normalization inherited from the first study. Root keys and recorded actions must match between runs.",
+  "interpretation": "No new bot policy deployed or evaluated in live duels. Fixed-counterpolicy restricts only P2, so only its P0 upper endpoint is used as a full-game upper bound for the selected joint first actions.",
+  "schedules": {
+    "baseline": "Previous 200000 work / 10000ms / 100000 nodes / depth24",
+    "directed": "Historical filename: probability-first eager expansion, safe Quick Claw quotient, depth1024; solve_policy_losses has no direction override, so material ordering is inactive here",
+    "target": "One-sided policy-loss threshold (1e-6), explicit bound direction, material descent; 2000000 work / 60000ms / 300000 nodes",
+    "resume": "Same graph reused up to five calls; 2000000 additional work per call; one cumulative node cap of 300000",
+    "fixed-counterpolicy": "P2 first switches; then priority Struggle, Surf, Thunder, Ice Beam, Rest, Switch2, with Rest<=90% and wake handling. P1 first action fixed to recorded switch; all later P1 choices remain free. Full-information certificate attempt only.",
+    "fair": "Same target configuration plus chance_fair_period=8; changes proof-search allocation only",
+    "chance-audit": "Complete first-step enumeration with recorded joint actions; coalesce equal state keys, inspect Quick Claw roll and compare keys after clearing only that flag"
+  },
+  "unused_config": "deep-config.json was not executed: diagnostics showed zero depth-limit hits.",
+  "reproduce": "cargo build --release -p nc2000-bot --example theoretical_focus; target/release/examples/theoretical_focus CONFIG.json NEW-OUTPUT.jsonl all|ROOT-NAME. Each output must be new. See *-config.json files.",
+  "limitations": [
+    "Floating-point numerical bounds, not formally verified real arithmetic",
+    "Independent uniform per-draw chance model, not enumeration of all PRNG seeds",
+    "Native engine has historical parity with pinned deployed WASM, not exhaustive equivalence",
+    "Known opponent sets and hidden state: not a blind information-set proof",
+    "Score is not pure win probability; all intervals remain unconstrained, so neither metric establishes improvement",
+    "Budgets are checked at work boundaries; node/time caps may be exceeded within one expansion",
+    "Runs overlap in wall-clock time: durations are not a controlled speed benchmark"
+  ],
+  "sha256": {
+    "crates/bot/examples/theoretical_focus.rs": "b28726c6158fe1d86e6ec68e9bfeb6da7ecf6a9fe4738587d6736b5d7c902f5d",
+    "crates/bot/examples/theoretical_headroom.rs": "0566dc3e8ebda71d8b4584bee9766d6ee5d4956dc93b07f9fe69b01fa61eaccf",
+    "crates/bot/src/bounds.rs": "fcfa7be284c502d46a508947522604f576c92767b01ba4d7c3ac6b1cd71b29bd",
+    "crates/bot/src/bounds/loss_threshold.rs": "737b82a959ea7895dc6c68f5c32275ffea4839b823c99abcc6cb92a8a55251e3",
+    "crates/bot/src/bounds/correlated.rs": "1459dd7be94c3b5558e7669a34d5d83c0a11522f4937ce69bbfa1352c94a153f",
+    "crates/engine/src/battle/enumerate.rs": "6ac1d14740da165c92c7ccdb35573d523e24e0144133bcfef216f10816e53d2a",
+    "crates/engine/src/battle/search.rs": "7af867a1e8511e2463ed4a2b16dc4cd7d038f7683a25e4c776f9cf76a75027fc",
+    "crates/engine/src/battle/turn.rs": "7fff915cbce429f5fece52421e5428b35918d4d65e4022a5ce6c43cba2347d5d",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "tools/theoretical-focus-report.py": "7912a09f23d7d820e7d40a0968d9415e498e78287fb5352789b1f552bde613db",
+    "findings/deployed-endurance-v1/games/g4.jsonl": "4e7c500e6f38527db1c9103cdb17a0f74106bf430e80c750478db92af8ef56ca",
+    "findings/deployed-endurance-v1/continuations/g4-d12-baseline-4.json": "cf86bd8362e36c4b441dbdb9c1bf43c761069c8deb43ac54d86a3e51510fb78e",
+    "findings/deployed-endurance-v1/continuations/g4-d12-baseline-12.json": "6db529521c8acf049f3fca4d7d59657ee623721ce4285bc1aed5e49dba35a9aa"
+  }
+}
