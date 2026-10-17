@@ -1,0 +1,22 @@
+Run inside this nc2000-engine checkout. This archive is evidence and a patch, not a standalone source distribution.
+
+Audit existing results:
+  python3 tools/policy-class-study.py
+
+Tests:
+  cargo test --release -p nc2000-bot --lib root_policy::
+  cargo test --release -p nc2000-bot --test interval_root_games
+
+Build and reproduce fresh certificates (new output path required):
+  cargo build --release -p nc2000-bot --example root_class_certificates --example interval_root_probe
+  target/release/examples/root_class_certificates findings/policy-class-v1/fixtures.json /tmp/nc2000-class-certificates.jsonl
+  target/release/examples/interval_root_probe findings/policy-class-v1/inputs.jsonl /tmp/nc2000-class-outputs.jsonl
+
+Repeat the 36 deployed searches against the pinned WASM (about one minute):
+  cd web
+  node tests/deployed-policy-class.mjs /tmp/nc2000-class-deployed.jsonl
+
+Regenerate the document:
+  python3 tools/policy-class-report.py
+
+The generic interval API is not connected to standard bot play. Input bounds must refer to an admissible continuation policy; sample means do not satisfy this contract automatically. The fresh game certificates use known actual loadouts and optimal continuation scores (win 1, tie 0.5). The finite-game tests separately validate full-policy improvement using the incumbent policy's actual continuation. The original 128-seed data are reused for output-selection ablations; no new statistical strength claim is made.

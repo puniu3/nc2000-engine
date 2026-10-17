@@ -1,5 +1,7 @@
 use crate::exact::solve_matrix_full;
 
+pub mod interval;
+
 pub const MIN_MIX_MARGIN: f64 = 0.02;
 
 #[derive(Clone, serde::Serialize)]

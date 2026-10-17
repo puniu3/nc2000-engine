@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+import html,json,pathlib
+root=pathlib.Path(__file__).resolve().parents[1];out=root/'findings/policy-class-v1'
+s=json.loads((out/'summary.json').read_text())
+rows=''.join('<tr><td>'+html.escape(c['id'])+'</td><td>'+html.escape(', '.join(f'{k}: {v}' for k,v in c['choices'].items()))+'</td><td>'+', '.join(f'{p*100:.3f}%' for p in c['candidate'])+'</td><td>'+f"{c['candidate_guarantee'][0]*100:.3f}%"+'</td></tr>' for c in s['cases'])
+page=r'''<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NC2000 — 混合方策の問題をクラスとして解く</title>
+<style>:root{color-scheme:light;background:#f5f2e9;color:#292e28;font:17px/1.85 system-ui,sans-serif}body{max-width:960px;margin:auto;padding:28px 20px 65px}h1{font-size:1.8rem;line-height:1.5}h2{font-size:1.25rem;margin-top:2em}a{color:#3c6450}small,.note{color:#62665d}.box{background:#e8ebdf;border-left:4px solid #7e9170;padding:14px 20px}.table{overflow:auto}table{border-collapse:collapse;width:100%;font-size:.93rem}td,th{padding:10px;text-align:left;border-bottom:1px solid #c8cebd}th{background:#eae7de}li{margin:9px 0}code{font-size:.85em;overflow-wrap:anywhere}pre{overflow:auto;background:#eae7de;padding:15px}button{font:inherit;background:#e2e7d9;border:1px solid #99a58c;border-radius:5px;padding:7px 12px;margin:5px 5px 5px 0;color:inherit}input[type=range]{width:100%;accent-color:#667f55}svg{width:100%;height:auto}.controls{max-width:700px}details{border-top:1px solid #c8cebd;padding-top:12px;margin-top:25px}summary{font-weight:600;cursor:pointer}@media(max-width:650px){body{padding:18px 15px}h1{font-size:1.45rem}td,th{padding:7px}}</style>
+<p class="note">NC2000 / 2026年10月17日 / 原因分析と一般化した選択処理</p>
+<h1>「最多の一手」への変換が、混合方策の価値を消している</h1>
+<p>今回の反例は、<strong>相手の応答によって有利な手が逆転し、少数派の手にも抑止力がある同時手番</strong>の一例だった。探索が最適な行動頻度を完全に学習していても、その最多の一手だけを採用すると非最適になる。探索精度と、探索結果から実行方策を作る処理を分ける必要がある。</p>
+<div class="box">今回、技名に依存しない区間値による方策選択を実装した。既知の有限ゲームでは、現行方策の継続値を評価し、保証値を改善する分布へ更新することで、この問題のクラスを解ける。通常のblind対戦で使うには、同じ情報制約で実行できる継続方策の値を用意する必要が残る。</div>
+
+<h2>1. コードとデータから確定した原因</h2>
+<p>ソースの標準経路は <code>WasmBlindSearcher.best() → BlindSearch.best()</code>。後者は合法・除外条件を満たす手から最多訪問の一手を返す。<code>rootPolicy()</code> の <code>frac</code> は探索中の訪問割合であり、実際のプレイ確率ではない。別に実装されている混合方策を返す経路は、現行の通常プレイでは使われていない。今回の公開版36探索と前回128探索でも、最多訪問の手を選ぶことが一致した。</p>
+<p>前回の公開版128探索を固定して、最後の分布の作り方だけを変えて評価した。以下は<strong>同じ真の構成・最適な将来の継続を仮定した初手の保証スコア</strong>（勝ち1・引き分け0.5）。変更後のbotを対戦させた勝率ではない。</p>
+<div class="table"><table><tr><th>最後の選び方</th><th>攻撃の割合</th><th>最悪応答に対する保証スコア</th></tr>
+<tr><td>最多訪問の一手</td><td>0%</td><td>0%</td></tr>
+<tr><td>一様に混ぜる</td><td>50%</td><td>6.533%</td></tr>
+<tr><td>128探索の訪問割合を平均</td><td>13.338%</td><td>11.323%</td></tr>
+<tr><td>最適な割合</td><td>12.5%</td><td>11.433%</td></tr></table></div>
+<p>平均訪問割合は最適配分に近いが、各探索を個別に訪問割合でプレイした場合の最小保証値は0.317%だった。「訪問割合を使う」は有望な対照実験になる一方、あらゆる局面の一般解にはならない。探索には試行のための配分が含まれ、相手の探索方策と将来の評価も途中で変化する。</p>
+
+<h2>2. 個別の技から、資源つきの読み合いへ</h2>
+<p>相手が防御的な応答をあと <em>k</em> 回使える、次の抽象ゲームを考える。攻撃同士が重なった場合の成功値を <em>g</em>、残り <em>k</em> 回での最適値を <em>V<sub>k</sub></em> とする。</p>
+<div class="table"><table><tr><th>自分 ＼ 相手</th><th>攻撃</th><th>防御的な応答</th></tr><tr><td>攻撃</td><td>g</td><td>0</td></tr><tr><td>待機</td><td>0</td><td>V<sub>k−1</sub></td></tr></table></div>
+<p><code>V₀ = g</code>。攻撃確率を <em>p</em> とすると、相手は <code>p·g</code> と <code>(1−p)·Vₖ₋₁</code> の小さい方を実現する。この二つを釣り合わせると、</p>
+<pre>pₖ = Vₖ₋₁ / (g + Vₖ₋₁) = 1 / (k + 1)
+Vₖ = g·Vₖ₋₁ / (g + Vₖ₋₁) = g / (k + 1)</pre>
+<p>「1〜k+1回目から最初の攻撃時機を一様に選ぶ」と同じ。<strong>残り資源が減るたびに確率が変わる</strong>。<em>k</em> が1以上なら、攻撃一択も待機一択も保証値0。これは探索回数を無限に増やしても、最後に一手へ潰す限り残る構造的な損失である。</p>
+<div class="controls box"><strong>確率を動かして確認する</strong><p class="note">抽象モデル g=1。グラフは相手の最悪応答を選んだ保証値。アニメーションは使用していない。</p>
+<label>残り資源 k = <output id="kout">7</output><input id="k" type="range" min="1" max="32" step="1" value="7"></label>
+<label>攻撃確率 p = <output id="pout">12.5%</output><input id="p" type="range" min="0" max="1" step="any" value=".125"></label>
+<button id="optimal">最適混合</button><button id="modal">最多の手に確定</button><button id="uniform">一様に混ぜる</button>
+<p id="value" aria-live="polite"></p><svg viewBox="0 0 650 280" role="img" aria-label="攻撃確率と最悪応答に対する保証値"><path d="M45 20V240H625" fill="none" stroke="#777f70"/><text x="48" y="16" fill="#555e4e">保証値</text><text x="40" y="263" fill="#555e4e">0%</text><text x="575" y="263" fill="#555e4e">100%</text><path id="curve" fill="none" stroke="#647e52" stroke-width="3"/><circle id="dot" r="6" fill="#775d3b"/></svg></div>
+<p>これは全ての待機局面に適用するルールではない。追加の逃げ道や別の手がある場合には、その応答も含めて値を検査する。今回の実局面では交代を含む全合法手で値を計算し、0〜7の各残り回数が上式と一致する区間に入ることを確認した。</p>
+
+<h2>3. 初手だけ混ぜると、なぜまだ失敗するのか</h2>
+<p>上の右下の値は、将来も適切に混ぜる場合の値である。初手だけ12.5%対87.5%にして、その後は待機一択へ戻すと、相手は最初に防御的な応答を選べばよく、保証値は0になる。毎回同じ12.5%を使い続けても、残り7回の抽象ゲームの保証値は約4.49%で、最適な11.43%に届かない。</p>
+<p>したがって、<strong>「最適に継続した場合の値」で初手を評価し、「従来bot」で継続する</strong>という食い違いを避ける必要がある。前回の純粋な勝率下限10.57%は、初手だけでなく攻撃時機を決めた継続方策を直接列挙して得たものだった。</p>
+<p>全体の一般解は、現行方策 π をいったん固定して、その継続値 <code>Q^π(s,a,b)</code> を評価する方策改善で表せる。</p>
+<pre>Q^π の下界 L と上界 U を用意する
+p = argmaxₚ min_b Σₐ p(a) L(s,a,b)
+
+min_b Σₐ p(a) L(s,a,b)
+  &gt; min_b Σₐ π(a) U(s,a,b)
+なら、その状態の π を p に置き換える</pre>
+<p>既知の有限・非循環ゲームでは、末端からの帰納法で、こうした更新が全状態の最悪応答に対する値を下げないことを示せる。正確な継続値を使って繰り返せば、ゲーム木の深さに応じた回数で最適方策へ到達する。区間が広いときには改善判定がつかず、元の分布を保持する。</p>
+<p>実装した <code>root_policy::interval::analyze</code> は、この判断を行う技名非依存の選択器。単一行動への丸めや、小さい確率の切り捨てをしない。純粋戦略が適切な局面では純粋戦略を返す。既存のLP解法を再利用し、既存botの標準経路にはまだ接続していない。数値誤差のため上下界に2×10⁻⁸の余裕を取り、有理数による形式的証明とは区別している。</p>
+
+<h2>4. 一般化で落としてはいけない条件</h2>
+<ul>
+<li><strong>全ての合法応答を見る。</strong>良さそうな2×2部分行列だけを解くと、除外した交代や別技に負ける。未評価のセルは都合のよい平均値で埋めず、[0,1]のまま扱う。</li>
+<li><strong>少数派の手を消さない。</strong>今回のクラスでは、資源が増えるほど必要な攻撃確率が小さくなる。別の実験用RM経路にある「最大確率の半分未満を除く」処理なら、k≥3の必要な手も消える。現行公開版の直接原因はargmaxであり、この閾値処理が動いた結果ではない。</li>
+<li><strong>固定の改善幅を隠さない。</strong>既存の実験用混合ゲートは2ポイント超を要求する。一方、今回のゲンガー側の混合利得は約1.633ポイントなので、値が完全に正しくても通らない。新APIでは必要改善幅を引数として明示し、今回の検証では数値誤差の余裕だけを残した。</li>
+<li><strong>隠れた構成を平均してから相手の最善応答を取らない。</strong>相手は自分の構成を知っている。既知のタイプ確率 w なら <code>Σθ wθ min_b Σₐ p(a)Qθ(a,b)</code> の順番になる。順番を逆にすると、実際には不利な混合を有利と判定できる。確率分布が不明な場合の、指定した全タイプに対する最悪値もAPIで分けた。</li>
+<li><strong>将来も情報制約を守る。</strong>各隠れた世界で別々に最適な行動をした値は、blindプレイヤーが実行できる下界にはならない。同じ観測履歴では同じ方策を使う必要がある。</li>
+<li><strong>探索用の乱数と実行用の抽選を分ける。</strong>実行する手は得られた分布から決定点ごとに一度抽選し、照会のたびには抽選し直さない。探索seedによってargmaxが揺れることを、意図した混合の代わりにはしない。</li>
+</ul>
+<p>探索節点ごとに後悔を小さくする手法へ置き換えるだけでも、観測した報酬をそのまま用いた木全体の均衡収束は一般には保証されないことが研究されている。これは過去の有限予算の失敗を直接証明するものではなく、「EXP3等に替えれば全体も自動的に正しくなる」と仮定できない根拠となる。<a href="https://arxiv.org/abs/1804.09045">Kovařík・Lisý, Analysis of Hannan Consistent Selection for Monte Carlo Tree Search in Simultaneous Move Games</a>。</p>
+
+<h2>5. 今回の検証範囲</h2>
+<p>公開版81,000回探索を、新しく9局面×4 seedで実行。8局面は元の合法な履歴に「のろい／みちづれ」を加えて残り回数を変えたもの、もう1局面は別機構の「おんがえし／なみのり」対「カウンター／ミラーコート」。全36回でネイティブ証明側と状態・乱数位置が一致した。</p>
+<div class="table"><table><tr><th>局面</th><th>公開botの選択（4 seed）</th><th>区間選択器の分布</th><th>その保証スコア下限</th></tr>@@ROWS@@</table></div>
+<p class="note">分布の順序：wait-* は「じしん・のろい」、counterは「おんがえし・なみのり」。この表は真の固定構成・最適継続値を用いた条件つき検証。4 seedは再現診断であり、集団勝率の有意差検定ではない。wait-0では現行の攻撃を保持した。</p>
+<ul>
+<li>新しい9局面の値の境界：629,525回のエンジン実行、約15.9秒。同じゲームの証明グラフを再利用した。</li>
+<li>一般選択器344ケース：実局面の両側・各純粋手、資源数と成功値を変えた264ケースを含む。</li>
+<li>検査18件：既存検査10件と新規8件。三すくみ、純粋な最適解、未知セル、未知タイプ分布、追加の悪い応答、0.01%の必要な手も含む。2×2区間ゲーム2,000個では、採用した分布を全端点行列でも再検査。</li>
+<li>全体の方策改善検査2件：ランダム生成した既知の非循環ゲーム200個（各7状態、2〜4行動）を7回更新。全状態で値が下がらず、最終値は同じ行列LPを使う別の後退解析による最適値から4×10⁻⁷未満。資源ゲームでは継続方策を間違えた対照も検査した。</li>
+</ul>
+
+<h2>実装済みの部分と、残る主課題</h2>
+<p><strong>保証された継続値がある有限モデルについて、混合を壊さず方策を改善するクラス共通の処理を実装・検証した。</strong>残る主課題は、通常のblind対戦の予算内で、実行可能な同一継続方策の値・誤差範囲を作ること。非定常な探索平均をそのまま証明済み区間として渡すことはできない。</p>
+<p>この結論は、従来の全ての強化実験が失敗した理由を一括して説明するものではない。今回は、出力時の分布の消失を構造的な原因として確定し、継続値・情報制約・固定閾値を別々の問題として切り分けた。公開botの変更・再公開、通常対戦の平均勝率向上の判定は行っていない。</p>
+<details><summary>データ・再現</summary><p><a href="summary.json">結果JSON</a> · <a href="certificates.jsonl">9局面の境界</a> · <a href="deployed-searches.jsonl">公開版36探索</a> · <a href="inputs.jsonl">汎用選択器入力</a> · <a href="outputs.jsonl">選択器出力</a> · <a href="evidence.tar.gz">コードと証拠一式</a></p><p><code>python3 tools/policy-class-study.py</code> で数値と対応関係を検査できる。新規の核となるコードは <code>crates/bot/src/root_policy/interval.rs</code>、全体方策の検査は <code>crates/bot/tests/interval_root_games.rs</code>。</p></details>
+<p class="note">プレビュー一覧の登録名：nc2000-policy-class</p>
+<script>
+const k=document.getElementById('k'),p=document.getElementById('p');
+function show(){const n=Number(k.value),x=Number(p.value),v=Math.min(x,(1-x)/n),best=1/(n+1);document.getElementById('kout').value=n;document.getElementById('pout').value=(x*100).toFixed(2)+'%';document.getElementById('value').textContent=`保証値 ${(v*100).toFixed(3)}% ／ 最適値 ${(best*100).toFixed(3)}%（最適な攻撃確率 ${(best*100).toFixed(3)}%）`;const px=x=>45+580*x,py=y=>240-400*y;document.getElementById('curve').setAttribute('d',`M45 240L${px(best)} ${py(best)}L625 240`);const dot=document.getElementById('dot');dot.setAttribute('cx',px(x));dot.setAttribute('cy',py(v));}
+k.addEventListener('input',()=>{p.value=1/(Number(k.value)+1);show()});p.addEventListener('input',show);document.getElementById('optimal').onclick=()=>{p.value=1/(Number(k.value)+1);show()};document.getElementById('modal').onclick=()=>{p.value=0;show()};document.getElementById('uniform').onclick=()=>{p.value=.5;show()};show();
+</script></html>'''
+(out/'index.html').write_text(page.replace('@@ROWS@@',rows))
