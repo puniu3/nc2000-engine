@@ -1,0 +1,115 @@
+{
+  "id": "sb-20261016171610-52c554a9",
+  "profile": "bot-compute",
+  "region": "ap-south-2",
+  "created": "2026-10-16T17:16:10.399401+00:00",
+  "status": "FAILED",
+  "events": [
+    {
+      "time": "2026-10-16T17:16:12.117381+00:00",
+      "phase": "preflight_ok",
+      "allowance_yen": 176.4
+    },
+    {
+      "time": "2026-10-16T17:16:15.454849+00:00",
+      "phase": "submitted",
+      "job": "projects/focus-cairn-458511-f1/locations/asia-northeast1/jobs/sb-20261016171610-52c554a9"
+    },
+    {
+      "time": "2026-10-16T17:16:15.826426+00:00",
+      "phase": "job_state",
+      "state": "QUEUED"
+    },
+    {
+      "time": "2026-10-16T17:16:26.012611+00:00",
+      "phase": "job_state",
+      "state": "SCHEDULED"
+    },
+    {
+      "time": "2026-10-16T17:17:59.075063+00:00",
+      "phase": "job_state",
+      "state": "RUNNING"
+    },
+    {
+      "time": "2026-10-16T18:17:48.086874+00:00",
+      "phase": "job_state",
+      "state": "FAILED"
+    },
+    {
+      "time": "2026-10-16T18:17:50.284877+00:00",
+      "phase": "results_collected",
+      "returncode": 124,
+      "bytes": 2961
+    },
+    {
+      "time": "2026-10-16T18:17:50.285138+00:00",
+      "phase": "cleanup_started"
+    },
+    {
+      "time": "2026-10-16T18:18:51.546379+00:00",
+      "phase": "cleanup_verified"
+    }
+  ],
+  "resources": {},
+  "backend": "gcp",
+  "project": "focus-cairn-458511-f1",
+  "location": "asia-northeast1",
+  "bucket": "focus-cairn-458511-f1-spot-batch-asia-northeast1",
+  "service_account": "spot-batch-worker@focus-cairn-458511-f1.iam.gserviceaccount.com",
+  "network": "projects/focus-cairn-458511-f1/global/networks/spot-batch",
+  "subnet": "projects/focus-cairn-458511-f1/regions/asia-northeast1/subnetworks/spot-batch",
+  "machine": "e2-standard-8",
+  "provisioning": "STANDARD",
+  "spec": {
+    "tasks": [
+      {
+        "id": "command",
+        "argv": [
+          "python3",
+          "command_worker.py"
+        ]
+      }
+    ],
+    "concurrency": [
+      1
+    ],
+    "repeats": 1,
+    "task_timeout_seconds": 3600,
+    "bootstrap": "bootstrap.sh",
+    "outputs": "results",
+    "binary": "/usr/bin/true",
+    "input_sha256": {},
+    "resources": {
+      "provider": "gcp-batch",
+      "instance_type": "e2-standard-8",
+      "volume_gib": 30,
+      "ttl_seconds": 3600,
+      "budget_yen": 200.0,
+      "yen_per_usd": 160,
+      "output_limit_bytes": 209715200
+    }
+  },
+  "minutes": 60,
+  "allowance_yen": 176.4,
+  "allowance_hourly_usd": 0.655,
+  "snapshot": "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/fixed-budget-v1/cloud/continuation7-run/snapshot",
+  "input_sha256": "67e9513862915d074de4d95acf6f8114ccdef4ed9b42428a2a0724572f7bb2f2",
+  "submit_intent": true,
+  "submitted_at": "2026-10-16T17:16:15.062883+00:00",
+  "request_id": "334d0d48-e9b3-43c4-a67e-b23bae6c7cf4",
+  "job_uid": "sb-20261016171610-6ef7baa8-8d64-407800",
+  "results_verified": true,
+  "returncode": 124,
+  "last_inventory": {
+    "instances": [],
+    "disks": [],
+    "instanceTemplates": [],
+    "instanceGroupManagers": []
+  },
+  "billable_compute_clear": true,
+  "cleanup_complete": true,
+  "cleanup_pending": false,
+  "billable_resources_clear": true,
+  "cleared_at": "2026-10-16T18:18:51.546367+00:00",
+  "cleanup_errors": []
+}

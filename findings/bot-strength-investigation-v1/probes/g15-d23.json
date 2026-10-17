@@ -1,0 +1,396 @@
+{
+  "id": "g15-d23",
+  "side": 0,
+  "snapshot": {
+    "turn": 20,
+    "key": "138783839858083067715604360417671669781",
+    "sides": [
+      [
+        {
+          "species": "tyranitar",
+          "active": true,
+          "hp": 154,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 15
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 6
+            },
+            {
+              "move": "fireblast",
+              "pp": 7
+            },
+            {
+              "move": "crunch",
+              "pp": 24
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 22
+            },
+            {
+              "move": "curse",
+              "pp": 13
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "exeggutor",
+          "active": false,
+          "hp": 158,
+          "maxhp": 201,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "psychic",
+              "pp": 13
+            },
+            {
+              "move": "sleeppowder",
+              "pp": 24
+            },
+            {
+              "move": "leechseed",
+              "pp": 16
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "machamp",
+          "active": true,
+          "hp": 36,
+          "maxhp": 192,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "crosschop",
+              "pp": 6
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 21
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "bellydrum",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "tyranitar",
+          "active": false,
+          "hp": 0,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 14
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 5
+            },
+            {
+              "move": "fireblast",
+              "pp": 7
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "rows": [
+    {
+      "seed": 2026104901,
+      "n": 27000,
+      "choice": "move rockslide",
+      "actions": [
+        "move rockslide",
+        "move dynamicpunch",
+        "move fireblast",
+        "move crunch",
+        "switch 3"
+      ],
+      "visits": [
+        15759,
+        2540,
+        7457,
+        863,
+        381
+      ],
+      "means": [
+        0.9952408147725109,
+        0.9799212598425197,
+        0.9906128469894059,
+        0.9617612977983777,
+        0.9396325459317585
+      ],
+      "nodes": 2499,
+      "ms": 193.07625000000002
+    },
+    {
+      "seed": 2026104901,
+      "n": 81000,
+      "choice": "move rockslide",
+      "actions": [
+        "move rockslide",
+        "move dynamicpunch",
+        "move fireblast",
+        "move crunch",
+        "switch 3"
+      ],
+      "visits": [
+        50639,
+        4461,
+        23288,
+        1850,
+        762
+      ],
+      "means": [
+        0.9956555224234286,
+        0.9813943062093701,
+        0.9927859841978701,
+        0.9702702702702702,
+        0.952755905511811
+      ],
+      "nodes": 5230,
+      "ms": 567.056208
+    },
+    {
+      "seed": 2026104902,
+      "n": 27000,
+      "choice": "move rockslide",
+      "actions": [
+        "move rockslide",
+        "move dynamicpunch",
+        "move fireblast",
+        "move crunch",
+        "switch 3"
+      ],
+      "visits": [
+        12382,
+        1745,
+        11157,
+        1106,
+        610
+      ],
+      "means": [
+        0.992812146664513,
+        0.9736389684813753,
+        0.9921125750649816,
+        0.9656419529837251,
+        0.9524590163934427
+      ],
+      "nodes": 2535,
+      "ms": 197.374291
+    },
+    {
+      "seed": 2026104902,
+      "n": 81000,
+      "choice": "move rockslide",
+      "actions": [
+        "move rockslide",
+        "move dynamicpunch",
+        "move fireblast",
+        "move crunch",
+        "switch 3"
+      ],
+      "visits": [
+        46714,
+        2283,
+        28400,
+        2723,
+        880
+      ],
+      "means": [
+        0.995333304790855,
+        0.9732807709154621,
+        0.993556338028169,
+        0.9757620271759089,
+        0.9556818181818182
+      ],
+      "nodes": 5192,
+      "ms": 572.148916
+    },
+    {
+      "seed": 2026104903,
+      "n": 27000,
+      "choice": "move rockslide",
+      "actions": [
+        "move rockslide",
+        "move dynamicpunch",
+        "move fireblast",
+        "move crunch",
+        "switch 3"
+      ],
+      "visits": [
+        13099,
+        3063,
+        10229,
+        163,
+        446
+      ],
+      "means": [
+        0.9934346133292618,
+        0.9813907933398629,
+        0.9919835761071464,
+        0.901840490797546,
+        0.9439461883408071
+      ],
+      "nodes": 2436,
+      "ms": 197.115208
+    },
+    {
+      "seed": 2026104903,
+      "n": 81000,
+      "choice": "move rockslide",
+      "actions": [
+        "move rockslide",
+        "move dynamicpunch",
+        "move fireblast",
+        "move crunch",
+        "switch 3"
+      ],
+      "visits": [
+        49003,
+        3919,
+        24544,
+        2769,
+        765
+      ],
+      "means": [
+        0.9956941411750301,
+        0.9800969635110998,
+        0.9932366362451108,
+        0.9761646803900325,
+        0.9529411764705882
+      ],
+      "nodes": 5179,
+      "ms": 580.0745000000001
+    },
+    {
+      "seed": 2026104904,
+      "n": 27000,
+      "choice": "move rockslide",
+      "actions": [
+        "move rockslide",
+        "move dynamicpunch",
+        "move fireblast",
+        "move crunch",
+        "switch 3"
+      ],
+      "visits": [
+        12925,
+        1601,
+        10943,
+        865,
+        666
+      ],
+      "means": [
+        0.99357833655706,
+        0.9725171767645222,
+        0.9925066252398794,
+        0.9606936416184971,
+        0.954954954954955
+      ],
+      "nodes": 2528,
+      "ms": 195.00187499999998
+    },
+    {
+      "seed": 2026104904,
+      "n": 81000,
+      "choice": "move rockslide",
+      "actions": [
+        "move rockslide",
+        "move dynamicpunch",
+        "move fireblast",
+        "move crunch",
+        "switch 3"
+      ],
+      "visits": [
+        47860,
+        3551,
+        27556,
+        1135,
+        898
+      ],
+      "means": [
+        0.9950898453823652,
+        0.9785975781470009,
+        0.9931049499201626,
+        0.9612334801762115,
+        0.955456570155902
+      ],
+      "nodes": 5063,
+      "ms": 561.384291
+    }
+  ]
+}

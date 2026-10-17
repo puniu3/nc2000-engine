@@ -161,6 +161,13 @@ impl BlindAgent {
         self
     }
 
+    /// Set the next decision's iteration budget without resetting observations
+    /// or the search RNG. This only changes allocation, not the search policy.
+    pub fn set_iterations(&mut self, iterations: u32) {
+        assert!(iterations > 0, "search budget must be positive");
+        self.cfg.iterations = iterations;
+    }
+
     /// M18: consume a community belief prior for the hidden-team fallback
     /// imputation. Takes effect from the next game/preview onward, and is
     /// inert on the open-sheet path (`OpenAgent` pins its belief).

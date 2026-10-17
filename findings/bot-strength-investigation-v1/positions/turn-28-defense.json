@@ -1,0 +1,614 @@
+{
+  "name": "turn-28-defense",
+  "source": "data/perish-trap-audit-v1/turn-28-defense.json",
+  "scope": "historical reconstructed player information; solver on one prior-imputed world, not exact history or information-set value",
+  "rows": [
+    {
+      "seed": 2026101901,
+      "n": 27000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 27000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 14063,
+            "mean": 0.05821299443980819,
+            "frac": 0.5208518518518519
+          },
+          {
+            "input": "move rest",
+            "visits": 7239,
+            "mean": 0.053956082368804975,
+            "frac": 0.26811111111111113
+          },
+          {
+            "input": "move earthquake",
+            "visits": 4409,
+            "mean": 0.04973559835372433,
+            "frac": 0.1632962962962963
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 1289,
+            "mean": 0.033352222531691254,
+            "frac": 0.04774074074074074
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101901,
+      "n": 81000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 81000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 39172,
+            "mean": 0.04566967073419859,
+            "frac": 0.48360493827160494
+          },
+          {
+            "input": "move rest",
+            "visits": 28762,
+            "mean": 0.044617754364616125,
+            "frac": 0.3550864197530864
+          },
+          {
+            "input": "move earthquake",
+            "visits": 9255,
+            "mean": 0.03848585712980517,
+            "frac": 0.11425925925925925
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 3811,
+            "mean": 0.030676948073067496,
+            "frac": 0.04704938271604938
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101901,
+      "n": 243000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 243000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 125669,
+            "mean": 0.03422865168023831,
+            "frac": 0.5171563786008231
+          },
+          {
+            "input": "move rest",
+            "visits": 79985,
+            "mean": 0.0332155253210081,
+            "frac": 0.32915637860082303
+          },
+          {
+            "input": "move earthquake",
+            "visits": 20950,
+            "mean": 0.028463539764029537,
+            "frac": 0.08621399176954732
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 16396,
+            "mean": 0.027195198525417213,
+            "frac": 0.06747325102880658
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101902,
+      "n": 27000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 27000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 13569,
+            "mean": 0.05706114876503213,
+            "frac": 0.5025555555555555
+          },
+          {
+            "input": "move rest",
+            "visits": 8066,
+            "mean": 0.053848795162457344,
+            "frac": 0.29874074074074075
+          },
+          {
+            "input": "move earthquake",
+            "visits": 3515,
+            "mean": 0.04647934632826715,
+            "frac": 0.13018518518518518
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 1850,
+            "mean": 0.03831666636736237,
+            "frac": 0.06851851851851852
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101902,
+      "n": 81000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 81000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 41910,
+            "mean": 0.04505665902183921,
+            "frac": 0.5174074074074074
+          },
+          {
+            "input": "move rest",
+            "visits": 27420,
+            "mean": 0.04361857401478077,
+            "frac": 0.3385185185185185
+          },
+          {
+            "input": "move earthquake",
+            "visits": 7079,
+            "mean": 0.03564284822052772,
+            "frac": 0.08739506172839506
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 4591,
+            "mean": 0.031775224558442144,
+            "frac": 0.056679012345679014
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101902,
+      "n": 243000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 243000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 131333,
+            "mean": 0.033046202200732774,
+            "frac": 0.5404650205761317
+          },
+          {
+            "input": "move rest",
+            "visits": 73825,
+            "mean": 0.03174884565456594,
+            "frac": 0.3038065843621399
+          },
+          {
+            "input": "move earthquake",
+            "visits": 25256,
+            "mean": 0.028068941502958307,
+            "frac": 0.10393415637860082
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 12586,
+            "mean": 0.02437543495004646,
+            "frac": 0.051794238683127575
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101903,
+      "n": 27000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 27000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 11489,
+            "mean": 0.05690235692379567,
+            "frac": 0.4255185185185185
+          },
+          {
+            "input": "move rest",
+            "visits": 9280,
+            "mean": 0.05548854557731352,
+            "frac": 0.3437037037037037
+          },
+          {
+            "input": "move earthquake",
+            "visits": 3372,
+            "mean": 0.046732632001537336,
+            "frac": 0.12488888888888888
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 2859,
+            "mean": 0.044848627041748745,
+            "frac": 0.1058888888888889
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101903,
+      "n": 81000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 81000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 41266,
+            "mean": 0.04883791276186711,
+            "frac": 0.5094567901234568
+          },
+          {
+            "input": "move rest",
+            "visits": 28491,
+            "mean": 0.04737328740743093,
+            "frac": 0.35174074074074074
+          },
+          {
+            "input": "move earthquake",
+            "visits": 6355,
+            "mean": 0.038480206176637485,
+            "frac": 0.07845679012345678
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 4888,
+            "mean": 0.0361210033004022,
+            "frac": 0.06034567901234568
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101903,
+      "n": 243000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 243000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 121297,
+            "mean": 0.035487612066083134,
+            "frac": 0.49916460905349797
+          },
+          {
+            "input": "move rest",
+            "visits": 88966,
+            "mean": 0.03479854456388736,
+            "frac": 0.3661152263374486
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 16513,
+            "mean": 0.028558580338662178,
+            "frac": 0.06795473251028807
+          },
+          {
+            "input": "move earthquake",
+            "visits": 16224,
+            "mean": 0.028462099546442077,
+            "frac": 0.06676543209876543
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101904,
+      "n": 27000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 27000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 15348,
+            "mean": 0.05964780792449689,
+            "frac": 0.5684444444444444
+          },
+          {
+            "input": "move rest",
+            "visits": 7890,
+            "mean": 0.05592170679400368,
+            "frac": 0.2922222222222222
+          },
+          {
+            "input": "move earthquake",
+            "visits": 2359,
+            "mean": 0.043659156252468814,
+            "frac": 0.08737037037037038
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 1403,
+            "mean": 0.035838635447602775,
+            "frac": 0.05196296296296296
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101904,
+      "n": 81000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 81000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 43518,
+            "mean": 0.04736259180468482,
+            "frac": 0.5372592592592592
+          },
+          {
+            "input": "move rest",
+            "visits": 28182,
+            "mean": 0.045797331202567855,
+            "frac": 0.3479259259259259
+          },
+          {
+            "input": "move earthquake",
+            "visits": 5811,
+            "mean": 0.03616395797488077,
+            "frac": 0.07174074074074074
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 3489,
+            "mean": 0.031041594773243343,
+            "frac": 0.04307407407407408
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101904,
+      "n": 243000,
+      "choice": "move bodyslam",
+      "policy": {
+        "iterations": 243000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move bodyslam",
+            "visits": 132515,
+            "mean": 0.033817822223398034,
+            "frac": 0.5453292181069959
+          },
+          {
+            "input": "move rest",
+            "visits": 79088,
+            "mean": 0.032678121257885155,
+            "frac": 0.3254650205761317
+          },
+          {
+            "input": "move earthquake",
+            "visits": 16881,
+            "mean": 0.026844280676261642,
+            "frac": 0.06946913580246913
+          },
+          {
+            "input": "move selfdestruct",
+            "visits": 14516,
+            "mean": 0.02599522141180317,
+            "frac": 0.05973662551440329
+          }
+        ]
+      }
+    }
+  ],
+  "snapshot": {
+    "turn": 28,
+    "key": "248111323550182379202978450661485268424",
+    "sides": [
+      [
+        {
+          "species": "misdreavus",
+          "active": true,
+          "hp": 48,
+          "maxhp": 166,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "meanlook",
+              "pp": 6
+            },
+            {
+              "move": "perishsong",
+              "pp": 6
+            },
+            {
+              "move": "destinybond",
+              "pp": 6
+            },
+            {
+              "move": "toxic",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "skarmory",
+          "active": false,
+          "hp": 187,
+          "maxhp": 187,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "drillpeck",
+              "pp": 29
+            },
+            {
+              "move": "rest",
+              "pp": 15
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "whirlwind",
+              "pp": 32
+            }
+          ]
+        },
+        {
+          "species": "blissey",
+          "active": false,
+          "hp": 190,
+          "maxhp": 361,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "toxic",
+              "pp": 12
+            },
+            {
+              "move": "softboiled",
+              "pp": 15
+            },
+            {
+              "move": "healbell",
+              "pp": 7
+            },
+            {
+              "move": "icebeam",
+              "pp": 16
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 170,
+          "maxhp": 266,
+          "status": "tox",
+          "trapped": true,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 21
+            },
+            {
+              "move": "earthquake",
+              "pp": 12
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            },
+            {
+              "move": "rest",
+              "pp": 15
+            }
+          ]
+        },
+        {
+          "species": "miltank",
+          "active": false,
+          "hp": 0,
+          "maxhp": 220,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "return",
+              "pp": 29
+            },
+            {
+              "move": "curse",
+              "pp": 14
+            },
+            {
+              "move": "doubleteam",
+              "pp": 24
+            },
+            {
+              "move": "milkdrink",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "zapdos",
+          "active": false,
+          "hp": 137,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 19
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "thunderwave",
+              "pp": 32
+            },
+            {
+              "move": "whirlwind",
+              "pp": 32
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "solver": {
+    "value": [
+      0.0,
+      1.0
+    ],
+    "stop": "NodeBudget",
+    "runs": 25449,
+    "ms": 1943.5179580000001
+  }
+}

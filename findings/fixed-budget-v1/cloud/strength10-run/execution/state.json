@@ -1,0 +1,102 @@
+{
+  "id": "sb-20261016161428-1fe09ad3",
+  "profile": "bot-compute",
+  "region": "ap-south-2",
+  "created": "2026-10-16T16:14:28.914319+00:00",
+  "status": "RUNNING",
+  "events": [
+    {
+      "time": "2026-10-16T16:14:30.837733+00:00",
+      "phase": "preflight_ok",
+      "allowance_yen": 99.6
+    },
+    {
+      "time": "2026-10-16T16:14:34.822355+00:00",
+      "phase": "submitted",
+      "job": "projects/focus-cairn-458511-f1/locations/asia-northeast3/jobs/sb-20261016161428-1fe09ad3"
+    },
+    {
+      "time": "2026-10-16T16:14:35.182392+00:00",
+      "phase": "job_state",
+      "state": "QUEUED"
+    },
+    {
+      "time": "2026-10-16T16:14:45.520870+00:00",
+      "phase": "job_state",
+      "state": "SCHEDULED"
+    },
+    {
+      "time": "2026-10-16T16:16:18.598784+00:00",
+      "phase": "job_state",
+      "state": "RUNNING"
+    },
+    {
+      "time": "2026-10-16T17:06:58.576069+00:00",
+      "phase": "cleanup_started"
+    },
+    {
+      "time": "2026-10-16T17:08:11.267957+00:00",
+      "phase": "cleanup_verified"
+    }
+  ],
+  "resources": {},
+  "backend": "gcp",
+  "project": "focus-cairn-458511-f1",
+  "location": "asia-northeast3",
+  "bucket": "focus-cairn-458511-f1-spot-batch-asia-northeast3",
+  "service_account": "spot-batch-worker@focus-cairn-458511-f1.iam.gserviceaccount.com",
+  "network": "projects/focus-cairn-458511-f1/global/networks/spot-batch",
+  "subnet": "projects/focus-cairn-458511-f1/regions/asia-northeast3/subnetworks/spot-batch",
+  "machine": "e2-standard-4",
+  "provisioning": "STANDARD",
+  "spec": {
+    "tasks": [
+      {
+        "id": "command",
+        "argv": [
+          "python3",
+          "command_worker.py"
+        ]
+      }
+    ],
+    "concurrency": [
+      1
+    ],
+    "repeats": 1,
+    "task_timeout_seconds": 3600,
+    "bootstrap": "bootstrap.sh",
+    "outputs": "results",
+    "binary": "/usr/bin/true",
+    "input_sha256": {},
+    "resources": {
+      "provider": "gcp-batch",
+      "instance_type": "e2-standard-4",
+      "volume_gib": 30,
+      "ttl_seconds": 3600,
+      "budget_yen": 200.0,
+      "yen_per_usd": 160,
+      "output_limit_bytes": 209715200
+    }
+  },
+  "minutes": 60,
+  "allowance_yen": 99.6,
+  "allowance_hourly_usd": 0.335,
+  "snapshot": "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/fixed-budget-v1/cloud/strength10-run/snapshot",
+  "input_sha256": "0d0a04ec5db5e474a6a18a3e279c517d8e61804f60f8b386f7fffb7853860b78",
+  "submit_intent": true,
+  "submitted_at": "2026-10-16T16:14:34.391981+00:00",
+  "request_id": "35aaa249-a371-4091-94f0-e78bb70079f1",
+  "job_uid": "sb-20261016161428-2d94f6d6-d3d7-482000",
+  "last_inventory": {
+    "instances": [],
+    "disks": [],
+    "instanceTemplates": [],
+    "instanceGroupManagers": []
+  },
+  "billable_compute_clear": true,
+  "cleanup_complete": true,
+  "cleanup_pending": false,
+  "billable_resources_clear": true,
+  "cleared_at": "2026-10-16T17:08:11.265700+00:00",
+  "cleanup_errors": []
+}

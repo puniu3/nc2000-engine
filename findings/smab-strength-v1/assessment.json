@@ -1,0 +1,69 @@
+{
+  "selected_confirmations": [
+    {
+      "source": "confirm-00-cost.json",
+      "a": "net:16",
+      "b": "mcts:200",
+      "score": 0.61328125,
+      "ci95": 0.055655471324691196,
+      "family_ci": [
+        0.5383662234534983,
+        0.6881962765465017
+      ],
+      "a_ms": 3.9513205548483716,
+      "b_ms": 3.884010900297619,
+      "a_p95_ms": 7.188792,
+      "b_p95_ms": 6.73775,
+      "time_ratio": 1.0173299345132103,
+      "turn_caps": 0,
+      "positive_at_close_cost": true,
+      "secondary_depth_check": false
+    },
+    {
+      "source": "confirm-01-tight.json",
+      "a": "eval:16",
+      "b": "mcts:130",
+      "score": 0.484375,
+      "ci95": 0.05536028092179589,
+      "family_ci": [
+        0.4098573143858958,
+        0.5588926856141042
+      ],
+      "a_ms": 2.079717489634376,
+      "b_ms": 2.1224621990619137,
+      "a_p95_ms": 3.41425,
+      "b_p95_ms": 3.143833,
+      "time_ratio": 0.9798607911856193,
+      "turn_caps": 0,
+      "positive_at_close_cost": false,
+      "secondary_depth_check": false
+    },
+    {
+      "source": "confirm-02-tight.json",
+      "a": "net:4x4",
+      "b": "mcts:2080",
+      "score": 0.44140625,
+      "ci95": 0.05502158045383014,
+      "family_ci": [
+        0.3673444720252532,
+        0.5154680279747468
+      ],
+      "a_ms": 40.08034495599791,
+      "b_ms": 43.05633163873889,
+      "a_p95_ms": 103.130042,
+      "b_p95_ms": 66.764417,
+      "time_ratio": 0.9308815551749557,
+      "turn_caps": 0,
+      "positive_at_close_cost": false,
+      "secondary_depth_check": true
+    }
+  ],
+  "total_screen_games": 704,
+  "total_confirmation_games": 1536,
+  "total_turn_caps": 0,
+  "family_interval_rule": "Bonferroni across all 6 fresh confirmation batches, including unmatched/cost-correction batches; z=2.638257. Intervals are normal approximations on pair means.",
+  "low_budget_positive": true,
+  "deep_positive": false,
+  "negative_controls_rejected": 3,
+  "interpretation": "Depth one does not invoke serialized subtree alpha-beta. A shallow value-network win is evidence for the matrix/value approach at low native budgets, not evidence that deep alpha-beta improves peak strength. Failed significance is not equivalence or universal hopelessness. All games grant both agents full information; hidden-information and browser deployment remain untested."
+}

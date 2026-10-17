@@ -1,0 +1,75 @@
+{
+  "status": "pass",
+  "artifacts": [
+    {
+      "file": "br-control-blind-3k.jsonl",
+      "sha256": "63d2ab5de90957021556c3d1cdd376aab0060a1939afc008dea1c0f5a1893d23"
+    },
+    {
+      "file": "br-control-null.jsonl",
+      "sha256": "4cbb6d3049bc3c4fb87626255646a673d1cbf2e943d3b90cce6d7a15ef64245f"
+    },
+    {
+      "file": "br-control-skuct-3k.jsonl",
+      "sha256": "fddc2064833edbdabecb56109ec0452fa64e739242c1d656b817ca72cb14be34"
+    },
+    {
+      "file": "br-exploit-blind-3k.jsonl",
+      "sha256": "1db3a86ce3076192bf8f9af7ea012a2aa0e3c57f0b4766f722d58068bf3036f2"
+    },
+    {
+      "file": "br-exploit-skuct-3k.jsonl",
+      "sha256": "435954196626dbc6911cc23169976ab6bf0503352db8306fb62e2af6a9bdbc25"
+    },
+    {
+      "file": "br-replay-blind-3k.jsonl",
+      "sha256": "d1c188f8cf14830f9b509e0e772881b1d8fef12954774d6ded91c9681b95dc66"
+    },
+    {
+      "file": "br-replay-skuct-3k.jsonl",
+      "sha256": "377bf363eee9bf717a88263cd0981bd3f3ffdf1356c10f4ab5fdde76a1e8b57e"
+    },
+    {
+      "file": "info-open-vs-blind-inpool-9k.jsonl",
+      "sha256": "5dab4497a51c6b3dad3ba202cebfd23978958d61f777e717cf47a80a8238df9e"
+    },
+    {
+      "file": "info-open-vs-blind-offpool-27k.jsonl",
+      "sha256": "98de13c189d10b49b323f12c29f77ea52ff824f73063fbdde16d9eaa3f957bf4"
+    },
+    {
+      "file": "info-open-vs-blind-offpool-9k.jsonl",
+      "sha256": "70c553f8f6f365e72616ec0267eea5b76e2fead59902cdbab2185d56000fa6c8"
+    },
+    {
+      "file": "info-skuct-vs-open-inpool-9k.jsonl",
+      "sha256": "a38b4944bed4805b3574cd8609c2c6e1bae5aa85152f8d988368784aaa9920bd"
+    },
+    {
+      "file": "scale-27k-vs-9k.jsonl",
+      "sha256": "a4d3f2d03b811cab3dc46f86a17b526529654014cfdb9ebc1754e18977824c95"
+    },
+    {
+      "file": "scale-3k-vs-1k.jsonl",
+      "sha256": "c7dfcd07ccf0ebe14f28f8687dbb701c1fa908f071230ece4aac905ffd7119b0"
+    },
+    {
+      "file": "scale-9k-vs-3k.jsonl",
+      "sha256": "1ca96c22f0ee858505d2f64f2109b51a7f8471bac02c47c1099200b461906381"
+    }
+  ],
+  "checks": [
+    "arena schema",
+    "complete game and pair counts",
+    "zero caps and invalids",
+    "score and CI recomputation",
+    "paired oracle increment recomputation"
+  ],
+  "tests_passed": [
+    "cargo test -p nc2000-bot oracle_control --lib",
+    "cargo test -p nc2000-bot --example arena"
+  ],
+  "replayed_games": 200,
+  "new_games": 408,
+  "resume_check": "pass; all five completed batches reused with the recorded runner-only correction"
+}

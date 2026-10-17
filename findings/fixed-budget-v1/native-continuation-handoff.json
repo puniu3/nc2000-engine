@@ -1,0 +1,22 @@
+{
+  "paused_pid": 21531,
+  "reason": "Preserve the old process in memory while the final 12 conditions run with recovered completed branches and 12 local workers.",
+  "jobs": [
+    466,
+    468,
+    470,
+    471,
+    472,
+    473,
+    474,
+    475,
+    476,
+    477,
+    478,
+    479
+  ],
+  "state": "superseded_paused_process_terminated",
+  "terminated_at": "2026-10-16T18:35:06.889582+00:00",
+  "termination_reason": "Eleven final conditions completed in the replacement worker; last condition is running with its first branch checkpoint. Old paused worker is no longer needed.",
+  "replacement_state": "all_12_assigned_conditions_complete"
+}

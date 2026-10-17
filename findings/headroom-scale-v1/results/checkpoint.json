@@ -1,0 +1,12 @@
+{
+  "type": "checkpoint",
+  "index": 6,
+  "games": 896,
+  "score": 0.5625,
+  "betting_interval": [
+    0.5061273504201373,
+    0.6187988951483179
+  ],
+  "alpha": 0.025,
+  "positive": true
+}

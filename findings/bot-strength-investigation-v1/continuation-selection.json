@@ -1,0 +1,98 @@
+[
+  {
+    "id": "g1-d0",
+    "actions": [
+      "team 1, 5, 4",
+      "team 4, 5, 1"
+    ],
+    "flips": [
+      [
+        "team 1, 5, 4",
+        "team 4, 5, 1"
+      ]
+    ],
+    "turn": 0
+  },
+  {
+    "id": "g14-d8",
+    "actions": [
+      "switch 3",
+      "switch 2"
+    ],
+    "flips": [
+      [
+        "switch 3",
+        "switch 2"
+      ]
+    ],
+    "turn": 6
+  },
+  {
+    "id": "g2-d7",
+    "actions": [
+      "switch 2",
+      "switch 3"
+    ],
+    "flips": [
+      [
+        "switch 2",
+        "switch 3"
+      ]
+    ],
+    "turn": 5
+  },
+  {
+    "id": "g3-d29",
+    "actions": [
+      "move return",
+      "move icebeam"
+    ],
+    "flips": [
+      [
+        "move return",
+        "move icebeam"
+      ],
+      [
+        "move icebeam",
+        "move return"
+      ],
+      [
+        "move return",
+        "move icebeam"
+      ]
+    ],
+    "turn": 27
+  },
+  {
+    "id": "g4-d0",
+    "actions": [
+      "team 3, 2, 5",
+      "team 2, 5, 3"
+    ],
+    "flips": [
+      [
+        "team 3, 2, 5",
+        "team 2, 5, 3"
+      ],
+      [
+        "team 3, 2, 5",
+        "team 2, 5, 3"
+      ]
+    ],
+    "turn": 0
+  },
+  {
+    "id": "g4-d13",
+    "actions": [
+      "switch 3",
+      "switch 2"
+    ],
+    "flips": [
+      [
+        "switch 3",
+        "switch 2"
+      ]
+    ],
+    "turn": 10
+  }
+]

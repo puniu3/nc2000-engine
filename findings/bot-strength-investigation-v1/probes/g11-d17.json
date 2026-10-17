@@ -1,0 +1,372 @@
+{
+  "id": "g11-d17",
+  "side": 0,
+  "snapshot": {
+    "turn": 13,
+    "key": "128565913232208931341440426146717994942",
+    "sides": [
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 39,
+          "maxhp": 292,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 23
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "curse",
+              "pp": 15
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "starmie",
+          "active": false,
+          "hp": 0,
+          "maxhp": 166,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "surf",
+              "pp": 24
+            },
+            {
+              "move": "psychic",
+              "pp": 16
+            },
+            {
+              "move": "thunderwave",
+              "pp": 32
+            },
+            {
+              "move": "recover",
+              "pp": 32
+            }
+          ]
+        },
+        {
+          "species": "zapdos",
+          "active": false,
+          "hp": 0,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 23
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 19
+            },
+            {
+              "move": "thunderwave",
+              "pp": 32
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "zapdos",
+          "active": true,
+          "hp": 180,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunder",
+              "pp": 15
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 23
+            },
+            {
+              "move": "swagger",
+              "pp": 24
+            },
+            {
+              "move": "substitute",
+              "pp": 13
+            }
+          ]
+        },
+        {
+          "species": "exeggutor",
+          "active": false,
+          "hp": 0,
+          "maxhp": 189,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "hiddenpower",
+              "pp": 23
+            },
+            {
+              "move": "psychic",
+              "pp": 15
+            },
+            {
+              "move": "leechseed",
+              "pp": 15
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 23
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "bellydrum",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "rows": [
+    {
+      "seed": 2026104401,
+      "n": 27000,
+      "choice": "move rest",
+      "actions": [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move rest"
+      ],
+      "visits": [
+        85,
+        94,
+        102,
+        26719
+      ],
+      "means": [
+        0.047058823529411764,
+        0.05319148936170213,
+        0.058823529411764705,
+        0.1784477327608401
+      ],
+      "nodes": 7779,
+      "ms": 324.714542
+    },
+    {
+      "seed": 2026104401,
+      "n": 81000,
+      "choice": "move rest",
+      "actions": [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move rest"
+      ],
+      "visits": [
+        154,
+        104,
+        113,
+        80629
+      ],
+      "means": [
+        0.07142857142857142,
+        0.04807692307692308,
+        0.05309734513274336,
+        0.17551836552829492
+      ],
+      "nodes": 22096,
+      "ms": 1020.9681669999999
+    },
+    {
+      "seed": 2026104402,
+      "n": 27000,
+      "choice": "move rest",
+      "actions": [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move rest"
+      ],
+      "visits": [
+        177,
+        70,
+        50,
+        26703
+      ],
+      "means": [
+        0.0847457627118644,
+        0.02857142857142857,
+        0.0,
+        0.1737891181722145
+      ],
+      "nodes": 7762,
+      "ms": 327.0475
+    },
+    {
+      "seed": 2026104402,
+      "n": 81000,
+      "choice": "move rest",
+      "actions": [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move rest"
+      ],
+      "visits": [
+        221,
+        79,
+        58,
+        80642
+      ],
+      "means": [
+        0.08597285067873303,
+        0.02531645569620253,
+        0.0,
+        0.172467059081607
+      ],
+      "nodes": 22488,
+      "ms": 1041.7009580000001
+    },
+    {
+      "seed": 2026104403,
+      "n": 27000,
+      "choice": "move rest",
+      "actions": [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move rest"
+      ],
+      "visits": [
+        205,
+        85,
+        161,
+        26549
+      ],
+      "means": [
+        0.0975609756097561,
+        0.047058823529411764,
+        0.08541357119335524,
+        0.17924916242769315
+      ],
+      "nodes": 7771,
+      "ms": 331.5735
+    },
+    {
+      "seed": 2026104403,
+      "n": 81000,
+      "choice": "move rest",
+      "actions": [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move rest"
+      ],
+      "visits": [
+        245,
+        122,
+        176,
+        80457
+      ],
+      "means": [
+        0.09387755102040816,
+        0.05737704918032787,
+        0.07813400546664882,
+        0.17533965715970348
+      ],
+      "nodes": 21928,
+      "ms": 1039.5152919999998
+    },
+    {
+      "seed": 2026104404,
+      "n": 27000,
+      "choice": "move rest",
+      "actions": [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move rest"
+      ],
+      "visits": [
+        134,
+        68,
+        194,
+        26604
+      ],
+      "means": [
+        0.07462686567164178,
+        0.029411764705882353,
+        0.09278350515463918,
+        0.17907628198491773
+      ],
+      "nodes": 7784,
+      "ms": 323.893708
+    },
+    {
+      "seed": 2026104404,
+      "n": 81000,
+      "choice": "move rest",
+      "actions": [
+        "move doubleedge",
+        "move earthquake",
+        "move curse",
+        "move rest"
+      ],
+      "visits": [
+        178,
+        86,
+        223,
+        80513
+      ],
+      "means": [
+        0.07865168539325842,
+        0.03488372093023256,
+        0.08968609865470852,
+        0.17553299619369273
+      ],
+      "nodes": 22109,
+      "ms": 1040.0741659999999
+    }
+  ]
+}

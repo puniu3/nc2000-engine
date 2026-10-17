@@ -1,0 +1,532 @@
+//! M17e step 2 — exact endgame solver.
+//!
+//! Perfect-information subgame value (side-0 win probability; tie = 0.5)
+//! by depth-first backward induction over `enumerate_step`'s exact chance
+//! distributions. The game is finite and acyclic: `state_key` includes the
+//! turn counter and every within-turn step strictly advances the queue, and
+//! the engine auto-ties past turn 1000 — so plain memoized DFS is exact,
+//! no cycle handling needed. The memo is shared across `solve` calls
+//! (endgame positions from one game overlap heavily).
+//!
+//! Simultaneous decision nodes are zero-sum matrix games, solved by a
+//! compact tableau simplex on the classic positive-shift LP; the returned
+//! value is certified by a best-response bracket (row guarantee vs column
+//! guarantee) whose worst width is reported in `ExactStats` — everything
+//! here is deterministic, so re-runs are bit-identical.
+
+use std::collections::HashMap;
+
+use nc2000_engine::battle::enumerate::enumerate_step;
+use nc2000_engine::battle::{Outcome, SearchChoice};
+use nc2000_engine::dex::Dex;
+use nc2000_engine::state::Battle;
+
+#[derive(Clone, Debug)]
+pub struct ExactConfig {
+    /// Max NEW decision states expanded per `solve` call before giving up.
+    pub state_budget: usize,
+    /// Per-step chance-leaf cap (passed to `enumerate_step`).
+    pub leaf_cap: usize,
+    /// Max chance leaves enumerated per `solve` call — the actual work
+    /// bound: state count alone lets one unsolvable attempt burn
+    /// states × matrix-cells × leaves engine runs before giving up.
+    pub work_budget: usize,
+    /// Iterative-deepening horizons, in full turns past the root.
+    pub horizons: &'static [u16],
+    /// Stop deepening once the root interval is at most this wide.
+    pub eps: f64,
+    /// Stop deepening when one horizon step narrows the interval by less
+    /// than this (stall positions never converge — spend nothing more).
+    pub stall_gain: f64,
+}
+
+impl Default for ExactConfig {
+    fn default() -> Self {
+        ExactConfig {
+            state_budget: 100_000,
+            leaf_cap: 100_000,
+            work_budget: 2_000_000,
+            horizons: &[1, 2, 4, 8, 12],
+            eps: 0.02,
+            stall_gain: 0.05,
+        }
+    }
+}
+
+/// A certified value bracket: the true (turn-1000-tie) game value lies in
+/// `[lo, hi]` — chance handled exactly, lines truncated `horizon` turns
+/// past the root contribute their full [0,1] uncertainty. `hi − lo` ≤ eps
+/// means solved-for-practical-purposes; width 0 means fully resolved.
+#[derive(Clone, Copy, Debug)]
+pub struct Certified {
+    pub lo: f64,
+    pub hi: f64,
+    pub horizon: u16,
+}
+
+impl Certified {
+    pub fn mid(&self) -> f64 {
+        (self.lo + self.hi) * 0.5
+    }
+    pub fn width(&self) -> f64 {
+        self.hi - self.lo
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ExactStats {
+    /// Decision states solved (memo size).
+    pub states: usize,
+    /// ACTUAL engine executions (probes and endpoint evaluations included)
+    /// — the quantity budgets and benchmarks must use.
+    pub chance_runs: usize,
+    /// Resolved chance leaves (≠ work: merging returns leaves cheaper than
+    /// one run each, probing costs runs that return no leaf).
+    pub leaves: usize,
+    /// Worst certified simplex bracket width seen.
+    pub worst_gap: f64,
+    /// Largest simultaneous matrix solved.
+    pub max_matrix: [usize; 2],
+}
+
+pub struct ExactSolver<'d> {
+    dex: &'d Dex,
+    pub cfg: ExactConfig,
+    /// Fully-resolved subgame values (interval width 0: no truncated line
+    /// contributes) — true values regardless of horizon, kept forever and
+    /// shared across positions. Keyed by the 128-bit dual-hash fingerprint
+    /// (certificate-grade identity).
+    exact_memo: HashMap<u128, f64>,
+    /// Interval memo for the current (root, horizon) pass only.
+    ival_memo: HashMap<u128, (f64, f64)>,
+    t_max: u16,
+    limit: usize,
+    work_limit: usize,
+    pub stats: ExactStats,
+}
+
+impl<'d> ExactSolver<'d> {
+    pub fn new(dex: &'d Dex, cfg: ExactConfig) -> Self {
+        ExactSolver {
+            dex,
+            cfg,
+            exact_memo: HashMap::new(),
+            ival_memo: HashMap::new(),
+            t_max: 0,
+            limit: 0,
+            work_limit: 0,
+            stats: ExactStats::default(),
+        }
+    }
+
+    /// Certified value bracket for `b` by iterative deepening over
+    /// `cfg.horizons`. Returns the tightest bracket obtained before the
+    /// budget ran out, `eps` was reached, or deepening stopped paying
+    /// (`stall_gain`); `None` if not even the first horizon finished.
+    pub fn solve(&mut self, b: &Battle) -> Option<Certified> {
+        self.limit = self.exact_memo.len() + self.cfg.state_budget;
+        self.work_limit = self.stats.chance_runs + self.cfg.work_budget;
+        let mut best: Option<Certified> = None;
+        let mut prev_width = f64::INFINITY;
+        for &h in self.cfg.horizons {
+            self.t_max = b.turn.saturating_add(h);
+            self.ival_memo.clear();
+            let Some((lo, hi)) = self.ival(b) else { break };
+            best = Some(Certified { lo, hi, horizon: h });
+            let w = hi - lo;
+            if w <= self.cfg.eps || prev_width - w < self.cfg.stall_gain {
+                break;
+            }
+            prev_width = w;
+        }
+        self.stats.states = self.exact_memo.len();
+        best
+    }
+
+    /// The root's equilibrium MIXTURE, not just its value.
+    ///
+    /// `solve` answers "what is this position worth"; this answers "what does
+    /// equilibrium play actually do here", which is the only way to get a
+    /// ground-truth *action rate* to hold a policy against. Built for the
+    /// switching question: measuring whether the bot switches too little needs
+    /// a number that is right by construction, and neither human replays (skill
+    /// is a proxy, outcome is a confound) nor a perturbed-bot duel (a strength
+    /// change cannot separate "switching is bad" from "this bot switches badly")
+    /// supplies one.
+    ///
+    /// Trust the mixture only when `gap` is ~0: a truncated horizon leaves the
+    /// payoff matrix bracketed, and a mixture read off the midpoint of a wide
+    /// bracket is not an equilibrium of anything. Use small positions.
+    pub fn solve_root(&mut self, b: &Battle) -> Option<RootEquilibrium> {
+        // Resolve the tree first so the root children are memoised, then read
+        // the root layer back out. Cheaper than duplicating the recursion and
+        // it inherits `solve`'s iterative deepening and budgets exactly.
+        let certified = self.solve(b)?;
+        if b.outcome().is_some() {
+            return None;
+        }
+        // Re-walk at the horizon that actually certified the value, not at
+        // whatever `t_max` was left over. `solve` breaks out of its deepening
+        // loop when a horizon exhausts the budget, so `t_max` can point past
+        // the deepest horizon that finished while `certified` came from a
+        // shallower one. Re-walking at the leftover `t_max` then re-enters the
+        // unfinished region and every root entry comes back as [0, 1] — which
+        // showed up as a tight `certified.width()` sitting next to an
+        // `entry_gap` near 1.0, a combination that cannot be true.
+        self.t_max = b.turn.saturating_add(certified.horizon);
+        self.ival_memo.clear();
+        self.limit = self.exact_memo.len() + self.cfg.state_budget;
+        self.work_limit = self.stats.chance_runs + self.cfg.work_budget;
+        let needs = b.needs_choice();
+        let mut probe = b.clone();
+        let a0: Vec<Option<SearchChoice>> = if needs[0] {
+            probe.legal_choices(self.dex, 0).into_iter().map(Some).collect()
+        } else {
+            vec![None]
+        };
+        let a1: Vec<Option<SearchChoice>> = if needs[1] {
+            probe.legal_choices(self.dex, 1).into_iter().map(Some).collect()
+        } else {
+            vec![None]
+        };
+        let (n0, n1) = (a0.len(), a1.len());
+        if n0 == 0 || n1 == 0 {
+            return None;
+        }
+        let mut mid = vec![0.0f64; n0 * n1];
+        let mut worst = 0.0f64;
+        for (i, &c0) in a0.iter().enumerate() {
+            for (j, &c1) in a1.iter().enumerate() {
+                let step = enumerate_step(self.dex, b, [c0, c1], self.cfg.leaf_cap)?;
+                let mut agg: HashMap<u128, (f64, usize)> = HashMap::new();
+                for (idx, l) in step.leaves.iter().enumerate() {
+                    let e = agg.entry(l.battle.state_key128()).or_insert((0.0, idx));
+                    e.0 += l.prob;
+                }
+                let (mut elo, mut ehi) = (0.0, 0.0);
+                for (p, idx) in agg.values() {
+                    let (lo, hi) = self.ival(&step.leaves[*idx].battle)?;
+                    elo += p * lo;
+                    ehi += p * hi;
+                }
+                worst = worst.max(ehi - elo);
+                mid[i * n1 + j] = (elo + ehi) * 0.5;
+            }
+        }
+        let sol = if n0 > 1 && n1 > 1 {
+            solve_matrix_full(&mid, n0, n1)
+        } else {
+            // A degenerate side has one action; its mixture is that action.
+            MatrixSolution {
+                value: mid.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+                gap: 0.0,
+                x: vec![1.0; n0],
+                y: vec![1.0; n1],
+            }
+        };
+        Some(RootEquilibrium {
+            value: sol.value,
+            entry_gap: worst,
+            certified,
+            actions: [
+                a0.iter().map(|c| c.map(|c| c.to_input(self.dex))).collect(),
+                a1.iter().map(|c| c.map(|c| c.to_input(self.dex))).collect(),
+            ],
+            mix: [sol.x, sol.y],
+        })
+    }
+
+    fn ival(&mut self, b: &Battle) -> Option<(f64, f64)> {
+        if let Some(o) = b.outcome() {
+            let v = match o {
+                Outcome::P1Win => 1.0,
+                Outcome::Tie => 0.5,
+                Outcome::P2Win => 0.0,
+            };
+            return Some((v, v));
+        }
+        let key = b.state_key128();
+        if let Some(&v) = self.exact_memo.get(&key) {
+            return Some((v, v));
+        }
+        if b.turn > self.t_max {
+            return Some((0.0, 1.0)); // truncated: full uncertainty
+        }
+        if let Some(&iv) = self.ival_memo.get(&key) {
+            return Some(iv);
+        }
+        if self.exact_memo.len() >= self.limit || self.stats.chance_runs >= self.work_limit {
+            return None;
+        }
+
+        let needs = b.needs_choice();
+        let mut probe = b.clone();
+        let acts = |probe: &mut Battle, dex, side: usize, need: bool| -> Vec<Option<SearchChoice>> {
+            if need {
+                probe.legal_choices(dex, side).into_iter().map(Some).collect()
+            } else {
+                vec![None]
+            }
+        };
+        let a0 = acts(&mut probe, self.dex, 0, needs[0]);
+        let a1 = acts(&mut probe, self.dex, 1, needs[1]);
+        let (n0, n1) = (a0.len(), a1.len());
+        if n0 == 0 || n1 == 0 {
+            return None; // defensive: a side owes a choice but has none
+        }
+
+        let mut mlo = vec![0.0f64; n0 * n1];
+        let mut mhi = vec![0.0f64; n0 * n1];
+        for (i, &c0) in a0.iter().enumerate() {
+            for (j, &c1) in a1.iter().enumerate() {
+                let step = enumerate_step(self.dex, b, [c0, c1], self.cfg.leaf_cap)?;
+                self.stats.chance_runs += step.runs;
+                self.stats.leaves += step.leaves.len();
+                // Merge identical successors before recursing.
+                let mut agg: HashMap<u128, (f64, usize)> = HashMap::new();
+                for (idx, l) in step.leaves.iter().enumerate() {
+                    let e = agg.entry(l.battle.state_key128()).or_insert((0.0, idx));
+                    e.0 += l.prob;
+                }
+                let (mut elo, mut ehi) = (0.0, 0.0);
+                for (p, idx) in agg.values() {
+                    let (lo, hi) = self.ival(&step.leaves[*idx].battle)?;
+                    elo += p * lo;
+                    ehi += p * hi;
+                }
+                mlo[i * n1 + j] = elo;
+                mhi[i * n1 + j] = ehi;
+            }
+        }
+
+        // The matrix-game value is monotone in every payoff entry, so
+        // solving the all-lo and all-hi matrices brackets the true value.
+        let mut game = |m: &[f64]| -> f64 {
+            if n0 == 1 && n1 == 1 {
+                m[0]
+            } else if n1 == 1 {
+                m.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+            } else if n0 == 1 {
+                m.iter().cloned().fold(f64::INFINITY, f64::min)
+            } else {
+                let (v, gap) = solve_matrix(m, n0, n1);
+                self.stats.worst_gap = self.stats.worst_gap.max(gap);
+                v
+            }
+        };
+        let (lo, hi) = (game(&mlo), game(&mhi));
+        if n0 > 1 && n1 > 1 && n0 * n1 > self.stats.max_matrix[0] * self.stats.max_matrix[1] {
+            self.stats.max_matrix = [n0, n1];
+        }
+        if hi - lo < 1e-12 {
+            self.exact_memo.insert(key, (lo + hi) * 0.5);
+        }
+        self.ival_memo.insert(key, (lo, hi));
+        Some((lo, hi))
+    }
+}
+
+/// The root equilibrium: value, both sides' mixtures, and the evidence needed
+/// to decide whether to believe the mixtures.
+pub struct RootEquilibrium {
+    pub value: f64,
+    /// Widest lo/hi spread over the root payoff entries. ~0 means the matrix
+    /// the mixtures were solved from is exact; anything appreciable means the
+    /// mixtures came off a guessed midpoint and are not equilibrium play.
+    pub entry_gap: f64,
+    /// The root value bracket `solve` certified, for cross-checking `value`.
+    pub certified: Certified,
+    /// PS-canonical action strings per side (`None` = the side owes no choice).
+    pub actions: [Vec<Option<String>>; 2],
+    /// Equilibrium mixture per side, aligned with `actions`.
+    pub mix: [Vec<f64>; 2],
+}
+
+impl RootEquilibrium {
+    /// Equilibrium probability mass this side puts on switching.
+    pub fn switch_mass(&self, side: usize) -> f64 {
+        self.actions[side]
+            .iter()
+            .zip(&self.mix[side])
+            .filter(|(a, _)| a.as_deref().is_some_and(|s| s.starts_with("switch")))
+            .map(|(_, p)| *p)
+            .sum()
+    }
+}
+
+/// Full matrix-game solution: certified value bracket plus both players'
+/// strategies (the e-5 frontier scheduler steers by LP supports).
+pub struct MatrixSolution {
+    pub value: f64,
+    pub gap: f64,
+    pub x: Vec<f64>,
+    pub y: Vec<f64>,
+}
+
+/// Value of the zero-sum matrix game `a` (row maximizes, row-major n0×n1),
+/// with a certified bracket: returns ((lower+upper)/2, upper−lower) where
+/// lower = row strategy's guarantee, upper = column strategy's guarantee.
+pub fn solve_matrix(a: &[f64], n0: usize, n1: usize) -> (f64, f64) {
+    let s = solve_matrix_full(a, n0, n1);
+    (s.value, s.gap)
+}
+
+pub fn solve_matrix_full(a: &[f64], n0: usize, n1: usize) -> MatrixSolution {
+    // Positive shift so the game value is > 0.
+    let min = a.iter().cloned().fold(f64::INFINITY, f64::min);
+    let shift = min - 1.0;
+
+    // LP (column player, scaled): maximize Σw_j s.t. Σ_j A'[i][j] w_j ≤ 1.
+    // Tableau: n1 vars + n0 slacks + rhs; objective row last (stores
+    // reduced costs; slack entries at optimum = dual values = row strategy).
+    let cols = n1 + n0 + 1;
+    let mut tab = vec![0.0f64; (n0 + 1) * cols];
+    for i in 0..n0 {
+        for j in 0..n1 {
+            tab[i * cols + j] = a[i * n1 + j] - shift;
+        }
+        tab[i * cols + n1 + i] = 1.0;
+        tab[i * cols + cols - 1] = 1.0;
+    }
+    for j in 0..n1 {
+        tab[n0 * cols + j] = -1.0;
+    }
+    let mut basis: Vec<usize> = (n1..n1 + n0).collect();
+
+    const EPS: f64 = 1e-12;
+    // Pivot cap + graceful exit on fp-degenerate "unbounded" directions:
+    // whatever state the tableau is left in, the best-response bracket
+    // below certifies (a bad exit only widens the gap, never unsounds it).
+    let mut pivots = 0;
+    loop {
+        pivots += 1;
+        if pivots > 200 {
+            break;
+        }
+        // Bland's rule: entering = lowest-index negative reduced cost.
+        let Some(e) = (0..n1 + n0).find(|&j| tab[n0 * cols + j] < -EPS) else { break };
+        // Ratio test; Bland tie-break on the leaving basis variable index.
+        let mut leave: Option<(usize, f64)> = None;
+        for i in 0..n0 {
+            let coef = tab[i * cols + e];
+            if coef > EPS {
+                let ratio = tab[i * cols + cols - 1] / coef;
+                let better = match leave {
+                    None => true,
+                    Some((li, lr)) => {
+                        ratio < lr - EPS || (ratio < lr + EPS && basis[i] < basis[li])
+                    }
+                };
+                if better {
+                    leave = Some((i, ratio));
+                }
+            }
+        }
+        let Some((r, _)) = leave else { break };
+        // Pivot on (r, e).
+        let p = tab[r * cols + e];
+        for j in 0..cols {
+            tab[r * cols + j] /= p;
+        }
+        for i in 0..n0 + 1 {
+            if i != r {
+                let f = tab[i * cols + e];
+                if f != 0.0 {
+                    for j in 0..cols {
+                        tab[i * cols + j] -= f * tab[r * cols + j];
+                    }
+                }
+            }
+        }
+        basis[r] = e;
+    }
+
+    let inv_v: f64 = tab[n0 * cols + cols - 1]; // Σw at optimum = 1/v'
+    let vp = 1.0 / inv_v.max(EPS);
+
+    // Recover strategies: column player w from the basis; row player from
+    // the slack reduced costs (dual values).
+    let mut y = vec![0.0f64; n1];
+    for (i, &bv) in basis.iter().enumerate() {
+        if bv < n1 {
+            y[bv] = tab[i * cols + cols - 1] * vp;
+        }
+    }
+    let mut x = vec![0.0f64; n0];
+    for i in 0..n0 {
+        x[i] = tab[n0 * cols + n1 + i] * vp;
+    }
+    for weights in [&mut x, &mut y] {
+        for weight in weights.iter_mut() {
+            *weight = if weight.is_finite() { weight.max(0.0) } else { 0.0 };
+        }
+        let sum = weights.iter().sum::<f64>();
+        if sum.is_finite() && sum > 0.0 {
+            weights.iter_mut().for_each(|weight| *weight /= sum);
+        } else {
+            let uniform = 1.0 / weights.len() as f64;
+            weights.fill(uniform);
+        }
+    }
+
+    // Certified bracket in the ORIGINAL payoffs.
+    let lower = (0..n1)
+        .map(|j| (0..n0).map(|i| x[i] * a[i * n1 + j]).sum::<f64>())
+        .fold(f64::INFINITY, f64::min);
+    let upper = (0..n0)
+        .map(|i| (0..n1).map(|j| y[j] * a[i * n1 + j]).sum::<f64>())
+        .fold(f64::NEG_INFINITY, f64::max);
+    MatrixSolution { value: (lower + upper) * 0.5, gap: (upper - lower).max(0.0), x, y }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::solve_matrix;
+
+    #[test]
+    fn degenerate_matrix_has_legal_witnesses_before_bounding_value() {
+        let matrix = [0.9999999999999988, 0.9999508422226046,
+                      0.9999999999999998, 1.0];
+        let solution = super::solve_matrix_full(&matrix, 2, 2);
+        for policy in [&solution.x, &solution.y] {
+            assert!(policy.iter().all(|p| p.is_finite() && *p >= 0.0));
+            assert!((policy.iter().sum::<f64>() - 1.0).abs() < 1e-15);
+        }
+        let exact = matrix[2];
+        assert!(solution.value - solution.gap * 0.5 <= exact + 1e-15);
+        assert!(solution.value + solution.gap * 0.5 >= exact - 1e-15);
+    }
+
+    #[test]
+    fn matching_pennies() {
+        let (v, gap) = solve_matrix(&[1.0, 0.0, 0.0, 1.0], 2, 2);
+        assert!((v - 0.5).abs() < 1e-9, "v={v}");
+        assert!(gap < 1e-9, "gap={gap}");
+    }
+
+    #[test]
+    fn dominant_row() {
+        // Row 0 dominates; column picks its best response 0.3.
+        let (v, gap) = solve_matrix(&[0.7, 0.3, 0.2, 0.1], 2, 2);
+        assert!((v - 0.3).abs() < 1e-9, "v={v}");
+        assert!(gap < 1e-9, "gap={gap}");
+    }
+
+    #[test]
+    fn rps_like() {
+        // Rock-paper-scissors in win-prob form: value 0.5.
+        let a = [0.5, 1.0, 0.0, 0.0, 0.5, 1.0, 1.0, 0.0, 0.5];
+        let (v, gap) = solve_matrix(&a, 3, 3);
+        assert!((v - 0.5).abs() < 1e-9, "v={v}");
+        assert!(gap < 1e-9, "gap={gap}");
+    }
+
+    #[test]
+    fn asymmetric_2x3() {
+        // Known value: max_x min(...) for [[0,1,2],[2,1,0]] is 1.0 at x=(.5,.5).
+        let a = [0.0, 1.0, 2.0, 2.0, 1.0, 0.0];
+        let (v, gap) = solve_matrix(&a, 2, 3);
+        assert!((v - 1.0).abs() < 1e-9, "v={v}");
+        assert!(gap < 1e-9, "gap={gap}");
+    }
+}

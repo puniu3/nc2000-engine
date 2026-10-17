@@ -1,0 +1,178 @@
+{
+  "id": "g10-d3",
+  "snapshot": {
+    "turn": 2,
+    "key": "264204543311294989391277229285000824933",
+    "sides": [
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "fnt",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 23
+            },
+            {
+              "move": "earthquake",
+              "pp": 15
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "machamp",
+          "active": false,
+          "hp": 196,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "crosschop",
+              "pp": 8
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        },
+        {
+          "species": "zapdos",
+          "active": false,
+          "hp": 215,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunder",
+              "pp": 16
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "swagger",
+              "pp": 24
+            },
+            {
+              "move": "substitute",
+              "pp": 16
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "fnt",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "zapdos",
+          "active": false,
+          "hp": 215,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunder",
+              "pp": 16
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "swagger",
+              "pp": 24
+            },
+            {
+              "move": "substitute",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "machamp",
+          "active": false,
+          "hp": 196,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "crosschop",
+              "pp": 8
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "value": [
+    0.0,
+    1.0
+  ],
+  "stop": "TimeBudget",
+  "runs": 15837,
+  "ms": 2000.112584,
+  "one_sided_heal": "Err(NotQuiescent)",
+  "two_sided_heal": "Err(NotQuiescent)"
+}

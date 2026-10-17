@@ -1,0 +1,7 @@
+{
+  "recorded_at": "2026-10-16T18:17:58.159625+00:00",
+  "timing": "Before inspecting aggregate unknown-continuation outcomes; full fixed-grid computations continue.",
+  "purpose": "Planning certificate using the original bootstrap bank, multiplicity corrections, 3-point threshold and minimum-budget rule. No change to the primary complete-data analysis.",
+  "eligibility": "Every pending row must have identical choices at 243k,729k,2187k and a different choice at 81k.",
+  "method": "Set each unresolved 81k-versus-higher difference to -1 and +1 in separate mathematical bounds, never as synthetic observations. Nonnegative bootstrap weights and quantile monotonicity bound all possible completions. Equal endpoint decisions certify the unchanged eventual decision."
+}

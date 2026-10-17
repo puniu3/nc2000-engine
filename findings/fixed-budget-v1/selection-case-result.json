@@ -1,0 +1,33 @@
+{
+  "root": 14,
+  "search_seed": 135721,
+  "trials": 16,
+  "scores": {
+    "81k": {
+      "choice": "team 2, 6, 4",
+      "species": [
+        "Skarmory",
+        "Suicune",
+        "Snorlax"
+      ],
+      "wins": 11,
+      "ties": 0,
+      "losses": 5,
+      "mean": 0.6875
+    },
+    "243k_and_above": {
+      "choice": "team 1, 6, 4",
+      "species": [
+        "Umbreon",
+        "Suicune",
+        "Snorlax"
+      ],
+      "wins": 14,
+      "ties": 0,
+      "losses": 2,
+      "mean": 0.875
+    }
+  },
+  "high_minus_low": 0.1875,
+  "scope": "Prespecified illustrative selection change, not a separate confirmatory strength claim."
+}

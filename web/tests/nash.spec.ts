@@ -194,7 +194,7 @@ async function choosePreview(page: Page) {
   await expect(page.locator(".battle-screen")).toBeVisible({ timeout: 90_000 });
 }
 
-test("the nash door opens only on ?nash, and carries no controls", async ({
+test("the nash door fixes the draw while allowing a strength choice", async ({
   page,
 }) => {
   const errors = guardConsole(page);
@@ -206,7 +206,7 @@ test("the nash door opens only on ?nash, and carries no controls", async ({
     "solved mixture",
   );
   // Start / banner / your party / the mixture row. No Blind setup: nash
-  // ships one configuration, so there is nothing on this screen to change.
+  // fixes the draw and prior; strength is chosen on every play door.
   await expect(page.locator('[data-party="nash"]')).toHaveCount(1);
   await expect(page.locator('[data-party="human"]')).toHaveCount(1);
   await expect(page.locator('[data-party="settings"]')).toHaveCount(0);
@@ -399,6 +399,6 @@ test("the start screen links to the party evaluator", async ({ page }) => {
   const link = page.locator(".start-link");
   await expect(link).toHaveAttribute("href", /\?evaluate$/);
   await link.click();
-  await expect(page.getByLabel("考える回数", { exact: true })).toHaveValue("27000");
+  await expect(page.getByLabel("考える回数", { exact: true })).toHaveValue("81000");
 });
 

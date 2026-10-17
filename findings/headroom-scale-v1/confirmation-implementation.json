@@ -1,0 +1,11 @@
+{
+  "schema": "nc2000-headroom-confirmation-implementation-v1",
+  "registered_at": "2026-10-16T06:44:52.841810+00:00",
+  "amendment_sha256": "a4d45af34557d66edfaa1846bc9cf88e6b1f6bb11ad4f7c62e865a1d92271b57",
+  "summarizer_sha256": "96a379ca2b4f06c13aa07c1c262f7a4d11b4ace1af412f10d6a250e585d751eb",
+  "tests_sha256": "2b4c432d72b77fe220306db1b30f618e0a435c5773c279b4199ba072e4a48c14",
+  "evaluator_sha256": "85cb9af9254dd49eb9b549a322d21e8bf20930d266f1e464103f6a02281e5f93",
+  "controller_sha256": "a5ca8a4cffb08fb4b317fd15f3a26abe3f3df30d03eb3923addd2c2d44e07446",
+  "tests_passed": 5,
+  "block_01_result_absent_when_bound": true
+}

@@ -77,6 +77,30 @@ function serveRepoData(): Plugin {
   };
 }
 
+// A production bundle must contain a complete artifact from these exact
+// policy inputs. Source changes require rebaking, never silently stale picks.
+function verifyCompiledPreview(): Plugin {
+  return {
+    name: "verify-compiled-preview",
+    apply: "build",
+    buildStart() {
+      const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
+      const catalog = JSON.parse(fs.readFileSync(path.join(dataDir, "team-pool-v2/team-pool.json"), "utf8"));
+      const profiles = JSON.parse(fs.readFileSync(path.join(dataDir, "search-profiles.json"), "utf8"));
+      const publicRosters = new Set(catalog.teams.map((t: { sets: { species: string; level: number }[] }) => JSON.stringify(t.sets.map(p => [p.species, p.level]))));
+      if (artifact.matchups !== catalog.teams.length * publicRosters.size)
+        throw new Error("Compiled previews do not cover the complete catalog matchup grid.");
+      if (artifact.format !== "nc2000-compiled-preview-v1" || !artifact.inputs || !artifact.matchups || Object.keys(artifact.policies ?? {}).length !== artifact.matchups)
+        throw new Error("Compiled previews are incomplete. Run compile_preview and tools/compile-preview-artifact.py.");
+      if (artifact.c !== profiles.blind.c) throw new Error("Compiled previews use a different search coefficient. Rebuild the preview artifact.");
+      for (const [relative, expected] of Object.entries(artifact.inputs)) {
+        const actual = createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relative))).digest("hex");
+        if (actual !== expected) throw new Error(`Stale compiled previews: ${relative}. Rebuild the preview artifact.`);
+      }
+    },
+  };
+}
+
 function evaluatorBuildId(): string {
   const hash = createHash("sha256");
   const add = (relative: string) => {
@@ -108,7 +132,7 @@ function evaluatorBuildId(): string {
 export default defineConfig({
   base,
   define: { __EVALUATOR_BUILD__: JSON.stringify(evaluatorBuildId()) },
-  plugins: [serveRepoData()],
+  plugins: [verifyCompiledPreview(), serveRepoData()],
   esbuild: {
     jsx: "automatic",
     jsxImportSource: "preact",

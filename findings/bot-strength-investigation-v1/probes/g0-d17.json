@@ -1,0 +1,372 @@
+{
+  "id": "g0-d17",
+  "side": 0,
+  "snapshot": {
+    "turn": 14,
+    "key": "258281558033705175654693046642812345795",
+    "sides": [
+      [
+        {
+          "species": "steelix",
+          "active": true,
+          "hp": 71,
+          "maxhp": 181,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "earthquake",
+              "pp": 11
+            },
+            {
+              "move": "sandstorm",
+              "pp": 15
+            },
+            {
+              "move": "roar",
+              "pp": 29
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "tyranitar",
+          "active": false,
+          "hp": 0,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 8
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "venusaur",
+          "active": true,
+          "hp": 19,
+          "maxhp": 186,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "razorleaf",
+              "pp": 40
+            },
+            {
+              "move": "leechseed",
+              "pp": 16
+            },
+            {
+              "move": "sleeppowder",
+              "pp": 24
+            },
+            {
+              "move": "synthesis",
+              "pp": 7
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 24
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            },
+            {
+              "move": "curse",
+              "pp": 14
+            }
+          ]
+        },
+        {
+          "species": "tyranitar",
+          "active": false,
+          "hp": 226,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 14
+            },
+            {
+              "move": "crunch",
+              "pp": 24
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 6
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "rows": [
+    {
+      "seed": 2026101701,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move sandstorm",
+        "move roar",
+        "move explosion"
+      ],
+      "visits": [
+        10339,
+        7781,
+        4440,
+        4440
+      ],
+      "means": [
+        0.007060644162878421,
+        0.005140727412928929,
+        0.00045045045045045046,
+        0.00045045045045045046
+      ],
+      "nodes": 7916,
+      "ms": 332.98704200000003
+    },
+    {
+      "seed": 2026101701,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move sandstorm",
+        "move roar",
+        "move explosion"
+      ],
+      "visits": [
+        40810,
+        19629,
+        11019,
+        9542
+      ],
+      "means": [
+        0.007424650820877236,
+        0.0044831626674817875,
+        0.0012705327162174426,
+        0.00031439949696080485
+      ],
+      "nodes": 19220,
+      "ms": 1056.8535
+    },
+    {
+      "seed": 2026101702,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move sandstorm",
+        "move roar",
+        "move explosion"
+      ],
+      "visits": [
+        11380,
+        6699,
+        5119,
+        3802
+      ],
+      "means": [
+        0.009050966608084358,
+        0.005373936408419167,
+        0.003125610470795077,
+        0.0002630194634402946
+      ],
+      "nodes": 8146,
+      "ms": 343.52462499999996
+    },
+    {
+      "seed": 2026101702,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move sandstorm",
+        "move roar",
+        "move explosion"
+      ],
+      "visits": [
+        35615,
+        21779,
+        13974,
+        9632
+      ],
+      "means": [
+        0.006991436192615471,
+        0.005004821157996235,
+        0.00279089738085015,
+        0.0004152823920265781
+      ],
+      "nodes": 19036,
+      "ms": 1062.3211669999998
+    },
+    {
+      "seed": 2026101703,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move sandstorm",
+        "move roar",
+        "move explosion"
+      ],
+      "visits": [
+        11662,
+        6612,
+        5026,
+        3700
+      ],
+      "means": [
+        0.009175098610872921,
+        0.00529340592861464,
+        0.0029844807003581377,
+        0.0
+      ],
+      "nodes": 8213,
+      "ms": 349.647833
+    },
+    {
+      "seed": 2026101703,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move sandstorm",
+        "move roar",
+        "move explosion"
+      ],
+      "visits": [
+        41234,
+        18273,
+        12403,
+        9090
+      ],
+      "means": [
+        0.008075859727409419,
+        0.004706397416953976,
+        0.0025800209626703216,
+        0.00055005500550055
+      ],
+      "nodes": 19024,
+      "ms": 1076.680125
+    },
+    {
+      "seed": 2026101704,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move sandstorm",
+        "move roar",
+        "move explosion"
+      ],
+      "visits": [
+        11675,
+        6995,
+        4419,
+        3911
+      ],
+      "means": [
+        0.00993576017130621,
+        0.006433166547533953,
+        0.0024892509617560534,
+        0.0012784454103809768
+      ],
+      "nodes": 8160,
+      "ms": 347.541541
+    },
+    {
+      "seed": 2026101704,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move sandstorm",
+        "move roar",
+        "move explosion"
+      ],
+      "visits": [
+        42200,
+        18161,
+        11425,
+        9214
+      ],
+      "means": [
+        0.008246445497630333,
+        0.004790485105445735,
+        0.002188183807439825,
+        0.000759713479487736
+      ],
+      "nodes": 19603,
+      "ms": 1079.445208
+    }
+  ]
+}

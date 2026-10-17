@@ -1,0 +1,178 @@
+{
+  "id": "g6-d11",
+  "snapshot": {
+    "turn": 8,
+    "key": "288000057932382695302429541886064099443",
+    "sides": [
+      [
+        {
+          "species": "marowak",
+          "active": true,
+          "hp": 78,
+          "maxhp": 166,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "earthquake",
+              "pp": 14
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "swordsdance",
+              "pp": 48
+            }
+          ]
+        },
+        {
+          "species": "skarmory",
+          "active": false,
+          "hp": 0,
+          "maxhp": 171,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "drillpeck",
+              "pp": 32
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "toxic",
+              "pp": 15
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "raikou",
+          "active": false,
+          "hp": 0,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunder",
+              "pp": 15
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "sleeptalk",
+              "pp": 16
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "heracross",
+          "active": true,
+          "hp": 174,
+          "maxhp": 174,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "megahorn",
+              "pp": 15
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "rest",
+              "pp": 15
+            }
+          ]
+        },
+        {
+          "species": "cloyster",
+          "active": false,
+          "hp": 0,
+          "maxhp": 156,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "surf",
+              "pp": 24
+            },
+            {
+              "move": "spikes",
+              "pp": 32
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "explosion",
+              "pp": 7
+            }
+          ]
+        },
+        {
+          "species": "raikou",
+          "active": false,
+          "hp": 0,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 23
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 23
+            },
+            {
+              "move": "reflect",
+              "pp": 32
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "value": [
+    0.0,
+    0.3631034799827297
+  ],
+  "stop": "TimeBudget",
+  "runs": 26412,
+  "ms": 2000.141583,
+  "one_sided_heal": "Ok(OneSidedHeal { healer: 1, non_healer: 0, active: [PokeId { side: 0, slot: 2 }, PokeId { side: 1, slot: 4 }], move_ids: [[MoveId(54), MoveId(63), MoveId(183), MoveId(238)], [MoveId(133), MoveId(89), MoveId(37), MoveId(179)]], max_hp: [166, 174] })",
+  "two_sided_heal": "Err(NotBothHealers)"
+}

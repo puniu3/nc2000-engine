@@ -1,0 +1,178 @@
+{
+  "id": "g12-d16",
+  "snapshot": {
+    "turn": 13,
+    "key": "159842637709336128261594065159021891329",
+    "sides": [
+      [
+        {
+          "species": "zapdos",
+          "active": true,
+          "hp": 196,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 23
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "thunderwave",
+              "pp": 32
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "cloyster",
+          "active": false,
+          "hp": 0,
+          "maxhp": 156,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "icebeam",
+              "pp": 14
+            },
+            {
+              "move": "explosion",
+              "pp": 7
+            },
+            {
+              "move": "curse",
+              "pp": 14
+            },
+            {
+              "move": "spikes",
+              "pp": 32
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 292,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 21
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "curse",
+              "pp": 14
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "steelix",
+          "active": true,
+          "hp": 181,
+          "maxhp": 181,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "mudslap",
+              "pp": 16
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            },
+            {
+              "move": "roar",
+              "pp": 32
+            },
+            {
+              "move": "toxic",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "zapdos",
+          "active": false,
+          "hp": 196,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 24
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "thunderwave",
+              "pp": 32
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 292,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 20
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "curse",
+              "pp": 13
+            },
+            {
+              "move": "rest",
+              "pp": 15
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "value": [
+    0.0,
+    0.019985823445875187
+  ],
+  "stop": "WidthMet",
+  "runs": 2647,
+  "ms": 31.356375,
+  "one_sided_heal": "Err(NotLastMon { side: 1 })",
+  "two_sided_heal": "Err(NotLastMon { side: 1 })"
+}

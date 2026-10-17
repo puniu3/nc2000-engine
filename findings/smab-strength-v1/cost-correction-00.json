@@ -1,0 +1,8 @@
+{
+  "candidate": "net:16",
+  "old_reference": "mcts:150",
+  "old_time_ratio": 1.4632398452814934,
+  "new_reference": "mcts:200",
+  "seed": 2026101330,
+  "basis": "Timing-only correction under the fixed protocol; previous batch remains visible, is not pooled, and does not become a matched-cost result."
+}

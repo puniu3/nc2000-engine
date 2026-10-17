@@ -1,0 +1,456 @@
+//! M3 search API: legal-choice enumeration + structured stepping for
+//! DUCT/MCTS-style self-play.
+//!
+//! Contract with the rest of the engine: enumeration mirrors the validation
+//! rules of `choices.rs` exactly (same helpers, same order of checks), and
+//! Structured and text choices share validation and commit handling.
+//!
+//! Search usage: `Battle` is a plain deep-clonable value. Typical loop:
+//! ```ignore
+//! battle.set_log_enabled(false);          // search mode: skip protocol log
+//! while battle.outcome().is_none() {
+//!     let picks = [0, 1].map(|s| {
+//!         let cs = battle.legal_choices(&dex, s);
+//!         if cs.is_empty() { None } else { Some(cs[rng(cs.len())]) }
+//!     });
+//!     battle.apply_choices(&dex, picks).unwrap();
+//! }
+//! ```
+//! Determinized playouts: clone the battle, then `reseed(...)` the clone so
+//! each playout samples fresh chance outcomes.
+
+use crate::dex::{Dex, MoveId};
+use crate::prng::Prng;
+use crate::state::*;
+
+use super::EngineError;
+
+use crate::fxhash::FxHasher;
+
+/// A single side's choice, compact and `Copy` (fits in search tree nodes).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SearchChoice {
+    /// Team-preview pick: 1-based display positions in lead order.
+    /// Trailing zeros = unused (only when fewer than 3 are picked, which
+    /// NC2000 never does).
+    Team([u8; 3]),
+    /// Use a move by id. Locked/recharge/struggle turns enumerate exactly one.
+    Move(MoveId),
+    /// Switch to the 1-based display position (bench = 2..=party size).
+    Switch(u8),
+    /// Forced pass (only legal when a forced switch has no legal target).
+    Pass,
+}
+
+impl SearchChoice {
+    /// The PS-canonical inputLog string for this choice (what fixtures carry
+    /// and what `Battle::choose` parses).
+    pub fn to_input(self, dex: &Dex) -> String {
+        match self {
+            SearchChoice::Team(slots) => {
+                let parts: Vec<String> = slots
+                    .iter()
+                    .filter(|&&s| s != 0)
+                    .map(|s| s.to_string())
+                    .collect();
+                format!("team {}", parts.join(", "))
+            }
+            SearchChoice::Move(id) => format!("move {}", dex.moves.key(id)),
+            SearchChoice::Switch(pos) => format!("switch {pos}"),
+            SearchChoice::Pass => "pass".to_string(),
+        }
+    }
+}
+
+/// Terminal battle result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    P1Win,
+    P2Win,
+    Tie,
+}
+
+impl Battle {
+    /// Which sides must submit a choice before the battle advances.
+    /// (`[false, false]` means the battle has ended.)
+    pub fn needs_choice(&self) -> [bool; 2] {
+        [0, 1].map(|n| !self.ended && self.sides[n].request_state().is_some())
+    }
+
+    /// Terminal result, `None` while the battle is still running.
+    pub fn outcome(&self) -> Option<Outcome> {
+        if !self.ended {
+            return None;
+        }
+        match self.winner.as_deref() {
+            Some(name) if !name.is_empty() => {
+                if name == self.sides[0].name {
+                    Some(Outcome::P1Win)
+                } else {
+                    Some(Outcome::P2Win)
+                }
+            }
+            _ => Some(Outcome::Tie),
+        }
+    }
+
+    /// Replace the PRNG (determinized playouts: clone the battle, reseed the
+    /// clone). The seed is the raw 64-bit LCG state.
+    pub fn reseed(&mut self, seed: u64) {
+        self.prng = crate::prng::BattleRng::seeded(Prng::new(seed));
+    }
+
+    /// Hash of the decision-relevant battle state — everything the game's
+    /// future depends on EXCEPT the PRNG (search resamples chance, so two
+    /// sims that differ only in seed are the same decision point). Used by
+    /// state-keyed search trees (M7): equal keys ⇒ same state ⇒ per-node
+    /// statistics and cached legal-action sets stay valid; a 64-bit collision
+    /// only mis-aggregates one node's statistics, never produces an illegal
+    /// choice submission path (choices are still validated by `choose`).
+    ///
+    /// Skipped on purpose: `prng`, the protocol log and its bookkeeping
+    /// (`log`, `log_enabled`, `sent_log_pos`, `last_move_line`), scratch
+    /// buffers (`listener_pool`), and the derived `battle_mask` (a function
+    /// of hashed state). Mid-event machinery is quiescent at request points;
+    /// its occupancy is hashed as a cheap guard.
+    pub fn state_key(&self) -> u64 {
+        self.state_key_with(None, false)
+    }
+
+    /// `state_key` with search-tree abstraction: HP is hashed as one of
+    /// `buckets` maxhp-relative buckets and pure roll-magnitude bookkeeping
+    /// (`last_damage`, `attacked_by` damages, `hurt_this_turn`) in coarse
+    /// steps, so chance outcomes that differ only in damage-roll detail map
+    /// to the same node. Discrete chance (KOs, status procs, request kinds,
+    /// volatile durations) still splits exactly — that is the open-loop
+    /// aliasing M7 exists to fix. The bucketing trades a bounded value
+    /// blur inside a node for sample density below it.
+    pub fn state_key_bucketed(&self, buckets: i64) -> u64 {
+        self.state_key_with(Some(buckets), false)
+    }
+
+    /// `state_key_bucketed` that additionally drops damage-history fields
+    /// (`last_damage`, `hurt_this_turn`, `attacked_by` magnitudes). Callers
+    /// MUST first establish `!damage_bookkeeping_observable(dex)` — only
+    /// Counter/Mirror Coat read them. Without this, every damage roll leaves
+    /// its own fingerprint in the key even after HP is bucketed, and a search
+    /// tree keyed on it can never revisit a state.
+    pub fn state_key_bucketed_no_damage(&self, buckets: i64) -> u64 {
+        self.state_key_with(Some(buckets), true)
+    }
+
+    fn state_key_with(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
+        use std::hash::Hasher;
+        let mut h = FxHasher::default();
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping, false);
+        h.finish()
+    }
+
+    /// Search-only key with the same field walk as the stable state keys.
+    /// Damage bookkeeping may be omitted only when it cannot affect future play.
+    pub fn search_key(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
+        use std::hash::Hasher;
+        let mut h = crate::fxhash::SearchHasher::default();
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping, false);
+        h.finish()
+    }
+
+    pub fn search_key_canonical_claw(&self, dex: &Dex, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
+        use std::hash::Hasher;
+        let mut h = crate::fxhash::SearchHasher::default();
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping, !self.quick_claw_roll_observable(dex));
+        h.finish()
+    }
+
+    /// Two-independent-hash fingerprint (FxHash ‖ SipHash) for
+    /// certificate-grade state identity (M17e): the 64-bit search key
+    /// tolerates collisions (mis-aggregated statistics), a proof-carrying
+    /// merge must not — two hashes over independent functions push the
+    /// collision odds to ~2^-128.
+    pub fn state_key128(&self) -> u128 {
+        self.state_key128_with(false, false)
+    }
+
+    /// Certificate-grade solver key with damage-history fields removed.
+    /// Callers MUST first establish `!damage_bookkeeping_observable(dex)`;
+    /// the method is separate from `state_key128` so ordinary exact identity
+    /// can never silently acquire this semantic quotient.
+    pub fn state_key128_without_damage_bookkeeping(&self) -> u128 {
+        self.state_key128_with(true, false)
+    }
+
+    fn state_key128_with(&self, omit_damage_bookkeeping: bool, omit_quick_claw_roll: bool) -> u128 {
+        let mut h = crate::fxhash::FingerprintHasher::default();
+        self.state_hash_into(&mut h, None, omit_damage_bookkeeping, omit_quick_claw_roll);
+        h.finish128()
+    }
+
+    pub fn state_key128_without_quick_claw_roll(&self, dex: &Dex, omit_damage_bookkeeping: bool) -> u128 {
+        assert!(!self.quick_claw_roll_observable(dex));
+        assert!(!omit_damage_bookkeeping || !self.damage_bookkeeping_observable(dex));
+        self.state_key128_with(omit_damage_bookkeeping, true)
+    }
+
+    /// After selection, unselected items cannot enter play. Fainted holders
+    /// are ignored only at idle move requests after pending callbacks finish.
+    pub fn quick_claw_roll_observable(&self, dex: &Dex) -> bool {
+        let selected = self.started && self.turn > 0 && self.request_state != RequestState::TeamPreview
+            && !self.queue.iter().any(|action| matches!(action.choice, ActionKind::Team { .. } | ActionKind::Start));
+        let idle = self.is_idle_move_request();
+        dex.known_items.quickclaw.is_some_and(|item| self.sides.iter().any(|side|
+            side.roster.iter().enumerate().any(|(slot,pokemon)| pokemon.item == Some(item)
+                && (!selected || side.party.contains(&(slot as u8)))
+                && (!idle || !pokemon.fainted || pokemon.hp > 0))))
+    }
+
+    pub fn is_idle_move_request(&self) -> bool {
+        self.started && !self.ended && self.request_state == RequestState::Move
+            && self.needs_choice() == [true, true] && !self.mid_turn
+            && self.queue.is_empty() && self.faint_queue.is_empty()
+            && self.event_stack.is_empty() && self.effect_stack.is_empty()
+            && self.active_move.is_none() && self.active_pokemon.is_none()
+            && self.active_target.is_none() && self.pending_boosts.is_none()
+            && self.sides.iter().all(|side| side.choice.actions.is_empty()
+                && side.choice.switch_ins.is_empty() && side.choice.forced_switches_left == 0
+                && side.choice.forced_passes_left == 0)
+    }
+
+    /// Whether dropping damage-history fields can change future behavior.
+    /// Counter/Mirror Coat read `attacked_by`. Mimic/Mirror Move/Transform
+    /// need no special case because their possible source move is present in
+    /// some roster's base/current slots, both of which are scanned. Neither
+    /// observer is in Metronome's flagged call pool.
+    pub fn damage_bookkeeping_observable(&self, dex: &Dex) -> bool {
+        self.sides.iter().flat_map(|s| s.roster.iter()).any(|p| {
+            p.base_move_slots
+                .iter()
+                .chain(p.move_slots.iter())
+                .any(|slot| matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat"))
+        })
+    }
+
+    fn state_hash_into<H: std::hash::Hasher>(
+        &self,
+        mut h: H,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+        omit_quick_claw_roll: bool,
+    ) {
+        use std::hash::Hash;
+        // Total destructuring on purpose: adding a `Battle` field breaks
+        // this fn until the field is placed (hashed or explicitly skipped).
+        let Battle {
+            preview_level_caps,
+            prng: _, // chance is resampled by search
+            turn,
+            request_state,
+            mid_turn,
+            started,
+            ended,
+            winner,
+            field,
+            sides,
+            queue,
+            faint_queue,
+            log: _, // protocol log + bookkeeping: not state
+            log_enabled: _,
+            effect_order,
+            event_depth,
+            last_move_line: _, // log bookkeeping
+            last_successful_move_this_turn,
+            last_damage,
+            quick_claw_roll,
+            speed_order,
+            format_data,
+            sent_log_pos: _, // log bookkeeping
+            event_stack,
+            effect_stack,
+            active_move,
+            active_pokemon,
+            active_target,
+            last_move_id,
+            pending_boosts,
+            listener_pool: _, // scratch buffers
+            battle_mask: _,   // derived from hashed state
+        } = self;
+        (turn, request_state, mid_turn, started, ended, winner).hash(&mut h);
+        if *preview_level_caps != [Some(super::MAX_TOTAL_LEVEL); 2] {
+            preview_level_caps.hash(&mut h);
+        }
+        field.hash(&mut h);
+        for side in sides.iter() {
+            side.hash_with_options(&mut h, hp_buckets, omit_damage_bookkeeping);
+        }
+        (queue, faint_queue, effect_order, event_depth).hash(&mut h);
+        last_successful_move_this_turn.hash(&mut h);
+        if !omit_damage_bookkeeping {
+            match hp_buckets {
+                None => last_damage.hash(&mut h),
+                Some(_) => (last_damage / 16).hash(&mut h),
+            }
+        }
+        (if omit_quick_claw_roll { false } else { *quick_claw_roll }, speed_order, format_data).hash(&mut h);
+        // mid-event machinery: quiescent at request points, hashed as a guard
+        (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(&mut h);
+        (active_pokemon, active_target, last_move_id, pending_boosts).hash(&mut h);
+    }
+
+    /// All legal choices for one side at the current request point. Empty ⇔
+    /// the side has nothing to submit (waiting side, or battle ended).
+    ///
+    /// Needs `&mut self` because locked-move detection runs the (side-effect
+    /// free, PRNG-free) `LockMove`/`SemiLockMove` priority events, exactly
+    /// like PS request generation does.
+    pub fn legal_choices(&mut self, dex: &Dex, side_n: usize) -> Vec<SearchChoice> {
+        if self.ended {
+            return Vec::new();
+        }
+        let Some(request) = self.sides[side_n].request_state() else {
+            return Vec::new();
+        };
+        match request {
+            RequestKind::TeamPreview => self.legal_team_choices(side_n),
+            RequestKind::Move => self.legal_move_choices(dex, side_n),
+            RequestKind::Switch => self.legal_forced_switch_choices(side_n),
+            RequestKind::Wait => Vec::new(),
+        }
+    }
+
+    /// All ordered picks of `picked_team_size` distinct display positions
+    /// whose level sum respects the side's preview cap. Never empty for a
+    /// validator-legal team — the validator guarantees a legal triple.
+    fn legal_team_choices(&self, side_n: usize) -> Vec<SearchChoice> {
+        let n = self.sides[side_n].party.len() as u8;
+        let k = self.picked_team_size(side_n).min(3) as u8;
+        let mut out = Vec::new();
+        let push = |out: &mut Vec<SearchChoice>, slots: [u8; 3]| {
+            let mut positions = [0; 3];
+            let mut len = 0;
+            for slot in slots.into_iter().filter(|&s| s != 0) {
+                positions[len] = slot as usize - 1;
+                len += 1;
+            }
+            if self.preview_level_caps[side_n]
+                .is_none_or(|cap| self.picked_total_level(side_n, &positions[..len]) <= cap)
+            {
+                out.push(SearchChoice::Team(slots));
+            }
+        };
+        for a in 1..=n {
+            if k <= 1 {
+                push(&mut out, [a, 0, 0]);
+                continue;
+            }
+            for b in 1..=n {
+                if b == a {
+                    continue;
+                }
+                if k == 2 {
+                    push(&mut out, [a, b, 0]);
+                    continue;
+                }
+                for c in 1..=n {
+                    if c != a && c != b {
+                        push(&mut out, [a, b, c]);
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Mirrors `choose_move` + `choose_switch` legality on a move request.
+    fn legal_move_choices(&mut self, dex: &Dex, side_n: usize) -> Vec<SearchChoice> {
+        let Some(active) = self.active_id(side_n) else {
+            return vec![SearchChoice::Pass];
+        };
+        if self.poke(active).fainted {
+            // only reachable defensively; PS would have made a switch request
+            return vec![SearchChoice::Pass];
+        }
+
+        // locked moves preempt everything (thrash/rollout/recharge/...)
+        let locked = self
+            .get_locked_move(dex, active)
+            .or_else(|| self.get_semi_locked_move(dex, active));
+        if let Some(locked_id) = locked {
+            let id = dex
+                .moves
+                .id(&locked_id)
+                .or_else(|| dex.moves.id("recharge"))
+                .expect("locked move id interned");
+            return vec![SearchChoice::Move(id)];
+        }
+
+        let moves = &self.poke(active).move_slots;
+        let mut out = Vec::with_capacity(moves.len() + self.sides[side_n].party.len().saturating_sub(1));
+        for slot in moves {
+            let choice = SearchChoice::Move(slot.id);
+            if !slot.disabled && slot.pp > 0 && !out.contains(&choice) {
+                out.push(choice);
+            }
+        }
+        if out.is_empty() {
+            out.push(SearchChoice::Move(dex.moves.id("struggle").unwrap()));
+        }
+
+        // voluntary switches
+        if !self.poke(active).trapped {
+            let side = &self.sides[side_n];
+            for pos in 1..side.party.len() {
+                let slot = side.party[pos];
+                if !side.roster[slot as usize].fainted {
+                    out.push(SearchChoice::Switch(pos as u8 + 1));
+                }
+            }
+        }
+        out
+    }
+
+    /// Mirrors `choose_switch`/`choose_pass` legality on a forced switch.
+    fn legal_forced_switch_choices(&self, side_n: usize) -> Vec<SearchChoice> {
+        let side = &self.sides[side_n];
+        let mut out = Vec::new();
+        if side.choice.forced_switches_left > 0 {
+            for pos in 1..side.party.len() {
+                let slot = side.party[pos];
+                if !side.roster[slot as usize].fainted
+                    && !side.choice.switch_ins.contains(&(pos as u8))
+                {
+                    out.push(SearchChoice::Switch(pos as u8 + 1));
+                }
+            }
+        }
+        if out.is_empty() && side.choice.forced_passes_left > 0 {
+            out.push(SearchChoice::Pass);
+        }
+        out
+    }
+
+    /// Submit one side's choice (advances the battle when it was the last
+    /// side owing one).
+    pub fn apply_choice(
+        &mut self,
+        dex: &Dex,
+        side_n: usize,
+        choice: SearchChoice,
+    ) -> Result<(), EngineError> {
+        self.choose_search(dex, side_n, choice)
+    }
+
+    /// Submit both sides' choices for this decision point (`None` for a side
+    /// that owes none). Afterwards the battle has advanced to the next
+    /// request point or ended.
+    pub fn apply_choices(
+        &mut self,
+        dex: &Dex,
+        choices: [Option<SearchChoice>; 2],
+    ) -> Result<(), EngineError> {
+        for (side_n, choice) in choices.into_iter().enumerate() {
+            if let Some(c) = choice {
+                self.apply_choice(dex, side_n, c)?;
+            }
+        }
+        Ok(())
+    }
+}

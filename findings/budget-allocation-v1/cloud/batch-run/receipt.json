@@ -1,0 +1,12 @@
+{
+  "status": "failed",
+  "results": null,
+  "budget_yen": 100.0,
+  "cleanup": "not_started",
+  "error": "Conservative allowance 247.12 yen exceeds budget",
+  "backend": "gcp-batch",
+  "machine_type": "e2-standard-16",
+  "provisioning": "STANDARD",
+  "returncode": null,
+  "allowance_yen": null
+}

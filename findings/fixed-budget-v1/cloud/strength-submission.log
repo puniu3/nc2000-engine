@@ -1,0 +1,20 @@
+python3(49393) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(51797) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(51893) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(51933) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(51950) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52093) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52108) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52234) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52291) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52315) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52339) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52414) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52448) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52470) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52497) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52552) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52633) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52658) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(52718) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+{"status": "failed", "results": "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/fixed-budget-v1/cloud/strength-run/results", "budget_yen": 195.0, "cleanup": "verified", "error": "Computation failed: exit 124, Batch FAILED", "backend": "gcp-batch", "machine_type": "e2-standard-8", "provisioning": "STANDARD", "returncode": 124, "allowance_yen": 155.44, "estimated_usage_yen": 93.57, "estimate_scope": "Conservative usage estimate including queue time; 160 JPY/USD accounting rate; before credits, not invoice"}

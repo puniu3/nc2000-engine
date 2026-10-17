@@ -1,0 +1,8 @@
+{
+  "defaultStrength": "strong",
+  "battle": {
+    "standard": 27000,
+    "strong": 81000
+  },
+  "unknownPreview": 729000
+}

@@ -1,0 +1,324 @@
+{
+  "id": "g4-d13",
+  "side": 0,
+  "snapshot": {
+    "turn": 10,
+    "key": "79922709338375799664471663743421953734",
+    "sides": [
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "fnt",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 23
+            },
+            {
+              "move": "earthquake",
+              "pp": 15
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            },
+            {
+              "move": "rest",
+              "pp": 15
+            }
+          ]
+        },
+        {
+          "species": "machamp",
+          "active": false,
+          "hp": 196,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "crosschop",
+              "pp": 7
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        },
+        {
+          "species": "miltank",
+          "active": false,
+          "hp": 48,
+          "maxhp": 220,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "return",
+              "pp": 31
+            },
+            {
+              "move": "zapcannon",
+              "pp": 8
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "milkdrink",
+              "pp": 15
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "porygon2",
+          "active": true,
+          "hp": 20,
+          "maxhp": 209,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "return",
+              "pp": 32
+            },
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "curse",
+              "pp": 14
+            },
+            {
+              "move": "recover",
+              "pp": 32
+            }
+          ]
+        },
+        {
+          "species": "exeggutor",
+          "active": false,
+          "hp": 0,
+          "maxhp": 201,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "psychic",
+              "pp": 11
+            },
+            {
+              "move": "leechseed",
+              "pp": 16
+            },
+            {
+              "move": "sleeppowder",
+              "pp": 24
+            },
+            {
+              "move": "explosion",
+              "pp": 7
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "rows": [
+    {
+      "seed": 2026102901,
+      "n": 27000,
+      "choice": "switch 3",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        13244,
+        13756
+      ],
+      "means": [
+        0.9664753850800363,
+        0.9564553649316662
+      ],
+      "nodes": 1868,
+      "ms": 244.14175
+    },
+    {
+      "seed": 2026102901,
+      "n": 81000,
+      "choice": "switch 2",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        67244,
+        13756
+      ],
+      "means": [
+        0.9632978406995419,
+        0.9564553649316662
+      ],
+      "nodes": 4564,
+      "ms": 737.683417
+    },
+    {
+      "seed": 2026102902,
+      "n": 27000,
+      "choice": "switch 2",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        20389,
+        6611
+      ],
+      "means": [
+        0.9661582225709942,
+        0.9593102405082439
+      ],
+      "nodes": 1830,
+      "ms": 243.226791
+    },
+    {
+      "seed": 2026102902,
+      "n": 81000,
+      "choice": "switch 2",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        68339,
+        12661
+      ],
+      "means": [
+        0.9632420726086129,
+        0.9564015480609747
+      ],
+      "nodes": 4589,
+      "ms": 727.682458
+    },
+    {
+      "seed": 2026102903,
+      "n": 27000,
+      "choice": "switch 2",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        19208,
+        7792
+      ],
+      "means": [
+        0.9594960433152853,
+        0.9537987679671458
+      ],
+      "nodes": 2020,
+      "ms": 244.843959
+    },
+    {
+      "seed": 2026102903,
+      "n": 81000,
+      "choice": "switch 2",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        70913,
+        10087
+      ],
+      "means": [
+        0.9625738581078223,
+        0.9527114107266779
+      ],
+      "nodes": 4622,
+      "ms": 733.105209
+    },
+    {
+      "seed": 2026102904,
+      "n": 27000,
+      "choice": "switch 2",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        26894,
+        106
+      ],
+      "means": [
+        0.9585037554844947,
+        0.839622641509434
+      ],
+      "nodes": 1850,
+      "ms": 244.323041
+    },
+    {
+      "seed": 2026102904,
+      "n": 81000,
+      "choice": "switch 2",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        80892,
+        108
+      ],
+      "means": [
+        0.9602803738317757,
+        0.8333333333333334
+      ],
+      "nodes": 4413,
+      "ms": 734.57925
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "branch": "optimize/low-attack-pool",
+  "commit": "6bc5c9b24334278ce801d2478c07c5eb7822a2b0",
+  "previousCommit": "d7cb2fc",
+  "applyFromOriginal": "git cherry-pick d7cb2fc 6bc5c9b",
+  "applyIfPreviousAlreadyMerged": "git cherry-pick 6bc5c9b",
+  "cumulativePatch": "findings/low-attack-pool-v1/integration.patch",
+  "genderOnlyPatch": "findings/low-attack-pool-v1/gender-update.patch",
+  "scope": "27 low-Attack sets in 14 parties, including 6 male-to-female changes; source-weight conditional female policy",
+  "validation": {
+    "nodeTests": 11,
+    "exactAttractCases": 9,
+    "validatedTeams": 24,
+    "additionalSelfHitComparisons": 4056
+  },
+  "caveat": "Same-sex immunity is symmetric. F 1 versus M 0.25 is frozen-prior source weight, not encounter frequency or win-rate proof. Catalog-only mirror has no direct Attract users.",
+  "mainSessionNote": "Regenerate exact-own-set preview caches or verify fallback. Runtime sources and active worktree remain unchanged."
+}

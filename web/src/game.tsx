@@ -15,8 +15,8 @@
 // is surfaced as the belief chip: it is information ABOUT the bot, not
 // about the foe.
 //
-// Bot preview is always the live search at the preview root: the baked pair
-// tables are keyed to the retired bundled pool's indices and are never read.
+// Known preview information sets use the current compiled policy artifact;
+// other previews run the separately measured fixed selection budget.
 
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
@@ -63,7 +63,7 @@ import { announce, announceAssertive } from "./announcer";
 import { moveNote } from "./behavior-notes";
 import { noteRef } from "./tooltip";
 import type { SelectedTeam } from "./app";
-import { searchProfile } from "./search-profile";
+import { liveBudget, type Strength } from "./search-profile";
 import { Modal } from "./modal";
 import { sheetMon } from "./set-info";
 import { MonSheet, TeamSheets } from "./team-sheet";
@@ -101,26 +101,23 @@ function focusIsOrphaned(): boolean {
 }
 
 /** Subtle bot-think status while the human deliberates: "thinking" =
- * required budget still running, "pondering" = budget done, bonus
- * iterations accumulating until the human commits. Hidden from screen
+ * fixed budget running; input timing never changes that budget. Hidden from screen
  * readers entirely — the ticking counter must not reach the SR (the
  * polite announcer speaks the meaningful transitions instead). */
 export function ThinkChip(props: { thinking: Thinking | null }) {
   const t = props.thinking;
   if (!t) return null;
-  const pondering = t.done >= t.budget;
+
   return (
     <span
-      class={`think-chip ${pondering ? "pondering" : ""}`}
+      class="think-chip"
       aria-hidden="true"
       data-done={t.done}
       data-budget={t.budget}
-      data-pondering={pondering ? "1" : "0"}
+      data-pondering="0"
     >
       <span class="think-chip-dot" />
-      {pondering
-        ? ui().ponderChip(fmtK(t.done - t.budget))
-        : ui().thinkChip(fmtK(t.done), fmtK(t.budget))}
+      {ui().thinkChip(fmtK(t.done), fmtK(t.budget))}
     </span>
   );
 }
@@ -137,6 +134,7 @@ const UNKNOWN_ITEM = "?";
 export function Game(props: {
   /** The opponent prior the bot's belief narrows down (belief-pool-v3). */
   poolJson: string;
+  strength: Strength;
   humanTeam: SelectedTeam;
   botTeam: SelectedTeam;
   /** Raw belief-prior table text, only when the player loaded one by hand
@@ -154,9 +152,7 @@ export function Game(props: {
   const [humanWaiting, setHumanWaiting] = useState(false); // picked, bot still thinking
   const [thinking, setThinking] = useState<Thinking | null>(null);
   const [previewSel, setPreviewSel] = useState<number[]>([]); // 1-based display positions, lead first
-  const [botPreviewSrc, setBotPreviewSrc] = useState<"table" | "search" | null>(
-    null,
-  );
+  const [botPreviewReady, setBotPreviewReady] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false); // battle: team-sheets modal
   const [kifuOpen, setKifuOpen] = useState(false);
   // The searcher's own read of the hidden opponent, refreshed by the
@@ -345,10 +341,9 @@ export function Game(props: {
 
   async function searchBot(req: Request, legal: Choice[]) {
     const bot = botRef.current!;
-    const budget = searchProfile("blind").iterations;
-    // Ponder iff the human still owes a pick at launch: the search then
-    // keeps running past its budget (bonus strength) until the human
-    // commits (humanPick -> flush) or the ponder cap.
+    const budget = liveBudget(props.strength, legal[0].kind === "team");
+    // Start before the human commits to hide latency. The worker finishes
+    // exactly this budget regardless of when the human chooses.
     const ponder = req.needs[HUMAN] && req.picks[HUMAN] === null;
     // A non-ponder search is a genuine wait for the human — say so once.
     // Ponder searches run behind the human's own deliberation: silent.
@@ -366,8 +361,7 @@ export function Game(props: {
     );
     if (!aliveRef.current || req !== reqRef.current) return;
     setThinking(null);
-    // Previews report their source (baked table vs live search).
-    if (r.src && legal[0].kind === "team") setBotPreviewSrc(r.src);
+    if (legal[0].kind === "team") setBotPreviewReady(true);
     req.picks[BOT] = r.best ?? legal[0].input;
     maybeCommit(req);
   }
@@ -378,7 +372,7 @@ export function Game(props: {
     req.picks[HUMAN] = input;
     setHumanChoices(null);
     setHumanWaiting(true);
-    // A pondering bot search returns its best immediately.
+    // Notify experimental timed searches; fixed-budget searches ignore flush.
     if (req.needs[BOT] && req.picks[BOT] === null) botRef.current!.flush();
     maybeCommit(req);
   }
@@ -588,8 +582,8 @@ export function Game(props: {
           <span class="bot-preview-note">
             {thinking ? (
               <ThinkChip thinking={thinking} />
-            ) : botPreviewSrc === "search" ? (
-              ui().previewFromSearch
+            ) : botPreviewReady ? (
+              ui().previewReady
             ) : (
               ""
             )}

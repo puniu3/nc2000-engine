@@ -1,0 +1,8 @@
+{
+  "source": "confirm-02.json",
+  "candidate": "net:4x4",
+  "old_time_ratio": 1.1572717870378595,
+  "new_reference": "mcts:2080",
+  "seed": 2026101432,
+  "basis": "Additional timing-only close-match validation; predeclared before the depth>=2 confirmation finished. No pooling or outcome-based selection."
+}

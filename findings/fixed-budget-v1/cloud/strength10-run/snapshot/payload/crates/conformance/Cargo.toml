@@ -1,0 +1,19 @@
+[package]
+name = "conformance"
+version = "0.1.0"
+edition = "2021"
+description = "Conformance harness for nc2000-engine: fixture schema, replay tests, divergence reporter"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+nc2000-engine = { path = "../engine" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+mimalloc = "0.1.52"
+pprof = { version = "0.15.0", features = ["flamegraph"] }
+
+[features]
+mi = []

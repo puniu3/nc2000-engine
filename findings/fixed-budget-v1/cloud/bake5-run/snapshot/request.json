@@ -1,0 +1,9 @@
+{
+  "command": [
+    "python3",
+    "findings/fixed-budget-v1/cloud/bake_once.py",
+    "findings/fixed-budget-v1/bake-gap-jobs.json"
+  ],
+  "setup": "sh findings/fixed-budget-v1/cloud/setup.sh",
+  "output_limit_bytes": 209715200
+}

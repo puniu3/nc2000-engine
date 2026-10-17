@@ -1,0 +1,9 @@
+{
+  "url": "https://mini-usb.local:18080/nc2000-fixed/index.html",
+  "strengthOptions": 2,
+  "defaultStrength": "strong",
+  "knownSelectionSource": "table",
+  "knownSelectionIterations": 0,
+  "errors": [],
+  "tls": "separately verified by curl using shared development CA"
+}

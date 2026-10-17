@@ -1,0 +1,2098 @@
+{
+  "battle243-p000-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p000-s0.json",
+      "sha256": "467015958d1c5fe5d50dc91384091da7cd26e8185a418d2394f48d38151dc170",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    },
+    {
+      "path": "strength-canary/battle243-p000-s0.json",
+      "sha256": "93442c782d65ed4045694052f6ec503ca5bd332575a81f8374d6bb0b68bf609b",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p018-s1.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p018-s1.json",
+      "sha256": "f959f48fe1924273e1d1c9e43af8f3e581d7d8c30cc77b99e7948b15eb7dac9f",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p024-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p024-s0.json",
+      "sha256": "3bae11e9c4959222e7078fa1852cd50524633103ced00fff460f9ae4a37eee13",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p033-s1.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p033-s1.json",
+      "sha256": "f212ab1abe8f00ded4130f3c976a0154f947eb62781385a1c92683b56323b828",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p036-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p036-s0.json",
+      "sha256": "23c27b7ec9ccda364c64e14c34729f73b1bc2de51c980de214e465598d5aa0ba",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p037-s1.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p037-s1.json",
+      "sha256": "dbf6399467280cc01caf6b5c7ca2524b6ef3e34ccb10355a2c6988c3b4a8868c",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p041-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p041-s0.json",
+      "sha256": "56b96813d8072705eafd83968b0d51b49962adccf5461c6841d32dc6af19e029",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p045-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p045-s0.json",
+      "sha256": "42299acfe96ba0b6a903445941fb6485b293b59e7fc964398a86610334477135",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p057-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p057-s0.json",
+      "sha256": "1cb0495807731638967597595ab4d05e520e40208542996c39ab0162b9f40e9b",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p064-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p064-s0.json",
+      "sha256": "17a63e4299ac0d9331e568b9f9bca43c2c138891688e73dc5da9d635795197b8",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p071-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p071-s0.json",
+      "sha256": "c26868379f9baccb84b5a4940b2f6994e0c3d074767dd3beb3a3d7e238aa8878",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p080-s1.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p080-s1.json",
+      "sha256": "2652fb554d5ef74453dffb2f6d4dc5e04371c7fbf01efb8a56155faa96cecc07",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p086-s1.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p086-s1.json",
+      "sha256": "752a50a2bd6a4f40bb9745436bd77d8d79aa4467161616c4583f25ff1cd3437c",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p093-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p093-s0.json",
+      "sha256": "ccd19f6ca93526d6c7f81595ff79c0fe7033cfdf245c3e53c460effa61569d35",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p095-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p095-s0.json",
+      "sha256": "fa0597509aa03ff0a58139812484675f6f02c72c1873704c74f70a3b1c4b91bd",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p104-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p104-s0.json",
+      "sha256": "ddd504a70fb5a5ddbc0be8ac5b78d02a20f083cab7003a45ef87106ef8e1f108",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p112-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p112-s0.json",
+      "sha256": "80f6981e8751a327a4368d41828b70a82cb432e631e1e7afdc78ab77957e7fda",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p118-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p118-s0.json",
+      "sha256": "7c65733d01355d795944d74f503b4a5e25dd6e18d645c233c8595b511ddc56a6",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p121-s1.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p121-s1.json",
+      "sha256": "abd36827efc8669ca1dc50a0036931a47aa2e4d952857b8df377d41c549aa0bc",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p123-s0.json": [
+    {
+      "path": "cloud/strength-run/results/files/games/battle243-p123-s0.json",
+      "sha256": "c05114d896a29e1ce376a864b7c1501bb8edd127396dd172c9af6aa49f62fa63",
+      "binary_sha256": "0bed2b5c2cfab8215f116fe3552cdfde375c394fe23ebe0e7700e8809fb33315",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p006-s0.json": [
+    {
+      "path": "cloud/strength11-run/results/files/games/battle243-p006-s0.json",
+      "sha256": "ac1ebf31d0209ac8e9d5c446d66d9072ef3a78130086a6358f6ada5d1060f8df",
+      "binary_sha256": "9bb22339c144d32e486152e26a889a4d6944b7611454678ef36016c80bb9ad49",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p011-s0.json": [
+    {
+      "path": "cloud/strength11-run/results/files/games/battle243-p011-s0.json",
+      "sha256": "0bd6ef53d0e0231524235abfce9917f58328c13985d450b46cededd1c42dfde8",
+      "binary_sha256": "9bb22339c144d32e486152e26a889a4d6944b7611454678ef36016c80bb9ad49",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p035-s0.json": [
+    {
+      "path": "cloud/strength11-run/results/files/games/battle243-p035-s0.json",
+      "sha256": "9bf3260bbe865108c20dc6c575bbfc2fc745bfd7a86e9b15fc94f85c75783313",
+      "binary_sha256": "9bb22339c144d32e486152e26a889a4d6944b7611454678ef36016c80bb9ad49",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p051-s0.json": [
+    {
+      "path": "cloud/strength11-run/results/files/games/battle243-p051-s0.json",
+      "sha256": "8b44d2ab26e6328c66f4b5db50dcfd84ee7bc7b006a1de742f0789cffde3426b",
+      "binary_sha256": "9bb22339c144d32e486152e26a889a4d6944b7611454678ef36016c80bb9ad49",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p061-s1.json": [
+    {
+      "path": "cloud/strength11-run/results/files/games/battle243-p061-s1.json",
+      "sha256": "4f03ffdd15be96f5df03458737bfa921799cd1b7b73823e0b42dc5c8d0e4bd40",
+      "binary_sha256": "9bb22339c144d32e486152e26a889a4d6944b7611454678ef36016c80bb9ad49",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p079-s0.json": [
+    {
+      "path": "cloud/strength11-run/results/files/games/battle243-p079-s0.json",
+      "sha256": "5ea517c4b1c3648fe477017f086fb482d9770de4eb401cf5b62cf750ec7f3e61",
+      "binary_sha256": "9bb22339c144d32e486152e26a889a4d6944b7611454678ef36016c80bb9ad49",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p106-s1.json": [
+    {
+      "path": "cloud/strength11-run/results/files/games/battle243-p106-s1.json",
+      "sha256": "7d3e158d1a512fb56640186ac78d232f3a5f7c9fd5d80aeed51bbbb1b3f7e52c",
+      "binary_sha256": "9bb22339c144d32e486152e26a889a4d6944b7611454678ef36016c80bb9ad49",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p115-s0.json": [
+    {
+      "path": "cloud/strength11-run/results/files/games/battle243-p115-s0.json",
+      "sha256": "65ff21357990d184f18df3dba3ce692e09f61e31571773ac51eed17edfcb0b66",
+      "binary_sha256": "9bb22339c144d32e486152e26a889a4d6944b7611454678ef36016c80bb9ad49",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p119-s1.json": [
+    {
+      "path": "cloud/strength11-run/results/files/games/battle243-p119-s1.json",
+      "sha256": "1d2a2df59047ad3f301e064d5ae12a214c01edd28276a4c54b49c04182c1b598",
+      "binary_sha256": "9bb22339c144d32e486152e26a889a4d6944b7611454678ef36016c80bb9ad49",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p124-s1.json": [
+    {
+      "path": "cloud/strength11-run/results/files/games/battle243-p124-s1.json",
+      "sha256": "f22131d920b5744c61375dc99a76e463051f9972f5de08ff3699de605dedc37e",
+      "binary_sha256": "9bb22339c144d32e486152e26a889a4d6944b7611454678ef36016c80bb9ad49",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p018-s0.json": [
+    {
+      "path": "cloud/strength12-run/results/files/games/battle243-p018-s0.json",
+      "sha256": "1a3dc1c0a94744220319aadfd1e9a2ff4d9560dcce575d8c44954caf787aaa47",
+      "binary_sha256": "0ae7bd743f823272a7a8df5801cad8fbf40031d87a16cffbb0b6ba6716eaad55",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p028-s0.json": [
+    {
+      "path": "cloud/strength12-run/results/files/games/battle243-p028-s0.json",
+      "sha256": "322faa0ad6d6a3120cb57c84e74d5bdf9169f9259058fa782ef960ba9fcbfc03",
+      "binary_sha256": "0ae7bd743f823272a7a8df5801cad8fbf40031d87a16cffbb0b6ba6716eaad55",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p034-s0.json": [
+    {
+      "path": "cloud/strength12-run/results/files/games/battle243-p034-s0.json",
+      "sha256": "4ee9149f6161f121a3887bfd10e68e1555cf51435066fd241f8b440b57ac4762",
+      "binary_sha256": "0ae7bd743f823272a7a8df5801cad8fbf40031d87a16cffbb0b6ba6716eaad55",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p048-s0.json": [
+    {
+      "path": "cloud/strength12-run/results/files/games/battle243-p048-s0.json",
+      "sha256": "16ee28f9c8146154b70cdbeb89474b1bde083f257dd1775108c4aa803f9d59b5",
+      "binary_sha256": "0ae7bd743f823272a7a8df5801cad8fbf40031d87a16cffbb0b6ba6716eaad55",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p076-s1.json": [
+    {
+      "path": "cloud/strength12-run/results/files/games/battle243-p076-s1.json",
+      "sha256": "9fae7597f0c91aa5752c50c42fcf6229737d8a6a9037bfb569dce902b4b63843",
+      "binary_sha256": "0ae7bd743f823272a7a8df5801cad8fbf40031d87a16cffbb0b6ba6716eaad55",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p085-s0.json": [
+    {
+      "path": "cloud/strength12-run/results/files/games/battle243-p085-s0.json",
+      "sha256": "5ae46be6c406296a20a6fbdd9ed37bc78e788709c4691c007612dfad661c2ecc",
+      "binary_sha256": "0ae7bd743f823272a7a8df5801cad8fbf40031d87a16cffbb0b6ba6716eaad55",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    },
+    {
+      "path": "strength-local-3/battle243-p085-s0.json",
+      "sha256": "1fb7cab451bf7f14b9b7e4d53f08d876fa802500d8a2ea82977f5d27b906996a",
+      "binary_sha256": "d724d8c9ea6e58230bed72c5af8cf05425c862fca154c1a56952667eee036897",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p106-s0.json": [
+    {
+      "path": "cloud/strength12-run/results/files/games/battle243-p106-s0.json",
+      "sha256": "9fa5b010a36d49215a8d3dd0494768ce8c292203fe89c81857e3e3215627435a",
+      "binary_sha256": "0ae7bd743f823272a7a8df5801cad8fbf40031d87a16cffbb0b6ba6716eaad55",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p125-s0.json": [
+    {
+      "path": "cloud/strength12-run/results/files/games/battle243-p125-s0.json",
+      "sha256": "21cb419558a5cb8e537bbca0c635d67019a732ad93848a923bd9e564532ddde4",
+      "binary_sha256": "0ae7bd743f823272a7a8df5801cad8fbf40031d87a16cffbb0b6ba6716eaad55",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p030-s1.json": [
+    {
+      "path": "cloud/strength13-run/results/files/games/battle243-p030-s1.json",
+      "sha256": "5022d38c565a48a2c4a4e90afb4b5b3c47a581245d76aa609e5ecd66af132dd7",
+      "binary_sha256": "675487f0f34c95a333dd464133b030e2130b92be80da90c578af385c4d90ba02",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p043-s0.json": [
+    {
+      "path": "cloud/strength13-run/results/files/games/battle243-p043-s0.json",
+      "sha256": "c12fbc4d548998f070b59f7fd5700c3405fb92e4e6211236a42e065756b234ad",
+      "binary_sha256": "675487f0f34c95a333dd464133b030e2130b92be80da90c578af385c4d90ba02",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p064-s1.json": [
+    {
+      "path": "cloud/strength13-run/results/files/games/battle243-p064-s1.json",
+      "sha256": "5e71afdd02eb589849c0fcd304e4f8ba6030037e3b4dddf46de5733fd8e5386f",
+      "binary_sha256": "675487f0f34c95a333dd464133b030e2130b92be80da90c578af385c4d90ba02",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p068-s0.json": [
+    {
+      "path": "cloud/strength13-run/results/files/games/battle243-p068-s0.json",
+      "sha256": "e6cc60470e9ed1b9790e7f8a50119b0849728aa2985fde9707f1126820766b93",
+      "binary_sha256": "675487f0f34c95a333dd464133b030e2130b92be80da90c578af385c4d90ba02",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p070-s1.json": [
+    {
+      "path": "cloud/strength13-run/results/files/games/battle243-p070-s1.json",
+      "sha256": "99a113ed63b4424e3e76d465f0b9176e264bfd9036a224f72d5540182a326fa5",
+      "binary_sha256": "675487f0f34c95a333dd464133b030e2130b92be80da90c578af385c4d90ba02",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p074-s1.json": [
+    {
+      "path": "cloud/strength13-run/results/files/games/battle243-p074-s1.json",
+      "sha256": "c1c4f182e693af0fd389545855ad17fec3b3d96f1f1422ccbdbf73f62b1fef20",
+      "binary_sha256": "675487f0f34c95a333dd464133b030e2130b92be80da90c578af385c4d90ba02",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p075-s1.json": [
+    {
+      "path": "cloud/strength13-run/results/files/games/battle243-p075-s1.json",
+      "sha256": "2ccb2706cb5066208456656a4f89f0030cfb23637ceebc357b60eb26d1a296bb",
+      "binary_sha256": "675487f0f34c95a333dd464133b030e2130b92be80da90c578af385c4d90ba02",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p078-s1.json": [
+    {
+      "path": "cloud/strength13-run/results/files/games/battle243-p078-s1.json",
+      "sha256": "406349e4824c970486c28c81e61cd65d8f72a73eb02f533eecef104f2ad754ab",
+      "binary_sha256": "675487f0f34c95a333dd464133b030e2130b92be80da90c578af385c4d90ba02",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p088-s0.json": [
+    {
+      "path": "cloud/strength13-run/results/files/games/battle243-p088-s0.json",
+      "sha256": "0039171a37d67411bee0e73b38565fc4ab1504228ad7f59f911a221a877c5865",
+      "binary_sha256": "675487f0f34c95a333dd464133b030e2130b92be80da90c578af385c4d90ba02",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p004-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p004-s0.json",
+      "sha256": "de86d4470655cdf0a925ff1524e5e0195e4b68031f4d13cffc2d036c65577378",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p007-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p007-s1.json",
+      "sha256": "b18319b9791daca8e1685d437c02b20d236abcb6208fdc32de2a616836b713b9",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p010-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p010-s1.json",
+      "sha256": "94350899e9adcc38edcbf20993775c8803abf6411f9af118ab0bcd120de8f7ee",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p011-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p011-s1.json",
+      "sha256": "0540009a227223895b8c8b858e6b549f8eb0a6d67c8512eae021482712871558",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p014-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p014-s1.json",
+      "sha256": "2a2e54fc07eed846f0ef9523248684f4475a10d8d060f97f9c75a8b29cd14374",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p019-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p019-s1.json",
+      "sha256": "d81c6e287696a9ad0d38bf3e3b03e865ee052e6b8cd8d434a8b3c32ecba718be",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p021-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p021-s1.json",
+      "sha256": "7d2dccfbcd54fec51802fd13fb5f9c1fe73fb3a328e7285d0753f79da6f32dae",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    },
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p021-s1.json",
+      "sha256": "5f75a564ddffb5b734737a6e59edb19b32000c9db4dcea8cd7312a0df95f3fab",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p022-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p022-s0.json",
+      "sha256": "23a003f2762ff8a85f4115f6c9b98549953cfb2256916a7e967b6e1163f3a15a",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p022-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p022-s1.json",
+      "sha256": "fab79494f974f21c586fb72dd89877f4d5ecb54b776245c82d4f336b9609fce2",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p029-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p029-s0.json",
+      "sha256": "032b7c0f1ca4a25fbba793ce3952268f8bad68a3f6835699cb3f1bacf30a93e8",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p037-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p037-s0.json",
+      "sha256": "cfc07bb9cbd5adf910487ecae171dc354d69ac01b066b119605b4ed548fb5259",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p044-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p044-s0.json",
+      "sha256": "44f756c5c87254322313a8b6b13ed0ad611d1ea6f25328b0cac5137a3dda752b",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p050-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p050-s0.json",
+      "sha256": "aa5393aa59409a7a072f9331935cfb8607b5c39e47671b488aecc6f5ab3af055",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    },
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p050-s0.json",
+      "sha256": "39081b606831511503c46b7216b2229eb33423dcbbda59c42345a50f509e2a47",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p054-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p054-s0.json",
+      "sha256": "6df423d2ec9a19c43ec322680d76a5d62d6e16638b2142b4c3c466d2741642f7",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p060-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p060-s1.json",
+      "sha256": "33e62cdd8d90f8420c1fc70bf5eb4b9bb1b41ae39f5cd7277e40dc641817eb77",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p065-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p065-s0.json",
+      "sha256": "ad8a827518b020dd5184d5fa6a107a4b870a1eb2fa887e8411c8cef96bfb7f9e",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p065-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p065-s1.json",
+      "sha256": "c8b35b3388858a53a410a523fb7b958b086d5ed56eeba1eb1f53305d363bb937",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p069-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p069-s0.json",
+      "sha256": "12f3cd92ef542a2ddfc59d44214e652670ce6d325703bb8798925f9e3a66cbf9",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p071-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p071-s1.json",
+      "sha256": "f3d47fe141b297b9f0f3fbd83122c20617e7bc32964a7425ba9942069ad2af9c",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p074-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p074-s0.json",
+      "sha256": "c1ac5f186db6ed84a5d0a4ed9aaa0bd1f612858e6caa3abc0d0321a09c165970",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p080-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p080-s0.json",
+      "sha256": "61347e0ec48a71a5ca19a52d725fa515b5face0b6545401bef0e7ddd67e5c2d6",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p082-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p082-s1.json",
+      "sha256": "b954c3af7c27d17c73ac8fc143a7ba446818511627e950751133906ead752fb5",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p089-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p089-s0.json",
+      "sha256": "ae568b396f2c7c3c6493e53ca05005609cc5460b4ce3525e30c4c2d874645960",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p092-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p092-s1.json",
+      "sha256": "cfe42e2b184e6ae409350518a5034d926f163249041544f7abe8489eb0523086",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p097-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p097-s1.json",
+      "sha256": "dd347d38b5227dd1e3bfdfc7f8c43d7363bc7c7e53db67cbb47e8b1bbbcfa351",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p098-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p098-s1.json",
+      "sha256": "67c437cb39a52f2cb4a15d1f9fa6f11878f6b775150bc1ed1136088c8a01b143",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p100-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p100-s0.json",
+      "sha256": "637be2f7c15cd770d504519716efed5a6fd5fd921ad2bb55878c2d7f2f2cb361",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p101-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p101-s0.json",
+      "sha256": "733127da72ffca723401b43f4b987eca6eaf12e0b8e0d03150e95cc86b78c62d",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p107-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p107-s1.json",
+      "sha256": "354fa00a34e20d845e4f74d97852c052d794e19a0f1e06b8904fbf6a2f29dbdd",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p113-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p113-s0.json",
+      "sha256": "fb60b4ba08dd312d2f8c832af8a98f492bc1e0295a06cb2619e2a067e3afcdf1",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p116-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p116-s0.json",
+      "sha256": "b8f184600328b47072e58aa70c132b9ab9e0224da74548f672801360a0724500",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p116-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p116-s1.json",
+      "sha256": "3614145f93e25b5aac1102c4bfc519b514a54f7681aab308478c5a7938c0ccc4",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p117-s1.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p117-s1.json",
+      "sha256": "1a497eed2f784b858c06efd12d3d0c08c8e0c524c392b59177b0deafa554e3f1",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p122-s0.json": [
+    {
+      "path": "cloud/strength2-run/results/files/games/battle243-p122-s0.json",
+      "sha256": "b507603d95b9983e81d531b0afa1b70cd6ac5ababf147268284d7eabeb1d1009",
+      "binary_sha256": "74e3ef57ad2557a5c501728763b48646310450d9b5fb05d67865420a3425a569",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    },
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p122-s0.json",
+      "sha256": "d1ba231860ffd2fe010719cc7a4762c3e2c65c02cb078aef5e3a8e3737076a87",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p008-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p008-s0.json",
+      "sha256": "637240d1060734e5c23c610ef90c73669b1393165d7f6215883edca44a2b0ab4",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p013-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p013-s0.json",
+      "sha256": "ed4eaead97faaeb5676067cc5bde82578414b52de5eb1c5d1bb04e3e33755fbd",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p025-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p025-s0.json",
+      "sha256": "eb477e4d5ddd4cf7ff2b52a582ebf4c6f4b1056b5df51ef46c4efeaddbdf9d31",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p030-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p030-s0.json",
+      "sha256": "1bc3aac6ee10a14babf0eb46098c9efb5c9bdb17a75a9dea2e9483135ccefb3d",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p031-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p031-s1.json",
+      "sha256": "7f7e0d4e5268d803b3c43bd4ff6e9926b542969ab51d96eefd1e3eda34c86aab",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p035-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p035-s1.json",
+      "sha256": "ff0eed66d1fb4ec92cf40308d7be9fd291104dded8e05dce960817ef371cd199",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p036-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p036-s1.json",
+      "sha256": "50a86af7927456824d7cb0d827eb4e497ce7dd9c9d45f409c9d988166ca049f6",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p038-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p038-s1.json",
+      "sha256": "4ccdb45b0b635cd335c30372305e02fe6b4978c91c6ba7136422dcadeee4cb2f",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p040-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p040-s1.json",
+      "sha256": "588910a15b079e97fe30f9c81a29a5931105c235692a4ea37ea8c3bd68e8498a",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p044-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p044-s1.json",
+      "sha256": "c88ee93f4e657b0c132c7f64e6eb95bd0af491d6fd012d511c1820fdbf1d9a3c",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p046-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p046-s0.json",
+      "sha256": "0f9ba700ff6f6eb5babeedd3f8422f1f6b1450b7138d693d7a3a28028536ad5e",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p047-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p047-s1.json",
+      "sha256": "4b6e851b0d9b02b684eb347c4d3b2c6b08a75e7cfd4fe4d9acc54acd6cbeda1a",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p049-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p049-s1.json",
+      "sha256": "f19ed704851c9008af6e8f1a533f07e54e5acb8bc20a4c1cdfc2c401384cf309",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p050-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p050-s1.json",
+      "sha256": "4d6a551c19d57e3cb6157267bb7042f814ac56137492cb9359bdd896c58cdfc7",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p051-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p051-s1.json",
+      "sha256": "760074fafdd55dd9771821204d90c0a4a7b2cf9fb1a661fa06806d767f111baa",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p052-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p052-s1.json",
+      "sha256": "9b6000d3d4e5def6e614fb844d60f50aac64ad714a161a6c8532586b491fc13b",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p053-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p053-s0.json",
+      "sha256": "e29d0df8058c74435d19a36064e21a96daae11baf0a19d997b55eb3a1ca347a5",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p056-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p056-s0.json",
+      "sha256": "58545e2c445eb828da1b83d61d53a1865a02d730677b58e5b051c116ff6e29da",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p056-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p056-s1.json",
+      "sha256": "d80ad1b3000b0400d251e43bdc85b4ab0b363583bde64c0de81abd6fb122a1bc",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p061-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p061-s0.json",
+      "sha256": "0c31800040ecb06f23671ede6f01f1a81f2466b554548b00b35aa933b567f4aa",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p066-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p066-s1.json",
+      "sha256": "6366bbcc6584ef7a1a1daa083f075777eb276abb23a4c7a2c53e1bcf58c57d6f",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p076-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p076-s0.json",
+      "sha256": "27c8e5fa8c9b8ad280d7762291a35cb03f6a0a67011ee0bc6be12aa88f828f31",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p085-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p085-s1.json",
+      "sha256": "f94cff94d5ed0809c21c5362995c3bb4e48a3864e307cb0c5e6f1503a1754795",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p093-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p093-s1.json",
+      "sha256": "6ea725a10f5b61fffd6b510b7844d838025137901fdd19b07e63a1672e3a528e",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p094-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p094-s0.json",
+      "sha256": "732111298c270d11bab43d43b13e7ae9d0167b19d34fb1f8284985b4a27f6dc1",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p094-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p094-s1.json",
+      "sha256": "aa0bcbcdf9bd519f9ebec1898de714bd96983d430b22855311bd3a5b2b5213c6",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p103-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p103-s0.json",
+      "sha256": "823a4e35d850f413085a9e701933231dedfa81848f7dbc8620910b4cd8e1c8fa",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p110-s0.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p110-s0.json",
+      "sha256": "6e20c7cd169a7791fbe341aaf6ee548296679f5ea52b2b70b8bb3994790a4301",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p125-s1.json": [
+    {
+      "path": "cloud/strength3-run/results/files/games/battle243-p125-s1.json",
+      "sha256": "7caa21271424910064ee9617d9dc9339a47be9929f9b24ace8168ffa331627fc",
+      "binary_sha256": "21b36e627a9a7659ba092a04b63ce6c9e02303647f0d5fd5a442bee9ba4f821a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p002-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p002-s1.json",
+      "sha256": "67f54286261dfc300fe8b75e2f7e9558a6e4957fe8f1cbf7539031045a33703d",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p003-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p003-s0.json",
+      "sha256": "c876c7f37973890edac7a8d5eaddd409e59f80eeaff9c66cff8b6457176f340c",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p004-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p004-s1.json",
+      "sha256": "446cdc4d329e61688c3cb245c6fe4910fd8b519dc419e418aa78debe1c1ecf44",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p007-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p007-s0.json",
+      "sha256": "b887fe6d3eeeb518d9535f3217deb503b675075d1241423305a6ca5a78938eb8",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p010-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p010-s0.json",
+      "sha256": "2eda53be603a7e1ea4aebb9cf216fa7bc71b8d3c85266c7983df5636d6c3b0a4",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p012-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p012-s1.json",
+      "sha256": "46e2bec873468971c191832338833ebe048525826270a7dc61c1408e01dd521b",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p014-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p014-s0.json",
+      "sha256": "c48a1afd10fa7a48b025651b09b275da8535e5f2c24a74fd71ee6ead355368b8",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p017-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p017-s0.json",
+      "sha256": "d02ee3f6cb003adeed1af7e49ec4f0730e54a87b29fe47a62a6e0c5c5cadd3c7",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p029-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p029-s1.json",
+      "sha256": "c2fe7d91a4f3e9a9854c519fabe137abb6c4518b2ecf37755610463d00bd6da1",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p031-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p031-s0.json",
+      "sha256": "15a32485cc94cd869ecb63b476a5f1b22aa6606b9f4d39575dc3ff76867f4163",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p054-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p054-s1.json",
+      "sha256": "6c457570cc604f80766a0540766aef96c9a6ddae08ee2f4df9813e3bfc5c6a24",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p055-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p055-s1.json",
+      "sha256": "b30c6d4d47eca8f1b2f2cbcc625bc35c28f842ac2f7ef2cf5b412834dda1775a",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p057-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p057-s1.json",
+      "sha256": "1cd3a0ffca6d9f67d7755df216a8c168f02a8500d5bb441e3b63d8ea539441e7",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p062-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p062-s1.json",
+      "sha256": "ca7ce9ff5d1e283c5df143b9166447032d739d6e715508bc82eb44ca735567ce",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p063-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p063-s0.json",
+      "sha256": "e07ad7fb639135f817544908f3b7c0321565bf63e4882eeed66b3add978083bf",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p077-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p077-s0.json",
+      "sha256": "3ded1cca37c4fcaccce6b49d0a0e144193c4c1618e28db7d24e5e6b940fd9259",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p083-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p083-s0.json",
+      "sha256": "edebae550c095b5e636fb678102a7f1ea865d5548e36269ff56e8413b408a7b1",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p083-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p083-s1.json",
+      "sha256": "4c41fa1d2bf79bbe0598f5c45555aaa302101b2f880548db2c3e760925de39c2",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p084-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p084-s0.json",
+      "sha256": "503dd0c204a037e9173728867b3d3178d40e97f6b87874d39675d842b1e24c07",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p086-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p086-s0.json",
+      "sha256": "4bd19c0fbad75a9851d0918b14682ed958bf24c018af6f3ab910ad63b53c5fc5",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p088-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p088-s1.json",
+      "sha256": "acb7f5a4d6673b3ac7ff37ae8834d830458abd3fdb6e3c70ef8d334dfc0499b5",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p091-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p091-s0.json",
+      "sha256": "1379e1c29fca57c8140e34d2c98185c98d5c4c038fb6d7053418a810c6edccd7",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p091-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p091-s1.json",
+      "sha256": "311f7f3b169b91dfa261e5acc3e75f0fc0702e602242ba1a66d9b7482cf6ffb0",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p101-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p101-s1.json",
+      "sha256": "c6ebb264fc26a14590eb22a1f9dc7eda5f4ab8244e28f6a28eb304c4f4b90612",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p102-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p102-s1.json",
+      "sha256": "af0eb152cd5d335b6112768a43fa6b9639680da1aedf8ef24a23235c1ca816dd",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p103-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p103-s1.json",
+      "sha256": "643681bbb411e9b4cb080cb08eb9aefe734c18224764606f06d6cadc060c8bfa",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p105-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p105-s1.json",
+      "sha256": "d24ffe27e01d3100f9c5cddcd647f976a5585598e5edd33d593e336de8c4cb96",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p109-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p109-s1.json",
+      "sha256": "a1114c7ff3aaf9bf7ecd8fdaa87b3655aca40d1e98a35a21b2baceb1ffb5dc39",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p112-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p112-s1.json",
+      "sha256": "47450d200c75613451af8eb68e59804c45a5de98ece1080cf54e5d1508cb7854",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p123-s1.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p123-s1.json",
+      "sha256": "a128fa412a73a5979e2b478751c199499f12076d51cea97645dd40792ee8416a",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p124-s0.json": [
+    {
+      "path": "cloud/strength4b-run/results/files/games/battle243-p124-s0.json",
+      "sha256": "1fcf0853af775074d77ff26d30142f697bf3c5270de8e43f2fdc97e45c28ad41",
+      "binary_sha256": "026742b662b057f04f4e73d7c3abc73486d5dcd22934878470952fe21fafcb47",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p000-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p000-s1.json",
+      "sha256": "4d754bbebb2307dac8cf8bff419aa5b3c789abf0ca69695ffa0c7ece5976fa1a",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    },
+    {
+      "path": "strength-local-resume-canary/battle243-p000-s1.json",
+      "sha256": "c7514b48a6fa9656bfe310a578ad49faef7cd52483cb66678a46902b4deeb591",
+      "binary_sha256": "d724d8c9ea6e58230bed72c5af8cf05425c862fca154c1a56952667eee036897",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    },
+    {
+      "path": "strength-canary/battle243-p000-s1.json",
+      "sha256": "8ad3177bf3005a3514209e91a15a6e56fff46595fc369ea96af1acdf5f62feed",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p005-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p005-s1.json",
+      "sha256": "c01e3665a11ba0b3701e1bc9b3c93c3586e2a27488da2838b50667682b7966df",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p009-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p009-s1.json",
+      "sha256": "e2039fadb060127e375e1d1bb6dac602f9625f81e5da850f6a57d7eea6e1d156",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p015-s0.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p015-s0.json",
+      "sha256": "e08aa1121729ce94b9dd86ba29e1ea10f592d150ee303b3140a81d7413df6b1c",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    },
+    {
+      "path": "strength-local-1/battle243-p015-s0.json",
+      "sha256": "cbff30bbeb802f610d536baf6ea1679bcfaf1fc08ff1dcce38c353b44759b0dd",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p015-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p015-s1.json",
+      "sha256": "aec7a2197eca159467bb8046c9fe1b3b42247e04af990194e5e1f3ec9c6259e3",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p016-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p016-s1.json",
+      "sha256": "84b185f2341d1f1aeb61ba5d6c931a652b9b466aa9b3970fe5c67c3d2aaffd54",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p023-s0.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p023-s0.json",
+      "sha256": "eb546d413bcec18168b68e3d50eea37d5a926e8e70d33f0d98660432d6564d8d",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p025-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p025-s1.json",
+      "sha256": "68ae0633de67442e9130ff6510707f08ec2d819960c47e7bebc0556bc6aace87",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p027-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p027-s1.json",
+      "sha256": "68c84de4175e1422e6da16bfc833e4f568c09b87b1e5b4386aff96600e1406d0",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p032-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p032-s1.json",
+      "sha256": "47bb1fd3ba589e0232c55301973b73e50641a32caa6b1933781bf13b50fb5dbc",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p033-s0.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p033-s0.json",
+      "sha256": "825cb6b0f8e8c852c97a2ce79371252b79c9a335ae91e76f6cdbc582423ce7ce",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p039-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p039-s1.json",
+      "sha256": "8e8bb2034051f38997878b6d05ccf900f18a48e4ae25eb00a584644607d7686f",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p041-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p041-s1.json",
+      "sha256": "b063e4eacb1b38e883f17bd5a2d2cf850aeddb10976aab24903361e52c51c92a",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p046-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p046-s1.json",
+      "sha256": "7b2459a4301cfd543a8a3fd21527270fa73e85d684da9a606bb6b2da29095f86",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p067-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p067-s1.json",
+      "sha256": "5527908853d502b916f2920938e910d2f317a8567dd77208173c1dde2457593b",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p072-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p072-s1.json",
+      "sha256": "20e6f7fb8a5b4f088df048756d211dcede8cbe8f932686473e586bd301a0957f",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p073-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p073-s1.json",
+      "sha256": "41bdd2759c5a23a44f100eedbb5fa9e326dd6e4ec3e625263187fdc29ed17ee5",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p075-s0.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p075-s0.json",
+      "sha256": "994397b247e88c07476c5957aa44485f0732bfac7a72cbd7a17893dcf386ab29",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p081-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p081-s1.json",
+      "sha256": "6c36a68beb38d6e7b9ae75ad1a13b6090f43d106b6b9d75665b8103ba8071bd5",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p087-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p087-s1.json",
+      "sha256": "aaec06915f354db9d1a0214088ad42bc627b654b34c0cbc49d0a065ac3b78b46",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p089-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p089-s1.json",
+      "sha256": "59cb875bc4934aa14fb1d6c482446a213a61bf219e6c315336072a1696541a6a",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p100-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p100-s1.json",
+      "sha256": "620579f76a64f8afd1f9b0bb8c5767e6ecc0cceecf964979a2e0b5af860c7ddd",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p108-s0.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p108-s0.json",
+      "sha256": "83a9f04fe4bb5fa839e3f7821ccd8084e800a0c33bf9a1961ace4e28c37122c8",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p114-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p114-s1.json",
+      "sha256": "870e55b21a35628920cb7850c98191453c70003a9134f322c5095ce6c70b93c2",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p120-s0.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p120-s0.json",
+      "sha256": "6f3e20a65ba1e5e2644e6414715af257b3cafcfcf22b6d84b5feb9aec55097e2",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p120-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p120-s1.json",
+      "sha256": "4cb8b52f2899b95ad766f95ba9563d3fdd0c6800919f433832240a699c05060c",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p121-s0.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p121-s0.json",
+      "sha256": "a89cd7194e98a62df75b8ca71fba15ff31df8f05a4d8c9bb07e93df71858a40d",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p126-s0.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p126-s0.json",
+      "sha256": "55be2292bbc38aa978936d6a61dd5edc124dd6911010bd90048726dd0aa8c20b",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p126-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p126-s1.json",
+      "sha256": "6d62b0afc1bc182b7ae0c0995e06e88c9349f358d4cd995579b6dd7e5357689f",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p127-s1.json": [
+    {
+      "path": "cloud/strength5b-run/results/files/games/battle243-p127-s1.json",
+      "sha256": "c8178bf625055b9184ab92fc6f4198384c1a8be72ad4ea9733def6dfb715a12c",
+      "binary_sha256": "4e2936525b23fe72a56cf1f4eaf6daac1c0f40d7a49b21aa072249463611c20e",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p009-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p009-s0.json",
+      "sha256": "dc2e3a215321089864580610893cd414636dc681b37062dc42cf02744b4ad5ee",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p012-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p012-s0.json",
+      "sha256": "d72e4857dffa1e99e8a471dc3cb73cea6c8d21e3001a8dcaee866a79a172a2b9",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p019-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p019-s0.json",
+      "sha256": "2644f8dbd2761339786d8085ce57724bd06cf075adc5b71c830e779d49056b44",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p024-s1.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p024-s1.json",
+      "sha256": "fbdb8f53a3adf5bae8d481c57bc0fde9b78ac2681774001288604af27cccff8a",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p027-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p027-s0.json",
+      "sha256": "4c09cda8bb88cbb53b28e89b795ce6308a0e450dbb9e47d4d6ac58f3c134c87d",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p028-s1.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p028-s1.json",
+      "sha256": "863a23c62f1c6a0c17bb912855a8478eea8e1e1c501ac57786d5fcbc31f4e8f6",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p039-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p039-s0.json",
+      "sha256": "8cb1628d27910945b5673040fbd8bfcc276017095c4d08e81f2abf7101edbdcc",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p052-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p052-s0.json",
+      "sha256": "b25a1fe0b0da281e9013921aa014dbba18a98443b582e2084b471e363ac9c5a7",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p060-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p060-s0.json",
+      "sha256": "36d9261c67b65e88d188bf9870ae3c1ea4aecef6e983a160ecf6e8240336da19",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p066-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p066-s0.json",
+      "sha256": "e96b5f84a1d75d186cd828da6fd8095e98b16f114c9db765b78ca6da161e87cc",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p077-s1.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p077-s1.json",
+      "sha256": "51b6030e0f193c025c25a65a354ef0e52d9261cb087c47bd4c5d66472cf63023",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p079-s1.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p079-s1.json",
+      "sha256": "e6ba158f806ef2cfc1de7ee24b6ca54d5cfdd2413b020e05f967c65e13306e7c",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p090-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p090-s0.json",
+      "sha256": "29a4d79bc4d80e14cdc534894d7ab668dd0a5faea3513b83ff2c6693173db51b",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p095-s1.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p095-s1.json",
+      "sha256": "05bb6e099ccd9b6504ffd6d5628c3ebc0aac459774ab6f14cbf611678f621185",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p096-s1.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p096-s1.json",
+      "sha256": "6780e0abb49bcce4585e4dd8b13feb614acc62fd5020293ab4a16940442e5dba",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p097-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p097-s0.json",
+      "sha256": "16c87a2caac7c5d79cfcd63ceb17cab7cd2396809f6677d05476ae6fece2691d",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p113-s1.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p113-s1.json",
+      "sha256": "7e9eb2c2485c77ad42d6879e1459a4eff1a0f71a47a2969972010812179e881b",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p115-s1.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p115-s1.json",
+      "sha256": "1dc0daf85cbfab9640ce7f890ff131cf854ab2d7b23b15d20842ede89decbd46",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p119-s0.json": [
+    {
+      "path": "cloud/strength6b-run/results/files/games/battle243-p119-s0.json",
+      "sha256": "52fd55504f2b349e0e7d98a8d0dba16eeccd759e55b7c9e31aaf6f5f2875aff4",
+      "binary_sha256": "8b2acc50112ba64a9c5cfb99e31de06bddeade61ee361fa2f39258142acaef1a",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p002-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p002-s0.json",
+      "sha256": "d414ce43507dc04c2be16ee9266a88493bedc9f3d4b9a231b1bad53fa4e234d7",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p008-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p008-s1.json",
+      "sha256": "a058b914f56a5b19936bf758b7512ee4c7805ed3943500489d3d878749afed79",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p016-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p016-s0.json",
+      "sha256": "9ed37e64ed7daaf5b5ca403730e45da4a58efa23f36a367c8b0d5e034df9c6ff",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p021-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p021-s0.json",
+      "sha256": "3b13ee3e05c0776456435a816e795502a56561b435c2a9210aa446eb0c27bbe7",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p023-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p023-s1.json",
+      "sha256": "12df5b8b994a5532c4b8574d55f6580028eb0d4b5614da54eac5c3d0402ee09f",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p026-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p026-s0.json",
+      "sha256": "a40ddcc6092e5250f9b7e91aff80311939ef3660590960f314b2114bcee2ee99",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p026-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p026-s1.json",
+      "sha256": "88df1418a756d7751a6aab7a22ee6e71356ae65fb8ba832a70234850d48e43f0",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p032-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p032-s0.json",
+      "sha256": "1960ca17c1ce473510e59e740224d2706de01a2af214b2734bedc9297596cdf1",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p034-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p034-s1.json",
+      "sha256": "5638114ef5b61be2295069423391043b59ed8ee12cbe1b684f9ab3e38494d3c5",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p042-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p042-s0.json",
+      "sha256": "1571f1e394f038392d53eb66f2a8d7b9a3cb2c1ffbf926b1fda5db94f0afe619",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p042-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p042-s1.json",
+      "sha256": "dcd448a5126c6643f9b5f5f12e75ab9ff5a89f7b48ec00d55e8be9fe1651135a",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p043-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p043-s1.json",
+      "sha256": "284cbb6ed6e5736dfe478ff9b018aac7379bc1fae130483c83da204f8b8dea1e",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p045-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p045-s1.json",
+      "sha256": "25b4a20cf31d119dd00016c28cebab08e2217e0f25669448dd2228658e68d74d",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p047-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p047-s0.json",
+      "sha256": "f31412ce5f34126ab41b09869cd56366d92ca89ad97ff85393d113eb0a304614",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p048-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p048-s1.json",
+      "sha256": "e1d38f8b712555a391d133b746b5dd15b6079cccfdcf4ef895e172a69f4a8e88",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p053-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p053-s1.json",
+      "sha256": "308b1a85084a8cfc02c6a3edebd8cea4ceef6d78e7c7b917421a2ee8fbde1612",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p058-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p058-s1.json",
+      "sha256": "2bc21f806ae304b3bd1f6d047b4027f9e153b2f540652c025b68d3d55223ef92",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p063-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p063-s1.json",
+      "sha256": "1f7bbbafd9e620d07ce37362b62b8da1a442b3a064d4485deac2974b60b7a74f",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p073-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p073-s0.json",
+      "sha256": "e600a15c394f9aac677d01710a40f8512e69684aa2df7af3e4ca4b860be837a8",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p078-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p078-s0.json",
+      "sha256": "42f0b49c859b36595e55b424c4da1450f9d5edb39e9dfe8fdd73fde231530266",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p082-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p082-s0.json",
+      "sha256": "0113fb743e2f8cffba39a3dae6b92b4c35078a40878d72ba912f07706491e27a",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p118-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p118-s1.json",
+      "sha256": "b9351ced376cd28675faa0d0c7f1b4cc292b517789e71274a40e1efed6020345",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p122-s1.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p122-s1.json",
+      "sha256": "4c01ed52e001ede90939bae126b0d74ade2f59ed454109c42350a2919d0bf524",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p127-s0.json": [
+    {
+      "path": "cloud/strength7-run/results/files/games/battle243-p127-s0.json",
+      "sha256": "1a01243eee03856a1e8d940cd94902b1c386fa30c8ca8a1e90e2d084bed4ca0f",
+      "binary_sha256": "b210db04a0e64a493b15eebe943f945c8a6f0c1d6c8e3cb99866c88ce96f1ebc",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p084-s1.json": [
+    {
+      "path": "cloud/strength9-run/results/files/games/battle243-p084-s1.json",
+      "sha256": "ee3be602f8d42040ed74c43e3793636376030680bb818f7736ece8f33ca44fad",
+      "binary_sha256": "a5fa8c5d6c5cad1ef898796f5661c37f90a42461ab8285c9ccf812cee43aa243",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p107-s0.json": [
+    {
+      "path": "cloud/strength9-run/results/files/games/battle243-p107-s0.json",
+      "sha256": "615b32d84d0986cc2f22117a4f205785184f82f15271074bb0582a5db3b4ecf1",
+      "binary_sha256": "a5fa8c5d6c5cad1ef898796f5661c37f90a42461ab8285c9ccf812cee43aa243",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p003-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p003-s1.json",
+      "sha256": "49395b05958806503de2815e5ea10a7f7802b7f429b5d5ec5635188a776fc178",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p005-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p005-s0.json",
+      "sha256": "7164badbd8d4cb963cdac2f526b38fcd587e978d8d51a1c30abf03bb70216a99",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p006-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p006-s1.json",
+      "sha256": "cdd215ebe4b8ccc08ef29779dad7bc558872c600832024ac5287030258ee73f8",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p013-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p013-s1.json",
+      "sha256": "3aefb00ba8cb17abe223f3b8cb90c6808908aee8f41c2b69fb8f276ddc75c102",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p017-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p017-s1.json",
+      "sha256": "83bf39ea450d2b17c759f006bba595561fdf4dd0dbfb6e76b754f06f975791cc",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p038-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p038-s0.json",
+      "sha256": "3ce2c68ff269342c177b133512f1f5abc0e3a516e50aaf69d106c6fa438c4b9a",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p040-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p040-s0.json",
+      "sha256": "b5a0aa5e741eabb8e1d27ac14bf9a1117ec9458f21eb09495c5bc4233bc8b682",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p049-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p049-s0.json",
+      "sha256": "0910330117ce21d44ff41c3afbfa9623a77457fd5ef3d24f0e97d6242eb004a5",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p055-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p055-s0.json",
+      "sha256": "79faf2dbccfa4f50ce8ff443e4ef86319d0b6aa14d1d55a14abb8db0fe17bbbc",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p059-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p059-s0.json",
+      "sha256": "c375e799c523c6d55a7659cfbe5540c2f06f282a7cd747bdad0e1d86700e8e7b",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p059-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p059-s1.json",
+      "sha256": "8543bdbec6bb495327fe0efd05718340b5c0b522623c3cfcebe177fc807f4e63",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p067-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p067-s0.json",
+      "sha256": "a125473cf6d11ce0fffa1b9dcbd506baf3f2a1bdbb6fc2a74b42d43424728573",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p068-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p068-s1.json",
+      "sha256": "859471f65a507190066a1d8b5b65818a7374070b74c01f5bb5f3bd4f339c735b",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p069-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p069-s1.json",
+      "sha256": "521536d85a51da174fc126930632cc70538f9a5a5f6ae833efbc8b5843d02b3d",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p070-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p070-s0.json",
+      "sha256": "6be3f4cc8ba9624d54fb201d1a7691e181fda5866ce3ea6d66e9ed77dd919e41",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p072-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p072-s0.json",
+      "sha256": "66a0e07902645704aee6cf716804a2ce93548b45fef0cba7647c4b92501ff4c5",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p081-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p081-s0.json",
+      "sha256": "691a4774c9bb5deac9c2e26e725c4b05f837d9a8478c2d622451f7333ac717ba",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p087-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p087-s0.json",
+      "sha256": "eb58f60d1c410146d6b5b88c60acfbb83e1fea3c3523e339c3b6ccaeb1a11a93",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p092-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p092-s0.json",
+      "sha256": "a1568c81ce6ada782daf5b7389fc8c67c10786bed6f1ff4a47517e8c21e718b3",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p096-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p096-s0.json",
+      "sha256": "a1670392d27c624365da93555af2f9c33ab57b1f296ed69951159edfefb455f6",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p098-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p098-s0.json",
+      "sha256": "670cd067433563df0ad5bc6de63156b419bf5457e7418cfacbc409dea70c4e0f",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p099-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p099-s0.json",
+      "sha256": "1b2883c462754c51cf2713ad3f04722682bd92aa6f4e5392fa96c087a7b80fa7",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p099-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p099-s1.json",
+      "sha256": "7cbfe8fe862e9035d7c960c3ae325811ccfde842235c53f14913217850586fb5",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p104-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p104-s1.json",
+      "sha256": "0908c63c59a8764e0f308638fbc7895616a55c7c38548d26db5b0bb948338b5a",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p105-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p105-s0.json",
+      "sha256": "f9e2673f40cfbc4c3604c1f62f53f0b42b3bfe7a38c3677481c619632b648a31",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p108-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p108-s1.json",
+      "sha256": "8ed43d1d0ecc743a56f642ba74f596c8826194ba4374dd0868a8d6dc0d77c908",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p109-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p109-s0.json",
+      "sha256": "9a6834d66480a698fb204062c2e7449ba4386768ea897d1fa9cc9b9f9a704f94",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p110-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p110-s1.json",
+      "sha256": "a41f6cbf19830b3e557bb463067481b4b9bf2144cf36f0602402648ecd274814",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p111-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p111-s0.json",
+      "sha256": "166f1a018b0c4ef405f9c07d48e7826dab8ab8902fa5cc30873af4590dad43a2",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p111-s1.json": [
+    {
+      "path": "strength-local-1/battle243-p111-s1.json",
+      "sha256": "c477ad0f6805acf9d4745257a4b7c48c90033fccef63690fd10275bd6347b407",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p114-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p114-s0.json",
+      "sha256": "017ddd0db28b76fb37129c9f173c6b586a359a8e9da37b3e377abf7ad93883ff",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p117-s0.json": [
+    {
+      "path": "strength-local-1/battle243-p117-s0.json",
+      "sha256": "d312be0572d44215bb8a101b9d76c1d413276366ea47037d1289aa32c7a6b3a6",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p001-s0.json": [
+    {
+      "path": "strength-local-2/battle243-p001-s0.json",
+      "sha256": "cfe6df16d1865ae3d43f2b5c05512b33a73c3ae2b564ae853ee8da80b4a2df3a",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p001-s1.json": [
+    {
+      "path": "strength-local-2/battle243-p001-s1.json",
+      "sha256": "d37bf5441a51b46f9ac3df1609665edbd1190e2a35549d0916b29a026fb8367a",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p062-s0.json": [
+    {
+      "path": "strength-local-2/battle243-p062-s0.json",
+      "sha256": "654bc985a76dd99cd892ab1a994cfbde0634e3baae56bfa0d694a1ea2552419a",
+      "binary_sha256": "b594308d4fa10f27d2780b7cd719ef0593a96cd3af254175b8b0eca1d6b758b8",
+      "source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713"
+    }
+  ],
+  "battle243-p058-s0.json": [
+    {
+      "path": "strength-local-4/battle243-p058-s0.json",
+      "sha256": "d1ff8594fedb61cc12cb21bbd9fa67be823cc2728e4551b85f3a34e043a186fb",
+      "binary_sha256": "d724d8c9ea6e58230bed72c5af8cf05425c862fca154c1a56952667eee036897",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p020-s0.json": [
+    {
+      "path": "strength-local-5/battle243-p020-s0.json",
+      "sha256": "d36451b8f9179dbba7d340a4f67611a90f7f76d96397a368794c1b740d9211b5",
+      "binary_sha256": "d724d8c9ea6e58230bed72c5af8cf05425c862fca154c1a56952667eee036897",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p020-s1.json": [
+    {
+      "path": "strength-local-6/battle243-p020-s1.json",
+      "sha256": "6ae1cc65f83824b09e6f928d1fd025f412c35c18502dc35aefb3388727c83782",
+      "binary_sha256": "d724d8c9ea6e58230bed72c5af8cf05425c862fca154c1a56952667eee036897",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p090-s1.json": [
+    {
+      "path": "strength-local-6/battle243-p090-s1.json",
+      "sha256": "27cfedcd6db9a337adbcc040e43747194aed64caad00b7e2c6f4a372117fe193",
+      "binary_sha256": "d724d8c9ea6e58230bed72c5af8cf05425c862fca154c1a56952667eee036897",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ],
+  "battle243-p102-s0.json": [
+    {
+      "path": "strength-local-6/battle243-p102-s0.json",
+      "sha256": "e3501b9c2b81f7a44b4fe065c2cdca31bf508f0cc0911c75e59e803c22259267",
+      "binary_sha256": "d724d8c9ea6e58230bed72c5af8cf05425c862fca154c1a56952667eee036897",
+      "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+24 teams in pool (fixtures)
+  10/100 games (13s)
+  20/100 games (27s)
+  30/100 games (37s)
+  40/100 games (49s)
+  50/100 games (59s)
+  60/100 games (67s)
+  70/100 games (83s)
+  80/100 games (96s)
+  90/100 games (109s)
+  100/100 games (154s)
+A=exploit:skuct:3000:0.4:16 vs B=skuct:3000:0.4:16   100 games, seed 2026101609, 10 threads
+A: 65W 35L 0T   score 0.650 +/- 0.094 (95% CI)
+avg turns 22.3   154.1s total   0.65 games/s   think ms/move A 399.4 B 69.9
+turn caps 0   think p95/p99 ms A 604.3/655.7 B 105.9/118.4
+split pairs 27/50   crn agent seeds false

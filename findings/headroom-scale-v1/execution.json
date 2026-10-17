@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-16T05:51:24.683769+00:00",
+  "execution": "local",
+  "threads": 10,
+  "planned_threads": 32,
+  "reason": "AWS session expired before job creation; cloud receipt cleanup=not_started. Arena schedule is invariant to thread count.",
+  "cloud_receipt": "tmp/headroom-scale-cloud-00/receipt.json",
+  "initial_blocks": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "driver_pid": 20051,
+  "initial_arena_pid": 20069,
+  "exec_session_id": 21607,
+  "stdout": "findings/headroom-scale-v1/execution-00.stdout.jsonl",
+  "stderr": "findings/headroom-scale-v1/execution-00.log"
+}

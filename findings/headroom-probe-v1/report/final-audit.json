@@ -1,0 +1,138 @@
+{
+  "schema": "nc2000-headroom-scale-final-audit-v1",
+  "status": "pass",
+  "audited_at": "2026-10-16T09:23:29.072564+00:00",
+  "script_sha256": "18a91f9d8989f68eb0408fcf7839d324f94ed65deea2f0dc4273bdc07ba648b4",
+  "frozen_input_count": 389,
+  "binary_sha256": "bd1c4283700d3ee37b695cbd6cca8887539458877825a7f36b48bcd5f87e9eb0",
+  "protocol_sha256": "6d38386467b261c98a1922c11e99adb8888e2de75c717b3890b66c0e5d411cc4",
+  "amendment_sha256": "a4d45af34557d66edfaa1846bc9cf88e6b1f6bb11ad4f7c62e865a1d92271b57",
+  "summary_sha256": "da55788a2e681e63dac23e4092315a792a747e9f681d78d2a04a4fac1dd4ccbe",
+  "raw_sha256": {
+    "block-00-raw.jsonl": "8bf59a46fee342daf9ad8b2f288f92f9b3138b217ae81eeab50c0cb84663701c",
+    "block-01-raw.jsonl": "19c8e21ff8352e275a51143bf7cf7ea45d1613738d55828e0c9d9f8e305a0d19",
+    "block-02-raw.jsonl": "073333aa590a5d401b27c8297275f4f940ad56dc292a4e3671c40a056dc559b7",
+    "block-03-raw.jsonl": "1eda2d8eaee2207bbb9b1839b3b57b71b3affded8b25b534c32322b3687071ea",
+    "block-04-raw.jsonl": "5c00fd743ff3faa698570b4b558495a43b73d8e978b83477c6c548278f7905ef",
+    "block-05-raw.jsonl": "fbdc23c8dba6fb86059ebc0c6f5e365b3e392895dd598e968cc41c5da39cd256",
+    "block-06-raw.jsonl": "c0b41d1d50a97accbcba608a5ad546b61ea8136235c9debd50cedbe18759056a"
+  },
+  "executed_comparison_games": 896,
+  "confirmation_games": 756,
+  "wins": 427,
+  "losses": 329,
+  "ties": 0,
+  "invalid_games": 0,
+  "turn_caps": 0,
+  "exclusions": {
+    "discovery_games": 128,
+    "first_pair_games": 12
+  },
+  "checkpoints": [
+    {
+      "block": 1,
+      "games": 126,
+      "score": 0.49206349206349204,
+      "interval_decimal": [
+        "0.3533153069124334941961560678340414920484136018785648047924041748046875",
+        "0.631728760436121457832382600043608089634972202475182712078094482421875"
+      ],
+      "evalue_at_half_decimal": "0.38072926333876316481954450288468846548423540281862958383701172553830676608615451",
+      "positive": false
+    },
+    {
+      "block": 2,
+      "games": 252,
+      "score": 0.5555555555555556,
+      "interval_decimal": [
+        "0.4556790886268120689558836096909322233017292091972194612026214599609375",
+        "0.6538180124828483733973909165955451516794028066215105354785919189453125"
+      ],
+      "evalue_at_half_decimal": "2.3089242641565734465219723422521415345211286348029321523112312266315276192500923",
+      "positive": false
+    },
+    {
+      "block": 3,
+      "games": 378,
+      "score": 0.5661375661375662,
+      "interval_decimal": [
+        "0.4820752543160100226238222562331892095954799515311606228351593017578125",
+        "0.6493242868104078436957617040219126192113208162481896579265594482421875"
+      ],
+      "evalue_at_half_decimal": "10.296078519786471583504821602577775286849545751956930845687395159958356203248026",
+      "positive": false
+    },
+    {
+      "block": 4,
+      "games": 504,
+      "score": 0.5535714285714286,
+      "interval_decimal": [
+        "0.480406558630991925413719102755383261182942078448832035064697265625",
+        "0.6264111190048177137361582714376873060047046237741596996784210205078125"
+      ],
+      "evalue_at_half_decimal": "6.2392221348492179128458234898450046179250574657746662313683681257622296044371294",
+      "positive": false
+    },
+    {
+      "block": 5,
+      "games": 630,
+      "score": 0.5523809523809524,
+      "interval_decimal": [
+        "0.486825325927307370513672456734111104736939523718319833278656005859375",
+        "0.6178092147103820678239838141976303376168289105407893657684326171875"
+      ],
+      "evalue_at_half_decimal": "10.513057514587495882784547955156776256119375540372176207580719761441869481501513",
+      "positive": false
+    },
+    {
+      "block": 6,
+      "games": 756,
+      "score": 0.5648148148148148,
+      "interval_decimal": [
+        "0.504114414264782945992345573361925747946088449680246412754058837890625",
+        "0.62539446046978497085742682189135610570929202367551624774932861328125"
+      ],
+      "evalue_at_half_decimal": "179.09788200498000421054259291581098644067762655865102484446336155767649431602766",
+      "positive": true
+    }
+  ],
+  "two_sided_evalue_threshold": "8E+1",
+  "null_controls": [
+    {
+      "stdout": "execution-00.stdout.jsonl",
+      "games": 8,
+      "score": 0.5
+    },
+    {
+      "stdout": "execution-from-04.stdout.jsonl",
+      "games": 8,
+      "score": 0.5
+    }
+  ],
+  "executed_block_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "stopped": true,
+  "timing": {
+    "a": {
+      "choose_calls": 21954,
+      "mean_ms": 3458.562381928669,
+      "p95_ms": 5991.727708,
+      "scope": "All 896 executed games, including discovery and excluded pairs; loaded native host, 10 threads."
+    },
+    "b": {
+      "choose_calls": 22056,
+      "mean_ms": 1082.8154654321272,
+      "p95_ms": 1858.732917,
+      "scope": "All 896 executed games, including discovery and excluded pairs; loaded native host, 10 threads."
+    }
+  },
+  "mean_choose_time_ratio": 3.194045977675831,
+  "conclusion": "Additional search demonstrates strength headroom on this registered catalog distribution; equal-latency improvement and distance to game-theoretic optimality remain unmeasured."
+}

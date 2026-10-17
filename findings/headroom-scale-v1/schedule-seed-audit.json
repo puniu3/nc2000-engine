@@ -1,0 +1,12 @@
+{
+  "status": "pass",
+  "retained_pairs": 945,
+  "unique_battle_seeds": 945,
+  "repeated_battle_seeds_between_pairs": [],
+  "method": "Reproduce SplitMix64 schedule; one seed is intentionally shared by the two side-swapped games in each pair. No retained pair shares that seed with another retained pair.",
+  "protocol_sha256": "6d38386467b261c98a1922c11e99adb8888e2de75c717b3890b66c0e5d411cc4",
+  "source_sha256": {
+    "crates/bot/src/rng.rs": "33cd773ecd9d0b9ea398bf80d93aacd9c141f5f049e2abaf033d78b909a9c8ab",
+    "crates/bot/src/duel.rs": "ca5866bd9d9e463dd10221df09130b404479e017a19620ce914e55febe3ba7f7"
+  }
+}

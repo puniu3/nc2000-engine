@@ -12,6 +12,10 @@ export interface UIStrings {
   // title / start screen
   subtitle: string;
   startBattle: string;
+  strengthLabel: string;
+  strengthStandard: string;
+  strengthStrong: string;
+  strengthNote: string;
   yourParty: string;
   oppParty: string;
   randomLabel: string;
@@ -46,7 +50,7 @@ export interface UIStrings {
   overLevelCap: (cap: number) => string;
   overCapChip: (cap: number) => string;
   detailsFor: (species: string) => string;
-  previewFromSearch: string;
+  previewReady: string;
   // open team sheets (UI-2)
   teamSheets: string;
   yourTeam: (id: string) => string;
@@ -318,6 +322,10 @@ const EN: UIStrings = {
   settingUp: "Setting up battle…",
   subtitle: "Gen 2 · human vs bot",
   startBattle: "Start battle",
+  strengthLabel: "Bot strength",
+  strengthStandard: "Standard · shorter wait",
+  strengthStrong: "Strong · longer wait",
+  strengthNote: "The bot thinks while you choose. Choosing quickly does not make it weaker.",
   yourParty: "Your party",
   oppParty: "Opponent's party",
   randomLabel: "Random",
@@ -355,7 +363,7 @@ const EN: UIStrings = {
   overLevelCap: (cap) => `Over the total-level cap of ${cap}`,
   overCapChip: (cap) => `>${cap}`,
   detailsFor: (s) => `${s} — details`,
-  previewFromSearch: "Opponent picks by live search",
+  previewReady: "Opponent is ready",
   teamSheets: "Team sheets",
   yourTeam: (id) => `Your team (${id})`,
   sheetNote: "The game is over — both full teams are shown.",
@@ -600,6 +608,10 @@ const JA: UIStrings = {
   settingUp: "対戦を準備中…",
   subtitle: "第2世代 · 人間 vs ボット",
   startBattle: "対戦開始",
+  strengthLabel: "Botの強さ",
+  strengthStandard: "標準 · 待ち時間が短い",
+  strengthStrong: "強い · じっくり考える",
+  strengthNote: "あなたが選んでいる間に考えます。早く選んでもBotの強さは変わりません。",
   yourParty: "自分のパーティ",
   oppParty: "相手のパーティ",
   randomLabel: "ランダム",
@@ -636,7 +648,7 @@ const JA: UIStrings = {
   overLevelCap: (cap) => `合計レベルが${cap}を超えるため選べません`,
   overCapChip: () => "超過",
   detailsFor: (s) => `${s}の詳細`,
-  previewFromSearch: "相手の選出: ライブ探索",
+  previewReady: "相手の準備ができました",
   teamSheets: "チームシート",
   yourTeam: (id) => `自分のチーム(${id})`,
   sheetNote: "対戦終了 — 両チームの構成をすべて表示しています。",

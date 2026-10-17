@@ -46,18 +46,19 @@ try {
     // Live battles are blind-only: the worker must search with the blind
     // profile's c, and a c = 1.0 search must not reproduce its policy.
     {
-      for (const scenario of ["fixed", "early-flush", "ponder-cap"]) {
+      for (const scenario of ["fixed", "early-flush", "late-flush", "background-complete"]) {
         const worker = new BotWorker();
         try {
-          await worker.newBattle(teams[0], teams[1], "1,2,3,4", { poolJson, side: 1, seed });
+          await worker.newBattle(teams[0], teams[1], "1,2,3,4", { poolJson, side: 1, seed, compiledPreview: false });
           const budget = 512;
           const promise = worker.search(1, budget, seed, scenario !== "fixed");
           if (scenario === "early-flush") worker.flush();
+          if (scenario === "late-flush") setTimeout(() => worker.flush(), 125);
           const result = await Promise.race([
             promise,
             new Promise((_, reject) => setTimeout(() => reject(new Error("worker search timed out")), 60000)),
           ]);
-          const iterations = scenario === "ponder-cap" ? budget * 10 : budget;
+          const iterations = budget;
           if (result.wasmMemoryBytes <= 0 || result.wasmMemoryBytes % 65536 !== 0) throw new Error("missing Wasm memory measurement");
           const profile = searchProfile("blind");
           results.push({ scenario, c: profile.c, iterations: result.policy.iterations,
@@ -69,6 +70,36 @@ try {
           worker.terminate();
         }
       }
+    }
+    // Input timing must also preserve battle decisions and the persistent RNG.
+    {
+      const trajectories = [];
+      for (const timing of ["early", "background"]) {
+        const worker = new BotWorker();
+        const truth = new wasm.Battle(dex, teams[0], teams[1], "1,2,3,4");
+        try {
+          await worker.newBattle(teams[0], teams[1], "1,2,3,4", { poolJson, side: 1, seed, compiledPreview: false });
+          const policies = [];
+          for (let turn = 0; turn < 3; turn++) {
+            const legal = JSON.parse(truth.legalChoices(1));
+            if (!legal.length) break;
+            const promise = worker.search(1, 1024, seed, true);
+            if (timing === "early") worker.flush();
+            const result = await promise;
+            if (timing === "background") worker.flush();
+            if (result.policy.iterations !== 1024) throw new Error("human timing changed battle budget");
+            policies.push(result.policy);
+            const picks = [];
+            const own = JSON.parse(truth.legalChoices(0));
+            if (own.length) picks.push([0, own[0].input]);
+            picks.push([1, result.best]);
+            for (const [side, input] of picks) truth.applyChoice(side, input);
+            worker.apply(picks);
+          }
+          trajectories.push(policies);
+        } finally { worker.terminate(); truth.free(); }
+      }
+      if (JSON.stringify(trajectories[0]) !== JSON.stringify(trajectories[1])) throw new Error("input timing changed the persistent search trajectory");
     }
     for (const scenario of ["fixed", "early-flush", "late-flush", "ponder-cap", "cancel"]) {
       const worker = new BotWorker();

@@ -1,0 +1,758 @@
+{
+  "name": "turn-27-offense",
+  "source": "data/perish-trap-audit-v1/turn-27-offense.json",
+  "scope": "historical reconstructed player information; solver on one prior-imputed world, not exact history or information-set value",
+  "rows": [
+    {
+      "seed": 2026101901,
+      "n": 27000,
+      "choice": "move destinybond",
+      "policy": {
+        "iterations": 27000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move destinybond",
+            "visits": 25328,
+            "mean": 0.7023073773021761,
+            "frac": 0.9380740740740741
+          },
+          {
+            "input": "move rest",
+            "visits": 1128,
+            "mean": 0.5790428618915695,
+            "frac": 0.041777777777777775
+          },
+          {
+            "input": "move perishsong",
+            "visits": 366,
+            "mean": 0.5533101498844074,
+            "frac": 0.013555555555555555
+          },
+          {
+            "input": "move meanlook",
+            "visits": 144,
+            "mean": 0.5185507425332917,
+            "frac": 0.005333333333333333
+          },
+          {
+            "input": "switch 2",
+            "visits": 25,
+            "mean": 0.37778661613711106,
+            "frac": 0.000925925925925926
+          },
+          {
+            "input": "switch 3",
+            "visits": 9,
+            "mean": 0.2222222222222222,
+            "frac": 0.0003333333333333333
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101901,
+      "n": 81000,
+      "choice": "move destinybond",
+      "policy": {
+        "iterations": 81000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move destinybond",
+            "visits": 79328,
+            "mean": 0.7613430021123034,
+            "frac": 0.979358024691358
+          },
+          {
+            "input": "move rest",
+            "visits": 1128,
+            "mean": 0.5790428618915695,
+            "frac": 0.013925925925925927
+          },
+          {
+            "input": "move perishsong",
+            "visits": 366,
+            "mean": 0.5533101498844074,
+            "frac": 0.004518518518518519
+          },
+          {
+            "input": "move meanlook",
+            "visits": 144,
+            "mean": 0.5185507425332917,
+            "frac": 0.0017777777777777779
+          },
+          {
+            "input": "switch 2",
+            "visits": 25,
+            "mean": 0.37778661613711106,
+            "frac": 0.00030864197530864197
+          },
+          {
+            "input": "switch 3",
+            "visits": 9,
+            "mean": 0.2222222222222222,
+            "frac": 0.00011111111111111112
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101901,
+      "n": 243000,
+      "choice": "move destinybond",
+      "policy": {
+        "iterations": 243000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move destinybond",
+            "visits": 241328,
+            "mean": 0.84960562711897,
+            "frac": 0.993119341563786
+          },
+          {
+            "input": "move rest",
+            "visits": 1128,
+            "mean": 0.5790428618915695,
+            "frac": 0.004641975308641975
+          },
+          {
+            "input": "move perishsong",
+            "visits": 366,
+            "mean": 0.5533101498844074,
+            "frac": 0.0015061728395061728
+          },
+          {
+            "input": "move meanlook",
+            "visits": 144,
+            "mean": 0.5185507425332917,
+            "frac": 0.0005925925925925926
+          },
+          {
+            "input": "switch 2",
+            "visits": 25,
+            "mean": 0.37778661613711106,
+            "frac": 0.00010288065843621399
+          },
+          {
+            "input": "switch 3",
+            "visits": 9,
+            "mean": 0.2222222222222222,
+            "frac": 0.000037037037037037037
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101902,
+      "n": 27000,
+      "choice": "move perishsong",
+      "policy": {
+        "iterations": 27000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move perishsong",
+            "visits": 26117,
+            "mean": 0.8434979457275853,
+            "frac": 0.9672962962962963
+          },
+          {
+            "input": "move rest",
+            "visits": 661,
+            "mean": 0.6234793467987624,
+            "frac": 0.024481481481481483
+          },
+          {
+            "input": "move destinybond",
+            "visits": 146,
+            "mean": 0.5751907611224192,
+            "frac": 0.005407407407407408
+          },
+          {
+            "input": "switch 2",
+            "visits": 59,
+            "mean": 0.5205014795742466,
+            "frac": 0.002185185185185185
+          },
+          {
+            "input": "move meanlook",
+            "visits": 14,
+            "mean": 0.3485533364959994,
+            "frac": 0.0005185185185185185
+          },
+          {
+            "input": "switch 3",
+            "visits": 3,
+            "mean": 0.0,
+            "frac": 0.00011111111111111112
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101902,
+      "n": 81000,
+      "choice": "move perishsong",
+      "policy": {
+        "iterations": 81000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move perishsong",
+            "visits": 80117,
+            "mean": 0.8950053010986506,
+            "frac": 0.9890987654320987
+          },
+          {
+            "input": "move rest",
+            "visits": 661,
+            "mean": 0.6234793467987624,
+            "frac": 0.008160493827160494
+          },
+          {
+            "input": "move destinybond",
+            "visits": 146,
+            "mean": 0.5751907611224192,
+            "frac": 0.0018024691358024692
+          },
+          {
+            "input": "switch 2",
+            "visits": 59,
+            "mean": 0.5205014795742466,
+            "frac": 0.000728395061728395
+          },
+          {
+            "input": "move meanlook",
+            "visits": 14,
+            "mean": 0.3485533364959994,
+            "frac": 0.0001728395061728395
+          },
+          {
+            "input": "switch 3",
+            "visits": 3,
+            "mean": 0.0,
+            "frac": 0.000037037037037037037
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101902,
+      "n": 243000,
+      "choice": "move perishsong",
+      "policy": {
+        "iterations": 243000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move perishsong",
+            "visits": 242117,
+            "mean": 0.9218870476109489,
+            "frac": 0.9963662551440329
+          },
+          {
+            "input": "move rest",
+            "visits": 661,
+            "mean": 0.6234793467987624,
+            "frac": 0.002720164609053498
+          },
+          {
+            "input": "move destinybond",
+            "visits": 146,
+            "mean": 0.5751907611224192,
+            "frac": 0.0006008230452674897
+          },
+          {
+            "input": "switch 2",
+            "visits": 59,
+            "mean": 0.5205014795742466,
+            "frac": 0.000242798353909465
+          },
+          {
+            "input": "move meanlook",
+            "visits": 14,
+            "mean": 0.3485533364959994,
+            "frac": 0.00005761316872427983
+          },
+          {
+            "input": "switch 3",
+            "visits": 3,
+            "mean": 0.0,
+            "frac": 0.000012345679012345678
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101903,
+      "n": 27000,
+      "choice": "move perishsong",
+      "policy": {
+        "iterations": 27000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move perishsong",
+            "visits": 26356,
+            "mean": 0.7816651816618444,
+            "frac": 0.9761481481481481
+          },
+          {
+            "input": "move rest",
+            "visits": 433,
+            "mean": 0.6125814703793381,
+            "frac": 0.016037037037037037
+          },
+          {
+            "input": "switch 2",
+            "visits": 202,
+            "mean": 0.5876086983760482,
+            "frac": 0.007481481481481481
+          },
+          {
+            "input": "move meanlook",
+            "visits": 3,
+            "mean": 0.0005789493816507433,
+            "frac": 0.00011111111111111112
+          },
+          {
+            "input": "move destinybond",
+            "visits": 3,
+            "mean": 0.0,
+            "frac": 0.00011111111111111112
+          },
+          {
+            "input": "switch 3",
+            "visits": 3,
+            "mean": 0.0,
+            "frac": 0.00011111111111111112
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101903,
+      "n": 81000,
+      "choice": "move perishsong",
+      "policy": {
+        "iterations": 81000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move perishsong",
+            "visits": 80356,
+            "mean": 0.8420548454258663,
+            "frac": 0.9920493827160494
+          },
+          {
+            "input": "move rest",
+            "visits": 433,
+            "mean": 0.6125814703793381,
+            "frac": 0.005345679012345679
+          },
+          {
+            "input": "switch 2",
+            "visits": 202,
+            "mean": 0.5876086983760482,
+            "frac": 0.002493827160493827
+          },
+          {
+            "input": "move meanlook",
+            "visits": 3,
+            "mean": 0.0005789493816507433,
+            "frac": 0.000037037037037037037
+          },
+          {
+            "input": "move destinybond",
+            "visits": 3,
+            "mean": 0.0,
+            "frac": 0.000037037037037037037
+          },
+          {
+            "input": "switch 3",
+            "visits": 3,
+            "mean": 0.0,
+            "frac": 0.000037037037037037037
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101903,
+      "n": 243000,
+      "choice": "move perishsong",
+      "policy": {
+        "iterations": 243000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move perishsong",
+            "visits": 242356,
+            "mean": 0.8847786066911864,
+            "frac": 0.9973497942386831
+          },
+          {
+            "input": "move rest",
+            "visits": 433,
+            "mean": 0.6125814703793381,
+            "frac": 0.0017818930041152263
+          },
+          {
+            "input": "switch 2",
+            "visits": 202,
+            "mean": 0.5876086983760482,
+            "frac": 0.0008312757201646091
+          },
+          {
+            "input": "move meanlook",
+            "visits": 3,
+            "mean": 0.0005789493816507433,
+            "frac": 0.000012345679012345678
+          },
+          {
+            "input": "move destinybond",
+            "visits": 3,
+            "mean": 0.0,
+            "frac": 0.000012345679012345678
+          },
+          {
+            "input": "switch 3",
+            "visits": 3,
+            "mean": 0.0,
+            "frac": 0.000012345679012345678
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101904,
+      "n": 27000,
+      "choice": "move perishsong",
+      "policy": {
+        "iterations": 27000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move perishsong",
+            "visits": 26752,
+            "mean": 0.8228837574621856,
+            "frac": 0.9908148148148148
+          },
+          {
+            "input": "move destinybond",
+            "visits": 161,
+            "mean": 0.5872603316123178,
+            "frac": 0.005962962962962963
+          },
+          {
+            "input": "move rest",
+            "visits": 61,
+            "mean": 0.5385482645624564,
+            "frac": 0.0022592592592592595
+          },
+          {
+            "input": "move meanlook",
+            "visits": 13,
+            "mean": 0.3850713686746913,
+            "frac": 0.0004814814814814815
+          },
+          {
+            "input": "switch 3",
+            "visits": 7,
+            "mean": 0.20988112580237403,
+            "frac": 0.00025925925925925926
+          },
+          {
+            "input": "switch 2",
+            "visits": 6,
+            "mean": 0.2253430106283029,
+            "frac": 0.00022222222222222223
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101904,
+      "n": 81000,
+      "choice": "move perishsong",
+      "policy": {
+        "iterations": 81000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move perishsong",
+            "visits": 80752,
+            "mean": 0.8849817941375041,
+            "frac": 0.9969382716049383
+          },
+          {
+            "input": "move destinybond",
+            "visits": 161,
+            "mean": 0.5872603316123178,
+            "frac": 0.001987654320987654
+          },
+          {
+            "input": "move rest",
+            "visits": 61,
+            "mean": 0.5385482645624564,
+            "frac": 0.0007530864197530864
+          },
+          {
+            "input": "move meanlook",
+            "visits": 13,
+            "mean": 0.3850713686746913,
+            "frac": 0.00016049382716049382
+          },
+          {
+            "input": "switch 3",
+            "visits": 7,
+            "mean": 0.20988112580237403,
+            "frac": 0.00008641975308641975
+          },
+          {
+            "input": "switch 2",
+            "visits": 6,
+            "mean": 0.2253430106283029,
+            "frac": 0.00007407407407407407
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2026101904,
+      "n": 243000,
+      "choice": "move perishsong",
+      "policy": {
+        "iterations": 243000,
+        "baked": false,
+        "forced": null,
+        "actions": [
+          {
+            "input": "move perishsong",
+            "visits": 242752,
+            "mean": 0.9135310560442818,
+            "frac": 0.9989794238683127
+          },
+          {
+            "input": "move destinybond",
+            "visits": 161,
+            "mean": 0.5872603316123178,
+            "frac": 0.0006625514403292181
+          },
+          {
+            "input": "move rest",
+            "visits": 61,
+            "mean": 0.5385482645624564,
+            "frac": 0.00025102880658436216
+          },
+          {
+            "input": "move meanlook",
+            "visits": 13,
+            "mean": 0.3850713686746913,
+            "frac": 0.000053497942386831277
+          },
+          {
+            "input": "switch 3",
+            "visits": 7,
+            "mean": 0.20988112580237403,
+            "frac": 0.000028806584362139917
+          },
+          {
+            "input": "switch 2",
+            "visits": 6,
+            "mean": 0.2253430106283029,
+            "frac": 0.000024691358024691357
+          }
+        ]
+      }
+    }
+  ],
+  "snapshot": {
+    "turn": 27,
+    "key": "83114700953470163526323692883145867696",
+    "sides": [
+      [
+        {
+          "species": "misdreavus",
+          "active": true,
+          "hp": 110,
+          "maxhp": 166,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "meanlook",
+              "pp": 6
+            },
+            {
+              "move": "perishsong",
+              "pp": 7
+            },
+            {
+              "move": "destinybond",
+              "pp": 6
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "skarmory",
+          "active": false,
+          "hp": 187,
+          "maxhp": 187,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "drillpeck",
+              "pp": 29
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "whirlwind",
+              "pp": 32
+            },
+            {
+              "move": "rest",
+              "pp": 15
+            }
+          ]
+        },
+        {
+          "species": "blissey",
+          "active": false,
+          "hp": 191,
+          "maxhp": 361,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "toxic",
+              "pp": 12
+            },
+            {
+              "move": "softboiled",
+              "pp": 15
+            },
+            {
+              "move": "healbell",
+              "pp": 7
+            },
+            {
+              "move": "flamethrower",
+              "pp": 24
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 217,
+          "maxhp": 266,
+          "status": "tox",
+          "trapped": true,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 21
+            },
+            {
+              "move": "earthquake",
+              "pp": 13
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            },
+            {
+              "move": "rest",
+              "pp": 15
+            }
+          ]
+        },
+        {
+          "species": "miltank",
+          "active": false,
+          "hp": 0,
+          "maxhp": 220,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "return",
+              "pp": 29
+            },
+            {
+              "move": "curse",
+              "pp": 14
+            },
+            {
+              "move": "doubleteam",
+              "pp": 24
+            },
+            {
+              "move": "milkdrink",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "zapdos",
+          "active": false,
+          "hp": 137,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 19
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "thunderwave",
+              "pp": 32
+            },
+            {
+              "move": "whirlwind",
+              "pp": 32
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "solver": {
+    "value": [
+      0.0,
+      1.0
+    ],
+    "stop": "NodeBudget",
+    "runs": 22082,
+    "ms": 1357.8394170000001
+  }
+}

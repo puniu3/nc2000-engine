@@ -1,0 +1,372 @@
+{
+  "id": "g10-d19",
+  "side": 0,
+  "snapshot": {
+    "turn": 16,
+    "key": "124122244362497441149119117336878007399",
+    "sides": [
+      [
+        {
+          "species": "zapdos",
+          "active": true,
+          "hp": 79,
+          "maxhp": 215,
+          "status": "par",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunder",
+              "pp": 13
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 22
+            },
+            {
+              "move": "swagger",
+              "pp": 24
+            },
+            {
+              "move": "substitute",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "machamp",
+          "active": false,
+          "hp": 0,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "crosschop",
+              "pp": 8
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "rockslide",
+              "pp": 14
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 23
+            },
+            {
+              "move": "earthquake",
+              "pp": 15
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "zapdos",
+          "active": true,
+          "hp": 68,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunder",
+              "pp": 13
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 23
+            },
+            {
+              "move": "swagger",
+              "pp": 21
+            },
+            {
+              "move": "substitute",
+              "pp": 12
+            }
+          ]
+        },
+        {
+          "species": "machamp",
+          "active": false,
+          "hp": 0,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "crosschop",
+              "pp": 8
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "rockslide",
+              "pp": 15
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "rows": [
+    {
+      "seed": 2026104201,
+      "n": 27000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move thunder",
+        "move hiddenpower",
+        "move swagger",
+        "move substitute"
+      ],
+      "visits": [
+        734,
+        26065,
+        121,
+        80
+      ],
+      "means": [
+        0.2098092643051771,
+        0.24976021484749664,
+        0.14049586776859505,
+        0.1125
+      ],
+      "nodes": 504,
+      "ms": 175.577667
+    },
+    {
+      "seed": 2026104201,
+      "n": 81000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move thunder",
+        "move hiddenpower",
+        "move swagger",
+        "move substitute"
+      ],
+      "visits": [
+        849,
+        79876,
+        189,
+        86
+      ],
+      "means": [
+        0.2049469964664311,
+        0.24669487705944212,
+        0.15343915343915343,
+        0.10465116279069768
+      ],
+      "nodes": 835,
+      "ms": 516.2769999999999
+    },
+    {
+      "seed": 2026104202,
+      "n": 27000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move thunder",
+        "move hiddenpower",
+        "move swagger",
+        "move substitute"
+      ],
+      "visits": [
+        1736,
+        24726,
+        272,
+        266
+      ],
+      "means": [
+        0.18317972350230416,
+        0.20585618377416484,
+        0.13602941176470587,
+        0.13533834586466165
+      ],
+      "nodes": 1889,
+      "ms": 290.103958
+    },
+    {
+      "seed": 2026104202,
+      "n": 81000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move thunder",
+        "move hiddenpower",
+        "move swagger",
+        "move substitute"
+      ],
+      "visits": [
+        2555,
+        77865,
+        296,
+        284
+      ],
+      "means": [
+        0.18003913894324852,
+        0.20195209657740962,
+        0.12837837837837837,
+        0.1267605633802817
+      ],
+      "nodes": 3480,
+      "ms": 924.088708
+    },
+    {
+      "seed": 2026104203,
+      "n": 27000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move thunder",
+        "move hiddenpower",
+        "move swagger",
+        "move substitute"
+      ],
+      "visits": [
+        566,
+        26195,
+        59,
+        180
+      ],
+      "means": [
+        0.16431095406360424,
+        0.2106508875739645,
+        0.05084745762711865,
+        0.12222222222222222
+      ],
+      "nodes": 1700,
+      "ms": 307.366208
+    },
+    {
+      "seed": 2026104203,
+      "n": 81000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move thunder",
+        "move hiddenpower",
+        "move swagger",
+        "move substitute"
+      ],
+      "visits": [
+        634,
+        80017,
+        91,
+        258
+      ],
+      "means": [
+        0.15457413249211358,
+        0.20371920966794557,
+        0.06593406593406594,
+        0.12403100775193798
+      ],
+      "nodes": 3502,
+      "ms": 927.878208
+    },
+    {
+      "seed": 2026104204,
+      "n": 27000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move thunder",
+        "move hiddenpower",
+        "move swagger",
+        "move substitute"
+      ],
+      "visits": [
+        470,
+        26155,
+        130,
+        245
+      ],
+      "means": [
+        0.14468085106382977,
+        0.19816478684763908,
+        0.09230769230769231,
+        0.12244897959183673
+      ],
+      "nodes": 1804,
+      "ms": 309.74425
+    },
+    {
+      "seed": 2026104204,
+      "n": 81000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move thunder",
+        "move hiddenpower",
+        "move swagger",
+        "move substitute"
+      ],
+      "visits": [
+        624,
+        79990,
+        135,
+        251
+      ],
+      "means": [
+        0.15064102564102563,
+        0.20015001875234403,
+        0.08888888888888889,
+        0.11952191235059761
+      ],
+      "nodes": 3348,
+      "ms": 908.576417
+    }
+  ]
+}

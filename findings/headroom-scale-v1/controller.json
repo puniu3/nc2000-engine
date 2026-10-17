@@ -1,0 +1,12 @@
+{
+  "status": "positive_checkpoint_verified",
+  "updated_at": "2026-10-16T09:17:05.384204+00:00",
+  "controller_pid": 39496,
+  "controller_sha256": "a5ca8a4cffb08fb4b317fd15f3a26abe3f3df30d03eb3923addd2c2d44e07446",
+  "games": 896,
+  "score": 0.5648148148148148,
+  "betting_interval": [
+    0.5041144142647829,
+    0.625394460469785
+  ]
+}

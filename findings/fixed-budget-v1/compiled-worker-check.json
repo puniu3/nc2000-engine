@@ -1,0 +1,86 @@
+[
+  {
+    "scenario": "early",
+    "source": "table",
+    "choice": "team 1, 5, 6",
+    "iterations": 0
+  },
+  {
+    "scenario": "background",
+    "source": "table",
+    "choice": "team 1, 5, 6",
+    "iterations": 0
+  },
+  {
+    "scenario": "hidden-change",
+    "source": "table",
+    "choice": "team 1, 5, 6",
+    "iterations": 0
+  },
+  {
+    "scenario": "own-change",
+    "source": "search",
+    "choice": "team 4, 5, 1",
+    "iterations": 512
+  },
+  {
+    "scenario": "prior-change",
+    "source": "search",
+    "choice": "team 4, 5, 1",
+    "iterations": 512
+  },
+  {
+    "scenario": "item-presence",
+    "source": "search",
+    "choice": "team 1, 5, 2",
+    "iterations": 512
+  },
+  {
+    "scenario": "public-gender",
+    "source": "search",
+    "choice": "team 4, 1, 5",
+    "iterations": 512
+  },
+  {
+    "scenario": "early",
+    "source": "table",
+    "choice": "team 1, 5, 6",
+    "iterations": 0
+  },
+  {
+    "scenario": "background",
+    "source": "table",
+    "choice": "team 1, 5, 6",
+    "iterations": 0
+  },
+  {
+    "scenario": "hidden-change",
+    "source": "table",
+    "choice": "team 1, 5, 6",
+    "iterations": 0
+  },
+  {
+    "scenario": "own-change",
+    "source": "search",
+    "choice": "team 5, 1, 4",
+    "iterations": 512
+  },
+  {
+    "scenario": "prior-change",
+    "source": "search",
+    "choice": "team 5, 1, 4",
+    "iterations": 512
+  },
+  {
+    "scenario": "item-presence",
+    "source": "search",
+    "choice": "team 5, 3, 6",
+    "iterations": 512
+  },
+  {
+    "scenario": "public-gender",
+    "source": "search",
+    "choice": "team 5, 3, 6",
+    "iterations": 512
+  }
+]

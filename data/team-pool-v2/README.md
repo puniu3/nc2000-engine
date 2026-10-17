@@ -72,7 +72,12 @@ practical configuration optimization, not a universal dominance claim.
 
 Checks: `node --test tools/optimize-low-attack.test.js`. Reproduce the baseline
 audit using `crates/engine/examples/low_attack_catalog_audit.rs` and an original
-catalog input. Exact-own-set preview caches need regeneration or their
-existing mismatch fallback when these catalog sets are integrated.
+catalog input. The existing compiled preview choices may be reused for this
+specific optimization, as approved by the user. Run
+`node tools/rekey-low-attack-preview.js BASELINE_POOL OUTPUT_ARTIFACT` with
+the original cached catalog to update exact own-set keys using the real
+engine. The tool requires all other inputs to match and checks the complete
+matchup grid and legal selections. `catalogReuse` records the original
+artifact/catalog hashes and that the choices were reused without remeasurement.
 The gender audit is reproducible with `attract_gender_audit` using the
 `d7cb2fc` catalog as the baseline and the current catalog as the new pool.

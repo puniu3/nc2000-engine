@@ -1,0 +1,24 @@
+{
+  "status": "pass",
+  "evaluator_sha256": "85cb9af9254dd49eb9b549a322d21e8bf20930d266f1e464103f6a02281e5f93",
+  "alpha": 0.025,
+  "exact_bernoulli_null_checks": [
+    {
+      "null_mean": 0.2,
+      "checks": 40,
+      "probability_of_any_false_rejection": 0.005858942643270178
+    },
+    {
+      "null_mean": 0.5,
+      "checks": 40,
+      "probability_of_any_false_rejection": 0.006911952164955437
+    },
+    {
+      "null_mean": 0.8,
+      "checks": 40,
+      "probability_of_any_false_rejection": 0.005858942643270164
+    }
+  ],
+  "fractional_pair_scores_interval_nesting": true,
+  "existing_betting_interval_tests": 4
+}

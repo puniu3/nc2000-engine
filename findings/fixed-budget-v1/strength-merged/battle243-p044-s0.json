@@ -1,0 +1,324 @@
+{
+  "pair": 44,
+  "profile": "battle243",
+  "a_side": 0,
+  "a_score": 0.0,
+  "result": {
+    "p1_score": 0.0,
+    "outcome": "Some(P2Win)",
+    "cap": false,
+    "turns": 13,
+    "decisions": [
+      {
+        "side": 0,
+        "turn": 0,
+        "key": "259455915564475238241768601001308852304",
+        "phase": "preview",
+        "choices": 120,
+        "iterations": 243000,
+        "ns": 32954714307,
+        "choice": "team 4, 5, 1"
+      },
+      {
+        "side": 1,
+        "turn": 0,
+        "key": "259455915564475238241768601001308852304",
+        "phase": "preview",
+        "choices": 96,
+        "iterations": 243000,
+        "ns": 32885783197,
+        "choice": "team 2, 6, 4"
+      },
+      {
+        "side": 0,
+        "turn": 1,
+        "key": "190013205942841869377612467415937428202",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 34205353970,
+        "choice": "move thunderbolt"
+      },
+      {
+        "side": 1,
+        "turn": 1,
+        "key": "190013205942841869377612467415937428202",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 11872142478,
+        "choice": "move toxic"
+      },
+      {
+        "side": 0,
+        "turn": 2,
+        "key": "31088755325575041948291320103269403956",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 32497139583,
+        "choice": "move thunderbolt"
+      },
+      {
+        "side": 1,
+        "turn": 2,
+        "key": "31088755325575041948291320103269403956",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 11655371329,
+        "choice": "move rest"
+      },
+      {
+        "side": 0,
+        "turn": 3,
+        "key": "116956923983705287812278305168754201130",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 29946153297,
+        "choice": "move thunderbolt"
+      },
+      {
+        "side": 1,
+        "turn": 3,
+        "key": "116956923983705287812278305168754201130",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 10385638224,
+        "choice": "switch 3"
+      },
+      {
+        "side": 0,
+        "turn": 4,
+        "key": "22645767136894260324104243268454045903",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 31996224261,
+        "choice": "switch 2"
+      },
+      {
+        "side": 1,
+        "turn": 4,
+        "key": "22645767136894260324104243268454045903",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 10072198253,
+        "choice": "move curse"
+      },
+      {
+        "side": 0,
+        "turn": 5,
+        "key": "161421753491173599895836202888017569606",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 29706249309,
+        "choice": "move selfdestruct"
+      },
+      {
+        "side": 1,
+        "turn": 5,
+        "key": "161421753491173599895836202888017569606",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 9996139108,
+        "choice": "move curse"
+      },
+      {
+        "side": 0,
+        "turn": 5,
+        "key": "28313073772562910430573949967266711543",
+        "phase": "battle",
+        "choices": 2,
+        "iterations": 243000,
+        "ns": 29049874454,
+        "choice": "switch 3"
+      },
+      {
+        "side": 0,
+        "turn": 6,
+        "key": "190161391555401072181896403761392425162",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 27954973812,
+        "choice": "move rockslide"
+      },
+      {
+        "side": 1,
+        "turn": 6,
+        "key": "190161391555401072181896403761392425162",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 9351039482,
+        "choice": "move doubleedge"
+      },
+      {
+        "side": 0,
+        "turn": 7,
+        "key": "323000650392452806165675652694532687203",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 24428147661,
+        "choice": "move earthquake"
+      },
+      {
+        "side": 1,
+        "turn": 7,
+        "key": "323000650392452806165675652694532687203",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 8255675867,
+        "choice": "switch 3"
+      },
+      {
+        "side": 0,
+        "turn": 8,
+        "key": "314033096765487351049380730905674019281",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 23949067070,
+        "choice": "switch 2"
+      },
+      {
+        "side": 1,
+        "turn": 8,
+        "key": "314033096765487351049380730905674019281",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 7608446110,
+        "choice": "move drillpeck"
+      },
+      {
+        "side": 0,
+        "turn": 9,
+        "key": "181306460236443700038457747401949973730",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 20919651379,
+        "choice": "move sing"
+      },
+      {
+        "side": 1,
+        "turn": 9,
+        "key": "181306460236443700038457747401949973730",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 6468341523,
+        "choice": "switch 3"
+      },
+      {
+        "side": 0,
+        "turn": 10,
+        "key": "154972756603166110532994110578746185360",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 18890498032,
+        "choice": "move icebeam"
+      },
+      {
+        "side": 1,
+        "turn": 10,
+        "key": "154972756603166110532994110578746185360",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 5963764466,
+        "choice": "move rest"
+      },
+      {
+        "side": 0,
+        "turn": 11,
+        "key": "100339569825262982042107141597148375871",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 16202017915,
+        "choice": "move icebeam"
+      },
+      {
+        "side": 1,
+        "turn": 11,
+        "key": "100339569825262982042107141597148375871",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 5452322401,
+        "choice": "move doubleedge"
+      },
+      {
+        "side": 1,
+        "turn": 11,
+        "key": "115072403559556664223112002569473843611",
+        "phase": "battle",
+        "choices": 2,
+        "iterations": 81000,
+        "ns": 4672402519,
+        "choice": "switch 3"
+      },
+      {
+        "side": 0,
+        "turn": 12,
+        "key": "149197539940014691824868604119742166811",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 14318878540,
+        "choice": "move thunderbolt"
+      },
+      {
+        "side": 1,
+        "turn": 12,
+        "key": "149197539940014691824868604119742166811",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 81000,
+        "ns": 4258779247,
+        "choice": "move drillpeck"
+      },
+      {
+        "side": 0,
+        "turn": 12,
+        "key": "43724610392276378659367133539953266632",
+        "phase": "forced",
+        "choices": 1,
+        "iterations": 0,
+        "ns": 6420,
+        "choice": "switch 2"
+      },
+      {
+        "side": 0,
+        "turn": 13,
+        "key": "244607691480988589374405509360580423191",
+        "phase": "battle",
+        "choices": 4,
+        "iterations": 243000,
+        "ns": 7331599201,
+        "choice": "move rockslide"
+      },
+      {
+        "side": 1,
+        "turn": 13,
+        "key": "244607691480988589374405509360580423191",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 81000,
+        "ns": 2577926305,
+        "choice": "move drillpeck"
+      }
+    ]
+  }
+}

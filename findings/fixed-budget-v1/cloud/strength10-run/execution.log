@@ -1,0 +1,5 @@
+{"time": "2026-10-16T16:14:30.837733+00:00", "phase": "preflight_ok", "allowance_yen": 99.6}
+{"time": "2026-10-16T16:14:34.822355+00:00", "phase": "submitted", "job": "projects/focus-cairn-458511-f1/locations/asia-northeast3/jobs/sb-20261016161428-1fe09ad3"}
+{"time": "2026-10-16T16:14:35.182392+00:00", "phase": "job_state", "state": "QUEUED"}
+{"time": "2026-10-16T16:14:45.520870+00:00", "phase": "job_state", "state": "SCHEDULED"}
+{"time": "2026-10-16T16:16:18.598784+00:00", "phase": "job_state", "state": "RUNNING"}

@@ -1,0 +1,214 @@
+{
+  "pair": 40,
+  "profile": "battle243",
+  "a_side": 0,
+  "a_score": 1.0,
+  "result": {
+    "p1_score": 1.0,
+    "outcome": "Some(P1Win)",
+    "cap": false,
+    "turns": 7,
+    "decisions": [
+      {
+        "side": 0,
+        "turn": 0,
+        "key": "287983165268901569826678518372962577033",
+        "phase": "preview",
+        "choices": 96,
+        "iterations": 243000,
+        "ns": 19330087750,
+        "choice": "team 3, 6, 1"
+      },
+      {
+        "side": 1,
+        "turn": 0,
+        "key": "287983165268901569826678518372962577033",
+        "phase": "preview",
+        "choices": 96,
+        "iterations": 243000,
+        "ns": 16472472958,
+        "choice": "team 6, 3, 1"
+      },
+      {
+        "side": 0,
+        "turn": 1,
+        "key": "167078464837522089308421532211135167696",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 14584295041,
+        "choice": "move selfdestruct"
+      },
+      {
+        "side": 1,
+        "turn": 1,
+        "key": "167078464837522089308421532211135167696",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 5126626708,
+        "choice": "move crosschop"
+      },
+      {
+        "side": 0,
+        "turn": 1,
+        "key": "220528108718175741178147265404378972437",
+        "phase": "battle",
+        "choices": 2,
+        "iterations": 243000,
+        "ns": 14836934084,
+        "choice": "switch 2"
+      },
+      {
+        "side": 1,
+        "turn": 1,
+        "key": "220528108718175741178147265404378972437",
+        "phase": "battle",
+        "choices": 2,
+        "iterations": 81000,
+        "ns": 4849674333,
+        "choice": "switch 3"
+      },
+      {
+        "side": 0,
+        "turn": 2,
+        "key": "219367899283450403415460958269879944776",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 15046716375,
+        "choice": "move earthquake"
+      },
+      {
+        "side": 1,
+        "turn": 2,
+        "key": "219367899283450403415460958269879944776",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 81000,
+        "ns": 4238577000,
+        "choice": "move reflect"
+      },
+      {
+        "side": 1,
+        "turn": 2,
+        "key": "289644415687193946901097916252063318695",
+        "phase": "forced",
+        "choices": 1,
+        "iterations": 0,
+        "ns": 4042,
+        "choice": "switch 2"
+      },
+      {
+        "side": 0,
+        "turn": 3,
+        "key": "175279701628341474784381429377933250068",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 12196018458,
+        "choice": "move toxic"
+      },
+      {
+        "side": 1,
+        "turn": 3,
+        "key": "175279701628341474784381429377933250068",
+        "phase": "battle",
+        "choices": 4,
+        "iterations": 81000,
+        "ns": 3604712750,
+        "choice": "move curse"
+      },
+      {
+        "side": 0,
+        "turn": 4,
+        "key": "231049478373705352989971242762293605339",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 10603607959,
+        "choice": "move earthquake"
+      },
+      {
+        "side": 1,
+        "turn": 4,
+        "key": "231049478373705352989971242762293605339",
+        "phase": "battle",
+        "choices": 4,
+        "iterations": 81000,
+        "ns": 3226173333,
+        "choice": "move curse"
+      },
+      {
+        "side": 0,
+        "turn": 5,
+        "key": "178838930828827801443128908209237103215",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 8392610292,
+        "choice": "move earthquake"
+      },
+      {
+        "side": 1,
+        "turn": 5,
+        "key": "178838930828827801443128908209237103215",
+        "phase": "battle",
+        "choices": 4,
+        "iterations": 81000,
+        "ns": 2719016667,
+        "choice": "move earthquake"
+      },
+      {
+        "side": 0,
+        "turn": 6,
+        "key": "122566504190705420157885370385119798535",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 5834366000,
+        "choice": "move explosion"
+      },
+      {
+        "side": 1,
+        "turn": 6,
+        "key": "122566504190705420157885370385119798535",
+        "phase": "battle",
+        "choices": 4,
+        "iterations": 81000,
+        "ns": 2114880083,
+        "choice": "move earthquake"
+      },
+      {
+        "side": 0,
+        "turn": 6,
+        "key": "10442860865264140141403961454190199002",
+        "phase": "forced",
+        "choices": 1,
+        "iterations": 0,
+        "ns": 2416,
+        "choice": "switch 3"
+      },
+      {
+        "side": 0,
+        "turn": 7,
+        "key": "77903370330558174870376044844138707444",
+        "phase": "battle",
+        "choices": 4,
+        "iterations": 243000,
+        "ns": 3000214375,
+        "choice": "move icebeam"
+      },
+      {
+        "side": 1,
+        "turn": 7,
+        "key": "77903370330558174870376044844138707444",
+        "phase": "battle",
+        "choices": 4,
+        "iterations": 81000,
+        "ns": 992894791,
+        "choice": "move bodyslam"
+      }
+    ]
+  }
+}

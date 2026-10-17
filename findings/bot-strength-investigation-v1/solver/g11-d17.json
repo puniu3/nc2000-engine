@@ -1,0 +1,178 @@
+{
+  "id": "g11-d17",
+  "snapshot": {
+    "turn": 13,
+    "key": "128565913232208931341440426146717994942",
+    "sides": [
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 39,
+          "maxhp": 292,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 23
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "curse",
+              "pp": 15
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "starmie",
+          "active": false,
+          "hp": 0,
+          "maxhp": 166,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "surf",
+              "pp": 24
+            },
+            {
+              "move": "psychic",
+              "pp": 16
+            },
+            {
+              "move": "thunderwave",
+              "pp": 32
+            },
+            {
+              "move": "recover",
+              "pp": 32
+            }
+          ]
+        },
+        {
+          "species": "zapdos",
+          "active": false,
+          "hp": 0,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 23
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 19
+            },
+            {
+              "move": "thunderwave",
+              "pp": 32
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "zapdos",
+          "active": true,
+          "hp": 180,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunder",
+              "pp": 15
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 23
+            },
+            {
+              "move": "swagger",
+              "pp": 24
+            },
+            {
+              "move": "substitute",
+              "pp": 13
+            }
+          ]
+        },
+        {
+          "species": "exeggutor",
+          "active": false,
+          "hp": 0,
+          "maxhp": 189,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "hiddenpower",
+              "pp": 23
+            },
+            {
+              "move": "psychic",
+              "pp": 15
+            },
+            {
+              "move": "leechseed",
+              "pp": 15
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 23
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "bellydrum",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "value": [
+    0.005285108238870723,
+    0.3046875
+  ],
+  "stop": "NodeBudget",
+  "runs": 23027,
+  "ms": 1734.744125,
+  "one_sided_heal": "Err(NotExactlyOneHealer)",
+  "two_sided_heal": "Ok(TwoSidedHeal { active: [PokeId { side: 0, slot: 4 }, PokeId { side: 1, slot: 0 }], move_ids: [[MoveId(45), MoveId(54), MoveId(37), MoveId(179)], [MoveId(246), MoveId(89), MoveId(234), MoveId(229)]], max_hp: [292, 215], healing_slots: [[3], []] })"
+}

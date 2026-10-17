@@ -423,7 +423,7 @@ test("editing an imported party preserves custom stats and exposes no technical 
   const visibleText = await page.locator("main").innerText();
   expect(visibleText).not.toMatch(/WASM|belief|反復|BLIND|正規化/);
   await expect(page.getByLabel("考える回数", { exact: true })).toHaveValue(
-    "27000",
+    "81000",
   );
 });
 

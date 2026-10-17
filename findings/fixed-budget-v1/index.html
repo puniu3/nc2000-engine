@@ -1,0 +1,28 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NC2000 固定探索予算の調査</title>
+<style>body{background:#f6f3ec;color:#282b27;font:16px/1.8 system-ui,sans-serif;max-width:980px;margin:auto;padding:26px}h1{font-size:1.7rem}h2{font-size:1.25rem;margin-top:2rem}a{color:#385c42}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:9px;border-bottom:1px solid #c9c9bd}.scroll{overflow:auto}.verdict{border-left:4px solid #536c4c;padding:12px 18px;background:#eaece2}small{color:#565a52}code{overflow-wrap:anywhere}</style>
+<h1>NC2000 固定探索予算の調査</h1>
+<p class="verdict">243kの明確な優位は確認できず、選択肢への追加は見送り。通常対戦の探索予算は <strong>27,000／81,000</strong> 回。入力する速さで探索回数は変わりません。</p>
+<h2>243k 対 81k：対戦中の探索回数だけを変更</h2>
+<p>既知カタログ24パーティの既定の抽選重みで128条件を生成し、両サイドで対戦した256試合。243k側は<strong>129勝・0分・127敗</strong>、引き分けを0.5とした得点率は<strong>50.4%</strong>。条件単位の95%ブートストラップ区間は<strong>44.5%〜56.2%</strong>でした。</p>
+<p>選出は両者243k、探索係数0.4、対戦相手の推定に使う事前分布、パーティ、乱数の割当を固定。ponderによる追加探索、選出表、ソルバは使っていません。サイドを入れ替えても各席の選出が同じであることと、全判断の探索回数を検査しました。試合の途中打ち切りはありません。</p>
+<p>同じ盤面から判断が分かれる最初の地点を照合すると、128条件中126条件で選択が変わりました。81k→243kの方向で、技の変更81件、技から交代26件、交代から技13件、交代先の変更6件です。判断が変わること自体は、強さの改善を意味しません。個々の一手の因果効果は、この比較だけでは分離していません。</p>
+<p>採用条件は計測前に「95%区間の下限が50%を上回る」と固定しました。追加を見送る場合も、243kと81kが同じ強さだと証明したわけではありません。</p>
+<small>ネイティブ実行で探索アルゴリズムを比較。ブラウザ版は各判断の探索用乱数の渡し方が異なり、完成版では既知パーティの選出表も使うため、製品全体の勝率をそのまま表す実験ではありません。</small>
+<h2>未知パーティの選出</h2>
+<p>事前分布に一致しない合法なカスタムパーティ16組、各2探索シード。81k／243k／729k／2187kの選出を、同じ相手の選出・乱数・対戦中81kで各16回継続評価しました。選出が同じ条件は結果の差が厳密にゼロなので、試合を再計算していません。</p>
+<div class="scroll"><table><tr><th>選出の探索回数</th><th>2187k側の得点差</th><th>差の95%区間</th><th>参照との補正上限</th><th>全上位との補正上限</th><th>判定</th></tr><tr><td>81,000</td><td>-0.4pt</td><td>-6.6pt〜+4.5pt</td><td>+4.9pt</td><td>+5.7pt</td><td>未確認</td></tr><tr><td>243,000</td><td>-0.2pt</td><td>-4.7pt〜+3.9pt</td><td>+4.3pt</td><td>+5.5pt</td><td>未確認</td></tr><tr><td>729,000</td><td>-1.4pt</td><td>-5.1pt〜+1.0pt</td><td>+1.0pt</td><td>+1.2pt</td><td>採用</td></tr></table></div>
+<p>16パーティを独立単位として集計。参照2187kの上積みが3ポイント以内という基準を、3候補に対する補正を含めて検査します。さらに中間の回数も含め、より多い探索回数の上積みがすべて3ポイント以内となることを6対比較の補正付きで確認し、両基準を満たす最小の回数を選びます。採用設定は<strong>729,000回</strong>。これは試した参照値とパーティ生成方法に対する飽和判定で、未知のあらゆるパーティに対する保証ではありません。</p>
+<h2>選出が変わる具体例</h2>
+<p>結果を見る前に例示対象として固定した1条件では、81kの「エアームド・スイクン・カビゴン」が、243k以上では「ブラッキー・スイクン・カビゴン」に変わりました。同じ相手・乱数割当で16回ずつ継続すると、前者は11勝0分5敗、後者は14勝0分2敗、得点差は+18.8ptでした。選出以降の探索は両者81kです。この1条件は判断の変化を説明する例で、一般的な強さの改善を示す独立した検定ではありません。</p>
+<h2>既知パーティの事前計算</h2>
+<p>カタログ24パーティ×公開ロスター21種類＝<strong>504組</strong>を事前計算。各組を729,000回×2探索シードで求め、選出をアプリに組み込みます。実行時は探索なしで選出できます。</p>
+<p>照合に使うのは自分の詳細な構成と相手の公開種族・レベル・並び順で照合し、公開された性別・持ち物の有無の一致も確認します。相手の非公開の技や持ち物はキーに含めません。完全解や厳密な均衡ではなく、十分な探索を事前に実行した近似です。独自の事前分布、未対応パーティ、互換性のない入力ではライブ探索に戻ります。古い表や未完成の表では製品ビルドを止めます。</p>
+<h2>待ち時間と検証</h2>
+<div class="scroll"><table><tr><th>未知選出の回数</th><th>4局面の実測時間</th><th>最大WASMメモリ</th></tr><tr><td>243,000</td><td>11.6〜13.7秒</td><td>89 MiB</td></tr><tr><td>729,000</td><td>37.2〜43.3秒</td><td>260 MiB</td></tr></table></div>
+<p>対戦中の固定した4局面でも計測しました。</p><div class="scroll"><table><tr><th>対戦中の回数</th><th>実測時間</th><th>最大WASMメモリ</th></tr><tr><td>81,000</td><td>3.1〜4.7秒</td><td>36 MiB</td></tr><tr><td>243,000</td><td>9.9〜15.1秒</td><td>86 MiB</td></tr></table></div>
+<p>計測は他の調査計算も動いているMacのChromium。iPad Safariの実測ではありません。プレイヤーが選択している間にも思考を進め、選択時点で未完了なら残りだけ待ちます。</p>
+<p>早い入力／遅い入力／思考完了後の入力で判断が一致すること、複数ターンの乱数の継続、非公開情報を変えても選出表の照合が変わらないことを確認。実際のWASMでカタログ全576組の照合と合法性を確認しました。検証記録は下記から取得できます。</p>
+<h2>Cloud利用</h2><p>計算ジョブ25件、回収された利用見積もりの合計は約<strong>2226円</strong>（クレジット適用前・請求額ではありません）。時間枠を超えたジョブの完了分も回収し、未完了分だけを継続しました。担当条件を他の実行で完了した枠は停止し、その費用は記録された時間と単価から保守的に見積もっています。全ジョブのVM・ディスク・転送用オブジェクトの削除を確認済みです。</p>
+<h2>フォーク向けインターフェース</h2><p><a href="preview-cache.html">選出キャッシュの生成・読み込みAPI</a>。保存と利用者間共有はフォーク側の責務です。</p>
+<h2>再現用データ</h2><p><a href="../nc2000-budget/index.html">選出への予算配分の予備調査</a> · <a href="../nc2000-strength/index.html">27k→81kの強さと判断改善の調査</a></p><p><a href="strength-protocol.json">strength-protocol.json</a> · <a href="strength-analysis.json">strength-analysis.json</a> · <a href="strength-result.json">strength-result.json</a> · <a href="unknown-analysis.json">unknown-analysis.json</a> · <a href="unknown-nonmonotonic-guard.json">unknown-nonmonotonic-guard.json</a> · <a href="unknown-result.json">unknown-result.json</a> · <a href="validation.json">validation.json</a> · <a href="compiled-coverage.json">compiled-coverage.json</a> · <a href="browser-timing.json">browser-timing.json</a> · <a href="browser-battle-timing.json">browser-battle-timing.json</a> · <a href="selection-case-result.json">selection-case-result.json</a> · <a href="shared-preview-check.json">shared-preview-check.json</a></p><p><a href="evidence.zip">対戦ログ・計測条件・解析コード一式</a> · <a href="../nc2000-fixed/">対戦プレビュー</a></p>
+</html>

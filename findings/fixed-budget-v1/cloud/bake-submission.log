@@ -1,0 +1,23 @@
+python3(38405) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38437) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38523) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38549) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38571) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38593) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38663) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38686) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38706) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38728) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38824) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38850) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38875) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(38923) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(39010) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(39042) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(39063) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(39161) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(39232) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(39257) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(39272) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+python3(39323) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+{"status": "failed", "results": "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/fixed-budget-v1/cloud/bake-run/results", "budget_yen": 200.0, "cleanup": "verified", "error": "Computation failed: exit 124, Batch FAILED", "backend": "gcp-batch", "machine_type": "e2-standard-16", "provisioning": "STANDARD", "returncode": 124, "allowance_yen": 197.39199999999997, "estimated_usage_yen": 107.921, "estimate_scope": "Conservative usage estimate including queue time; 160 JPY/USD accounting rate; before credits, not invoice"}

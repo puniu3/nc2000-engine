@@ -1,0 +1,11 @@
+{
+  "selected": {
+    "candidate": "net:4x4",
+    "screen_score": 0.53125,
+    "screen_mean_ms": 46.89654751487252,
+    "reference_curve_score": 0.48104729870424945,
+    "residual": 0.05020270129575055,
+    "confirmation_reference": "mcts:1800"
+  },
+  "basis": "Prespecified secondary depth-coverage amendment; chosen only from screen data, before any confirmation result."
+}

@@ -1,0 +1,14 @@
+{
+  "status": "cancelled_duplicate_only",
+  "cleanup": "verified",
+  "backend": "gcp-batch",
+  "machine_type": "e2-standard-4",
+  "provisioning": "STANDARD",
+  "returncode": null,
+  "allowance_yen": 99.6,
+  "estimated_usage_yen": 47.977,
+  "estimate_scope": "Local conservative estimate from recorded admission hourly rate and creation-to-verified-cleanup elapsed time; before credits, not invoice",
+  "audit_origin": "Local summary of explicit spot-batch cleanup; no new computation results collected",
+  "cleanup_state_sha256": "4373ad506276959f24b8fb02e61e49871564acb945eb6f926d35356553449dda",
+  "reason": "All 15 assigned fixed-study games have completed in preserved native outputs; stop duplicate computation only."
+}

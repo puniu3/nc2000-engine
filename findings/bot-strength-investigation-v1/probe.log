@@ -1,0 +1,6 @@
+
+thread 'main' (35278290) panicked at crates/bot/examples/strength_investigation.rs:25:4:
+assertion `left == right` failed
+  left: "319843944026763251664318484683498292063"
+ right: "223821410829357886175692661787463207164"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

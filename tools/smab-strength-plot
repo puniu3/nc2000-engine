@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""Export the common-reference screen as a standalone SVG/PDF plot."""
+import json
+from pathlib import Path
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+out=Path(__file__).resolve().parents[1]/'findings/smab-strength-v1'
+rows=[json.loads(p.read_text()) for p in sorted(out.glob('screen-*.json'))]
+fig,ax=plt.subplots(figsize=(9,5.5),layout='constrained')
+fig.patch.set_facecolor('#f4f1e9');ax.set_facecolor('#f4f1e9')
+colors={'mcts':'#505a52','eval':'#987132','net':'#39765d'}
+markers={'mcts':'o','eval':'s','net':'^'}
+for kind in colors:
+    rs=sorted([r for r in rows if r['a'].startswith(kind+':')],key=lambda r:r['a_metrics']['mean_ms'])
+    if not rs:continue
+    x=[r['a_metrics']['mean_ms'] for r in rs];y=[r['score'] for r in rs]
+    ax.errorbar(x,y,yerr=[r['ci95'] for r in rs],fmt=markers[kind],color=colors[kind],capsize=3,label={'mcts':'MCTS (skuct)','eval':'SMAB + eval01','net':'SMAB + frozen value net'}[kind],linestyle='-' if kind=='mcts' else 'none',alpha=.9)
+    for r,xx,yy in zip(rs,x,y):
+        ax.annotate(r['a'].split(':')[1],(xx,yy),xytext=(5,5),textcoords='offset points',fontsize=9,color=colors[kind])
+ax.axhline(.5,color='#a6ada3',linestyle=':',linewidth=1)
+ax.set_xscale('log');ax.set_ylim(0,1)
+ax.set_xlabel('Mean thinking time per non-forced decision (ms, native / 4 workers)')
+ax.set_ylabel('Score against skuct:3000')
+ax.set_title('Exploratory cost / strength screen — perfect information')
+ax.grid(alpha=.15);ax.legend(loc='best',fontsize=9)
+fig.suptitle('64 games per point; 95% intervals over side-swapped pairs',fontsize=10,color='#505a52')
+fig.savefig(out/'frontier.svg');fig.savefig(out/'frontier.pdf')

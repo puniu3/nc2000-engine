@@ -1,0 +1,8 @@
+{
+  "crates/bot/examples/strength_investigation.rs": "6cac8ee9720b92edd155d85bcf781f456bd296292868b6dfd9830c6d9c1eee17",
+  "target/release/examples/strength_investigation": "66817db61e844fc1be5c36f08ede304d125f490d3214724b6f03c532738d3d77",
+  "web/tests/strength-budget.mjs": "50973ca8af79c46846fc28120d35540c9b58923a15e82baac0f161f9e0652de4",
+  "web/tests/strength-public-parity.mjs": "4f502cb73775fa699c2850472782c45370237df2c2a312a9f24ce728959f5243",
+  "findings/bot-strength-investigation-v1/report.py": "43d5fd1c141a1609ef31422f920976a5bf0933ecd06d0066e3f19b41cffa0d20",
+  "findings/bot-strength-investigation-v1/confirm.py": "6d3b32a4c4680e16af3247640845725d144acd4e71cc0e782af555d4cfc50a49"
+}

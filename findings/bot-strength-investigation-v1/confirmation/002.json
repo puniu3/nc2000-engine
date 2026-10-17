@@ -1,0 +1,1 @@
+{"trial": 2, "seed": 2026102202, "iterations": 27000, "rows": [{"action": "switch 2", "result": {"score": 0.0, "turn": 11, "decisions": 9, "log": null}}, {"action": "switch 3", "result": {"score": 0.0, "turn": 18, "decisions": 16, "log": null}}]}

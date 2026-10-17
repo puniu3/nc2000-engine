@@ -4,14 +4,8 @@
 // step() slices with a macrotask yield in between so progress posts flush
 // and cancel/flush messages can interleave — the UI thread never blocks.
 //
-// Ponder (M9c): a search launched with `ponder: true` (a simultaneous
-// request point — the human also owes a pick) does not stop at its budget.
-// Budget iterations are the required think; past them it keeps stepping —
-// free bonus strength while the human deliberates — up to PONDER_CAP x
-// budget (bounds memory). A `flush` message (human committed) makes it
-// return `best()` at the next slice boundary; if the flush arrives before
-// the budget is met, the required think still completes first. Bot-only
-// points (`ponder: false`) stop exactly at budget, as before.
+// Live searches start during the human's selection and stop at a fixed
+// iteration count. Input timing never adds or removes iterations.
 //
 // Information policy: every live game is blind. The per-game BlindSearcher
 // sees what the human also sees — the opponent's six species/levels/types
@@ -30,7 +24,7 @@
 //
 // The mirror battle runs log-ON (the observer's trace-free reveal channel
 // reads it). Per search: observe() feeds the mirror, then the stepped
-// search ponders.
+// search runs to its fixed count.
 
 import init, {
   Dex,
@@ -38,8 +32,10 @@ import init, {
   BlindSearcher,
   PlayerChannel,
   ProtocolSearcher,
+  embeddedDexJson,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import { searchProfile } from "./search-profile";
+import { compiledPreviewMatches, compiledPreviewPick } from "./compiled-preview";
 import type { EndgameSettings } from "./endgame-settings";
 import { runEndgameSearch } from "./endgame-search";
 
@@ -56,6 +52,7 @@ export type WorkerRequest =
         side: number;
         seed: number;
         priorJson?: string;
+        compiledPreview?: boolean;
         endgame?: EndgameSettings;
       };
     }
@@ -97,8 +94,8 @@ export type WorkerResponse =
       ms: number;
       wasmMemoryBytes: number;
       endgame?: string;
-      /** Where the pick came from (always the live search). */
-      src?: "search";
+      /** Known preview lookup or a live fixed-budget search. */
+      src?: "table" | "search";
     }
   /** Raw `setBeliefPrior` report JSON, posted once per battle that carried a
    * `priorJson` — applied or refused, the caller gets the verdict rather
@@ -121,6 +118,8 @@ const ready = init().then(exports => {
 
 let battle: Battle | null = null;
 let searcher: BlindSearcher | null = null;
+let compiledAllowed: Promise<boolean> = Promise.resolve(false);
+let previewSeed = 0;
 let forked: {
   channel: PlayerChannel;
   searcher: ProtocolSearcher;
@@ -135,7 +134,7 @@ function dropForked() {
   forked = null;
 }
 let gen = 0; // bumped whenever the battle state moves on -> running searches abort
-let flushed = false; // human committed: stop pondering at the next slice
+let flushed = false; // only the opt-in timed experiment observes this
 let forkMode: "open" | "blind" = "blind"; // a forked battle's recorded policy
 
 self.onmessage = (e: MessageEvent<WorkerRequest>) => {
@@ -149,6 +148,9 @@ async function handle(m: WorkerRequest): Promise<void> {
   switch (m.t) {
     case "battle": {
       gen += 1;
+      previewSeed = m.searcher.seed;
+      compiledAllowed = m.searcher.compiledPreview === false || m.searcher.priorJson
+        ? Promise.resolve(false) : compiledPreviewMatches(m.searcher.poolJson, embeddedDexJson()).catch(() => false);
       searcher?.free();
       searcher = null;
       dropForked();
@@ -228,7 +230,6 @@ async function handle(m: WorkerRequest): Promise<void> {
   }
 }
 
-const PONDER_CAP = 10; // max total think = cap x budget
 
 // Adaptive slice size: target ~125 ms per step() call so progress ticks
 // ~8x/s on any device (>=4x/s even when a slice overshoots 2x), and cancel
@@ -258,13 +259,14 @@ interface SearchMsg {
 
 // One decision point on the persistent per-game searcher: observe()
 // snapshots the mirror's state (updating the belief's observations), then
-// the stepped search runs the ponder loop. The searcher is NOT freed per
+// the stepped search runs to its fixed count. The searcher is NOT freed per
 // decision — it carries the game's accumulated observations.
 async function runSearch(m: SearchMsg): Promise<void> {
   const myGen = gen;
   flushed = false;
-  const cap = m.budget * PONDER_CAP;
   const s = searcher!;
+  const allowCompiled = await compiledAllowed;
+  if (gen !== myGen) return;
   s.observe(battle!);
   // That observe() is what re-filtered the belief and rebuilt the fallback
   // roster the prior drives, so this is the first instant either read means
@@ -272,13 +274,27 @@ async function runSearch(m: SearchMsg): Promise<void> {
   // ms stays the search's.
   post({ t: "belief", info: s.beliefInfo(), prior: s.beliefPriorInfo() });
   const t0 = performance.now();
+  const compiled = allowCompiled
+    ? compiledPreviewPick(s.compiledPreviewBuild(), s.compiledPreviewKey(battle!), previewSeed, searchProfile("blind").c, s.previewCacheInfo())
+    : undefined;
+  // Validate against this engine's actual ordered action space, even though
+  // the artifact is built and versioned with the same sources.
+  if (compiled && (JSON.parse(battle!.legalChoices(m.side)) as { input: string }[]).some(c => c.input === compiled)) {
+    post({ t: "result", id: m.id, best: compiled,
+      policy: JSON.stringify({ iterations: 0, preview: true, baked: true,
+        actions: [{ input: compiled, visits: 0, mean: 0.5, frac: 1 }] }),
+      ms: performance.now() - t0, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "table" });
+    return;
+  }
   let done = 0;
   for (;;) {
     if (gen !== myGen) return; // superseded: next observe() resets the search
-    // Required think first; then ponder until flushed or capped.
-    const target = !m.ponder || flushed ? m.budget : cap;
+    // Always finish the requested count, including after an early flush.
+    const target = m.budget;
     if (done >= target) break;
-    done = stepAdaptive(s, Math.min(slice, target - done));
+    const next = stepAdaptive(s, Math.min(slice, target - done));
+    if (next === done) break;
+    done = next;
     post({ t: "progress", id: m.id, done, budget: m.budget });
     // Macrotask yield: flush the progress post, let cancel/flush interleave.
     await new Promise((r) => setTimeout(r, 0));
@@ -296,7 +312,7 @@ async function runSearch(m: SearchMsg): Promise<void> {
 }
 
 // The forked bot's decision: catch the searcher up on the player stream
-// since its last decision, then the same ponder loop. At the fork itself the
+// since its last decision, then the same fixed-budget loop. At the fork itself the
 // searcher is already installed from the position and no line has arrived.
 async function runForkSearch(m: SearchMsg): Promise<void> {
   const t0 = performance.now();
@@ -328,11 +344,10 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
       policy: f.searcher.rootPolicy(), ms: performance.now() - t0, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "search", endgame: f.searcher.endgameStats() });
     return;
   }
-  const cap = m.budget * PONDER_CAP;
   let done = 0;
   for (;;) {
     if (gen !== myGen) return;
-    const target = !m.ponder || flushed ? m.budget : cap;
+    const target = m.budget;
     if (done >= target) break;
     const next = stepAdaptive(f.searcher, Math.min(slice, target - done));
     if (next === done) break; // a forced choice: the searcher does not step

@@ -1,0 +1,178 @@
+{
+  "id": "g9-d18",
+  "snapshot": {
+    "turn": 16,
+    "key": "70927396898913957912994355404986132422",
+    "sides": [
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 65,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 20
+            },
+            {
+              "move": "fireblast",
+              "pp": 4
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "miltank",
+          "active": false,
+          "hp": 220,
+          "maxhp": 220,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "return",
+              "pp": 30
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 6
+            },
+            {
+              "move": "curse",
+              "pp": 15
+            },
+            {
+              "move": "milkdrink",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "exeggutor",
+          "active": false,
+          "hp": 0,
+          "maxhp": 201,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "psychic",
+              "pp": 16
+            },
+            {
+              "move": "explosion",
+              "pp": 7
+            },
+            {
+              "move": "leechseed",
+              "pp": 15
+            },
+            {
+              "move": "sleeppowder",
+              "pp": 24
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "suicune",
+          "active": true,
+          "hp": 28,
+          "maxhp": 206,
+          "status": "slp",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "surf",
+              "pp": 24
+            },
+            {
+              "move": "icebeam",
+              "pp": 12
+            },
+            {
+              "move": "rest",
+              "pp": 15
+            },
+            {
+              "move": "sleeptalk",
+              "pp": 14
+            }
+          ]
+        },
+        {
+          "species": "tyranitar",
+          "active": false,
+          "hp": 0,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "crunch",
+              "pp": 24
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 8
+            },
+            {
+              "move": "icebeam",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "skarmory",
+          "active": false,
+          "hp": 87,
+          "maxhp": 171,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "drillpeck",
+              "pp": 31
+            },
+            {
+              "move": "curse",
+              "pp": 14
+            },
+            {
+              "move": "whirlwind",
+              "pp": 31
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "value": [
+    0.0,
+    1.0
+  ],
+  "stop": "NodeBudget",
+  "runs": 18824,
+  "ms": 1134.0525,
+  "one_sided_heal": "Err(NotLastMon { side: 0 })",
+  "two_sided_heal": "Err(NotLastMon { side: 0 })"
+}

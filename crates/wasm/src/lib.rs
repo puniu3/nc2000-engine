@@ -31,6 +31,8 @@
 //! Objects share the dex via `Rc` (wasm is single-threaded), so JS passes
 //! the dex only at construction time.
 
+mod preview_cache;
+
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -54,6 +56,13 @@ use nc2000_engine::replay::{Recorder, Replay};
 /// over the wire) — one fetch fewer and no path plumbing for the common
 /// case; `Dex.fromJson` exists for callers that want to ship it separately.
 const EMBEDDED_DEX: &str = include_str!("../../../data/gen2stadium2.json");
+
+/// Exact data embedded in this binary, for compiled-policy compatibility.
+#[wasm_bindgen(js_name = embeddedDexJson)]
+pub fn embedded_dex_json() -> String {
+    EMBEDDED_DEX.to_string()
+}
+
 
 /// data/learnsets-gen2.json baked in too (~124 KB raw, ~13 KB gzipped —
 /// well under the dex's embed precedent, and the validator is useless
@@ -459,6 +468,8 @@ pub struct WasmBlindSearcher {
     /// M18: has the first `observe()` run? A belief prior is accepted only
     /// before it — see `setBeliefPrior`'s third refusal.
     observed: bool,
+    preview_cache_identity: preview_cache::Identity,
+    preview_cache_info: Option<String>,
     rng: SplitMix64,
     search: Option<BlindSearch>,
     baked: Option<SearchChoice>,
@@ -497,6 +508,8 @@ impl WasmBlindSearcher {
             belief,
             pinned: false,
             observed: false,
+            preview_cache_identity: preview_cache::Identity::new("blind", &skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets), pool_json),
+            preview_cache_info: None,
             rng: SplitMix64::new(seed as u64),
             search: None,
             baked: None,
@@ -526,6 +539,25 @@ impl WasmBlindSearcher {
         Ok(())
     }
 
+    /// Own canonical set + opponent public roster, at preview only.
+    #[wasm_bindgen(js_name = compiledPreviewKey)]
+    pub fn compiled_preview_key(&self, battle: &WasmBattle) -> Option<String> {
+        nc2000_bot::compiled_preview::key(&battle.battle, self.side)
+    }
+
+    #[wasm_bindgen(js_name = compiledPreviewBuild)]
+    pub fn compiled_preview_build(&self) -> String {
+        nc2000_bot::compiled_preview::build_fingerprint().to_string()
+    }
+
+    /// Opaque cache identity after observe(), for a blind preview only.
+    /// This contains public opponent facts, never their hidden set.
+    #[wasm_bindgen(js_name = previewCacheInfo)]
+    pub fn preview_cache_info(&self) -> Option<String> {
+        if self.pinned { return None; }
+        self.preview_cache_info.clone()
+    }
+
     /// Feed one baked pair table (`data/preview-tables-v0/pair-*.json`
     /// contents) for the belief-mediated preview lookup.
     #[wasm_bindgen(js_name = addPair)]
@@ -540,6 +572,7 @@ impl WasmBlindSearcher {
     /// M8 mixed table plays instead: `bakedPreview()`/`best()` return the
     /// table pick immediately and `step` is a no-op.
     pub fn observe(&mut self, battle: &WasmBattle) -> Result<(), JsError> {
+        self.preview_cache_info = None;
         self.observed = true;
         self.observer.observe(&battle.battle, &self.dex);
         self.belief
@@ -570,6 +603,7 @@ impl WasmBlindSearcher {
                 }
             }
         }
+        self.preview_cache_info = self.preview_cache_identity.info(&battle.battle, &self.observer);
         self.search = Some(search);
         Ok(())
     }
@@ -724,6 +758,7 @@ impl WasmBlindSearcher {
         let applied = refusals.is_empty();
         let report = belief_prior_report(&prior, applied, &refusals);
         if applied {
+            self.preview_cache_identity.set_prior(json);
             self.belief.set_prior(Arc::new(prior));
         }
         report
@@ -760,6 +795,7 @@ impl WasmBlindSearcher {
 pub struct WasmProtocolSearcher {
     dex: Rc<Dex>,
     agent: ProtocolAgent,
+    preview_cache_identity: Option<preview_cache::Identity>,
     /// Open-team-sheet mode (`pinOpponent`). Tracked here only so
     /// `setBeliefPrior` can refuse out loud instead of relying on the agent's
     /// internal "never onto a pinned belief" guard.
@@ -816,8 +852,9 @@ impl WasmProtocolSearcher {
     ) -> Result<WasmProtocolSearcher, JsError> {
         let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
         let cfg = skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets);
+        let preview_cache_identity = Some(preview_cache::Identity::new("protocol", &cfg, pool_json));
         let agent = ProtocolAgent::new(&dex.dex, side, pool, cfg, seed as u64);
-        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: false, endgame: None })
+        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, preview_cache_identity, pinned: false, endgame: None })
     }
 
     /// `c` defaults to the profile of the information policy the fork was
@@ -829,7 +866,7 @@ impl WasmProtocolSearcher {
         let recorded = if fork.info == nc2000_bot::fork::Info::Open { "open" } else { "blind" };
         let c = c.unwrap_or_else(|| profile_c(recorded));
         let agent = fork.bot_agent(&dex.dex, pool, skuct_config(c, None), seed as u64).map_err(|e| JsError::new(&e))?;
-        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: fork.info == nc2000_bot::fork::Info::Open, endgame: None })
+        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, preview_cache_identity: None, pinned: fork.info == nc2000_bot::fork::Info::Open, endgame: None })
     }
 
     /// Our exact team, as submitted to PS (same JSON array shape as the
@@ -906,6 +943,7 @@ impl WasmProtocolSearcher {
         let applied = refusals.is_empty();
         let report = belief_prior_report(&prior, applied, &refusals);
         if applied {
+            if let Some(identity) = self.preview_cache_identity.as_mut() { identity.set_prior(json); }
             self.agent.set_belief_prior(Arc::new(prior));
         }
         report
@@ -950,6 +988,15 @@ impl WasmProtocolSearcher {
     pub fn on_request(&mut self, request_json: &str) -> Result<bool, JsError> {
         self.endgame = None;
         self.agent.on_request(&self.dex, request_json).map_err(|e| JsError::new(&e))
+    }
+
+    /// Opaque cache identity after onRequest(), for a blind preview only.
+    /// Forks, hand-entered positions, pinned sheets and endgame sessions are
+    /// excluded from the shared preview-cache interface.
+    #[wasm_bindgen(js_name = previewCacheInfo)]
+    pub fn preview_cache_info(&self) -> Option<String> {
+        if self.pinned || self.endgame.is_some() || !self.agent.search()?.is_preview() { return None; }
+        self.preview_cache_identity.as_ref()?.info(self.agent.battle()?, self.agent.observer()?)
     }
 
     /// The baked-table preview pick when one applies, else `null`.
@@ -1039,6 +1086,7 @@ impl WasmProtocolSearcher {
     pub fn set_position(&mut self, spec_json: &str) -> Result<(), JsError> {
         self.endgame = None;
         let spec = PositionSpec::parse(spec_json).map_err(|e| JsError::new(&e))?;
+        self.preview_cache_identity = None;
         self.agent.set_position(&self.dex, &spec).map_err(|e| JsError::new(&e))
     }
 

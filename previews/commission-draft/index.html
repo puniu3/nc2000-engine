@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NC2000 — About</title>
+<style>
+:root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #24251f; background: #efede7; }
+* { box-sizing: border-box; }
+body { max-width: 760px; margin: auto; padding: 36px 24px 60px; line-height: 1.65; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 44px; }
+header a { font-weight: 600; text-decoration: none; }
+a { color: inherit; text-underline-offset: .2em; }
+h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -.03em; margin: 0 0 24px; }
+h2 { font-size: 1.1rem; margin: 30px 0 12px; }
+p { margin: 0 0 16px; }
+ul { padding-left: 20px; margin: 0; }
+li { padding-left: 3px; margin-bottom: 13px; }
+.links { display: flex; gap: 24px; margin: 24px 0; }
+.label { font-size: .8rem; color: #616257; }
+a:focus-visible { outline: 2px solid #715535; outline-offset: 5px; }
+@media print { header { display: none; } body { padding: 0; background: white; } }
+</style>
+<header><a href="https://puniu3.github.io/">puniu3</a><span class="label">About draft</span></header>
+<main>
+<h1>NC2000</h1>
+<h2>Overview</h2>
+<p>A Pokémon Gen 2 battle bot for Nintendo Cup 2000. It plays on par with experienced players and takes approximately three seconds per move on local hardware.</p>
+<nav class="links" aria-label="Project links"><a href="https://puniu3.github.io/nc2000-engine/">Play ↗</a><a href="https://github.com/puniu3/nc2000-engine">Code ↗</a></nav>
+
+<h2>Technology</h2>
+<ul>
+<li><strong>Rust rules engine.</strong> Reimplemented from Pokémon Showdown, with battle state, random-number state and logs checked against the reference implementation.</li>
+<li><strong>Search-based play.</strong> Monte Carlo tree search evaluates actions through simulated continuations. Unrevealed opposing moves and items are sampled from candidates consistent with observations.</li>
+<li><strong>Local solvers.</strong> Bounded analysis of small positions, supplemented by checks that reject provably ineffective actions.</li>
+<li><strong>No neural network in the deployed bot.</strong> Several approaches were tested; none established a playing-strength improvement over the search baseline.</li>
+</ul>
+
+</main>
+</html>

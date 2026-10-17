@@ -1,0 +1,10 @@
+[
+  {
+    "path": "belief-pool-v3/belief-pool.json",
+    "matches_public": true
+  },
+  {
+    "path": "team-pool-v2/team-pool.json",
+    "matches_public": true
+  }
+]

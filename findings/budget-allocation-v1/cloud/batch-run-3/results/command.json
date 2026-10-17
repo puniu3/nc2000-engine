@@ -1,0 +1,8 @@
+{
+  "command": [
+    "python3",
+    "findings/budget-allocation-v1/cloud/run.py"
+  ],
+  "returncode": 101,
+  "wall_seconds": 35.86742597400001
+}

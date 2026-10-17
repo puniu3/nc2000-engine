@@ -1,0 +1,17 @@
+[package]
+name = "nc2000-engine"
+version = "0.1.0"
+edition = "2021"
+description = "NC2000 battle engine with operational sleep forfeits and PS fixture conformance"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+smallvec = "1.15.2"
+miniz_oxide = "0.8"
+sha2 = "0.10"
+
+[build-dependencies]
+sha2 = "0.10"

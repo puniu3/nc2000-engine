@@ -1,0 +1,278 @@
+{
+  "schema": "nc2000-headroom-fixture-scope-audit-v1",
+  "corpora": {
+    "puredata": {
+      "teams": 60,
+      "pokemon": 360,
+      "pokemon_with_item": 0,
+      "teams_without_any_item": 60,
+      "levels": {
+        "50": 183,
+        "51": 177
+      },
+      "formats": {
+        "gen2nintendocup2000noohkostadium2strict": 30
+      }
+    },
+    "full": {
+      "teams": 60,
+      "pokemon": 360,
+      "pokemon_with_item": 260,
+      "teams_without_any_item": 0,
+      "levels": {
+        "50": 181,
+        "51": 179
+      },
+      "formats": {
+        "gen2nintendocup2000noohkostadium2strict": 30
+      }
+    }
+  },
+  "current_fixture_files": [
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-000.json",
+      "sha256": "05875084ee13d8a0c8860820af8e09229b53036e24d36fdf92a8ea16fd4aba74"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-001.json",
+      "sha256": "7fa36b01bfcf76e4647da9e0caf1a374eab93be1a6ed14023b7a0ddb276f0ba7"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-002.json",
+      "sha256": "fc30be10b6e99c03ca697febdda0ef5cc140bc28be4e1328a86d4725674f0d99"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-003.json",
+      "sha256": "452121f001fdbadbb9c36f8c262f76c9d21215d7e39e639f447a8275b1c7bd53"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-004.json",
+      "sha256": "d5aff45ac11a3118bc182524647377cb48cc2a9c7b67d5266c0fd354c03b52bd"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-005.json",
+      "sha256": "ff7aacfc2aab452a49f7c5f5b1ff2565812a4dbb1d0c7029ea38b092c12c01e9"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-006.json",
+      "sha256": "ddff5a80a8b9580b1964d66b3ef8d92133037f1dda5a39f223e47d2c2981cb3a"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-007.json",
+      "sha256": "b0e5758252e278770f3def177fab6ac7fbeffba9d83fdf77a9d743b6a1891a12"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-008.json",
+      "sha256": "bd79f32a56fedc32b7b705bb231d97105786718a86d9681beadb692bc646710f"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-009.json",
+      "sha256": "015e5be30eda19f9e6476ef9b2c7f5a8bf72181a06fb776298d09f0575d88c7a"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-010.json",
+      "sha256": "351887702e1b9db2cf0a4d848fa274e5ee5a0ee65d4d4889be3d52faa41c7b73"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-011.json",
+      "sha256": "fd72d2106c50cd21967e12b87b2a798537faf27ab0fd1d3435b6470dd96205a8"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-012.json",
+      "sha256": "e4859bcf891b316efb6aeda3b18379895ace9e17df5303e887aa76738d539034"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-013.json",
+      "sha256": "7b6daac821c7bd0246323b204097762b834e5c41f843fffd3914efc4ca76c6d4"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-014.json",
+      "sha256": "bbe6382231b322255fe65d6bdab908d16a2126b11a8f203d88c1104093eb1e6c"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-015.json",
+      "sha256": "86d58e08fc721b7615914440e638064b66e7b171b20be9dc90d13fa8b3dbb936"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-016.json",
+      "sha256": "1d64ffabc3b25119cc7844825ed874eff00fe9e6f610f30fec654a2eda3ca7bc"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-017.json",
+      "sha256": "f59ad45e9876ebf6c5012e8e1c24d9a3f21c986e70484edd457fb4d4922c768f"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-018.json",
+      "sha256": "fb28e9444af1befead8c773a7254f8b9a3390d480ee45308ea10e020d598c221"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-019.json",
+      "sha256": "20de29491342175ce32e802a3e617e3b21eb2a21239c8ba9754a5664c1c53ffd"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-020.json",
+      "sha256": "c2617730a333bcaf8fbaa89e0cfb169ecb8dae7cc4589d46c97fe6b5d771931e"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-021.json",
+      "sha256": "8b7e2902eebfdeb80b782d6dc0bd9d49e3c7398a89682482b181f9f07b1df07b"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-022.json",
+      "sha256": "578761db85bd5dafe9acf431e413238044eaacae9b67aedc7b604daa312af583"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-023.json",
+      "sha256": "275d1d77caddb90651d231f2ece2cb75df494c3a8fe198fa1c06ec7297769dac"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-024.json",
+      "sha256": "01b3bf12929db7745bf806d24e1a6cd6b99750e613e304f848488eba876fc784"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-025.json",
+      "sha256": "ad43b76a3091df68edd0a05873968b18cd0e755f6f0ebdd8a79b42de0d9c4f70"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-026.json",
+      "sha256": "07cc2f303e29dceed99d40713c399084e1ee2343acbe3f826ab50ddf9a6c1860"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-027.json",
+      "sha256": "0170f302bcbaf5d326886cffe150aec7ccfca474e844a77149f8f01e02a1058d"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-028.json",
+      "sha256": "081f3276922913948e1a86005e3e36eec52ed49d79fdb40a6453491c9d6d5eaf"
+    },
+    {
+      "path": "fixtures/corpus-v1/puredata/battle-029.json",
+      "sha256": "7ed01f7d8241a149c26e77cd88f673acdd13a1f093243563e8537775739f75ce"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-000.json",
+      "sha256": "30453eaf6b37a8ac90ee241597b18506c8b34ee23c04f94b489a9c72b4808060"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-001.json",
+      "sha256": "f998b71ef5a6fbc8cb491e9d471a9e6de55879545c802a7f7d520c03103ddd9c"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-002.json",
+      "sha256": "6fedac3908b130a5aad615f6ab0f0fcd0f0ce592dd9224ebb4c2c468abbcf4af"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-003.json",
+      "sha256": "93c1bea40da7a2a396b4067752cce7e0cb96187f374a46067722e0494a4e244e"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-004.json",
+      "sha256": "2c1ef2c382adab4274227cff64380f66c0681ebb30ef489f9ba9a72b08cc17e0"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-005.json",
+      "sha256": "933b1f6a69663e55a08e1ac1d591fd2eccaccea8a4b44f208723bad0944b6495"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-006.json",
+      "sha256": "1225a3aee1e88ea8c2b693d0f019a473127c8accc94d7d0947d11ca0ebf724a6"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-007.json",
+      "sha256": "86a6f9b2df5e1b3ce2f8f8a5e0195a7a211919c2a7ea8b4c6b6d3208dd7e4105"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-008.json",
+      "sha256": "259c33ec3e2715974fc2cf209ac92b2921333a26ffc09565c7e05d4dfec53219"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-009.json",
+      "sha256": "f9088c0ce59eceb88acbae979dacdf2703ca8a4295798e196b6ac0e095680d30"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-010.json",
+      "sha256": "e0ff5ae6eb4344a3b480876e9a908312ee40ec9e54913eb06672e2e50dcef2b8"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-011.json",
+      "sha256": "044700feb126528cfd4007a8d491b772dbf44c6d1be9142aa9e8eeeb297d62a0"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-012.json",
+      "sha256": "a08e723162d4cbdd8c396cdc482429351dc655b2f00fae5d69d1b1fb13e08cde"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-013.json",
+      "sha256": "79a899922424b27b1ca48e9dcede00b067ba43dc01ad97237582a5ccd39eb81c"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-014.json",
+      "sha256": "5df9aba3e6cba881320e8cca55c37674fb6e1e594effa80235c66e19da55b1c9"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-015.json",
+      "sha256": "82329d5426f040d4d8fdacd86a48a3e96480bcde166439535bd299ba07a48b2c"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-016.json",
+      "sha256": "d5a7e8abcabc1229ac7b947933cc5b01f2e67d34df8cf5140c1b3b07b012f503"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-017.json",
+      "sha256": "d537c1e2868470e83d14293d2a3a7e539106621b73a66c530afaada524e19ae0"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-018.json",
+      "sha256": "261db79d7ce62dd1ef1a79465fce161674e59157bfa510307c16ed89ca081139"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-019.json",
+      "sha256": "f31940fb2d3d3dae0bd01296fa8936e6cbc138acf019469622ce626b4e069dd6"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-020.json",
+      "sha256": "306a33d12472a9a4aa8a2cb89cccb33e8fa6a1492a986261731d6266c0086f1e"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-021.json",
+      "sha256": "612a7d2daf16cd0b39a01cec67a821dd117976f6b21e90da4ebbf34d491525db"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-022.json",
+      "sha256": "c6432567bf9926711b03ddc588de69e29ee0070578a03104cd932616d6019bdc"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-023.json",
+      "sha256": "f7477e63e7ccd11c5d2565c0cde9e775521a37ae67f62e9b8224f690a84caec5"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-024.json",
+      "sha256": "53cb49ab12f0777eaaf10291d3072e3e45d6fe0b5c76f0e194a20ab8be116450"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-025.json",
+      "sha256": "fd6fa3241197a468862b1be144aaeba58df76a7206ef6c5b661871cd14bcbc45"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-026.json",
+      "sha256": "07e081929f26bcc3494d30a6f07353fca8bc34f495d7511aecbc341d46d4721a"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-027.json",
+      "sha256": "6b757f813c67d7612a807c7903f338d8df48d83e2e9a0a74a949ed668f84198e"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-028.json",
+      "sha256": "a8ed534352e357f36fa38c4bc9ccd583a75e9fca2f1bdb35f8925db14ba9b970"
+    },
+    {
+      "path": "fixtures/corpus-v1/full/battle-029.json",
+      "sha256": "bb6b2b3404dfa65fea9c506e02513f0cb74874daa96bc6716cb896334cbb768b"
+    }
+  ],
+  "scope": "Read-only audit of current arena fixture input composition; no new games, no independent team legality certificate, and no claim of a human-team sampling distribution.",
+  "generator": "tools/gen-fixtures.js",
+  "generator_sha256": "1d32cf4d73407cae6f90ede18bb0d1325713796ddb2328eae6e095b94fdaab34",
+  "arena_loader": "crates/bot/examples/arena.rs::load_team_pool",
+  "conclusion": "The historical oracle comparison used a mixture of 60 puredata and 60 full randomly generated teams. Its gains cannot be treated as estimates of feasible inference improvements against human teams."
+}

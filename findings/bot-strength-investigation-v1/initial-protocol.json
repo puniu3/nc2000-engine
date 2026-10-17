@@ -1,0 +1,82 @@
+{
+  "schema": "nc2000-strength-investigation-v1",
+  "purpose": "Exploratory deployment cost, nested blind action changes, conditional tactical solver feasibility",
+  "selection": "First sampled state per archived game where side0 has >=2 legal actions; first six game previews; four fresh search seeds. No outcome-dependent source selection.",
+  "budgets": [
+    27000,
+    81000
+  ],
+  "threads": 4,
+  "source_scope": "24 archived catalog selfplay games; endgame-enriched, not prevalence or causal decomposition of the 756 confirmation games",
+  "hashes": {
+    "crates/bot/examples/strength_investigation.rs": "b43d796a8e521d4e93c87a54caf148ec5762c7f4d2c0dec2ffbd527247a6448d",
+    "target/release/examples/strength_investigation": "593321190c0985d7bdf7d9d8de66e3ffcfa98574f444a73340a54fd01868bdcf",
+    "data/search-profiles.json": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "data/team-pool-v2/team-pool.json": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+    "findings/bot-strength-investigation-v1/corpus.jsonl": "091af45282d2fe7537591d0b060c7d4f428eec530402b69cdb8512967cb8e6ca"
+  },
+  "supplementary_selection": "All 12 archived endpoints with a certified bad alternative and certified near-optimal pure action. Diagnostic enrichment, not prevalence; selected before fresh probes.",
+  "certified_selection": [
+    {
+      "game": 1,
+      "decision": 21,
+      "side": 0
+    },
+    {
+      "game": 2,
+      "decision": 11,
+      "side": 0
+    },
+    {
+      "game": 2,
+      "decision": 11,
+      "side": 1
+    },
+    {
+      "game": 2,
+      "decision": 13,
+      "side": 0
+    },
+    {
+      "game": 2,
+      "decision": 13,
+      "side": 1
+    },
+    {
+      "game": 6,
+      "decision": 33,
+      "side": 0
+    },
+    {
+      "game": 6,
+      "decision": 33,
+      "side": 1
+    },
+    {
+      "game": 15,
+      "decision": 21,
+      "side": 0
+    },
+    {
+      "game": 16,
+      "decision": 26,
+      "side": 1
+    },
+    {
+      "game": 18,
+      "decision": 28,
+      "side": 0
+    },
+    {
+      "game": 20,
+      "decision": 23,
+      "side": 1
+    },
+    {
+      "game": 21,
+      "decision": 40,
+      "side": 0
+    }
+  ]
+}

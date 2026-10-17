@@ -1,0 +1,4 @@
+game 0: 2 samples, 15 decisions, Some(P1Win), 1.3s
+game 1: 6 samples, 30 decisions, Some(P2Win), 3.1s
+game 2: 4 samples, 12 decisions, Some(P2Win), 1.3s
+game 3: 6 samples, 17 decisions, Some(P1Win), 1.5s

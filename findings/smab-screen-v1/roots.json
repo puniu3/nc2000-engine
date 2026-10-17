@@ -1,0 +1,337 @@
+{
+  "replayed_decisions": 225,
+  "roots": [
+    {
+      "game": 1,
+      "decision": 32,
+      "key": "95960204221239154475721129683695045937",
+      "turn": 28,
+      "alive": [
+        1,
+        1
+      ],
+      "actions": [
+        [
+          "move bodyslam",
+          "move fireblast",
+          "move rest",
+          "move selfdestruct"
+        ],
+        [
+          "move hydropump",
+          "move icebeam",
+          "move sleeptalk",
+          "move rest"
+        ]
+      ],
+      "stratum": 0,
+      "rank": 308567229697740353
+    },
+    {
+      "game": 8,
+      "decision": 15,
+      "key": "326189755476747421997799735591216746478",
+      "turn": 12,
+      "alive": [
+        1,
+        1
+      ],
+      "actions": [
+        [
+          "move bodyslam",
+          "move earthquake",
+          "move selfdestruct",
+          "move curse"
+        ],
+        [
+          "move thunderbolt",
+          "move reflect",
+          "move lightscreen",
+          "move explosion"
+        ]
+      ],
+      "stratum": 0,
+      "rank": 574636750123048406
+    },
+    {
+      "game": 0,
+      "decision": 16,
+      "key": "72839079707471019154237927086484683093",
+      "turn": 13,
+      "alive": [
+        1,
+        1
+      ],
+      "actions": [
+        [
+          "move doubleedge",
+          "move curse",
+          "move rest",
+          "move sleeptalk"
+        ],
+        [
+          "move doubleedge",
+          "move curse",
+          "move rest",
+          "move sleeptalk"
+        ]
+      ],
+      "stratum": 0,
+      "rank": 2398060427346970419
+    },
+    {
+      "game": 11,
+      "decision": 15,
+      "key": "210593946082552667771236090012874685160",
+      "turn": 12,
+      "alive": [
+        1,
+        1
+      ],
+      "actions": [
+        [
+          "move psychic",
+          "move stunspore",
+          "move sleeppowder",
+          "move explosion"
+        ],
+        [
+          "move earthquake",
+          "move fireblast",
+          "move roar",
+          "move explosion"
+        ]
+      ],
+      "stratum": 0,
+      "rank": 3530222572947894854
+    },
+    {
+      "game": 3,
+      "decision": 16,
+      "key": "294964062189336057442500822637069870817",
+      "turn": 13,
+      "alive": [
+        1,
+        2
+      ],
+      "actions": [
+        [
+          "move doubleedge",
+          "move curse",
+          "move fireblast",
+          "move selfdestruct"
+        ],
+        [
+          "move surf",
+          "move icebeam",
+          "move rest",
+          "move sleeptalk",
+          "switch 3"
+        ]
+      ],
+      "stratum": 1,
+      "rank": 70691084857175389
+    },
+    {
+      "game": 7,
+      "decision": 6,
+      "key": "43273766182584550904918545916264284833",
+      "turn": 4,
+      "alive": [
+        1,
+        2
+      ],
+      "actions": [
+        [
+          "move icebeam",
+          "move explosion",
+          "move reflect",
+          "move spikes"
+        ],
+        [
+          "move psychic",
+          "move explosion",
+          "move leechseed",
+          "move sleeppowder",
+          "switch 3"
+        ]
+      ],
+      "stratum": 1,
+      "rank": 336490514052303275
+    },
+    {
+      "game": 6,
+      "decision": 4,
+      "key": "158109164234731066714479161495916564902",
+      "turn": 3,
+      "alive": [
+        2,
+        2
+      ],
+      "actions": [
+        [
+          "move crosschop",
+          "move earthquake",
+          "move hiddenpower",
+          "move encore",
+          "switch 3"
+        ],
+        [
+          "move thunderbolt",
+          "move reflect",
+          "move lightscreen",
+          "move explosion",
+          "switch 2"
+        ]
+      ],
+      "stratum": 1,
+      "rank": 518142277101569135
+    },
+    {
+      "game": 4,
+      "decision": 5,
+      "key": "251825398987285080201713328015719046568",
+      "turn": 4,
+      "alive": [
+        2,
+        2
+      ],
+      "actions": [
+        [
+          "move crosschop",
+          "move rockslide",
+          "move earthquake",
+          "move hiddenpower",
+          "switch 3"
+        ],
+        [
+          "move psychic",
+          "move stunspore",
+          "move sleeppowder",
+          "move explosion",
+          "switch 3"
+        ]
+      ],
+      "stratum": 1,
+      "rank": 1029222562008931150
+    },
+    {
+      "game": 2,
+      "decision": 6,
+      "key": "52324669836470352342548250874912636598",
+      "turn": 5,
+      "alive": [
+        2,
+        3
+      ],
+      "actions": [
+        [
+          "move earthquake",
+          "move fireblast",
+          "move rockslide",
+          "move swordsdance",
+          "switch 2"
+        ],
+        [
+          "move thunderbolt",
+          "move hiddenpower",
+          "move reflect",
+          "move rest",
+          "switch 2",
+          "switch 3"
+        ]
+      ],
+      "stratum": 2,
+      "rank": 69340905181649543
+    },
+    {
+      "game": 0,
+      "decision": 1,
+      "key": "317830892572784406261617349960509119851",
+      "turn": 1,
+      "alive": [
+        3,
+        3
+      ],
+      "actions": [
+        [
+          "move earthquake",
+          "move flamethrower",
+          "move rockslide",
+          "move swordsdance",
+          "switch 2",
+          "switch 3"
+        ],
+        [
+          "move earthquake",
+          "move bonemerang",
+          "move rockslide",
+          "move swordsdance",
+          "switch 2",
+          "switch 3"
+        ]
+      ],
+      "stratum": 2,
+      "rank": 1019115210803633350
+    },
+    {
+      "game": 11,
+      "decision": 9,
+      "key": "84415827025879971206636698719490971221",
+      "turn": 8,
+      "alive": [
+        3,
+        2
+      ],
+      "actions": [
+        [
+          "move bodyslam",
+          "move rest",
+          "move sleeptalk",
+          "move selfdestruct",
+          "switch 2",
+          "switch 3"
+        ],
+        [
+          "move bodyslam",
+          "move earthquake",
+          "move curse",
+          "move selfdestruct",
+          "switch 3"
+        ]
+      ],
+      "stratum": 2,
+      "rank": 1181218245144512759
+    },
+    {
+      "game": 6,
+      "decision": 1,
+      "key": "50508008096319020881299015141782820151",
+      "turn": 1,
+      "alive": [
+        3,
+        3
+      ],
+      "actions": [
+        [
+          "move earthquake",
+          "move rockslide",
+          "move hiddenpower",
+          "move swordsdance",
+          "switch 2",
+          "switch 3"
+        ],
+        [
+          "move thunderbolt",
+          "move whirlwind",
+          "move rest",
+          "move hiddenpower",
+          "switch 2",
+          "switch 3"
+        ]
+      ],
+      "stratum": 2,
+      "rank": 1220887719865073537
+    }
+  ]
+}

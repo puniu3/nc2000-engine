@@ -1,0 +1,12 @@
+{
+  "observed_at": "2026-10-16T06:33:15.951942+00:00",
+  "block_index": 1,
+  "completed_games_at_least": 0,
+  "block_games": 128,
+  "completed_and_verified_previous_games": 128,
+  "arena_pid": 44234,
+  "driver_pid": 20051,
+  "controller_pid": 39496,
+  "all_three_processes_verified_live": true,
+  "controller_exec_session_id": 18241
+}

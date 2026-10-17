@@ -1,0 +1,178 @@
+{
+  "id": "g14-d17",
+  "snapshot": {
+    "turn": 14,
+    "key": "307613039112531982254067320043041194991",
+    "sides": [
+      [
+        {
+          "species": "tyranitar",
+          "active": true,
+          "hp": 177,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "crunch",
+              "pp": 23
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "exeggutor",
+          "active": false,
+          "hp": 0,
+          "maxhp": 201,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "psychic",
+              "pp": 15
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            },
+            {
+              "move": "leechseed",
+              "pp": 16
+            },
+            {
+              "move": "sleeppowder",
+              "pp": 24
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 21
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            },
+            {
+              "move": "curse",
+              "pp": 14
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "exeggutor",
+          "active": true,
+          "hp": 48,
+          "maxhp": 201,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "psychic",
+              "pp": 16
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 20
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            },
+            {
+              "move": "leechseed",
+              "pp": 12
+            }
+          ]
+        },
+        {
+          "species": "poliwrath",
+          "active": false,
+          "hp": 0,
+          "maxhp": 196,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "hydropump",
+              "pp": 8
+            },
+            {
+              "move": "submission",
+              "pp": 40
+            },
+            {
+              "move": "return",
+              "pp": 32
+            },
+            {
+              "move": "bellydrum",
+              "pp": 15
+            }
+          ]
+        },
+        {
+          "species": "porygon2",
+          "active": false,
+          "hp": 0,
+          "maxhp": 209,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "return",
+              "pp": 32
+            },
+            {
+              "move": "icebeam",
+              "pp": 15
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "recover",
+              "pp": 30
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "value": [
+    0.980769230867736,
+    1.0
+  ],
+  "stop": "WidthMet",
+  "runs": 15942,
+  "ms": 289.062958,
+  "one_sided_heal": "Ok(OneSidedHeal { healer: 1, non_healer: 0, active: [PokeId { side: 0, slot: 5 }, PokeId { side: 1, slot: 3 }], move_ids: [[MoveId(183), MoveId(36), MoveId(63), MoveId(53)], [MoveId(166), MoveId(89), MoveId(59), MoveId(121)]], max_hp: [226, 201] })",
+  "two_sided_heal": "Err(NotBothHealers)"
+}

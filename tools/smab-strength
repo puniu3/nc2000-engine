@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""Run and audit the preregistered local SMAB strength screen."""
+import hashlib
+import html
+import json
+import math
+from pathlib import Path
+import statistics
+import subprocess
+import sys
+import copy
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / 'findings/smab-strength-v1'
+BIN = ROOT / 'target/release/examples/smab_duel'
+
+
+def read(path):
+    return json.loads(path.read_text())
+
+
+def write(path, data):
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n')
+
+
+def verify(r):
+    n = r['games']
+    assert n == len(r['game_scores']) == 2 * len(r['pair_scores'])
+    pairs = [(r['game_scores'][i] + r['game_scores'][i+1])/2 for i in range(0,n,2)]
+    assert pairs == r['pair_scores']
+    assert r['wins']+r['losses']+r['ties'] == n
+    assert abs(statistics.mean(pairs) - r['score']) < 1e-12
+    ci = 1.96 * statistics.stdev(pairs) / math.sqrt(len(pairs))
+    assert abs(ci - r['ci95']) < 1e-12
+    for side in ['a','b']:
+        m = r[side+'_metrics']; samples = m['samples_ns']
+        assert len(samples) == m['decisions'] and samples == sorted(samples)
+        assert abs(statistics.mean(samples)/1e6 - m['mean_ms']) < 1e-8
+        if not r[side].startswith('mcts:'):
+            assert sum(m['completed_depths'].values()) == m['decisions']
+            assert m['counts']['runs'] <= 100000*m['decisions']
+    return r
+
+
+def run(name, a, b, games, seed):
+    dest = OUT / (name+'.json')
+    if dest.exists():
+        old = verify(read(dest))
+        assert (old['a'],old['b'],old['games'],old['seed']) == (a,b,games,seed)
+        print('retained',name,flush=True)
+        return
+    print('starting',name,a,b,games,seed,flush=True)
+    write(OUT/'progress.json',{'running':name,'a':a,'b':b,'games':games,'seed':seed})
+    report()
+    with (OUT/(name+'.log')).open('w') as log:
+        subprocess.run([str(BIN),a,b,str(games),str(seed),'4',str(dest)],cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,check=True)
+    r = verify(read(dest))
+    print('finished',name,round(r['score'],4),round(r['ci95'],4),round(r['a_metrics']['mean_ms'],2),round(r['b_metrics']['mean_ms'],2),'caps',r['turn_caps'],flush=True)
+    write(OUT/'progress.json',{'completed':name})
+    report()
+
+
+def screen():
+    p = read(OUT/'protocol.json')
+    for path, expected in p['sha256'].items():
+        assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest() == expected,path
+    null = verify(read(OUT/'null.json'))
+    assert all(v == .5 for v in null['pair_scores'])
+    checks = read(OUT/'correctness.json')
+    assert len(checks) == 12 and all(r['check']['value_error'] < 1e-7 and r['check']['policy_gap'] < 1e-7 for r in checks)
+    for i, a in enumerate(p['screen']['order']):
+        run(f'screen-{i:02}',a,p['reference'],p['screen']['games_per_arm'],p['screen']['seed'])
+    select()
+
+
+def select():
+    rows = [verify(read(p)) for p in sorted(OUT.glob('screen-*.json'))]
+    p = read(OUT/'protocol.json'); assert len(rows) == len(p['screen']['order'])
+    bases = [(r['a_metrics']['mean_ms'],r['score']) for r in rows if r['a'].startswith('mcts:')]
+    base_ms = sum(sum(r['b_metrics']['samples_ns']) for r in rows)/sum(r['b_metrics']['decisions'] for r in rows)/1e6
+    bases.append((base_ms,.5));bases.sort()
+    def interp(ms):
+        if ms <= bases[0][0]:return bases[0][1]
+        if ms >= bases[-1][0]:return bases[-1][1]
+        for (x0,y0),(x1,y1) in zip(bases,bases[1:]):
+            if x0 <= ms <= x1:
+                t=(math.log(ms)-math.log(x0))/(math.log(x1)-math.log(x0));return y0+t*(y1-y0)
+    ranked = []
+    for r in rows:
+        if r['a'].startswith('mcts:'):continue
+        ms = r['a_metrics']['mean_ms']
+        iters = max(50,min(27000,int(.9*3000*ms/r['b_metrics']['mean_ms']/50)*50))
+        ranked.append({'candidate':r['a'],'screen_score':r['score'],'screen_mean_ms':ms,'reference_curve_score':interp(ms),'residual':r['score']-interp(ms),'confirmation_reference':f'mcts:{iters}'})
+    ranked.sort(key=lambda r:-r['residual'])
+    decision={'ranking':ranked,'selected':ranked[:2],'basis':'Exploratory common-reference cost interpolation, frozen before fresh direct tests. No screen result is confirmatory.'}
+    path=OUT/'selection.json'
+    if path.exists():assert read(path)==decision
+    else:write(path,decision)
+    print(json.dumps(decision,indent=2),flush=True)
+    report()
+
+
+def confirm():
+    p=read(OUT/'protocol.json');selected=read(OUT/'selection.json')['selected']
+    if all('x' not in s['candidate'] for s in selected):
+        extra=next(s for s in read(OUT/'selection.json')['ranking'] if 'x' in s['candidate'])
+        decision={'selected':extra,'basis':'Prespecified secondary depth-coverage amendment; chosen only from screen data, before any confirmation result.'}
+        path=OUT/'selection-secondary.json'
+        if path.exists():assert read(path)==decision
+        else:write(path,decision)
+        selected=selected+[extra]
+    for i,s in enumerate(selected):
+        run(f'confirm-{i:02}',s['candidate'],s['confirmation_reference'],p['confirmation']['games_per_candidate'],p['confirmation']['seed_first']+i)
+        r=verify(read(OUT/f'confirm-{i:02}.json'))
+        ratio=r['a_metrics']['mean_ms']/r['b_metrics']['mean_ms']
+        if ratio < 1/1.1 or ratio > 1/.75:
+            old=int(r['b'].split(':')[1]);new=max(50,min(27000,int(old*ratio/50)*50))
+            if new==old:continue
+            rule={'candidate':r['a'],'old_reference':r['b'],'old_time_ratio':ratio,'new_reference':f'mcts:{new}','seed':p['confirmation']['seed_first']+100+i,'basis':'Timing-only correction under the fixed protocol; previous batch remains visible, is not pooled, and does not become a matched-cost result.'}
+            dest=OUT/f'cost-correction-{i:02}.json'
+            if dest.exists():assert read(dest)==rule
+            else:write(dest,rule)
+            run(f'confirm-{i:02}-cost',r['a'],rule['new_reference'],p['confirmation']['games_per_candidate'],rule['seed'])
+
+
+def tighten():
+    p=read(OUT/'protocol.json')
+    ids=range(3 if (OUT/'selection-secondary.json').exists() else 2)
+    for i in ids:
+        source=OUT/f'confirm-{i:02}-cost.json'
+        if not source.exists():source=OUT/f'confirm-{i:02}.json'
+        r=verify(read(source));ratio=r['a_metrics']['mean_ms']/r['b_metrics']['mean_ms']
+        if .9 <= ratio <= 1.1:continue
+        old=int(r['b'].split(':')[1]);new=max(50,min(27000,round(old*ratio/10)*10))
+        if new==old:continue
+        rule={'source':source.name,'candidate':r['a'],'old_time_ratio':ratio,'new_reference':f'mcts:{new}','seed':p['confirmation']['seed_first']+200+i,'basis':'Additional timing-only close-match validation; predeclared before the depth>=2 confirmation finished. No pooling or outcome-based selection.'}
+        dest=OUT/f'tight-match-{i:02}.json'
+        if dest.exists():assert read(dest)==rule
+        else:write(dest,rule)
+        run(f'confirm-{i:02}-tight',r['a'],rule['new_reference'],256,rule['seed'])
+
+
+def assess():
+    batches=[verify(read(p)) for p in sorted(OUT.glob('confirm-*.json'))]
+    z=statistics.NormalDist().inv_cdf(1-.05/(2*len(batches)))
+    chosen=[]
+    for i in range(3 if (OUT/'selection-secondary.json').exists() else 2):
+        paths=[OUT/f'confirm-{i:02}{suffix}.json' for suffix in ['-tight','-cost','']]
+        path=next(p for p in paths if p.exists());r=verify(read(path))
+        se=statistics.stdev(r['pair_scores'])/math.sqrt(r['pairs'])
+        ratio=r['a_metrics']['mean_ms']/r['b_metrics']['mean_ms']
+        lo,hi=r['score']-z*se,r['score']+z*se
+        chosen.append({'source':path.name,'a':r['a'],'b':r['b'],'score':r['score'],'ci95':r['ci95'],
+                       'family_ci':[lo,hi],'a_ms':r['a_metrics']['mean_ms'],'b_ms':r['b_metrics']['mean_ms'],
+                       'a_p95_ms':r['a_metrics']['p95_ms'],'b_p95_ms':r['b_metrics']['p95_ms'],
+                       'time_ratio':ratio,'turn_caps':r['turn_caps'],
+                       'positive_at_close_cost':lo>.5 and .9<=ratio<=1.1 and r['turn_caps']==0,
+                       'secondary_depth_check':i==2})
+    # Audit corruption controls: paired outcomes, CI and time cannot be
+    # altered independently while retaining a verified report.
+    for kind in ['score','ci','time']:
+        bad=copy.deepcopy(batches[0])
+        if kind=='score':bad['pair_scores'][0]+=.125
+        elif kind=='ci':bad['ci95']+=.01
+        else:bad['a_metrics']['mean_ms']*=1.1
+        try:verify(bad)
+        except AssertionError:pass
+        else:raise AssertionError('corruption accepted: '+kind)
+    screens=[verify(read(p)) for p in sorted(OUT.glob('screen-*.json'))]
+    result={'selected_confirmations':chosen,'total_screen_games':sum(r['games'] for r in screens),
+            'total_confirmation_games':sum(r['games'] for r in batches),
+            'total_turn_caps':sum(r['turn_caps'] for r in screens+batches),
+            'family_interval_rule':f'Bonferroni across all {len(batches)} fresh confirmation batches, including unmatched/cost-correction batches; z={z:.6f}. Intervals are normal approximations on pair means.',
+            'low_budget_positive':any(r['positive_at_close_cost'] and 'x' not in r['a'] for r in chosen),
+            'deep_positive':any(r['positive_at_close_cost'] and 'x' in r['a'] for r in chosen),
+            'negative_controls_rejected':3,
+            'interpretation':'Depth one does not invoke serialized subtree alpha-beta. A shallow value-network win is evidence for the matrix/value approach at low native budgets, not evidence that deep alpha-beta improves peak strength. Failed significance is not equivalence or universal hopelessness. All games grant both agents full information; hidden-information and browser deployment remain untested.'}
+    write(OUT/'assessment.json',result)
+    write(OUT/'progress.json',{'status':'complete','screen_games':result['total_screen_games'],'confirmation_games':result['total_confirmation_games']})
+    report();print(json.dumps(result,indent=2))
+
+
+def report():
+    rows=[]
+    for path in sorted(OUT.glob('screen-*.json'))+sorted(OUT.glob('confirm-*.json')):
+        r=verify(read(path));rows.append((path.stem,r))
+    compact=[]
+    for name,r in rows:
+        compact.append({'batch':name,'a':r['a'],'b':r['b'],'games':r['games'],'score':r['score'],'ci95':r['ci95'],'a_ms':r['a_metrics']['mean_ms'],'b_ms':r['b_metrics']['mean_ms'],'time_ratio':r['a_metrics']['mean_ms']/r['b_metrics']['mean_ms'],'a_p95_ms':r['a_metrics']['p95_ms'],'b_p95_ms':r['b_metrics']['p95_ms'],'turn_caps':r['turn_caps'],'score_if_caps_all_losses':r['score']-.5*r['turn_caps']/r['games'],'score_if_caps_all_wins':r['score']+.5*r['turn_caps']/r['games'],'search_caps':r['a_metrics']['work_caps'],'decisions':r['a_metrics']['decisions']})
+    summary={'batches':compact,'scope':'Native perfect-information paired games, current 24-team catalog, shared preview, fixed existing evaluation functions. Common-reference scores are opponent-dependent. No blind or human superiority claim; turn caps are unresolved. Cost includes failed deepening.','progress':read(OUT/'progress.json') if (OUT/'progress.json').exists() else {}}
+    write(OUT/'summary.json',summary)
+    table=''.join(f'<tr><td>{html.escape(r["batch"])}</td><td>{html.escape(r["a"])}</td><td>{html.escape(r["b"])}</td><td>{r["score"]:.3f} ± {r["ci95"]:.3f}</td><td>{r["a_ms"]:.1f} / {r["b_ms"]:.1f}</td><td>{r["turn_caps"]}</td></tr>' for r in compact)
+    progress=html.escape(json.dumps(summary['progress'],ensure_ascii=False))
+    assessment=''
+    if (OUT/'assessment.json').exists():
+        a=read(OUT/'assessment.json')
+        lines=''.join(f'<tr><td>{r["a"]}</td><td>{r["b"]}</td><td>{r["score"]:.3f} ± {r["ci95"]:.3f}</td><td>{r["a_ms"]:.2f} / {r["b_ms"]:.2f}</td><td>{r["family_ci"][0]:.3f}–{r["family_ci"][1]:.3f}</td></tr>' for r in a['selected_confirmations'])
+        headline='低予算では有望。深いαβの改善は未確認。' if a['low_budget_positive'] and not a['deep_positive'] else '確認試験の結果'
+        assessment=f'<h2>{headline}</h2><p>以下は時間を合わせた新規シード各256戦。途中で時間がずれた試験も下の全記録に残し、合算していません。深さ1は深いαβ枝刈りを使わず、少数候補から解く行列探索です。</p><div class="scroll"><table><tr><th>候補</th><th>MCTS対照</th><th>スコア ±95%</th><th>平均ms 候補 / MCTS</th><th>多重比較調整区間</th></tr>{lines}</table></div><p>一次調査{a["total_screen_games"]}戦、確認{a["total_confirmation_games"]}戦。対局打切は合計{a["total_turn_caps"]}件。多重比較区間は時間調整前を含む確認試験全体にBonferroni補正を適用しています。浅い設定の勝利を、深いαβ探索の成果とは解釈しません。深い設定の未検出を「あらゆるαβ法が無望」とも解釈しません。</p><p><a href="assessment.json">判定・補正方法・検証</a> · <a href="frontier.pdf">図のPDF</a></p>'
+    page=f'''<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NC2000 αβ 強さと計算時間</title>
+<style>body{{font:17px/1.8 system-ui,sans-serif;background:#f4f1e9;color:#252b26;max-width:1100px;margin:40px auto;padding:0 20px}}h1{{font-size:1.7rem}}table{{border-collapse:collapse;width:100%;font-size:.9rem}}td,th{{padding:9px;border-bottom:1px solid #cbcfc5;text-align:right}}td:first-child,th:first-child{{text-align:left}}a{{color:#35604d}}.scroll{{overflow:auto}}code{{overflow-wrap:anywhere}}img{{max-width:100%}}</style>
+<h1>αβ系探索：強さと計算時間</h1><p>状態：<code>{progress}</code></p>
+{assessment}
+<p>双方が完全情報を持つ対戦で、同時手番αβ系とMCTS系（skuct）を比較。チーム選出は共通、24チームから一様抽選。evalは既存評価関数、netは保存済みmodel-d3（追加学習なし）。各手は深さ1から反復深化し、エンジン実行10万回の上限で最後に完了した深さを採用します。</p>
+<p>一次調査は各64戦、同じ組合せ・シード。時間と成績から最大2設定を選び、新しいシードで各256戦の直接対戦を行います。思考時間は選出と強制一択を除く平均です。4並列のネイティブ測定で、ブラウザの待ち時間ではありません。</p>
+<p>スコアは勝ち1・引分0.5・負け0、±は先後交換ペアを単位とする95%区間。対局の打ち切りは未解決として別に数えます。一次調査の相手は共通ですが、その相手への成績だけで全対戦相手に通用するパレート優越は主張しません。</p>
+{('<img src="frontier.svg" alt="共通相手への成績と平均思考時間">' if (OUT/'frontier.svg').exists() else '')}
+<div class="scroll"><table><tr><th>試験</th><th>A</th><th>B</th><th>Aスコア</th><th>平均ms A / B</th><th>対局打切</th></tr>{table}</table></div>
+<p><a href="protocol.json">事前条件</a> · <a href="summary.json">全結果集計</a> · <a href="correctness.json">探索一致検証</a> · <a href="null.json">同一ボット対照</a> · <a href="selection.json">候補選択</a></p>
+<p>共有プレビューハブの項目：nc2000-smab-strength。自動更新や点滅はありません。</p></html>'''
+    (OUT/'index.html').write_text(page)
+
+
+if __name__=='__main__':
+    {'screen':screen,'select':select,'confirm':confirm,'tighten':tighten,'assess':assess,'report':report}[sys.argv[1]]()

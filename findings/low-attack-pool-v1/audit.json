@@ -1,0 +1,1219 @@
+{
+  "format": "nc2000-low-attack-audit-v1",
+  "sourcePool": "data/team-pool-v2/team-pool.json",
+  "sourcePoolSha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
+  "dexSha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+  "teams": 24,
+  "changedTeams": 14,
+  "changedSets": 27,
+  "eligibleAlreadyAtMinimumDv": 19,
+  "excluded": {
+    "hidden-power": 33,
+    "physical-move": 84
+  },
+  "checks": {
+    "sourceAndCandidateTeamsValidated": 24,
+    "selfHitComparisons": 18252,
+    "selfHitIncreases": 0,
+    "preserved": "HP, gender, shiny DV predicate, all non-Attack stats, moves, items, levels, draw weights",
+    "scope": "current native engine; each selected move's base type and held item; Attack and Defense stages -6 through +6; no burn, weather or screens"
+  },
+  "limitations": [
+    "Struggle damage also decreases: no unconditional dominance or win-rate claim",
+    "Hidden Power and Physical-category moves conservatively excluded, including fixed damage",
+    "Metronome, Mimic, Mirror Move and Transform excluded; Sleep Talk only accesses the unchanged own moves",
+    "Changing gender could affect Attract: gender is preserved",
+    "Built-in validator checks flat learnsets; it does not certify every event or egg combination",
+    "Source catalog, inventory, prior, Nash mixture and compiled preview artifacts remain untouched"
+  ],
+  "rows": [
+    {
+      "baseId": "rental-cban-8",
+      "slot": 3,
+      "species": "Venusaur",
+      "level": 50,
+      "gender": "M",
+      "hp": 186,
+      "attackDvBefore": 15,
+      "attackDvAfter": 3,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 133,
+      "attackAfter": 90,
+      "damage": [
+        {
+          "move": "Razor Leaf",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 37,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Sleep Powder",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 37,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Leech Seed",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 37,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Synthesis",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 37,
+          "swaggerAfter": 25
+        }
+      ]
+    },
+    {
+      "baseId": "sample-12",
+      "slot": 1,
+      "species": "Gengar",
+      "level": 50,
+      "gender": "F",
+      "hp": 166,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 102,
+      "attackAfter": 71,
+      "damage": [
+        {
+          "move": "Zap Cannon",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Destiny Bond",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Mean Look",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Perish Song",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        }
+      ]
+    },
+    {
+      "baseId": "sample-12",
+      "slot": 2,
+      "species": "Starmie",
+      "level": 50,
+      "gender": "N",
+      "hp": 166,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 112,
+      "attackAfter": 81,
+      "damage": [
+        {
+          "move": "Hydro Pump",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Psychic",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Thunder Wave",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Recover",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        }
+      ]
+    },
+    {
+      "baseId": "sample-12",
+      "slot": 4,
+      "species": "Umbreon",
+      "level": 50,
+      "gender": "F",
+      "hp": 201,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 102,
+      "attackAfter": 71,
+      "damage": [
+        {
+          "move": "Pursuit",
+          "neutralBefore": 13,
+          "neutralAfter": 9,
+          "swaggerBefore": 24,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Charm",
+          "neutralBefore": 13,
+          "neutralAfter": 9,
+          "swaggerBefore": 24,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Toxic",
+          "neutralBefore": 13,
+          "neutralAfter": 9,
+          "swaggerBefore": 24,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Rest",
+          "neutralBefore": 13,
+          "neutralAfter": 9,
+          "swaggerBefore": 24,
+          "swaggerAfter": 17
+        }
+      ]
+    },
+    {
+      "baseId": "sample-17-orig",
+      "slot": 6,
+      "species": "Suicune",
+      "level": 50,
+      "gender": "N",
+      "hp": 206,
+      "attackDvBefore": 15,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 126,
+      "attackAfter": 81,
+      "damage": [
+        {
+          "move": "Surf",
+          "neutralBefore": 15,
+          "neutralAfter": 10,
+          "swaggerBefore": 28,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Ice Beam",
+          "neutralBefore": 15,
+          "neutralAfter": 10,
+          "swaggerBefore": 28,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Rest",
+          "neutralBefore": 15,
+          "neutralAfter": 10,
+          "swaggerBefore": 28,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Sleep Talk",
+          "neutralBefore": 15,
+          "neutralAfter": 10,
+          "swaggerBefore": 28,
+          "swaggerAfter": 19
+        }
+      ]
+    },
+    {
+      "baseId": "nb-sample-13-0",
+      "slot": 1,
+      "species": "Gengar",
+      "level": 50,
+      "gender": "F",
+      "hp": 166,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 102,
+      "attackAfter": 71,
+      "damage": [
+        {
+          "move": "Fire Punch",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Mean Look",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Destiny Bond",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Perish Song",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        }
+      ]
+    },
+    {
+      "baseId": "nb-sample-13-0",
+      "slot": 3,
+      "species": "Starmie",
+      "level": 50,
+      "gender": "N",
+      "hp": 166,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 112,
+      "attackAfter": 81,
+      "damage": [
+        {
+          "move": "Surf",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Psychic",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Thunder Wave",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Recover",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        }
+      ]
+    },
+    {
+      "baseId": "nb-sample-12-0",
+      "slot": 1,
+      "species": "Gengar",
+      "level": 50,
+      "gender": "F",
+      "hp": 166,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 102,
+      "attackAfter": 71,
+      "damage": [
+        {
+          "move": "Zap Cannon",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Destiny Bond",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Mean Look",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Perish Song",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        }
+      ]
+    },
+    {
+      "baseId": "nb-sample-12-0",
+      "slot": 2,
+      "species": "Starmie",
+      "level": 50,
+      "gender": "N",
+      "hp": 166,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 112,
+      "attackAfter": 81,
+      "damage": [
+        {
+          "move": "Hydro Pump",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Psychic",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Thunder Wave",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Recover",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        }
+      ]
+    },
+    {
+      "baseId": "nb-sample-12-0",
+      "slot": 4,
+      "species": "Umbreon",
+      "level": 50,
+      "gender": "F",
+      "hp": 201,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 102,
+      "attackAfter": 71,
+      "damage": [
+        {
+          "move": "Pursuit",
+          "neutralBefore": 13,
+          "neutralAfter": 9,
+          "swaggerBefore": 24,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Charm",
+          "neutralBefore": 13,
+          "neutralAfter": 9,
+          "swaggerBefore": 24,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Toxic",
+          "neutralBefore": 13,
+          "neutralAfter": 9,
+          "swaggerBefore": 24,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Rest",
+          "neutralBefore": 13,
+          "neutralAfter": 9,
+          "swaggerBefore": 24,
+          "swaggerAfter": 17
+        }
+      ]
+    },
+    {
+      "baseId": "sample-10",
+      "slot": 5,
+      "species": "Venusaur",
+      "level": 50,
+      "gender": "M",
+      "hp": 186,
+      "attackDvBefore": 15,
+      "attackDvAfter": 3,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 133,
+      "attackAfter": 90,
+      "damage": [
+        {
+          "move": "Razor Leaf",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 37,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Leech Seed",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 37,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Sleep Powder",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 37,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Synthesis",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 37,
+          "swaggerAfter": 25
+        }
+      ]
+    },
+    {
+      "baseId": "mjj-2014-thdrcomb",
+      "slot": 3,
+      "species": "Venusaur",
+      "level": 50,
+      "gender": "M",
+      "hp": 186,
+      "attackDvBefore": 3,
+      "attackDvAfter": 3,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 121,
+      "attackAfter": 90,
+      "damage": [
+        {
+          "move": "Razor Leaf",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Leech Seed",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Sleep Powder",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Synthesis",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        }
+      ]
+    },
+    {
+      "baseId": "sample-11",
+      "slot": 1,
+      "species": "Alakazam",
+      "level": 55,
+      "gender": "F",
+      "hp": 176,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 95,
+      "attackAfter": 61,
+      "damage": [
+        {
+          "move": "Psychic",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 36,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Ice Punch",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 36,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Encore",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 36,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Recover",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 36,
+          "swaggerAfter": 24
+        }
+      ]
+    },
+    {
+      "baseId": "sample-11",
+      "slot": 4,
+      "species": "Venusaur",
+      "level": 50,
+      "gender": "F",
+      "hp": 186,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 119,
+      "attackAfter": 88,
+      "damage": [
+        {
+          "move": "Razor Leaf",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Leech Seed",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Sleep Powder",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Synthesis",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        }
+      ]
+    },
+    {
+      "baseId": "sample-11",
+      "slot": 5,
+      "species": "Suicune",
+      "level": 50,
+      "gender": "N",
+      "hp": 206,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 112,
+      "attackAfter": 81,
+      "damage": [
+        {
+          "move": "Surf",
+          "neutralBefore": 13,
+          "neutralAfter": 10,
+          "swaggerBefore": 25,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Ice Beam",
+          "neutralBefore": 13,
+          "neutralAfter": 10,
+          "swaggerBefore": 25,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Rest",
+          "neutralBefore": 13,
+          "neutralAfter": 10,
+          "swaggerBefore": 25,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Sleep Talk",
+          "neutralBefore": 13,
+          "neutralAfter": 10,
+          "swaggerBefore": 25,
+          "swaggerAfter": 19
+        }
+      ]
+    },
+    {
+      "baseId": "sample-06",
+      "slot": 1,
+      "species": "Umbreon",
+      "level": 50,
+      "gender": "M",
+      "hp": 201,
+      "attackDvBefore": 15,
+      "attackDvAfter": 3,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 116,
+      "attackAfter": 73,
+      "damage": [
+        {
+          "move": "Pursuit",
+          "neutralBefore": 14,
+          "neutralAfter": 9,
+          "swaggerBefore": 27,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Charm",
+          "neutralBefore": 14,
+          "neutralAfter": 9,
+          "swaggerBefore": 27,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Toxic",
+          "neutralBefore": 14,
+          "neutralAfter": 9,
+          "swaggerBefore": 27,
+          "swaggerAfter": 17
+        },
+        {
+          "move": "Rest",
+          "neutralBefore": 14,
+          "neutralAfter": 9,
+          "swaggerBefore": 27,
+          "swaggerAfter": 17
+        }
+      ]
+    },
+    {
+      "baseId": "sample-06",
+      "slot": 6,
+      "species": "Suicune",
+      "level": 50,
+      "gender": "N",
+      "hp": 206,
+      "attackDvBefore": 15,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 126,
+      "attackAfter": 81,
+      "damage": [
+        {
+          "move": "Surf",
+          "neutralBefore": 15,
+          "neutralAfter": 10,
+          "swaggerBefore": 28,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Ice Beam",
+          "neutralBefore": 15,
+          "neutralAfter": 10,
+          "swaggerBefore": 28,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Rest",
+          "neutralBefore": 15,
+          "neutralAfter": 10,
+          "swaggerBefore": 28,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Sleep Talk",
+          "neutralBefore": 15,
+          "neutralAfter": 10,
+          "swaggerBefore": 28,
+          "swaggerAfter": 19
+        }
+      ]
+    },
+    {
+      "baseId": "sample-11-orig",
+      "slot": 1,
+      "species": "Alakazam",
+      "level": 55,
+      "gender": "F",
+      "hp": 176,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 95,
+      "attackAfter": 61,
+      "damage": [
+        {
+          "move": "Psychic",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 36,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Ice Punch",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 36,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Encore",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 36,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Recover",
+          "neutralBefore": 19,
+          "neutralAfter": 13,
+          "swaggerBefore": 36,
+          "swaggerAfter": 24
+        }
+      ]
+    },
+    {
+      "baseId": "sample-11-orig",
+      "slot": 4,
+      "species": "Venusaur",
+      "level": 50,
+      "gender": "F",
+      "hp": 186,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 119,
+      "attackAfter": 88,
+      "damage": [
+        {
+          "move": "Razor Leaf",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Leech Seed",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Sleep Powder",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Synthesis",
+          "neutralBefore": 17,
+          "neutralAfter": 13,
+          "swaggerBefore": 33,
+          "swaggerAfter": 25
+        }
+      ]
+    },
+    {
+      "baseId": "sample-11-orig",
+      "slot": 5,
+      "species": "Suicune",
+      "level": 50,
+      "gender": "N",
+      "hp": 206,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 112,
+      "attackAfter": 81,
+      "damage": [
+        {
+          "move": "Surf",
+          "neutralBefore": 13,
+          "neutralAfter": 10,
+          "swaggerBefore": 25,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Ice Beam",
+          "neutralBefore": 13,
+          "neutralAfter": 10,
+          "swaggerBefore": 25,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Rest",
+          "neutralBefore": 13,
+          "neutralAfter": 10,
+          "swaggerBefore": 25,
+          "swaggerAfter": 19
+        },
+        {
+          "move": "Sleep Talk",
+          "neutralBefore": 13,
+          "neutralAfter": 10,
+          "swaggerBefore": 25,
+          "swaggerAfter": 19
+        }
+      ]
+    },
+    {
+      "baseId": "mjj-2010-garap-a",
+      "slot": 2,
+      "species": "Jolteon",
+      "level": 50,
+      "gender": "M",
+      "hp": 171,
+      "attackDvBefore": 3,
+      "attackDvAfter": 3,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 104,
+      "attackAfter": 73,
+      "damage": [
+        {
+          "move": "Thunderbolt",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Swagger",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Substitute",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 25
+        },
+        {
+          "move": "Baton Pass",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 25
+        }
+      ]
+    },
+    {
+      "baseId": "mjj-2010-garap-a",
+      "slot": 4,
+      "species": "Lapras",
+      "level": 50,
+      "gender": "F",
+      "hp": 236,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 122,
+      "attackAfter": 91,
+      "damage": [
+        {
+          "move": "Ice Beam",
+          "neutralBefore": 18,
+          "neutralAfter": 14,
+          "swaggerBefore": 34,
+          "swaggerAfter": 26
+        },
+        {
+          "move": "Thunderbolt",
+          "neutralBefore": 18,
+          "neutralAfter": 14,
+          "swaggerBefore": 34,
+          "swaggerAfter": 26
+        },
+        {
+          "move": "Sing",
+          "neutralBefore": 18,
+          "neutralAfter": 14,
+          "swaggerBefore": 34,
+          "swaggerAfter": 26
+        },
+        {
+          "move": "Reflect",
+          "neutralBefore": 18,
+          "neutralAfter": 14,
+          "swaggerBefore": 34,
+          "swaggerAfter": 26
+        }
+      ]
+    },
+    {
+      "baseId": "sample-13",
+      "slot": 1,
+      "species": "Gengar",
+      "level": 50,
+      "gender": "F",
+      "hp": 166,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 102,
+      "attackAfter": 71,
+      "damage": [
+        {
+          "move": "Fire Punch",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Mean Look",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Destiny Bond",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Perish Song",
+          "neutralBefore": 18,
+          "neutralAfter": 13,
+          "swaggerBefore": 34,
+          "swaggerAfter": 24
+        }
+      ]
+    },
+    {
+      "baseId": "sample-13",
+      "slot": 3,
+      "species": "Starmie",
+      "level": 50,
+      "gender": "N",
+      "hp": 166,
+      "attackDvBefore": 1,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 112,
+      "attackAfter": 81,
+      "damage": [
+        {
+          "move": "Surf",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Psychic",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Thunder Wave",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Recover",
+          "neutralBefore": 16,
+          "neutralAfter": 12,
+          "swaggerBefore": 30,
+          "swaggerAfter": 22
+        }
+      ]
+    },
+    {
+      "baseId": "sample-02",
+      "slot": 1,
+      "species": "Jynx",
+      "level": 50,
+      "gender": "F",
+      "hp": 171,
+      "attackDvBefore": 15,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 101,
+      "attackAfter": 56,
+      "damage": [
+        {
+          "move": "Ice Beam",
+          "neutralBefore": 22,
+          "neutralAfter": 13,
+          "swaggerBefore": 43,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Psychic",
+          "neutralBefore": 22,
+          "neutralAfter": 13,
+          "swaggerBefore": 43,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Thief",
+          "neutralBefore": 22,
+          "neutralAfter": 13,
+          "swaggerBefore": 43,
+          "swaggerAfter": 24
+        },
+        {
+          "move": "Lovely Kiss",
+          "neutralBefore": 22,
+          "neutralAfter": 13,
+          "swaggerBefore": 43,
+          "swaggerAfter": 24
+        }
+      ]
+    },
+    {
+      "baseId": "sample-02",
+      "slot": 2,
+      "species": "Starmie",
+      "level": 50,
+      "gender": "N",
+      "hp": 166,
+      "attackDvBefore": 15,
+      "attackDvAfter": 1,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 126,
+      "attackAfter": 81,
+      "damage": [
+        {
+          "move": "Surf",
+          "neutralBefore": 18,
+          "neutralAfter": 12,
+          "swaggerBefore": 34,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Psychic",
+          "neutralBefore": 18,
+          "neutralAfter": 12,
+          "swaggerBefore": 34,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Thunder Wave",
+          "neutralBefore": 18,
+          "neutralAfter": 12,
+          "swaggerBefore": 34,
+          "swaggerAfter": 22
+        },
+        {
+          "move": "Recover",
+          "neutralBefore": 18,
+          "neutralAfter": 12,
+          "swaggerBefore": 34,
+          "swaggerAfter": 22
+        }
+      ]
+    },
+    {
+      "baseId": "rental-cban-14",
+      "slot": 1,
+      "species": "Vaporeon",
+      "level": 55,
+      "gender": "M",
+      "hp": 259,
+      "attackDvBefore": 15,
+      "attackDvAfter": 3,
+      "attackEvBefore": 255,
+      "attackEvAfter": 0,
+      "attackBefore": 127,
+      "attackAfter": 79,
+      "damage": [
+        {
+          "move": "Hydro Pump",
+          "neutralBefore": 21,
+          "neutralAfter": 14,
+          "swaggerBefore": 41,
+          "swaggerAfter": 26
+        },
+        {
+          "move": "Ice Beam",
+          "neutralBefore": 21,
+          "neutralAfter": 14,
+          "swaggerBefore": 41,
+          "swaggerAfter": 26
+        },
+        {
+          "move": "Sleep Talk",
+          "neutralBefore": 21,
+          "neutralAfter": 14,
+          "swaggerBefore": 41,
+          "swaggerAfter": 26
+        },
+        {
+          "move": "Rest",
+          "neutralBefore": 21,
+          "neutralAfter": 14,
+          "swaggerBefore": 41,
+          "swaggerAfter": 26
+        }
+      ]
+    }
+  ]
+}

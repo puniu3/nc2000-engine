@@ -1,0 +1,14 @@
+{
+  "status": "failed",
+  "results": "/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/findings/fixed-budget-v1/cloud/bake2-run/results",
+  "budget_yen": 200.0,
+  "cleanup": "verified",
+  "error": "Computation failed: exit 124, Batch FAILED",
+  "backend": "gcp-batch",
+  "machine_type": "e2-standard-8",
+  "provisioning": "STANDARD",
+  "returncode": 124,
+  "allowance_yen": 176.4,
+  "estimated_usage_yen": 110.852,
+  "estimate_scope": "Conservative usage estimate including queue time; 160 JPY/USD accounting rate; before credits, not invoice"
+}

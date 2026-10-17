@@ -1,0 +1,372 @@
+{
+  "id": "g5-d29",
+  "side": 0,
+  "snapshot": {
+    "turn": 25,
+    "key": "49189634163358361040430704225398302086",
+    "sides": [
+      [
+        {
+          "species": "machamp",
+          "active": true,
+          "hp": 1,
+          "maxhp": 192,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "crosschop",
+              "pp": 4
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "earthquake",
+              "pp": 11
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 22
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 15
+            },
+            {
+              "move": "bellydrum",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "tyranitar",
+          "active": false,
+          "hp": 0,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 15
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 5
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "venusaur",
+          "active": true,
+          "hp": 186,
+          "maxhp": 186,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "razorleaf",
+              "pp": 38
+            },
+            {
+              "move": "leechseed",
+              "pp": 15
+            },
+            {
+              "move": "sleeppowder",
+              "pp": 23
+            },
+            {
+              "move": "synthesis",
+              "pp": 1
+            }
+          ]
+        },
+        {
+          "species": "tyranitar",
+          "active": false,
+          "hp": 0,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "earthquake",
+              "pp": 13
+            },
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 7
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 23
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "rows": [
+    {
+      "seed": 2026103301,
+      "n": 27000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move crosschop",
+        "move rockslide",
+        "move earthquake",
+        "move hiddenpower"
+      ],
+      "visits": [
+        6750,
+        6750,
+        6750,
+        6750
+      ],
+      "means": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "nodes": 2,
+      "ms": 164.3965
+    },
+    {
+      "seed": 2026103301,
+      "n": 81000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move crosschop",
+        "move rockslide",
+        "move earthquake",
+        "move hiddenpower"
+      ],
+      "visits": [
+        20250,
+        20250,
+        20250,
+        20250
+      ],
+      "means": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "nodes": 2,
+      "ms": 493.713708
+    },
+    {
+      "seed": 2026103302,
+      "n": 27000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move crosschop",
+        "move rockslide",
+        "move earthquake",
+        "move hiddenpower"
+      ],
+      "visits": [
+        6750,
+        6750,
+        6750,
+        6750
+      ],
+      "means": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "nodes": 2,
+      "ms": 164.554708
+    },
+    {
+      "seed": 2026103302,
+      "n": 81000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move crosschop",
+        "move rockslide",
+        "move earthquake",
+        "move hiddenpower"
+      ],
+      "visits": [
+        20250,
+        20250,
+        20250,
+        20250
+      ],
+      "means": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "nodes": 2,
+      "ms": 494.022833
+    },
+    {
+      "seed": 2026103303,
+      "n": 27000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move crosschop",
+        "move rockslide",
+        "move earthquake",
+        "move hiddenpower"
+      ],
+      "visits": [
+        6750,
+        6750,
+        6750,
+        6750
+      ],
+      "means": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "nodes": 2,
+      "ms": 165.707333
+    },
+    {
+      "seed": 2026103303,
+      "n": 81000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move crosschop",
+        "move rockslide",
+        "move earthquake",
+        "move hiddenpower"
+      ],
+      "visits": [
+        20250,
+        20250,
+        20250,
+        20250
+      ],
+      "means": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "nodes": 2,
+      "ms": 495.6875
+    },
+    {
+      "seed": 2026103304,
+      "n": 27000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move crosschop",
+        "move rockslide",
+        "move earthquake",
+        "move hiddenpower"
+      ],
+      "visits": [
+        6750,
+        6750,
+        6750,
+        6750
+      ],
+      "means": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "nodes": 2,
+      "ms": 164.937917
+    },
+    {
+      "seed": 2026103304,
+      "n": 81000,
+      "choice": "move hiddenpower",
+      "actions": [
+        "move crosschop",
+        "move rockslide",
+        "move earthquake",
+        "move hiddenpower"
+      ],
+      "visits": [
+        20250,
+        20250,
+        20250,
+        20250
+      ],
+      "means": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "nodes": 2,
+      "ms": 490.772667
+    }
+  ]
+}

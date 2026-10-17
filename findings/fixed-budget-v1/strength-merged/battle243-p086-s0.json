@@ -1,0 +1,384 @@
+{
+  "pair": 86,
+  "profile": "battle243",
+  "a_side": 0,
+  "a_score": 1.0,
+  "result": {
+    "p1_score": 1.0,
+    "outcome": "Some(P1Win)",
+    "cap": false,
+    "turns": 16,
+    "decisions": [
+      {
+        "side": 0,
+        "turn": 0,
+        "key": "207326394577263878774365507110708556745",
+        "phase": "preview",
+        "choices": 120,
+        "iterations": 243000,
+        "ns": 31988492282,
+        "choice": "team 2, 5, 6"
+      },
+      {
+        "side": 1,
+        "turn": 0,
+        "key": "207326394577263878774365507110708556745",
+        "phase": "preview",
+        "choices": 96,
+        "iterations": 243000,
+        "ns": 33184296246,
+        "choice": "team 1, 3, 6"
+      },
+      {
+        "side": 0,
+        "turn": 1,
+        "key": "70539951622533744765778191996361685117",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 31116898718,
+        "choice": "move toxic"
+      },
+      {
+        "side": 1,
+        "turn": 1,
+        "key": "70539951622533744765778191996361685117",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 9269329958,
+        "choice": "move substitute"
+      },
+      {
+        "side": 0,
+        "turn": 2,
+        "key": "228523079306288320341011524362900448830",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 33888922326,
+        "choice": "move roar"
+      },
+      {
+        "side": 1,
+        "turn": 2,
+        "key": "228523079306288320341011524362900448830",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 9553714331,
+        "choice": "move swagger"
+      },
+      {
+        "side": 0,
+        "turn": 3,
+        "key": "101500216213069444375176130331470753923",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 33279899217,
+        "choice": "switch 3"
+      },
+      {
+        "side": 1,
+        "turn": 3,
+        "key": "101500216213069444375176130331470753923",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 8984462744,
+        "choice": "move crosschop"
+      },
+      {
+        "side": 0,
+        "turn": 4,
+        "key": "174854538635356228560514961925850966616",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 33169899315,
+        "choice": "move thunderwave"
+      },
+      {
+        "side": 1,
+        "turn": 4,
+        "key": "174854538635356228560514961925850966616",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 9528997024,
+        "choice": "switch 2"
+      },
+      {
+        "side": 0,
+        "turn": 5,
+        "key": "23697284595884669610430284310615566870",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 30804955818,
+        "choice": "move thunderbolt"
+      },
+      {
+        "side": 1,
+        "turn": 5,
+        "key": "23697284595884669610430284310615566870",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 9252618689,
+        "choice": "move bodyslam"
+      },
+      {
+        "side": 0,
+        "turn": 6,
+        "key": "19186390918680769667510860649687858333",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 31376453850,
+        "choice": "move thunderbolt"
+      },
+      {
+        "side": 1,
+        "turn": 6,
+        "key": "19186390918680769667510860649687858333",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 9264196766,
+        "choice": "move bodyslam"
+      },
+      {
+        "side": 0,
+        "turn": 7,
+        "key": "63856875913974908404008104849551048450",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 31168842341,
+        "choice": "move rest"
+      },
+      {
+        "side": 1,
+        "turn": 7,
+        "key": "63856875913974908404008104849551048450",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 9255072494,
+        "choice": "move rest"
+      },
+      {
+        "side": 0,
+        "turn": 8,
+        "key": "333478426877478333536753289706489154331",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 34402957695,
+        "choice": "switch 3"
+      },
+      {
+        "side": 1,
+        "turn": 8,
+        "key": "333478426877478333536753289706489154331",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 9850792099,
+        "choice": "move rest"
+      },
+      {
+        "side": 0,
+        "turn": 9,
+        "key": "226805929202039698748359877202434754638",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 34650803135,
+        "choice": "move earthquake"
+      },
+      {
+        "side": 1,
+        "turn": 9,
+        "key": "226805929202039698748359877202434754638",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 9984117256,
+        "choice": "move earthquake"
+      },
+      {
+        "side": 0,
+        "turn": 10,
+        "key": "144514554144285008071280779988716073789",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 243000,
+        "ns": 32727361819,
+        "choice": "move explosion"
+      },
+      {
+        "side": 1,
+        "turn": 10,
+        "key": "144514554144285008071280779988716073789",
+        "phase": "battle",
+        "choices": 6,
+        "iterations": 81000,
+        "ns": 10099309332,
+        "choice": "move earthquake"
+      },
+      {
+        "side": 0,
+        "turn": 10,
+        "key": "45341385914912122093612366965651289702",
+        "phase": "battle",
+        "choices": 2,
+        "iterations": 243000,
+        "ns": 31137024667,
+        "choice": "switch 2"
+      },
+      {
+        "side": 1,
+        "turn": 10,
+        "key": "45341385914912122093612366965651289702",
+        "phase": "battle",
+        "choices": 2,
+        "iterations": 81000,
+        "ns": 8888702772,
+        "choice": "switch 2"
+      },
+      {
+        "side": 0,
+        "turn": 11,
+        "key": "38243349328960715462169026715390389715",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 32276385746,
+        "choice": "switch 3"
+      },
+      {
+        "side": 1,
+        "turn": 11,
+        "key": "38243349328960715462169026715390389715",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 81000,
+        "ns": 10578909483,
+        "choice": "switch 3"
+      },
+      {
+        "side": 0,
+        "turn": 12,
+        "key": "246823066538693974410427575521399306985",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 32199761336,
+        "choice": "switch 3"
+      },
+      {
+        "side": 1,
+        "turn": 12,
+        "key": "246823066538693974410427575521399306985",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 81000,
+        "ns": 9922775127,
+        "choice": "move thunder"
+      },
+      {
+        "side": 0,
+        "turn": 13,
+        "key": "54656974225751797173214837700976704692",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 28637316102,
+        "choice": "move doubleedge"
+      },
+      {
+        "side": 1,
+        "turn": 13,
+        "key": "54656974225751797173214837700976704692",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 81000,
+        "ns": 9209456435,
+        "choice": "move thunder"
+      },
+      {
+        "side": 0,
+        "turn": 14,
+        "key": "275498805191355842906077368457135842270",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 25592247913,
+        "choice": "move doubleedge"
+      },
+      {
+        "side": 1,
+        "turn": 14,
+        "key": "275498805191355842906077368457135842270",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 81000,
+        "ns": 8304946897,
+        "choice": "move thunder"
+      },
+      {
+        "side": 1,
+        "turn": 14,
+        "key": "79424129417231125639216227161138845746",
+        "phase": "forced",
+        "choices": 1,
+        "iterations": 0,
+        "ns": 9360,
+        "choice": "switch 3"
+      },
+      {
+        "side": 0,
+        "turn": 15,
+        "key": "127268018607547093163758461169912090001",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 15117237596,
+        "choice": "move doubleedge"
+      },
+      {
+        "side": 1,
+        "turn": 15,
+        "key": "127268018607547093163758461169912090001",
+        "phase": "battle",
+        "choices": 4,
+        "iterations": 81000,
+        "ns": 5156613635,
+        "choice": "move crosschop"
+      },
+      {
+        "side": 0,
+        "turn": 16,
+        "key": "301572778990575339946315350359795420578",
+        "phase": "battle",
+        "choices": 5,
+        "iterations": 243000,
+        "ns": 7437989619,
+        "choice": "move doubleedge"
+      },
+      {
+        "side": 1,
+        "turn": 16,
+        "key": "301572778990575339946315350359795420578",
+        "phase": "battle",
+        "choices": 4,
+        "iterations": 81000,
+        "ns": 2834299957,
+        "choice": "move crosschop"
+      }
+    ]
+  }
+}

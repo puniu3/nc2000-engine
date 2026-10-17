@@ -1,0 +1,34 @@
+{
+  "assets": [
+    {
+      "url": "https://puniu3.github.io/nc2000-engine/assets/index-DjCLL9e4.js",
+      "sha256": "6d2d0c98435ed75a5a2b11369470b02edd42c3cc7385482a16c65c2228c14ab7"
+    },
+    {
+      "url": "https://puniu3.github.io/nc2000-engine/assets/index-DvjjxvKc.css",
+      "sha256": "fe9bd23fdde47bc7a12ecbd2dff0c3b07bda9c45a16bd465d23eab29e1ae1619"
+    },
+    {
+      "url": "https://puniu3.github.io/nc2000-engine/assets/bot-worker-D1fBU-wO.js",
+      "sha256": "f18d6f5d8b876506cb288e49157b3d431adbdc715fff3f8574223754620f2708"
+    },
+    {
+      "url": "https://puniu3.github.io/nc2000-engine/assets/evaluate-worker-7toWDplp.js",
+      "sha256": "20b4fe16d24573b507a1663a31fa3476c8ac0251d4bea3da3a8bdb279ebef2b3"
+    },
+    {
+      "url": "https://puniu3.github.io/nc2000-engine/assets/fork-arena-worker-DJeEbFyb.js",
+      "sha256": "0fa5cce6b90d29dae511cb3d8fff456d578a1e3b97a500e53fc09c0928d18de9"
+    },
+    {
+      "url": "https://puniu3.github.io/nc2000-engine/assets/nc2000_wasm_bg-BaPlj4wD.wasm",
+      "sha256": "9a290dab7cfbdd7ac4cb773a721b30642d268396c53de102bcf6a0a6f06e4098"
+    },
+    {
+      "url": "https://puniu3.github.io/nc2000-engine/assets/solver-worker-CtfYhgUj.js",
+      "sha256": "f3dbe1f01dd1c6a56f95ae5f96c1d1d7130a803bdc6ef5c1362849f4a70799fc"
+    }
+  ],
+  "local_wasm_sha256": "b717f2b0e6892ef8fc9711a1dea1a46222178a339bc54173ad4fbb15cc5fdc79",
+  "local_matches_public": false
+}

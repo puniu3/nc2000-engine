@@ -1,0 +1,29 @@
+[package]
+name = "nc2000-bot"
+version = "0.1.0"
+edition = "2021"
+description = "Search bots for nc2000-engine: MCTS/DUCT, state-keyed skuct, RM mixed strategies, imperfect-info blind agent, baked preview tables"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+nc2000-engine = { path = "../engine" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Native-only global allocator (never reaches wasm builds: the dependency is
+# target-gated and the attribute is cfg'd out). Default-on — measured on the
+# seed-paired arena: -3% think time on skuct:1000, -6% on mcts:1000, with
+# bit-identical decisions. Opt out with --no-default-features.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+mimalloc = { version = "0.1.52", optional = true }
+
+[features]
+default = ["mi"]
+mi = ["dep:mimalloc"]
+hp-type-evidence = []
+
+[dev-dependencies]
+conformance = { path = "../conformance" }
+pprof = { version = "0.15.0", features = ["flamegraph"] }
+sha2 = "0.10"

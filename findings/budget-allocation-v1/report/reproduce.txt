@@ -1,0 +1,19 @@
+From the nc2000-engine repository root (Rust 1.98.1):
+cargo test --release -p nc2000-bot --example budget_allocation
+cargo build --release -p nc2000-bot --example budget_allocation
+target/release/examples/budget_allocation findings/budget-allocation-v1/null-protocol.json NEW_NULL_DIR
+target/release/examples/budget_allocation findings/budget-allocation-v1/protocol.json NEW_GAME_DIR
+
+Compare each newly produced game JSON to the same filename in the archived
+null/ or merged games/ directory, deleting only result.decisions[*].ns from
+both records. They must be identical. Do not replace the original evidence.
+The current harness supports optional JOB_LIST and NC2000_BUDGET_THREADS;
+these change scheduling only, as verified by shard and cross-platform canaries.
+
+To regenerate the report from the original evidence:
+python3 findings/budget-allocation-v1/report.py
+
+Python dependency: numpy. The analyzer verifies original protocol/source hashes,
+all 240 game files, each decision budget, null parity and preview parity. Merge
+provenance contains per-game SHA256 hashes. Native concurrent elapsed times
+are separated by CPU platform and must not be interpreted as browser latency.

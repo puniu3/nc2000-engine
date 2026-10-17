@@ -1,0 +1,62 @@
+[
+  {
+    "game": 1,
+    "decision": 21,
+    "side": 0
+  },
+  {
+    "game": 2,
+    "decision": 11,
+    "side": 0
+  },
+  {
+    "game": 2,
+    "decision": 11,
+    "side": 1
+  },
+  {
+    "game": 2,
+    "decision": 13,
+    "side": 0
+  },
+  {
+    "game": 2,
+    "decision": 13,
+    "side": 1
+  },
+  {
+    "game": 6,
+    "decision": 33,
+    "side": 0
+  },
+  {
+    "game": 6,
+    "decision": 33,
+    "side": 1
+  },
+  {
+    "game": 15,
+    "decision": 21,
+    "side": 0
+  },
+  {
+    "game": 16,
+    "decision": 26,
+    "side": 1
+  },
+  {
+    "game": 18,
+    "decision": 28,
+    "side": 0
+  },
+  {
+    "game": 20,
+    "decision": 23,
+    "side": 1
+  },
+  {
+    "game": 21,
+    "decision": 40,
+    "side": 0
+  }
+]

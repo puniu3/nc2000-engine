@@ -21,14 +21,34 @@ in `crates/conformance/tests/berry_confusion.rs`.
 
 **Status:** engine bit-exact vs PS (M1–M4), search bots through imperfect-info play (M5–M10), wasm + browser demo shipped (M9), published (M12), Japanese localization (M13). Current phase: **bot strengthening with fail-closed evaluation (M17 — see Roadmap (M17+))**. Playable demo: **https://puniu3.github.io/nc2000-engine/** Licensing: MIT, third-party attribution in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
+Strength result (2026-10-16): [Headroom probe v1](findings/headroom-probe-v1/README.md)
+confirms extra-compute headroom: 81k vs 27k blind search scored 56.5% in 756
+confirmation games; the registered sequential interval is 50.4–62.5%.
+[The experiment and audit](findings/headroom-scale-v1/README.md) record the tested
+distribution and compute cost. This is not an equal-latency release change.
+
 ## Play
 
 The demo's play door (`/`, with `?blind` kept as an alias) is **blind**:
 each side sees the other's six species, levels and types, and nothing else
 until the game ends, when the opponent's full sets are shown. The bot searches
-with the one live profile in `data/search-profiles.json` (27,000 iterations,
-c = 0.4) and keeps pondering while the human thinks. Its picture of the party
-it faces is the frozen opponent prior `data/belief-pool-v3`.
+with c = 0.4 and a player-selected fixed battle budget: Standard (27,000)
+or Strong (81,000, default), configured in `data/live-search.json`. Search starts
+while the human chooses, but input timing never changes its iteration count.
+Known catalog preview information sets use `data/compiled-preview-v1.json`;
+other previews use a fixed 729,000-iteration selection budget from
+`live-search.json`, independently of the battle strength setting.
+The compiled policy is an offline blind-MCTS approximation over ordered legal
+selections, keyed by own canonical set and opponent public roster. It is not
+an exact equilibrium certificate; custom priors and incompatible inputs fall
+back to live selection. Production builds reject incomplete or stale artifacts. The bot’s picture of
+the party it faces is the frozen opponent prior `data/belief-pool-v3`.
+
+The fixed-budget 243k-vs-81k study kept selection and all other settings equal:
+129 wins / 127 losses over 256 games, with a paired 95% bootstrap interval of
+44.5–56.3%. It did not meet the predeclared strength-improvement criterion, so
+243k is not offered as another tier. This is not an equivalence claim. The
+protocol and full results are in `findings/fixed-budget-v1`.
 
 The built-in parties a human can pick and the parties the bot draws are one
 catalog, `data/team-pool-v2` (24 parties, same ids, exact sets); both Random
@@ -37,10 +57,103 @@ imported for the human side. The setup panel chooses where the bot's party
 comes from — the built-in parties (by `drawWeight`) or the solved mixture
 `data/meta-nash-v3` — and a pool file loaded there replaces the lists and the
 bot's draw (uniformly) without touching the prior. `?nash` is the mixture
-draw with nothing configurable. The start screen links to `?evaluate`. How the catalog was selected: `data/team-selection-v2` and
+draw with a fixed mixture and the same strength choices. The start screen links to `?evaluate`. How the catalog was selected: `data/team-selection-v2` and
 [`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md). The ladder
-client (`tools/ps-client.js`) plays the same way from the same files, without
-pondering.
+client (`tools/ps-client.js`) uses the same blind information policy and team
+files; its iteration count is controlled separately by the CLI.
+
+## Server-side preview cache interface
+
+`tools/preview-cache.js` supplies a Node.js interface for caching completed
+blind team-preview decisions. It performs no I/O and is not enabled in the
+GitHub Pages app or the websocket client. A fork owns persistence, sharing
+between users, concurrent-request deduplication, eviction, worker scheduling,
+and submitting the result to the still-current battle request.
+
+Build the bindings with `crates/wasm/build.sh nodejs`. Both `BlindSearcher`
+and `ProtocolSearcher` expose `previewCacheInfo()` after `observe(battle)` or
+`onRequest(requestJson)`, respectively. Call these normal initialization
+methods even on a cache hit: they advance the per-game observer and RNG.
+The returned identity is opaque; use the helper instead of parsing it.
+
+```js
+const fs = require('node:fs');
+const {createHash} = require('node:crypto');
+const wasm = require('./crates/wasm/pkg-node/nc2000_wasm.js');
+const {createPreviewCache} = require('./tools/preview-cache');
+
+const cache = createPreviewCache({
+  // Hash the actual binary loaded by this server process.
+  wasmSha256: createHash('sha256').update(fs.readFileSync(
+    './crates/wasm/pkg-node/nc2000_wasm_bg.wasm'
+  )).digest('hex'),
+  dexJson: wasm.embeddedDexJson(), // for new Dex(); pass actual JSON for Dex.fromJson
+  iterations: 729000,
+  formatId: 'gen2nintendocup2000noohkostadium2strict',
+});
+
+// After constructing the searcher, setting its own team/prior and feeding
+// all player-visible lines, require onRequest(requestJson) === true.
+// A BlindSearcher instead requires observe(battle).
+async function choosePreview(searcher, store) {
+  const key = cache.key(searcher);
+  if (key === null) return null; // caller's ordinary non-cache path
+  const hit = cache.readRecord(searcher, await store.get(key));
+  if (hit) return hit.choice;
+
+  // The fork should coalesce concurrent misses for this key, and put CPU
+  // work in its own worker. This loop only illustrates the exact budget.
+  while (searcher.iterations() < cache.iterations) {
+    const before = searcher.iterations();
+    const after = searcher.step(Math.min(1000, cache.iterations - before));
+    if (after <= before) throw new Error('Preview search did not advance');
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  const recordJson = cache.createRecord(searcher);
+  await store.put(key, recordJson); // atomic persistence is the fork's responsibility
+  return searcher.best();
+}
+```
+
+The three operations are:
+
+| Operation | Result |
+| --- | --- |
+| `cache.key(searcher)` | SHA-256 storage key, or `null` outside a supported live blind preview |
+| `cache.createRecord(searcher)` | JSON string; throws unless the live search completed **exactly** the configured iterations and selected a legal team |
+| `cache.readRecord(searcher, json)` | `{choice, source: 'cache', iterations: 0, sourceIterations}` on a hit; otherwise `null` |
+
+An entry uses the versioned `nc2000-preview-cache-v1` format with `key`,
+`iterations`, `choice`, and an integrity checksum. Treat the JSON as opaque
+server-generated data; the checksum detects corruption and is not an
+authentication signature. Loading an entry does not change `best()`, root
+statistics, or the searcher: submit **`hit.choice`**. Lookups after any search
+iterations have already run are rejected. Truncated JSON, different budgets,
+stale binaries/data/settings, invalid choices and unsupported versions miss.
+Incomplete, overshot, baked and forced decisions cannot be exported.
+
+Identity includes the actual WASM binary hash, dex contents, format, complete
+search configuration, opponent pool, applied belief prior, own canonical
+sets, ordered public opponent facts (including gender and item presence),
+and the legal action set. Hidden opponent moves and exact held items are
+excluded. Seeds, user names and battle IDs are excluded: the first completed
+selection is reused across users and seeds. This intentionally reuses one
+sampled decision rather than preserving fresh-search seed diversity. Different
+search drivers do not share entries. Binary updates conservatively invalidate
+entries even if the policy happens to be unchanged.
+
+The current interface supports blind selection only. Pinned/open sheets,
+`fromFork`, hand-entered positions, endgame sessions and in-battle decisions
+return no usable key. It caches final choices, not search trees/checkpoints;
+it cannot resume a partial search. The 729k default comes from the measured
+blind-selection study and is independent of the 27k/81k battle setting.
+The same interface can generate a record offline or on the first live miss;
+storage and distribution remain entirely with the fork.
+
+Verification: `node crates/wasm/tests-node/preview-cache.js` exercises real
+WASM generation/loading, both drivers, input/settings invalidation, hidden
+information exclusion, and unchanged subsequent RNG/belief behavior after a
+hit. No server or browser persistence is installed by this interface.
 
 ## Party evaluator
 
@@ -54,8 +167,9 @@ The shipped Nash mixture (`data/meta-nash-v3`) is the default. Both sides use
 blind search at c = 0.4 with the shipped opponent prior (`data/belief-pool-v3`);
 changing the opponent distribution only changes team draws.
 
-The default is 32 games at 27,000 iterations per decision, the live bot's
-budget; 3,000 and 10,000 are offered and labelled as quick runs. Each sampled matchup
+The default is 32 games at 81,000 iterations per decision, matching Strong's
+battle budget (the evaluator also searches selection rather than using the
+product's compiled previews); 3,000 and 10,000 are offered and labelled as quick runs. Each sampled matchup
 plays twice with P1/P2 reversed. Results stay in memory only and can be resumed
 or extended while the page remains open. Reloading or closing the tab resets
 results. The evaluator does not save to browser storage or load previous results.
@@ -186,7 +300,7 @@ crates/wasm/               nc2000-wasm JS bridge (M9): Dex / Battle / Searcher (
                            ProtocolSearcher.setPosition/report (the solver's entry point),
                            JSON-string API, embedded dex; build.sh = tuned wasm-pack build;
                            tests-node/ = parity + bench twins vs native
-web/                       Vite+Preact browser demo (M9): worker-threaded bot with ponder; blind play
+web/                       Vite+Preact browser demo (M9): worker-threaded bot with fixed budgets; blind play
                            only (see Play above; the M12 open team sheet was retired 2026-09-30);
                            custom parties (M14): PS-export paste import (ps-import.ts) -> wasm
                            canonicalize/validate -> localStorage; team files fetched from
@@ -274,7 +388,11 @@ node crates/wasm/tests-node/bench.js     # wasm iters/s; native twin: -p nc2000-
 cd web && npm run dev                    # 0.0.0.0:8000 (auto-bumps port if busy)
 cd web && npm run build && npm run preview   # <base>data/* served from repo data/ in dev AND preview
 cd web && npm run test:e2e               # built-dist custom-party full-game gates
-cd web && npm run test:worker            # search profiles, early flush, and ponder cap through real workers
+cd web && npm run test:worker            # fixed search budgets and input-timing parity through real workers
+# From the repository root, regenerate known previews after policy changes:
+cargo run --release -p nc2000-bot --example compile_preview -- --prepare /tmp/nc2000-preview
+cargo run --release -p nc2000-bot --example compile_preview -- /tmp/nc2000-preview/bake-jobs.json /tmp/nc2000-preview/rows 8
+python3 tools/compile-preview-artifact.py /tmp/nc2000-preview/bake-jobs.json data/compiled-preview-v1.json /tmp/nc2000-preview/rows
 # GH Pages build locally (same as .github/workflows/pages.yml; serves at /nc2000-engine/)
 cd web && NC2000_BASE=/nc2000-engine/ npm run build && NC2000_BASE=/nc2000-engine/ npm run preview
 # M14a: regenerate the learnset export, then cross-check the wasm validator
@@ -379,11 +497,13 @@ lower bound exceeds 0.5. The registration fixes the sample cap and evaluator
 before any games start. A strength-test pass still needs the thinking-budget
 and product-path checks before adoption.
 
-The Web bot and PS client share [search profiles](data/search-profiles.json).
+The Web bot and PS client share the search coefficient in
+[search profiles](data/search-profiles.json).
 The browser and CLI position solvers use the blind profile; the CLI also accepts
 an explicit `--c` coefficient. Explicit PS `--iters` arguments
-and solver budget selections override their default iteration counts; Web
-pondering uses ten times the selected profile's normal budget as its cap.
+and solver budget selections override their default iteration counts. Live Web
+battle budgets are separately selected in `data/live-search.json`; human think
+time does not extend them. The optional timed-solver experiment is separate.
 PS decision logs include `searchC`, and the regret reader accepts both these
 logs and older logs that omitted the coefficient.
 The blind profile passed [confirmation on fresh seeds](data/blind-c04-confirmation-v1.json)

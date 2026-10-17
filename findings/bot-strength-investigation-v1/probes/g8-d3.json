@@ -1,0 +1,324 @@
+{
+  "id": "g8-d3",
+  "side": 0,
+  "snapshot": {
+    "turn": 2,
+    "key": "315444826926975525074160163314772237111",
+    "sides": [
+      [
+        {
+          "species": "cloyster",
+          "active": true,
+          "hp": 0,
+          "maxhp": 156,
+          "status": "fnt",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "spikes",
+              "pp": 31
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "explosion",
+              "pp": 7
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 266,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "bellydrum",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "zapdos",
+          "active": false,
+          "hp": 215,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 24
+            },
+            {
+              "move": "whirlwind",
+              "pp": 32
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "fnt",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 15
+            },
+            {
+              "move": "bellydrum",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "cloyster",
+          "active": false,
+          "hp": 156,
+          "maxhp": 156,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "spikes",
+              "pp": 32
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "marowak",
+          "active": false,
+          "hp": 182,
+          "maxhp": 182,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bonemerang",
+              "pp": 16
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "swordsdance",
+              "pp": 48
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "rows": [
+    {
+      "seed": 2026103801,
+      "n": 27000,
+      "choice": "switch 3",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        1468,
+        25532
+      ],
+      "means": [
+        0.733801652761349,
+        0.7594693837087393
+      ],
+      "nodes": 26232,
+      "ms": 594.75975
+    },
+    {
+      "seed": 2026103801,
+      "n": 81000,
+      "choice": "switch 3",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        2633,
+        78367
+      ],
+      "means": [
+        0.7361299504090741,
+        0.7579223144821559
+      ],
+      "nodes": 76062,
+      "ms": 1879.140875
+    },
+    {
+      "seed": 2026103802,
+      "n": 27000,
+      "choice": "switch 3",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        912,
+        26088
+      ],
+      "means": [
+        0.7193204914635575,
+        0.7551719069362265
+      ],
+      "nodes": 26272,
+      "ms": 595.357875
+    },
+    {
+      "seed": 2026103802,
+      "n": 81000,
+      "choice": "switch 3",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        940,
+        80060
+      ],
+      "means": [
+        0.7170428598029408,
+        0.7567561082425653
+      ],
+      "nodes": 76210,
+      "ms": 1901.9102500000001
+    },
+    {
+      "seed": 2026103803,
+      "n": 27000,
+      "choice": "switch 3",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        1233,
+        25767
+      ],
+      "means": [
+        0.7205119102863385,
+        0.7504070277867212
+      ],
+      "nodes": 26386,
+      "ms": 591.534625
+    },
+    {
+      "seed": 2026103803,
+      "n": 81000,
+      "choice": "switch 3",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        1262,
+        79738
+      ],
+      "means": [
+        0.7166332689247665,
+        0.7504216178476883
+      ],
+      "nodes": 76658,
+      "ms": 1909.6336250000002
+    },
+    {
+      "seed": 2026103804,
+      "n": 27000,
+      "choice": "switch 3",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        3386,
+        23614
+      ],
+      "means": [
+        0.7347836836557818,
+        0.7488517010656908
+      ],
+      "nodes": 26430,
+      "ms": 593.051667
+    },
+    {
+      "seed": 2026103804,
+      "n": 81000,
+      "choice": "switch 3",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "visits": [
+        3917,
+        77083
+      ],
+      "means": [
+        0.7331989006972249,
+        0.7506630988090573
+      ],
+      "nodes": 76227,
+      "ms": 1930.352
+    }
+  ]
+}

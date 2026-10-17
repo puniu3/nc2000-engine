@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+export NC2000_REPO_ROOT="$PWD"
+mkdir -p tmp/lock-wait-reproduction
+cargo build --release -p nc2000-bot --example lock_wait_audit
+target/release/examples/lock_wait_audit > tmp/lock-wait-reproduction/measurements.jsonl
+cmp findings/lock-audit-v1/measurements.jsonl tmp/lock-wait-reproduction/measurements.jsonl
+printf 'Lock-wait proof and all 24 search decisions reproduce exactly.\n'

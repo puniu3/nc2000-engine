@@ -3,8 +3,8 @@
 // remount it cleanly.
 //
 // Product policy: every game is blind (info-mode.ts) and searches with the
-// one blind profile (data/search-profiles.json). `/` and its alias `?blind`
-// are the same door. No setting on the screen moves either.
+// blind search policy. The player chooses a fixed live iteration budget
+// (data/live-search.json). `/` and its alias `?blind` are the same door.
 //
 // Three team files, three questions (docs/TEAM-POOL-REBUILD-PLAN.md):
 // - the catalog (team-pool-v2): the built-in parties a human can pick, and
@@ -49,6 +49,7 @@ import {
 import { loadStoredPrior, type StoredPrior } from "./belief-prior";
 import { StartScreen } from "./select";
 import { Game } from "./game";
+import { loadStrength, storeStrength, type Strength } from "./search-profile";
 import { Solver } from "./solver";
 import { loadJaNames, locale, setLocale, ui, type Locale } from "./i18n";
 
@@ -101,6 +102,7 @@ export function App() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   // The lists in play: the catalog, or a pool file the user loaded.
   const [loadedPool, setLoadedPool] = useState<LoadedPool | null>(null);
+  const [strength, setStrength] = useState<Strength>(loadStrength);
   const [game, setGame] = useState<GameSpec | null>(null);
   // The solved mixture: the `?nash` draw, and a draw choice on the play door.
   // Never null once boot succeeded — a mixture that cannot load or validate
@@ -228,6 +230,8 @@ export function App() {
         botDrawCount={activePool.pool.teams.length}
         prior={prior}
         onPrior={setPrior}
+        strength={strength}
+        onStrength={value => { storeStrength(value); setStrength(value); }}
         onStart={(human, bot) => setGame({ human, bot, n: 1 })}
       />
     );
@@ -237,6 +241,7 @@ export function App() {
     <Game
       key={game.n}
       poolJson={beliefJson}
+      strength={strength}
       humanTeam={game.human}
       botTeam={game.bot}
       // Nash ships one configuration: a table left in storage by an earlier

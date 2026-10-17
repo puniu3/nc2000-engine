@@ -1,0 +1,372 @@
+{
+  "id": "g3-d29",
+  "side": 0,
+  "snapshot": {
+    "turn": 27,
+    "key": "250823986516503136905226555576008445439",
+    "sides": [
+      [
+        {
+          "species": "porygon2",
+          "active": true,
+          "hp": 200,
+          "maxhp": 209,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "return",
+              "pp": 23
+            },
+            {
+              "move": "icebeam",
+              "pp": 11
+            },
+            {
+              "move": "curse",
+              "pp": 15
+            },
+            {
+              "move": "recover",
+              "pp": 27
+            }
+          ]
+        },
+        {
+          "species": "exeggutor",
+          "active": false,
+          "hp": 0,
+          "maxhp": 201,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "psychic",
+              "pp": 14
+            },
+            {
+              "move": "leechseed",
+              "pp": 16
+            },
+            {
+              "move": "sleeppowder",
+              "pp": 24
+            },
+            {
+              "move": "explosion",
+              "pp": 7
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 26,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 21
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            },
+            {
+              "move": "curse",
+              "pp": 14
+            }
+          ]
+        },
+        {
+          "species": "porygon2",
+          "active": false,
+          "hp": 0,
+          "maxhp": 209,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "return",
+              "pp": 28
+            },
+            {
+              "move": "icebeam",
+              "pp": 12
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "recover",
+              "pp": 24
+            }
+          ]
+        },
+        {
+          "species": "golem",
+          "active": false,
+          "hp": 0,
+          "maxhp": 186,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            },
+            {
+              "move": "roar",
+              "pp": 32
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "rows": [
+    {
+      "seed": 2026102701,
+      "n": 27000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move icebeam",
+        "move curse",
+        "move recover"
+      ],
+      "visits": [
+        9276,
+        9275,
+        5409,
+        3040
+      ],
+      "means": [
+        1.0,
+        1.0,
+        0.9957478276945831,
+        0.9898026315789473
+      ],
+      "nodes": 860,
+      "ms": 182.246792
+    },
+    {
+      "seed": 2026102701,
+      "n": 81000,
+      "choice": "move icebeam",
+      "actions": [
+        "move return",
+        "move icebeam",
+        "move curse",
+        "move recover"
+      ],
+      "visits": [
+        29478,
+        29478,
+        16308,
+        5736
+      ],
+      "means": [
+        1.0,
+        1.0,
+        0.9973019376992887,
+        0.9900627615062761
+      ],
+      "nodes": 1747,
+      "ms": 540.9630840000001
+    },
+    {
+      "seed": 2026102702,
+      "n": 27000,
+      "choice": "move icebeam",
+      "actions": [
+        "move return",
+        "move icebeam",
+        "move curse",
+        "move recover"
+      ],
+      "visits": [
+        8740,
+        8740,
+        6530,
+        2990
+      ],
+      "means": [
+        1.0,
+        1.0,
+        0.9978560490045941,
+        0.9903010033444816
+      ],
+      "nodes": 900,
+      "ms": 188.586667
+    },
+    {
+      "seed": 2026102702,
+      "n": 81000,
+      "choice": "move icebeam",
+      "actions": [
+        "move return",
+        "move icebeam",
+        "move curse",
+        "move recover"
+      ],
+      "visits": [
+        28770,
+        28770,
+        17901,
+        5559
+      ],
+      "means": [
+        1.0,
+        1.0,
+        0.997877213563488,
+        0.9897463572584997
+      ],
+      "nodes": 1744,
+      "ms": 555.059917
+    },
+    {
+      "seed": 2026102703,
+      "n": 27000,
+      "choice": "move icebeam",
+      "actions": [
+        "move return",
+        "move icebeam",
+        "move curse",
+        "move recover"
+      ],
+      "visits": [
+        8734,
+        8734,
+        6697,
+        2835
+      ],
+      "means": [
+        1.0,
+        1.0,
+        0.998058832312976,
+        0.9894179894179894
+      ],
+      "nodes": 912,
+      "ms": 191.53916600000002
+    },
+    {
+      "seed": 2026102703,
+      "n": 81000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move icebeam",
+        "move curse",
+        "move recover"
+      ],
+      "visits": [
+        28549,
+        28548,
+        17744,
+        6159
+      ],
+      "means": [
+        1.0,
+        1.0,
+        0.997858431018936,
+        0.990745250852411
+      ],
+      "nodes": 1716,
+      "ms": 553.595416
+    },
+    {
+      "seed": 2026102704,
+      "n": 27000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move icebeam",
+        "move curse",
+        "move recover"
+      ],
+      "visits": [
+        9133,
+        9132,
+        6187,
+        2548
+      ],
+      "means": [
+        1.0,
+        1.0,
+        0.9970906739938581,
+        0.9878335949764521
+      ],
+      "nodes": 887,
+      "ms": 184.374958
+    },
+    {
+      "seed": 2026102704,
+      "n": 81000,
+      "choice": "move icebeam",
+      "actions": [
+        "move return",
+        "move icebeam",
+        "move curse",
+        "move recover"
+      ],
+      "visits": [
+        29556,
+        29556,
+        16303,
+        5585
+      ],
+      "means": [
+        1.0,
+        1.0,
+        0.9972397718211372,
+        0.989794091316025
+      ],
+      "nodes": 1691,
+      "ms": 549.668042
+    }
+  ]
+}

@@ -1,0 +1,2894 @@
+diff --git a/crates/engine/examples/attract_gender_audit.rs b/crates/engine/examples/attract_gender_audit.rs
+new file mode 100644
+index 0000000..f143dd0
+--- /dev/null
++++ b/crates/engine/examples/attract_gender_audit.rs
+@@ -0,0 +1,219 @@
++//! Isolate gender in actual Attract turns, then validate legal catalog changes.
++//! cargo run -p nc2000-engine --example attract_gender_audit -- OLD_POOL NEW_POOL NEW_REPORT
++use nc2000_engine::{
++    battle::{
++        enumerate::enumerate_step,
++        moveexec::{get_damage_synthetic, synthetic_move},
++        PokemonSet, SearchChoice,
++    },
++    dex::{toid, Dex},
++    state::{Battle, Gender},
++    validate::{validate_team, Learnsets},
++};
++use serde_json::{json, Value};
++use sha2::{Digest, Sha256};
++use std::{fs, io::Write, path::Path};
++
++fn battle(dex: &Dex, sets: &Value, lead: usize) -> Battle {
++    let team: Vec<PokemonSet> = serde_json::from_value(sets.clone()).unwrap();
++    let mut selection = None;
++    for i in 0..team.len() {
++        for j in i + 1..team.len() {
++            if i != lead
++                && j != lead
++                && u16::from(team[lead].level) + u16::from(team[i].level) + u16::from(team[j].level)
++                    <= 155
++            {
++                selection.get_or_insert((i, j));
++            }
++        }
++    }
++    let (i, j) = selection.unwrap();
++    let mut b = Battle::from_fixture(dex, "1,2,3,4", &team, &team).unwrap();
++    for side in 0..2 {
++        b.choose(dex, side, &format!("team {},{},{}", lead + 1, i + 1, j + 1))
++            .unwrap();
++    }
++    b.set_log_enabled(false);
++    b
++}
++fn damage(dex: &Dex, b: &mut Battle, name: &str, atk: i8, def: i8) -> i64 {
++    let id = b.active_id(0).unwrap();
++    b.poke_mut(id).boosts[0] = atk;
++    b.poke_mut(id).boosts[1] = def;
++    let mut fake = synthetic_move(dex, 40);
++    fake.base_move_type = dex
++        .move_static(dex.moves.id(&toid(name)).unwrap())
++        .move_type;
++    get_damage_synthetic(b, dex, id, id, fake).unwrap() as i64
++}
++fn main() {
++    let args: Vec<String> = std::env::args().collect();
++    assert_eq!(
++        args.len(),
++        4,
++        "usage: attract_gender_audit OLD_POOL NEW_POOL NEW_REPORT"
++    );
++    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
++    let dex_text = fs::read_to_string(root.join("data/gen2stadium2.json")).unwrap();
++    let dex = Dex::from_json(&dex_text).unwrap();
++    let ls =
++        Learnsets::from_json(&fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap())
++            .unwrap();
++    let old_bytes = fs::read(root.join(&args[1])).unwrap();
++    let new_bytes = fs::read(root.join(&args[2])).unwrap();
++    let old: Value = serde_json::from_slice(&old_bytes).unwrap();
++    let new: Value = serde_json::from_slice(&new_bytes).unwrap();
++    // Controlled causal intervention: the identical battle has only gender
++    // changed. Synthetic genderless Venusaur/Ninetales are negative controls,
++    // not proposed legal sets. The actual proposed sets are validated below.
++    let mon = |sp: &str, mv: &str| {
++        serde_json::from_value::<PokemonSet>(json!({
++            "name":sp,"species":sp,"moves":[mv],"level":50,
++            "ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},
++            "evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255}
++        }))
++        .unwrap()
++    };
++    let own = vec![
++        mon("Ninetales", "Attract"),
++        mon("Snorlax", "Rest"),
++        mon("Starmie", "Recover"),
++    ];
++    let foe = vec![
++        mon("Venusaur", "Growth"),
++        mon("Snorlax", "Rest"),
++        mon("Starmie", "Recover"),
++    ];
++    let mut base = Battle::from_fixture(&dex, "1,2,3,4", &own, &foe).unwrap();
++    for side in 0..2 {
++        base.choose(&dex, side, "team 1,2,3").unwrap();
++    }
++    base.set_log_enabled(false);
++    let mut matrix = Vec::new();
++    for source_gender in [Gender::M, Gender::F, Gender::N] {
++        for target_gender in [Gender::M, Gender::F, Gender::N] {
++            let mut b = base.clone();
++            let src = b.active_id(0).unwrap();
++            let dst = b.active_id(1).unwrap();
++            b.poke_mut(src).gender = source_gender;
++            b.poke_mut(dst).gender = target_gender;
++            let choices = [
++                Some(SearchChoice::Move(dex.moves.id("attract").unwrap())),
++                Some(SearchChoice::Move(dex.moves.id("growth").unwrap())),
++            ];
++            let step = enumerate_step(&dex, &b, choices, 20000).unwrap();
++            let mut infatuated = 0.0;
++            let mut acted = 0.0;
++            let mut mass = 0.0;
++            for leaf in &step.leaves {
++                mass += leaf.prob;
++                let target = leaf.battle.poke(dst);
++                if target.has_volatile(dex.conds_id("attract").unwrap()) {
++                    infatuated += leaf.prob;
++                }
++                if target.boosts[2] > 0 {
++                    acted += leaf.prob;
++                }
++            }
++            let opposite = matches!(
++                (source_gender, target_gender),
++                (Gender::M, Gender::F) | (Gender::F, Gender::M)
++            );
++            assert!((mass - 1.0).abs() < 1e-10);
++            assert!((infatuated - if opposite { 1.0 } else { 0.0 }).abs() < 1e-10);
++            assert!((acted - if opposite { 0.5 } else { 1.0 }).abs() < 1e-10);
++            let label = |g: Gender| if g == Gender::N { "N" } else { g.as_str() };
++            matrix.push(json!({"sourceGender":label(source_gender),"targetGender":label(target_gender),
++                "infatuatedProbability":infatuated,"targetActsProbability":acted,"leaves":step.leaves.len()}));
++        }
++    }
++    let mut rows = Vec::new();
++    let mut checks = 0;
++    assert_eq!(
++        old["teams"].as_array().unwrap().len(),
++        new["teams"].as_array().unwrap().len()
++    );
++    for (before, after) in old["teams"]
++        .as_array()
++        .unwrap()
++        .iter()
++        .zip(new["teams"].as_array().unwrap())
++    {
++        assert_eq!(before["id"], after["id"]);
++        assert_eq!(before["drawWeight"], after["drawWeight"]);
++        for sets in [&before["sets"], &after["sets"]] {
++            let verdict = validate_team(&dex, &ls, &sets.to_string());
++            assert_eq!(verdict["ok"], true, "{verdict}");
++            assert!(!verdict["findings"]
++                .as_array()
++                .unwrap()
++                .iter()
++                .any(|f| matches!(f["code"].as_str(), Some("dv-gender" | "gender-species"))));
++        }
++        for (slot, (a, z)) in before["sets"]
++            .as_array()
++            .unwrap()
++            .iter()
++            .zip(after["sets"].as_array().unwrap())
++            .enumerate()
++        {
++            if a == z {
++                continue;
++            }
++            assert_eq!(a["gender"], "M");
++            assert_eq!(z["gender"], "F");
++            let mut restored = z.clone();
++            restored["gender"] = a["gender"].clone();
++            restored["ivs"]["atk"] = a["ivs"]["atk"].clone();
++            assert_eq!(restored, *a, "unexpected non-gender/Attack-IV change");
++            let mut b = battle(&dex, &before["sets"], slot);
++            let mut n = battle(&dex, &after["sets"], slot);
++            let bp = b.poke(b.active_id(0).unwrap());
++            let np = n.poke(n.active_id(0).unwrap());
++            assert_eq!(bp.gender, Gender::M);
++            assert_eq!(np.gender, Gender::F);
++            assert_eq!(bp.maxhp, np.maxhp);
++            assert_eq!(bp.stored_stats[1..], np.stored_stats[1..]);
++            assert!(np.stored_stats[0] <= bp.stored_stats[0]);
++            let (attack_before, attack_after, hp) =
++                (bp.stored_stats[0], np.stored_stats[0], bp.maxhp);
++            let mut damages = Vec::new();
++            for mv in a["moves"].as_array().unwrap() {
++                let name = mv.as_str().unwrap();
++                damages.push(json!({"move":name,"neutralBefore":damage(&dex,&mut b,name,0,0),
++                    "neutralAfter":damage(&dex,&mut n,name,0,0),"swaggerBefore":damage(&dex,&mut b,name,2,0),
++                    "swaggerAfter":damage(&dex,&mut n,name,2,0)}));
++                for atk in -6..=6 {
++                    for def in -6..=6 {
++                        assert!(
++                            damage(&dex, &mut n, name, atk, def)
++                                <= damage(&dex, &mut b, name, atk, def)
++                        );
++                        checks += 1;
++                    }
++                }
++            }
++            rows.push(json!({"baseId":before["id"],"slot":slot+1,"species":a["species"],"hp":hp,
++                "genderBefore":"M","genderAfter":"F","attackDvBefore":a["ivs"]["atk"].as_i64().unwrap()/2,
++                "attackDvAfter":z["ivs"]["atk"].as_i64().unwrap()/2,
++                "attackBefore":attack_before,"attackAfter":attack_after,"damage":damages}));
++        }
++    }
++    let report = json!({"format":"nc2000-attract-gender-mechanics-v1",
++        "baselineSha256":format!("{:x}",Sha256::digest(&old_bytes)),"optimizedSha256":format!("{:x}",Sha256::digest(&new_bytes)),
++        "matrixControl":"Identical stats, moves, items, seed and field; gender intervention only. Genderless Ninetales/Venusaur are synthetic negative controls, not legal catalog proposals.",
++        "matrix":matrix,"validatedTeams":new["teams"].as_array().unwrap().len(),"changedSets":rows.len(),
++        "selfHitComparisons":checks,"selfHitIncreases":0,"unchanged":"HP, non-Attack stats, moves, items, EVs, levels, team IDs, draw weights",
++        "rows":rows});
++    let out = root.join(&args[3]);
++    fs::create_dir_all(out.parent().unwrap()).unwrap();
++    fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .open(out)
++        .unwrap()
++        .write_all((serde_json::to_string_pretty(&report).unwrap() + "\n").as_bytes())
++        .unwrap();
++    println!("9 exact Attract cases; {} teams validated; {} legal gender changes; {} self-hit comparisons",new["teams"].as_array().unwrap().len(),rows.len(),checks);
++}
+diff --git a/crates/engine/examples/low_attack_catalog_audit.rs b/crates/engine/examples/low_attack_catalog_audit.rs
+new file mode 100644
+index 0000000..0c3a8b8
+--- /dev/null
++++ b/crates/engine/examples/low_attack_catalog_audit.rs
+@@ -0,0 +1,257 @@
++//! Offline proposal; never rewrites the shipped catalog, inventory or prior.
++//! cargo run -p nc2000-engine --example low_attack_catalog_audit --
++//!   data/team-pool-v2/team-pool.json NEW_OUTPUT_DIRECTORY
++use nc2000_engine::{
++    battle::{
++        moveexec::{get_damage_synthetic, synthetic_move},
++        PokemonSet,
++    },
++    dex::{toid, Dex},
++    state::Battle,
++    validate::{validate_team, Learnsets},
++};
++use serde_json::{json, Value};
++use sha2::{Digest, Sha256};
++use std::{collections::BTreeMap, fs, path::Path};
++
++fn sha(bytes: &[u8]) -> String {
++    format!("{:x}", Sha256::digest(bytes))
++}
++fn iv(set: &Value, key: &str) -> i64 {
++    set["ivs"][key].as_i64().unwrap_or(31) & 30
++}
++fn shiny(set: &Value, atk: i64) -> bool {
++    ["def", "spe", "spa"].iter().all(|k| iv(set, k) / 2 == 10) && atk % 4 >= 2
++}
++fn gender(species: &Value, atk: i64) -> String {
++    species["gender"]
++        .as_str()
++        .map(str::to_owned)
++        .unwrap_or_else(|| {
++            let female = species["genderRatio"]["F"].as_f64().unwrap_or(0.5);
++            if (atk as f64) < female * 16.0 {
++                "F"
++            } else {
++                "M"
++            }
++            .to_owned()
++        })
++}
++fn battle(dex: &Dex, sets: &Value, lead: usize) -> Battle {
++    let team: Vec<PokemonSet> = serde_json::from_value(sets.clone()).unwrap();
++    let pair = (0..team.len())
++        .filter(|&i| i != lead)
++        .flat_map(|i| {
++            let team = &team;
++            (i + 1..team.len())
++                .filter(move |&j| {
++                    j != lead
++                        && u16::from(team[lead].level)
++                            + u16::from(team[i].level)
++                            + u16::from(team[j].level)
++                            <= 155
++                })
++                .map(move |j| (i, j))
++        })
++        .next()
++        .expect("legal lead selection");
++    let mut b = Battle::from_fixture(dex, "1,2,3,4", &team, &team).unwrap();
++    let choice = format!("team {},{},{}", lead + 1, pair.0 + 1, pair.1 + 1);
++    b.choose(dex, 0, &choice).unwrap();
++    b.choose(dex, 1, &choice).unwrap();
++    b.set_log_enabled(false);
++    b
++}
++fn self_hit(dex: &Dex, b: &mut Battle, move_name: &str, atk: i8, def: i8) -> i64 {
++    let p = b.active_id(0).unwrap();
++    b.poke_mut(p).boosts[0] = atk;
++    b.poke_mut(p).boosts[1] = def;
++    let id = dex.moves.id(&toid(move_name)).unwrap();
++    let mut fake = synthetic_move(dex, 40);
++    // Same item/base-type handling as conditions.rs's confusion handler.
++    fake.base_move_type = dex.move_static(id).move_type;
++    get_damage_synthetic(b, dex, p, p, fake).unwrap() as i64
++}
++fn write(dir: &Path, name: &str, value: &Value) {
++    fs::write(
++        dir.join(name),
++        serde_json::to_string_pretty(value).unwrap() + "\n",
++    )
++    .unwrap();
++}
++
++fn main() {
++    let args: Vec<String> = std::env::args().collect();
++    assert_eq!(
++        args.len(),
++        3,
++        "usage: low_attack_catalog_audit INPUT_POOL NEW_OUTPUT_DIRECTORY"
++    );
++    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
++    let input_path = root.join(&args[1]);
++    let output = root.join(&args[2]);
++    assert!(
++        !output.exists(),
++        "output must be a new directory; existing work is never overwritten"
++    );
++    let input = fs::read(&input_path).unwrap();
++    let pool: Value = serde_json::from_slice(&input).unwrap();
++    let dex_bytes = fs::read(root.join("data/gen2stadium2.json")).unwrap();
++    let dex_json: Value = serde_json::from_slice(&dex_bytes).unwrap();
++    let dex = Dex::from_json(std::str::from_utf8(&dex_bytes).unwrap()).unwrap();
++    let ls =
++        Learnsets::from_json(&fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap())
++            .unwrap();
++    let mut teams = pool["teams"].as_array().unwrap().clone();
++    let mut rows = Vec::new();
++    let mut excluded = BTreeMap::<String, usize>::new();
++    let mut changed_teams = 0;
++    let mut comparisons = 0;
++    let mut already_low_dv = 0;
++    for team in &mut teams {
++        let original = team["sets"].clone();
++        let check = validate_team(&dex, &ls, &original.to_string());
++        assert_eq!(check["ok"], true, "source {}: {check}", team["id"]);
++        let base_id = team["id"].as_str().unwrap().to_owned();
++        let mut changed = false;
++        for (slot, set) in original.as_array().unwrap().iter().enumerate() {
++            let moves: Vec<&str> = set["moves"]
++                .as_array()
++                .unwrap()
++                .iter()
++                .map(|m| m.as_str().unwrap())
++                .collect();
++            let ids: Vec<String> = moves.iter().map(|m| toid(m)).collect();
++            let reason = if ids.iter().any(|m| m.starts_with("hiddenpower")) {
++                Some("hidden-power")
++            } else if ids.iter().any(|m| dex_json["moves"][m].is_null()) {
++                panic!("unknown move in {base_id}")
++            } else if ids
++                .iter()
++                .any(|m| dex_json["moves"][m]["category"] == "Physical")
++            {
++                Some("physical-move")
++            } else if ids.iter().any(|m| {
++                matches!(
++                    m.as_str(),
++                    "metronome" | "mimic" | "mirrormove" | "transform"
++                )
++            }) {
++                Some("external-move-access")
++            } else {
++                None
++            };
++            if let Some(reason) = reason {
++                *excluded.entry(reason.to_owned()).or_default() += 1;
++                continue;
++            }
++            let species = &dex_json["species"][toid(set["species"].as_str().unwrap())];
++            assert!(!species.is_null());
++            let old_dv = iv(set, "atk") / 2;
++            let new_dv = (0..=old_dv)
++                .find(|&a| {
++                    a % 2 == old_dv % 2
++                        && gender(species, a) == gender(species, old_dv)
++                        && shiny(set, a) == shiny(set, old_dv)
++                })
++                .unwrap();
++            if old_dv == new_dv {
++                already_low_dv += 1;
++            }
++            let mut proposed = set.clone();
++            // These catalog records carry complete maps; refuse ambiguous defaults.
++            assert!(set["ivs"].is_object() && set["evs"].is_object());
++            proposed["ivs"]["atk"] = json!(new_dv * 2);
++            proposed["evs"]["atk"] = json!(0);
++            if new_dv == old_dv && set["evs"]["atk"] == 0 {
++                continue;
++            }
++            let mut one_changed = original.clone();
++            one_changed[slot] = proposed.clone();
++            let mut before = battle(&dex, &original, slot);
++            let mut after = battle(&dex, &one_changed, slot);
++            let a = before.poke(before.active_id(0).unwrap());
++            let z = after.poke(after.active_id(0).unwrap());
++            assert_eq!(a.maxhp, z.maxhp);
++            assert_eq!(a.gender, z.gender);
++            assert_eq!(a.stored_stats[1..], z.stored_stats[1..]);
++            assert!(z.stored_stats[0] <= a.stored_stats[0]);
++            let stats_before = a.stored_stats;
++            let stats_after = z.stored_stats;
++            let hp = a.maxhp;
++            let mut damage = Vec::new();
++            for m in &moves {
++                damage.push(json!({"move":m,
++                    "neutralBefore":self_hit(&dex, &mut before, m, 0, 0),
++                    "neutralAfter":self_hit(&dex, &mut after, m, 0, 0),
++                    "swaggerBefore":self_hit(&dex, &mut before, m, 2, 0),
++                    "swaggerAfter":self_hit(&dex, &mut after, m, 2, 0)}));
++                for atk in -6..=6 {
++                    for def in -6..=6 {
++                        let old = self_hit(&dex, &mut before, m, atk, def);
++                        let new = self_hit(&dex, &mut after, m, atk, def);
++                        assert!(
++                            new <= old,
++                            "self-hit increased: {base_id}/{slot}/{m}/{atk}/{def}"
++                        );
++                        comparisons += 1;
++                    }
++                }
++            }
++            rows.push(
++                json!({"baseId":base_id,"slot":slot+1,"species":set["species"],
++                "level":set["level"],"gender":set["gender"],"hp":hp,
++                "attackDvBefore":old_dv,"attackDvAfter":new_dv,
++                "attackEvBefore":set["evs"]["atk"],"attackEvAfter":0,
++                "attackBefore":stats_before[0],"attackAfter":stats_after[0],"damage":damage}),
++            );
++            team["sets"][slot] = proposed;
++            changed = true;
++        }
++        if changed {
++            changed_teams += 1;
++            team["baseId"] = json!(base_id);
++            team["id"] = json!(format!("{base_id}-low-atk"));
++        }
++        // Selection scores were measured on the original sets, never these proposals.
++        if let Some(score) = team.as_object_mut().unwrap().remove("score") {
++            team["baselineScore"] = score;
++        }
++        let check = validate_team(&dex, &ls, &team["sets"].to_string());
++        assert_eq!(check["ok"], true, "candidate {}: {check}", team["id"]);
++    }
++    // Fail if a concurrent session changed our input during the audit.
++    assert_eq!(
++        input,
++        fs::read(&input_path).unwrap(),
++        "source changed during audit"
++    );
++    let candidate = json!({"format":"nc2000-low-attack-candidate-v1", "sourcePool":args[1],
++        "sourcePoolSha256":sha(&input),"measurementStatus":"unmeasured candidate; baselineScore is for original sets",
++        "drawRule":pool["drawRule"],"teams":teams});
++    let report = json!({"format":"nc2000-low-attack-audit-v1","sourcePool":args[1],
++        "sourcePoolSha256":sha(&input),"dexSha256":sha(&dex_bytes),
++        "teams":teams.len(),"changedTeams":changed_teams,"changedSets":rows.len(),
++        "eligibleAlreadyAtMinimumDv":already_low_dv,"excluded":excluded,
++        "checks":{"sourceAndCandidateTeamsValidated":teams.len(),"selfHitComparisons":comparisons,
++            "selfHitIncreases":0,"preserved":"HP, gender, shiny DV predicate, all non-Attack stats, moves, items, levels, draw weights",
++            "scope":"current native engine; each selected move's base type and held item; Attack and Defense stages -6 through +6; no burn, weather or screens"},
++        "limitations":["Struggle damage also decreases: no unconditional dominance or win-rate claim",
++            "Hidden Power and Physical-category moves conservatively excluded, including fixed damage",
++            "Metronome, Mimic, Mirror Move and Transform excluded; Sleep Talk only accesses the unchanged own moves",
++            "Changing gender could affect Attract: gender is preserved",
++            "Built-in validator checks flat learnsets; it does not certify every event or egg combination",
++            "Source catalog, inventory, prior, Nash mixture and compiled preview artifacts remain untouched"],
++        "rows":rows});
++    fs::create_dir_all(output.parent().unwrap()).unwrap();
++    fs::create_dir(&output).unwrap();
++    write(&output, "candidate-pool.json", &candidate);
++    write(&output, "audit.json", &report);
++    println!(
++        "{} teams, {} changed teams, {} changed sets, {} self-hit comparisons; source untouched",
++        teams.len(),
++        changed_teams,
++        rows.len(),
++        comparisons
++    );
++}
+diff --git a/data/team-pool-v2/README.md b/data/team-pool-v2/README.md
+index b1c0cdf..67641e7 100644
+--- a/data/team-pool-v2/README.md
++++ b/data/team-pool-v2/README.md
+@@ -25,4 +25,54 @@ clusters) — near copies of one design do not multiply its share. Both Random
+ buttons and the ladder's `pool:random` use these weights; the selection's
+ pool value `V` was measured under the same rule.
+ 
+-`score` on each entry is the confirmation panel score (fresh seeds, stage C).
++`score` on each entry is the confirmation panel score (fresh seeds, stage C)
++of the original inventory sets, before the optimization below. No new win-rate
++measurement is claimed for the optimized sets.
++
++## Low-Attack optimization
++
++The generator applies `tools/optimize-low-attack.js` to the playable catalog:
++14 parties / 27 sets have Attack EV reduced to 0 and Attack DV minimized while
++preserving HP DV and the shiny DV predicate. Other stats, moves,
++items, levels, team IDs and draw weights are preserved. Sets with a Physical
++move (using this generation's categories), any Hidden Power, Metronome,
++Mimic, Mirror Move or Transform are excluded. Sleep Talk is allowed when the
++set's own moves otherwise qualify. An odd Attack DV preserves maximum HP.
++
++Version 2 allows female preference in these qualifying sets when the frozen
++prior's weighted direct-Attract sources favor it. Attract works only between
++opposite genders: female is immune to a female user, but susceptible to a
++male user. The prior has Ninetales F (team weight 1) and Snorlax M (0.25).
++This favors female on a source-weight proxy; it is not a measured encounter
++rate or win-rate improvement. The catalog and Nash support contain no direct
++Attract, so a catalog-only mirror has no direct Attract advantage either way.
++
++Six formerly male sets now use female DV 1 instead of male DV 3: Venusaur in
++`rental-cban-8`, `sample-10`, `mjj-2014-thdrcomb`; Umbreon in `sample-06`;
++Jolteon in `mjj-2010-garap-a`; Vaporeon in `rental-cban-14`. HP and every
++non-Attack stat stay identical; Attack falls another 2 points. Fixed gender,
++genderless and already-female sets keep their gender. Own Attract users keep
++their gender, and shiny constraints can prevent a female change. The pure
++optimizer preserves gender unless this preference is explicitly enabled.
++
++The original inventory, frozen belief prior, measured Nash mixture and
++selection/reference evidence remain unchanged. Only the catalog applies
++this policy, so rebuilding products reproduces it. The `setOptimization`
++metadata identifies the policy and the historical basis of `score`.
++
++The baseline audit in `findings/low-attack-catalog-v1/audit.json` records all
++27 changes and 18,252 native-engine self-hit comparisons (each move, Attack
++and Defense stages -6 through +6, no burn/weather/screens): no self-hit
++increase and unchanged HP, gender and non-Attack stats in that first pass.
++`findings/attract-gender-v1/mechanics.json` independently verifies the six
++version-2 changes: nine exact gender-only Attract cases, 4,056 additional
++self-hit comparisons, and unchanged HP/non-Attack stats. All 24 optimized
++teams pass the engine validator. Struggle also loses power; this is a
++practical configuration optimization, not a universal dominance claim.
++
++Checks: `node --test tools/optimize-low-attack.test.js`. Reproduce the baseline
++audit using `crates/engine/examples/low_attack_catalog_audit.rs` and an original
++catalog input. Exact-own-set preview caches need regeneration or their
++existing mismatch fallback when these catalog sets are integrated.
++The gender audit is reproducible with `attract_gender_audit` using the
++`d7cb2fc` catalog as the baseline and the current catalog as the new pool.
+diff --git a/data/team-pool-v2/team-pool.json b/data/team-pool-v2/team-pool.json
+index 1f5854d..d4144ad 100644
+--- a/data/team-pool-v2/team-pool.json
++++ b/data/team-pool-v2/team-pool.json
+@@ -14,6 +14,23 @@
+    "seed_base": 20261131
+   }
+  },
++ "setOptimization": {
++  "policy": "low-attack-v2: no Physical move, Hidden Power or external move access; minimum Attack DV preserving HP and shiny status; Attack EV 0; conditional female preference except own Attract users",
++  "changedTeams": 14,
++  "changedSets": 27,
++  "changedGenders": 6,
++  "femalePreference": {
++   "enabled": true,
++   "weightedDirectSources": {
++    "M": 0.25,
++    "F": 1,
++    "N": 0
++   },
++   "basis": "female targets resist female sources and are susceptible to male sources; weighted direct-source-set mass is a proxy, not encounter or win probability",
++   "priorFingerprint": "fnv1a64:ffa73c4245fe3774"
++  },
++  "scoreBasis": "confirmation scores refer to the original inventory sets, before low-attack-v2; optimized sets have not been remeasured"
++ },
+  "drawRule": "each variant cluster among the selected parties is drawn with equal probability, split equally among its members (drawWeight sums to 1); the same weights serve the human Random and the bot draw",
+  "teams": [
+   {
+@@ -572,16 +589,16 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+       "spe": 255
+      },
+-     "gender": "M",
++     "gender": "F",
+      "ivs": {
+       "hp": 31,
+-      "atk": 31,
++      "atk": 2,
+       "def": 31,
+       "spa": 31,
+       "spd": 31,
+@@ -732,7 +749,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -764,7 +781,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -828,7 +845,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -1340,7 +1357,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -1349,7 +1366,7 @@
+      "gender": "N",
+      "ivs": {
+       "hp": 31,
+-      "atk": 31,
++      "atk": 2,
+       "def": 31,
+       "spa": 31,
+       "spd": 31,
+@@ -1404,7 +1421,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -1468,7 +1485,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -1628,7 +1645,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -1660,7 +1677,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -1724,7 +1741,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -2428,16 +2445,16 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+       "spe": 255
+      },
+-     "gender": "M",
++     "gender": "F",
+      "ivs": {
+       "hp": 31,
+-      "atk": 31,
++      "atk": 2,
+       "def": 31,
+       "spa": 31,
+       "spd": 31,
+@@ -2588,16 +2605,16 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+       "spe": 255
+      },
+-     "gender": "M",
++     "gender": "F",
+      "ivs": {
+       "hp": 31,
+-      "atk": 6,
++      "atk": 2,
+       "def": 31,
+       "spa": 31,
+       "spd": 31,
+@@ -2972,7 +2989,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -3068,7 +3085,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -3100,7 +3117,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -3196,16 +3213,16 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+       "spe": 255
+      },
+-     "gender": "M",
++     "gender": "F",
+      "ivs": {
+       "hp": 31,
+-      "atk": 31,
++      "atk": 2,
+       "def": 31,
+       "spa": 31,
+       "spd": 31,
+@@ -3356,7 +3373,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -3365,7 +3382,7 @@
+      "gender": "N",
+      "ivs": {
+       "hp": 31,
+-      "atk": 31,
++      "atk": 2,
+       "def": 31,
+       "spa": 31,
+       "spd": 31,
+@@ -3420,7 +3437,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -3516,7 +3533,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -3548,7 +3565,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -3676,16 +3693,16 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+       "spe": 255
+      },
+-     "gender": "M",
++     "gender": "F",
+      "ivs": {
+       "hp": 31,
+-      "atk": 6,
++      "atk": 2,
+       "def": 31,
+       "spa": 31,
+       "spd": 31,
+@@ -3740,7 +3757,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -4540,7 +4557,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -4604,7 +4621,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -4764,7 +4781,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -4773,7 +4790,7 @@
+      "gender": "F",
+      "ivs": {
+       "hp": 31,
+-      "atk": 31,
++      "atk": 2,
+       "def": 31,
+       "spa": 31,
+       "spd": 31,
+@@ -4796,7 +4813,7 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+@@ -4805,7 +4822,7 @@
+      "gender": "N",
+      "ivs": {
+       "hp": 31,
+-      "atk": 31,
++      "atk": 2,
+       "def": 31,
+       "spa": 31,
+       "spd": 31,
+@@ -4988,16 +5005,16 @@
+      "nature": "Serious",
+      "evs": {
+       "hp": 255,
+-      "atk": 255,
++      "atk": 0,
+       "def": 255,
+       "spa": 255,
+       "spd": 255,
+       "spe": 255
+      },
+-     "gender": "M",
++     "gender": "F",
+      "ivs": {
+       "hp": 31,
+-      "atk": 31,
++      "atk": 2,
+       "def": 31,
+       "spa": 31,
+       "spd": 31,
+diff --git a/findings/attract-gender-v1/census.json b/findings/attract-gender-v1/census.json
+new file mode 100644
+index 0000000..f887bd0
+--- /dev/null
++++ b/findings/attract-gender-v1/census.json
+@@ -0,0 +1,53 @@
++{
++  "format": "nc2000-attract-gender-census-v1",
++  "priorSha256": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
++  "prior": {
++    "totalTeamWeight": 61.749997,
++    "weightedSources": {
++      "M": 0.25,
++      "F": 1,
++      "N": 0
++    },
++    "sources": [
++      {
++        "team": "mjj-2021-q10con",
++        "slot": 1,
++        "species": "Ninetales",
++        "gender": "F",
++        "weight": 1
++      },
++      {
++        "team": "lineage-fine-s07",
++        "slot": 5,
++        "species": "Snorlax",
++        "gender": "M",
++        "weight": 0.25
++      }
++    ],
++    "preferFemale": true,
++    "basis": "female targets resist female sources and are susceptible to male sources; weighted direct-source-set mass is a proxy, not encounter or win probability"
++  },
++  "catalog": {
++    "totalTeamWeight": 0.999998,
++    "weightedSources": {
++      "M": 0,
++      "F": 0,
++      "N": 0
++    },
++    "sources": [],
++    "preferFemale": false,
++    "basis": "female targets resist female sources and are susceptible to male sources; weighted direct-source-set mass is a proxy, not encounter or win probability"
++  },
++  "nash": {
++    "totalTeamWeight": 0.9999999999999999,
++    "weightedSources": {
++      "M": 0,
++      "F": 0,
++      "N": 0
++    },
++    "sources": [],
++    "preferFemale": false,
++    "basis": "female targets resist female sources and are susceptible to male sources; weighted direct-source-set mass is a proxy, not encounter or win probability"
++  },
++  "inference": "Female preference is justified only under the frozen prior direct-source-weight proxy (female source mass 1 versus male 0.25). Same-sex immunity is symmetric. Catalog mirror matches have no direct Attract users; no universal gender or win-rate advantage is established."
++}
+diff --git a/findings/attract-gender-v1/mechanics.json b/findings/attract-gender-v1/mechanics.json
+new file mode 100644
+index 0000000..d39d6c0
+--- /dev/null
++++ b/findings/attract-gender-v1/mechanics.json
+@@ -0,0 +1,330 @@
++{
++  "format": "nc2000-attract-gender-mechanics-v1",
++  "baselineSha256": "844f39c062dad3c807951793ed293721acad10e766baf58f301419bf95f6781d",
++  "optimizedSha256": "549539b911498bbc805e3975e0218cf1dae2560bce4fd515239ce3185e6ee754",
++  "matrixControl": "Identical stats, moves, items, seed and field; gender intervention only. Genderless Ninetales/Venusaur are synthetic negative controls, not legal catalog proposals.",
++  "matrix": [
++    {
++      "sourceGender": "M",
++      "targetGender": "M",
++      "infatuatedProbability": 0.0,
++      "targetActsProbability": 1.0,
++      "leaves": 2
++    },
++    {
++      "sourceGender": "M",
++      "targetGender": "F",
++      "infatuatedProbability": 1.0,
++      "targetActsProbability": 0.5,
++      "leaves": 4
++    },
++    {
++      "sourceGender": "M",
++      "targetGender": "N",
++      "infatuatedProbability": 0.0,
++      "targetActsProbability": 1.0,
++      "leaves": 2
++    },
++    {
++      "sourceGender": "F",
++      "targetGender": "M",
++      "infatuatedProbability": 1.0,
++      "targetActsProbability": 0.5,
++      "leaves": 4
++    },
++    {
++      "sourceGender": "F",
++      "targetGender": "F",
++      "infatuatedProbability": 0.0,
++      "targetActsProbability": 1.0,
++      "leaves": 2
++    },
++    {
++      "sourceGender": "F",
++      "targetGender": "N",
++      "infatuatedProbability": 0.0,
++      "targetActsProbability": 1.0,
++      "leaves": 2
++    },
++    {
++      "sourceGender": "N",
++      "targetGender": "M",
++      "infatuatedProbability": 0.0,
++      "targetActsProbability": 1.0,
++      "leaves": 2
++    },
++    {
++      "sourceGender": "N",
++      "targetGender": "F",
++      "infatuatedProbability": 0.0,
++      "targetActsProbability": 1.0,
++      "leaves": 2
++    },
++    {
++      "sourceGender": "N",
++      "targetGender": "N",
++      "infatuatedProbability": 0.0,
++      "targetActsProbability": 1.0,
++      "leaves": 2
++    }
++  ],
++  "validatedTeams": 24,
++  "changedSets": 6,
++  "selfHitComparisons": 4056,
++  "selfHitIncreases": 0,
++  "unchanged": "HP, non-Attack stats, moves, items, EVs, levels, team IDs, draw weights",
++  "rows": [
++    {
++      "baseId": "rental-cban-8",
++      "slot": 3,
++      "species": "Venusaur",
++      "hp": 186,
++      "genderBefore": "M",
++      "genderAfter": "F",
++      "attackDvBefore": 3,
++      "attackDvAfter": 1,
++      "attackBefore": 90,
++      "attackAfter": 88,
++      "damage": [
++        {
++          "move": "Razor Leaf",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Sleep Powder",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Leech Seed",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Synthesis",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        }
++      ]
++    },
++    {
++      "baseId": "sample-10",
++      "slot": 5,
++      "species": "Venusaur",
++      "hp": 186,
++      "genderBefore": "M",
++      "genderAfter": "F",
++      "attackDvBefore": 3,
++      "attackDvAfter": 1,
++      "attackBefore": 90,
++      "attackAfter": 88,
++      "damage": [
++        {
++          "move": "Razor Leaf",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Leech Seed",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Sleep Powder",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Synthesis",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        }
++      ]
++    },
++    {
++      "baseId": "mjj-2014-thdrcomb",
++      "slot": 3,
++      "species": "Venusaur",
++      "hp": 186,
++      "genderBefore": "M",
++      "genderAfter": "F",
++      "attackDvBefore": 3,
++      "attackDvAfter": 1,
++      "attackBefore": 90,
++      "attackAfter": 88,
++      "damage": [
++        {
++          "move": "Razor Leaf",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Leech Seed",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Sleep Powder",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Synthesis",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 25
++        }
++      ]
++    },
++    {
++      "baseId": "sample-06",
++      "slot": 1,
++      "species": "Umbreon",
++      "hp": 201,
++      "genderBefore": "M",
++      "genderAfter": "F",
++      "attackDvBefore": 3,
++      "attackDvAfter": 1,
++      "attackBefore": 73,
++      "attackAfter": 71,
++      "damage": [
++        {
++          "move": "Pursuit",
++          "neutralBefore": 9,
++          "neutralAfter": 9,
++          "swaggerBefore": 17,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Charm",
++          "neutralBefore": 9,
++          "neutralAfter": 9,
++          "swaggerBefore": 17,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Toxic",
++          "neutralBefore": 9,
++          "neutralAfter": 9,
++          "swaggerBefore": 17,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Rest",
++          "neutralBefore": 9,
++          "neutralAfter": 9,
++          "swaggerBefore": 17,
++          "swaggerAfter": 17
++        }
++      ]
++    },
++    {
++      "baseId": "mjj-2010-garap-a",
++      "slot": 2,
++      "species": "Jolteon",
++      "hp": 171,
++      "genderBefore": "M",
++      "genderAfter": "F",
++      "attackDvBefore": 3,
++      "attackDvAfter": 1,
++      "attackBefore": 73,
++      "attackAfter": 71,
++      "damage": [
++        {
++          "move": "Thunderbolt",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Swagger",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Substitute",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Baton Pass",
++          "neutralBefore": 13,
++          "neutralAfter": 13,
++          "swaggerBefore": 25,
++          "swaggerAfter": 24
++        }
++      ]
++    },
++    {
++      "baseId": "rental-cban-14",
++      "slot": 1,
++      "species": "Vaporeon",
++      "hp": 259,
++      "genderBefore": "M",
++      "genderAfter": "F",
++      "attackDvBefore": 3,
++      "attackDvAfter": 1,
++      "attackBefore": 79,
++      "attackAfter": 77,
++      "damage": [
++        {
++          "move": "Hydro Pump",
++          "neutralBefore": 14,
++          "neutralAfter": 14,
++          "swaggerBefore": 26,
++          "swaggerAfter": 26
++        },
++        {
++          "move": "Ice Beam",
++          "neutralBefore": 14,
++          "neutralAfter": 14,
++          "swaggerBefore": 26,
++          "swaggerAfter": 26
++        },
++        {
++          "move": "Sleep Talk",
++          "neutralBefore": 14,
++          "neutralAfter": 14,
++          "swaggerBefore": 26,
++          "swaggerAfter": 26
++        },
++        {
++          "move": "Rest",
++          "neutralBefore": 14,
++          "neutralAfter": 14,
++          "swaggerBefore": 26,
++          "swaggerAfter": 26
++        }
++      ]
++    }
++  ]
++}
+diff --git a/findings/low-attack-catalog-v1/audit.json b/findings/low-attack-catalog-v1/audit.json
+new file mode 100644
+index 0000000..379ecbb
+--- /dev/null
++++ b/findings/low-attack-catalog-v1/audit.json
+@@ -0,0 +1,1219 @@
++{
++  "format": "nc2000-low-attack-audit-v1",
++  "sourcePool": "data/team-pool-v2/team-pool.json",
++  "sourcePoolSha256": "ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72",
++  "dexSha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
++  "teams": 24,
++  "changedTeams": 14,
++  "changedSets": 27,
++  "eligibleAlreadyAtMinimumDv": 19,
++  "excluded": {
++    "hidden-power": 33,
++    "physical-move": 84
++  },
++  "checks": {
++    "sourceAndCandidateTeamsValidated": 24,
++    "selfHitComparisons": 18252,
++    "selfHitIncreases": 0,
++    "preserved": "HP, gender, shiny DV predicate, all non-Attack stats, moves, items, levels, draw weights",
++    "scope": "current native engine; each selected move's base type and held item; Attack and Defense stages -6 through +6; no burn, weather or screens"
++  },
++  "limitations": [
++    "Struggle damage also decreases: no unconditional dominance or win-rate claim",
++    "Hidden Power and Physical-category moves conservatively excluded, including fixed damage",
++    "Metronome, Mimic, Mirror Move and Transform excluded; Sleep Talk only accesses the unchanged own moves",
++    "Changing gender could affect Attract: gender is preserved",
++    "Built-in validator checks flat learnsets; it does not certify every event or egg combination",
++    "Source catalog, inventory, prior, Nash mixture and compiled preview artifacts remain untouched"
++  ],
++  "rows": [
++    {
++      "baseId": "rental-cban-8",
++      "slot": 3,
++      "species": "Venusaur",
++      "level": 50,
++      "gender": "M",
++      "hp": 186,
++      "attackDvBefore": 15,
++      "attackDvAfter": 3,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 133,
++      "attackAfter": 90,
++      "damage": [
++        {
++          "move": "Razor Leaf",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 37,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Sleep Powder",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 37,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Leech Seed",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 37,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Synthesis",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 37,
++          "swaggerAfter": 25
++        }
++      ]
++    },
++    {
++      "baseId": "sample-12",
++      "slot": 1,
++      "species": "Gengar",
++      "level": 50,
++      "gender": "F",
++      "hp": 166,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 102,
++      "attackAfter": 71,
++      "damage": [
++        {
++          "move": "Zap Cannon",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Destiny Bond",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Mean Look",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Perish Song",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        }
++      ]
++    },
++    {
++      "baseId": "sample-12",
++      "slot": 2,
++      "species": "Starmie",
++      "level": 50,
++      "gender": "N",
++      "hp": 166,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 112,
++      "attackAfter": 81,
++      "damage": [
++        {
++          "move": "Hydro Pump",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Psychic",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Thunder Wave",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Recover",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        }
++      ]
++    },
++    {
++      "baseId": "sample-12",
++      "slot": 4,
++      "species": "Umbreon",
++      "level": 50,
++      "gender": "F",
++      "hp": 201,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 102,
++      "attackAfter": 71,
++      "damage": [
++        {
++          "move": "Pursuit",
++          "neutralBefore": 13,
++          "neutralAfter": 9,
++          "swaggerBefore": 24,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Charm",
++          "neutralBefore": 13,
++          "neutralAfter": 9,
++          "swaggerBefore": 24,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Toxic",
++          "neutralBefore": 13,
++          "neutralAfter": 9,
++          "swaggerBefore": 24,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Rest",
++          "neutralBefore": 13,
++          "neutralAfter": 9,
++          "swaggerBefore": 24,
++          "swaggerAfter": 17
++        }
++      ]
++    },
++    {
++      "baseId": "sample-17-orig",
++      "slot": 6,
++      "species": "Suicune",
++      "level": 50,
++      "gender": "N",
++      "hp": 206,
++      "attackDvBefore": 15,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 126,
++      "attackAfter": 81,
++      "damage": [
++        {
++          "move": "Surf",
++          "neutralBefore": 15,
++          "neutralAfter": 10,
++          "swaggerBefore": 28,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Ice Beam",
++          "neutralBefore": 15,
++          "neutralAfter": 10,
++          "swaggerBefore": 28,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Rest",
++          "neutralBefore": 15,
++          "neutralAfter": 10,
++          "swaggerBefore": 28,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Sleep Talk",
++          "neutralBefore": 15,
++          "neutralAfter": 10,
++          "swaggerBefore": 28,
++          "swaggerAfter": 19
++        }
++      ]
++    },
++    {
++      "baseId": "nb-sample-13-0",
++      "slot": 1,
++      "species": "Gengar",
++      "level": 50,
++      "gender": "F",
++      "hp": 166,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 102,
++      "attackAfter": 71,
++      "damage": [
++        {
++          "move": "Fire Punch",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Mean Look",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Destiny Bond",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Perish Song",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        }
++      ]
++    },
++    {
++      "baseId": "nb-sample-13-0",
++      "slot": 3,
++      "species": "Starmie",
++      "level": 50,
++      "gender": "N",
++      "hp": 166,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 112,
++      "attackAfter": 81,
++      "damage": [
++        {
++          "move": "Surf",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Psychic",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Thunder Wave",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Recover",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        }
++      ]
++    },
++    {
++      "baseId": "nb-sample-12-0",
++      "slot": 1,
++      "species": "Gengar",
++      "level": 50,
++      "gender": "F",
++      "hp": 166,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 102,
++      "attackAfter": 71,
++      "damage": [
++        {
++          "move": "Zap Cannon",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Destiny Bond",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Mean Look",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Perish Song",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        }
++      ]
++    },
++    {
++      "baseId": "nb-sample-12-0",
++      "slot": 2,
++      "species": "Starmie",
++      "level": 50,
++      "gender": "N",
++      "hp": 166,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 112,
++      "attackAfter": 81,
++      "damage": [
++        {
++          "move": "Hydro Pump",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Psychic",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Thunder Wave",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Recover",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        }
++      ]
++    },
++    {
++      "baseId": "nb-sample-12-0",
++      "slot": 4,
++      "species": "Umbreon",
++      "level": 50,
++      "gender": "F",
++      "hp": 201,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 102,
++      "attackAfter": 71,
++      "damage": [
++        {
++          "move": "Pursuit",
++          "neutralBefore": 13,
++          "neutralAfter": 9,
++          "swaggerBefore": 24,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Charm",
++          "neutralBefore": 13,
++          "neutralAfter": 9,
++          "swaggerBefore": 24,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Toxic",
++          "neutralBefore": 13,
++          "neutralAfter": 9,
++          "swaggerBefore": 24,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Rest",
++          "neutralBefore": 13,
++          "neutralAfter": 9,
++          "swaggerBefore": 24,
++          "swaggerAfter": 17
++        }
++      ]
++    },
++    {
++      "baseId": "sample-10",
++      "slot": 5,
++      "species": "Venusaur",
++      "level": 50,
++      "gender": "M",
++      "hp": 186,
++      "attackDvBefore": 15,
++      "attackDvAfter": 3,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 133,
++      "attackAfter": 90,
++      "damage": [
++        {
++          "move": "Razor Leaf",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 37,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Leech Seed",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 37,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Sleep Powder",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 37,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Synthesis",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 37,
++          "swaggerAfter": 25
++        }
++      ]
++    },
++    {
++      "baseId": "mjj-2014-thdrcomb",
++      "slot": 3,
++      "species": "Venusaur",
++      "level": 50,
++      "gender": "M",
++      "hp": 186,
++      "attackDvBefore": 3,
++      "attackDvAfter": 3,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 121,
++      "attackAfter": 90,
++      "damage": [
++        {
++          "move": "Razor Leaf",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Leech Seed",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Sleep Powder",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Synthesis",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        }
++      ]
++    },
++    {
++      "baseId": "sample-11",
++      "slot": 1,
++      "species": "Alakazam",
++      "level": 55,
++      "gender": "F",
++      "hp": 176,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 95,
++      "attackAfter": 61,
++      "damage": [
++        {
++          "move": "Psychic",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 36,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Ice Punch",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 36,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Encore",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 36,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Recover",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 36,
++          "swaggerAfter": 24
++        }
++      ]
++    },
++    {
++      "baseId": "sample-11",
++      "slot": 4,
++      "species": "Venusaur",
++      "level": 50,
++      "gender": "F",
++      "hp": 186,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 119,
++      "attackAfter": 88,
++      "damage": [
++        {
++          "move": "Razor Leaf",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Leech Seed",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Sleep Powder",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Synthesis",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        }
++      ]
++    },
++    {
++      "baseId": "sample-11",
++      "slot": 5,
++      "species": "Suicune",
++      "level": 50,
++      "gender": "N",
++      "hp": 206,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 112,
++      "attackAfter": 81,
++      "damage": [
++        {
++          "move": "Surf",
++          "neutralBefore": 13,
++          "neutralAfter": 10,
++          "swaggerBefore": 25,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Ice Beam",
++          "neutralBefore": 13,
++          "neutralAfter": 10,
++          "swaggerBefore": 25,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Rest",
++          "neutralBefore": 13,
++          "neutralAfter": 10,
++          "swaggerBefore": 25,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Sleep Talk",
++          "neutralBefore": 13,
++          "neutralAfter": 10,
++          "swaggerBefore": 25,
++          "swaggerAfter": 19
++        }
++      ]
++    },
++    {
++      "baseId": "sample-06",
++      "slot": 1,
++      "species": "Umbreon",
++      "level": 50,
++      "gender": "M",
++      "hp": 201,
++      "attackDvBefore": 15,
++      "attackDvAfter": 3,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 116,
++      "attackAfter": 73,
++      "damage": [
++        {
++          "move": "Pursuit",
++          "neutralBefore": 14,
++          "neutralAfter": 9,
++          "swaggerBefore": 27,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Charm",
++          "neutralBefore": 14,
++          "neutralAfter": 9,
++          "swaggerBefore": 27,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Toxic",
++          "neutralBefore": 14,
++          "neutralAfter": 9,
++          "swaggerBefore": 27,
++          "swaggerAfter": 17
++        },
++        {
++          "move": "Rest",
++          "neutralBefore": 14,
++          "neutralAfter": 9,
++          "swaggerBefore": 27,
++          "swaggerAfter": 17
++        }
++      ]
++    },
++    {
++      "baseId": "sample-06",
++      "slot": 6,
++      "species": "Suicune",
++      "level": 50,
++      "gender": "N",
++      "hp": 206,
++      "attackDvBefore": 15,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 126,
++      "attackAfter": 81,
++      "damage": [
++        {
++          "move": "Surf",
++          "neutralBefore": 15,
++          "neutralAfter": 10,
++          "swaggerBefore": 28,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Ice Beam",
++          "neutralBefore": 15,
++          "neutralAfter": 10,
++          "swaggerBefore": 28,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Rest",
++          "neutralBefore": 15,
++          "neutralAfter": 10,
++          "swaggerBefore": 28,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Sleep Talk",
++          "neutralBefore": 15,
++          "neutralAfter": 10,
++          "swaggerBefore": 28,
++          "swaggerAfter": 19
++        }
++      ]
++    },
++    {
++      "baseId": "sample-11-orig",
++      "slot": 1,
++      "species": "Alakazam",
++      "level": 55,
++      "gender": "F",
++      "hp": 176,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 95,
++      "attackAfter": 61,
++      "damage": [
++        {
++          "move": "Psychic",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 36,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Ice Punch",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 36,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Encore",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 36,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Recover",
++          "neutralBefore": 19,
++          "neutralAfter": 13,
++          "swaggerBefore": 36,
++          "swaggerAfter": 24
++        }
++      ]
++    },
++    {
++      "baseId": "sample-11-orig",
++      "slot": 4,
++      "species": "Venusaur",
++      "level": 50,
++      "gender": "F",
++      "hp": 186,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 119,
++      "attackAfter": 88,
++      "damage": [
++        {
++          "move": "Razor Leaf",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Leech Seed",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Sleep Powder",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Synthesis",
++          "neutralBefore": 17,
++          "neutralAfter": 13,
++          "swaggerBefore": 33,
++          "swaggerAfter": 25
++        }
++      ]
++    },
++    {
++      "baseId": "sample-11-orig",
++      "slot": 5,
++      "species": "Suicune",
++      "level": 50,
++      "gender": "N",
++      "hp": 206,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 112,
++      "attackAfter": 81,
++      "damage": [
++        {
++          "move": "Surf",
++          "neutralBefore": 13,
++          "neutralAfter": 10,
++          "swaggerBefore": 25,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Ice Beam",
++          "neutralBefore": 13,
++          "neutralAfter": 10,
++          "swaggerBefore": 25,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Rest",
++          "neutralBefore": 13,
++          "neutralAfter": 10,
++          "swaggerBefore": 25,
++          "swaggerAfter": 19
++        },
++        {
++          "move": "Sleep Talk",
++          "neutralBefore": 13,
++          "neutralAfter": 10,
++          "swaggerBefore": 25,
++          "swaggerAfter": 19
++        }
++      ]
++    },
++    {
++      "baseId": "mjj-2010-garap-a",
++      "slot": 2,
++      "species": "Jolteon",
++      "level": 50,
++      "gender": "M",
++      "hp": 171,
++      "attackDvBefore": 3,
++      "attackDvAfter": 3,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 104,
++      "attackAfter": 73,
++      "damage": [
++        {
++          "move": "Thunderbolt",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Swagger",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Substitute",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 25
++        },
++        {
++          "move": "Baton Pass",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 25
++        }
++      ]
++    },
++    {
++      "baseId": "mjj-2010-garap-a",
++      "slot": 4,
++      "species": "Lapras",
++      "level": 50,
++      "gender": "F",
++      "hp": 236,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 122,
++      "attackAfter": 91,
++      "damage": [
++        {
++          "move": "Ice Beam",
++          "neutralBefore": 18,
++          "neutralAfter": 14,
++          "swaggerBefore": 34,
++          "swaggerAfter": 26
++        },
++        {
++          "move": "Thunderbolt",
++          "neutralBefore": 18,
++          "neutralAfter": 14,
++          "swaggerBefore": 34,
++          "swaggerAfter": 26
++        },
++        {
++          "move": "Sing",
++          "neutralBefore": 18,
++          "neutralAfter": 14,
++          "swaggerBefore": 34,
++          "swaggerAfter": 26
++        },
++        {
++          "move": "Reflect",
++          "neutralBefore": 18,
++          "neutralAfter": 14,
++          "swaggerBefore": 34,
++          "swaggerAfter": 26
++        }
++      ]
++    },
++    {
++      "baseId": "sample-13",
++      "slot": 1,
++      "species": "Gengar",
++      "level": 50,
++      "gender": "F",
++      "hp": 166,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 102,
++      "attackAfter": 71,
++      "damage": [
++        {
++          "move": "Fire Punch",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Mean Look",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Destiny Bond",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Perish Song",
++          "neutralBefore": 18,
++          "neutralAfter": 13,
++          "swaggerBefore": 34,
++          "swaggerAfter": 24
++        }
++      ]
++    },
++    {
++      "baseId": "sample-13",
++      "slot": 3,
++      "species": "Starmie",
++      "level": 50,
++      "gender": "N",
++      "hp": 166,
++      "attackDvBefore": 1,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 112,
++      "attackAfter": 81,
++      "damage": [
++        {
++          "move": "Surf",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Psychic",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Thunder Wave",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Recover",
++          "neutralBefore": 16,
++          "neutralAfter": 12,
++          "swaggerBefore": 30,
++          "swaggerAfter": 22
++        }
++      ]
++    },
++    {
++      "baseId": "sample-02",
++      "slot": 1,
++      "species": "Jynx",
++      "level": 50,
++      "gender": "F",
++      "hp": 171,
++      "attackDvBefore": 15,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 101,
++      "attackAfter": 56,
++      "damage": [
++        {
++          "move": "Ice Beam",
++          "neutralBefore": 22,
++          "neutralAfter": 13,
++          "swaggerBefore": 43,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Psychic",
++          "neutralBefore": 22,
++          "neutralAfter": 13,
++          "swaggerBefore": 43,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Thief",
++          "neutralBefore": 22,
++          "neutralAfter": 13,
++          "swaggerBefore": 43,
++          "swaggerAfter": 24
++        },
++        {
++          "move": "Lovely Kiss",
++          "neutralBefore": 22,
++          "neutralAfter": 13,
++          "swaggerBefore": 43,
++          "swaggerAfter": 24
++        }
++      ]
++    },
++    {
++      "baseId": "sample-02",
++      "slot": 2,
++      "species": "Starmie",
++      "level": 50,
++      "gender": "N",
++      "hp": 166,
++      "attackDvBefore": 15,
++      "attackDvAfter": 1,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 126,
++      "attackAfter": 81,
++      "damage": [
++        {
++          "move": "Surf",
++          "neutralBefore": 18,
++          "neutralAfter": 12,
++          "swaggerBefore": 34,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Psychic",
++          "neutralBefore": 18,
++          "neutralAfter": 12,
++          "swaggerBefore": 34,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Thunder Wave",
++          "neutralBefore": 18,
++          "neutralAfter": 12,
++          "swaggerBefore": 34,
++          "swaggerAfter": 22
++        },
++        {
++          "move": "Recover",
++          "neutralBefore": 18,
++          "neutralAfter": 12,
++          "swaggerBefore": 34,
++          "swaggerAfter": 22
++        }
++      ]
++    },
++    {
++      "baseId": "rental-cban-14",
++      "slot": 1,
++      "species": "Vaporeon",
++      "level": 55,
++      "gender": "M",
++      "hp": 259,
++      "attackDvBefore": 15,
++      "attackDvAfter": 3,
++      "attackEvBefore": 255,
++      "attackEvAfter": 0,
++      "attackBefore": 127,
++      "attackAfter": 79,
++      "damage": [
++        {
++          "move": "Hydro Pump",
++          "neutralBefore": 21,
++          "neutralAfter": 14,
++          "swaggerBefore": 41,
++          "swaggerAfter": 26
++        },
++        {
++          "move": "Ice Beam",
++          "neutralBefore": 21,
++          "neutralAfter": 14,
++          "swaggerBefore": 41,
++          "swaggerAfter": 26
++        },
++        {
++          "move": "Sleep Talk",
++          "neutralBefore": 21,
++          "neutralAfter": 14,
++          "swaggerBefore": 41,
++          "swaggerAfter": 26
++        },
++        {
++          "move": "Rest",
++          "neutralBefore": 21,
++          "neutralAfter": 14,
++          "swaggerBefore": 41,
++          "swaggerAfter": 26
++        }
++      ]
++    }
++  ]
++}
+diff --git a/findings/low-attack-catalog-v1/integration.json b/findings/low-attack-catalog-v1/integration.json
+new file mode 100644
+index 0000000..5f3efa8
+--- /dev/null
++++ b/findings/low-attack-catalog-v1/integration.json
+@@ -0,0 +1,33 @@
++{
++  "format": "nc2000-low-attack-integration-v2",
++  "baseCommit": "da407a575e00f4d4ceeafb6b607edb2c46cebedb",
++  "branch": "optimize/low-attack-pool",
++  "catalog": "data/team-pool-v2/team-pool.json",
++  "catalogSha256": "549539b911498bbc805e3975e0218cf1dae2560bce4fd515239ce3185e6ee754",
++  "changedTeams": 14,
++  "changedSets": 27,
++  "scope": "Playable catalog only: 27 Attack-minimized sets; six former male sets become female under frozen-prior direct-Attract source mix. HP, shiny predicate, non-Attack stats, moves, items, levels, team IDs and draw weights preserved.",
++  "unchanged": [
++    "data/team-inventory-v1/inventory.json",
++    "data/belief-pool-v3/belief-pool.json",
++    "data/meta-nash-v3/pool-artifact.json",
++    "data/team-selection-v2/reference.json"
++  ],
++  "validation": {
++    "nodeTestsPassed": 11,
++    "nativeValidatedTeams": 24,
++    "regeneratedProductsByteIdentical": true,
++    "independentBaselineSelfHitComparisons": 18252,
++    "selfHitIncreases": 0,
++    "nativeExactAttractCases": 9,
++    "additionalGenderSelfHitComparisons": 4056
++  },
++  "checks": [
++    "node --test tools/optimize-low-attack.test.js",
++    "node tools/build-team-products-v2.js --out-root NEW_OUTPUT_DIRECTORY"
++  ],
++  "integrationNote": "Regenerate exact-own-set compiled preview artifacts or verify their mismatch fallback after merge. No search, engine or web runtime sources were changed.",
++  "measurementNote": "Selection scores are historical pre-optimization values; no new win-rate measurement is claimed.",
++  "changedGenders": 6,
++  "genderEvidence": "findings/attract-gender-v1/mechanics.json and census.json; weighted direct-Attract sources F 1 versus M 0.25. Proxy only, not encounter frequency or win-rate proof."
++}
+diff --git a/tools/attract-gender-census.js b/tools/attract-gender-census.js
+new file mode 100644
+index 0000000..d3f32bb
+--- /dev/null
++++ b/tools/attract-gender-census.js
+@@ -0,0 +1,27 @@
++'use strict';
++const toid = name => String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
++
++/** Weighted direct-Attract source-set mass, not an encounter/win probability.
++ * Team selection, matchup and move choice can all change actual exposure.
++ */
++function attractGenderCensus(pool, weightKey = 'weight') {
++	const weightedSources = { M: 0, F: 0, N: 0 };
++	const sources = [];
++	let totalTeamWeight = 0;
++	for (const team of pool.teams) {
++		const weight = team[weightKey];
++		if (!Number.isFinite(weight) || weight < 0) throw new Error(`invalid ${weightKey}: ${team.id}`);
++		totalTeamWeight += weight;
++		team.sets.forEach((set, index) => {
++			if (!set.moves.some(move => toid(move) === 'attract')) return;
++			if (!Object.hasOwn(weightedSources, set.gender)) throw new Error(`unknown Attract source gender: ${team.id}`);
++			weightedSources[set.gender] += weight;
++			sources.push({ team: team.id, slot: index + 1, species: set.species, gender: set.gender, weight });
++		});
++	}
++	return { totalTeamWeight, weightedSources, sources,
++		preferFemale: weightedSources.F > weightedSources.M,
++		basis: 'female targets resist female sources and are susceptible to male sources; weighted direct-source-set mass is a proxy, not encounter or win probability' };
++}
++
++module.exports = { attractGenderCensus };
+diff --git a/tools/build-team-products-v2.js b/tools/build-team-products-v2.js
+index 3462e78..dd423f5 100644
+--- a/tools/build-team-products-v2.js
++++ b/tools/build-team-products-v2.js
+@@ -20,6 +20,8 @@
+ 'use strict';
+ const fs = require('fs');
+ const path = require('path');
++const { optimizeLowAttack } = require('./optimize-low-attack');
++const { attractGenderCensus } = require('./attract-gender-census');
+ 
+ const REPO = path.join(__dirname, '..');
+ const arg = name => {
+@@ -76,11 +78,25 @@ const clusters = size.size;
+ const drawWeight = t => 1 / (clusters * size.get(clusterKey(t)));
+ const round = x => Math.round(x * 1e6) / 1e6;
+ const provenance = t => ({ family: t.family, origin: t.origin, source: t.source.name, url: t.source.url, version: t.source.version || null });
++// Optimize only the playable catalog. All measurements, the Nash solution,
++// reference inventory and frozen opponent prior keep their original inputs.
++const dex = read('data/gen2stadium2.json');
++const attract = attractGenderCensus(prior);
++const optimized = new Map(selected.map(t => [t.id, optimizeLowAttack(t.sets, dex, { preferFemale: attract.preferFemale })]));
+ write('data/team-pool-v2/team-pool.json', {
+ 	format: 'nc2000-team-pool-v2',
+ 	generator: 'tools/build-team-products-v2.js',
+ 	protocol: sel.protocol,
+ 	condition: sel.condition,
++	setOptimization: {
++		policy: 'low-attack-v2: no Physical move, Hidden Power or external move access; minimum Attack DV preserving HP and shiny status; Attack EV 0; conditional female preference except own Attract users',
++		changedTeams: selected.filter(t => optimized.get(t.id).changedSets > 0).length,
++		changedSets: selected.reduce((sum, t) => sum + optimized.get(t.id).changedSets, 0),
++		changedGenders: selected.reduce((sum, t) => sum + optimized.get(t.id).changedGenders, 0),
++		femalePreference: { enabled: attract.preferFemale, weightedDirectSources: attract.weightedSources,
++			basis: attract.basis, priorFingerprint: priorFp },
++		scoreBasis: 'confirmation scores refer to the original inventory sets, before low-attack-v2; optimized sets have not been remeasured',
++	},
+ 	drawRule: 'each variant cluster among the selected parties is drawn with equal probability, split equally among its members (drawWeight sums to 1); the same weights serve the human Random and the bot draw',
+ 	teams: selected.map((t, i) => ({
+ 		id: t.id, rank: i + 1, label: 'selected',
+@@ -88,7 +104,7 @@ write('data/team-pool-v2/team-pool.json', {
+ 		drawWeight: round(drawWeight(t)),
+ 		score: round(sel.labels[t.id].score),
+ 		provenance: provenance(t),
+-		sets: t.sets,
++		sets: optimized.get(t.id).sets,
+ 	})),
+ });
+ 
+diff --git a/tools/optimize-low-attack.js b/tools/optimize-low-attack.js
+new file mode 100644
+index 0000000..4cf2419
+--- /dev/null
++++ b/tools/optimize-low-attack.js
+@@ -0,0 +1,64 @@
++'use strict';
++
++const toid = name => String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
++const CALLERS = new Set(['metronome', 'mimic', 'mirrormove', 'transform']);
++const STATS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
++
++/** Optimize validated Gen 2 catalog sets without changing HP or shiny
++ * status. Use the generation-specific dex: e.g. Pursuit and Thief are Special.
++ * Hidden Power and external move access are deliberately outside this policy.
++ * The inventory, measured Nash mixture and frozen opponent prior stay original.
++ * Gender is preserved by default. The catalog may opt into female preference
++ * using the frozen prior's direct-Attract source mix; this is not universal.
++ */
++function optimizeLowAttack(sets, dex, { preferFemale = false } = {}) {
++	const optimized = structuredClone(sets);
++	let changedSets = 0;
++	let changedGenders = 0;
++	for (const set of optimized) {
++		const ids = set.moves.map(toid);
++		if (ids.some(id => id.startsWith('hiddenpower'))) continue;
++		const moves = ids.map(id => {
++			if (!dex.moves[id]) throw new Error(`unknown move: ${id}`);
++			return dex.moves[id];
++		});
++		if (moves.some(move => move.category === 'Physical') || ids.some(id => CALLERS.has(id))) continue;
++		const species = dex.species[toid(set.species)];
++		if (!species) throw new Error(`unknown species: ${set.species}`);
++		// This is a build step on validated inventory records, not an importer.
++		for (const stat of STATS) {
++			if (!Number.isInteger(set.ivs?.[stat]) || set.ivs[stat] < 0 || set.ivs[stat] > 31 ||
++				!Number.isInteger(set.evs?.[stat]) || set.evs[stat] < 0 || set.evs[stat] > 255) {
++				throw new Error(`${set.species}: complete validated IV/EV maps required`);
++			}
++		}
++		const dv = stat => Math.floor(set.ivs[stat] / 2);
++		const old = dv('atk');
++		const gender = atk => species.gender || (atk < (species.genderRatio?.F ?? 0.5) * 16 ? 'F' : 'M');
++		const shiny = atk => ['def', 'spe', 'spa'].every(stat => dv(stat) === 10) && atk % 4 >= 2;
++		// Retain the source gender when this set itself uses Attract: changing
++		// it also changes which opponents its own Attract can target.
++		const allowFemale = preferFemale && gender(old) === 'M' && !ids.includes('attract');
++		let minimum = old;
++		for (let candidate = 0; candidate <= old; candidate++) {
++			if (candidate % 2 === old % 2 &&
++				(gender(candidate) === gender(old) || (allowFemale && gender(candidate) === 'F')) &&
++				shiny(candidate) === shiny(old)) {
++				minimum = candidate;
++				break;
++			}
++		}
++		if (minimum !== old || set.evs.atk !== 0) {
++			set.ivs.atk = minimum * 2;
++			set.evs.atk = 0;
++			changedSets++;
++		}
++		if (gender(minimum) !== gender(old)) {
++			set.gender = gender(minimum);
++			changedGenders++;
++		}
++	}
++	return { sets: optimized, changedSets, changedGenders };
++}
++
++module.exports = { optimizeLowAttack };
+diff --git a/tools/optimize-low-attack.test.js b/tools/optimize-low-attack.test.js
+new file mode 100644
+index 0000000..34ac450
+--- /dev/null
++++ b/tools/optimize-low-attack.test.js
+@@ -0,0 +1,157 @@
++'use strict';
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const dex = require('../data/gen2stadium2.json');
++const { optimizeLowAttack } = require('./optimize-low-attack');
++
++function set(species, moves, atk = 31) {
++	return { species, moves,
++		ivs: { hp: 31, atk, def: 31, spa: 31, spd: 31, spe: 31 },
++		evs: { hp: 255, atk: 255, def: 255, spa: 255, spd: 255, spe: 255 } };
++}
++const optimize = (mon, options) => optimizeLowAttack([mon], dex, options).sets[0];
++
++test('preserves male gender threshold and maximum HP parity', () => {
++	for (const species of ['Venusaur', 'Jolteon', 'Vaporeon', 'Umbreon']) {
++		const mon = optimize(set(species, ['Rest']));
++		assert.equal(mon.ivs.atk, 6, species); // male threshold DV 2, first odd DV 3
++		assert.equal(mon.ivs.hp, 31);
++		assert.equal(mon.evs.atk, 0);
++	}
++	assert.equal(optimize(set('Gengar', ['Perish Song'])).ivs.atk, 18); // male, 1:1 ratio
++});
++
++test('female, fixed-gender and genderless sets can reach odd DV 1', () => {
++	for (const mon of [set('Gengar', ['Perish Song'], 2), set('Jynx', ['Psychic']), set('Starmie', ['Surf'])]) {
++		const result = optimize(mon);
++		assert.equal(result.ivs.atk, 2);
++		assert.equal(result.ivs.hp, mon.ivs.hp);
++	}
++});
++
++test('preserves an even Attack DV parity rather than silently increasing HP', () => {
++	const mon = set('Starmie', ['Surf'], 8);
++	mon.ivs.hp = 14;
++	const result = optimize(mon);
++	assert.equal(result.ivs.atk, 0);
++	assert.equal(result.ivs.hp, 14);
++});
++
++test('preserves the shiny DV predicate together with male gender and HP', () => {
++	const mon = set('Gengar', ['Psychic']);
++	Object.assign(mon.ivs, { hp: 16, def: 20, spe: 20, spa: 20, spd: 20 });
++	mon.gender = 'M';
++	mon.shiny = true;
++	const result = optimize(mon);
++	assert.equal(result.ivs.atk, 22); // DV 11: male, odd and shiny
++	assert.equal(result.shiny, true);
++	assert.equal(result.gender, 'M');
++	assert.equal(result.ivs.hp, 16);
++});
++
++test('excludes Physical moves, every Hidden Power spelling and external move access', () => {
++	for (const move of ['Explosion', 'Counter', 'Hidden Power', 'Hidden Power Ice',
++		'Metronome', 'Mimic', 'Mirror Move', 'Transform']) {
++		const mon = set('Gengar', [move]);
++		assert.deepEqual(optimize(mon), mon, move);
++	}
++});
++
++test('uses Gen 2 categories and allows Sleep Talk on qualifying own moves', () => {
++	for (const mon of [set('Jynx', ['Thief']), set('Umbreon', ['Pursuit']),
++		set('Suicune', ['Surf', 'Ice Beam', 'Rest', 'Sleep Talk'])]) {
++		assert.equal(optimize(mon).evs.atk, 0);
++	}
++});
++
++test('does not mutate inputs, is idempotent, and fails closed on unknown data', () => {
++	const original = [set('Starmie', ['Surf'])];
++	const frozen = structuredClone(original);
++	const once = optimizeLowAttack(original, dex);
++	assert.deepEqual(original, frozen);
++	assert.equal(once.changedSets, 1);
++	const twice = optimizeLowAttack(once.sets, dex);
++	assert.deepEqual(twice.sets, once.sets);
++	assert.equal(twice.changedSets, 0);
++	assert.throws(() => optimize(set('Starmie', ['Nonexistent Move'])), /unknown move/);
++	const incomplete = set('Starmie', ['Surf']);
++	delete incomplete.evs;
++	assert.throws(() => optimize(incomplete), /complete validated/);
++});
++
++test('opt-in female preference removes the male threshold while preserving HP and other fields', () => {
++	for (const species of ['Venusaur', 'Jolteon', 'Vaporeon', 'Umbreon']) {
++		const mon = set(species, ['Rest']); mon.gender = 'M';
++		const result = optimize(mon, { preferFemale: true });
++		assert.equal(result.gender, 'F');
++		assert.equal(result.ivs.atk, 2);
++		assert.equal(result.ivs.hp, mon.ivs.hp);
++		assert.equal(result.evs.atk, 0);
++		const again = optimizeLowAttack([result], dex, { preferFemale: true });
++		assert.deepEqual(again.sets, [result]);
++		assert.equal(again.changedGenders, 0);
++	}
++});
++
++test('female preference preserves own Attract targets and impossible fixed/shiny genders', () => {
++	const user = set('Umbreon', ['Pursuit', 'Attract']); user.gender = 'M';
++	assert.equal(optimize(user, { preferFemale: true }).gender, 'M');
++	for (const [species, gender] of [['Tauros', 'M'], ['Jynx', 'F'], ['Starmie', 'N']]) {
++		const mon = set(species, ['Rest']); mon.gender = gender;
++		assert.equal(optimize(mon, { preferFemale: true }).gender, gender);
++	}
++	const shiny = set('Venusaur', ['Rest']); shiny.gender = 'M'; shiny.shiny = true;
++	Object.assign(shiny.ivs, { hp: 16, def: 20, spa: 20, spd: 20, spe: 20 });
++	const result = optimize(shiny, { preferFemale: true });
++	assert.equal(result.gender, 'M');
++	assert.equal(result.ivs.atk, 6); // no legal shiny female exists at a 1/8 female ratio
++	assert.equal(result.shiny, true);
++});
++
++test('female preference is supported only by the frozen prior source mix', () => {
++	const { attractGenderCensus } = require('./attract-gender-census');
++	const prior = require('../data/belief-pool-v3/belief-pool.json');
++	const result = attractGenderCensus(prior);
++	assert.deepEqual(result.weightedSources, { M: 0.25, F: 1, N: 0 });
++	assert.equal(result.preferFemale, true);
++	assert.equal(result.sources.length, 2);
++	const catalog = require('../data/team-pool-v2/team-pool.json');
++	assert.equal(attractGenderCensus(catalog, 'drawWeight').sources.length, 0);
++	const equal = { teams: result.sources.map(s => ({ id: s.team, weight: 1,
++		sets: [{ species: s.species, gender: s.gender, moves: ['Attract'] }] })) };
++	assert.equal(attractGenderCensus(equal).preferFemale, false);
++	equal.teams[0].weight = NaN;
++	assert.throws(() => attractGenderCensus(equal), /invalid weight/);
++});
++
++test('generated catalog matches the independently audited 27 adjustments exactly', () => {
++	const catalog = require('../data/team-pool-v2/team-pool.json');
++	const inventory = require('../data/team-inventory-v1/inventory.json');
++	const audit = require('../findings/low-attack-catalog-v1/audit.json');
++	const genderAudit = require('../findings/attract-gender-v1/mechanics.json');
++	const original = new Map(inventory.teams.map(team => [team.id, team.sets]));
++	assert.equal(catalog.teams.length, 24);
++	assert.equal(catalog.setOptimization.changedTeams, 14);
++	assert.equal(catalog.setOptimization.changedSets, 27);
++	assert.equal(catalog.setOptimization.changedGenders, 6);
++	assert.equal(audit.rows.length, 27);
++	for (const team of catalog.teams) {
++		const expected = structuredClone(original.get(team.id));
++		for (const row of audit.rows.filter(row => row.baseId === team.id)) {
++			const mon = expected[row.slot - 1];
++			assert.equal(mon.species, row.species);
++			assert.equal(Math.floor(mon.ivs.atk / 2), row.attackDvBefore);
++			assert.equal(mon.evs.atk, row.attackEvBefore);
++			mon.ivs.atk = row.attackDvAfter * 2;
++			mon.evs.atk = 0;
++		}
++		for (const row of genderAudit.rows.filter(row => row.baseId === team.id)) {
++			const mon = expected[row.slot - 1];
++			assert.equal(mon.gender, row.genderBefore);
++			assert.equal(Math.floor(mon.ivs.atk / 2), row.attackDvBefore);
++			mon.gender = row.genderAfter;
++			mon.ivs.atk = row.attackDvAfter * 2;
++		}
++		assert.deepEqual(team.sets, expected, team.id);
++	}
++});

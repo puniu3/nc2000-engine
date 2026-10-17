@@ -1,0 +1,1077 @@
+{
+  "type": "fixture",
+  "teams": [
+    [
+      {
+        "name": "Gengar",
+        "species": "Gengar",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Mean Look",
+          "Return",
+          "Snore",
+          "Night Shade"
+        ],
+        "level": 55,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 0
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Electrode",
+        "species": "Electrode",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Explosion"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Voltorb",
+        "species": "Voltorb",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Explosion"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Magikarp",
+        "species": "Magikarp",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Splash"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Pikachu",
+        "species": "Pikachu",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Thunder Shock"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Abra",
+        "species": "Abra",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Teleport"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      }
+    ],
+    [
+      {
+        "name": "Electrode",
+        "species": "Electrode",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Explosion"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Gengar",
+        "species": "Gengar",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Mean Look",
+          "Sleep Talk",
+          "Snore",
+          "Destiny Bond"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Magikarp",
+        "species": "Magikarp",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Splash",
+          "Tackle",
+          "Flail"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Pikachu",
+        "species": "Pikachu",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Thunder Shock"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Abra",
+        "species": "Abra",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Teleport"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      },
+      {
+        "name": "Rattata",
+        "species": "Rattata",
+        "item": "",
+        "ability": "No Ability",
+        "moves": [
+          "Tackle"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 30,
+          "def": 30,
+          "hp": 30,
+          "spa": 30,
+          "spd": 30,
+          "spe": 30
+        },
+        "happiness": 255,
+        "gender": null
+      }
+    ]
+  ],
+  "log": [
+    "|gametype|singles",
+    "|player|p1|P1||",
+    "|player|p2|P2||",
+    "|gen|2",
+    "|tier|[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict",
+    "|rule|Species Clause: Limit one of each Pokémon",
+    "|rule|Item Clause: Limit 1 of each item",
+    "|rule|Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle",
+    "|rule|Freeze Clause Mod: Limit one foe frozen",
+    "|rule|OHKO Clause: OHKO moves are banned",
+    "|rule|HP Percentage Mod: HP is shown in percentages",
+    "|clearpoke",
+    "|poke|p1|Gengar, L55, M|",
+    "|poke|p1|Electrode, L50|",
+    "|poke|p1|Voltorb, L50|",
+    "|poke|p1|Magikarp, L50, F|",
+    "|poke|p1|Pikachu, L50, F|",
+    "|poke|p1|Abra, L50, M|",
+    "|poke|p2|Electrode, L50|",
+    "|poke|p2|Gengar, L50, F|",
+    "|poke|p2|Magikarp, L50, F|",
+    "|poke|p2|Pikachu, L50, F|",
+    "|poke|p2|Abra, L50, M|",
+    "|poke|p2|Rattata, L50, F|",
+    "|teampreview|3",
+    "|",
+    "|teamsize|p1|3",
+    "|teamsize|p2|3",
+    "|start",
+    "|split|p1",
+    "|switch|p1a: Gengar|Gengar, L55, M|182/182",
+    "|switch|p1a: Gengar|Gengar, L55, M|100/100",
+    "|split|p2",
+    "|switch|p2a: Electrode|Electrode, L50|166/166",
+    "|switch|p2a: Electrode|Electrode, L50|100/100",
+    "|turn|1",
+    "|",
+    "|move|p2a: Electrode|Explosion|p1a: Gengar",
+    "|-immune|p1a: Gengar",
+    "|faint|p2a: Electrode",
+    "|",
+    "|split|p2",
+    "|switch|p2a: Magikarp|Magikarp, L50, F|126/126",
+    "|switch|p2a: Magikarp|Magikarp, L50, F|100/100",
+    "|",
+    "|upkeep",
+    "|turn|2",
+    "|",
+    "|move|p1a: Gengar|Snore|p2a: Magikarp",
+    "|move|p2a: Magikarp|Splash|p2a: Magikarp",
+    "|-nothing",
+    "|-fail|p2a: Magikarp",
+    "|",
+    "|upkeep",
+    "|turn|3",
+    "|",
+    "|split|p2",
+    "|switch|p2a: Gengar|Gengar, L50, F|166/166",
+    "|switch|p2a: Gengar|Gengar, L50, F|100/100",
+    "|move|p1a: Gengar|Snore|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|4",
+    "|",
+    "|split|p1",
+    "|switch|p1a: Electrode|Electrode, L50|166/166",
+    "|switch|p1a: Electrode|Electrode, L50|100/100",
+    "|move|p2a: Gengar|Snore|p1a: Electrode",
+    "|",
+    "|upkeep",
+    "|turn|5",
+    "|",
+    "|move|p1a: Electrode|Explosion|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|faint|p1a: Electrode",
+    "|",
+    "|split|p1",
+    "|switch|p1a: Voltorb|Voltorb, L50|146/146",
+    "|switch|p1a: Voltorb|Voltorb, L50|100/100",
+    "|",
+    "|upkeep",
+    "|turn|6",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Voltorb",
+    "|move|p1a: Voltorb|Explosion|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|faint|p1a: Voltorb",
+    "|",
+    "|split|p1",
+    "|switch|p1a: Gengar|Gengar, L55, M|182/182",
+    "|switch|p1a: Gengar|Gengar, L55, M|100/100",
+    "|",
+    "|upkeep",
+    "|turn|7",
+    "|",
+    "|move|p2a: Gengar|Destiny Bond|p2a: Gengar",
+    "|-singlemove|p2a: Gengar|Destiny Bond",
+    "|move|p1a: Gengar|Snore|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|8",
+    "|",
+    "|move|p2a: Gengar|Mean Look|p1a: Gengar",
+    "|-activate|p1a: Gengar|trapped",
+    "|move|p1a: Gengar|Night Shade|p2a: Gengar",
+    "|split|p2",
+    "|-damage|p2a: Gengar|111/166",
+    "|-damage|p2a: Gengar|67/100",
+    "|",
+    "|upkeep",
+    "|turn|9",
+    "|",
+    "|move|p2a: Gengar|Mean Look|p1a: Gengar",
+    "|-fail|p1a: Gengar",
+    "|move|p1a: Gengar|Night Shade|p2a: Gengar",
+    "|split|p2",
+    "|-damage|p2a: Gengar|56/166",
+    "|-damage|p2a: Gengar|34/100",
+    "|",
+    "|upkeep",
+    "|turn|10",
+    "|",
+    "|move|p2a: Gengar|Mean Look|p1a: Gengar",
+    "|-fail|p1a: Gengar",
+    "|move|p1a: Gengar|Night Shade|p2a: Gengar",
+    "|split|p2",
+    "|-damage|p2a: Gengar|1/166",
+    "|-damage|p2a: Gengar|1/100",
+    "|",
+    "|upkeep",
+    "|turn|11",
+    "|",
+    "|move|p2a: Gengar|Mean Look|p1a: Gengar",
+    "|-fail|p1a: Gengar",
+    "|move|p1a: Gengar|Mean Look|p2a: Gengar",
+    "|-activate|p2a: Gengar|trapped",
+    "|",
+    "|upkeep",
+    "|turn|12",
+    "|",
+    "|move|p2a: Gengar|Mean Look|p1a: Gengar",
+    "|-fail|p1a: Gengar",
+    "|move|p1a: Gengar|Mean Look|p2a: Gengar",
+    "|-fail|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|13",
+    "|",
+    "|move|p2a: Gengar|Mean Look|p1a: Gengar",
+    "|-fail|p1a: Gengar",
+    "|move|p1a: Gengar|Mean Look|p2a: Gengar",
+    "|-fail|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|14",
+    "|",
+    "|move|p2a: Gengar|Mean Look|p1a: Gengar",
+    "|-fail|p1a: Gengar",
+    "|move|p1a: Gengar|Mean Look|p2a: Gengar",
+    "|-fail|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|15",
+    "|",
+    "|move|p2a: Gengar|Mean Look|p1a: Gengar",
+    "|-fail|p1a: Gengar",
+    "|move|p1a: Gengar|Mean Look|p2a: Gengar",
+    "|-fail|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|16",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Mean Look|p2a: Gengar",
+    "|-fail|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|17",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Mean Look|p2a: Gengar",
+    "|-fail|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|18",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Mean Look|p2a: Gengar",
+    "|-fail|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|19",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|20",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|21",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|22",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|23",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|24",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|25",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|26",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|27",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|28",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|29",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|30",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|31",
+    "|",
+    "|move|p2a: Gengar|Sleep Talk|p2a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|32",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|33",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|34",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|35",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|36",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|37",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|38",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|39",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|40",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|41",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|42",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|43",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|44",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|45",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|46",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|47",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|48",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|49",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|50",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Return|p2a: Gengar",
+    "|-immune|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|51",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Snore|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|52",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Snore|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|53",
+    "|",
+    "|move|p2a: Gengar|Snore|p1a: Gengar",
+    "|move|p1a: Gengar|Snore|p2a: Gengar",
+    "|",
+    "|upkeep",
+    "|turn|54"
+  ],
+  "inputs": [
+    [
+      "team 1,2,3",
+      "team 1,2,3"
+    ],
+    [
+      "move snore",
+      "move explosion"
+    ],
+    [
+      null,
+      "switch 3"
+    ],
+    [
+      "move snore",
+      "move splash"
+    ],
+    [
+      "move snore",
+      "switch 2"
+    ],
+    [
+      "switch 2",
+      "move snore"
+    ],
+    [
+      "move explosion",
+      "move snore"
+    ],
+    [
+      "switch 3",
+      null
+    ],
+    [
+      "move explosion",
+      "move snore"
+    ],
+    [
+      "switch 2",
+      null
+    ],
+    [
+      "move snore",
+      "move destinybond"
+    ],
+    [
+      "move nightshade",
+      "move meanlook"
+    ],
+    [
+      "move nightshade",
+      "move meanlook"
+    ],
+    [
+      "move nightshade",
+      "move meanlook"
+    ],
+    [
+      "move meanlook",
+      "move meanlook"
+    ],
+    [
+      "move meanlook",
+      "move meanlook"
+    ],
+    [
+      "move meanlook",
+      "move meanlook"
+    ],
+    [
+      "move meanlook",
+      "move meanlook"
+    ],
+    [
+      "move meanlook",
+      "move meanlook"
+    ],
+    [
+      "move meanlook",
+      "move sleeptalk"
+    ],
+    [
+      "move meanlook",
+      "move sleeptalk"
+    ],
+    [
+      "move meanlook",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move sleeptalk"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move return",
+      "move snore"
+    ],
+    [
+      "move snore",
+      "move snore"
+    ],
+    [
+      "move snore",
+      "move snore"
+    ],
+    [
+      "move snore",
+      "move snore"
+    ]
+  ],
+  "rng": "24261,38534,33528,14061",
+  "validated_six_mon_teams": true,
+  "sides": [
+    {
+      "hp": 182,
+      "maxhp": 182,
+      "trapped": true,
+      "speed": 142,
+      "moves": [
+        {
+          "move": "meanlook",
+          "pp": 0
+        },
+        {
+          "move": "return",
+          "pp": 0
+        },
+        {
+          "move": "snore",
+          "pp": 18
+        },
+        {
+          "move": "nightshade",
+          "pp": 21
+        }
+      ]
+    },
+    {
+      "hp": 1,
+      "maxhp": 166,
+      "trapped": true,
+      "speed": 161,
+      "moves": [
+        {
+          "move": "meanlook",
+          "pp": 0
+        },
+        {
+          "move": "sleeptalk",
+          "pp": 0
+        },
+        {
+          "move": "snore",
+          "pp": 0
+        },
+        {
+          "move": "destinybond",
+          "pp": 7
+        }
+      ]
+    }
+  ],
+  "mask": [
+    [
+      "move snore",
+      "the target is immune to the move's type"
+    ]
+  ]
+}

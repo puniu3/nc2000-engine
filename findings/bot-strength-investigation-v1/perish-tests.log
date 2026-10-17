@@ -1,0 +1,12 @@
+   Compiling nc2000-bot v0.1.0 (/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/crates/bot)
+    Finished `release` profile [optimized] target(s) in 13.73s
+     Running tests/perish_deadline.rs (target/release/deps/perish_deadline-a70626843eb11da5)
+
+running 4 tests
+test waiting_is_retained_only_at_the_opposing_actives_deadline ... ok
+test an_opponents_deadline_does_not_allow_self_ko_or_sleep_forfeits ... ok
+test waits_without_attacking_into_a_faster_destiny_bond ... ok
+test waits_without_attacking_into_an_active_destiny_bond ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

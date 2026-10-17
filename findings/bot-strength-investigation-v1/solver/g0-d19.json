@@ -1,0 +1,178 @@
+{
+  "id": "g0-d19",
+  "snapshot": {
+    "turn": 15,
+    "key": "182984538058427437211086301348708658011",
+    "sides": [
+      [
+        {
+          "species": "steelix",
+          "active": true,
+          "hp": 71,
+          "maxhp": 181,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "earthquake",
+              "pp": 10
+            },
+            {
+              "move": "sandstorm",
+              "pp": 15
+            },
+            {
+              "move": "roar",
+              "pp": 29
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "tyranitar",
+          "active": false,
+          "hp": 0,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 8
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "tyranitar",
+          "active": true,
+          "hp": 226,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 14
+            },
+            {
+              "move": "crunch",
+              "pp": 24
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 6
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 24
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            },
+            {
+              "move": "curse",
+              "pp": 14
+            }
+          ]
+        },
+        {
+          "species": "venusaur",
+          "active": false,
+          "hp": 0,
+          "maxhp": 186,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "razorleaf",
+              "pp": 40
+            },
+            {
+              "move": "leechseed",
+              "pp": 16
+            },
+            {
+              "move": "sleeppowder",
+              "pp": 24
+            },
+            {
+              "move": "synthesis",
+              "pp": 6
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "value": [
+    0.0,
+    0.13827687111603906
+  ],
+  "stop": "NodeBudget",
+  "runs": 17335,
+  "ms": 1224.9335,
+  "one_sided_heal": "Err(NotExactlyOneHealer)",
+  "two_sided_heal": "Err(NotBothHealers)"
+}

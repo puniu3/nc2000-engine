@@ -1,0 +1,178 @@
+{
+  "id": "g2-d7",
+  "snapshot": {
+    "turn": 5,
+    "key": "72843848028087071986140162133027225678",
+    "sides": [
+      [
+        {
+          "species": "zapdos",
+          "active": true,
+          "hp": 0,
+          "maxhp": 196,
+          "status": "fnt",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 22
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "thunderwave",
+              "pp": 31
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 292,
+          "maxhp": 292,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "doubleedge",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "starmie",
+          "active": false,
+          "hp": 166,
+          "maxhp": 166,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "surf",
+              "pp": 24
+            },
+            {
+              "move": "psychic",
+              "pp": 16
+            },
+            {
+              "move": "thunderwave",
+              "pp": 32
+            },
+            {
+              "move": "recover",
+              "pp": 32
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "jolteon",
+          "active": true,
+          "hp": 149,
+          "maxhp": 171,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 23
+            },
+            {
+              "move": "swagger",
+              "pp": 23
+            },
+            {
+              "move": "substitute",
+              "pp": 15
+            },
+            {
+              "move": "batonpass",
+              "pp": 61
+            }
+          ]
+        },
+        {
+          "species": "lapras",
+          "active": false,
+          "hp": 0,
+          "maxhp": 236,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "icebeam",
+              "pp": 15
+            },
+            {
+              "move": "thunderbolt",
+              "pp": 24
+            },
+            {
+              "move": "sing",
+              "pp": 24
+            },
+            {
+              "move": "reflect",
+              "pp": 32
+            }
+          ]
+        },
+        {
+          "species": "marowak",
+          "active": false,
+          "hp": 173,
+          "maxhp": 173,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "swordsdance",
+              "pp": 48
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "value": [
+    0.0,
+    1.0
+  ],
+  "stop": "TimeBudget",
+  "runs": 38212,
+  "ms": 2000.0359589999998,
+  "one_sided_heal": "Err(NotQuiescent)",
+  "two_sided_heal": "Err(NotQuiescent)"
+}

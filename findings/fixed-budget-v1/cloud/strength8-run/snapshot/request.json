@@ -1,0 +1,11 @@
+{
+  "command": [
+    "env",
+    "NC2000_BUDGET_THREADS=2",
+    "python3",
+    "findings/fixed-budget-v1/cloud/strength_resume.py",
+    "findings/fixed-budget-v1/strength8-jobs.json"
+  ],
+  "setup": "sh findings/fixed-budget-v1/cloud/setup-resume.sh",
+  "output_limit_bytes": 209715200
+}

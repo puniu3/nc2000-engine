@@ -1,0 +1,1288 @@
+{
+  "numpy_version": "2.5.3",
+  "games": 256,
+  "pairs": 128,
+  "wins": 129,
+  "ties": 0,
+  "losses": 127,
+  "score": 0.50390625,
+  "ci95": [
+    0.4453125,
+    0.5625
+  ],
+  "add243": false,
+  "pair_scores": [
+    0.0,
+    0.5,
+    0.5,
+    0.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+    0.0,
+    0.5,
+    0.5,
+    0.5,
+    0.0,
+    1.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.0,
+    0.5,
+    0.0,
+    0.5,
+    0.5,
+    1.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+    0.5,
+    0.5,
+    0.0,
+    0.5,
+    1.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+    0.5,
+    1.0,
+    1.0,
+    0.5,
+    1.0,
+    0.5,
+    0.0,
+    0.5,
+    1.0,
+    1.0,
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+    1.0,
+    0.5,
+    0.5,
+    1.0,
+    0.0,
+    0.5,
+    0.5,
+    0.5,
+    0.0,
+    0.0,
+    1.0,
+    0.5,
+    0.5,
+    1.0,
+    0.0,
+    0.5,
+    1.0,
+    0.5,
+    0.5,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.5,
+    0.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+    0.5,
+    0.5,
+    1.0,
+    0.0,
+    0.5,
+    0.0,
+    1.0,
+    0.5,
+    0.0,
+    1.0,
+    0.5,
+    1.0,
+    0.0,
+    0.5,
+    0.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.5,
+    0.5,
+    0.0,
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.5,
+    0.5,
+    0.5
+  ],
+  "first_decision_changes": [
+    {
+      "pair": 0,
+      "side": 0,
+      "turn": 9,
+      "key": "215488254234624814223337786429446819045",
+      "high_choice": "move curse",
+      "low_choice": "move return",
+      "phase": "battle"
+    },
+    {
+      "pair": 1,
+      "side": 0,
+      "turn": 4,
+      "key": "95403072009136361865607326410965874928",
+      "high_choice": "move hiddenpower",
+      "low_choice": "move earthquake",
+      "phase": "battle"
+    },
+    {
+      "pair": 2,
+      "side": 0,
+      "turn": 5,
+      "key": "256254777188773097755162730578156587093",
+      "high_choice": "move curse",
+      "low_choice": "move recover",
+      "phase": "battle"
+    },
+    {
+      "pair": 3,
+      "side": 0,
+      "turn": 10,
+      "key": "275919069680851095790905892214846137766",
+      "high_choice": "move thunderbolt",
+      "low_choice": "switch 2",
+      "phase": "battle"
+    },
+    {
+      "pair": 4,
+      "side": 0,
+      "turn": 3,
+      "key": "173873049514810890704401762639936369929",
+      "high_choice": "move thunderbolt",
+      "low_choice": "switch 2",
+      "phase": "battle"
+    },
+    {
+      "pair": 5,
+      "side": 0,
+      "turn": 1,
+      "key": "320710842934888631247806700068004002089",
+      "high_choice": "move psychic",
+      "low_choice": "move sleeppowder",
+      "phase": "battle"
+    },
+    {
+      "pair": 6,
+      "side": 1,
+      "turn": 2,
+      "key": "166010877753825191397381034972237885165",
+      "high_choice": "move curse",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 7,
+      "side": 1,
+      "turn": 4,
+      "key": "194571379061062856856012533265092840839",
+      "high_choice": "move psychic",
+      "low_choice": "move surf",
+      "phase": "battle"
+    },
+    {
+      "pair": 8,
+      "side": 0,
+      "turn": 2,
+      "key": "111652291156505828800018938198419683330",
+      "high_choice": "move explosion",
+      "low_choice": "move earthquake",
+      "phase": "battle"
+    },
+    {
+      "pair": 9,
+      "side": 1,
+      "turn": 4,
+      "key": "38619084960917558017246173447024545861",
+      "high_choice": "move curse",
+      "low_choice": "move doubleedge",
+      "phase": "battle"
+    },
+    {
+      "pair": 10,
+      "side": 0,
+      "turn": 1,
+      "key": "80499581133897378331299325116371343455",
+      "high_choice": "move thunder",
+      "low_choice": "move substitute",
+      "phase": "battle"
+    },
+    {
+      "pair": 11,
+      "side": 0,
+      "turn": 1,
+      "key": "18985012913683441734537548970661078503",
+      "high_choice": "switch 2",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 12,
+      "side": 0,
+      "turn": 2,
+      "key": "76431948925668509465520652346906061497",
+      "high_choice": "move earthquake",
+      "low_choice": "switch 2",
+      "phase": "battle"
+    },
+    {
+      "pair": 13,
+      "side": 0,
+      "turn": 4,
+      "key": "325796223716428810719668257680964136074",
+      "high_choice": "switch 3",
+      "low_choice": "move thunderbolt",
+      "phase": "battle"
+    },
+    {
+      "pair": 14,
+      "side": 1,
+      "turn": 2,
+      "key": "169800560855770443041841331032393987703",
+      "high_choice": "switch 2",
+      "low_choice": "move explosion",
+      "phase": "battle"
+    },
+    {
+      "pair": 15,
+      "side": 0,
+      "turn": 5,
+      "key": "4332282525799060348678487850517125163",
+      "high_choice": "switch 2",
+      "low_choice": "switch 3",
+      "phase": "battle"
+    },
+    {
+      "pair": 16,
+      "side": 1,
+      "turn": 4,
+      "key": "278993482205860942781231645168674792895",
+      "high_choice": "switch 2",
+      "low_choice": "move reflect",
+      "phase": "battle"
+    },
+    {
+      "pair": 17,
+      "side": 1,
+      "turn": 2,
+      "key": "283101100529288066294367185770566698464",
+      "high_choice": "move curse",
+      "low_choice": "move doubleedge",
+      "phase": "battle"
+    },
+    {
+      "pair": 18,
+      "side": 1,
+      "turn": 2,
+      "key": "98972996890995337667666032846424278077",
+      "high_choice": "move spikes",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 19,
+      "side": 1,
+      "turn": 6,
+      "key": "218910016375896998228272972922102935019",
+      "high_choice": "move sleeppowder",
+      "low_choice": "move synthesis",
+      "phase": "battle"
+    },
+    {
+      "pair": 20,
+      "side": 1,
+      "turn": 9,
+      "key": "338506140586331125754385806501959350927",
+      "high_choice": "move doubleedge",
+      "low_choice": "move curse",
+      "phase": "battle"
+    },
+    {
+      "pair": 21,
+      "side": 0,
+      "turn": 6,
+      "key": "236255178145659616901936050967523451830",
+      "high_choice": "move bodyslam",
+      "low_choice": "move selfdestruct",
+      "phase": "battle"
+    },
+    {
+      "pair": 22,
+      "side": 0,
+      "turn": 5,
+      "key": "258293447167593679995434527205074099868",
+      "high_choice": "move bodyslam",
+      "low_choice": "move rest",
+      "phase": "battle"
+    },
+    {
+      "pair": 23,
+      "side": 0,
+      "turn": 2,
+      "key": "295119436402004968010204244506808753943",
+      "high_choice": "move hiddenpower",
+      "low_choice": "switch 2",
+      "phase": "battle"
+    },
+    {
+      "pair": 24,
+      "side": 0,
+      "turn": 3,
+      "key": "50397442828185800821228662696704573928",
+      "high_choice": "switch 3",
+      "low_choice": "move explosion",
+      "phase": "battle"
+    },
+    {
+      "pair": 25,
+      "side": 1,
+      "turn": 1,
+      "key": "121799323977932594775648960195840850429",
+      "high_choice": "move curse",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 26,
+      "side": 0,
+      "turn": 3,
+      "key": "147143167556876230140859354376045553272",
+      "high_choice": "switch 2",
+      "low_choice": "move crosschop",
+      "phase": "battle"
+    },
+    {
+      "pair": 27,
+      "side": 1,
+      "turn": 2,
+      "key": "50336827648799877138003144888590744063",
+      "high_choice": "switch 2",
+      "low_choice": "move substitute",
+      "phase": "battle"
+    },
+    {
+      "pair": 28,
+      "side": 0,
+      "turn": 1,
+      "key": "143462477339811000628957965543969947041",
+      "high_choice": "move earthquake",
+      "low_choice": "switch 2",
+      "phase": "battle"
+    },
+    {
+      "pair": 29,
+      "side": 1,
+      "turn": 3,
+      "key": "279035766844942473103378403559437945396",
+      "high_choice": "move bonemerang",
+      "low_choice": "move rockslide",
+      "phase": "battle"
+    },
+    {
+      "pair": 30,
+      "side": 0,
+      "turn": 3,
+      "key": "16762192333320309350733986743544843953",
+      "high_choice": "move curse",
+      "low_choice": "move fireblast",
+      "phase": "battle"
+    },
+    {
+      "pair": 31,
+      "side": 0,
+      "turn": 2,
+      "key": "319283717369822574406564757996030398976",
+      "high_choice": "move spikes",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 33,
+      "side": 0,
+      "turn": 2,
+      "key": "225524277267577866109582501796454217520",
+      "high_choice": "move thunder",
+      "low_choice": "move substitute",
+      "phase": "battle"
+    },
+    {
+      "pair": 34,
+      "side": 0,
+      "turn": 4,
+      "key": "68049300070780936096781424232549837922",
+      "high_choice": "move doubleedge",
+      "low_choice": "move curse",
+      "phase": "battle"
+    },
+    {
+      "pair": 35,
+      "side": 1,
+      "turn": 3,
+      "key": "88122170680929145287149913281781807190",
+      "high_choice": "move bodyslam",
+      "low_choice": "move earthquake",
+      "phase": "battle"
+    },
+    {
+      "pair": 36,
+      "side": 0,
+      "turn": 2,
+      "key": "40655958160467932345869103877366496315",
+      "high_choice": "move return",
+      "low_choice": "move recover",
+      "phase": "battle"
+    },
+    {
+      "pair": 37,
+      "side": 1,
+      "turn": 5,
+      "key": "245043781964659093825616100346697897464",
+      "high_choice": "move recover",
+      "low_choice": "move return",
+      "phase": "battle"
+    },
+    {
+      "pair": 38,
+      "side": 0,
+      "turn": 4,
+      "key": "284965026900247216730690415986472639722",
+      "high_choice": "switch 2",
+      "low_choice": "move thunderbolt",
+      "phase": "battle"
+    },
+    {
+      "pair": 39,
+      "side": 1,
+      "turn": 6,
+      "key": "63466654083920778954055424271114198419",
+      "high_choice": "move rest",
+      "low_choice": "move bodyslam",
+      "phase": "battle"
+    },
+    {
+      "pair": 40,
+      "side": 0,
+      "turn": 1,
+      "key": "167078464837522089308421532211135167696",
+      "high_choice": "move selfdestruct",
+      "low_choice": "move doubleedge",
+      "phase": "battle"
+    },
+    {
+      "pair": 41,
+      "side": 1,
+      "turn": 1,
+      "key": "328627631026992041535610770088168329512",
+      "high_choice": "move return",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 42,
+      "side": 0,
+      "turn": 3,
+      "key": "106742759975303868856036055067733930620",
+      "high_choice": "move thunderbolt",
+      "low_choice": "move explosion",
+      "phase": "battle"
+    },
+    {
+      "pair": 43,
+      "side": 1,
+      "turn": 3,
+      "key": "49717678888455862771668146943090253493",
+      "high_choice": "move curse",
+      "low_choice": "move earthquake",
+      "phase": "battle"
+    },
+    {
+      "pair": 44,
+      "side": 0,
+      "turn": 9,
+      "key": "181306460236443700038457747401949973730",
+      "high_choice": "move sing",
+      "low_choice": "switch 2",
+      "phase": "battle"
+    },
+    {
+      "pair": 45,
+      "side": 0,
+      "turn": 1,
+      "key": "182950354133435876332035044517701597799",
+      "high_choice": "switch 2",
+      "low_choice": "switch 3",
+      "phase": "battle"
+    },
+    {
+      "pair": 46,
+      "side": 1,
+      "turn": 7,
+      "key": "10737703705976672086563766744534712799",
+      "high_choice": "move thunderbolt",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 47,
+      "side": 1,
+      "turn": 3,
+      "key": "276323706942475514004629101029027448693",
+      "high_choice": "move psychic",
+      "low_choice": "move hydropump",
+      "phase": "battle"
+    },
+    {
+      "pair": 48,
+      "side": 1,
+      "turn": 3,
+      "key": "258648240614293718805564176937560392279",
+      "high_choice": "move bodyslam",
+      "low_choice": "switch 3",
+      "phase": "battle"
+    },
+    {
+      "pair": 49,
+      "side": 1,
+      "turn": 3,
+      "key": "272052350557939895133963487022521197337",
+      "high_choice": "switch 2",
+      "low_choice": "switch 3",
+      "phase": "battle"
+    },
+    {
+      "pair": 50,
+      "side": 0,
+      "turn": 1,
+      "key": "17545696497614966761818092134588899006",
+      "high_choice": "move curse",
+      "low_choice": "move doubleteam",
+      "phase": "battle"
+    },
+    {
+      "pair": 51,
+      "side": 0,
+      "turn": 9,
+      "key": "279956034216567737822821535158991351839",
+      "high_choice": "move sleeppowder",
+      "low_choice": "move explosion",
+      "phase": "battle"
+    },
+    {
+      "pair": 52,
+      "side": 0,
+      "turn": 1,
+      "key": "215284119993598138564611817142147180230",
+      "high_choice": "move sleeppowder",
+      "low_choice": "move razorleaf",
+      "phase": "battle"
+    },
+    {
+      "pair": 53,
+      "side": 1,
+      "turn": 11,
+      "key": "307188047981259386836493814461470792746",
+      "high_choice": "move softboiled",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 54,
+      "side": 0,
+      "turn": 11,
+      "key": "22927117466792666134422411041077052897",
+      "high_choice": "move selfdestruct",
+      "low_choice": "move bodyslam",
+      "phase": "battle"
+    },
+    {
+      "pair": 55,
+      "side": 0,
+      "turn": 10,
+      "key": "114330753817375502917562406861150401949",
+      "high_choice": "move hydropump",
+      "low_choice": "move psychic",
+      "phase": "battle"
+    },
+    {
+      "pair": 56,
+      "side": 1,
+      "turn": 1,
+      "key": "176268644131156029750193752465936232804",
+      "high_choice": "switch 2",
+      "low_choice": "move whirlwind",
+      "phase": "battle"
+    },
+    {
+      "pair": 57,
+      "side": 0,
+      "turn": 7,
+      "key": "39626172275795501324589890249840376977",
+      "high_choice": "move thunderbolt",
+      "low_choice": "move reflect",
+      "phase": "battle"
+    },
+    {
+      "pair": 58,
+      "side": 0,
+      "turn": 2,
+      "key": "55026716522674895979564451474538812430",
+      "high_choice": "move earthquake",
+      "low_choice": "move rockslide",
+      "phase": "battle"
+    },
+    {
+      "pair": 59,
+      "side": 1,
+      "turn": 3,
+      "key": "221916795459145286488735729954193137257",
+      "high_choice": "move explosion",
+      "low_choice": "move surf",
+      "phase": "battle"
+    },
+    {
+      "pair": 60,
+      "side": 0,
+      "turn": 1,
+      "key": "320167037244919887945510402134594174793",
+      "high_choice": "switch 2",
+      "low_choice": "move earthquake",
+      "phase": "battle"
+    },
+    {
+      "pair": 61,
+      "side": 0,
+      "turn": 2,
+      "key": "225524277267577866109582501796454217520",
+      "high_choice": "move thunder",
+      "low_choice": "move substitute",
+      "phase": "battle"
+    },
+    {
+      "pair": 62,
+      "side": 0,
+      "turn": 1,
+      "key": "58509908300133748907487496843435218476",
+      "high_choice": "switch 2",
+      "low_choice": "move thunderwave",
+      "phase": "battle"
+    },
+    {
+      "pair": 63,
+      "side": 0,
+      "turn": 3,
+      "key": "108866290622278798698299834043187304202",
+      "high_choice": "move curse",
+      "low_choice": "move selfdestruct",
+      "phase": "battle"
+    },
+    {
+      "pair": 64,
+      "side": 0,
+      "turn": 2,
+      "key": "247180717402833900644187510542005315614",
+      "high_choice": "move return",
+      "low_choice": "move submission",
+      "phase": "battle"
+    },
+    {
+      "pair": 65,
+      "side": 1,
+      "turn": 5,
+      "key": "89370617594331869230654880792115437326",
+      "high_choice": "move doubleedge",
+      "low_choice": "move selfdestruct",
+      "phase": "battle"
+    },
+    {
+      "pair": 66,
+      "side": 1,
+      "turn": 5,
+      "key": "263545406215531395616076167466141027090",
+      "high_choice": "move earthquake",
+      "low_choice": "move explosion",
+      "phase": "battle"
+    },
+    {
+      "pair": 67,
+      "side": 0,
+      "turn": 2,
+      "key": "318442149170320403050255589483022199301",
+      "high_choice": "switch 3",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 68,
+      "side": 1,
+      "turn": 2,
+      "key": "168077126139093072487702936086818766125",
+      "high_choice": "move thunderbolt",
+      "low_choice": "move reflect",
+      "phase": "battle"
+    },
+    {
+      "pair": 69,
+      "side": 1,
+      "turn": 4,
+      "key": "129369779516275550808771162363010514838",
+      "high_choice": "move bodyslam",
+      "low_choice": "move curse",
+      "phase": "battle"
+    },
+    {
+      "pair": 70,
+      "side": 1,
+      "turn": 2,
+      "key": "243852851887291928958085552138283076803",
+      "high_choice": "move bodyslam",
+      "low_choice": "move selfdestruct",
+      "phase": "battle"
+    },
+    {
+      "pair": 71,
+      "side": 1,
+      "turn": 3,
+      "key": "114214084928147825946017555724051638475",
+      "high_choice": "switch 2",
+      "low_choice": "move submission",
+      "phase": "battle"
+    },
+    {
+      "pair": 72,
+      "side": 0,
+      "turn": 1,
+      "key": "18824038545015767102260860412992530905",
+      "high_choice": "move return",
+      "low_choice": "move submission",
+      "phase": "battle"
+    },
+    {
+      "pair": 73,
+      "side": 1,
+      "turn": 1,
+      "key": "128951518088028861565767315325750926803",
+      "high_choice": "move icebeam",
+      "low_choice": "move surf",
+      "phase": "battle"
+    },
+    {
+      "pair": 74,
+      "side": 1,
+      "turn": 2,
+      "key": "85508714762581104863774926020110391781",
+      "high_choice": "move reflect",
+      "low_choice": "move thunderbolt",
+      "phase": "battle"
+    },
+    {
+      "pair": 75,
+      "side": 1,
+      "turn": 8,
+      "key": "328892795654935083680644826549782571413",
+      "high_choice": "move explosion",
+      "low_choice": "move toxic",
+      "phase": "battle"
+    },
+    {
+      "pair": 76,
+      "side": 1,
+      "turn": 5,
+      "key": "63125448062469564656759246552242710104",
+      "high_choice": "move thunderbolt",
+      "low_choice": "move hiddenpower",
+      "phase": "battle"
+    },
+    {
+      "pair": 77,
+      "side": 0,
+      "turn": 1,
+      "key": "233705424612751574583942381352903499837",
+      "high_choice": "move whirlwind",
+      "low_choice": "switch 3",
+      "phase": "battle"
+    },
+    {
+      "pair": 78,
+      "side": 1,
+      "turn": 1,
+      "key": "331206980245543361127801865728909770209",
+      "high_choice": "move thunderwave",
+      "low_choice": "move thunderbolt",
+      "phase": "battle"
+    },
+    {
+      "pair": 80,
+      "side": 0,
+      "turn": 1,
+      "key": "218031606324353959369565687514460793998",
+      "high_choice": "switch 2",
+      "low_choice": "move thunderbolt",
+      "phase": "battle"
+    },
+    {
+      "pair": 81,
+      "side": 1,
+      "turn": 2,
+      "key": "158286697854719685618558699571680756008",
+      "high_choice": "switch 3",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 82,
+      "side": 1,
+      "turn": 8,
+      "key": "226138945085733336809119043144952515341",
+      "high_choice": "move doubleedge",
+      "low_choice": "move rest",
+      "phase": "battle"
+    },
+    {
+      "pair": 83,
+      "side": 0,
+      "turn": 3,
+      "key": "107083694475392187022975028676382157038",
+      "high_choice": "move earthquake",
+      "low_choice": "switch 3",
+      "phase": "battle"
+    },
+    {
+      "pair": 84,
+      "side": 1,
+      "turn": 4,
+      "key": "206311442086582113055398099573834270830",
+      "high_choice": "move return",
+      "low_choice": "move recover",
+      "phase": "battle"
+    },
+    {
+      "pair": 85,
+      "side": 0,
+      "turn": 6,
+      "key": "304510412514388476053164566829996409485",
+      "high_choice": "move icebeam",
+      "low_choice": "switch 2",
+      "phase": "battle"
+    },
+    {
+      "pair": 86,
+      "side": 0,
+      "turn": 3,
+      "key": "101500216213069444375176130331470753923",
+      "high_choice": "switch 3",
+      "low_choice": "move earthquake",
+      "phase": "battle"
+    },
+    {
+      "pair": 87,
+      "side": 0,
+      "turn": 2,
+      "key": "7829174201442339695623973510941233903",
+      "high_choice": "move reflect",
+      "low_choice": "move hiddenpower",
+      "phase": "battle"
+    },
+    {
+      "pair": 88,
+      "side": 0,
+      "turn": 5,
+      "key": "94332873321741659200422133519719966335",
+      "high_choice": "switch 2",
+      "low_choice": "move curse",
+      "phase": "battle"
+    },
+    {
+      "pair": 89,
+      "side": 0,
+      "turn": 4,
+      "key": "121575221177076874333043301624448941026",
+      "high_choice": "move surf",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 90,
+      "side": 1,
+      "turn": 2,
+      "key": "219859416069765312446738766067533911745",
+      "high_choice": "move doubleedge",
+      "low_choice": "move earthquake",
+      "phase": "battle"
+    },
+    {
+      "pair": 91,
+      "side": 0,
+      "turn": 2,
+      "key": "334856673795971607679786575064828877105",
+      "high_choice": "move curse",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 92,
+      "side": 0,
+      "turn": 2,
+      "key": "66507564089819928602009733721849020582",
+      "high_choice": "move reflect",
+      "low_choice": "move rest",
+      "phase": "battle"
+    },
+    {
+      "pair": 93,
+      "side": 0,
+      "turn": 2,
+      "key": "254350418458563517930941987690858370222",
+      "high_choice": "switch 3",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 94,
+      "side": 0,
+      "turn": 3,
+      "key": "100996501328247892882437236498749007368",
+      "high_choice": "move thunder",
+      "low_choice": "move swagger",
+      "phase": "battle"
+    },
+    {
+      "pair": 95,
+      "side": 0,
+      "turn": 2,
+      "key": "103956346726440583286511483941721154118",
+      "high_choice": "switch 2",
+      "low_choice": "switch 3",
+      "phase": "battle"
+    },
+    {
+      "pair": 96,
+      "side": 0,
+      "turn": 1,
+      "key": "257491923394922606330257638391800098044",
+      "high_choice": "move curse",
+      "low_choice": "move doubleedge",
+      "phase": "battle"
+    },
+    {
+      "pair": 97,
+      "side": 0,
+      "turn": 2,
+      "key": "4461360386362657417989282725280055487",
+      "high_choice": "move thunderbolt",
+      "low_choice": "switch 2",
+      "phase": "battle"
+    },
+    {
+      "pair": 98,
+      "side": 0,
+      "turn": 1,
+      "key": "302088868460522637623988724809555437316",
+      "high_choice": "switch 2",
+      "low_choice": "move curse",
+      "phase": "battle"
+    },
+    {
+      "pair": 99,
+      "side": 1,
+      "turn": 3,
+      "key": "103058674129561046786809988471257546340",
+      "high_choice": "switch 2",
+      "low_choice": "switch 3",
+      "phase": "battle"
+    },
+    {
+      "pair": 100,
+      "side": 1,
+      "turn": 1,
+      "key": "27287886114868894988156734241430988670",
+      "high_choice": "switch 2",
+      "low_choice": "move thunderbolt",
+      "phase": "battle"
+    },
+    {
+      "pair": 101,
+      "side": 1,
+      "turn": 1,
+      "key": "90804793354886267442201846654185184516",
+      "high_choice": "move rest",
+      "low_choice": "move thunderbolt",
+      "phase": "battle"
+    },
+    {
+      "pair": 102,
+      "side": 0,
+      "turn": 6,
+      "key": "163222137878900662942557596617612081321",
+      "high_choice": "move doubleedge",
+      "low_choice": "move curse",
+      "phase": "battle"
+    },
+    {
+      "pair": 103,
+      "side": 0,
+      "turn": 2,
+      "key": "297219891476216363983107178764796458898",
+      "high_choice": "switch 2",
+      "low_choice": "move leechseed",
+      "phase": "battle"
+    },
+    {
+      "pair": 104,
+      "side": 1,
+      "turn": 5,
+      "key": "314639285253248626815586225130475222094",
+      "high_choice": "move icebeam",
+      "low_choice": "move curse",
+      "phase": "battle"
+    },
+    {
+      "pair": 105,
+      "side": 0,
+      "turn": 3,
+      "key": "73981849370071956673311367106684650506",
+      "high_choice": "switch 2",
+      "low_choice": "move curse",
+      "phase": "battle"
+    },
+    {
+      "pair": 106,
+      "side": 0,
+      "turn": 1,
+      "key": "124056801847844210391443990874280522004",
+      "high_choice": "move icebeam",
+      "low_choice": "move recover",
+      "phase": "battle"
+    },
+    {
+      "pair": 107,
+      "side": 1,
+      "turn": 2,
+      "key": "206798976395146924961894425603955439185",
+      "high_choice": "move curse",
+      "low_choice": "move return",
+      "phase": "battle"
+    },
+    {
+      "pair": 108,
+      "side": 1,
+      "turn": 5,
+      "key": "108640076245238237012389029283498354816",
+      "high_choice": "switch 3",
+      "low_choice": "move curse",
+      "phase": "battle"
+    },
+    {
+      "pair": 109,
+      "side": 0,
+      "turn": 7,
+      "key": "190459138206088255472169575233809030840",
+      "high_choice": "move explosion",
+      "low_choice": "move thunderbolt",
+      "phase": "battle"
+    },
+    {
+      "pair": 110,
+      "side": 0,
+      "turn": 6,
+      "key": "110754742676013922855537462427697591909",
+      "high_choice": "move thunder",
+      "low_choice": "move hiddenpower",
+      "phase": "battle"
+    },
+    {
+      "pair": 111,
+      "side": 0,
+      "turn": 2,
+      "key": "157876226293467362839599814343909298078",
+      "high_choice": "move psychic",
+      "low_choice": "move icepunch",
+      "phase": "battle"
+    },
+    {
+      "pair": 112,
+      "side": 1,
+      "turn": 2,
+      "key": "307471617806445228806286250750323726082",
+      "high_choice": "move rest",
+      "low_choice": "move thunderbolt",
+      "phase": "battle"
+    },
+    {
+      "pair": 113,
+      "side": 1,
+      "turn": 1,
+      "key": "180768930106307060613670835040810000099",
+      "high_choice": "move razorleaf",
+      "low_choice": "move leechseed",
+      "phase": "battle"
+    },
+    {
+      "pair": 114,
+      "side": 1,
+      "turn": 1,
+      "key": "121374787142031033750593753458798290328",
+      "high_choice": "switch 3",
+      "low_choice": "switch 2",
+      "phase": "battle"
+    },
+    {
+      "pair": 115,
+      "side": 1,
+      "turn": 1,
+      "key": "335888297355188271483632721739322322986",
+      "high_choice": "move curse",
+      "low_choice": "move bodyslam",
+      "phase": "battle"
+    },
+    {
+      "pair": 116,
+      "side": 0,
+      "turn": 2,
+      "key": "265154476405270689785364728291108732140",
+      "high_choice": "move explosion",
+      "low_choice": "move earthquake",
+      "phase": "battle"
+    },
+    {
+      "pair": 117,
+      "side": 1,
+      "turn": 4,
+      "key": "187378846666505546562884348162953314308",
+      "high_choice": "move explosion",
+      "low_choice": "move icebeam",
+      "phase": "battle"
+    },
+    {
+      "pair": 118,
+      "side": 0,
+      "turn": 1,
+      "key": "329861111678334573154344459515718879809",
+      "high_choice": "move thunderbolt",
+      "low_choice": "move reflect",
+      "phase": "battle"
+    },
+    {
+      "pair": 119,
+      "side": 0,
+      "turn": 1,
+      "key": "185182608075984241377503153745728141083",
+      "high_choice": "move mudslap",
+      "low_choice": "switch 2",
+      "phase": "battle"
+    },
+    {
+      "pair": 120,
+      "side": 1,
+      "turn": 1,
+      "key": "151938956087784830529506704808379697046",
+      "high_choice": "move whirlwind",
+      "low_choice": "switch 3",
+      "phase": "battle"
+    },
+    {
+      "pair": 121,
+      "side": 1,
+      "turn": 3,
+      "key": "155011990532765119409478489086881714171",
+      "high_choice": "switch 3",
+      "low_choice": "move rest",
+      "phase": "battle"
+    },
+    {
+      "pair": 122,
+      "side": 1,
+      "turn": 5,
+      "key": "149825361471078020045560334123454400336",
+      "high_choice": "move curse",
+      "low_choice": "move doubleedge",
+      "phase": "battle"
+    },
+    {
+      "pair": 123,
+      "side": 0,
+      "turn": 2,
+      "key": "47143377238708066085479951932536140757",
+      "high_choice": "switch 2",
+      "low_choice": "move crosschop",
+      "phase": "battle"
+    },
+    {
+      "pair": 124,
+      "side": 1,
+      "turn": 1,
+      "key": "330383257629264585966997451405696824024",
+      "high_choice": "switch 3",
+      "low_choice": "move rest",
+      "phase": "battle"
+    },
+    {
+      "pair": 125,
+      "side": 1,
+      "turn": 1,
+      "key": "209644756586427636160820531038071520994",
+      "high_choice": "move thunderwave",
+      "low_choice": "move reflect",
+      "phase": "battle"
+    },
+    {
+      "pair": 126,
+      "side": 1,
+      "turn": 2,
+      "key": "67173785342388457451782189258641805162",
+      "high_choice": "move rest",
+      "low_choice": "move thunderbolt",
+      "phase": "battle"
+    },
+    {
+      "pair": 127,
+      "side": 1,
+      "turn": 9,
+      "key": "204523658238620155569144701750114817863",
+      "high_choice": "move earthquake",
+      "low_choice": "move curse",
+      "phase": "battle"
+    }
+  ],
+  "max_turns": 129,
+  "checks": {
+    "complete": true,
+    "no_caps": true,
+    "budgets": true,
+    "same_preview": true
+  },
+  "protocol_sha256": "7e0f67ef951839f929aa2b65ed5a0cc024cf102cebdb1cc5e54fcfe1b305a21e"
+}

@@ -1,0 +1,19 @@
+{
+  "matchups": 576,
+  "uniqueKeys": 504,
+  "allLegal": true,
+  "worker": [
+    {
+      "own": "rental-cban-8",
+      "foe": "sample-07",
+      "source": "table",
+      "iterations": 0
+    },
+    {
+      "own": "sample-07",
+      "foe": "rental-cban-8",
+      "source": "table",
+      "iterations": 0
+    }
+  ]
+}

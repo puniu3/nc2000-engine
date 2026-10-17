@@ -1,0 +1,41 @@
+{
+  "native_compiled_preview_identity": "passed: own inputs included, opponent hidden inputs excluded",
+  "worker_fixed_budget": "passed: early flush, late flush, background completion, wrong-c discriminator, three-decision persistent trajectory",
+  "compiled_worker_canaries": "passed: 14 scenarios including rejection of changed public gender and item presence; hidden moves/exact items remain excluded",
+  "browser_timing": "passed: 8 full unknown searches at 243k/729k; loaded Mac Chromium",
+  "typecheck": "passed",
+  "dev_test_mode_e2e": {
+    "strength": 1,
+    "nash": 6,
+    "blind": 5,
+    "passed": 12,
+    "test_budget": 300
+  },
+  "continuation_resume": "passed: completed branches resumed to byte-identical result; checkpoint identity mismatch rejected",
+  "incomplete_artifact_build_guard": "passed: production build rejected incomplete catalog grid",
+  "native_cloud_strength_canary": "passed: p000-s0 all choices and outcome identical, excluding elapsed times",
+  "battle_browser_timing": "passed: 8 full searches on four identical turn-one roots, 81k/243k exact completion and legal choices",
+  "checkpointed_runner": "passed: repeated restart parity at three test seeds, frozen schedule equality, real 81k/243k interrupted game exactly matches original full trajectory",
+  "native_cloud_unknown_canary": "passed: r00-s0-t00 both alternative selections, final outcomes and turn counts identical",
+  "compiled_full_catalog": "passed: actual WASM, all 576 catalog pairs, 504 unique keys, two baked choices legal per key",
+  "production_build": "passed",
+  "nash_catalog_coverage": "passed: all five Nash arms exactly match catalog sets",
+  "compiled_artifact_e2e": {
+    "passed": 12,
+    "test_budget": 300,
+    "suites": [
+      "strength",
+      "blind",
+      "nash"
+    ]
+  },
+  "stale_artifact_build_guard": "passed: mismatched source hash rejected production build; valid artifact restored",
+  "additional_cloud_bake_duplicates": "passed: 46 additional duplicate previews agree; assembled artifact unchanged",
+  "live_ui_budget_path": "passed: UI -> Game -> Worker uses 27k/81k exact counts, finishes while human chooses, compiled preview zero iterations",
+  "strength_study": "passed: all 256 games, 128 paired conditions, same preview choices, exact per-decision budgets, no caps; 243k addition criterion not met",
+  "cloud_policy_snapshots": "passed: 25 submitted snapshots, 85 policy/data files each",
+  "live_unknown_ui_budget_path": "passed: actual UI -> Game -> Worker fallback completes 729k iterations while human selects; 28.17 seconds and 260.375 MiB in this loaded Mac Chromium example",
+  "shared_app_preview": "passed: HTTPS route, production bundle, two strengths/default81k, compiled zero-iteration selection, no browser or resource errors",
+  "unknown_study": "passed: all 512 paired conditions complete; registered full analysis selects 729k, exactly matching the earlier all-outcome certificate",
+  "server_preview_cache_interface": "passed: real Node WASM, both drivers, complete-budget generation, stale/corrupt/illegal misses, public-only identity, and unchanged subsequent RNG/belief"
+}

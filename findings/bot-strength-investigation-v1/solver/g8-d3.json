@@ -1,0 +1,178 @@
+{
+  "id": "g8-d3",
+  "snapshot": {
+    "turn": 2,
+    "key": "315444826926975525074160163314772237111",
+    "sides": [
+      [
+        {
+          "species": "cloyster",
+          "active": true,
+          "hp": 0,
+          "maxhp": 156,
+          "status": "fnt",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "spikes",
+              "pp": 31
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "explosion",
+              "pp": 7
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 266,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "bellydrum",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "zapdos",
+          "active": false,
+          "hp": 215,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 24
+            },
+            {
+              "move": "whirlwind",
+              "pp": 32
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "snorlax",
+          "active": true,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "fnt",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 15
+            },
+            {
+              "move": "bellydrum",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "cloyster",
+          "active": false,
+          "hp": 156,
+          "maxhp": 156,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "spikes",
+              "pp": 32
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "explosion",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "marowak",
+          "active": false,
+          "hp": 182,
+          "maxhp": 182,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bonemerang",
+              "pp": 16
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "swordsdance",
+              "pp": 48
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "value": [
+    0.0,
+    1.0
+  ],
+  "stop": "NodeBudget",
+  "runs": 23055,
+  "ms": 1980.011875,
+  "one_sided_heal": "Err(NotQuiescent)",
+  "two_sided_heal": "Err(NotQuiescent)"
+}

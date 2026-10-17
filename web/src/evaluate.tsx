@@ -122,7 +122,7 @@ function ResultTable({ run }: { run: EvaluationRun }) {
  * such, anything else is marked as a quick run. */
 function budgetLabel(n: number): string {
   return n === PRODUCT_ITERATIONS
-    ? `${n.toLocaleString()}回(実際のボットと同じ)`
+    ? `${n.toLocaleString()}回(「強い」の対戦中と同じ回数)`
     : `${n.toLocaleString()}回(簡易計測)`;
 }
 
@@ -549,9 +549,9 @@ export function Evaluate() {
             </p>
           )}
           <p class="eval-muted">
-            1手を決めるまでに試す回数です。実際のボットは
+            1手を決めるまでに試す回数です。「強い」の対戦中は
             {PRODUCT_ITERATIONS.toLocaleString()}
-            回で、それより少ない回数は結果を早く見るための簡易計測です。両方に同じ回数を使い、先後を入れ替えて2戦ずつ対戦します。
+            回です。ここでは選出にも同じ回数を使うため、通常対戦の事前計算済みの選出とは異なります。両方に同じ回数を使い、先後を入れ替えて2戦ずつ対戦します。
           </p>
         </section>
       </fieldset>

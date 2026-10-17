@@ -1,0 +1,372 @@
+{
+  "id": "g6-d9",
+  "side": 0,
+  "snapshot": {
+    "turn": 7,
+    "key": "37313734201346721298520184786748277824",
+    "sides": [
+      [
+        {
+          "species": "marowak",
+          "active": true,
+          "hp": 166,
+          "maxhp": 166,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "earthquake",
+              "pp": 15
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "swordsdance",
+              "pp": 48
+            }
+          ]
+        },
+        {
+          "species": "skarmory",
+          "active": false,
+          "hp": 0,
+          "maxhp": 171,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "drillpeck",
+              "pp": 32
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "toxic",
+              "pp": 15
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "raikou",
+          "active": false,
+          "hp": 0,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunder",
+              "pp": 15
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "sleeptalk",
+              "pp": 16
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "raikou",
+          "active": true,
+          "hp": 215,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunderbolt",
+              "pp": 23
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "reflect",
+              "pp": 32
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "cloyster",
+          "active": false,
+          "hp": 0,
+          "maxhp": 156,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "surf",
+              "pp": 24
+            },
+            {
+              "move": "spikes",
+              "pp": 32
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "explosion",
+              "pp": 7
+            }
+          ]
+        },
+        {
+          "species": "heracross",
+          "active": false,
+          "hp": 174,
+          "maxhp": 174,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "megahorn",
+              "pp": 15
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 24
+            },
+            {
+              "move": "curse",
+              "pp": 16
+            },
+            {
+              "move": "rest",
+              "pp": 15
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "rows": [
+    {
+      "seed": 2026103401,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance"
+      ],
+      "visits": [
+        21244,
+        2219,
+        1635,
+        1902
+      ],
+      "means": [
+        0.058934287328186785,
+        0.040558810274898605,
+        0.036085626911314984,
+        0.03838065194532071
+      ],
+      "nodes": 5187,
+      "ms": 357.550667
+    },
+    {
+      "seed": 2026103401,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance"
+      ],
+      "visits": [
+        65356,
+        6095,
+        5307,
+        4242
+      ],
+      "means": [
+        0.042979986535283676,
+        0.031009023789991798,
+        0.0297719992462785,
+        0.027581329561527583
+      ],
+      "nodes": 10259,
+      "ms": 1056.847542
+    },
+    {
+      "seed": 2026103402,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance"
+      ],
+      "visits": [
+        20688,
+        2313,
+        1588,
+        2411
+      ],
+      "means": [
+        0.05529775715390565,
+        0.03761348897535668,
+        0.03211586901763224,
+        0.03815844048112816
+      ],
+      "nodes": 5322,
+      "ms": 349.56233399999996
+    },
+    {
+      "seed": 2026103402,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance"
+      ],
+      "visits": [
+        63526,
+        6843,
+        6404,
+        4227
+      ],
+      "means": [
+        0.04163649529326575,
+        0.030688294607628234,
+        0.03013741411617739,
+        0.0262597586941093
+      ],
+      "nodes": 10866,
+      "ms": 1042.3465
+    },
+    {
+      "seed": 2026103403,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance"
+      ],
+      "visits": [
+        20463,
+        2213,
+        1712,
+        2612
+      ],
+      "means": [
+        0.06929580217954356,
+        0.05106190691369182,
+        0.04731308411214953,
+        0.05321592649310873
+      ],
+      "nodes": 7820,
+      "ms": 375.800459
+    },
+    {
+      "seed": 2026103403,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance"
+      ],
+      "visits": [
+        63099,
+        6509,
+        5985,
+        5407
+      ],
+      "means": [
+        0.045151270226152555,
+        0.033799354739591336,
+        0.03308270676691729,
+        0.0321805067505086
+      ],
+      "nodes": 13426,
+      "ms": 1070.639625
+    },
+    {
+      "seed": 2026103404,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance"
+      ],
+      "visits": [
+        21623,
+        1478,
+        2157,
+        1742
+      ],
+      "means": [
+        0.05637515608379966,
+        0.031799729364005415,
+        0.037552155771905425,
+        0.03444316877152698
+      ],
+      "nodes": 5013,
+      "ms": 361.988042
+    },
+    {
+      "seed": 2026103404,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move fireblast",
+        "move rockslide",
+        "move swordsdance"
+      ],
+      "visits": [
+        64358,
+        6112,
+        6654,
+        3876
+      ],
+      "means": [
+        0.04184405979054663,
+        0.02994109947643979,
+        0.030658250676284943,
+        0.025541795665634675
+      ],
+      "nodes": 10532,
+      "ms": 1053.262959
+    }
+  ]
+}

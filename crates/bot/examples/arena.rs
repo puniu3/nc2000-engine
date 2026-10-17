@@ -58,6 +58,8 @@
 //!                                    table lookup, else pinned live search
 //!   exploit:<inner>                  best-response probe vs a frozen <inner> policy
 //!                                    (3-sample seed-marginal oracle, own budget = 3x inner's)
+//!   exploit-control:<inner>          Same BR search/rollout without oracle queries;
+//!                                    matches own search work, not total thinking time.
 //!   baked:<inner> | bakedarg:<inner>       M8 baked preview (mixed sample / argmax),
 //!                                          <inner> plays the battle; unknown matchup
 //!                                          falls back to <inner>'s own preview search
@@ -103,6 +105,7 @@ enum AgentSpec {
     Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool },
     Open { iterations: u32, c: f64, buckets: i64, perish: PerishRollout, m16c: M16c },
     Exploit(Box<AgentSpec>),
+    ExploitControl(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
     Counter { inner: Box<AgentSpec>, target: PreviewMode },
 }
@@ -346,6 +349,10 @@ impl AgentSpec {
                 let inner = s.strip_prefix("exploit:").ok_or("exploit needs an inner spec")?;
                 Ok(AgentSpec::Exploit(Box::new(AgentSpec::parse(inner)?)))
             }
+            "exploit-control" => {
+                let inner = s.strip_prefix("exploit-control:").ok_or("exploit-control needs an inner spec")?;
+                Ok(AgentSpec::ExploitControl(Box::new(AgentSpec::parse(inner)?)))
+            }
             tag @ ("baked" | "bakedarg" | "counter" | "counterarg") => {
                 let inner = s
                     .strip_prefix(tag)
@@ -373,7 +380,7 @@ impl AgentSpec {
             | AgentSpec::SkUctNs { iterations, .. }
             | AgentSpec::Blind { iterations, .. }
             | AgentSpec::Open { iterations, .. } => *iterations,
-            AgentSpec::Exploit(inner) => inner.iterations(),
+            AgentSpec::Exploit(inner) | AgentSpec::ExploitControl(inner) => inner.iterations(),
             AgentSpec::Baked { inner, .. } | AgentSpec::Counter { inner, .. } => {
                 inner.iterations()
             }
@@ -387,7 +394,7 @@ impl AgentSpec {
             | AgentSpec::Counter { .. }
             | AgentSpec::Blind { .. }
             | AgentSpec::Open { .. } => true,
-            AgentSpec::Exploit(inner) => inner.needs_tables(),
+            AgentSpec::Exploit(inner) | AgentSpec::ExploitControl(inner) => inner.needs_tables(),
             _ => false,
         }
     }
@@ -400,6 +407,7 @@ impl AgentSpec {
         match self {
             AgentSpec::Blind { .. } | AgentSpec::Open { .. } => true,
             AgentSpec::Exploit(inner)
+            | AgentSpec::ExploitControl(inner)
             | AgentSpec::Baked { inner, .. }
             | AgentSpec::Counter { inner, .. } => inner.is_blind(),
             _ => false,
@@ -522,11 +530,14 @@ impl AgentSpec {
                 tables.cloned(),
                 seed,
             )),
-            AgentSpec::Exploit(inner) => {
+            AgentSpec::Exploit(inner) | AgentSpec::ExploitControl(inner) => {
                 let model = inner.build(seed ^ 0x517C_C1B7_2722_0A95, tables, pool);
                 let cfg =
                     MctsConfig { iterations: inner.iterations() * 3, ..Default::default() };
-                Box::new(BrAgent::new(model, 3, cfg, seed))
+                let agent = BrAgent::new(model, 3, cfg, seed);
+                Box::new(if matches!(self, AgentSpec::ExploitControl(_)) {
+                    agent.without_oracle()
+                } else { agent })
             }
             AgentSpec::Baked { inner, mode } => Box::new(BakedPreviewAgent::new(
                 tables.expect("baked agents need --tables").clone(),
@@ -586,6 +597,7 @@ impl AgentSpec {
                 format!("open:{iterations}:{c}:{buckets}{rollout}")
             }
             AgentSpec::Exploit(inner) => format!("exploit:{}", inner.label()),
+            AgentSpec::ExploitControl(inner) => format!("exploit-control:{}", inner.label()),
             AgentSpec::Baked { inner, mode } => match mode {
                 PreviewMode::Mixed => format!("baked:{}", inner.label()),
                 PreviewMode::Argmax => format!("bakedarg:{}", inner.label()),
@@ -1066,6 +1078,18 @@ fn load_team_pool() -> Vec<Vec<PokemonSet>> {
 #[cfg(test)]
 mod artifact_tests {
     use super::*;
+
+    #[test]
+    fn exploit_control_retains_target_configuration() {
+        for target in ["blind:3000:0.4", "skuct:3000:0.4"] {
+            let control = AgentSpec::parse(&format!("exploit-control:{target}")).unwrap();
+            let oracle = AgentSpec::parse(&format!("exploit:{target}")).unwrap();
+            assert_eq!(control.iterations(), oracle.iterations());
+            assert_eq!(control.is_blind(), oracle.is_blind());
+            assert_eq!(control.needs_tables(), oracle.needs_tables());
+            assert!(matches!(AgentSpec::parse(&control.label()).unwrap(), AgentSpec::ExploitControl(_)));
+        }
+    }
 
     #[test]
     fn mixed_agent_specs_keep_their_mode_when_labeled() {

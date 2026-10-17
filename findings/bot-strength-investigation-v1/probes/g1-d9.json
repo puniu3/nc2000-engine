@@ -1,0 +1,372 @@
+{
+  "id": "g1-d9",
+  "side": 0,
+  "snapshot": {
+    "turn": 6,
+    "key": "162958205200992179380798311333024203050",
+    "sides": [
+      [
+        {
+          "species": "marowak",
+          "active": true,
+          "hp": 73,
+          "maxhp": 173,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "earthquake",
+              "pp": 15
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "swordsdance",
+              "pp": 48
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 23
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "sleeptalk",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            }
+          ]
+        },
+        {
+          "species": "lapras",
+          "active": false,
+          "hp": 0,
+          "maxhp": 236,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "thunderbolt",
+              "pp": 24
+            },
+            {
+              "move": "sing",
+              "pp": 24
+            },
+            {
+              "move": "reflect",
+              "pp": 32
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "raikou",
+          "active": true,
+          "hp": 215,
+          "maxhp": 215,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "thunder",
+              "pp": 15
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 23
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "sleeptalk",
+              "pp": 16
+            }
+          ]
+        },
+        {
+          "species": "marowak",
+          "active": false,
+          "hp": 0,
+          "maxhp": 166,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "earthquake",
+              "pp": 15
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "swordsdance",
+              "pp": 48
+            }
+          ]
+        },
+        {
+          "species": "suicune",
+          "active": false,
+          "hp": 0,
+          "maxhp": 206,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "surf",
+              "pp": 23
+            },
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "sleeptalk",
+              "pp": 16
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "rows": [
+    {
+      "seed": 2026102101,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move rockslide",
+        "move swordsdance",
+        "move hiddenpower"
+      ],
+      "visits": [
+        7674,
+        6161,
+        6761,
+        6404
+      ],
+      "means": [
+        0.0016940317956737035,
+        0.0,
+        0.0007395355716609969,
+        0.0003123048094940662
+      ],
+      "nodes": 26,
+      "ms": 150.201334
+    },
+    {
+      "seed": 2026102101,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move rockslide",
+        "move swordsdance",
+        "move hiddenpower"
+      ],
+      "visits": [
+        21790,
+        19194,
+        20412,
+        19604
+      ],
+      "means": [
+        0.000596603946764571,
+        0.0,
+        0.00029394473838918284,
+        0.00010201999591920016
+      ],
+      "nodes": 27,
+      "ms": 451.35920899999996
+    },
+    {
+      "seed": 2026102102,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move rockslide",
+        "move swordsdance",
+        "move hiddenpower"
+      ],
+      "visits": [
+        7886,
+        6372,
+        6494,
+        6248
+      ],
+      "means": [
+        0.001775297996449404,
+        0.00015693659761456373,
+        0.0003079765937788728,
+        0.0
+      ],
+      "nodes": 17,
+      "ms": 146.59229100000002
+    },
+    {
+      "seed": 2026102102,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move rockslide",
+        "move swordsdance",
+        "move hiddenpower"
+      ],
+      "visits": [
+        22199,
+        19601,
+        19806,
+        19394
+      ],
+      "means": [
+        0.0006306590386954367,
+        0.00005101780521401969,
+        0.00010097950116126426,
+        0.0
+      ],
+      "nodes": 17,
+      "ms": 441.09775
+    },
+    {
+      "seed": 2026102103,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move rockslide",
+        "move swordsdance",
+        "move hiddenpower"
+      ],
+      "visits": [
+        8159,
+        6321,
+        6199,
+        6321
+      ],
+      "means": [
+        0.0020835886750827305,
+        0.00015820281601012498,
+        0.0,
+        0.00015820281601012498
+      ],
+      "nodes": 17,
+      "ms": 147.430375
+    },
+    {
+      "seed": 2026102103,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move rockslide",
+        "move swordsdance",
+        "move hiddenpower"
+      ],
+      "visits": [
+        22679,
+        19509,
+        19303,
+        19509
+      ],
+      "means": [
+        0.0007495921336919617,
+        0.00005125839356194577,
+        0.0,
+        0.00005125839356194577
+      ],
+      "nodes": 17,
+      "ms": 446.685
+    },
+    {
+      "seed": 2026102104,
+      "n": 27000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move rockslide",
+        "move swordsdance",
+        "move hiddenpower"
+      ],
+      "visits": [
+        7771,
+        6370,
+        6612,
+        6247
+      ],
+      "means": [
+        0.0016728863724102432,
+        0.00015698587127158556,
+        0.00045372050816696913,
+        0.0
+      ],
+      "nodes": 15,
+      "ms": 148.468042
+    },
+    {
+      "seed": 2026102104,
+      "n": 81000,
+      "choice": "move earthquake",
+      "actions": [
+        "move earthquake",
+        "move rockslide",
+        "move swordsdance",
+        "move hiddenpower"
+      ],
+      "visits": [
+        21949,
+        19548,
+        20161,
+        19342
+      ],
+      "means": [
+        0.0005922821085243064,
+        0.0000511561285041948,
+        0.00019840285700114082,
+        0.0
+      ],
+      "nodes": 15,
+      "ms": 444.206917
+    }
+  ]
+}

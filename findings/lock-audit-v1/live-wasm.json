@@ -1,0 +1,452 @@
+{
+  "commit": "08e51da55cc1215fe7b3ac2159ddf5d5c4e9ee75",
+  "wasmSha256": "8917c359f59a16c071137cfb29774024c7745d18d956dddeb9d60448d3675a5c",
+  "url": "https://puniu3.github.io/nc2000-engine/",
+  "verifiedAt": "2026-10-04T11:43:37.369Z",
+  "rows": [
+    {
+      "seed": 99101,
+      "arm": "bot",
+      "best": "move nightshade",
+      "raw": "move snore",
+      "policy": [
+        {
+          "input": "move snore",
+          "visits": 26796,
+          "mean": 0.9922003284072249,
+          "frac": 0.9924444444444445
+        },
+        {
+          "input": "move nightshade",
+          "visits": 204,
+          "mean": 0,
+          "frac": 0.007555555555555556
+        }
+      ],
+      "outcome": "p2",
+      "trace": [
+        {
+          "turn": 54,
+          "own": "move nightshade",
+          "reply": "move destinybond"
+        }
+      ]
+    },
+    {
+      "seed": 99101,
+      "arm": "wait",
+      "best": "move nightshade",
+      "raw": "move snore",
+      "policy": [
+        {
+          "input": "move snore",
+          "visits": 26796,
+          "mean": 0.9922003284072249,
+          "frac": 0.9924444444444445
+        },
+        {
+          "input": "move nightshade",
+          "visits": 204,
+          "mean": 0,
+          "frac": 0.007555555555555556
+        }
+      ],
+      "outcome": "p1",
+      "trace": [
+        {
+          "turn": 54,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 55,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 56,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 57,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 58,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 59,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 60,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 61,
+          "own": "move snore",
+          "reply": "move struggle"
+        },
+        {
+          "turn": 61,
+          "own": null,
+          "reply": "switch 2"
+        },
+        {
+          "turn": 62,
+          "own": "move nightshade",
+          "reply": "move splash"
+        },
+        {
+          "turn": 63,
+          "own": "move nightshade",
+          "reply": "move splash"
+        },
+        {
+          "turn": 64,
+          "own": "move nightshade",
+          "reply": "move splash"
+        }
+      ]
+    },
+    {
+      "seed": 99102,
+      "arm": "bot",
+      "best": "move nightshade",
+      "raw": "move snore",
+      "policy": [
+        {
+          "input": "move snore",
+          "visits": 26871,
+          "mean": 0.9946038480145882,
+          "frac": 0.9952222222222222
+        },
+        {
+          "input": "move nightshade",
+          "visits": 129,
+          "mean": 0,
+          "frac": 0.0047777777777777775
+        }
+      ],
+      "outcome": "p2",
+      "trace": [
+        {
+          "turn": 54,
+          "own": "move nightshade",
+          "reply": "move destinybond"
+        }
+      ]
+    },
+    {
+      "seed": 99102,
+      "arm": "wait",
+      "best": "move nightshade",
+      "raw": "move snore",
+      "policy": [
+        {
+          "input": "move snore",
+          "visits": 26871,
+          "mean": 0.9946038480145882,
+          "frac": 0.9952222222222222
+        },
+        {
+          "input": "move nightshade",
+          "visits": 129,
+          "mean": 0,
+          "frac": 0.0047777777777777775
+        }
+      ],
+      "outcome": "p1",
+      "trace": [
+        {
+          "turn": 54,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 55,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 56,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 57,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 58,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 59,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 60,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 61,
+          "own": "move snore",
+          "reply": "move struggle"
+        },
+        {
+          "turn": 61,
+          "own": null,
+          "reply": "switch 2"
+        },
+        {
+          "turn": 62,
+          "own": "move nightshade",
+          "reply": "move splash"
+        },
+        {
+          "turn": 63,
+          "own": "move nightshade",
+          "reply": "move splash"
+        },
+        {
+          "turn": 64,
+          "own": "move nightshade",
+          "reply": "move splash"
+        }
+      ]
+    },
+    {
+      "seed": 99103,
+      "arm": "bot",
+      "best": "move nightshade",
+      "raw": "move snore",
+      "policy": [
+        {
+          "input": "move snore",
+          "visits": 26912,
+          "mean": 0.996172711058264,
+          "frac": 0.9967407407407407
+        },
+        {
+          "input": "move nightshade",
+          "visits": 88,
+          "mean": 0,
+          "frac": 0.003259259259259259
+        }
+      ],
+      "outcome": "p2",
+      "trace": [
+        {
+          "turn": 54,
+          "own": "move nightshade",
+          "reply": "move destinybond"
+        }
+      ]
+    },
+    {
+      "seed": 99103,
+      "arm": "wait",
+      "best": "move nightshade",
+      "raw": "move snore",
+      "policy": [
+        {
+          "input": "move snore",
+          "visits": 26912,
+          "mean": 0.996172711058264,
+          "frac": 0.9967407407407407
+        },
+        {
+          "input": "move nightshade",
+          "visits": 88,
+          "mean": 0,
+          "frac": 0.003259259259259259
+        }
+      ],
+      "outcome": "p1",
+      "trace": [
+        {
+          "turn": 54,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 55,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 56,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 57,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 58,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 59,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 60,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 61,
+          "own": "move snore",
+          "reply": "move struggle"
+        },
+        {
+          "turn": 61,
+          "own": null,
+          "reply": "switch 2"
+        },
+        {
+          "turn": 62,
+          "own": "move nightshade",
+          "reply": "move splash"
+        },
+        {
+          "turn": 63,
+          "own": "move nightshade",
+          "reply": "move splash"
+        },
+        {
+          "turn": 64,
+          "own": "move nightshade",
+          "reply": "move splash"
+        }
+      ]
+    },
+    {
+      "seed": 99104,
+      "arm": "bot",
+      "best": "move nightshade",
+      "raw": "move snore",
+      "policy": [
+        {
+          "input": "move snore",
+          "visits": 26889,
+          "mean": 0.9954628286659972,
+          "frac": 0.9958888888888889
+        },
+        {
+          "input": "move nightshade",
+          "visits": 111,
+          "mean": 0,
+          "frac": 0.004111111111111111
+        }
+      ],
+      "outcome": "p2",
+      "trace": [
+        {
+          "turn": 54,
+          "own": "move nightshade",
+          "reply": "move destinybond"
+        }
+      ]
+    },
+    {
+      "seed": 99104,
+      "arm": "wait",
+      "best": "move nightshade",
+      "raw": "move snore",
+      "policy": [
+        {
+          "input": "move snore",
+          "visits": 26889,
+          "mean": 0.9954628286659972,
+          "frac": 0.9958888888888889
+        },
+        {
+          "input": "move nightshade",
+          "visits": 111,
+          "mean": 0,
+          "frac": 0.004111111111111111
+        }
+      ],
+      "outcome": "p1",
+      "trace": [
+        {
+          "turn": 54,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 55,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 56,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 57,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 58,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 59,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 60,
+          "own": "move snore",
+          "reply": "move destinybond"
+        },
+        {
+          "turn": 61,
+          "own": "move snore",
+          "reply": "move struggle"
+        },
+        {
+          "turn": 61,
+          "own": null,
+          "reply": "switch 2"
+        },
+        {
+          "turn": 62,
+          "own": "move nightshade",
+          "reply": "move splash"
+        },
+        {
+          "turn": 63,
+          "own": "move nightshade",
+          "reply": "move splash"
+        },
+        {
+          "turn": 64,
+          "own": "move nightshade",
+          "reply": "move splash"
+        }
+      ]
+    }
+  ]
+}

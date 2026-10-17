@@ -1,0 +1,503 @@
+{
+  "case": "return",
+  "snapshot": {
+    "turn": 12,
+    "key": "32575377636059329907099801742808698026",
+    "sides": [
+      [
+        {
+          "species": "misdreavus",
+          "active": true,
+          "hp": 143,
+          "maxhp": 182,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "meanlook",
+              "pp": 0
+            },
+            {
+              "move": "return",
+              "pp": 32
+            },
+            {
+              "move": "shadowball",
+              "pp": 24
+            },
+            {
+              "move": "psychic",
+              "pp": 15
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "selfdestruct",
+              "pp": 7
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "gengar",
+          "active": true,
+          "hp": 29,
+          "maxhp": 166,
+          "status": "",
+          "trapped": true,
+          "moves": [
+            {
+              "move": "destinybond",
+              "pp": 1
+            },
+            {
+              "move": "perishsong",
+              "pp": 7
+            },
+            {
+              "move": "nightshade",
+              "pp": 21
+            }
+          ]
+        },
+        {
+          "species": "magikarp",
+          "active": false,
+          "hp": 126,
+          "maxhp": 126,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "splash",
+              "pp": 61
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "eval": 0.30010639704596903,
+  "search": [
+    {
+      "seed": 2026101701,
+      "n": 27000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        26977,
+        13,
+        10
+      ],
+      "means": [
+        1.0,
+        0.6153846153846154,
+        0.6
+      ]
+    },
+    {
+      "seed": 2026101701,
+      "n": 81000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        80976,
+        13,
+        11
+      ],
+      "means": [
+        1.0,
+        0.6153846153846154,
+        0.5454545454545454
+      ]
+    },
+    {
+      "seed": 2026101701,
+      "n": 243000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        242975,
+        14,
+        11
+      ],
+      "means": [
+        1.0,
+        0.5714285714285714,
+        0.5454545454545454
+      ]
+    },
+    {
+      "seed": 2026101702,
+      "n": 27000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        26982,
+        10,
+        8
+      ],
+      "means": [
+        1.0,
+        0.6,
+        0.5
+      ]
+    },
+    {
+      "seed": 2026101702,
+      "n": 81000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        80981,
+        11,
+        8
+      ],
+      "means": [
+        1.0,
+        0.5454545454545454,
+        0.5
+      ]
+    },
+    {
+      "seed": 2026101702,
+      "n": 243000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        242981,
+        11,
+        8
+      ],
+      "means": [
+        1.0,
+        0.5454545454545454,
+        0.5
+      ]
+    },
+    {
+      "seed": 2026101703,
+      "n": 27000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        26983,
+        7,
+        10
+      ],
+      "means": [
+        1.0,
+        0.42857142857142855,
+        0.6
+      ]
+    },
+    {
+      "seed": 2026101703,
+      "n": 81000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        80980,
+        7,
+        13
+      ],
+      "means": [
+        1.0,
+        0.42857142857142855,
+        0.6153846153846154
+      ]
+    },
+    {
+      "seed": 2026101703,
+      "n": 243000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        242979,
+        7,
+        14
+      ],
+      "means": [
+        1.0,
+        0.42857142857142855,
+        0.5714285714285714
+      ]
+    },
+    {
+      "seed": 2026101704,
+      "n": 27000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        26993,
+        5,
+        2
+      ],
+      "means": [
+        1.0,
+        0.4,
+        0.0
+      ]
+    },
+    {
+      "seed": 2026101704,
+      "n": 81000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        80993,
+        5,
+        2
+      ],
+      "means": [
+        1.0,
+        0.4,
+        0.0
+      ]
+    },
+    {
+      "seed": 2026101704,
+      "n": 243000,
+      "choice": "move return",
+      "actions": [
+        "move return",
+        "move shadowball",
+        "move psychic"
+      ],
+      "visits": [
+        242992,
+        6,
+        2
+      ],
+      "means": [
+        1.0,
+        0.3333333333333333,
+        0.0
+      ]
+    }
+  ],
+  "proof": {
+    "side": 0,
+    "terminal": false,
+    "work_budget": 100000,
+    "runs": 5039,
+    "enumeration_runs": 27,
+    "solver_runs": 5012,
+    "unique_successors": 9,
+    "actions": [
+      {
+        "action": "move return",
+        "lo": 0.9806485497079629,
+        "hi": 1.0
+      },
+      {
+        "action": "move shadowball",
+        "lo": 0.0,
+        "hi": 0.0
+      },
+      {
+        "action": "move psychic",
+        "lo": 0.0,
+        "hi": 0.0
+      }
+    ],
+    "cells": [
+      {
+        "joint": [
+          "move return",
+          "move destinybond"
+        ],
+        "complete": true,
+        "enumeration_runs": 1,
+        "successors": 1,
+        "lo": 0.9806485497079629,
+        "hi": 1.0
+      },
+      {
+        "joint": [
+          "move return",
+          "move perishsong"
+        ],
+        "complete": true,
+        "enumeration_runs": 1,
+        "successors": 1,
+        "lo": 0.9806485497079629,
+        "hi": 1.0
+      },
+      {
+        "joint": [
+          "move return",
+          "move nightshade"
+        ],
+        "complete": true,
+        "enumeration_runs": 1,
+        "successors": 1,
+        "lo": 0.9806485497079629,
+        "hi": 1.0
+      },
+      {
+        "joint": [
+          "move shadowball",
+          "move destinybond"
+        ],
+        "complete": true,
+        "enumeration_runs": 4,
+        "successors": 1,
+        "lo": 0.0,
+        "hi": 0.0
+      },
+      {
+        "joint": [
+          "move shadowball",
+          "move perishsong"
+        ],
+        "complete": true,
+        "enumeration_runs": 4,
+        "successors": 1,
+        "lo": 0.9806485497079629,
+        "hi": 1.0
+      },
+      {
+        "joint": [
+          "move shadowball",
+          "move nightshade"
+        ],
+        "complete": true,
+        "enumeration_runs": 4,
+        "successors": 1,
+        "lo": 0.9806485497079629,
+        "hi": 1.0
+      },
+      {
+        "joint": [
+          "move psychic",
+          "move destinybond"
+        ],
+        "complete": true,
+        "enumeration_runs": 4,
+        "successors": 1,
+        "lo": 0.0,
+        "hi": 0.0
+      },
+      {
+        "joint": [
+          "move psychic",
+          "move perishsong"
+        ],
+        "complete": true,
+        "enumeration_runs": 4,
+        "successors": 1,
+        "lo": 0.9806485497079629,
+        "hi": 1.0
+      },
+      {
+        "joint": [
+          "move psychic",
+          "move nightshade"
+        ],
+        "complete": true,
+        "enumeration_runs": 4,
+        "successors": 1,
+        "lo": 0.9806485497079629,
+        "hi": 1.0
+      }
+    ],
+    "solver_stops": [
+      {
+        "state": 0,
+        "stop": "WidthMet",
+        "runs": 716
+      },
+      {
+        "state": 1,
+        "stop": "WidthMet",
+        "runs": 716
+      },
+      {
+        "state": 2,
+        "stop": "WidthMet",
+        "runs": 716
+      },
+      {
+        "state": 4,
+        "stop": "WidthMet",
+        "runs": 716
+      },
+      {
+        "state": 5,
+        "stop": "WidthMet",
+        "runs": 716
+      },
+      {
+        "state": 7,
+        "stop": "WidthMet",
+        "runs": 716
+      },
+      {
+        "state": 8,
+        "stop": "WidthMet",
+        "runs": 716
+      }
+    ]
+  },
+  "generic_solver": {
+    "lo": 0.9800061506387991,
+    "hi": 1.0,
+    "stop": "WidthMet",
+    "runs": 31743
+  },
+  "solver_total_ms": 209.75570800000003
+}

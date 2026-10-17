@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NC2000 攻撃最小化の調整候補</title>
+<style>
+:root{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#f5f2eb;color:#292924;font:16px/1.75 system-ui,sans-serif}
+main{max-width:1150px;margin:auto;padding:32px 20px 64px}h1{font-size:1.65rem;line-height:1.4}h2{font-size:1.15rem;margin-top:2em}
+a{color:#425d39}.lead{font-size:1.1rem}.note{background:#e9e5db;padding:16px 20px;border-left:4px solid #6d7858}
+.table{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.91rem}th,td{padding:12px 10px;border-bottom:1px solid #d3d0c5;text-align:left;vertical-align:top}
+th{background:#e9e5db;white-space:nowrap}td:nth-child(n+3):nth-child(-n+6){white-space:nowrap}code{font-size:.84em;overflow-wrap:anywhere}
+summary{cursor:pointer}.small{font-size:.88rem;color:#55564c}.downloads{display:flex;gap:16px;flex-wrap:wrap}.downloads a{padding:10px 14px;background:#e2e7d9;border-radius:5px}
+</style><main>
+<p class="small">NC2000 ENGINE · 独立監査 / 2026-10-17</p><div class="note"><strong>最新版 v2：♀優先の検証と反映まで保存済み</strong><br>
+<a href="attract.html">今回の検証結果・最新プール・取り込み方法はこちら</a><br>
+ブランチ <code>optimize/low-attack-pool</code> / 前回 <code>d7cb2fc</code> ＋ 追加 <code>6bc5c9b</code>。
+以下は性別を維持していたv1の測定記録です。本体側は未変更です。</div>
+<h1>物理技を持たない個体の攻撃を下げる調整候補</h1>
+<p class="lead">現行24パーティのうち14パーティ・27枠が対象。
+攻撃努力値を0、攻撃DVをHP・性別・色違い条件が変わらない最小値にすると、
+通常状態の混乱自傷は1回あたり3〜9軽減しました。</p>
+<p class="note">既存のプール・起動中のアプリには適用していません。候補の勝率は未測定です。
+「わるあがき」の与ダメージも下がるため、すべての局面で有利とは言えません。</p>
+<h2>調整条件</h2>
+<ul><li>めざめるパワー、物理分類の技、他の技を取得する「ゆびをふる・ものまね・オウムがえし・へんしん」がある個体は除外。
+物理／特殊は第2世代のデータで判定します。「おいうち」「どろぼう」は特殊です。</li>
+<li>HP、性別、色違いのDV条件、攻撃以外の能力、技・持ち物・レベル・抽選重みを維持します。</li>
+<li>最大HPの個体では攻撃DVの奇数を維持。♂フシギバナ・♂サンダース・♂シャワーズ・♂ブラッキーはDV3が下限です。
+♀や性別不明の今回の対象はDV1になります。</li>
+<li>対象のうち19枠は既にこの条件で最小DVでした。攻撃努力値を下げる余地が残っていました。</li></ul>
+<h2>対象一覧</h2>
+<p class="small">全対象で攻撃努力値255 → 0。攻撃は実数値。自傷はHP減少量で、乱数幅ではありません。
+選んだ技のタイプと持ち物によって値が分かれる場合は最小〜最大を表示。
+「いばる後」は攻撃+2段階・防御±0、回復などのターン終了効果を加える前の値です。</p>
+<div class="table"><table><thead><tr><th>元パーティ / 枠</th><th>個体</th><th>攻撃DV</th><th>攻撃</th><th>通常自傷</th><th>いばる後の自傷</th><th>技</th></tr></thead>
+<tbody><tr><td><code>rental-cban-8</code><br>枠3</td><td>フシギバナ<br>Lv50 / M / HP 186</td><td>15 → 3</td><td>133 → 90</td><td>19 → 13</td><td>37 → 25</td><td><details><summary>技構成</summary>Razor Leaf<br>Sleep Powder<br>Leech Seed<br>Synthesis</details></td></tr><tr><td><code>sample-12</code><br>枠1</td><td>ゲンガー<br>Lv50 / F / HP 166</td><td>1 → 1</td><td>102 → 71</td><td>18 → 13</td><td>34 → 24</td><td><details><summary>技構成</summary>Zap Cannon<br>Destiny Bond<br>Mean Look<br>Perish Song</details></td></tr><tr><td><code>sample-12</code><br>枠2</td><td>スターミー<br>Lv50 / N / HP 166</td><td>1 → 1</td><td>112 → 81</td><td>16 → 12</td><td>30 → 22</td><td><details><summary>技構成</summary>Hydro Pump<br>Psychic<br>Thunder Wave<br>Recover</details></td></tr><tr><td><code>sample-12</code><br>枠4</td><td>ブラッキー<br>Lv50 / F / HP 201</td><td>1 → 1</td><td>102 → 71</td><td>13 → 9</td><td>24 → 17</td><td><details><summary>技構成</summary>Pursuit<br>Charm<br>Toxic<br>Rest</details></td></tr><tr><td><code>sample-17-orig</code><br>枠6</td><td>スイクン<br>Lv50 / N / HP 206</td><td>15 → 1</td><td>126 → 81</td><td>15 → 10</td><td>28 → 19</td><td><details><summary>技構成</summary>Surf<br>Ice Beam<br>Rest<br>Sleep Talk</details></td></tr><tr><td><code>nb-sample-13-0</code><br>枠1</td><td>ゲンガー<br>Lv50 / F / HP 166</td><td>1 → 1</td><td>102 → 71</td><td>18 → 13</td><td>34 → 24</td><td><details><summary>技構成</summary>Fire Punch<br>Mean Look<br>Destiny Bond<br>Perish Song</details></td></tr><tr><td><code>nb-sample-13-0</code><br>枠3</td><td>スターミー<br>Lv50 / N / HP 166</td><td>1 → 1</td><td>112 → 81</td><td>16 → 12</td><td>30 → 22</td><td><details><summary>技構成</summary>Surf<br>Psychic<br>Thunder Wave<br>Recover</details></td></tr><tr><td><code>nb-sample-12-0</code><br>枠1</td><td>ゲンガー<br>Lv50 / F / HP 166</td><td>1 → 1</td><td>102 → 71</td><td>18 → 13</td><td>34 → 24</td><td><details><summary>技構成</summary>Zap Cannon<br>Destiny Bond<br>Mean Look<br>Perish Song</details></td></tr><tr><td><code>nb-sample-12-0</code><br>枠2</td><td>スターミー<br>Lv50 / N / HP 166</td><td>1 → 1</td><td>112 → 81</td><td>16 → 12</td><td>30 → 22</td><td><details><summary>技構成</summary>Hydro Pump<br>Psychic<br>Thunder Wave<br>Recover</details></td></tr><tr><td><code>nb-sample-12-0</code><br>枠4</td><td>ブラッキー<br>Lv50 / F / HP 201</td><td>1 → 1</td><td>102 → 71</td><td>13 → 9</td><td>24 → 17</td><td><details><summary>技構成</summary>Pursuit<br>Charm<br>Toxic<br>Rest</details></td></tr><tr><td><code>sample-10</code><br>枠5</td><td>フシギバナ<br>Lv50 / M / HP 186</td><td>15 → 3</td><td>133 → 90</td><td>19 → 13</td><td>37 → 25</td><td><details><summary>技構成</summary>Razor Leaf<br>Leech Seed<br>Sleep Powder<br>Synthesis</details></td></tr><tr><td><code>mjj-2014-thdrcomb</code><br>枠3</td><td>フシギバナ<br>Lv50 / M / HP 186</td><td>3 → 3</td><td>121 → 90</td><td>17 → 13</td><td>33 → 25</td><td><details><summary>技構成</summary>Razor Leaf<br>Leech Seed<br>Sleep Powder<br>Synthesis</details></td></tr><tr><td><code>sample-11</code><br>枠1</td><td>フーディン<br>Lv55 / F / HP 176</td><td>1 → 1</td><td>95 → 61</td><td>19 → 13</td><td>36 → 24</td><td><details><summary>技構成</summary>Psychic<br>Ice Punch<br>Encore<br>Recover</details></td></tr><tr><td><code>sample-11</code><br>枠4</td><td>フシギバナ<br>Lv50 / F / HP 186</td><td>1 → 1</td><td>119 → 88</td><td>17 → 13</td><td>33 → 25</td><td><details><summary>技構成</summary>Razor Leaf<br>Leech Seed<br>Sleep Powder<br>Synthesis</details></td></tr><tr><td><code>sample-11</code><br>枠5</td><td>スイクン<br>Lv50 / N / HP 206</td><td>1 → 1</td><td>112 → 81</td><td>13 → 10</td><td>25 → 19</td><td><details><summary>技構成</summary>Surf<br>Ice Beam<br>Rest<br>Sleep Talk</details></td></tr><tr><td><code>sample-06</code><br>枠1</td><td>ブラッキー<br>Lv50 / M / HP 201</td><td>15 → 3</td><td>116 → 73</td><td>14 → 9</td><td>27 → 17</td><td><details><summary>技構成</summary>Pursuit<br>Charm<br>Toxic<br>Rest</details></td></tr><tr><td><code>sample-06</code><br>枠6</td><td>スイクン<br>Lv50 / N / HP 206</td><td>15 → 1</td><td>126 → 81</td><td>15 → 10</td><td>28 → 19</td><td><details><summary>技構成</summary>Surf<br>Ice Beam<br>Rest<br>Sleep Talk</details></td></tr><tr><td><code>sample-11-orig</code><br>枠1</td><td>フーディン<br>Lv55 / F / HP 176</td><td>1 → 1</td><td>95 → 61</td><td>19 → 13</td><td>36 → 24</td><td><details><summary>技構成</summary>Psychic<br>Ice Punch<br>Encore<br>Recover</details></td></tr><tr><td><code>sample-11-orig</code><br>枠4</td><td>フシギバナ<br>Lv50 / F / HP 186</td><td>1 → 1</td><td>119 → 88</td><td>17 → 13</td><td>33 → 25</td><td><details><summary>技構成</summary>Razor Leaf<br>Leech Seed<br>Sleep Powder<br>Synthesis</details></td></tr><tr><td><code>sample-11-orig</code><br>枠5</td><td>スイクン<br>Lv50 / N / HP 206</td><td>1 → 1</td><td>112 → 81</td><td>13 → 10</td><td>25 → 19</td><td><details><summary>技構成</summary>Surf<br>Ice Beam<br>Rest<br>Sleep Talk</details></td></tr><tr><td><code>mjj-2010-garap-a</code><br>枠2</td><td>サンダース<br>Lv50 / M / HP 171</td><td>3 → 3</td><td>104 → 73</td><td>18 → 13</td><td>34 → 25</td><td><details><summary>技構成</summary>Thunderbolt<br>Swagger<br>Substitute<br>Baton Pass</details></td></tr><tr><td><code>mjj-2010-garap-a</code><br>枠4</td><td>ラプラス<br>Lv50 / F / HP 236</td><td>1 → 1</td><td>122 → 91</td><td>18 → 14</td><td>34 → 26</td><td><details><summary>技構成</summary>Ice Beam<br>Thunderbolt<br>Sing<br>Reflect</details></td></tr><tr><td><code>sample-13</code><br>枠1</td><td>ゲンガー<br>Lv50 / F / HP 166</td><td>1 → 1</td><td>102 → 71</td><td>18 → 13</td><td>34 → 24</td><td><details><summary>技構成</summary>Fire Punch<br>Mean Look<br>Destiny Bond<br>Perish Song</details></td></tr><tr><td><code>sample-13</code><br>枠3</td><td>スターミー<br>Lv50 / N / HP 166</td><td>1 → 1</td><td>112 → 81</td><td>16 → 12</td><td>30 → 22</td><td><details><summary>技構成</summary>Surf<br>Psychic<br>Thunder Wave<br>Recover</details></td></tr><tr><td><code>sample-02</code><br>枠1</td><td>ルージュラ<br>Lv50 / F / HP 171</td><td>15 → 1</td><td>101 → 56</td><td>22 → 13</td><td>43 → 24</td><td><details><summary>技構成</summary>Ice Beam<br>Psychic<br>Thief<br>Lovely Kiss</details></td></tr><tr><td><code>sample-02</code><br>枠2</td><td>スターミー<br>Lv50 / N / HP 166</td><td>15 → 1</td><td>126 → 81</td><td>18 → 12</td><td>34 → 22</td><td><details><summary>技構成</summary>Surf<br>Psychic<br>Thunder Wave<br>Recover</details></td></tr><tr><td><code>rental-cban-14</code><br>枠1</td><td>シャワーズ<br>Lv55 / M / HP 259</td><td>15 → 3</td><td>127 → 79</td><td>21 → 14</td><td>41 → 26</td><td><details><summary>技構成</summary>Hydro Pump<br>Ice Beam<br>Sleep Talk<br>Rest</details></td></tr></tbody></table></div>
+<h2>検証結果と限界</h2>
+<p>現行ネイティブエンジンの混乱自傷処理を使い、各対象の全技で攻撃・防御それぞれ−6〜+6段階を比較。
+18,252組で自傷の増加は0でした。元と候補の全24パーティを組み込みバリデータで検証し、
+HP・性別・攻撃以外の実数値が一致することも確認しています。</p>
+<p>この比較はやけど・天候・壁なしの状態です。バリデータは単独技の習得可否を確認しますが、
+イベント・タマゴ技の全組合せを保証しません。今回は技構成を変更していません。
+PP枯渇戦での「わるあがき」の損失と、実際に混乱する頻度を含めた勝率差は別途評価が必要です。</p>
+<p>候補の変更パーティIDには <code>-low-atk</code> を追加しました。
+既存の選定スコアは元構成の記録として <code>baselineScore</code> に退避し、候補の測定値と区別しています。
+既存の対戦相手事前分布・Nash解・コンパイル済み選出表は書き換えていません。
+本採用時は新しい入力として選出表との整合性を確認する必要があります。</p>
+<div class="downloads"><a href="candidate-pool.json" download>候補プール JSON</a><a href="audit.json" download>全検証結果 JSON</a></div>
+<p class="small">入力: <code>data/team-pool-v2/team-pool.json</code><br>
+SHA-256: <code>ce55d34048b2ece428df98fa5354a4d5af685cd82ded1ff12a5496a7686d1c72</code><br>
+比較対象: <a href="https://github.com/smogon/pokemon-showdown/blob/79c04dcc4c055d190a7aba724ec83733ee3f7b38/data/mods/gen2/conditions.ts">参照実装の第2世代混乱処理</a>。
+再現: <code>cargo run --locked --offline -j 1 --target-dir tmp/low-attack-audit-target -p nc2000-engine --example low_attack_pool_audit -- data/team-pool-v2/team-pool.json NEW_OUTPUT_DIRECTORY</code></p>
+</main></html>

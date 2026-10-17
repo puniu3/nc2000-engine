@@ -1,0 +1,623 @@
+{
+  "schema": "nc2000-strength-investigation-report-v1",
+  "public_assets": {
+    "assets": [
+      {
+        "url": "https://puniu3.github.io/nc2000-engine/assets/index-DjCLL9e4.js",
+        "sha256": "6d2d0c98435ed75a5a2b11369470b02edd42c3cc7385482a16c65c2228c14ab7"
+      },
+      {
+        "url": "https://puniu3.github.io/nc2000-engine/assets/index-DvjjxvKc.css",
+        "sha256": "fe9bd23fdde47bc7a12ecbd2dff0c3b07bda9c45a16bd465d23eab29e1ae1619"
+      },
+      {
+        "url": "https://puniu3.github.io/nc2000-engine/assets/bot-worker-D1fBU-wO.js",
+        "sha256": "f18d6f5d8b876506cb288e49157b3d431adbdc715fff3f8574223754620f2708"
+      },
+      {
+        "url": "https://puniu3.github.io/nc2000-engine/assets/evaluate-worker-7toWDplp.js",
+        "sha256": "20b4fe16d24573b507a1663a31fa3476c8ac0251d4bea3da3a8bdb279ebef2b3"
+      },
+      {
+        "url": "https://puniu3.github.io/nc2000-engine/assets/fork-arena-worker-DJeEbFyb.js",
+        "sha256": "0fa5cce6b90d29dae511cb3d8fff456d578a1e3b97a500e53fc09c0928d18de9"
+      },
+      {
+        "url": "https://puniu3.github.io/nc2000-engine/assets/nc2000_wasm_bg-BaPlj4wD.wasm",
+        "sha256": "9a290dab7cfbdd7ac4cb773a721b30642d268396c53de102bcf6a0a6f06e4098"
+      },
+      {
+        "url": "https://puniu3.github.io/nc2000-engine/assets/solver-worker-CtfYhgUj.js",
+        "sha256": "f3dbe1f01dd1c6a56f95ae5f96c1d1d7130a803bdc6ef5c1362849f4a70799fc"
+      }
+    ],
+    "local_wasm_sha256": "b717f2b0e6892ef8fc9711a1dea1a46222178a339bc54173ad4fbb15cc5fdc79",
+    "local_matches_public": false
+  },
+  "public_data": [
+    {
+      "path": "belief-pool-v3/belief-pool.json",
+      "matches_public": true
+    },
+    {
+      "path": "team-pool-v2/team-pool.json",
+      "matches_public": true
+    }
+  ],
+  "browser_timing": [
+    {
+      "iterations": 27000,
+      "measurements": 6,
+      "search_seconds": [
+        0.6002999999523163,
+        0.873
+      ],
+      "memory_mb": [
+        13.303808,
+        14.221312
+      ],
+      "max_progress_gap_ms": 132.29999995231628
+    },
+    {
+      "iterations": 81000,
+      "measurements": 6,
+      "search_seconds": [
+        1.9557000000476836,
+        2.844399999856949
+      ],
+      "memory_mb": [
+        35.192832,
+        36.37248
+      ],
+      "max_progress_gap_ms": 141
+    },
+    {
+      "iterations": 243000,
+      "measurements": 3,
+      "search_seconds": [
+        6.652,
+        9.496900000095367
+      ],
+      "memory_mb": [
+        83.165184,
+        86.17984
+      ],
+      "max_progress_gap_ms": 141.39999985694885
+    }
+  ],
+  "ponder": [
+    {
+      "budget": 27000,
+      "iterations": 183750,
+      "request_ms": 5033,
+      "memory": 66453504,
+      "choice": "switch 3"
+    },
+    {
+      "budget": 81000,
+      "iterations": 183750,
+      "request_ms": 5077.299999952316,
+      "memory": 66453504,
+      "choice": "switch 3"
+    }
+  ],
+  "parity": [
+    {
+      "case": "preview",
+      "same_choice": true,
+      "same_policy": true
+    },
+    {
+      "case": "turn1",
+      "same_choice": true,
+      "same_policy": false
+    },
+    {
+      "case": "fork",
+      "same_choice": true,
+      "same_policy": true
+    }
+  ],
+  "source_games": 16,
+  "roots": 34,
+  "paired_searches": 136,
+  "flips": [
+    {
+      "id": "g1-d0",
+      "seed": 2026101903,
+      "before": "team 1, 5, 4",
+      "after": "team 4, 5, 1"
+    },
+    {
+      "id": "g14-d8",
+      "seed": 2026104601,
+      "before": "switch 3",
+      "after": "switch 2"
+    },
+    {
+      "id": "g2-d7",
+      "seed": 2026102303,
+      "before": "switch 2",
+      "after": "switch 3"
+    },
+    {
+      "id": "g3-d29",
+      "seed": 2026102701,
+      "before": "move return",
+      "after": "move icebeam"
+    },
+    {
+      "id": "g3-d29",
+      "seed": 2026102703,
+      "before": "move icebeam",
+      "after": "move return"
+    },
+    {
+      "id": "g3-d29",
+      "seed": 2026102704,
+      "before": "move return",
+      "after": "move icebeam"
+    },
+    {
+      "id": "g4-d0",
+      "seed": 2026102803,
+      "before": "team 3, 2, 5",
+      "after": "team 2, 5, 3"
+    },
+    {
+      "id": "g4-d0",
+      "seed": 2026102804,
+      "before": "team 3, 2, 5",
+      "after": "team 2, 5, 3"
+    },
+    {
+      "id": "g4-d13",
+      "seed": 2026102901,
+      "before": "switch 3",
+      "after": "switch 2"
+    }
+  ],
+  "continuations": [
+    {
+      "id": "g1-d0",
+      "actions": [
+        "team 1, 5, 4",
+        "team 4, 5, 1"
+      ],
+      "flips": [
+        [
+          "team 1, 5, 4",
+          "team 4, 5, 1"
+        ]
+      ],
+      "turn": 0,
+      "trials": 64,
+      "wins": [
+        31,
+        41
+      ],
+      "scores": [
+        0.484375,
+        0.640625
+      ],
+      "delta": 0.15625,
+      "conservative_difference_95": [
+        -0.13613689632222892,
+        0.42985692191092717
+      ],
+      "improved_pairs": 17,
+      "worsened_pairs": 7,
+      "mcnemar_two_sided": 0.06391465663909912,
+      "bonferroni_six": 0.3834879398345947
+    },
+    {
+      "id": "g14-d8",
+      "actions": [
+        "switch 3",
+        "switch 2"
+      ],
+      "flips": [
+        [
+          "switch 3",
+          "switch 2"
+        ]
+      ],
+      "turn": 6,
+      "trials": 64,
+      "wins": [
+        64,
+        64
+      ],
+      "scores": [
+        1.0,
+        1.0
+      ],
+      "delta": 0.0,
+      "conservative_difference_95": [
+        -0.06617774702077073,
+        0.06617774702077073
+      ],
+      "improved_pairs": 0,
+      "worsened_pairs": 0,
+      "mcnemar_two_sided": 1,
+      "bonferroni_six": 1
+    },
+    {
+      "id": "g2-d7",
+      "actions": [
+        "switch 2",
+        "switch 3"
+      ],
+      "flips": [
+        [
+          "switch 2",
+          "switch 3"
+        ]
+      ],
+      "turn": 5,
+      "trials": 64,
+      "wins": [
+        4,
+        20
+      ],
+      "scores": [
+        0.0625,
+        0.3125
+      ],
+      "delta": 0.25,
+      "conservative_difference_95": [
+        0.0228598622823582,
+        0.4442980561171973
+      ],
+      "improved_pairs": 19,
+      "worsened_pairs": 3,
+      "mcnemar_two_sided": 0.0008554458618164062,
+      "bonferroni_six": 0.0051326751708984375
+    },
+    {
+      "id": "g3-d29",
+      "actions": [
+        "move return",
+        "move icebeam"
+      ],
+      "flips": [
+        [
+          "move return",
+          "move icebeam"
+        ],
+        [
+          "move icebeam",
+          "move return"
+        ],
+        [
+          "move return",
+          "move icebeam"
+        ]
+      ],
+      "turn": 27,
+      "trials": 64,
+      "wins": [
+        64,
+        64
+      ],
+      "scores": [
+        1.0,
+        1.0
+      ],
+      "delta": 0.0,
+      "conservative_difference_95": [
+        -0.06617774702077073,
+        0.06617774702077073
+      ],
+      "improved_pairs": 0,
+      "worsened_pairs": 0,
+      "mcnemar_two_sided": 1,
+      "bonferroni_six": 1
+    },
+    {
+      "id": "g4-d0",
+      "actions": [
+        "team 3, 2, 5",
+        "team 2, 5, 3"
+      ],
+      "flips": [
+        [
+          "team 3, 2, 5",
+          "team 2, 5, 3"
+        ],
+        [
+          "team 3, 2, 5",
+          "team 2, 5, 3"
+        ]
+      ],
+      "turn": 0,
+      "trials": 64,
+      "wins": [
+        33,
+        42
+      ],
+      "scores": [
+        0.515625,
+        0.65625
+      ],
+      "delta": 0.140625,
+      "conservative_difference_95": [
+        -0.14953721252781516,
+        0.4138643653527272
+      ],
+      "improved_pairs": 16,
+      "worsened_pairs": 7,
+      "mcnemar_two_sided": 0.0931396484375,
+      "bonferroni_six": 0.558837890625
+    },
+    {
+      "id": "g4-d13",
+      "actions": [
+        "switch 3",
+        "switch 2"
+      ],
+      "flips": [
+        [
+          "switch 3",
+          "switch 2"
+        ]
+      ],
+      "turn": 10,
+      "trials": 64,
+      "wins": [
+        62,
+        62
+      ],
+      "scores": [
+        0.96875,
+        0.96875
+      ],
+      "delta": 0.0,
+      "conservative_difference_95": [
+        -0.11836053879328046,
+        0.11836053879328046
+      ],
+      "improved_pairs": 2,
+      "worsened_pairs": 2,
+      "mcnemar_two_sided": 1,
+      "bonferroni_six": 1
+    }
+  ],
+  "confirmation": {
+    "case": "g2-d7",
+    "trials": 32,
+    "iterations": 27000,
+    "wins": [
+      2,
+      20
+    ],
+    "scores": [
+      0.0625,
+      0.625
+    ],
+    "delta": 0.5625,
+    "improved_pairs": 20,
+    "worsened_pairs": 2,
+    "mcnemar_two_sided": 0.00012111663818359375,
+    "conservative_difference_95": [
+      0.18199324332304495,
+      0.8020731234135601
+    ]
+  },
+  "solver": {
+    "roots": 28,
+    "width_met": 8,
+    "stops": {
+      "TimeBudget": 11,
+      "WidthMet": 8,
+      "NodeBudget": 9
+    },
+    "one_sided_heal": 6,
+    "two_sided_heal": 4
+  },
+  "perish_positions": [
+    {
+      "name": "turn-26-defense",
+      "scope": "historical reconstructed player information; solver on one prior-imputed world, not exact history or information-set value",
+      "solver": {
+        "value": [
+          0.0,
+          1.0
+        ],
+        "stop": "NodeBudget",
+        "runs": 22218,
+        "ms": 1678.747917
+      },
+      "choices": {
+        "27000": {
+          "switch 3": 4
+        },
+        "81000": {
+          "switch 3": 4
+        },
+        "243000": {
+          "switch 3": 4
+        }
+      }
+    },
+    {
+      "name": "turn-27-offense",
+      "scope": "historical reconstructed player information; solver on one prior-imputed world, not exact history or information-set value",
+      "solver": {
+        "value": [
+          0.0,
+          1.0
+        ],
+        "stop": "NodeBudget",
+        "runs": 22082,
+        "ms": 1357.8394170000001
+      },
+      "choices": {
+        "27000": {
+          "move destinybond": 1,
+          "move perishsong": 3
+        },
+        "81000": {
+          "move destinybond": 1,
+          "move perishsong": 3
+        },
+        "243000": {
+          "move destinybond": 1,
+          "move perishsong": 3
+        }
+      }
+    },
+    {
+      "name": "turn-28-defense",
+      "scope": "historical reconstructed player information; solver on one prior-imputed world, not exact history or information-set value",
+      "solver": {
+        "value": [
+          0.0,
+          1.0
+        ],
+        "stop": "NodeBudget",
+        "runs": 25449,
+        "ms": 1943.5179580000001
+      },
+      "choices": {
+        "27000": {
+          "move bodyslam": 4
+        },
+        "81000": {
+          "move bodyslam": 4
+        },
+        "243000": {
+          "move bodyslam": 4
+        }
+      }
+    },
+    {
+      "name": "turn-30-offense",
+      "scope": "historical reconstructed player information; solver on one prior-imputed world, not exact history or information-set value",
+      "solver": {
+        "value": [
+          0.0,
+          1.0
+        ],
+        "stop": "NodeBudget",
+        "runs": 23171,
+        "ms": 1907.02325
+      },
+      "choices": {
+        "27000": {
+          "switch 2": 4
+        },
+        "81000": {
+          "switch 2": 3,
+          "switch 3": 1
+        },
+        "243000": {
+          "switch 2": 3,
+          "switch 3": 1
+        }
+      }
+    }
+  ],
+  "tactics": [
+    {
+      "case": "return",
+      "eval": 0.30010639704596903,
+      "generic_solver": {
+        "lo": 0.9800061506387991,
+        "hi": 1.0,
+        "stop": "WidthMet",
+        "runs": 31743
+      },
+      "proof_actions": [
+        {
+          "action": "move return",
+          "lo": 0.9806485497079629,
+          "hi": 1.0
+        },
+        {
+          "action": "move shadowball",
+          "lo": 0.0,
+          "hi": 0.0
+        },
+        {
+          "action": "move psychic",
+          "lo": 0.0,
+          "hi": 0.0
+        }
+      ],
+      "search_choices": {
+        "move return": 12
+      }
+    },
+    {
+      "case": "snore",
+      "eval": 0.3839256165940055,
+      "generic_solver": {
+        "lo": 0.9800197826710458,
+        "hi": 1.0,
+        "stop": "WidthMet",
+        "runs": 16996
+      },
+      "proof_actions": [
+        {
+          "action": "move snore",
+          "lo": 0.9806485497079629,
+          "hi": 1.0
+        },
+        {
+          "action": "move shadowball",
+          "lo": 0.0,
+          "hi": 0.0
+        },
+        {
+          "action": "move psychic",
+          "lo": 0.0,
+          "hi": 0.0
+        }
+      ],
+      "search_choices": {
+        "move snore": 12
+      }
+    }
+  ],
+  "checks": {
+    "corpus": {
+      "verified_games": 16,
+      "state_keys": true,
+      "legal_replay": true,
+      "sample_selection": true,
+      "outcomes": true
+    },
+    "null_paired_trials": 4,
+    "null_identical": true,
+    "continuation_games": 768,
+    "confirmation_games": 64,
+    "continuation_caps": 0,
+    "invalid_actions": 0,
+    "memory_instrumentation_preview_policies_equal": true,
+    "perish_regression_tests": 4
+  },
+  "limitations": [
+    "Mac Chromium, not iPad Safari. WebKit launch timed out.",
+    "Public and local WASM differ; one of three root policies differs.",
+    "34 roots from16 fresh3000-iteration weighted-catalog games, enriched for endgames.",
+    "64 paired continuations per root at3000 iterations; conditional policy values, not optimal play.",
+    "Not a causal decomposition of earlier756 confirmation games.",
+    "Historical Perish positions are reconstructed; generic solver results conditional on a single imputed world.",
+    "Two tactic fixtures are synthetic, with Magikarp bench; no operational prevalence claim."
+  ],
+  "references": [
+    {
+      "title": "MCTS Solver (2008)",
+      "url": "https://staff.ru.is/yngvi/pdf/WinandsBS08.pdf"
+    },
+    {
+      "title": "Information Set Monte Carlo Tree Search (2012)",
+      "url": "https://eprints.whiterose.ac.uk/id/eprint/75048/"
+    },
+    {
+      "title": "Bounded value iteration for concurrent stochastic games (2025)",
+      "url": "https://arxiv.org/abs/2505.21087"
+    }
+  ]
+}

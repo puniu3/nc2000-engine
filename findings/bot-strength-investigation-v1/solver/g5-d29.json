@@ -1,0 +1,178 @@
+{
+  "id": "g5-d29",
+  "snapshot": {
+    "turn": 25,
+    "key": "49189634163358361040430704225398302086",
+    "sides": [
+      [
+        {
+          "species": "machamp",
+          "active": true,
+          "hp": 1,
+          "maxhp": 192,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "crosschop",
+              "pp": 4
+            },
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "earthquake",
+              "pp": 11
+            },
+            {
+              "move": "hiddenpower",
+              "pp": 22
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 24
+            },
+            {
+              "move": "earthquake",
+              "pp": 15
+            },
+            {
+              "move": "bellydrum",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        },
+        {
+          "species": "tyranitar",
+          "active": false,
+          "hp": 0,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 15
+            },
+            {
+              "move": "earthquake",
+              "pp": 16
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 5
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "species": "venusaur",
+          "active": true,
+          "hp": 186,
+          "maxhp": 186,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "razorleaf",
+              "pp": 38
+            },
+            {
+              "move": "leechseed",
+              "pp": 15
+            },
+            {
+              "move": "sleeppowder",
+              "pp": 23
+            },
+            {
+              "move": "synthesis",
+              "pp": 1
+            }
+          ]
+        },
+        {
+          "species": "tyranitar",
+          "active": false,
+          "hp": 0,
+          "maxhp": 226,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "rockslide",
+              "pp": 16
+            },
+            {
+              "move": "earthquake",
+              "pp": 13
+            },
+            {
+              "move": "icebeam",
+              "pp": 16
+            },
+            {
+              "move": "dynamicpunch",
+              "pp": 7
+            }
+          ]
+        },
+        {
+          "species": "snorlax",
+          "active": false,
+          "hp": 0,
+          "maxhp": 266,
+          "status": "",
+          "trapped": false,
+          "moves": [
+            {
+              "move": "bodyslam",
+              "pp": 23
+            },
+            {
+              "move": "fireblast",
+              "pp": 8
+            },
+            {
+              "move": "rest",
+              "pp": 16
+            },
+            {
+              "move": "selfdestruct",
+              "pp": 8
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "value": [
+    0.0,
+    0.018098488815088132
+  ],
+  "stop": "WidthMet",
+  "runs": 136,
+  "ms": 0.7155,
+  "one_sided_heal": "Ok(OneSidedHeal { healer: 1, non_healer: 0, active: [PokeId { side: 0, slot: 5 }, PokeId { side: 1, slot: 2 }], move_ids: [[MoveId(35), MoveId(183), MoveId(54), MoveId(89)], [MoveId(174), MoveId(121), MoveId(205), MoveId(239)]], max_hp: [192, 186] })",
+  "two_sided_heal": "Err(NotBothHealers)"
+}
