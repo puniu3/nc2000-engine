@@ -1,0 +1,23 @@
+{
+  "checked_utc": "2026-10-18T01:23:10.359Z",
+  "entry": "nc2000-mixed-policy-strength",
+  "hub_index": "pass",
+  "viewports": [
+    {
+      "width": 390,
+      "overflow": false,
+      "links": "pass",
+      "served_summary_matches_audited_file": true,
+      "expected_final_content": "pass",
+      "errors": []
+    },
+    {
+      "width": 834,
+      "overflow": false,
+      "links": "pass",
+      "served_summary_matches_audited_file": true,
+      "expected_final_content": "pass",
+      "errors": []
+    }
+  ]
+}

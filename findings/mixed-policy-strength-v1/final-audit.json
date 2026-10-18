@@ -1,0 +1,41 @@
+{
+  "created_utc": "2026-10-18T01:20:37.984760+00:00",
+  "status": "pass",
+  "games": 1096,
+  "summary_sha256": "03abf864dfc0495bc4ea8a59187e35cd0a47185514caa22407f8f55fb13b0b2a",
+  "source_input_hashes_verified": [
+    "crates/bot/examples/mixed_policy_eval.rs",
+    "crates/bot/examples/support/execution_agent.rs",
+    "crates/bot/src/decision.rs",
+    "crates/bot/src/blind.rs",
+    "crates/bot/src/root_policy.rs",
+    "crates/bot/src/exploit.rs",
+    "crates/bot/src/smmcts.rs",
+    "crates/bot/src/belief.rs",
+    "crates/bot/src/observe.rs",
+    "Cargo.lock",
+    "data/team-pool-v2/team-pool.json",
+    "data/belief-pool-v3/belief-pool.json",
+    "data/gen2stadium2.json"
+  ],
+  "executable_hash_verified": "6a4dbe94969bc01858c7f2e380e70903b02cb6c3272fd35ce1045db7f8b88fd0",
+  "all_terminal": true,
+  "draws": 0,
+  "unresolved_caps": 0,
+  "max_turns": 124,
+  "paired_conditions_both_legs": "pass",
+  "reported_counts_and_point_estimates": "independently_recomputed",
+  "trace_equality": {
+    "oracle_estimated_vs_legacy_games": 128,
+    "control_estimated_vs_legacy_games": 64,
+    "direct_estimated_side_swap_pairs": 128
+  },
+  "estimated_mix_target_decisions": {
+    "decisions": 11067,
+    "mixed": 3,
+    "fallback": 11064,
+    "differs_from_legacy": 0
+  },
+  "ci_method_review": "block percentile bootstrap, 100000 draws, fixed seed; nominal Bonferroni levels; not exact finite-sample coverage",
+  "degenerate_ci_note": "Estimated-mix zero-width bootstrap intervals reflect zero observed paired differences; they are not population equivalence proofs."
+}

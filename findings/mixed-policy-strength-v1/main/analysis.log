@@ -1,0 +1,113 @@
+{
+  "games": 1096,
+  "all_terminal": true,
+  "primary": {
+    "visit-sample": {
+      "direct_score_minus_half": {
+        "estimate": -0.09765625,
+        "interval": [
+          -0.16796875,
+          -0.02734375
+        ],
+        "level": 0.9875,
+        "blocks": 128
+      },
+      "oracle_score_minus_legacy": {
+        "estimate": 0.0078125,
+        "interval": [
+          -0.1484375,
+          0.1640625
+        ],
+        "level": 0.9875,
+        "blocks": 64
+      },
+      "both_improvements_demonstrated": false
+    },
+    "estimated-mix": {
+      "direct_score_minus_half": {
+        "estimate": 0.0,
+        "interval": [
+          0.0,
+          0.0
+        ],
+        "level": 0.9875,
+        "blocks": 128
+      },
+      "oracle_score_minus_legacy": {
+        "estimate": 0.0,
+        "interval": [
+          0.0,
+          0.0
+        ],
+        "level": 0.9875,
+        "blocks": 64
+      },
+      "both_improvements_demonstrated": false
+    }
+  },
+  "secondary": {
+    "pure-win-direct-visit-sample-minus-opponent": {
+      "estimate": -0.1953125,
+      "interval": [
+        -0.3046875,
+        -0.0859375
+      ],
+      "level": 0.95,
+      "blocks": 128
+    },
+    "pure-win-oracle-visit-sample-minus-legacy": {
+      "estimate": 0.0078125,
+      "interval": [
+        -0.1171875,
+        0.1328125
+      ],
+      "level": 0.95,
+      "blocks": 64
+    },
+    "pure-win-direct-estimated-mix-minus-opponent": {
+      "estimate": 0.0,
+      "interval": [
+        0.0,
+        0.0
+      ],
+      "level": 0.95,
+      "blocks": 128
+    },
+    "pure-win-oracle-estimated-mix-minus-legacy": {
+      "estimate": 0.0,
+      "interval": [
+        0.0,
+        0.0
+      ],
+      "level": 0.95,
+      "blocks": 64
+    },
+    "oracle-loss-vs-control-legacy": {
+      "estimate": 0.1875,
+      "interval": [
+        0.03125,
+        0.34375
+      ],
+      "level": 0.95,
+      "blocks": 32
+    },
+    "oracle-loss-vs-control-visit-sample": {
+      "estimate": 0.09375,
+      "interval": [
+        -0.0625,
+        0.25
+      ],
+      "level": 0.95,
+      "blocks": 32
+    },
+    "oracle-loss-vs-control-estimated-mix": {
+      "estimate": 0.1875,
+      "interval": [
+        0.03125,
+        0.34375
+      ],
+      "level": 0.95,
+      "blocks": 32
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "observed_utc": "2026-10-18T01:18:41.907253+00:00",
+  "runs": [
+    {
+      "kind": "pilot",
+      "pid": 25915,
+      "live": false,
+      "observed_command": "",
+      "completed": 18,
+      "planned": 18,
+      "all_rows_present": true
+    },
+    {
+      "kind": "main",
+      "pid": 29529,
+      "live": false,
+      "observed_command": "",
+      "completed": 1096,
+      "planned": 1096,
+      "all_rows_present": true
+    }
+  ]
+}

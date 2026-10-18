@@ -23,14 +23,22 @@
       "exec_session_id": 90985,
       "threads": 8,
       "directory": "findings/mixed-policy-strength-v1/main",
-      "jobs": 1096
+      "jobs": 1096,
+      "status": "completed_and_audited",
+      "exit_code": 0,
+      "completion_observed_utc": "2026-10-18T01:20:37.984760+00:00",
+      "audited_games": 1096,
+      "summary": "findings/mixed-policy-strength-v1/main/summary.json"
     }
   ],
   "preview_entry": "nc2000-mixed-policy-strength",
-  "goal_status": "active",
   "watcher": {
     "pid": 40861,
     "exec_session_id": 70575,
-    "command": "python3 tools/watch-mixed-policy.py"
-  }
+    "command": "python3 tools/watch-mixed-policy.py",
+    "status": "completed",
+    "exit_code": 0
+  },
+  "experiment_status": "completed_and_reviewed",
+  "final_report": "https://mini-usb.local:18080/nc2000-mixed-policy-strength/index.html"
 }
