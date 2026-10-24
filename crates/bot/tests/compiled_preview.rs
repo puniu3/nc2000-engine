@@ -18,6 +18,8 @@ fn preview_identity_has_no_hidden_opponent_fields_and_keeps_own_order() {
  b.sides[0].roster.swap(1,2);
  b.sides[0].roster[0].set_ivs[0]-=1;assert_ne!(original,key(&b,0).unwrap());
  b.sides[0].roster[0].set_ivs[0]+=1;
+ // Fresh state: the identity checks above intentionally mutate raw fields.
+ let mut b=Battle::from_fixture(&dex,"1,2,3,4",&pool.teams[0].sets,&pool.teams[1].sets).unwrap();
  let picks=[0,1].map(|side|b.legal_choices(&dex,side).into_iter().find(|c|matches!(c,SearchChoice::Team(_))));
  b.apply_choices(&dex,picks).unwrap();assert!(key(&b,0).is_none());
  assert!(key(&b,2).is_none());

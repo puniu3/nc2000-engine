@@ -1,3 +1,4 @@
+import { ToolError } from "./tool-errors";
 import init, {
   Dex,
   Battle,
@@ -25,7 +26,7 @@ onmessage = (event: MessageEvent<WorkerRequest>) => {
   if (started) return;
   started = true;
   void run(event.data.run, event.data.beliefJson).catch((e) =>
-    send({ type: "error", message: String(e) }),
+    send({ type: "error", message: String(e), ...(e instanceof ToolError ? { issue: e.issue } : {}) }),
   );
 };
 
@@ -38,8 +39,9 @@ async function run(run: EvaluationRun, beliefJson: string) {
       const opponent = run.config.opponents.find(
         (e) => e.id === scheduled.opponent,
       )!;
-      const games: GameResult[] = [];
       for (const playerSide of [0, 1] as const) {
+        // The main thread already holds this game, including its log.
+        if (run.pending?.index === index && playerSide === 0) continue;
         const teams =
           playerSide === 0
             ? [run.config.player, opponent]
@@ -51,6 +53,7 @@ async function run(run: EvaluationRun, beliefJson: string) {
           deriveBattleSeed(scheduled.battleSeed),
         );
         const agents: BlindSearcher[] = [];
+        let game: GameResult;
         try {
           teams.forEach((t, side) =>
             battle.setPreviewLevelCap(side, t.relaxed ? undefined : 155),
@@ -68,17 +71,22 @@ async function run(run: EvaluationRun, beliefJson: string) {
             );
           let lastProgress = 0;
           let lastYield = performance.now();
+          const selections: GameResult["selections"] = [];
           while (!battle.outcome() && battle.turn() < run.config.turnLimit) {
             const needs = JSON.parse(battle.needsChoice()) as boolean[];
             if (!needs.some(Boolean))
-              throw new Error("終局前に両側の選択要求が消えました。");
+              throw new ToolError("missingRequests");
             const choices: (string | undefined)[] = [];
             for (let side = 0; side < 2; side++) {
               if (!needs[side]) continue;
               const agent = agents[side];
+              const preview = JSON.parse(battle.legalChoices(side))[0]?.kind === "team";
+              const budget = preview ? run.config.previewIterations : run.config.iterations;
               agent.observe(battle);
-              for (let n = 0; n < run.config.iterations; n += 32) {
-                agent.step(Math.min(32, run.config.iterations - n));
+              // No compiled lookup, table injection or preview cache. Both
+              // sides search every selection using the common live budget.
+              for (let n = 0; n < budget; n += 32) {
+                agent.step(Math.min(32, budget - n));
                 if (performance.now() - lastProgress > 500) {
                   send({
                     type: "progress",
@@ -87,6 +95,7 @@ async function run(run: EvaluationRun, beliefJson: string) {
                     turn: battle.turn(),
                     side,
                     iterations: agent.iterations(),
+                    budget,
                   });
                   lastProgress = performance.now();
                 }
@@ -97,13 +106,14 @@ async function run(run: EvaluationRun, beliefJson: string) {
               }
               choices[side] = agent.best();
               if (!choices[side])
-                throw new Error(`P${side + 1}: 選択できる手がありません。`);
+                throw new ToolError("noLegalAction", side + 1);
+              if (preview) selections.push({ side, input: choices[side]!, iterations: agent.iterations() });
             }
             for (let side = 0; side < 2; side++)
               if (choices[side]) battle.applyChoice(side, choices[side]!);
           }
           const outcome = battle.outcome();
-          games.push({
+          game = {
             playerSide,
             turns: battle.turn(),
             outcome: !outcome
@@ -113,20 +123,21 @@ async function run(run: EvaluationRun, beliefJson: string) {
                 : outcome === `p${playerSide + 1}`
                   ? "win"
                   : "loss",
-          });
+            log: JSON.parse(battle.takeNewLog()),
+            // Review the user's party, including after the side swap.
+            kifu: battle.exportKifu(false, playerSide),
+            selections,
+          };
         } finally {
           agents.forEach((a) => a.free());
           battle.free();
         }
+        const ack = new Promise<void>((resolve) => {
+          acknowledge = resolve;
+        });
+        send({ type: "game", record: { ...scheduled, game } });
+        await ack;
       }
-      const ack = new Promise<void>((resolve) => {
-        acknowledge = resolve;
-      });
-      send({
-        type: "pair",
-        pair: { ...scheduled, games: games as [GameResult, GameResult] },
-      });
-      await ack;
     }
     send({ type: "done" });
   } finally {

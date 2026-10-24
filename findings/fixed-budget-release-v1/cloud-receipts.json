@@ -1,0 +1,74 @@
+[
+  {
+    "name": "bake-0-run",
+    "status": "succeeded",
+    "cleanup": "verified",
+    "backend": "gcp-batch",
+    "machine_type": "e2-standard-8",
+    "returncode": 0,
+    "estimated_usage_yen": 59.519
+  },
+  {
+    "name": "bake-1-run",
+    "status": "succeeded",
+    "cleanup": "verified",
+    "backend": "gcp-batch",
+    "machine_type": "e2-standard-8",
+    "returncode": 0,
+    "estimated_usage_yen": 63.981
+  },
+  {
+    "name": "bake-2-retry-run",
+    "status": "succeeded",
+    "cleanup": "verified",
+    "backend": "gcp-batch",
+    "machine_type": "e2-standard-8",
+    "returncode": 0,
+    "estimated_usage_yen": 59.445
+  },
+  {
+    "name": "bake-2-run",
+    "status": "failed",
+    "cleanup": "not_started",
+    "backend": "gcp-batch",
+    "machine_type": "e2-standard-8",
+    "returncode": null,
+    "estimated_usage_yen": null
+  },
+  {
+    "name": "bake-3-run",
+    "status": "succeeded",
+    "cleanup": "verified",
+    "backend": "gcp-batch",
+    "machine_type": "e2-standard-8",
+    "returncode": 0,
+    "estimated_usage_yen": 86.807
+  },
+  {
+    "name": "bake-4-ready-run",
+    "status": "succeeded",
+    "cleanup": "verified",
+    "backend": "gcp-batch",
+    "machine_type": "e2-standard-8",
+    "returncode": 0,
+    "estimated_usage_yen": 61.049
+  },
+  {
+    "name": "bake-5-ready-run",
+    "status": "succeeded",
+    "cleanup": "verified",
+    "backend": "gcp-batch",
+    "machine_type": "e2-standard-8",
+    "returncode": 0,
+    "estimated_usage_yen": 62.551
+  },
+  {
+    "name": "bake-5-run",
+    "status": "failed",
+    "cleanup": "not_started",
+    "backend": "gcp-batch",
+    "machine_type": "e2-standard-8",
+    "returncode": null,
+    "estimated_usage_yen": null
+  }
+]

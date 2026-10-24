@@ -18,6 +18,9 @@ on:
       - "web/**"
       - "crates/**"
       - "data/**"
+      - "tools/preview-cache.js"
+      - "tools/render-preview-cache-doc.py"
+      - "README.md"
       - ".github/workflows/pages.yml"
 
 permissions:
@@ -91,6 +94,12 @@ jobs:
           test -s web/dist/data/team-pool-v2/team-pool.json
           test -s web/dist/data/belief-pool-v3/belief-pool.json
           test -s web/dist/data/meta-nash-v3/pool-artifact.json
+
+      - name: Build and verify server cache bindings
+        run: |
+          crates/wasm/build.sh nodejs
+          node crates/wasm/tests-node/preview-cache.js
+          python3 tools/render-preview-cache-doc.py web/dist
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

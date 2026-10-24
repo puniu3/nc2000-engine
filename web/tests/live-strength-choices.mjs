@@ -11,7 +11,7 @@ assert(tiers.length);
 const server=http();let vite,browser;const rows=[];
 try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- vite=await createServer({server:{middlewareMode:true,hmr:false}});server.on('request',vite.middlewares);
+ vite=await createServer({server:{middlewareMode:true,hmr:{server}}});server.on('request',vite.middlewares);
  browser=await chromium.launch();
  for(const [strength,budget] of tiers){
   const context=await browser.newContext();const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(String(e)));
@@ -36,7 +36,7 @@ try{
   rows.push({strength,budget,previewIterations:0,battleIterations:JSON.parse(battle.policy).iterations,completedWhileHumanChoosing:true});
   await context.close();
  }
- const path='../findings/fixed-budget-v1/live-strength-choice-check.json';
+ const path='../findings/fixed-budget-release-v1/live-strength-choice-check.json';
  const prior=fs.existsSync(path)?JSON.parse(fs.readFileSync(path,'utf8')):[];
  fs.writeFileSync(path,JSON.stringify([...prior.filter(r=>!rows.some(n=>n.strength===r.strength)),...rows],null,2)+'\n');console.log(rows);
 }finally{await browser?.close();await vite?.close();server.close();}

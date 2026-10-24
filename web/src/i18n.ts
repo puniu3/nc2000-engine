@@ -1,15 +1,3 @@
-// M13 i18n: a light two-locale string layer — no library.
-//
-// - Locale: "ja" by default when navigator.language starts with "ja", else
-//   "en"; a manual toggle on the title screen persists to localStorage.
-// - Dex names (species / moves / items / types) come from
-//   data/i18n-ja.json (generated once from PokéAPI by
-//   tools/build-i18n-ja.js), fetched at startup and keyed by PS id. Any
-//   missing entry — or the table failing to load at all — falls back to
-//   the English name the wasm bridge already provides.
-// - Small closed sets (statuses, stats, volatile/side conditions, UI
-//   strings, narration templates) are hand-authored here and in narrate.ts.
-
 import type { Locale, UIStrings } from "./i18n-strings";
 import { STRINGS } from "./i18n-strings";
 
@@ -28,6 +16,13 @@ function detect(): Locale {
     (navigator.language ?? "").toLowerCase().startsWith("ja")
     ? "ja"
     : "en";
+}
+
+const listeners = new Set<() => void>();
+
+export function subscribeLocale(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
 }
 
 let current: Locale = detect();
@@ -52,6 +47,7 @@ export function setLocale(l: Locale, persist = true): void {
     } catch {}
   }
   applyDocumentLocale();
+  listeners.forEach(listener => listener());
 }
 
 /** Current UI string table. */

@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "jobs": [
+    "pair-04-18",
+    "pair-00-00"
+  ],
+  "iterations": 729000,
+  "seeds": [
+    17011,
+    29443
+  ],
+  "build": "fnv1a64:0acd867d65aeed9d:m17e-solver-build-v3"
+}

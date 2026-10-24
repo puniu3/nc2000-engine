@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useToolMessage } from "./tool-message";
+import { toolText } from "./tool-strings";
+import { useMemo, useEffect, useRef, useState } from "preact/hooks";
 import { Kifu, getDex, loadEngine, randomSeed32, readFork } from "./engine";
 import { fetchBeliefPool, fetchDexJson, fetchI18nJa } from "./data";
-import { loadJaNames, moveName, setLocale, speciesName, statusLongName } from "./i18n";
+import { loadJaNames, moveName, locale, speciesName, statusLongName } from "./i18n";
 import { loadSetDex } from "./set-info";
 import { extractKifu } from "./kifu-code";
-import { ForkGame, type LoadedFork, type GameRecord } from "./fork";
+import { armNames, ForkGame, type LoadedFork, type GameRecord } from "./fork";
 import { ArenaPanel } from "./fork-arena";
 import { searchProfile } from "./search-profile";
 import { Narrator } from "./narrate";
@@ -19,15 +21,15 @@ interface Run { fork: LoadedFork; method: "human" | "bot"; record: GameRecord }
 
 export function choiceName(choice: Choice): string {
   if (choice.kind === "move") return moveName(choice.name);
-  if (choice.kind === "switch") return `${speciesName(choice.species)}に交代`;
-  return choice.kind === "pass" ? "待機" : "ポケモンを選出";
+  if (choice.kind === "switch") return toolText("switchTo", speciesName(choice.species));
+  return choice.kind === "pass" ? toolText("pass") : toolText("selectPokemon");
 }
 
 function recordError(error: unknown): string {
   const text = String(error);
-  if (text.includes("incompatible replay version")) return "この棋譜は異なる版のエンジンで作られています。対応する版のページで開いてください。";
-  if (text.includes("not a replay code")) return "この記録には、再開用の棋譜が見つかりませんでした。対戦画面の「棋譜をコピー」でコピーした内容を貼り付けてください。";
-  return "棋譜を最後まで読み取れませんでした。コピーした内容が途中で切れていないか確認してください。";
+  if (text.includes("incompatible replay version")) return toolText("replayVersionError");
+  if (text.includes("not a replay code")) return toolText("missingReplay");
+  return toolText("invalidReplay");
 }
 
 export function KifuTool() {
@@ -35,13 +37,14 @@ export function KifuTool() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [paste, setPaste] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useToolMessage("");
   const [metadata, setMetadata] = useState<RecordInfo | null>(null);
   const [scene, setScene] = useState<Scene | null>(null);
   const [selected, setSelected] = useState(0);
   const [alternative, setAlternative] = useState("");
   const [method, setMethod] = useState<"human" | "bot">("human");
-  const [run, setRun] = useState<Run | null>(null);
+  const [storedRun, setRun] = useState<Run | null>(null);
+  const run = useMemo(() => storedRun && ({ ...storedRun, fork: { ...storedRun.fork, armNames: armNames(storedRun.fork.json, storedRun.fork.info) } }), [storedRun, locale()]);
   const [poolJson, setPoolJson] = useState("");
   const replay = useRef<Kifu | null>(null);
   const alive = useRef(true);
@@ -50,9 +53,6 @@ export function KifuTool() {
 
   useEffect(() => {
     alive.current = true;
-    setLocale("ja", false);
-    document.title = "NC2000 — 別の手を試す";
-    document.documentElement.lang = "ja";
     void (async () => {
       try {
         const [, pool] = await Promise.all([loadEngine(), fetchBeliefPool(), loadJaNames(fetchI18nJa), loadSetDex(fetchDexJson)]);
@@ -63,7 +63,7 @@ export function KifuTool() {
         if (code) { setPaste(code); await load(code); }
       } catch (error) {
         console.error("kifu setup", error);
-        if (alive.current) setNotice("対戦データを読み込めませんでした。ページを読み込み直してください。");
+        if (alive.current) setNotice(() => toolText("battleDataError"));
       }
     })();
     return () => { alive.current = false; replay.current?.free(); replay.current = null; };
@@ -83,7 +83,7 @@ export function KifuTool() {
       next = new Kifu(getDex(), code);
       const info = JSON.parse(next.scenes()) as RecordInfo;
       if (info.scenes.length === 0) {
-        setNotice("まだ試し直せる場面がありません。対戦を進めてから棋譜をコピーしてください。");
+        setNotice(() => toolText("noReplayScenes"));
         return;
       }
       const first = JSON.parse(next.scene(info.scenes[0].round)) as Scene;
@@ -97,7 +97,7 @@ export function KifuTool() {
       setScreen("scene");
     } catch (error) {
       console.error("kifu import", error);
-      setNotice(text.trim() ? recordError(error) : "対戦記録を貼り付けてください。");
+      setNotice(() => text.trim() ? recordError(error) : toolText("pasteReplayError"));
       pasteField.current?.focus();
     } finally {
       next?.free();
@@ -135,7 +135,7 @@ export function KifuTool() {
       setRun({ fork, method, record: newGame(fork) });
     } catch (error) {
       console.error("kifu fork", error);
-      setNotice("この場面からの再開を準備できませんでした。棋譜は保持されています。別の場面を選んで試せます。");
+      setNotice(() => toolText("resumeSceneError"));
     } finally { setBusy(false); }
   }
 
@@ -143,7 +143,7 @@ export function KifuTool() {
     key={run.record.game} fork={run.fork} record={run.record} poolJson={poolJson}
     budget={searchProfile(run.fork.info.info).iterations}
     onFinish={() => {}}
-    onForfeit={() => setRun(null)} onBack={() => setRun(null)} backLabel="場面と手を選び直す"
+    onForfeit={() => setRun(null)} onBack={() => setRun(null)} backLabel={toolText("chooseSceneAgain")}
     onNext={() => setRun({ ...run, record: newGame(run.fork, run.record.game + 1) })}
   />;
 
@@ -156,7 +156,7 @@ export function KifuTool() {
   function choiceOption(choice: Choice) {
     return <label class={`kp-option ${alternative === choice.input ? "is-selected" : ""}`} key={choice.input}>
       <input type="radio" name="alternative" value={choice.input} checked={alternative === choice.input} onChange={() => setAlternative(choice.input)} disabled={busy} />
-      <span>{choiceName(choice)}{scene?.played.input === choice.input && <small>元の手</small>}
+      <span>{choiceName(choice)}{scene?.played.input === choice.input && <small>{toolText("originalMove")}</small>}
         {choice.kind === "move" && <small>PP {choice.pp} / {choice.maxpp}</small>}
       </span>
     </label>;
@@ -164,50 +164,50 @@ export function KifuTool() {
 
   return <div class="kifu-tool kifu-page"><main class="kp-main">
     {run?.method === "bot" ? <>
-      <button class="kp-back" onClick={() => setRun(null)}>← 場面と手を選び直す</button>
-      <header class="kp-heading"><h1 ref={heading} tabIndex={-1}>元の手と別の手を比べる</h1><p class="kp-muted">{run.fork.info.turn}ターン目 · {run.fork.armNames.join(" ／ ")}</p></header>
+      <button class="kp-back" onClick={() => setRun(null)}>{toolText("backToScene")}</button>
+      <header class="kp-heading"><h1 ref={heading} tabIndex={-1}>{toolText("compareMoves")}</h1><p class="kp-muted">{toolText("turnWithLabel", run.fork.info.turn, run.fork.armNames.join(" ／ "))}</p></header>
       <ArenaPanel info={run.fork.info} json={run.fork.json} poolJson={poolJson} armNames={run.fork.armNames} fileKey={run.fork.key} simple autoStart />
     </> : screen === "import" ? <>
-      <header class="kp-heading"><p class="kp-eyebrow">NC2000 · 対戦の振り返り</p><h1 ref={heading} tabIndex={-1}>別の手を試す</h1><p class="kp-muted">対戦記録から場面を選んで、続きを試せます。</p></header>
+      <header class="kp-heading"><p class="kp-eyebrow">{toolText("kifuEyebrow")}</p><h1 ref={heading} tabIndex={-1}>{toolText("tryAnotherMove")}</h1><p class="kp-muted">{toolText("kifuIntro")}</p></header>
       <form class="kp-card" onSubmit={e => { e.preventDefault(); if (ready && !busy) void load(paste); }}>
-        <label class="kp-label" for="kp-paste">対戦記録を貼り付ける</label>
-        <p id="kp-paste-help" class="kp-muted">コピーした記録をそのまま貼り付けてください。棋譜コードやリンクでも読み込めます。</p>
-        <textarea ref={pasteField} id="kp-paste" rows={6} value={paste} onInput={e => setPaste(e.currentTarget.value)} aria-describedby="kp-paste-help kp-import-status" placeholder="ここに対戦記録を貼り付け" spellcheck={false} autoCapitalize="off" />
-        <button class="primary kp-full" type="submit" disabled={!ready || busy}>{busy ? "記録を読み込んでいます…" : ready ? "記録を読み込む" : "対戦データを準備しています…"}</button>
+        <label class="kp-label" for="kp-paste">{toolText("pasteReplay")}</label>
+        <p id="kp-paste-help" class="kp-muted">{toolText("pasteReplayHelp")}</p>
+        <textarea ref={pasteField} id="kp-paste" rows={6} value={paste} onInput={e => setPaste(e.currentTarget.value)} aria-describedby="kp-paste-help kp-import-status" placeholder={toolText("pasteReplayPlaceholder")} spellcheck={false} autoCapitalize="off" />
+        <button class="primary kp-full" type="submit" disabled={!ready || busy}>{busy ? toolText("loadingReplay") : ready ? toolText("loadReplay") : toolText("preparingData")}</button>
         <p id="kp-import-status" class="kp-status" role="status">{notice}</p>
       </form>
-      <nav class="kp-tools-nav"><a href={import.meta.env.BASE_URL}>botと対戦する</a></nav>
+      <nav class="kp-tools-nav"><a href={import.meta.env.BASE_URL}>{toolText("playBot")}</a></nav>
     </> : metadata && scene && <>
-      <button class="kp-back" disabled={busy} onClick={() => { setScreen("import"); setNotice(""); }}>← 別の記録を読み込む</button>
-      <header class="kp-heading"><p class="kp-eyebrow">あなた 対 bot · {metadata.turns}ターン{metadata.outcome ? "で終了" : "まで記録"}</p><h1 ref={heading} tabIndex={-1}>どこから試しますか？</h1></header>
+      <button class="kp-back" disabled={busy} onClick={() => { setScreen("import"); setNotice(""); }}>{toolText("loadAnotherReplay")}</button>
+      <header class="kp-heading"><p class="kp-eyebrow">{toolText("recordSummary", metadata.turns, metadata.outcome ? toolText("recordEnded") : toolText("recordPartial"))}</p><h1 ref={heading} tabIndex={-1}>{toolText("choosePosition")}</h1></header>
       <section class="kp-card" aria-labelledby="kp-scene-title">
-        <h2 id="kp-scene-title">1. 場面を選ぶ</h2>
-        <label class="kp-sr-only" for="kp-scene">再開する場面</label>
+        <h2 id="kp-scene-title">{toolText("chooseScene")}</h2>
+        <label class="kp-sr-only" for="kp-scene">{toolText("resumePosition")}</label>
         <select id="kp-scene" value={selected} disabled={busy} onChange={e => chooseScene(Number(e.currentTarget.value))}>
-          {metadata.scenes.map((s, i) => <option value={i} key={s.round}>{s.turn}ターン目 · {s.active[bot] ? speciesName(s.active[bot]!) : "bot"}が{choiceName(s.played)}</option>)}
+          {metadata.scenes.map((s, i) => <option value={i} key={s.round}>{toolText("sceneOption", s.turn, s.active[bot] ? speciesName(s.active[bot]!) : "bot", choiceName(s.played))}</option>)}
         </select>
-        <div class="kp-scene-nav"><button disabled={busy || selected === 0} onClick={() => chooseScene(selected - 1)}>前の場面</button><button disabled={busy || selected === metadata.scenes.length - 1} onClick={() => chooseScene(selected + 1)}>次の場面</button></div>
+        <div class="kp-scene-nav"><button disabled={busy || selected === 0} onClick={() => chooseScene(selected - 1)}>{toolText("previousScene")}</button><button disabled={busy || selected === metadata.scenes.length - 1} onClick={() => chooseScene(selected + 1)}>{toolText("nextScene")}</button></div>
         <div class="kp-scene-state" aria-live="polite" aria-atomic="true">
-          <p class="kp-turn">{scene.view.turn}ターン目・手を選ぶ前</p>
-          <dl class="kp-matchup">{[1 - bot, bot].map(side => <div key={side}><dt>{side === bot ? "bot" : "あなた"}</dt><dd><strong>{active?.[side] ? speciesName(active[side]!.species) : "交代待ち"}</strong>{active?.[side] && <><span>HP {active[side]!.hp} / {active[side]!.maxhp}</span>{active[side]!.status && <span>{statusLongName(active[side]!.status)}</span>}</>}</dd></div>)}</dl>
-          <p class="kp-played">記録では、botが<strong>{choiceName(scene.played)}</strong>を選びました。</p>
+          <p class="kp-turn">{toolText("beforeTurn", scene.view.turn)}</p>
+          <dl class="kp-matchup">{[1 - bot, bot].map(side => <div key={side}><dt>{side === bot ? "bot" : toolText("you")}</dt><dd><strong>{active?.[side] ? speciesName(active[side]!.species) : toolText("awaitingSwitch")}</strong>{active?.[side] && <><span>HP {active[side]!.hp} / {active[side]!.maxhp}</span>{active[side]!.status && <span>{statusLongName(active[side]!.status)}</span>}</>}</dd></div>)}</dl>
+          <p class="kp-played">{toolText("originalChoicePrefix")}<strong>{choiceName(scene.played)}</strong>{toolText("originalChoiceSuffix")}</p>
         </div>
-        <details class="kp-details"><summary>直前までの記録を見る</summary><div class="kp-journal">{journal.map((entry, i) => <p key={i}>{entry.text}</p>)}</div></details>
+        <details class="kp-details"><summary>{toolText("showJournal")}</summary><div class="kp-journal">{journal.map((entry, i) => <p key={i}>{entry.text}</p>)}</div></details>
       </section>
       <section class="kp-card" aria-labelledby="kp-action-title">
-        <h2 id="kp-action-title">2. botに選ばせる手</h2>
-        {scene.choices.some(c => c.kind === "move") && <fieldset class="kp-choice-field"><legend>技を使う</legend><div class="kp-options">{scene.choices.filter(c => c.kind === "move").map(choiceOption)}</div></fieldset>}
-        {scene.choices.some(c => c.kind === "switch") && <fieldset class="kp-choice-field"><legend>交代する</legend><div class="kp-options">{scene.choices.filter(c => c.kind === "switch").map(choiceOption)}</div></fieldset>}
+        <h2 id="kp-action-title">{toolText("chooseBotMove")}</h2>
+        {scene.choices.some(c => c.kind === "move") && <fieldset class="kp-choice-field"><legend>{toolText("useMove")}</legend><div class="kp-options">{scene.choices.filter(c => c.kind === "move").map(choiceOption)}</div></fieldset>}
+        {scene.choices.some(c => c.kind === "switch") && <fieldset class="kp-choice-field"><legend>{toolText("switchPokemon")}</legend><div class="kp-options">{scene.choices.filter(c => c.kind === "switch").map(choiceOption)}</div></fieldset>}
         {scene.choices.filter(c => c.kind === "pass").map(choiceOption)}
       </section>
       <section class="kp-card" aria-labelledby="kp-method-title">
-        <h2 id="kp-method-title">3. 続きをどう試しますか？</h2>
+        <h2 id="kp-method-title">{toolText("chooseMethod")}</h2>
         <div class="kp-methods" role="radiogroup" aria-labelledby="kp-method-title">
-          <label class={`kp-option ${method === "human" ? "is-selected" : ""}`}><input type="radio" name="method" checked={method === "human"} onChange={() => setMethod("human")} disabled={busy} /><span>自分で対戦する<small>あなたは元のチームを操作します。</small></span></label>
-          <label class={`kp-option ${method === "bot" ? "is-selected" : ""}`}><input type="radio" name="method" checked={method === "bot"} onChange={() => setMethod("bot")} disabled={busy} /><span>bot同士で比べる<small>元の手と選んだ手で、続きを繰り返し対戦します。</small></span></label>
+          <label class={`kp-option ${method === "human" ? "is-selected" : ""}`}><input type="radio" name="method" checked={method === "human"} onChange={() => setMethod("human")} disabled={busy} /><span>{toolText("playYourself")}<small>{toolText("playYourselfHelp")}</small></span></label>
+          <label class={`kp-option ${method === "bot" ? "is-selected" : ""}`}><input type="radio" name="method" checked={method === "bot"} onChange={() => setMethod("bot")} disabled={busy} /><span>{toolText("compareBots")}<small>{toolText("compareBotsHelp")}</small></span></label>
         </div>
-        <p class="kp-summary" aria-live="polite">{sameComparison ? "元の手と同じです。比較する別の手を選んでください。" : alternativeChoice ? `${scene.view.turn}ターン目、botが「${choiceName(alternativeChoice)}」を選んだところから。` : "試したい手を上から一つ選んでください。"}</p>
-        <button class="primary kp-full" disabled={busy || !alternative || sameComparison} onClick={() => void start()}>{busy ? "局面を準備しています…" : method === "human" ? "この手で対戦を始める" : "この2つの手を比べる"}</button>
+        <p class="kp-summary" aria-live="polite">{sameComparison ? toolText("sameMoveWarning") : alternativeChoice ? toolText("continuationSummary", scene.view.turn, choiceName(alternativeChoice)) : toolText("chooseMoveHelp")}</p>
+        <button class="primary kp-full" disabled={busy || !alternative || sameComparison} onClick={() => void start()}>{busy ? toolText("preparingPosition") : method === "human" ? toolText("playThisMove") : toolText("compareTwoMoves")}</button>
         <p class="kp-status" role="status">{notice}</p>
       </section>
     </>}

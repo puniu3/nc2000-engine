@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import type { EvaluationRun } from "../src/evaluate-core";
 
-test.use({ actionTimeout: 10000 });
+test.use({ locale: "ja-JP", actionTimeout: 10000 });
 
 const route = `${process.env.NC2000_E2E_BASE ?? "/"}?evaluate`;
 /** The default opponents are the shipped Nash mixture, read from the same
@@ -113,6 +113,35 @@ test("local wasm plays both sides, resumes in memory, separates changed configur
   expect(initial.pairs).toHaveLength(1);
   expect(initial.pairs[0].games.map((g) => g.playerSide)).toEqual([0, 1]);
   expect(initial.pairs[0].games.map((g) => g.outcome)).toEqual(["win", "win"]);
+  expect(initial.version).toBe(2);
+  for (const game of initial.pairs[0].games) {
+    expect(game.kifu).toMatch(/^NC2-/);
+    expect(game.log.some(line => line.startsWith("|move|"))).toBe(true);
+    expect(game.selections.map(s => s.iterations)).toEqual([
+      initial.config.previewIterations, initial.config.previewIterations,
+    ]);
+  }
+  await expect(page.getByRole("table", { name: "各試合のログ" }).locator("tbody tr")).toHaveCount(2);
+  await page.setViewportSize({ width: 375, height: 900 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const single = page.waitForEvent("download");
+  await page.getByRole("button", { name: "第2戦のログを保存", exact: true }).click();
+  const singleHtml = readFileSync((await (await single).path())!, "utf8");
+  expect(singleHtml).toContain(initial.pairs[0].games[1].kifu);
+  expect(singleHtml).not.toContain(initial.pairs[0].games[0].kifu);
+  expect(singleHtml).toContain("自分のパーティ: P2");
+  expect(singleHtml).toContain("サイコキネシス");
+  const all = page.waitForEvent("download");
+  await page.getByRole("button", { name: "全試合のログを保存", exact: true }).click();
+  const allHtml = readFileSync((await (await all).path())!, "utf8");
+  for (const game of initial.pairs[0].games) expect(allHtml).toContain(game.kifu);
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("table", { name: "各試合のログ" }).locator("a").last().click();
+  const popup = await popupPromise;
+  await expect(popup).toHaveURL(/\?fork#kifu=NC2-/);
+  await expect(popup.locator("#kp-scene")).toBeVisible();
+  await popup.close();
   await expect(
     page.getByRole("button", { name: "追加計測", exact: true }),
   ).toBeEnabled();
@@ -132,19 +161,19 @@ test("local wasm plays both sides, resumes in memory, separates changed configur
       ).text();
       return new Promise((resolve, reject) => {
         const w = new Worker(url, { type: "module" });
-        const pairs: unknown[] = [];
+        const records: unknown[] = [];
         w.onerror = (event) => {
           w.terminate();
           reject(event.message);
         };
         w.onmessage = (event) => {
-          if (event.data.type === "pair") {
-            pairs.push(event.data.pair);
+          if (event.data.type === "game") {
+            records.push(event.data.record);
             w.postMessage({ type: "ack" });
           }
           if (event.data.type === "done") {
             w.terminate();
-            resolve(pairs);
+            resolve(records);
           }
           if (event.data.type === "error") {
             w.terminate();
@@ -160,7 +189,9 @@ test("local wasm plays both sides, resumes in memory, separates changed configur
     },
     { url: workerUrl, run: updated, base: process.env.NC2000_E2E_BASE ?? "/" },
   );
-  expect(replayed).toEqual(updated.pairs);
+  expect(replayed).toEqual(updated.pairs.flatMap(({ games, ...scheduled }) =>
+    games.map(game => ({ ...scheduled, game })),
+  ));
 
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "結果をファイルに保存" }).click();
@@ -237,6 +268,49 @@ test("results stay out of browser storage and reset on reload or tab closure", a
   await expect(reopened.locator(".eval-opponent strong")).toHaveCount(nash.teams.length);
   await expect(reopened.getByRole("button", { name: "計測を開始", exact: true })).toBeVisible();
   await expect(reopened.getByText("結果は自動保存されません。", { exact: false })).toBeVisible();
+});
+
+test("a completed first game can be downloaded and resumed without replay or double counting", async ({ page }) => {
+  // Hold the first acknowledgment to stop at a real half-pair boundary.
+  await page.addInitScript(() => {
+    const Original = window.Worker;
+    let held = false;
+    window.Worker = class extends Original {
+      postMessage(message: { type: string }, transfer: Transferable[] = []) {
+        if (message.type === "ack" && !held) { held = true; return; }
+        super.postMessage(message, transfer);
+      }
+    };
+  });
+  await boot(page);
+  await distribution(page);
+  await page.getByLabel("自分のパーティ", { exact: true }).fill(JSON.stringify(player));
+  await page.getByLabel("試合数", { exact: true }).fill("2");
+  await page.getByRole("button", { name: "計測を開始", exact: true }).click();
+  await expect(page.getByRole("table", { name: "各試合のログ" }).locator("tbody tr")).toHaveCount(1);
+  await page.getByRole("button", { name: "停止", exact: true }).click();
+  const half = await exported(page);
+  expect(half.pairs).toEqual([]);
+  expect(half.pending!.games).toHaveLength(1);
+  const saved = page.waitForEvent("download");
+  await page.getByRole("button", { name: "全試合のログを保存" }).click();
+  const html = readFileSync((await (await saved).path())!, "utf8");
+  expect(html).toContain(half.pending!.games[0].kifu);
+  expect(html).toContain("ペア待ち");
+  await page.getByRole("button", { name: "再開", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("計測が完了");
+  const complete = await exported(page);
+  expect(complete.pending).toBeUndefined();
+  expect(complete.pairs).toHaveLength(1);
+  expect(complete.pairs[0].games[0]).toEqual(half.pending!.games[0]);
+  await expect(page.getByRole("table", { name: "各試合のログ" }).locator("tbody tr")).toHaveCount(2);
+  await page.locator(".tool-language-bar select").selectOption("en");
+  expect(await page.locator("main").innerText()).not.toMatch(/[ぁ-んァ-ヶ一-龠]/);
+  const english = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save all battle logs" }).click();
+  const englishHtml = readFileSync((await (await english).path())!, "utf8");
+  expect(englishHtml).toContain('<html lang="en">');
+  expect(englishHtml).toContain("Psychic");
 });
 
 test("relaxed high-level preview survives blind search and reaches outcomes", async ({
@@ -452,7 +526,7 @@ test("opponent panel shows the mixture's parties and probabilities, with JSON as
   ).toHaveText([
     "3,000回(簡易計測)",
     "10,000回(簡易計測)",
-    "27,000回(実際のボットと同じ)",
+    "81,000回(「強い」の対戦中と同じ回数)",
   ]);
   await panel.getByText("技・持ち物を見る", { exact: true }).first().click();
   await expect(

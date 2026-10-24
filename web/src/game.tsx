@@ -18,6 +18,7 @@
 // Known preview information sets use the current compiled policy artifact;
 // other previews run the separately measured fixed selection budget.
 
+import { toolText } from "./tool-strings";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   Battle,
@@ -628,7 +629,7 @@ export function Game(props: {
         <button class="ghost sheets-btn" onClick={() => setSheetOpen(true)}>
           {ui().teamSheets}
         </button>
-        {phase !== "end" && <button class="ghost" aria-expanded={kifuOpen} onClick={() => setKifuOpen(!kifuOpen)}>棋譜</button>}
+        {phase !== "end" && <button class="ghost" aria-expanded={kifuOpen} onClick={() => setKifuOpen(!kifuOpen)}>{toolText("replay")}</button>}
         <button class="ghost quit-btn" onClick={props.onNewTeams}>
           {ui().quit}
         </button>

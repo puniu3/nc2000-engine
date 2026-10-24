@@ -1,5 +1,6 @@
+import { toolText } from "./tool-strings";
 import { useId, useMemo, useRef, useState } from "preact/hooks";
-import { itemName, moveName, speciesName } from "./i18n";
+import { locale, itemName, moveName, speciesName } from "./i18n";
 import { parsePsExport } from "./ps-import";
 
 export interface EditorDex {
@@ -175,7 +176,7 @@ function NameChoice({
           class="eval-name-options"
           id={`${id}-options`}
           role="listbox"
-          aria-label={`${label}の候補`}
+          aria-label={toolText("suggestionsFor", label)}
         >
           {matches.map((c, i) => (
             <button
@@ -191,7 +192,7 @@ function NameChoice({
               {c.label}
             </button>
           ))}
-          {!matches.length && <p>候補がありません。名前を確かめてください。</p>}
+          {!matches.length && <p>{toolText("noSuggestions")}</p>}
         </div>
       )}
     </div>
@@ -215,22 +216,20 @@ export function TeamEditor({
     const list = (kind: keyof EditorDex, label: (value: string) => string) =>
       Object.values(dex[kind])
         .map((v) => ({ value: v.name, label: label(v.name) }))
-        .sort((a, b) => a.label.localeCompare(b.label, "ja"));
+        .sort((a, b) => a.label.localeCompare(b.label, locale()));
     return {
       species: list("species", speciesName),
       moves: list("moves", moveName),
-      items: [{ value: "", label: "なし" }, ...list("items", itemName)],
+      items: [{ value: "", label: toolText("none") }, ...list("items", itemName)],
     };
-  }, [dex]);
+  }, [dex, locale()]);
   if (!sets)
     return (
-      <p class="eval-warning">
-        読み込んだ内容を確認できません。「テキストから読み込む」で内容を直してください。
-      </p>
+      <p class="eval-warning">{toolText("editorInvalid")}</p>
     );
   const index = Math.min(active, sets.length - 1);
   const member = sets[index];
-  const key = `${name}${index + 1}匹目`;
+  const key = toolText("memberKey", name, index + 1);
   const replace = (next: EditorSet[]) => onChange(JSON.stringify(next));
   const patch = (updates: Partial<EditorSet>) =>
     replace(sets.map((s, i) => (i === index ? { ...s, ...updates } : s)));
@@ -258,7 +257,7 @@ export function TeamEditor({
   }
   return (
     <div class="eval-team-editor">
-      <div class="eval-members" aria-label={`${name}のメンバー`}>
+      <div class="eval-members" aria-label={toolText("teamMembers", name)}>
         {sets.map((s, i) => (
           <button
             type="button"
@@ -267,7 +266,7 @@ export function TeamEditor({
             aria-pressed={index === i}
             onClick={() => setActive(i)}
           >
-            {i + 1}. {s.species ? speciesName(s.species) : "未入力"}
+            {i + 1}. {s.species ? speciesName(s.species) : toolText("emptyMember")}
           </button>
         ))}
         {sets.length < 6 && (
@@ -277,18 +276,16 @@ export function TeamEditor({
               setActive(sets.length);
               replace([...sets, newMember()]);
             }}
-          >
-            ＋ ポケモンを追加
-          </button>
+          >{toolText("addPokemon")}</button>
         )}
       </div>
       <div class="eval-member-form" key={key}>
         <NameChoice
-          label={`${key}のポケモン`}
-          caption="ポケモン"
+          label={toolText("memberSpecies", key)}
+          caption={toolText("pokemon")}
           value={member.species}
           choices={choices.species}
-          placeholder="例：カビゴン"
+          placeholder={toolText("speciesExample")}
           onChange={(species) =>
             patch({
               species,
@@ -298,9 +295,8 @@ export function TeamEditor({
         />
         <div class="eval-member-basics">
           <label>
-            レベル
-            <input
-              aria-label={`${key}のレベル`}
+            {toolText("level")}<input
+              aria-label={toolText("memberLevel", key)}
               type="number"
               min="1"
               max="100"
@@ -315,11 +311,11 @@ export function TeamEditor({
             />
           </label>
           <NameChoice
-            label={`${key}の持ち物`}
-            caption="持ち物"
+            label={toolText("memberItem", key)}
+            caption={toolText("item")}
             value={member.item ?? ""}
             choices={choices.items}
-            placeholder="なし／名前で検索"
+            placeholder={toolText("itemPlaceholder")}
             onChange={(item) => patch({ item })}
           />
         </div>
@@ -327,11 +323,11 @@ export function TeamEditor({
           {[0, 1, 2, 3].map((slot) => (
             <NameChoice
               key={slot}
-              label={`${key}の技${slot + 1}`}
-              caption={`技${slot + 1}`}
+              label={toolText("memberMove", key, slot + 1)}
+              caption={toolText("moveSlot", slot + 1)}
               value={moves[slot] ?? ""}
               choices={choices.moves}
-              placeholder="技の名前で検索"
+              placeholder={toolText("movePlaceholder")}
               onChange={(value) => {
                 const next = [...moves];
                 while (next.length < 4) next.push("");
@@ -342,21 +338,18 @@ export function TeamEditor({
           ))}
         </div>
         <details>
-          <summary>個体値・育成状態など</summary>
-          <p class="eval-muted">
-            指定しない場合は、個体値・育成状態・なつき度を最大として計算します。めざめるパワーの種類を指定した場合は、個体値を自動で合わせます。
-          </p>
+          <summary>{toolText("advancedStats")}</summary>
+          <p class="eval-muted">{toolText("advancedStatsHelp")}</p>
           <div class="eval-detail-fields">
             {[
-              ["atk", "こうげき"],
-              ["def", "ぼうぎょ"],
-              ["spe", "すばやさ"],
-              ["spa", "とくしゅ"],
+              ["atk", toolText("attack")],
+              ["def", toolText("defense")],
+              ["spe", toolText("speed")],
+              ["spa", toolText("special")],
             ].map(([stat, label]) => (
               <label key={stat}>
-                {label}の個体値
-                <input
-                  aria-label={`${key}の${label}の個体値`}
+                {label}{toolText("dvSuffix")}<input
+                  aria-label={toolText("memberDv", key, label)}
                   type="number"
                   min="0"
                   max="15"
@@ -366,9 +359,8 @@ export function TeamEditor({
               </label>
             ))}
             <label>
-              なつき度
-              <input
-                aria-label={`${key}のなつき度`}
+              {toolText("happiness")}<input
+                aria-label={toolText("memberHappiness", key)}
                 type="number"
                 min="0"
                 max="255"
@@ -379,9 +371,8 @@ export function TeamEditor({
               />
             </label>
             <label>
-              育成状態
-              <select
-                aria-label={`${key}の育成状態`}
+              {toolText("training")}<select
+                aria-label={toolText("memberTraining", key)}
                 value={
                   !member.evs ||
                   Object.values(member.evs).every((v) => v === 255)
@@ -397,11 +388,9 @@ export function TeamEditor({
                   });
                 }}
               >
-                <option value="max">十分に育成（最大）</option>
-                <option value="none">育成前（0）</option>
-                <option value="custom" disabled>
-                  読み込んだ個別の設定
-                </option>
+                <option value="max">{toolText("trainingMax")}</option>
+                <option value="none">{toolText("trainingNone")}</option>
+                <option value="custom" disabled>{toolText("trainingCustom")}</option>
               </select>
             </label>
           </div>
@@ -414,9 +403,7 @@ export function TeamEditor({
               replace(sets.filter((_, i) => i !== index));
               setActive(Math.max(0, index - 1));
             }}
-          >
-            このポケモンを外す
-          </button>
+          >{toolText("removePokemon")}</button>
         )}
       </div>
     </div>

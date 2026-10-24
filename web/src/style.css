@@ -2038,6 +2038,13 @@ td.solver-cell {
   color: var(--text-dim);
 }
 
+.tool-language-bar {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 12px 16px 0;
+}
 .strength-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 20px 0 4px; }
 .strength-choice select { font: inherit; padding: 8px; max-width: 100%; }
 .strength-note { font-size: .85rem; color: var(--text-dim); margin: 4px 0 16px; }

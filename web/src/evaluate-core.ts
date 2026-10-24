@@ -1,3 +1,4 @@
+import { ToolError, type ToolIssue } from "./tool-errors";
 export interface EvaluationTeam {
   sets: unknown[];
   warnings: string[];
@@ -14,6 +15,7 @@ export interface EvaluationConfig {
   player: EvaluationTeam;
   opponents: EvaluationOpponent[];
   iterations: number;
+  previewIterations: number;
   c: number;
   turnLimit: number;
 }
@@ -21,6 +23,10 @@ export interface GameResult {
   playerSide: 0 | 1;
   outcome: "win" | "loss" | "tie" | "cap";
   turns: number;
+  log: string[];
+  kifu: string;
+  /** Actual live search counts and choices, in physical side order. */
+  selections: { side: number; input: string; iterations: number }[];
 }
 export interface PairResult {
   index: number;
@@ -30,13 +36,18 @@ export interface PairResult {
   games: [GameResult, GameResult];
 }
 export interface EvaluationRun {
-  version: 1;
+  version: 2;
   id: string;
   createdAt: string;
   config: EvaluationConfig;
   seed: number;
   targetPairs: number;
   pairs: PairResult[];
+  /** A completed first game awaiting its paired, side-swapped game. */
+  pending?: Omit<PairResult, "games"> & { games: [GameResult] };
+}
+export interface GameRecord extends Omit<PairResult, "games"> {
+  game: GameResult;
 }
 export type WorkerRequest =
   | { type: "start"; run: EvaluationRun; beliefJson: string }
@@ -49,22 +60,21 @@ export type WorkerResponse =
       turn: number;
       side: number;
       iterations: number;
+      budget: number;
     }
-  | { type: "pair"; pair: PairResult }
+  | { type: "game"; record: GameRecord }
   | { type: "done" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; issue?: ToolIssue };
 
 export function normalizeWeights<T extends { weight: number }>(
   entries: T[],
 ): T[] {
-  if (!entries.length) throw new Error("対戦相手を1件以上指定してください。");
+  if (!entries.length) throw new ToolError("noOpponents");
   if (entries.some((e) => !Number.isFinite(e.weight) || e.weight < 0))
-    throw new Error("出やすさは0以上の数値にしてください。");
+    throw new ToolError("invalidWeight");
   const max = Math.max(...entries.map((e) => e.weight));
   if (max === 0)
-    throw new Error(
-      "少なくとも1つの相手の出やすさを、0より大きくしてください。",
-    );
+    throw new ToolError("zeroWeights");
   const total = entries.reduce((s, e) => s + e.weight / max, 0);
   return entries.map((e) => ({ ...e, weight: e.weight / max / total }));
 }
@@ -133,6 +143,7 @@ export function sameConfig(a: EvaluationConfig, b: EvaluationConfig): boolean {
     build: config.build,
     beliefHash: config.beliefHash,
     iterations: config.iterations,
+    previewIterations: config.previewIterations,
     c: config.c,
     turnLimit: config.turnLimit,
     player: { sets: config.player.sets, relaxed: config.player.relaxed },
@@ -150,13 +161,31 @@ export function sameConfig(a: EvaluationConfig, b: EvaluationConfig): boolean {
   );
 }
 
-export function appendPair(
+export function appendGame(
   run: EvaluationRun,
-  pair: PairResult,
+  record: GameRecord,
 ): EvaluationRun {
-  if (pair.index !== run.pairs.length || pair.games.length !== 2)
-    throw new Error("対戦結果の順序を確認できないため、計測を停止しました。");
-  return { ...run, pairs: [...run.pairs, pair] };
+  const { game, ...scheduled } = record;
+  const expected = pairSchedule(run.seed, run.pairs.length, run.config.opponents);
+  if (record.index >= run.targetPairs ||
+      record.index !== expected.index || record.opponent !== expected.opponent ||
+      record.battleSeed !== expected.battleSeed ||
+      record.agentSeeds.some((seed, i) => seed !== expected.agentSeeds[i]) ||
+      game.playerSide !== (run.pending ? 1 : 0))
+    throw new ToolError("resultOrderError");
+  if (!run.pending) return { ...run, pending: { ...scheduled, games: [game] } };
+  const { pending, ...rest } = run;
+  return { ...rest, pairs: [...run.pairs, { ...scheduled, games: [pending.games[0], game] }] };
+}
+
+export function completedGames(run: EvaluationRun): GameRecord[] {
+  return [...run.pairs, ...(run.pending ? [run.pending] : [])].flatMap(
+    ({ games, ...scheduled }) => games.map(game => ({ ...scheduled, game })),
+  );
+}
+
+export function completedCount(run: EvaluationRun): number {
+  return run.pairs.length * 2 + (run.pending ? 1 : 0);
 }
 
 export function resultsCsv(run: EvaluationRun): string {
@@ -206,10 +235,10 @@ export function resultsCsv(run: EvaluationRun): string {
       "battle_seed",
       "player_agent_seed",
       "opponent_agent_seed",
+      "included_in_summary",
     ],
   );
-  run.pairs.forEach((p) =>
-    p.games.forEach((g) =>
+  completedGames(run).forEach(({ game: g, ...p }) =>
       rows.push([
         p.index,
         p.opponent,
@@ -219,8 +248,8 @@ export function resultsCsv(run: EvaluationRun): string {
         g.turns,
         p.battleSeed,
         ...p.agentSeeds,
+        p.index < run.pairs.length,
       ]),
-    ),
   );
   return "\ufeff" + rows.map((row) => row.map(q).join(",")).join("\r\n");
 }

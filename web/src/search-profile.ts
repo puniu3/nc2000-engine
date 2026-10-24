@@ -17,6 +17,7 @@ const isStrength = (value: unknown): value is Strength =>
 export const DEFAULT_STRENGTH: Strength = isStrength(live.defaultStrength)
   ? live.defaultStrength : "strong";
 export const PRODUCT_ITERATIONS = live.battle[DEFAULT_STRENGTH];
+export const PREVIEW_ITERATIONS = live.unknownPreview;
 export function liveBudget(strength: Strength, preview = false): number {
   return Number.isSafeInteger(testBudget) && testBudget > 0
     ? testBudget : preview ? live.unknownPreview : live.battle[strength];

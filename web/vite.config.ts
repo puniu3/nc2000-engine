@@ -123,6 +123,8 @@ function evaluatorBuildId(): string {
     "web/package-lock.json",
     "Cargo.lock",
     "Cargo.toml",
+    "data/live-search.json",
+    "data/search-profiles.json",
     "crates/engine/src",
     "crates/bot/src",
     "crates/wasm/src",

@@ -1,3 +1,4 @@
+import { ToolError } from "./tool-errors";
 import { Battle, getDex, getValidator } from "./engine";
 import { parsePsExport } from "./ps-import";
 import { findingAnchor, findingText, type Finding } from "./findings";
@@ -15,34 +16,43 @@ export interface OpponentDraft {
 const explain = (f: Finding) =>
   [findingAnchor(f), findingText(f)].filter(Boolean).join(": ");
 
+class TeamFindingError extends Error {
+  constructor(private findings: Finding[]) {
+    super("Invalid team");
+  }
+  toString(): string {
+    return this.findings.map(explain).join("\n");
+  }
+}
+
 export function readTeam(text: string): EvaluationTeam {
-  if (!text.trim()) throw new Error("パーティを入力してください。");
+  if (!text.trim()) throw new ToolError("enterTeam");
   let raw: unknown;
   if (/^\s*[\[{]/.test(text)) raw = JSON.parse(text);
   else {
     const parsed = parsePsExport(text);
     if (parsed.findings.length)
-      throw new Error(parsed.findings.map(explain).join("\n"));
+      throw new TeamFindingError(parsed.findings);
     raw = parsed.sets;
   }
   if (raw && typeof raw === "object" && "sets" in raw) raw = raw.sets;
   if (!Array.isArray(raw) || raw.length < 1 || raw.length > 6)
-    throw new Error("ポケモンは1〜6匹で登録してください。");
+    throw new ToolError("teamSize");
   for (const [i, set] of raw.entries()) {
     if (!set || typeof set !== "object" || typeof set.species !== "string")
-      throw new Error(`${i + 1}匹目: 種族を指定してください。`);
+      throw new ToolError("missingSpecies", i + 1);
     if (
       set.level !== undefined &&
       (!Number.isInteger(set.level) || set.level < 1 || set.level > 100)
     )
-      throw new Error(`${i + 1}匹目: レベルは1〜100の整数にしてください。`);
+      throw new ToolError("invalidLevel", i + 1);
     if (
       set.moves !== undefined &&
       (!Array.isArray(set.moves) ||
         set.moves.some((m: unknown) => typeof m !== "string") ||
         set.moves.length > 4)
     )
-      throw new Error(`${i + 1}匹目: 技は4個以下で登録してください。`);
+      throw new ToolError("invalidMoves", i + 1);
   }
   raw = raw.map((set) => ({
     ...set,
@@ -59,9 +69,9 @@ export function readTeam(text: string): EvaluationTeam {
       "item-unknown",
     ].includes(f.code),
   );
-  if (fatal.length) throw new Error(fatal.map(explain).join("\n"));
+  if (fatal.length) throw new TeamFindingError(fatal);
   if (!Array.isArray(result.team))
-    throw new Error("パーティを構成できません。");
+    throw new ToolError("invalidTeam");
   const relaxed = result.errors.some(
     (f) => f.code === "level-sum" || f.code === "level-sum-highest",
   );
@@ -85,10 +95,10 @@ export function readOpponents(drafts: OpponentDraft[]): EvaluationOpponent[] {
   const entries = drafts.map((d) => {
     const id = d.id.trim();
     if (!id || seen.has(id))
-      throw new Error("相手の名前は空欄にせず、重複しないようにしてください。");
+      throw new ToolError("uniqueOpponentNames");
     seen.add(id);
     if (!d.weight.trim())
-      throw new Error(`${id}: 出やすさを入力してください。`);
+      throw new ToolError("missingWeight", id);
     return { id, weight: Number(d.weight), ...readTeam(d.text) };
   });
   return normalizeWeights(entries);
@@ -97,9 +107,7 @@ export function readOpponents(drafts: OpponentDraft[]): EvaluationOpponent[] {
 export function importDistribution(text: string): OpponentDraft[] {
   const raw = JSON.parse(text);
   if (!raw || !Array.isArray(raw.teams))
-    throw new Error(
-      "相手の設定ファイルを確認してください。パーティと出やすさをまとめたJSONファイルが必要です。",
-    );
+    throw new ToolError("invalidDistribution");
   const drafts = raw.teams.map(
     (e: { id?: unknown; weight?: unknown; sets?: unknown }) => {
       if (
@@ -108,7 +116,7 @@ export function importDistribution(text: string): OpponentDraft[] {
         typeof e.weight !== "number" ||
         !Array.isArray(e.sets)
       )
-        throw new Error("相手の名前・出やすさ・パーティの情報が足りません。");
+        throw new ToolError("incompleteOpponent");
       return {
         id: e.id,
         weight: String(e.weight),

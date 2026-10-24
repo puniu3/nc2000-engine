@@ -9,6 +9,7 @@
     "build:e2e": "tsc --noEmit && VITE_NC2000_TEST_BUDGET=300 vite build --mode test",
     "preview": "vite preview --host --port 8000",
     "test:worker": "node tests/worker-profile.mjs",
+    "test:evaluate-worker": "node tests/evaluate-worker.mjs",
     "test:e2e": "npm run build:e2e && node tests/run-e2e.mjs",
     "build:research": "tsc --noEmit && NC2000_DISABLE_COMPILED_PREVIEW=1 vite build",
     "test:policy": "node tests/worker-policy.mjs"

@@ -20,7 +20,7 @@ try {
       : {}),
   });
   const page = await browser.newPage();
-  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: "networkidle" });
   const results = await page.evaluate(async (wasmUrl) => {
     const { BotWorker } = await import("/src/bot.ts");
     const { searchProfile } = await import("/src/search-profile.ts");

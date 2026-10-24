@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { createServer as http } from 'node:http';
 import { createServer } from 'vite';
 import { chromium } from '@playwright/test';
-const root='../findings/fixed-budget-v1';
+const root='../findings/fixed-budget-release-v1';
 const rows=fs.readdirSync(root+'/canary').filter(n=>n.endsWith('.json')).sort().map(n=>JSON.parse(fs.readFileSync(root+'/canary/'+n,'utf8')));
 const artifact={format:'nc2000-compiled-preview-v1',c:0.4,build:rows[0].build,priorSha256:crypto.createHash('sha256').update(fs.readFileSync('../data/belief-pool-v3/belief-pool.json')).digest('hex'),dexSha256:crypto.createHash('sha256').update(fs.readFileSync('../data/gen2stadium2.json')).digest('hex'),policies:{...JSON.parse(fs.readFileSync('../data/compiled-preview-v1.json','utf8')).policies,...Object.fromEntries(rows.map(r=>[r.key,r.samples.map(s=>s.choice)]))}};
 const server=http();let vite,browser;
