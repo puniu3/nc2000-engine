@@ -32,23 +32,25 @@ impl Cb {
 /// 256-bit set over registered callback ids (the gen2stadium2 dex registers
 /// ~90 distinct names; load asserts the bound).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct CbMask([u64; 4]);
+pub struct CbMask(pub(crate) [u64; 4]);
 
 impl CbMask {
     pub const EMPTY: CbMask = CbMask([0; 4]);
 
-    #[inline]
+    #[inline(always)]
     pub fn has(&self, cb: Cb) -> bool {
         let i = cb.0 as usize;
         i < 256 && self.0[i >> 6] & (1 << (i & 63)) != 0
     }
 
+    #[inline(always)]
     pub fn set(&mut self, cb: Cb) {
         let i = cb.0 as usize;
         assert!(i < 256, "CbMask overflow");
         self.0[i >> 6] |= 1 << (i & 63);
     }
 
+    #[inline(always)]
     pub fn clear(&mut self, cb: Cb) {
         let i = cb.0 as usize;
         if i < 256 {
@@ -56,10 +58,20 @@ impl CbMask {
         }
     }
 
+    #[inline(always)]
     pub fn or_with(&mut self, other: &CbMask) {
         for k in 0..4 {
             self.0[k] |= other.0[k];
         }
+    }
+
+    #[inline(always)]
+    pub const fn intersects(&self, other: &CbMask) -> bool {
+        ((self.0[0] & other.0[0])
+            | (self.0[1] & other.0[1])
+            | (self.0[2] & other.0[2])
+            | (self.0[3] & other.0[3]))
+            != 0
     }
 }
 
@@ -161,7 +173,7 @@ pub struct KnownCbs {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MoveId(pub u16);
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SpeciesId(pub u16);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ItemId(pub u16);

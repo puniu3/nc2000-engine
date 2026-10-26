@@ -168,15 +168,11 @@ impl Battle {
             return;
         }
 
-        let switches: Vec<bool> = (0..2)
-            .map(|side_n| {
-                self.active_id(side_n)
-                    .map(|a| self.poke(a).switch_flag.is_set())
-                    .unwrap_or(false)
-            })
-            .collect();
-
-        let mut switches = switches;
+        let mut switches: [bool; 2] = [0, 1].map(|side_n| {
+            self.active_id(side_n)
+                .map(|a| self.poke(a).switch_flag.is_set())
+                .unwrap_or(false)
+        });
         for side_n in 0..2usize {
             if switches[side_n] && !self.can_switch(side_n as u8) {
                 if let Some(active) = self.active_id(side_n) {
@@ -512,8 +508,8 @@ impl Battle {
     }
 
     /// battle.getRequests.
-    fn get_requests(&self, kind: RequestState) -> Vec<RequestKind> {
-        let mut requests = vec![RequestKind::Wait, RequestKind::Wait];
+    fn get_requests(&self, kind: RequestState) -> [RequestKind; 2] {
+        let mut requests = [RequestKind::Wait, RequestKind::Wait];
         match kind {
             RequestState::Switch => {
                 for side_n in 0..2usize {

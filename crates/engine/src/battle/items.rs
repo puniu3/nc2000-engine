@@ -60,12 +60,12 @@ pub fn dispatch_item(
     source_effect: EffectHandle,
     relay: RV,
 ) -> RV {
-    let key = dex.items.key(item).to_string();
+    let key = dex.items.key(item);
     let tpoke = target.poke();
     let _ = source;
 
     // 1.1x type-boost items
-    if let (Some(ty), "onModifyDamage") = (type_boost(&key), cb) {
+    if let (Some(ty), "onModifyDamage") = (type_boost(key), cb) {
         let move_type = b.active_move.as_ref().map(|m| m.move_type);
         if move_type.is_some() && move_type == dex.type_id(ty) {
             return RV::Num(relay.as_num() * 1.1);
@@ -73,7 +73,7 @@ pub fn dispatch_item(
         return RV::Undef;
     }
 
-    match (key.as_str(), cb) {
+    match (key, cb) {
         // ------------------------------------------------------- crit items
         ("scopelens", "onModifyCritRatio") => RV::Num(relay.as_num() + 1.0),
         ("stick", "onModifyCritRatio") => {
@@ -206,7 +206,7 @@ pub fn dispatch_item(
         | ("przcureberry", "onUpdate") | ("psncureberry", "onUpdate") => {
             let t = tpoke.unwrap();
             let status = b.poke(t).status;
-            let fire = match key.as_str() {
+            let fire = match key {
                 "burntberry" => status == Status::Frz,
                 "iceberry" => status == Status::Brn,
                 "przcureberry" => status == Status::Par,
@@ -230,7 +230,7 @@ pub fn dispatch_item(
         | ("przcureberry", "onEat") | ("psncureberry", "onEat") => {
             let t = tpoke.unwrap();
             let status = b.poke(t).status;
-            let fire = match key.as_str() {
+            let fire = match key {
                 "burntberry" => status == Status::Frz,
                 "iceberry" => status == Status::Brn,
                 "mintberry" => status == Status::Slp,

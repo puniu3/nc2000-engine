@@ -131,27 +131,29 @@ impl Battle {
 
         self.run_event(dex, &ev::BeforeSwitchIn, EvTarget::Poke(pokemon), None, EffectHandle::None, None, false, false);
         // |switch| / |drag|
-        let ps = self.poke_str(pokemon);
-        let details = self.details(dex, pokemon);
-        let (secret, shared) = self.get_health(pokemon);
-        let side_id = format!("p{}", side_n + 1);
-        let tag = if is_drag { "drag" } else { "switch" };
-        match source_effect {
-            Some(se) if !se.is_none() => {
-                // PS: '[from] ' + sourceEffect (toString = plain name)
-                let from = format!("[from] {}", self.effect_name(dex, se));
-                self.add_split(
-                    &side_id,
-                    &[tag, &ps, &details, &secret, &from],
-                    &[tag, &ps, &details, &shared, &from],
-                );
-            }
-            _ => {
-                self.add_split(
-                    &side_id,
-                    &[tag, &ps, &details, &secret],
-                    &[tag, &ps, &details, &shared],
-                );
+        if self.log_enabled {
+            let ps = self.poke_str(pokemon);
+            let details = self.details(dex, pokemon);
+            let (secret, shared) = self.get_health(pokemon);
+            let side_id = format!("p{}", side_n + 1);
+            let tag = if is_drag { "drag" } else { "switch" };
+            match source_effect {
+                Some(se) if !se.is_none() => {
+                    // PS: '[from] ' + sourceEffect (toString = plain name)
+                    let from = format!("[from] {}", self.effect_name(dex, se));
+                    self.add_split(
+                        &side_id,
+                        &[tag, &ps, &details, &secret, &from],
+                        &[tag, &ps, &details, &shared, &from],
+                    );
+                }
+                _ => {
+                    self.add_split(
+                        &side_id,
+                        &[tag, &ps, &details, &secret],
+                        &[tag, &ps, &details, &shared],
+                    );
+                }
             }
         }
         if is_drag {

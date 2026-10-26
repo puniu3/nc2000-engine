@@ -229,9 +229,9 @@ impl Battle {
         })
     }
 
-    fn state_hash_into<H: std::hash::Hasher>(
+    fn state_hash_into<H: crate::fxhash::StateHasher>(
         &self,
-        mut h: H,
+        h: &mut H,
         hp_buckets: Option<i64>,
         omit_damage_bookkeeping: bool,
         omit_quick_claw_roll: bool,
@@ -273,26 +273,33 @@ impl Battle {
             listener_pool: _, // scratch buffers
             battle_mask: _,   // derived from hashed state
         } = self;
-        (turn, request_state, mid_turn, started, ended, winner).hash(&mut h);
+        (turn, request_state, mid_turn, started, ended, winner).hash(h);
         if *preview_level_caps != [Some(super::MAX_TOTAL_LEVEL); 2] {
-            preview_level_caps.hash(&mut h);
+            preview_level_caps.hash(h);
         }
-        field.hash(&mut h);
+        field.weather.hash(h);
+        field.weather_state.hash_state(h);
+        field.pseudo_weather.len().hash(h);
+        for (cid, st) in field.pseudo_weather.iter() {
+            cid.hash(h);
+            st.hash_state(h);
+        }
         for side in sides.iter() {
-            side.hash_with_options(&mut h, hp_buckets, omit_damage_bookkeeping);
+            side.hash_with_options(h, hp_buckets, omit_damage_bookkeeping);
         }
-        (queue, faint_queue, effect_order, event_depth).hash(&mut h);
-        last_successful_move_this_turn.hash(&mut h);
+        (queue, faint_queue, effect_order, event_depth).hash(h);
+        last_successful_move_this_turn.hash(h);
         if !omit_damage_bookkeeping {
             match hp_buckets {
-                None => last_damage.hash(&mut h),
-                Some(_) => (last_damage / 16).hash(&mut h),
+                None => last_damage.hash(h),
+                Some(_) => (last_damage / 16).hash(h),
             }
         }
-        (if omit_quick_claw_roll { false } else { *quick_claw_roll }, speed_order, format_data).hash(&mut h);
+        (if omit_quick_claw_roll { false } else { *quick_claw_roll }, speed_order).hash(h);
+        format_data.hash_state(h);
         // mid-event machinery: quiescent at request points, hashed as a guard
-        (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(&mut h);
-        (active_pokemon, active_target, last_move_id, pending_boosts).hash(&mut h);
+        (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(h);
+        (active_pokemon, active_target, last_move_id, pending_boosts).hash(h);
     }
 
     /// All legal choices for one side at the current request point. Empty ⇔

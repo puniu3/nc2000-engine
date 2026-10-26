@@ -5,7 +5,7 @@ use crate::dex::{Accuracy, CondId, Dex, MoveId};
 use crate::state::*;
 
 use super::events::{ev, EvTarget};
-use super::{clamp_int_range, EffectHandle, RV};
+use super::{EffectHandle, RV};
 
 pub const STAT_KEYS: [&str; 5] = ["atk", "def", "spa", "spd", "spe"];
 
@@ -16,67 +16,59 @@ impl Battle {
     /// `stat` is an index into stored_stats (0=atk..4=spe).
     pub fn get_stat(&self, dex: &Dex, id: PokeId, stat: usize, unboosted: bool, unmodified: bool, fast_return: bool) -> i32 {
         let p = self.poke(id);
-        let mut value = p.stored_stats[stat] as f64;
-
-        if !unboosted {
-            let mut boost = p.boosts[stat] as i32;
-            boost = boost.clamp(-6, 6);
-            if boost >= 0 {
-                const BOOST_TABLE: [f64; 7] = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
-                value = (value * BOOST_TABLE[boost as usize]).floor();
-            } else {
-                const NUMERATORS: [f64; 7] = [100.0, 66.0, 50.0, 40.0, 33.0, 28.0, 25.0];
-                value = (value * NUMERATORS[(-boost) as usize] / 100.0).floor();
-            }
-        }
-        let parspeeddrop = crate::cond_id!(dex, "parspeeddrop").map(|c| p.has_volatile(c)).unwrap_or(false);
-        if p.status == Status::Par && stat == 4 && parspeeddrop {
-            value = (value / 4.0).floor();
-        }
-        if !unmodified {
-            let brnattackdrop =
-                crate::cond_id!(dex, "brnattackdrop").map(|c| p.has_volatile(c)).unwrap_or(false);
-            if p.status == Status::Brn && stat == 0 && brnattackdrop {
-                value = (value / 2.0).floor();
-            }
-        }
-
-        let mut value = clamp_int_range(value, Some(1.0), Some(999.0));
+        let boost = if unboosted { 0 } else { p.boosts[stat] };
+        let has_par_drop = p.status == Status::Par
+            && stat == 4
+            && crate::cond_id!(dex, "parspeeddrop").map(|c| p.has_volatile(c)).unwrap_or(false);
+        let has_brn_drop = !unmodified
+            && p.status == Status::Brn
+            && stat == 0
+            && crate::cond_id!(dex, "brnattackdrop").map(|c| p.has_volatile(c)).unwrap_or(false);
         if fast_return {
-            return value as i32;
+            return crate::compact::get_stat_branchless(
+                p.stored_stats[stat],
+                boost,
+                stat,
+                unboosted,
+                unmodified,
+                true,
+                has_par_drop,
+                has_brn_drop,
+                false,
+                false,
+                crate::compact::ItemStatKind::None,
+            );
         }
-
-        // Screens
-        if !unboosted {
+        let (has_reflect, has_lightscreen) = if !unboosted && (stat == 1 || stat == 3) {
             let side = &self.sides[id.side as usize];
-            let reflect = crate::cond_id!(dex, "reflect").map(|c| side.has_side_condition(c)).unwrap_or(false);
-            let lightscreen =
-                crate::cond_id!(dex, "lightscreen").map(|c| side.has_side_condition(c)).unwrap_or(false);
-            if (stat == 1 && reflect) || (stat == 3 && lightscreen) {
-                value *= 2.0;
+            if stat == 1 {
+                (
+                    crate::cond_id!(dex, "reflect").map(|c| side.has_side_condition(c)).unwrap_or(false),
+                    false,
+                )
+            } else {
+                (
+                    false,
+                    crate::cond_id!(dex, "lightscreen").map(|c| side.has_side_condition(c)).unwrap_or(false),
+                )
             }
-        }
-
-        // Boosting items (thickclub/lightball/metalpowder). PS compares
-        // `species.name` (the CURRENT species, transform included) — the
-        // interned id compare is equivalent.
-        if let Some(item) = p.item {
-            let item = Some(item);
-            let species = Some(p.species);
-            let ki = &dex.known_items;
-            let ks = &dex.known_species;
-            if (item == ki.thickclub
-                && (species == ks.cubone || species == ks.marowak)
-                && stat == 0)
-                || (item == ki.lightball && species == ks.pikachu && stat == 2)
-            {
-                value *= 2.0;
-            } else if item == ki.metalpowder && species == ks.ditto && (stat == 1 || stat == 3) {
-                value = (value * 1.5).floor();
-            }
-        }
-
-        value as i32
+        } else {
+            (false, false)
+        };
+        let item_kind = crate::compact::ItemStatKind::classify(dex, p.species, p.item);
+        crate::compact::get_stat_branchless(
+            p.stored_stats[stat],
+            boost,
+            stat,
+            unboosted,
+            unmodified,
+            false,
+            has_par_drop,
+            has_brn_drop,
+            has_reflect,
+            has_lightscreen,
+            item_kind,
+        )
     }
 
     /// Probability that `move_id`, used by `att` against `def`, lands —
@@ -92,41 +84,23 @@ impl Battle {
     /// semi-invulnerability/lock-on are not modeled — same class of caveat as
     /// the eval's static base powers; `always_hit` / `AlwaysHits` ⇒ 1.0.
     pub fn hit_probability(&self, dex: &Dex, att: PokeId, def: PokeId, move_id: MoveId) -> f64 {
-        // gen-2 accuracy/evasion stage multipliers (see `try_move_hit`).
-        const POS_BOOST: [f64; 7] = [1.0, 1.33, 1.66, 2.0, 2.33, 2.66, 3.0];
-        const NEG_BOOST: [f64; 7] = [1.0, 0.75, 0.6, 0.5, 0.43, 0.36, 0.33];
-
         let ms = dex.move_static(move_id);
         if ms.always_hit {
             return 1.0;
         }
-        let base = match ms.accuracy {
+        let base_pct = match ms.accuracy {
             Accuracy::AlwaysHits => return 1.0,
-            Accuracy::Pct(p) => p as f64,
+            Accuracy::Pct(p) => p.clamp(0, 100) as u8,
         };
-        let mut acc = (base * 255.0 / 100.0).floor();
-        if !ms.ignore_accuracy {
-            let boost = self.poke(att).boosts[5].clamp(-6, 6);
-            if boost > 0 {
-                acc *= POS_BOOST[boost as usize];
-            } else {
-                acc *= NEG_BOOST[(-boost) as usize];
-            }
-        }
-        if !ms.ignore_evasion {
-            let boost = self.poke(def).boosts[6].clamp(-6, 6);
-            if boost > 0 && !ms.ignore_positive_evasion {
-                acc *= NEG_BOOST[boost as usize];
-            } else if boost < 0 {
-                acc *= POS_BOOST[(-boost) as usize];
-            }
-        }
-        acc = acc.floor().min(255.0).max(1.0);
-        if acc >= 255.0 {
-            1.0
-        } else {
-            acc / 256.0
-        }
+        crate::compact::hit_probability_branchless(
+            base_pct,
+            false,
+            self.poke(att).boosts[5],
+            self.poke(def).boosts[6],
+            ms.ignore_accuracy,
+            ms.ignore_evasion,
+            ms.ignore_positive_evasion,
+        )
     }
 
     /// gen3 `pokemon.getActionSpeed()`.

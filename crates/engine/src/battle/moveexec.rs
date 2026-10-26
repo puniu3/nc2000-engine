@@ -310,10 +310,10 @@ pub fn dispatch_move_callback(
     source: Option<PokeId>,
     relay: RV,
 ) -> RV {
-    let key = dex.moves.key(m).to_string();
+    let key = dex.moves.key(m);
     let move_eff = EffectHandle::MoveEff(m);
     let tpoke = target.poke();
-    match (key.as_str(), callback_name) {
+    match (key, callback_name) {
         // ---------------------------------------------------- onModifyMove
         ("struggle", "onModifyMove") => {
             if let Some(am) = b.active_move.as_mut() {
@@ -1617,17 +1617,19 @@ impl Battle {
         }
 
         // |move| line
-        let ps = self.poke_str(pokemon);
-        let move_name = self.active_move_name(dex);
-        let target_str = match target {
-            Some(t) => self.poke_str(t),
-            None => "null".to_string(),
-        };
-        let mut last_part = target_str;
-        if let EffectHandle::MoveEff(se) = source_effect_h {
-            last_part = format!("{last_part}|[from] {}", dex.move_static(se).name);
+        if self.log_enabled {
+            let ps = self.poke_str(pokemon);
+            let move_name = self.active_move_name(dex);
+            let target_str = match target {
+                Some(t) => self.poke_str(t),
+                None => "null".to_string(),
+            };
+            let mut last_part = target_str;
+            if let EffectHandle::MoveEff(se) = source_effect_h {
+                last_part = format!("{last_part}|[from] {}", dex.move_static(se).name);
+            }
+            self.add_move(&["move", &ps, &move_name, &last_part]);
         }
-        self.add_move(&["move", &ps, &move_name, &last_part]);
 
         if target.is_none() {
             self.attr_last_move(&["[notarget]"]);
@@ -1885,38 +1887,51 @@ impl Battle {
             Accuracy::Pct(a) => Some(a as f64),
         };
         if let Some(a) = acc_num {
-            let mut acc = (a * 255.0 / 100.0).floor();
-            if ohko {
-                let plevel = self.poke(pokemon).level as f64;
-                let tlevel = self.poke(target).level as f64;
-                if plevel >= tlevel {
-                    acc += (plevel - tlevel) * 2.0;
-                    acc = acc.min(255.0);
-                } else {
-                    let ts = self.poke_str(target);
-                    self.add(&["-immune", &ts, "[ohko]"]);
-                    return MoveOutcome::Fail;
+            if !ohko && (0.0..=100.0).contains(&a) {
+                let acc = crate::compact::lookup_accuracy_threshold(
+                    a as u8,
+                    self.poke(pokemon).boosts[5],
+                    self.poke(target).boosts[6],
+                    ignore_accuracy,
+                    ignore_evasion,
+                    ignore_positive_evasion,
+                    false,
+                ) as f64;
+                acc_num = Some(acc);
+            } else {
+                let mut acc = (a * 255.0 / 100.0).floor();
+                if ohko {
+                    let plevel = self.poke(pokemon).level as f64;
+                    let tlevel = self.poke(target).level as f64;
+                    if plevel >= tlevel {
+                        acc += (plevel - tlevel) * 2.0;
+                        acc = acc.min(255.0);
+                    } else {
+                        let ts = self.poke_str(target);
+                        self.add(&["-immune", &ts, "[ohko]"]);
+                        return MoveOutcome::Fail;
+                    }
                 }
-            }
-            if !ignore_accuracy {
-                let boost = self.poke(pokemon).boosts[5].clamp(-6, 6);
-                if boost > 0 {
-                    acc *= POS_BOOST[boost as usize];
-                } else {
-                    acc *= NEG_BOOST[(-boost) as usize];
+                if !ignore_accuracy {
+                    let boost = self.poke(pokemon).boosts[5].clamp(-6, 6);
+                    if boost > 0 {
+                        acc *= POS_BOOST[boost as usize];
+                    } else {
+                        acc *= NEG_BOOST[(-boost) as usize];
+                    }
                 }
-            }
-            if !ignore_evasion {
-                let boost = self.poke(target).boosts[6].clamp(-6, 6);
-                if boost > 0 && !ignore_positive_evasion {
-                    acc *= NEG_BOOST[boost as usize];
-                } else if boost < 0 {
-                    acc *= POS_BOOST[(-boost) as usize];
+                if !ignore_evasion {
+                    let boost = self.poke(target).boosts[6].clamp(-6, 6);
+                    if boost > 0 && !ignore_positive_evasion {
+                        acc *= NEG_BOOST[boost as usize];
+                    } else if boost < 0 {
+                        acc *= POS_BOOST[(-boost) as usize];
+                    }
                 }
+                acc = acc.floor().min(255.0);
+                acc = acc.max(1.0);
+                acc_num = Some(acc);
             }
-            acc = acc.floor().min(255.0);
-            acc = acc.max(1.0);
-            acc_num = Some(acc);
         } else {
             // accuracy true: run Accuracy event again (PS quirk)
             let _ = self.run_accuracy_event(dex, target, pokemon, Accuracy::AlwaysHits);

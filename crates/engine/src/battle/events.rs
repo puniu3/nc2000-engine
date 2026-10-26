@@ -59,6 +59,7 @@ pub struct EvCbs {
     pub on_source: Cb,
     pub on_field: Cb,
     pub on_side: Cb,
+    pub mask: crate::dex::CbMask,
     /// PS-composed singleEvent ids for Side/Field holders in fieldEvent.
     pub side_name: &'static str,
     pub field_name: &'static str,
@@ -77,7 +78,7 @@ impl Ev {
         Ev { name, cell: std::sync::OnceLock::new() }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn cbs(&self, dex: &Dex) -> EvCbs {
         *self.cell.get_or_init(|| self.build(dex))
     }
@@ -90,6 +91,12 @@ impl Ev {
         let on_any = get("onAny");
         let on_foe = get("onFoe");
         let on_source = get("onSource");
+        let mut mask = crate::dex::CbMask::EMPTY;
+        for c in [on, on_ally, on_any, on_foe, on_source] {
+            if c.exists() {
+                mask.set(c);
+            }
+        }
         EvCbs {
             on,
             on_ally,
@@ -98,11 +105,10 @@ impl Ev {
             on_source,
             on_field: get("onField"),
             on_side: get("onSide"),
+            mask,
             side_name: Box::leak(format!("Side{name}").into_boxed_str()),
             field_name: Box::leak(format!("Field{name}").into_boxed_str()),
-            possible: [on, on_ally, on_any, on_foe, on_source]
-                .iter()
-                .any(|c| dex.possible_mask.has(*c)),
+            possible: dex.possible_mask.intersects(&mask),
             prefixed: !matches!(
                 name,
                 "BeforeTurn" | "Update" | "Weather" | "WeatherChange" | "TerrainChange"
@@ -846,6 +852,7 @@ impl Battle {
 
     // ------------------------------------------------------- singleEvent
 
+    #[inline(always)]
     #[allow(clippy::too_many_arguments)]
     pub fn single_event(
         &mut self,
@@ -859,6 +866,9 @@ impl Battle {
         relay: Option<RV>,
     ) -> RV {
         let cb = ev.cbs(dex).on;
+        if !cb.exists() {
+            return relay.unwrap_or(RV::True);
+        }
         self.single_event_cb(dex, ev.name, cb, effect, state, target, source, source_effect, relay)
     }
 
@@ -937,6 +947,7 @@ impl Battle {
 
     // ---------------------------------------------------------- runEvent
 
+    #[inline(always)]
     #[allow(clippy::too_many_arguments)]
     pub fn run_event(
         &mut self,
@@ -949,28 +960,51 @@ impl Battle {
         on_effect: bool,
         fast_exit: bool,
     ) -> RV {
-        if self.event_depth >= 8 {
-            panic!("runEvent stack overflow at {}", ev.name);
-        }
         let cbs = ev.cbs(dex);
-        debug_assert_eq!(
-            self.battle_mask,
-            self.recompute_battle_mask(dex),
-            "stale battle_mask at {}",
-            ev.name
-        );
-        let any_handler = cbs.possible
-            && (self.battle_mask.has(cbs.on)
-                || self.battle_mask.has(cbs.on_ally)
-                || self.battle_mask.has(cbs.on_any)
-                || self.battle_mask.has(cbs.on_foe)
-                || self.battle_mask.has(cbs.on_source));
+        let any_handler = cbs.possible && self.battle_mask.intersects(&cbs.mask);
         if !any_handler && !on_effect {
             // Zero handlers: PS runs the frame anyway, but with no handlers it
             // consumes no PRNG, leaves the modifier at 1 (identity on integer
             // relays) and returns the relay unchanged. Skip the machinery.
             return relay.unwrap_or(RV::True);
         }
+        self.run_event_slow(
+            dex,
+            ev,
+            cbs,
+            any_handler,
+            target,
+            source,
+            source_effect,
+            relay,
+            on_effect,
+            fast_exit,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn run_event_slow(
+        &mut self,
+        dex: &Dex,
+        ev: &'static Ev,
+        cbs: EvCbs,
+        any_handler: bool,
+        target: EvTarget,
+        source: Option<PokeId>,
+        source_effect: EffectHandle,
+        relay: Option<RV>,
+        on_effect: bool,
+        fast_exit: bool,
+    ) -> RV {
+        if self.event_depth >= 8 {
+            panic!("runEvent stack overflow at {}", ev.name);
+        }
+        debug_assert_eq!(
+            self.battle_mask,
+            self.recompute_battle_mask(dex),
+            "stale battle_mask at {}",
+            ev.name
+        );
         let mut handlers = self.take_scratch();
         if any_handler {
             self.find_event_handlers(dex, target, cbs, source, &mut handlers);

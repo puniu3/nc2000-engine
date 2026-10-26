@@ -61,11 +61,11 @@ impl Battle {
             target_damage = clamp_int_range(target_damage, Some(1.0), None);
         }
 
-        let effect_id = self.effect_id(dex, effect_handle).to_string();
+        let effect_id = self.effect_id(dex, effect_handle);
         if effect_id != "struggle-recoil" {
             // weather immunity
             if self.effect_type(dex, effect_handle) == EffectType::Weather
-                && !self.run_status_immunity(dex, target, &effect_id, false)
+                && !self.run_status_immunity(dex, target, effect_id, false)
             {
                 return Some(0.0);
             }
@@ -104,61 +104,63 @@ impl Battle {
             }
         }
 
-        let name = {
-            let full = self.effect_fullname(dex, effect_handle);
-            if full == "tox" {
-                "psn".to_string()
-            } else {
-                full
-            }
-        };
-        let ts = self.poke_str(target);
-        let (secret, shared) = self.get_health(target);
-        let side_id = format!("p{}", target.side + 1);
-        match effect_id.as_str() {
-            "partiallytrapped" => {
-                let pt = crate::cond_id!(dex, "partiallytrapped").unwrap();
-                let src_eff = self
-                    .poke(target)
-                    .volatile(pt)
-                    .and_then(|v| v.source_effect)
-                    .and_then(|e| match e {
-                        EffectHandle::MoveEff(m) => Some(format!("move: {}", dex.move_static(m).name)),
-                        _ => None,
-                    })
-                    .unwrap_or_default();
-                let from = format!("[from] {src_eff}");
-                self.add_split(
-                    &side_id,
-                    &["-damage", &ts, &secret, &from, "[partiallytrapped]"],
-                    &["-damage", &ts, &shared, &from, "[partiallytrapped]"],
-                );
-            }
-            "confused" => {
-                self.add_split(
-                    &side_id,
-                    &["-damage", &ts, &secret, "[from] confusion"],
-                    &["-damage", &ts, &shared, "[from] confusion"],
-                );
-            }
-            _ => {
-                if self.effect_type(dex, effect_handle) == EffectType::Move || name.is_empty() {
-                    self.add_split(&side_id, &["-damage", &ts, &secret], &["-damage", &ts, &shared]);
-                } else if source.is_some() && source != Some(target) {
-                    let of = format!("[of] {}", self.poke_str(source.unwrap()));
-                    let from = format!("[from] {name}");
-                    self.add_split(
-                        &side_id,
-                        &["-damage", &ts, &secret, &from, &of],
-                        &["-damage", &ts, &shared, &from, &of],
-                    );
+        if self.log_enabled {
+            let name = {
+                let full = self.effect_fullname(dex, effect_handle);
+                if full == "tox" {
+                    "psn".to_string()
                 } else {
-                    let from = format!("[from] {name}");
+                    full
+                }
+            };
+            let ts = self.poke_str(target);
+            let (secret, shared) = self.get_health(target);
+            let side_id = format!("p{}", target.side + 1);
+            match effect_id {
+                "partiallytrapped" => {
+                    let pt = crate::cond_id!(dex, "partiallytrapped").unwrap();
+                    let src_eff = self
+                        .poke(target)
+                        .volatile(pt)
+                        .and_then(|v| v.source_effect)
+                        .and_then(|e| match e {
+                            EffectHandle::MoveEff(m) => Some(format!("move: {}", dex.move_static(m).name)),
+                            _ => None,
+                        })
+                        .unwrap_or_default();
+                    let from = format!("[from] {src_eff}");
                     self.add_split(
                         &side_id,
-                        &["-damage", &ts, &secret, &from],
-                        &["-damage", &ts, &shared, &from],
+                        &["-damage", &ts, &secret, &from, "[partiallytrapped]"],
+                        &["-damage", &ts, &shared, &from, "[partiallytrapped]"],
                     );
+                }
+                "confused" => {
+                    self.add_split(
+                        &side_id,
+                        &["-damage", &ts, &secret, "[from] confusion"],
+                        &["-damage", &ts, &shared, "[from] confusion"],
+                    );
+                }
+                _ => {
+                    if self.effect_type(dex, effect_handle) == EffectType::Move || name.is_empty() {
+                        self.add_split(&side_id, &["-damage", &ts, &secret], &["-damage", &ts, &shared]);
+                    } else if source.is_some() && source != Some(target) {
+                        let of = format!("[of] {}", self.poke_str(source.unwrap()));
+                        let from = format!("[from] {name}");
+                        self.add_split(
+                            &side_id,
+                            &["-damage", &ts, &secret, &from, &of],
+                            &["-damage", &ts, &shared, &from, &of],
+                        );
+                    } else {
+                        let from = format!("[from] {name}");
+                        self.add_split(
+                            &side_id,
+                            &["-damage", &ts, &secret, &from],
+                            &["-damage", &ts, &shared, &from],
+                        );
+                    }
                 }
             }
         }
@@ -217,27 +219,29 @@ impl Battle {
         }
         let damage = clamp_int_range(damage, Some(1.0), None);
         let dealt = self.pokemon_damage(target, damage, source, effect);
-        let ts = self.poke_str(target);
-        let (secret, shared) = self.get_health(target);
-        let side_id = format!("p{}", target.side + 1);
-        let effect_id = self.effect_id(dex, effect).to_string();
-        match effect_id.as_str() {
-            "strugglerecoil" => {
-                self.add_split(
-                    &side_id,
-                    &["-damage", &ts, &secret, "[from] recoil"],
-                    &["-damage", &ts, &shared, "[from] recoil"],
-                );
-            }
-            "confusion" => {
-                self.add_split(
-                    &side_id,
-                    &["-damage", &ts, &secret, "[from] confusion"],
-                    &["-damage", &ts, &shared, "[from] confusion"],
-                );
-            }
-            _ => {
-                self.add_split(&side_id, &["-damage", &ts, &secret], &["-damage", &ts, &shared]);
+        if self.log_enabled {
+            let ts = self.poke_str(target);
+            let (secret, shared) = self.get_health(target);
+            let side_id = format!("p{}", target.side + 1);
+            let effect_id = self.effect_id(dex, effect);
+            match effect_id {
+                "strugglerecoil" => {
+                    self.add_split(
+                        &side_id,
+                        &["-damage", &ts, &secret, "[from] recoil"],
+                        &["-damage", &ts, &shared, "[from] recoil"],
+                    );
+                }
+                "confusion" => {
+                    self.add_split(
+                        &side_id,
+                        &["-damage", &ts, &secret, "[from] confusion"],
+                        &["-damage", &ts, &shared, "[from] confusion"],
+                    );
+                }
+                _ => {
+                    self.add_split(&side_id, &["-damage", &ts, &secret], &["-damage", &ts, &shared]);
+                }
             }
         }
         if self.poke(target).fainted {
@@ -306,48 +310,50 @@ impl Battle {
             return None;
         }
         let final_damage = self.pokemon_heal(target, damage)?;
-        let ts = self.poke_str(target);
-        let (secret, shared) = self.get_health(target);
-        let side_id = format!("p{}", target.side + 1);
-        let effect_id = self.effect_id(dex, effect_handle).to_string();
-        match (effect, effect_id.as_str()) {
-            (HealEffect::Drain, _) => {
-                let of = format!("[of] {}", self.poke_str(source.unwrap()));
-                self.add_split(
-                    &side_id,
-                    &["-heal", &ts, &secret, "[from] drain", &of],
-                    &["-heal", &ts, &shared, "[from] drain", &of],
-                );
-            }
-            (_, "leechseed") | (_, "rest") => {
-                self.add_split(
-                    &side_id,
-                    &["-heal", &ts, &secret, "[silent]"],
-                    &["-heal", &ts, &shared, "[silent]"],
-                );
-            }
-            _ => {
-                if self.effect_type(dex, effect_handle) == EffectType::Move
-                    || effect_handle.is_none()
-                {
-                    self.add_split(&side_id, &["-heal", &ts, &secret], &["-heal", &ts, &shared]);
-                } else if source.is_some() && source != Some(target) {
-                    let fullname = self.effect_fullname(dex, effect_handle);
-                    let from = format!("[from] {fullname}");
+        if self.log_enabled {
+            let ts = self.poke_str(target);
+            let (secret, shared) = self.get_health(target);
+            let side_id = format!("p{}", target.side + 1);
+            let effect_id = self.effect_id(dex, effect_handle);
+            match (effect, effect_id) {
+                (HealEffect::Drain, _) => {
                     let of = format!("[of] {}", self.poke_str(source.unwrap()));
                     self.add_split(
                         &side_id,
-                        &["-heal", &ts, &secret, &from, &of],
-                        &["-heal", &ts, &shared, &from, &of],
+                        &["-heal", &ts, &secret, "[from] drain", &of],
+                        &["-heal", &ts, &shared, "[from] drain", &of],
                     );
-                } else {
-                    let fullname = self.effect_fullname(dex, effect_handle);
-                    let from = format!("[from] {fullname}");
+                }
+                (_, "leechseed") | (_, "rest") => {
                     self.add_split(
                         &side_id,
-                        &["-heal", &ts, &secret, &from],
-                        &["-heal", &ts, &shared, &from],
+                        &["-heal", &ts, &secret, "[silent]"],
+                        &["-heal", &ts, &shared, "[silent]"],
                     );
+                }
+                _ => {
+                    if self.effect_type(dex, effect_handle) == EffectType::Move
+                        || effect_handle.is_none()
+                    {
+                        self.add_split(&side_id, &["-heal", &ts, &secret], &["-heal", &ts, &shared]);
+                    } else if source.is_some() && source != Some(target) {
+                        let fullname = self.effect_fullname(dex, effect_handle);
+                        let from = format!("[from] {fullname}");
+                        let of = format!("[of] {}", self.poke_str(source.unwrap()));
+                        self.add_split(
+                            &side_id,
+                            &["-heal", &ts, &secret, &from, &of],
+                            &["-heal", &ts, &shared, &from, &of],
+                        );
+                    } else {
+                        let fullname = self.effect_fullname(dex, effect_handle);
+                        let from = format!("[from] {fullname}");
+                        self.add_split(
+                            &side_id,
+                            &["-heal", &ts, &secret, &from],
+                            &["-heal", &ts, &shared, &from],
+                        );
+                    }
                 }
             }
         }
@@ -434,16 +440,18 @@ impl Battle {
                         self.remove_volatile(dex, target, "parspeeddrop");
                     }
                 }
-                let ts = self.poke_str(target);
-                let stat_name = crate::dex::BOOST_KEYS[stat];
-                let amount_str = boost_by.to_string();
-                let is_move_or_none = effect.is_none()
-                    || self.effect_type(dex, effect) == EffectType::Move;
-                if is_move_or_none {
-                    self.add(&[msg, &ts, stat_name, &amount_str]);
-                } else {
-                    let from = format!("[from] {}", self.effect_fullname(dex, effect));
-                    self.add(&[msg, &ts, stat_name, &amount_str, &from]);
+                if self.log_enabled {
+                    let ts = self.poke_str(target);
+                    let stat_name = crate::dex::BOOST_KEYS[stat];
+                    let amount_str = boost_by.to_string();
+                    let is_move_or_none = effect.is_none()
+                        || self.effect_type(dex, effect) == EffectType::Move;
+                    if is_move_or_none {
+                        self.add(&[msg, &ts, stat_name, &amount_str]);
+                    } else {
+                        let from = format!("[from] {}", self.effect_fullname(dex, effect));
+                        self.add(&[msg, &ts, stat_name, &amount_str, &from]);
+                    }
                 }
                 self.run_event(
                     dex,
