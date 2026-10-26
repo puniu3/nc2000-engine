@@ -153,14 +153,16 @@ export function Fork() {
   async function load(json: string) {
     try {
       const info = readFork(json);
-      const doc = JSON.parse(json) as { opponent_team: unknown[] };
+      const doc = JSON.parse(json) as { opponent_team: unknown[]; position?: { own_sets?: unknown[] } };
       const key = await sha256(json);
+      const botSeat = info.recordedBotSide ?? info.botSide;
+      const humanSide = 1 - botSeat;
       const loaded: LoadedFork = {
         json,
         info,
         key,
         armNames: armNames(json, info),
-        humanSets: doc.opponent_team,
+        humanSets: humanSide === info.botSide ? (doc.position?.own_sets ?? []) : doc.opponent_team,
       };
       const s: Session = restore(key, info.arms.length) ?? {
         key,
@@ -530,7 +532,8 @@ export function ForkGame(props: {
   backLabel?: string;
 }) {
   const { info, json, humanSets } = props.fork;
-  const BOT = info.botSide;
+  const ARM_SIDE = info.botSide;
+  const BOT = info.recordedBotSide ?? info.botSide;
   const HUMAN = 1 - BOT;
   const blind = info.info === "blind";
   const [phase, setPhase] = useState<"init" | "battle" | "end">("init");
@@ -615,7 +618,11 @@ export function ForkGame(props: {
     reqRef.current = req;
     setHumanWaiting(false);
     setPhase("battle");
-    if (needs[HUMAN]) {
+    if (armPendingRef.current) {
+      armPendingRef.current = false;
+      req.picks[ARM_SIDE] = props.record.input;
+    }
+    if (needs[HUMAN] && req.picks[HUMAN] === null) {
       const legal = legalChoices(battle, HUMAN);
       if (legal.length === 1) {
         req.picks[HUMAN] = legal[0].input;
@@ -626,16 +633,11 @@ export function ForkGame(props: {
     } else {
       setHumanChoices(null);
     }
-    if (needs[BOT]) decideBot(req);
+    if (needs[BOT] && req.picks[BOT] === null) decideBot(req);
     maybeCommit(req);
   }
 
   function decideBot(req: Request) {
-    if (armPendingRef.current) {
-      armPendingRef.current = false;
-      req.picks[BOT] = props.record.input;
-      return;
-    }
     const legal = legalChoices(battleRef.current!, BOT);
     if (legal.length === 1) {
       req.picks[BOT] = legal[0].input;

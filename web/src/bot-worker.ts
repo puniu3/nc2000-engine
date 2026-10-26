@@ -211,6 +211,7 @@ async function handle(m: WorkerRequest): Promise<void> {
         m.searcher.poolJson,
         m.searcher.seed >>> 0,
         searchProfile(forkMode).c,
+        m.searcher.side,
       );
       forked = {
         channel: new PlayerChannel(m.searcher.side),

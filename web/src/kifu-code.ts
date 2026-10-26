@@ -3,9 +3,14 @@ export function extractKifu(text: string): string | null {
   return match?.[0] ?? null;
 }
 
-export function kifuUrl(code: string): string {
+export function kifuUrl(code: string, opts?: { side?: number; round?: number; turn?: number }): string {
   const url = new URL(location.href);
-  url.search = "?fork";
+  const params = new URLSearchParams();
+  params.set("fork", "");
+  if (opts?.side !== undefined) params.set("side", String(opts.side));
+  if (opts?.round !== undefined) params.set("round", String(opts.round));
+  if (opts?.turn !== undefined) params.set("turn", String(opts.turn));
+  url.search = `?${params.toString().replace(/fork=&?/, "fork&").replace(/&$/, "")}`;
   url.hash = `kifu=${code}`;
   return url.href;
 }

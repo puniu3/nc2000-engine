@@ -6,10 +6,13 @@ human-readable log, URL or other surrounding text. **別の手を試す** opens 
 record in a new tab. Everything runs in the static page, including compression.
 
 `?fork` accepts a pasted code, a URL, or HTML/text containing a code. It lists the
-recorded bot decisions, shows the exact active HP, and offers the legal moves and
-switches at that point. The selected alternative can start a human game or a paired
-bot comparison. URL entry accepts `?fork&kifu=NC2-…` and `?fork#kifu=NC2-…`; exported
-links use the fragment. The advanced JSON interface remains at `?fork&advanced`,
+recorded decisions for either side (**あなたの手** or **botの手**), shows the exact active HP, offers the legal moves and
+switches at that point, and runs a quick background search to highlight the most promising move and rough win-rate estimates for each legal option. The selected alternative can start a human game or a paired
+bot comparison. After a bot battle finishes, the export panel also displays an expected
+win-rate chart across turns; selecting a turn on the chart opens `?fork` directly at
+that turn on the player's side (`?fork&side=0&turn=N#kifu=NC2-…`). URL entry accepts
+`?fork&kifu=NC2-…` and `?fork#kifu=NC2-…`, plus optional `side=0|1`, `turn=N`, or
+`round=R` parameters; exported links use the fragment. The advanced JSON interface remains at `?fork&advanced`,
 and named hosted definitions remain at `?fork=NAME`.
 
 ## Another UI using this engine
@@ -38,17 +41,22 @@ does not offer export (a fork changes the future RNG seed).
 
 ```js
 const replay = new Kifu(dex, code);
-const { scenes } = JSON.parse(replay.scenes());
+// Omit `side` for the recorded bot_side, or pass 0 / 1 to inspect either seat.
+const side = 0;
+const { scenes } = JSON.parse(replay.scenes(side));
 const round = scenes[0].round;
-const { view, choices, played, log } = JSON.parse(replay.scene(round));
+const { view, choices, played, log } = JSON.parse(replay.scene(round, side));
 const alternative = choices.find(c => c.input !== played.input);
-const forkJson = replay.fork(round, alternative.input, poolJson);
+const forkJson = replay.fork(round, alternative.input, poolJson, side);
 const restarted = Battle.fromFork(dex, forkJson, futureSeed);
-const bot = ProtocolSearcher.fromFork(dex, forkJson, poolJson, botSeed, 0.4);
+// `fromFork` defaults to `fork.botSide` (the forked seat); pass `1 - side` to
+// construct the opposing seat's protocol searcher from its recorded stream.
+const bot = ProtocolSearcher.fromFork(dex, forkJson, poolJson, botSeed, 0.4, 1);
 ```
 
 Free WASM objects when finished. Native callers use `replay::Recorder` and
-`replay::Replay` from `nc2000-engine`.
+`replay::Replay` from `nc2000-engine`, and `ForkSpec::from_replay` (or
+`ForkSpec::from_replay_side` for an arbitrary seat) from `nc2000-bot`.
 
 ## Exactness and compatibility
 

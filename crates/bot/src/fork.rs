@@ -99,24 +99,29 @@ impl ReplayOrigin {
 impl ForkSpec {
     pub fn from_replay(dex: &Dex, code: &str, round: usize, alternative: &str, pool: &MetaPool) -> Result<Self, String> {
         let replay = Replay::decode(dex, code)?;
-        let bot = replay.bot_side;
-        let played = replay.rounds.get(round).and_then(|p| p[bot]).ok_or("bot has no recorded action here")?;
+        Self::from_replay_side(dex, code, round, replay.bot_side, alternative, pool)
+    }
+
+    pub fn from_replay_side(dex: &Dex, code: &str, round: usize, side: usize, alternative: &str, pool: &MetaPool) -> Result<Self, String> {
+        let replay = Replay::decode(dex, code)?;
+        if side > 1 { return Err("invalid side".into()); }
+        let played = replay.rounds.get(round).and_then(|p| p[side]).ok_or("side has no recorded action here")?;
         let mut battle = replay.at(dex, round)?;
         if battle.turn == 0 { return Err("choose a battle turn".into()); }
-        let legal = battle.legal_choices(dex, bot);
+        let legal = battle.legal_choices(dex, side);
         let other = find_choice(dex, &legal, alternative).ok_or("alternative is not legal")?;
         let origin = ReplayOrigin { code: code.into(), round };
         let cfg = RmConfig::default();
-        let agent = origin.agent(dex, pool.clone(), cfg.clone(), 0, bot)?;
-        let position = agent.to_position_spec(dex).ok_or("missing bot position")?;
-        let foe = origin.agent(dex, pool.clone(), cfg, 0, 1-bot)?;
+        let agent = origin.agent(dex, pool.clone(), cfg.clone(), 0, side)?;
+        let position = agent.to_position_spec(dex).ok_or("missing side position")?;
+        let foe = origin.agent(dex, pool.clone(), cfg, 0, 1 - side)?;
         let mut arms = vec![Arm { input: played.to_input(dex), label: "元の手".into() }];
         if other != played { arms.push(Arm { input: other.to_input(dex), label: "試す手".into() }); }
         Ok(Self {
             schema: SCHEMA.into(), label: format!("{}ターン目", battle.turn),
             info: if replay.open { Info::Open } else { Info::Blind },
-            position, opponent_team: replay.teams[1-bot].clone(),
-            opponent_picks: battle.sides[1-bot].party.iter().map(|&s| dex.species.key(battle.sides[1-bot].roster[s as usize].base_species).into()).collect(),
+            position, opponent_team: replay.teams[1 - side].clone(),
+            opponent_picks: battle.sides[1 - side].party.iter().map(|&s| dex.species.key(battle.sides[1 - side].roster[s as usize].base_species).into()).collect(),
             opponent_position: foe.to_position_spec(dex), arms, exact_replay: Some(origin),
         })
     }
@@ -141,7 +146,7 @@ impl ForkSpec {
     pub fn battle(&self, dex: &Dex, seed: u64) -> Result<Battle, String> {
         if let Some(origin) = &self.exact_replay {
             let replay = Replay::decode(dex, &origin.code)?;
-            if origin.round >= replay.rounds.len() || replay.bot_side != self.bot_side()
+            if origin.round >= replay.rounds.len() || self.bot_side() > 1
                 || replay.open != (self.info == Info::Open) {
                 return Err("replay metadata differs from fork".into());
             }

@@ -52,6 +52,21 @@ for (let arm = 0; arm < info.arms.length; arm++) {
   check(["win", "loss", "tie"].includes(result.outcome), "exact fork arena completes");
   checkEq([result.legality_drift, result.projections], [0, 0], "exact fork agent legality");
 }
+// Player-seat (side 0) counterfactual fork from the same replay:
+const p0Index = JSON.parse(kifu.scenes(0));
+checkEq(p0Index.side, 0, "scenes(0) reports side 0");
+check(p0Index.scenes.length > 0, "player decisions are listed");
+const p0Point = p0Index.scenes.at(-1).round;
+const p0Scene = JSON.parse(kifu.scene(p0Point, 0));
+const p0Other = p0Scene.choices.find(c => c.input !== p0Scene.played.input) || p0Scene.played;
+const p0ForkJson = kifu.fork(p0Point, p0Other.input, pool, 0);
+const p0Info = JSON.parse(wasm.forkInfo(dex, p0ForkJson));
+checkEq(p0Info.botSide, 0, "fork targets side 0");
+checkEq(p0Info.recordedBotSide, 1, "fork preserves original bot seat");
+const p0FoeSearcher = wasm.ProtocolSearcher.fromFork(dex, p0ForkJson, pool, 29, 0.4, 1);
+p0FoeSearcher.step(100);
+check(Boolean(p0FoeSearcher.best()), "opponent seat searcher from fork selects an action");
+p0FoeSearcher.free();
 if (process.env.KIFU_FIXTURE) writeFileSync(process.env.KIFU_FIXTURE, JSON.stringify({ code, point, other: other.input }));
 arena.free(); searcher.free(); restored.free(); kifu.free(); battle.free(); dex.free();
 finish("kifu");

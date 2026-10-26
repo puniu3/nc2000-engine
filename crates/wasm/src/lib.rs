@@ -901,14 +901,20 @@ impl WasmProtocolSearcher {
     }
 
     /// `c` defaults to the profile of the information policy the fork was
-    /// recorded under.
+    /// recorded under. `side` selects which side of the fork this searcher
+    /// plays (defaults to `fork.bot_side()`).
     #[wasm_bindgen(js_name = fromFork)]
-    pub fn from_fork(dex: &WasmDex, fork_json: &str, pool_json: &str, seed: u32, c: Option<f64>) -> Result<WasmProtocolSearcher, JsError> {
+    pub fn from_fork(dex: &WasmDex, fork_json: &str, pool_json: &str, seed: u32, c: Option<f64>, side: Option<usize>) -> Result<WasmProtocolSearcher, JsError> {
         let fork = ForkSpec::parse(fork_json).map_err(|e| JsError::new(&e))?;
         let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
         let recorded = if fork.info == nc2000_bot::fork::Info::Open { "open" } else { "blind" };
         let c = c.unwrap_or_else(|| profile_c(recorded));
-        let agent = fork.bot_agent(&dex.dex, pool, skuct_config(c, None), seed as u64).map_err(|e| JsError::new(&e))?;
+        let target = side.unwrap_or_else(|| fork.bot_side());
+        let agent = if target == fork.bot_side() {
+            fork.bot_agent(&dex.dex, pool, skuct_config(c, None), seed as u64)
+        } else {
+            fork.opponent_agent(&dex.dex, pool, skuct_config(c, None), seed as u64)
+        }.map_err(|e| JsError::new(&e))?;
         Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, preview_cache_identity: None, pinned: fork.info == nc2000_bot::fork::Info::Open, endgame: None, decision: DecisionSampler::new(seed as u64) })
     }
 
@@ -1501,6 +1507,7 @@ pub fn fork_info(dex: &WasmDex, fork_json: &str) -> Result<String, JsError> {
         "botSide": fork.bot_side(),
         "arms": arms,
         "opponentView": fork.opponent_position.is_some() || fork.exact_replay.is_some(),
+        "recordedBotSide": fork.exact_replay.as_ref().and_then(|o| Replay::decode(&dex.dex, &o.code).ok().map(|r| r.bot_side)),
     })
     .to_string())
 }
@@ -1563,35 +1570,40 @@ impl WasmKifu {
         Ok(Self { dex: dex.dex.clone(), replay, code: code.into() })
     }
 
-    pub fn scenes(&self) -> Result<String, JsError> {
+    pub fn scenes(&self, side: Option<usize>) -> Result<String, JsError> {
+        let target = side.unwrap_or(self.replay.bot_side);
+        if target > 1 { return Err(JsError::new("invalid side")); }
         let mut b = self.replay.initial(&self.dex).map_err(|e| JsError::new(&e))?;
         let mut scenes = Vec::new();
         for (round, picks) in self.replay.rounds.iter().enumerate() {
             if b.turn > 0 {
-                if let Some(pick) = picks[self.replay.bot_side] {
+                if let Some(pick) = picks[target] {
                     let active: Vec<_> = (0..2).map(|s| b.active_id(s).map(|id| self.dex.species.get(b.poke(id).species).name.clone())).collect();
                     scenes.push(serde_json::json!({ "round": round, "turn": b.turn, "active": active,
-                        "played": choice_json(&b, &self.dex, self.replay.bot_side, pick) }));
+                        "played": choice_json(&b, &self.dex, target, pick) }));
                 }
             }
             self.replay.apply(&self.dex, &mut b, round).map_err(|e| JsError::new(&e))?;
         }
         Ok(serde_json::json!({ "scenes": scenes, "turns": b.turn.min(1000), "outcome": b.outcome().map(|o| format!("{o:?}")),
-            "botSide": self.replay.bot_side, "info": if self.replay.open { "open" } else { "blind" } }).to_string())
+            "botSide": self.replay.bot_side, "side": target, "info": if self.replay.open { "open" } else { "blind" } }).to_string())
     }
 
-    pub fn scene(&self, round: usize) -> Result<String, JsError> {
-        let pick = self.replay.rounds.get(round).and_then(|p| p[self.replay.bot_side]).ok_or_else(|| JsError::new("no bot action"))?;
+    pub fn scene(&self, round: usize, side: Option<usize>) -> Result<String, JsError> {
+        let target = side.unwrap_or(self.replay.bot_side);
+        if target > 1 { return Err(JsError::new("invalid side")); }
+        let pick = self.replay.rounds.get(round).and_then(|p| p[target]).ok_or_else(|| JsError::new("no side action"))?;
         let mut b = self.replay.at(&self.dex, round).map_err(|e| JsError::new(&e))?;
-        let legal = b.legal_choices(&self.dex, self.replay.bot_side);
-        let choices: Vec<_> = legal.iter().map(|&c| choice_json(&b, &self.dex, self.replay.bot_side, c)).collect();
+        let legal = b.legal_choices(&self.dex, target);
+        let choices: Vec<_> = legal.iter().map(|&c| choice_json(&b, &self.dex, target, c)).collect();
         Ok(serde_json::json!({ "view": state_view_json(&b, &self.dex), "choices": choices,
-            "played": choice_json(&b, &self.dex, self.replay.bot_side, pick), "log": b.log }).to_string())
+            "played": choice_json(&b, &self.dex, target, pick), "log": b.log }).to_string())
     }
 
-    pub fn fork(&self, round: usize, alternative: &str, pool_json: &str) -> Result<String, JsError> {
+    pub fn fork(&self, round: usize, alternative: &str, pool_json: &str, side: Option<usize>) -> Result<String, JsError> {
+        let target = side.unwrap_or(self.replay.bot_side);
         let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
-        let fork = ForkSpec::from_replay(&self.dex, &self.code, round, alternative, &pool).map_err(|e| JsError::new(&e))?;
+        let fork = ForkSpec::from_replay_side(&self.dex, &self.code, round, target, alternative, &pool).map_err(|e| JsError::new(&e))?;
         serde_json::to_string(&fork).map_err(js_err)
     }
 }

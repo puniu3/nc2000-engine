@@ -115,3 +115,23 @@ test("missing or damaged code keeps the input and offers a recoverable error", a
     await expect(input).toBeFocused();
   }
 });
+
+test("player seat fork and post-game win-rate chart jump to the selected turn", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  await page.goto(`/?fork&side=0&turn=2#kifu=${code}`);
+  await expect(page.getByRole("heading", { name: "どこから試しますか？" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "あなたの手" })).toBeChecked();
+  await expect(page.getByRole("heading", { name: "2. あなたが試す手" })).toBeVisible();
+  await expect(page.locator(".kp-turn")).toContainText("2ターン目");
+  await expect(page.locator(".kp-rec-pick")).toContainText("最も有望な手:", { timeout: 30_000 });
+  await expect(page.locator(".kp-rec-badge")).toContainText("★ 有望");
+  await page.locator(".kp-rec-pick").click();
+  await expect(page.locator(".kp-option.is-recommended input")).toBeChecked();
+  const option = page.locator('input[name="alternative"]').last();
+  await option.check();
+  await page.getByRole("button", { name: "この手で対戦を始める" }).click();
+  await expect(page.locator(".fork-battle")).toBeVisible();
+  await expect(page.locator(".move-btn, .switch-btn, .end-banner").first()).toBeVisible();
+  expect(errors).toEqual([]);
+});

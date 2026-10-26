@@ -263,12 +263,15 @@ performance against the selected distribution.
 
 ## Counterfactual forks
 
-The bot battle screen can copy a compact `NC2-…` replay. Paste it into `?fork`,
-select a recorded scene and a legal alternative, then play or compare bots.
-These forks reconstruct the exact battle, including hidden durations and
-mid-turn actions, from the initial teams, seed and committed choices.
-See [compact replay API and compatibility](docs/replay.md) for integration into
-another UI; no backend or LLM is needed.
+The bot battle screen can copy a compact `NC2-…` replay, and at the end of a
+battle it displays an expected win-rate chart across turns where clicking any
+turn jumps directly to that turn's counterfactual on the player's side. You can
+also paste a replay code into `?fork`, choose either seat (**あなたの手** or
+**botの手**), select a recorded scene and a legal alternative, then play or
+compare bots. These forks reconstruct the exact battle, including hidden
+durations and mid-turn actions, from the initial teams, seed and committed
+choices. See [compact replay API and compatibility](docs/replay.md) for
+integration into another UI; no backend or LLM is needed.
 
 The advanced workflow below also accepts manually assembled positions.
 When a player claims the bot had a better action at a recorded decision,

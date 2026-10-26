@@ -176,4 +176,6 @@ export interface ForkInfo {
   arms: { input: string; label: string }[];
   /** The opponent's own information set is present (protocol opponent). */
   opponentView: boolean;
+  /** The bot's seat in the original replay when built from an exact replay. */
+  recordedBotSide?: number | null;
 }

@@ -47,6 +47,7 @@
 }
 .kp-scene-nav { display: flex; gap: 10px; margin: 10px 0 18px; }
 .kp-scene-nav button { flex: 1; background: transparent; }
+.kp-side-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 .kp-matchup { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0 16px; }
 .kp-matchup > div { padding: 12px 14px; background: #292b2c; border-radius: 8px; min-width: 0; }
 .kp-matchup dt { color: var(--text-dim); font-size: .85rem; }
@@ -64,6 +65,11 @@
 .kp-option span { min-width: 0; overflow-wrap: anywhere; }
 .kp-option small { display: block; color: var(--text-dim); font-size: .8rem; line-height: 1.6; }
 .kp-option.is-selected { border-color: #d5b98a; background: #343126; }
+.kp-option.is-recommended:not(.is-selected) { border-color: #8f7e5e; }
+.kp-rec-banner { margin: 4px 0 8px; color: var(--accent); font-size: .9rem; min-height: 1.5em; }
+.kp-rec-banner:empty { display: none; }
+.kp-rec-pick { min-height: 36px !important; padding: 4px 10px; border: 1px solid #8f7e5e; border-radius: 7px; background: #2d2920; color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
+.kp-option small.kp-rec-badge { color: var(--accent); font-weight: 600; }
 .kp-methods { display: grid; gap: 10px; }
 .kp-summary { min-height: 3.3em; padding-top: 6px; }
 .kp-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -86,3 +92,19 @@
 .kp-journal p { margin: 5px 0; font-size: .9rem; }
 .kp-tools-nav { display: flex; gap: 16px; padding: 12px 0; }
 .kp-tools-nav a { color: var(--text-dim); min-height: 44px; display: inline-flex; align-items: center; }
+
+.kp-chart-wrap { margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.kp-chart-svg { width: 100%; height: auto; display: block; margin: 10px 0; overflow: visible; }
+.kp-chart-grid { stroke: var(--line); stroke-width: 1; opacity: 0.5; }
+.kp-chart-mid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 4; }
+.kp-chart-axis { fill: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+.kp-chart-line { stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.kp-chart-dot { fill: var(--panel); stroke: var(--accent); stroke-width: 2.5; cursor: pointer; }
+.kp-chart-turn { fill: var(--text-dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+.kp-chart-turns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.kp-turn-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: inherit; text-decoration: none; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.kp-turn-chip span { color: var(--text-dim); }
+@media (hover: hover) and (pointer: fine) {
+  .kp-turn-chip:hover { border-color: var(--accent); }
+  .kp-chart-svg a:hover .kp-chart-dot { fill: var(--accent); }
+}

@@ -56,18 +56,21 @@ fn replay_forks_preserve_true_state_and_rebuild_both_information_sets() {
         let replay = Replay::decode(&dex,&code).unwrap();
         let pool = MetaPool { teams: Vec::new() };
         for round in 1..replay.rounds.len() {
-            let Some(played) = replay.rounds[round][1] else { continue };
-            let original = replay.at(&dex,round).unwrap();
-            let fork = ForkSpec::from_replay(&dex,&code,round,&played.to_input(&dex),&pool).unwrap();
-            for future_seed in [7,99] {
-                let restored = fork.battle(&dex,future_seed).unwrap();
-                assert_eq!(original.state_key128(),restored.state_key128(),"round {round}");
-                assert!(restored.log.is_empty());
-                assert_eq!(restored.prng.seed_str(),nc2000_engine::prng::Prng::new(future_seed).seed_str());
+            for side in 0..2 {
+                let Some(played) = replay.rounds[round][side] else { continue };
+                let original = replay.at(&dex,round).unwrap();
+                let fork = ForkSpec::from_replay_side(&dex,&code,round,side,&played.to_input(&dex),&pool).unwrap();
+                assert_eq!(fork.bot_side(), side);
+                for future_seed in [7,99] {
+                    let restored = fork.battle(&dex,future_seed).unwrap();
+                    assert_eq!(original.state_key128(),restored.state_key128(),"round {round} side {side}");
+                    assert!(restored.log.is_empty());
+                    assert_eq!(restored.prng.seed_str(),nc2000_engine::prng::Prng::new(future_seed).seed_str());
+                }
+                fork.bot_agent(&dex,pool.clone(),cfg(1),0).unwrap();
+                fork.opponent_agent(&dex,pool.clone(),cfg(1),0).unwrap();
+                fork.check(&dex).unwrap();
             }
-            fork.bot_agent(&dex,pool.clone(),cfg(1),0).unwrap();
-            fork.opponent_agent(&dex,pool.clone(),cfg(1),0).unwrap();
-            fork.check(&dex).unwrap();
         }
     }
 }
