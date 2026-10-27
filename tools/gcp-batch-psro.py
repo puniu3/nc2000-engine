@@ -68,11 +68,14 @@ STAGE_PATHS = [
     "crates/bot/examples",
     "crates/conformance/Cargo.toml",
     "crates/conformance/src",
+    "crates/wasm/Cargo.toml",
+    "crates/wasm/src",
     "data/gen2stadium2.json",
     "data/learnsets-gen2.json",
     "data/legal-move-sources-gen2.json",
     "data/compiled-preview-v1.json",
     "data/search-profiles.json",
+    "data/community-rentals-v0/teams.json",
     "data/meta-pool-v0/meta-pool.json",
     "data/team-pool-v2/team-pool.json",
     "data/belief-pool-v3/belief-pool.json",
@@ -328,15 +331,16 @@ cd /tmp/work
 
 BIN=/mnt/disks/gcs/{GCS_PREFIX}/bin-{src_hash}/research_meta
 mkdir -p /mnt/disks/gcs/{GCS_PREFIX}/bin-{src_hash}
-if [ ! -f "$BIN" ]; then
-  echo "Building research_meta locally on worker..."
-  CARGO_TARGET_DIR=/tmp/target cargo build --release -p nc2000-bot --example research_meta
-  cp /tmp/target/release/examples/research_meta "${{BIN}}.tmp.$$" && mv "${{BIN}}.tmp.$$" "$BIN" || true
-  BIN=/tmp/target/release/examples/research_meta
-else
-  cp "$BIN" /tmp/research_meta
+if [ -s "$BIN" ] && cp "$BIN" /tmp/research_meta 2>/dev/null; then
   chmod +x /tmp/research_meta
   BIN=/tmp/research_meta
+else
+  echo "Building research_meta locally on worker..."
+  CARGO_TARGET_DIR=/tmp/target cargo build --release -p nc2000-bot --example research_meta
+  if [ "${{BATCH_TASK_INDEX:-0}}" = "0" ]; then
+    cp /tmp/target/release/examples/research_meta "${{BIN}}.tmp" && mv "${{BIN}}.tmp" "$BIN" || true
+  fi
+  BIN=/tmp/target/release/examples/research_meta
 fi
 
 export BIN_PATH="$BIN"
@@ -445,15 +449,16 @@ cd /tmp/work
 
 BIN=/mnt/disks/gcs/{GCS_PREFIX}/bin-{src_hash}/team_eval
 mkdir -p /mnt/disks/gcs/{GCS_PREFIX}/bin-{src_hash}
-if [ ! -f "$BIN" ]; then
-  echo "Building team_eval on worker..."
-  CARGO_TARGET_DIR=/tmp/target cargo build --release -p nc2000-bot --example team_eval
-  cp /tmp/target/release/examples/team_eval "${{BIN}}.tmp.$$" && mv "${{BIN}}.tmp.$$" "$BIN" || true
-  BIN=/tmp/target/release/examples/team_eval
-else
-  cp "$BIN" /tmp/team_eval
+if [ -s "$BIN" ] && cp "$BIN" /tmp/team_eval 2>/dev/null; then
   chmod +x /tmp/team_eval
   BIN=/tmp/team_eval
+else
+  echo "Building team_eval on worker..."
+  CARGO_TARGET_DIR=/tmp/target cargo build --release -p nc2000-bot --example team_eval
+  if [ "${{BATCH_TASK_INDEX:-0}}" = "0" ]; then
+    cp /tmp/target/release/examples/team_eval "${{BIN}}.tmp" && mv "${{BIN}}.tmp" "$BIN" || true
+  fi
+  BIN=/tmp/target/release/examples/team_eval
 fi
 
 SHARD=$(printf "%02d" "${{BATCH_TASK_INDEX:-0}}")
