@@ -181,7 +181,15 @@ def submit_batch_job(
                         "provisioningModel": "SPOT",
                     }
                 }
-            ]
+            ],
+            "network": {
+                "networkInterfaces": [
+                    {
+                        "network": "global/networks/spot-batch",
+                        "subnetwork": f"regions/{region}/subnetworks/spot-batch",
+                    }
+                ]
+            },
         },
         "logsPolicy": {"destination": "CLOUD_LOGGING"},
     }
